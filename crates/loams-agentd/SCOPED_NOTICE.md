@@ -1,6 +1,6 @@
 # Desktop import notice
 
-> **Kept for history (DD1 Task 5).** This was written when the fork was imported into `apps/desktop/native`. Those files now live in `crates/loams-agentd*` (D783). [`NOTICE`](NOTICE) has been rewritten for the daemon. The imported `NOTICE` is at `git show 6e470a96^:apps/desktop/native/NOTICE`. `LICENSE` and `THIRD_PARTY_NOTICES.md` are still as imported. The current licence of each crate is in [`README.md`](README.md#licences).
+> **Kept for history (DD1 Task 5).** This was written when the fork was imported into `apps/desktop/native`. Those files now live in `crates/loams-agentd*` (D783). [`NOTICE`](NOTICE) has been rewritten for the daemon. The imported `NOTICE` is at `git show 6e470a96^:apps/desktop/native/NOTICE`. `THIRD_PARTY_NOTICES.md` lost the entries of the deleted GUI components in DD1 Task 6; the imported text is at `git show 6e470a96^:apps/desktop/native/THIRD_PARTY_NOTICES.md`. `LICENSE` is still as imported. The current licence of each crate is in [`README.md`](README.md#licences).
 
 This notice applies only to `apps/desktop/native`, not to the monorepo's core crates.
 

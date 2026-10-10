@@ -1,4 +1,4 @@
-![Loams — Your data. Your bucket.](../../../../../docs/assets/loams-banner.svg)
+![Loams — Your data. Your bucket.](../../docs/assets/loams-banner.svg)
 
 # Explicit agent installation
 

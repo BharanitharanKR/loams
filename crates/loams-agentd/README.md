@@ -47,7 +47,7 @@ The daemon began as **zeron** (https://github.com/zeronsh/zeron), MIT, "Copyrigh
 Files kept with this crate:
 - [`LICENSE`](LICENSE): zeron's MIT licence, unmodified.
 - [`NOTICE`](NOTICE): the attribution and licence scope.
-- [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md): zeron's third-party notices, as imported.
+- [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md): third-party assets bundled with the daemon (none today; zeron's GUI entries were removed with the GUI).
 - [`SCOPED_NOTICE.md`](SCOPED_NOTICE.md): the original import notice.
 
 ## Licences

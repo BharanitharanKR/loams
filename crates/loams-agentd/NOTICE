@@ -42,11 +42,13 @@ Other notices in this directory
 - SCOPED_NOTICE.md is the notice written when the fork was imported into
   apps/desktop/native. It is kept for history; the import's paths are now
   crates/loams-agentd*.
-- THIRD_PARTY_NOTICES.md is Zeron's third-party notice, kept as imported. It
-  covers the tree-sitter grammars, GPUI and the gpui-component fork, the
-  Symbols icons, fonts, and the voice model. All of those belonged to
-  crates that were deleted, so none of them is built into or shipped with
-  loams-agentd. The notice applies again if one of them returns.
+- THIRD_PARTY_NOTICES.md began as Zeron's third-party notice. It covered
+  the tree-sitter grammars, GPUI and the gpui-component fork, the Symbols
+  icons, fonts, and the voice model. All of those belonged to crates that
+  were deleted, so none of them is built into or shipped with loams-agentd,
+  and their entries were removed. The imported text is at
+  `git show 6e470a96^:apps/desktop/native/THIRD_PARTY_NOTICES.md`. A bundled
+  third-party asset added later is listed there.
 
 Third-party components the fork added
 -------------------------------------
