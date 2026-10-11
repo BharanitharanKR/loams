@@ -428,12 +428,26 @@ impl loams_graph::owner::Forwarder for HttpForwarder {
             let response = call.send().await.map_err(|err| unreachable(&err))?;
             let status = response.status();
             let body = response.bytes().await.map_err(|err| unreachable(&err))?;
-            if status == reqwest::StatusCode::OK {
-                return Ok(body);
+            match status {
+                reqwest::StatusCode::OK => Ok(body),
+                // The owner's own refusal, as the Connect error it would answer.
+                reqwest::StatusCode::UNPROCESSABLE_ENTITY => {
+                    serde_json::from_slice::<ConnectError>(&body)
+                        .map_err(|err| unreachable(&err))
+                        .and_then(Err)
+                }
+                // A node still starting (or stopping): a retry can reach it.
+                reqwest::StatusCode::SERVICE_UNAVAILABLE => Err(unreachable(&status)),
+                // No such route (a node of another release), a body over its limit: a retry
+                // cannot help (PR #443 review).
+                other => {
+                    tracing::warn!(node, status = %other, "a graph owner answered an unexpected status");
+                    Err(ConnectError::new(
+                        ErrorCode::Internal,
+                        format!("the graph's owner (node {node}) answered {other}"),
+                    ))
+                }
             }
-            serde_json::from_slice::<ConnectError>(&body)
-                .map_err(|err| unreachable(&err))
-                .and_then(Err)
         })
     }
 }

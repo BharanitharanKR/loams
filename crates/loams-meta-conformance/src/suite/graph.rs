@@ -197,6 +197,18 @@ pub async fn graph_streams_are_reserved_idempotent_and_migrated(backend: &dyn Ba
         graph_stream_name(OTHER_GRAPH)
     );
     assert_eq!(high_watermark(reader, legacy, 0).await, 3);
+    // A stream of the legacy name in another shape (anyone could have taken the name) does not
+    // move: it would carry its retention or partitions under the reserved name.
+    const THIRD_GRAPH: &str = "gr_01J9ZQ3V7K8X2M4N6P8R0T2V4Y";
+    let odd = stream(meta, ns, &legacy_graph_stream_name(THIRD_GRAPH), 2).await;
+    assert!(matches!(
+        rejected(meta.ensure_graph_stream(ns, THIRD_GRAPH).await),
+        ApplyError::InvalidArgument(_)
+    ));
+    assert_eq!(
+        reader.stream(L, odd).await.expect("read").map(|s| s.name),
+        Some(legacy_graph_stream_name(THIRD_GRAPH))
+    );
     // Only graph ids name graph streams, in a namespace that exists.
     for bad in [
         "",
