@@ -95,7 +95,7 @@ services:
       - standalone
       - --bucket=${LOAMS_BUCKET:-file:///var/lib/loams/bucket}
       - --data-dir=/var/lib/loams
-      - --listen=${LOAMS_LISTEN:-0.0.0.0:8080}
+      - --listen=${LOAMS_LISTEN:-127.0.0.1:8080}
       - --graph-data-dir=/var/lib/loams/graph
       - --meta=tikv://pd:2379/loams_meta
       - --live-store=tikv://pd:2379/loams_live_dev

@@ -170,12 +170,14 @@ sudo=""; [ "$(id -u)" -eq 0 ] || sudo="sudo"
 dc="docker compose"; docker info >/dev/null 2>&1 || dc="$sudo docker compose"
 if [ -n "$headscale" ]; then
   $dc --profile headscale up -d headscale
-  if ! grep -q "^TS_AUTHKEY=." .env; then
+  # A minted key lives an hour, so mint a fresh one on every run until the
+  # sidecar has joined (its state volume then keeps it logged in).
+  if ! $dc exec -T tailscale tailscale status --json 2>/dev/null | tr -d "\n " | grep -q "\"BackendState\":\"Running\""; then
     for _ in $(seq 30); do $dc exec -T headscale headscale users list >/dev/null 2>&1 && break; sleep 1; done
     $dc exec -T headscale headscale users create loams >/dev/null 2>&1 || true
     uid="$($dc exec -T headscale headscale users list -o json | tr -d "\n\t " | sed -n "s/.*\"id\":\([0-9]*\),\"name\":\"loams\".*/\1/p")"
     [ -n "$uid" ] || { echo "could not find the headscale user loams" >&2; exit 1; }
-    key="$($dc exec -T headscale headscale preauthkeys create --user "$uid" --reusable --expiration 24h | tail -n 1 | tr -d "\r")"
+    key="$($dc exec -T headscale headscale preauthkeys create --user "$uid" --reusable --expiration 1h | tail -n 1 | tr -d "\r")"
     sed -i "s|^TS_AUTHKEY=.*|TS_AUTHKEY=$key|" .env
     echo "minted a Headscale pre-auth key for user loams"
   fi

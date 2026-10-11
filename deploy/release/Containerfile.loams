@@ -49,4 +49,4 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
   CMD curl -fsS http://127.0.0.1:8080/health || exit 1
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/loams"]
 CMD ["standalone", "--bucket", "file:///var/lib/loams/bucket", "--data-dir", "/var/lib/loams", \
-     "--listen", "0.0.0.0:8080", "--graph-data-dir", "/var/lib/loams/graph"]
+     "--listen", "127.0.0.1:8080", "--graph-data-dir", "/var/lib/loams/graph"]

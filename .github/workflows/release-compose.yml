@@ -29,6 +29,8 @@ jobs:
     runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: compose config (default, every profile, without Postgres)
         working-directory: deploy/release
         run: |
