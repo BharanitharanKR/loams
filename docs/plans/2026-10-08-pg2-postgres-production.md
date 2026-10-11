@@ -428,6 +428,7 @@ Tests:
 - `every_mutation_emits_audit_event`
 - `no_metering_guard_covers_pg`: the guard script fails on a fixture field named `billable_seconds` under `crates/loams-pg-control`.
 - `e2e_create_project_and_branch`: against `deploy/neon` with pinned images, `CreateProject` → `ready`, `CreateBranch` → `ready`, and the pageserver lists both timelines.
+- *(Amended by R8.7 and R8.9.)* `api_listener_serves_no_upcall`: the API listener answers 404 for `/compute/api/v2/computes/{id}/spec` and `/notify-attach`. The binary starts `UpcallServer` on `--pg-upcall-listen`, with the API address as `api_listen`. It keeps one signing key shared by every instance across restarts.
 
 Commit `feat(pg): pg-control role, authz, audit`. **PG2a exit:** a project and a branch are created through the API and exist in the pageserver. Every Task 1–9 test passes.
 
@@ -463,6 +464,11 @@ Commit `feat(pg): compute runtime, compose backend`.
 - `RestartEndpoint` replaces the compute.
 - At most one `read_write` endpoint per branch: `endpoint_exists_for_branch`.
 - Three crashes in 10 minutes lead to `failed`, with the reason.
+- *(Amended by R8.9.)* The `C/` record is written with:
+  - `binding`, `jwt_key_id` and `ctl_url`;
+  - the compute's upcall token (`ComputeKeys::issue_upcall_token`), passed as `NEON_CONTROL_PLANE_TOKEN`.
+
+  A compute older than `COMPUTE_TOKEN_TTL` is replaced, and a spec whose inputs changed is pushed again. Endpoint `pg_settings` are checked against an allow-list. Removing a deleting branch's or project's endpoints is R7.1's cascade.
 
 Tests:
 - `start_reaches_running`
@@ -1741,3 +1747,68 @@ Steps: each runbook step is executed once on kind and marked verified. Commit `d
   - **Operations pile up.** Each pass under the lease lists the project's operations, which nothing collects until Task 9 (R5.13).
   - **A child's roles are copied as of now** (R6.4), not as of the branch point; unchanged, and now documented where the copy is made (`service::branches`, `PgService::inherit`).
 - **R7.11 Tests.** `tests/reconcile.rs` (local store) and `tests/reconcile_tikv.rs` (feature `tikv`; CI's TiKV suites job runs it) share `tests/reconcile/cases.rs`. The named cases are there, plus `project_delete_removes_every_record`, `neon_refusals_fail_or_retry`, `failed_project_create_can_be_deleted`, `retention_change_reaches_the_tenant` and `resync_sweeps_orphan_secrets`. The test fake's `NeonWrite` keeps tenants and timelines and answers 409 for an existing timeline.
+
+### Task 8 rulings (2026-10-11)
+
+- **R8.1 Files.** `src/upcall.rs` holds the server, its config and the two handlers. Its parts sit beside it in `src/upcall/`, one job each: `keys.rs` (the key and the tokens), `spec.rs` (the spec from the records), `tenants.rs` (tenant id → project) and `limit.rs` (per-peer buckets). The Neon shapes are in `loams-postgres`, with fixtures: `ControlPlaneConfigResponse` and `ControlPlaneComputeStatus` (`compute_ctl.rs`), and `NotifyAttachRequest` (`storcon.rs`).
+- **R8.2 One Ed25519 key, two token audiences.** `ComputeKeys` holds `pg-control`'s key. The `kid` is `pgc-` plus 8 bytes of the public key's SHA-256. It signs JWTs with the claims `{compute_id, aud, iat, exp}`:
+  - **upcall token**: `aud` `loams-pg-control`, lifetime `COMPUTE_TOKEN_TTL` (90 days). It is the compute's own (`NEON_CONTROL_PLANE_TOKEN`). The compute keeps it, and `compute_ctl` reads its spec again whenever it reconfigures itself, so the token must outlive the compute.
+  - **`compute_ctl` token**: `aud` `compute`, lifetime `CTL_TOKEN_TTL` (10 minutes). `pg-control` uses it for its own calls to that compute. `compute_ctl` checks only its `compute_id`, against the JWKS in `compute_ctl_config`.
+
+  The upcall refuses any token that is not an upcall token. A compute record's `jwt_key_id` must equal the token's `kid`. `trust(older)` keeps an older key trusted, and published in the JWKS, during a rotation. `jsonwebtoken` =9.3.1 and `ring` =0.17.14 were already in the lockfile, so no package is new.
+- **R8.3 `ComputeRec` changes** (`FORMAT` stays 1; no compute record exists outside tests, R5.11's precedent):
+  - `project_id` and `endpoint_id` become `binding: Option<ComputeBinding { namespace, project_id, endpoint_id }>`. `None` is an unbound warm-pool compute, whose spec answer is `empty`. `namespace` is the project key's, so the upcall can read the project. `Record::project()` is the binding's project, and an unbound compute names none.
+  - `ctl_url` is new: `compute_ctl`'s external API, where `/configure` is pushed. The runtime reports it (Task 10).
+- **R8.4 The spec upcall.**
+  - Status codes:
+    - **401**: a missing or invalid token, an unknown `kid`, an expired token (60 s leeway, checked against the listener's clock), the wrong audience, or a `kid` other than the record's.
+    - **403**: the token is for another compute.
+    - **404**: unknown compute.
+    - **409**: the compute is stopped or failed, is not its endpoint's current compute, or its endpoint, branch or project is gone. A replaced compute must not run as a second primary.
+    - **503**: the project or branch is not ready, the pageserver or `loams-wal` pool has no configured address, the store is unavailable, or the peer is over its rate. `compute_ctl` retries only 502 and 503.
+  - The spec is a pure function of the project, endpoint, branch, role and database records. So the same records give the same bytes (§28 §5.3).
+  - The spec's inputs:
+    - **Pageserver.** It comes from the branch's `notify-attach` shard map. A branch with no map uses `default_pageserver` (single node). Node URLs come from `UpcallConfig::pageservers`. A sharded map is refused until Task 49 (R2.14).
+    - **Safekeepers.** `safekeeper_connstrings` come from `wal_pools[project.wal.pool]`.
+    - **Endpoint.** It gives the mode (read-write is `Primary`, read-only is `Replica`), the settings (its `pg_settings`) and the suspend timeout (0 becomes -1).
+    - **Not set yet.** Roles have no `encrypted_password`, which is Task 24's wiring of SCRAM verifiers. There is no `storage_auth_token` (Tasks 38 and 53) and no `neon.max_cluster_size` (Task 47).
+- **R8.5 `notify-attach`.**
+  - **Auth.** It is a static bearer token, the controller's `--control-plane-jwt-token`, compared in constant time over SHA-256 digests. mTLS is not built; that belongs with the TLS of Tasks 38 and 53. Without a configured token the route is not served (single node).
+  - **Finding the project.** The tenant id is a one-way hash, so a watch on `x/` keys a map from tenant id to project key. It adds no record (CP1). Until the first scan, the answer is 503. An unknown tenant is looked up once more after two polls, then answered 404.
+  - **Recording.** One API batch writes the new `shards` and `stripe_size` to every branch, compare-and-set, redone on conflict.
+  - **Pushing.** `/configure` goes to every `Running` compute that is its endpoint's current compute, through `ComputeConfigurer` (`ComputeCtlConfigurer` in production). At most 16 run at once, within `apply_timeout` (8 s; the controller's request timeout is 10 s).
+  - **Answers.** 200 means recorded and applied. 423 means recorded but not applied: the controller keeps `applied: false` and sends it again. 429 means too many notifications at once (32, the controller's own concurrency), or too many refused credentials from the peer. 400 is a malformed shard map, and 413 a body over 64 KiB.
+- **R8.6 Bounds.** Requests are bounded per connection, per peer and globally:
+  - **Connections.** At most 256 at once; one more is closed. Headers must arrive within 10 s (hyper's `header_read_timeout`).
+  - **Requests.** `Authorization` is at most 4 KiB. A body is read only after authentication.
+  - **Per peer IP** (a map of at most 4,096 peers):
+    - spec requests: 5/s, burst 20; over it is 503;
+    - refused credentials: 1/s, burst 10; over it is 429.
+  - **Timeouts.** A spec request, or a notification's store work, has 5 s.
+  - **Logs.** No token, header or spec is logged. `upcall_logs_no_token` checks this.
+- **R8.7 `upcall_not_served_on_api_listener`.** The router is private (a `compile_fail` doctest), so `UpcallServer` is the only way to serve it. `bind` refuses a `listen` that overlaps `api_listen`: the same port with the same IP, or a wildcard IP. **Task 9 adds the HTTP half** to `crates/loams/tests/pg_control.rs`: the API listener answers 404 for `/compute/api/v2/computes/{id}/spec` and `/notify-attach`.
+- **R8.8 Checked against the pinned `compute_ctl`.** The ignored `it_compute_ctl_reads_the_spec_upcall` (Podman, host network, `compute-node-v17@sha256:13ab146d…`) passed on 2026-10-11:
+  - `compute_ctl` read the `empty` answer through the upcall with its token, and then answered `/status` = `empty`;
+  - it accepted `pg-control`'s `compute_ctl` token against the JWKS, and refused another key's token;
+  - it accepted the attached spec at `/configure`. No storage runs in the test, so the start itself never finished.
+
+  Fixtures: `spec_upcall_empty.response.json` (verified this way), and `src_notify_attach*.request.json` from the fork's source, because no storage controller runs in `deploy/loams-postgres-dev`.
+- **R8.9 For later tasks.**
+  - **Task 9:**
+    - wire `UpcallServer` with `--pg-upcall-listen` (default `DEFAULT_UPCALL_LISTEN`, `127.0.0.1:7690`) and the API address as `api_listen`;
+    - keep the signing key across restarts, shared by every `pg-control` instance: a Secret, or the file store in single-node mode. Two instances must never each generate a key;
+    - pass the pageserver and pool addresses and the controller's token.
+  - **Tasks 10 and 11:**
+    - starting a compute writes its `C/` record with `binding`, `jwt_key_id = keys.kid()` and `ctl_url`, and hands the compute its upcall token (`issue_upcall_token`, `COMPUTE_TOKEN_TTL`) and `--control-plane-uri`;
+    - a compute older than the token TTL is replaced;
+    - the endpoint reconciler re-pushes a spec when its inputs change, because a compute that read its spec just before a `notify-attach` committed still has the old pageserver;
+    - endpoint `pg_settings` need an allow-list, because the builder lets a caller's setting replace `shared_preload_libraries` or `synchronous_standby_names`.
+  - **Task 14:** an unbound compute's record has `binding: None`, and binding it is a write under the project's lease.
+  - **Task 24:** role verifiers in the spec.
+  - **Task 46:** `loams_pg_upcall_requests_total{route,code}`.
+  - **Task 48:**
+    - the NetworkPolicy lets only computes and the storage controller reach the upcall port;
+    - the controller's token and the signing key live in Secrets.
+  - **Task 53:**
+    - TLS (or mTLS for the controller) on the upcall listener;
+    - a tenant-scoped `storage_auth_token`.
