@@ -102,7 +102,8 @@ export function outputSchema(
 export function topoOrder(graph: PipelineGraph): string[] {
   const indeg = new Map(graph.nodes.map((n) => [n.id, 0]));
   for (const e of graph.edges) {
-    if (indeg.has(e.target) && indeg.has(e.source)) indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
+    if (indeg.has(e.target) && indeg.has(e.source))
+      indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
   }
   const queue = graph.nodes.filter((n) => indeg.get(n.id) === 0).map((n) => n.id);
   const order: string[] = [];
@@ -144,7 +145,8 @@ export function acceptedSchema(node: PipelineNode, lookup: Lookup): Schema {
 /** Checks one edge: does what the source side emits fit what the target accepts? */
 export function checkSchemas(emitted: Schema | undefined, accepted: Schema): EdgeCheck {
   if (accepted.open) return { ok: true, problems: [] };
-  if (emitted === undefined) return { ok: false, message: 'No output', problems: ['The upstream node emits nothing.'] };
+  if (emitted === undefined)
+    return { ok: false, message: 'No output', problems: ['The upstream node emits nothing.'] };
   // An open stream cannot be proven to fit a fixed schema: map it first.
   if (emitted.open) {
     return {

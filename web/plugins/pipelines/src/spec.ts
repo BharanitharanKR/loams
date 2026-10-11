@@ -9,7 +9,7 @@
 // Secret values never enter a spec: a secret field is a `secretRef` the deploy call
 // resolves from the values it is handed alongside, once.
 
-import { DEFAULT_GRAPH_LAYOUT, positionNodes } from '@loams-core/flows';
+import { DEFAULT_GRAPH_LAYOUT, positionNodes } from '@loams-core/flows/src/compiler.ts';
 import type {
   ConfigValue,
   FieldMapping,
@@ -77,7 +77,10 @@ export const secretRef = (pipeline: string, nodeId: string, key: string) =>
 
 const finite = (n: number) => (Number.isFinite(n) ? n : 0);
 
-export function toPipelineSpec(graph: PipelineGraph, opts: { running?: boolean } = {}): PipelineSpec {
+export function toPipelineSpec(
+  graph: PipelineGraph,
+  opts: { running?: boolean } = {},
+): PipelineSpec {
   return {
     apiVersion: PIPELINE_API_VERSION,
     kind: 'Pipeline',

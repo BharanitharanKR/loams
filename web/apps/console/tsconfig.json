@@ -1,7 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    // @loams/charts and @loams/plugin-pipelines import core compilers from their
+    // source files (@loams-core/*/src/compiler.ts), not the Node-only package roots.
+    "allowImportingTsExtensions": true
   },
   "include": ["src", "test"]
 }

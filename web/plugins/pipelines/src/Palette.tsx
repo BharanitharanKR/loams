@@ -59,7 +59,15 @@ export function byFamily(
   return [...groups.entries()];
 }
 
-function Entry({ item, title, onAdd }: { item: PaletteItem; title?: string; onAdd: (i: PaletteItem) => void }) {
+function Entry({
+  item,
+  title,
+  onAdd,
+}: {
+  item: PaletteItem;
+  title?: string;
+  onAdd: (i: PaletteItem) => void;
+}) {
   const onDragStart = (e: DragEvent<HTMLButtonElement>) => {
     e.dataTransfer.setData(DRAG_MIME, encodeItem(item));
     e.dataTransfer.effectAllowed = 'copy';
@@ -104,7 +112,11 @@ function Section({
           <h4 className="m-0 text-xs text-faint">{FAMILY_LABEL[family]}</h4>
           <ul className="m-0 flex list-none flex-col gap-1 p-0">
             {list.map((c) => (
-              <Entry key={c.id} item={{ kind: direction, ref: c.id, label: c.name }} onAdd={onAdd} />
+              <Entry
+                key={c.id}
+                item={{ kind: direction, ref: c.id, label: c.name }}
+                onAdd={onAdd}
+              />
             ))}
           </ul>
         </div>

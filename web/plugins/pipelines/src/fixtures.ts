@@ -46,7 +46,12 @@ export const FIXTURE_CATALOG: readonly ConnectorDef[] = [
     config: [
       text('brokers', 'Bootstrap servers', 'host:9092'),
       text('topic', 'Topic'),
-      { key: 'sasl', label: 'SASL mechanism', kind: 'select', options: ['none', 'PLAIN', 'SCRAM-SHA-512'] },
+      {
+        key: 'sasl',
+        label: 'SASL mechanism',
+        kind: 'select',
+        options: ['none', 'PLAIN', 'SCRAM-SHA-512'],
+      },
       secret('password', 'SASL password', false),
     ],
     emits: EVENTS,
@@ -95,7 +100,13 @@ export const FIXTURE_CATALOG: readonly ConnectorDef[] = [
       text('table', 'Table'),
       text('user', 'User'),
       secret('password', 'Password'),
-      { key: 'mode', label: 'Write mode', kind: 'select', options: ['insert', 'upsert'], required: true },
+      {
+        key: 'mode',
+        label: 'Write mode',
+        kind: 'select',
+        options: ['insert', 'upsert'],
+        required: true,
+      },
     ],
     accepts: {
       fields: [
@@ -112,7 +123,12 @@ export const FIXTURE_CATALOG: readonly ConnectorDef[] = [
     name: 'MySQL binlog',
     family: 'mysql',
     directions: ['source'],
-    config: [text('host', 'Host'), text('table', 'Table'), text('user', 'User'), secret('password', 'Password')],
+    config: [
+      text('host', 'Host'),
+      text('table', 'Table'),
+      text('user', 'User'),
+      secret('password', 'Password'),
+    ],
     emits: ORDERS,
   },
   {
@@ -120,7 +136,12 @@ export const FIXTURE_CATALOG: readonly ConnectorDef[] = [
     name: 'SQL Server CDC',
     family: 'sqlserver',
     directions: ['source'],
-    config: [text('host', 'Host'), text('table', 'Table'), text('user', 'User'), secret('password', 'Password')],
+    config: [
+      text('host', 'Host'),
+      text('table', 'Table'),
+      text('user', 'User'),
+      secret('password', 'Password'),
+    ],
     emits: ORDERS,
   },
   {
@@ -131,7 +152,13 @@ export const FIXTURE_CATALOG: readonly ConnectorDef[] = [
     config: [
       text('bucket', 'Bucket'),
       text('prefix', 'Prefix', 'raw/', false),
-      { key: 'format', label: 'Format', kind: 'select', options: ['parquet', 'jsonl'], required: true },
+      {
+        key: 'format',
+        label: 'Format',
+        kind: 'select',
+        options: ['parquet', 'jsonl'],
+        required: true,
+      },
       text('access_key_id', 'Access key id'),
       secret('secret_access_key', 'Secret access key'),
     ],
@@ -143,8 +170,17 @@ export const FIXTURE_CATALOG: readonly ConnectorDef[] = [
     name: 'Redis Streams',
     family: 'kv',
     directions: ['source', 'sink'],
-    config: [text('address', 'Address', 'host:6379'), text('stream', 'Stream'), secret('password', 'Password', false)],
-    emits: { fields: [{ name: 'id', type: 'string' }, { name: 'fields', type: 'json' }] },
+    config: [
+      text('address', 'Address', 'host:6379'),
+      text('stream', 'Stream'),
+      secret('password', 'Password', false),
+    ],
+    emits: {
+      fields: [
+        { name: 'id', type: 'string' },
+        { name: 'fields', type: 'json' },
+      ],
+    },
     accepts: { fields: [{ name: 'fields', type: 'json', required: true }] },
   },
   {
@@ -152,16 +188,34 @@ export const FIXTURE_CATALOG: readonly ConnectorDef[] = [
     name: 'Elasticsearch',
     family: 'search',
     directions: ['sink'],
-    config: [text('index', 'Index'), text('endpoint', 'Endpoint', 'host:9200'), secret('api_key', 'API key')],
-    accepts: { fields: [{ name: 'order_id', type: 'string', required: true }, { name: 'status', type: 'string' }] },
+    config: [
+      text('index', 'Index'),
+      text('endpoint', 'Endpoint', 'host:9200'),
+      secret('api_key', 'API key'),
+    ],
+    accepts: {
+      fields: [
+        { name: 'order_id', type: 'string', required: true },
+        { name: 'status', type: 'string' },
+      ],
+    },
   },
   {
     id: 'mongodb',
     name: 'MongoDB change streams',
     family: 'mongodb',
     directions: ['source', 'sink'],
-    config: [text('database', 'Database'), text('collection', 'Collection'), secret('uri', 'Connection string')],
-    emits: { fields: [{ name: '_id', type: 'string' }, { name: 'doc', type: 'json' }] },
+    config: [
+      text('database', 'Database'),
+      text('collection', 'Collection'),
+      secret('uri', 'Connection string'),
+    ],
+    emits: {
+      fields: [
+        { name: '_id', type: 'string' },
+        { name: 'doc', type: 'json' },
+      ],
+    },
     accepts: { open: true },
   },
   {
@@ -169,7 +223,12 @@ export const FIXTURE_CATALOG: readonly ConnectorDef[] = [
     name: 'ClickHouse',
     family: 'analytics',
     directions: ['sink'],
-    config: [text('endpoint', 'Endpoint', 'host:8123'), text('table', 'Table'), text('user', 'User'), secret('password', 'Password')],
+    config: [
+      text('endpoint', 'Endpoint', 'host:8123'),
+      text('table', 'Table'),
+      text('user', 'User'),
+      secret('password', 'Password'),
+    ],
     accepts: {
       fields: [
         { name: 'order_id', type: 'int', required: true },
@@ -183,7 +242,11 @@ export const FIXTURE_CATALOG: readonly ConnectorDef[] = [
     name: 'Iceberg',
     family: 'analytics',
     directions: ['sink'],
-    config: [text('catalog', 'Catalog'), text('table', 'Table'), secret('token', 'Catalog token', false)],
+    config: [
+      text('catalog', 'Catalog'),
+      text('table', 'Table'),
+      secret('token', 'Catalog token', false),
+    ],
     accepts: { open: true },
   },
   {
@@ -192,7 +255,12 @@ export const FIXTURE_CATALOG: readonly ConnectorDef[] = [
     family: 'brokers',
     directions: ['source', 'sink'],
     config: [text('subject', 'Subject'), secret('creds', 'Credentials', false)],
-    emits: { fields: [{ name: 'subject', type: 'string' }, { name: 'data', type: 'bytes' }] },
+    emits: {
+      fields: [
+        { name: 'subject', type: 'string' },
+        { name: 'data', type: 'bytes' },
+      ],
+    },
     accepts: { fields: [{ name: 'data', type: 'bytes', required: true }] },
   },
   {
@@ -200,8 +268,17 @@ export const FIXTURE_CATALOG: readonly ConnectorDef[] = [
     name: 'SQS',
     family: 'cloud',
     directions: ['source', 'sink'],
-    config: [text('queue', 'Queue name'), text('region', 'Region'), secret('secret_access_key', 'Secret access key')],
-    emits: { fields: [{ name: 'message_id', type: 'string' }, { name: 'body', type: 'string' }] },
+    config: [
+      text('queue', 'Queue name'),
+      text('region', 'Region'),
+      secret('secret_access_key', 'Secret access key'),
+    ],
+    emits: {
+      fields: [
+        { name: 'message_id', type: 'string' },
+        { name: 'body', type: 'string' },
+      ],
+    },
     accepts: { fields: [{ name: 'body', type: 'string', required: true }] },
   },
   {
@@ -218,7 +295,15 @@ export const FIXTURE_CATALOG: readonly ConnectorDef[] = [
     name: 'OTLP',
     family: 'protocols',
     directions: ['source'],
-    config: [{ key: 'signal', label: 'Signal', kind: 'select', options: ['logs', 'metrics', 'traces'], required: true }],
+    config: [
+      {
+        key: 'signal',
+        label: 'Signal',
+        kind: 'select',
+        options: ['logs', 'metrics', 'traces'],
+        required: true,
+      },
+    ],
     emits: {
       fields: [
         { name: 'resource', type: 'json' },

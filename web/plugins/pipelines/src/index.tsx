@@ -24,9 +24,10 @@ const plugin: PluginModule = {
     const slots = service(ctx, 'slots');
     const client = createClient();
     ctx.effect(() =>
-      router.page({ id: 'pipelines', path: '/pipelines', title: 'Pipelines', plugin: 'pipelines' }, () => (
-        <PipelinesPage client={client} />
-      )),
+      router.page(
+        { id: 'pipelines', path: '/pipelines', title: 'Pipelines', plugin: 'pipelines' },
+        () => <PipelinesPage client={client} />,
+      ),
     );
     ctx.effect(() =>
       slots.register(

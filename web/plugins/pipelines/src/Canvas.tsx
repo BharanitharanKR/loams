@@ -36,7 +36,13 @@ import {
 import '@xyflow/react/dist/style.css';
 import { type CSSProperties, type DragEvent, memo, useCallback, useMemo } from 'react';
 import type { MetricPoint, PipelinesClient } from './client.js';
-import { FAMILY_LABEL, type PipelineGraph, type PipelineNode, TRANSFORM_LABEL, type TransformKind } from './model.js';
+import {
+  FAMILY_LABEL,
+  type PipelineGraph,
+  type PipelineNode,
+  TRANSFORM_LABEL,
+  type TransformKind,
+} from './model.js';
 import { DRAG_MIME, decodeItem, type PaletteItem } from './Palette.js';
 import { canConnect, type EdgeCheck, type Lookup } from './schema.js';
 
@@ -68,7 +74,10 @@ const KIND_TONE = {
 export const NODE_WINDOW_MS = 60_000;
 
 /** "1.2k ev/s · lag 0.8 s": the newest point of each series. */
-export function latestText(throughput: readonly MetricPoint[], lag: readonly MetricPoint[]): string {
+export function latestText(
+  throughput: readonly MetricPoint[],
+  lag: readonly MetricPoint[],
+): string {
   const t = throughput.at(-1)?.v;
   const l = lag.at(-1)?.v;
   const parts: string[] = [];
@@ -83,7 +92,10 @@ function NodeMetricsMini({ live, nodeId, label }: { live: Live; nodeId: string; 
     () => client.metrics(deploymentId, nodeId, 'throughput'),
     [client, deploymentId, nodeId],
   );
-  const lagSource = useCallback(() => client.metrics(deploymentId, nodeId, 'lag'), [client, deploymentId, nodeId]);
+  const lagSource = useCallback(
+    () => client.metrics(deploymentId, nodeId, 'lag'),
+    [client, deploymentId, nodeId],
+  );
   const throughput = useMetricStream(throughputSource, NODE_WINDOW_MS);
   const lag = useMetricStream(lagSource, NODE_WINDOW_MS);
   return (
@@ -102,18 +114,23 @@ const PipelineNodeView = memo(function PipelineNodeView({ data, selected }: Node
     problems.length ? `, ${problems.length} problem${problems.length > 1 ? 's' : ''}` : ''
   }`;
   return (
-    <div
-      role="group"
+    <fieldset
       aria-label={name}
-      className={`w-[200px] border border-l-4 border-solid bg-surface p-2 text-ink ${KIND_TONE[node.kind]} ${
-        selected ? 'border-accent shadow-[0_0_0_2px_var(--op-accent)]' : problems.length ? 'border-danger' : 'border-rule'
+      className={`m-0 w-[200px] min-w-0 border border-l-4 border-solid bg-surface p-2 text-ink ${KIND_TONE[node.kind]} ${
+        selected
+          ? 'border-accent shadow-[0_0_0_2px_var(--op-accent)]'
+          : problems.length
+            ? 'border-danger'
+            : 'border-rule'
       }`}
     >
       {node.kind !== 'source' && (
         <Handle type="target" position={Position.Left} aria-label={`${node.label} input`} />
       )}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-medium uppercase tracking-wide text-muted">{KIND_LABEL[node.kind]}</span>
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
+          {KIND_LABEL[node.kind]}
+        </span>
         {problems.length > 0 && (
           <span className="text-[10px] font-medium text-danger" title={problems.join('\n')}>
             {problems.length} issue{problems.length > 1 ? 's' : ''}
@@ -129,7 +146,7 @@ const PipelineNodeView = memo(function PipelineNodeView({ data, selected }: Node
       {node.kind !== 'sink' && (
         <Handle type="source" position={Position.Right} aria-label={`${node.label} output`} />
       )}
-    </div>
+    </fieldset>
   );
 });
 
@@ -167,7 +184,10 @@ function TypedEdge({
         <EdgeLabelRenderer>
           <div
             className="nodrag nopan absolute border border-solid border-danger bg-danger-soft px-1.5 py-0.5 text-[10px] font-medium text-danger"
-            style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, pointerEvents: 'all' }}
+            style={{
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              pointerEvents: 'all',
+            }}
             title={check.problems.join('\n')}
           >
             {check.message}
@@ -316,13 +336,10 @@ function CanvasInner(props: CanvasProps) {
   } as CSSProperties;
 
   return (
-    <div
-      className="h-full min-h-[420px] w-full border border-solid border-rule"
-      style={themed}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-    >
+    <div className="h-full min-h-[420px] w-full border border-solid border-rule" style={themed}>
       <ReactFlow<PNode, TEdge>
+        onDragOver={onDragOver}
+        onDrop={onDrop}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}

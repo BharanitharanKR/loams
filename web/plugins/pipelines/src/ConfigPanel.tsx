@@ -187,7 +187,9 @@ function MapEditor({
   const byFrom = new Map(current.map((m) => [m.from, m]));
   const set = (from: string, to: string | undefined) => {
     const next = fields
-      .map((f) => (f.name === from ? { from, to: to ?? '' } : (byFrom.get(f.name) ?? { from: f.name, to: '' })))
+      .map((f) =>
+        f.name === from ? { from, to: to ?? '' } : (byFrom.get(f.name) ?? { from: f.name, to: '' }),
+      )
       .filter((m) => m.to !== '');
     onChange(next);
   };
@@ -294,7 +296,8 @@ function Connections({
   const label = (id: string) => graph.nodes.find((n) => n.id === id)?.label ?? id;
   const ins = graph.edges.filter((e) => e.target === node.id);
   const outs = graph.edges.filter((e) => e.source === node.id);
-  const candidates = node.kind === 'sink' ? [] : graph.nodes.filter((n) => canConnect(graph, node.id, n.id).ok);
+  const candidates =
+    node.kind === 'sink' ? [] : graph.nodes.filter((n) => canConnect(graph, node.id, n.id).ok);
   return (
     <section aria-label="Connections" className="flex flex-col gap-2">
       <h3 className="m-0 text-xs font-medium uppercase tracking-wide text-muted">Connections</h3>
@@ -354,7 +357,9 @@ export function ConfigPanel(props: ConfigPanelProps) {
   const { node, lookup, input, output, problems, readOnly, onChange, onSecret } = props;
   const def = node.kind === 'transform' ? undefined : lookup(node.ref);
   const title =
-    node.kind === 'transform' ? TRANSFORM_LABEL[node.ref as TransformKind] : (def?.name ?? node.ref);
+    node.kind === 'transform'
+      ? TRANSFORM_LABEL[node.ref as TransformKind]
+      : (def?.name ?? node.ref);
   const setConfig = (key: string, v: ConfigValue | undefined) => {
     const next = { ...node.config };
     if (v === undefined) delete next[key];
@@ -363,13 +368,17 @@ export function ConfigPanel(props: ConfigPanelProps) {
   };
 
   return (
-    <aside aria-label={`Configure ${node.label}`} className="flex min-w-0 flex-col gap-4 overflow-y-auto">
+    <aside
+      aria-label={`Configure ${node.label}`}
+      className="flex min-w-0 flex-col gap-4 overflow-y-auto"
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 className="m-0 truncate text-base">{node.label}</h2>
           <p className="m-0 text-xs text-muted">
             {node.kind} · {title}
-            {def?.delivery?.[node.kind as 'source' | 'sink'] && ` · ${def.delivery[node.kind as 'source' | 'sink']}`}
+            {def?.delivery?.[node.kind as 'source' | 'sink'] &&
+              ` · ${def.delivery[node.kind as 'source' | 'sink']}`}
           </p>
         </div>
         {!readOnly && (
@@ -380,7 +389,10 @@ export function ConfigPanel(props: ConfigPanelProps) {
       </div>
 
       {problems.length > 0 && (
-        <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-danger" aria-label="Problems with this node">
+        <ul
+          className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-danger"
+          aria-label="Problems with this node"
+        >
           {problems.map((p) => (
             <li key={p}>{p}</li>
           ))}
@@ -391,7 +403,11 @@ export function ConfigPanel(props: ConfigPanelProps) {
         <legend className="sr-only">Settings</legend>
         <Field label="Label">
           {(ids) => (
-            <Input {...ids} value={node.label} onChange={(e) => onChange({ label: e.target.value || node.ref })} />
+            <Input
+              {...ids}
+              value={node.label}
+              onChange={(e) => onChange({ label: e.target.value || node.ref })}
+            />
           )}
         </Field>
 
@@ -415,7 +431,9 @@ export function ConfigPanel(props: ConfigPanelProps) {
           ),
         )}
 
-        {node.kind === 'transform' && <p className="m-0 text-sm text-muted">{TRANSFORM_HINT[node.ref as TransformKind]}</p>}
+        {node.kind === 'transform' && (
+          <p className="m-0 text-sm text-muted">{TRANSFORM_HINT[node.ref as TransformKind]}</p>
+        )}
         {node.ref === 'filter' && node.kind === 'transform' && (
           <Field
             label="Expression"
@@ -434,10 +452,20 @@ export function ConfigPanel(props: ConfigPanelProps) {
           </Field>
         )}
         {node.ref === 'map' && node.kind === 'transform' && (
-          <MapEditor node={node} input={input} disabled={readOnly} onChange={(m) => onChange({ mappings: m })} />
+          <MapEditor
+            node={node}
+            input={input}
+            disabled={readOnly}
+            onChange={(m) => onChange({ mappings: m })}
+          />
         )}
         {node.ref === 'schema' && node.kind === 'transform' && (
-          <CastEditor node={node} input={input} disabled={readOnly} onChange={(c) => onChange({ casts: c })} />
+          <CastEditor
+            node={node}
+            input={input}
+            disabled={readOnly}
+            onChange={(c) => onChange({ casts: c })}
+          />
         )}
       </fieldset>
 
@@ -460,7 +488,9 @@ export function ConfigPanel(props: ConfigPanelProps) {
             <dd className="m-0 break-words font-mono">
               {def.accepts.open
                 ? 'any record'
-                : def.accepts.fields.map((f) => `${f.name}:${f.type}${f.required ? '*' : ''}`).join(', ')}
+                : def.accepts.fields
+                    .map((f) => `${f.name}:${f.type}${f.required ? '*' : ''}`)
+                    .join(', ')}
             </dd>
           </>
         )}

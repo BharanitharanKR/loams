@@ -20,7 +20,10 @@ export function nextId(graph: PipelineGraph, ref: string): string {
 }
 
 /** Where a palette click puts a node: its kind's column, below what is there. */
-export function defaultPosition(graph: PipelineGraph, kind: NewNode['kind']): { x: number; y: number } {
+export function defaultPosition(
+  graph: PipelineGraph,
+  kind: NewNode['kind'],
+): { x: number; y: number } {
   const inColumn = graph.nodes.filter((n) => n.kind === kind).length;
   return { x: COLUMN[kind] * 300, y: inColumn * 140 };
 }
@@ -44,13 +47,21 @@ export function addNode(
   return { graph: { ...graph, nodes: [...graph.nodes, node] }, id };
 }
 
-export function updateNode(graph: PipelineGraph, id: string, patch: Partial<PipelineNode>): PipelineGraph {
+export function updateNode(
+  graph: PipelineGraph,
+  id: string,
+  patch: Partial<PipelineNode>,
+): PipelineGraph {
   // The id, kind and ref are the node's identity; a patch never changes them.
   const { id: _i, kind: _k, ref: _r, ...rest } = patch;
   return { ...graph, nodes: graph.nodes.map((n) => (n.id === id ? { ...n, ...rest } : n)) };
 }
 
-export function moveNode(graph: PipelineGraph, id: string, position: { x: number; y: number }): PipelineGraph {
+export function moveNode(
+  graph: PipelineGraph,
+  id: string,
+  position: { x: number; y: number },
+): PipelineGraph {
   if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) return graph;
   return updateNode(graph, id, { position });
 }

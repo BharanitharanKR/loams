@@ -367,7 +367,7 @@ function compileDerived(
   }
   if (palette.length > 0) {
     [...colorsByValue.keys()].forEach((value, index) => {
-      colorsByValue.set(value, palette[index % palette.length]);
+      colorsByValue.set(value, palette[index % palette.length] ?? "");
     });
   }
 

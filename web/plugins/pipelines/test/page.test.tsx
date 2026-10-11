@@ -61,7 +61,8 @@ async function mount(opts: MockOptions = {}) {
 
 const palette = () => within(screen.getByRole('navigation', { name: 'Node palette' }));
 const outline = () => within(screen.getByRole('navigation', { name: 'Pipeline outline' }));
-const panel = (label: string) => within(screen.getByRole('complementary', { name: `Configure ${label}` }));
+const panel = (label: string) =>
+  within(screen.getByRole('complementary', { name: `Configure ${label}` }));
 
 function connectFromPanel(from: string, to: string) {
   fireEvent.click(outline().getByRole('button', { name: new RegExp(`^${from} `) }));
@@ -103,11 +104,15 @@ describe('pipelines page', () => {
     fireEvent.click(palette().getByRole('button', { name: 'Add NATS sink' }));
     connectFromPanel('Postgres CDC', 'NATS');
     await waitFor(() =>
-      expect(document.body.textContent).toContain('the schemas do not match: Missing required field data (bytes).'),
+      expect(document.body.textContent).toContain(
+        'the schemas do not match: Missing required field data (bytes).',
+      ),
     );
     fireEvent.click(screen.getByRole('button', { name: 'Validate' }));
     const results = await screen.findByRole('region', { name: 'Validation results' });
-    expect(within(results).getByText(/Postgres CDC → NATS: Missing required field data/)).toBeTruthy();
+    expect(
+      within(results).getByText(/Postgres CDC → NATS: Missing required field data/),
+    ).toBeTruthy();
   });
 
   it('secrets are write-only, and deploy runs the pipeline with live charts per node', async () => {
@@ -146,8 +151,12 @@ describe('pipelines page', () => {
     // Each node: a throughput and a lag LiveChart, and a sparkline on the canvas.
     const metrics = within(screen.getByRole('region', { name: 'Live metrics' }));
     for (const label of ['Webhook', 'Iceberg']) {
-      expect(metrics.getByRole('img', { name: `${label} throughput in events/s, last five minutes` })).toBeTruthy();
-      expect(metrics.getByRole('img', { name: `${label} lag in s, last five minutes` })).toBeTruthy();
+      expect(
+        metrics.getByRole('img', { name: `${label} throughput in events/s, last five minutes` }),
+      ).toBeTruthy();
+      expect(
+        metrics.getByRole('img', { name: `${label} lag in s, last five minutes` }),
+      ).toBeTruthy();
     }
     expect(charts.liveSpecs).toContainEqual(metricSpec('throughput'));
     expect(charts.liveSpecs).toContainEqual(metricSpec('lag'));

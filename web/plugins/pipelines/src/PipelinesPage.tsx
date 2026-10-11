@@ -7,8 +7,8 @@ import { PageHead } from '@loams/desktop-ui';
 import { Badge, Button, Card, Empty, Input, Notice, StatusTag } from '@loams/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, type Live } from './Canvas.js';
-import { type Deployment, failureMessage, type PipelinesClient } from './client.js';
 import { ConfigPanel } from './ConfigPanel.js';
+import { type Deployment, failureMessage, type PipelinesClient } from './client.js';
 import { type ConnectorDef, emptyGraph, type PipelineGraph, type Schema } from './model.js';
 import { NodeMetrics } from './NodeMetrics.js';
 import { addNode, connect, disconnect, moveNode, removeNodes, updateNode } from './ops.js';
@@ -57,7 +57,9 @@ export function PipelinesPage({ client, initial }: PipelinesPageProps) {
     client
       .catalog(abort.signal)
       .then((catalog) => !abort.signal.aborted && setLoad({ state: 'ready', catalog }))
-      .catch((e) => !abort.signal.aborted && setLoad({ state: 'error', message: failureMessage(e) }));
+      .catch(
+        (e) => !abort.signal.aborted && setLoad({ state: 'error', message: failureMessage(e) }),
+      );
     return () => abort.abort();
   }, [client, tick]);
 
@@ -82,7 +84,8 @@ export function PipelinesPage({ client, initial }: PipelinesPageProps) {
   }, [liveIssues]);
 
   const running = phase.state === 'running' || phase.state === 'stopping';
-  const busy = phase.state === 'validating' || phase.state === 'deploying' || phase.state === 'stopping';
+  const busy =
+    phase.state === 'validating' || phase.state === 'deploying' || phase.state === 'stopping';
   const readOnly = running || busy;
   const deploymentId = running ? phase.deployment.id : undefined;
   const live: Live | undefined = useMemo(
@@ -121,7 +124,8 @@ export function PipelinesPage({ client, initial }: PipelinesPageProps) {
 
   const onRemoveNodes = (ids: string[]) => {
     for (const id of ids) {
-      for (const k of [...secrets.current.keys()]) if (k.startsWith(`${id}/`)) secrets.current.delete(k);
+      for (const k of [...secrets.current.keys()])
+        if (k.startsWith(`${id}/`)) secrets.current.delete(k);
     }
     edit(removeNodes(graph, ids));
     if (selectedId && ids.includes(selectedId)) setSelectedId(undefined);
@@ -213,7 +217,9 @@ export function PipelinesPage({ client, initial }: PipelinesPageProps) {
   const status = running ? (
     <StatusTag status="done">{phase.state === 'stopping' ? 'Stopping' : 'Running'}</StatusTag>
   ) : busy ? (
-    <StatusTag status="progress">{phase.state === 'validating' ? 'Validating' : 'Deploying'}</StatusTag>
+    <StatusTag status="progress">
+      {phase.state === 'validating' ? 'Validating' : 'Deploying'}
+    </StatusTag>
   ) : (
     <StatusTag status="planned">Draft</StatusTag>
   );
@@ -229,7 +235,11 @@ export function PipelinesPage({ client, initial }: PipelinesPageProps) {
           <Button disabled={busy} onClick={() => void validate()}>
             Validate
           </Button>
-          <Button variant="primary" disabled={busy || load.state !== 'ready'} onClick={() => void deploy()}>
+          <Button
+            variant="primary"
+            disabled={busy || load.state !== 'ready'}
+            onClick={() => void deploy()}
+          >
             Deploy
           </Button>
         </>
@@ -287,7 +297,9 @@ export function PipelinesPage({ client, initial }: PipelinesPageProps) {
           {error}
         </Notice>
       )}
-      {running && phase.deployment.message && <Notice title="Deployed">{phase.deployment.message}</Notice>}
+      {running && phase.deployment.message && (
+        <Notice title="Deployed">{phase.deployment.message}</Notice>
+      )}
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="loams-field">
@@ -316,9 +328,14 @@ export function PipelinesPage({ client, initial }: PipelinesPageProps) {
           ) : (
             <Card title={`${issues.length} issue${issues.length > 1 ? 's' : ''}`}>
               <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm">
-                {issues.map((i, n) => (
-                  <li key={`${n}-${i.message}`} className="flex items-baseline gap-2">
-                    <span className={i.level === 'error' ? 'text-danger' : 'text-muted'}>{i.level}</span>
+                {issues.map((i) => (
+                  <li
+                    key={`${i.level}:${i.nodeId ?? ''}:${i.edgeId ?? ''}:${i.message}`}
+                    className="flex items-baseline gap-2"
+                  >
+                    <span className={i.level === 'error' ? 'text-danger' : 'text-muted'}>
+                      {i.level}
+                    </span>
                     {i.nodeId ? (
                       <button
                         type="button"
@@ -384,7 +401,9 @@ export function PipelinesPage({ client, initial }: PipelinesPageProps) {
                       aria-current={n.id === selectedId ? 'true' : undefined}
                       onClick={() => select(n.id)}
                       className={`flex w-full items-center justify-between gap-2 border border-solid px-2 py-1 text-left text-sm ${
-                        n.id === selectedId ? 'border-accent bg-accent-soft' : 'border-rule bg-surface'
+                        n.id === selectedId
+                          ? 'border-accent bg-accent-soft'
+                          : 'border-rule bg-surface'
                       } text-ink`}
                     >
                       <span className="truncate">
@@ -392,7 +411,8 @@ export function PipelinesPage({ client, initial }: PipelinesPageProps) {
                       </span>
                       {problemsByNode.has(n.id) && (
                         <span className="text-xs text-danger">
-                          {problemsByNode.get(n.id)?.length} issue{(problemsByNode.get(n.id)?.length ?? 0) > 1 ? 's' : ''}
+                          {problemsByNode.get(n.id)?.length} issue
+                          {(problemsByNode.get(n.id)?.length ?? 0) > 1 ? 's' : ''}
                         </span>
                       )}
                     </button>
@@ -428,7 +448,12 @@ export function PipelinesPage({ client, initial }: PipelinesPageProps) {
           <h2 className="m-0 text-base">Live metrics</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {graph.nodes.map((n) => (
-              <NodeMetrics key={`${live.deploymentId}/${n.id}`} client={client} deploymentId={live.deploymentId} node={n} />
+              <NodeMetrics
+                key={`${live.deploymentId}/${n.id}`}
+                client={client}
+                deploymentId={live.deploymentId}
+                node={n}
+              />
             ))}
           </div>
         </section>

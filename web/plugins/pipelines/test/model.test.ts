@@ -2,7 +2,7 @@
 // without a DOM. The spec test feeds the serialized graph to @loams-core/flows' own
 // compiler, so "compatible with flows" is checked by flows, not by a copy of its rules.
 
-import { compileGraph } from '@loams-core/flows';
+import { compileGraph } from '@loams-core/flows/src/compiler.ts';
 import { describe, expect, it } from 'vitest';
 import { FIXTURE_CATALOG } from '../src/fixtures.js';
 import { emptyGraph, type PipelineGraph } from '../src/model.js';
@@ -69,28 +69,51 @@ describe('type rules', () => {
   });
 
   it('refuses an untyped stream into a typed sink, and accepts anything into an open one', () => {
-    expect(checkSchemas({ open: true }, { fields: [{ name: 'x', type: 'int', required: true }] }).ok).toBe(false);
+    expect(
+      checkSchemas({ open: true }, { fields: [{ name: 'x', type: 'int', required: true }] }).ok,
+    ).toBe(false);
     expect(checkSchemas({ open: true }, { open: true }).ok).toBe(true);
   });
 });
 
 describe('ports', () => {
-  const g = build(add('source', 'postgres-cdc'), add('transform', 'filter'), add('sink', 'clickhouse'));
+  const g = build(
+    add('source', 'postgres-cdc'),
+    add('transform', 'filter'),
+    add('sink', 'clickhouse'),
+  );
 
   it('has no input on a source, no output on a sink, and no self loop', () => {
-    expect(canConnect(g, 'clickhouse-1', 'filter-1')).toEqual({ ok: false, reason: 'A sink has no output.' });
-    expect(canConnect(g, 'filter-1', 'postgres-cdc-1')).toEqual({ ok: false, reason: 'A source has no input.' });
+    expect(canConnect(g, 'clickhouse-1', 'filter-1')).toEqual({
+      ok: false,
+      reason: 'A sink has no output.',
+    });
+    expect(canConnect(g, 'filter-1', 'postgres-cdc-1')).toEqual({
+      ok: false,
+      reason: 'A source has no input.',
+    });
     expect(canConnect(g, 'filter-1', 'filter-1').ok).toBe(false);
   });
 
   it('refuses a cycle and a duplicate', () => {
-    const two = build(add('transform', 'filter'), add('transform', 'map'), link('filter-1', 'map-1'));
-    expect(canConnect(two, 'map-1', 'filter-1')).toEqual({ ok: false, reason: 'That connection would make a cycle.' });
+    const two = build(
+      add('transform', 'filter'),
+      add('transform', 'map'),
+      link('filter-1', 'map-1'),
+    );
+    expect(canConnect(two, 'map-1', 'filter-1')).toEqual({
+      ok: false,
+      reason: 'That connection would make a cycle.',
+    });
     expect(canConnect(two, 'filter-1', 'map-1').ok).toBe(false);
   });
 
   it('draws a mismatched connection as an error edge rather than refusing it', () => {
-    const bad = build(add('source', 'postgres-cdc'), add('sink', 'nats'), link('postgres-cdc-1', 'nats-1'));
+    const bad = build(
+      add('source', 'postgres-cdc'),
+      add('sink', 'nats'),
+      link('postgres-cdc-1', 'nats-1'),
+    );
     const check = checkEdges(bad, lookup).get('postgres-cdc-1->nats-1');
     expect(check?.ok).toBe(false);
     expect(check?.problems).toContain('Missing required field data (bytes).');
@@ -142,7 +165,11 @@ describe('validation', () => {
   });
 
   it('names required config and unset required secrets', () => {
-    const g = build(add('source', 'webhook'), add('sink', 'iceberg'), link('webhook-1', 'iceberg-1'));
+    const g = build(
+      add('source', 'webhook'),
+      add('sink', 'iceberg'),
+      link('webhook-1', 'iceberg-1'),
+    );
     const msgs = validateGraph(g, lookup).map((i) => i.message);
     expect(msgs).toContain('webhook: Path is required.');
     expect(msgs).toContain('webhook: Signing secret is required.');
@@ -153,7 +180,10 @@ describe('validation', () => {
 
   it('passes a complete graph', () => {
     let g = build(add('source', 'webhook'), add('sink', 'iceberg'), link('webhook-1', 'iceberg-1'));
-    g = updateNode(g, 'webhook-1', { config: { path: '/hooks/a' }, secrets: { signing_secret: true } });
+    g = updateNode(g, 'webhook-1', {
+      config: { path: '/hooks/a' },
+      secrets: { signing_secret: true },
+    });
     g = updateNode(g, 'iceberg-1', { config: { catalog: 'main', table: 'events' } });
     expect(validateGraph(g, lookup)).toEqual([]);
   });
@@ -197,7 +227,10 @@ describe('pipeline spec', () => {
       link('postgres-cdc-1', 'filter-1'),
       link('filter-1', 'clickhouse-1'),
     );
-    g = updateNode(g, 'postgres-cdc-1', { config: { host: 'db', port: 5432 }, secrets: { password: true } });
+    g = updateNode(g, 'postgres-cdc-1', {
+      config: { host: 'db', port: 5432 },
+      secrets: { password: true },
+    });
     g = updateNode(g, 'filter-1', { config: { expression: 'amount > 10' } });
     return g;
   };
@@ -211,13 +244,15 @@ describe('pipeline spec', () => {
       ['postgres-cdc-1', 'filter-1'],
       ['filter-1', 'clickhouse-1'],
     ]);
-    expect(compiled.nodes[0].className).toBe('pipeline-source');
+    expect(compiled.nodes[0]?.className).toBe('pipeline-source');
   });
 
   it('carries secret refs, never values, and steps name their inputs', () => {
     const spec = toPipelineSpec(complete());
     const pg = spec.steps.find((s) => s.id === 'postgres-cdc-1');
-    expect(pg?.secrets).toEqual({ password: { secretRef: secretRef('orders', 'postgres-cdc-1', 'password') } });
+    expect(pg?.secrets).toEqual({
+      password: { secretRef: secretRef('orders', 'postgres-cdc-1', 'password') },
+    });
     expect(pg?.uses).toBe('connector:postgres-cdc');
     expect(spec.steps.find((s) => s.id === 'filter-1')).toMatchObject({
       uses: 'transform:filter',
@@ -231,15 +266,23 @@ describe('pipeline spec', () => {
   });
 
   it('animates edges only for a running pipeline', () => {
-    expect(toPipelineSpec(complete()).graph.edges.every((e) => e.animated === undefined)).toBe(true);
-    expect(toPipelineSpec(complete(), { running: true }).graph.edges.every((e) => e.animated)).toBe(true);
+    expect(toPipelineSpec(complete()).graph.edges.every((e) => e.animated === undefined)).toBe(
+      true,
+    );
+    expect(toPipelineSpec(complete(), { running: true }).graph.edges.every((e) => e.animated)).toBe(
+      true,
+    );
   });
 
   it('auto layout ranks left to right with flows ranker', () => {
     const laid = autoLayout(complete());
-    const x = Object.fromEntries(laid.nodes.map((n) => [n.id, n.position.x]));
-    expect(x['postgres-cdc-1']).toBe(0);
-    expect(x['filter-1']).toBeGreaterThan(x['postgres-cdc-1']);
-    expect(x['clickhouse-1']).toBeGreaterThan(x['filter-1']);
+    const x = (id: string) => {
+      const node = laid.nodes.find((n) => n.id === id);
+      if (!node) throw new Error(`auto layout dropped ${id}`);
+      return node.position.x;
+    };
+    expect(x('postgres-cdc-1')).toBe(0);
+    expect(x('filter-1')).toBeGreaterThan(x('postgres-cdc-1'));
+    expect(x('clickhouse-1')).toBeGreaterThan(x('filter-1'));
   });
 });

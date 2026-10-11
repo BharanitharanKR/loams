@@ -16,7 +16,12 @@ function spec() {
   g = addNode(g, { kind: 'source', ref: 'kafka', label: 'Kafka' }).graph;
   g = addNode(g, { kind: 'sink', ref: 's3', label: 'S3' }).graph;
   g = connect(g, 'kafka-1', 's3-1').graph;
-  g = { ...g, nodes: g.nodes.map((n) => (n.id === 's3-1' ? { ...n, secrets: { secret_access_key: true } } : n)) };
+  g = {
+    ...g,
+    nodes: g.nodes.map((n) =>
+      n.id === 's3-1' ? { ...n, secrets: { secret_access_key: true } } : n,
+    ),
+  };
   return toPipelineSpec(g);
 }
 
@@ -24,7 +29,16 @@ describe('mock pipelines client', () => {
   it('serves the fixture catalog with every CN2 family represented', async () => {
     const client = createMockPipelinesClient();
     const families = new Set((await client.catalog()).map((c) => c.family));
-    for (const f of ['kafka', 'postgres', 'mysql', 'objects', 'analytics', 'brokers', 'cloud', 'http']) {
+    for (const f of [
+      'kafka',
+      'postgres',
+      'mysql',
+      'objects',
+      'analytics',
+      'brokers',
+      'cloud',
+      'http',
+    ]) {
       expect(families.has(f as never)).toBe(true);
     }
   });
@@ -32,15 +46,21 @@ describe('mock pipelines client', () => {
   it('emits a backfill, then one point per interval, and ends on stop', async () => {
     vi.useFakeTimers();
     let t = 1_000_000;
-    const client = createMockPipelinesClient({ intervalMs: 500, deployMs: 0, now: () => t, random: () => 0.5 });
+    const client = createMockPipelinesClient({
+      intervalMs: 500,
+      deployMs: 0,
+      now: () => t,
+      random: () => 0.5,
+    });
     const deploying = client.deploy(spec(), new Map());
     await vi.advanceTimersByTimeAsync(0);
     const d = await deploying;
 
     const it = client.metrics(d.id, 'kafka-1', 'throughput')[Symbol.asyncIterator]();
     const first = await it.next();
+    if (first.done) throw new Error('the metric stream ended before its first batch');
     expect(first.value).toHaveLength(10);
-    expect(first.value?.every((p) => p.series === 'throughput' && p.v >= 0)).toBe(true);
+    expect(first.value.every((p) => p.series === 'throughput' && p.v >= 0)).toBe(true);
 
     const second = it.next();
     t += 500;
@@ -66,7 +86,10 @@ describe('mock pipelines client', () => {
     const ref = secretRef('m', 's3-1', 'secret_access_key');
     const d = await client.deploy(spec(), new Map([[ref, 'value-that-must-not-leak']]));
     expect(d.state).toBe('running');
-    expect(client.calls.find((c) => c.method === 'deploy')?.arg).toEqual({ name: 'm', secretRefs: [ref] });
+    expect(client.calls.find((c) => c.method === 'deploy')?.arg).toEqual({
+      name: 'm',
+      secretRefs: [ref],
+    });
     expect(JSON.stringify(client.calls)).not.toContain('value-that-must-not-leak');
     await client.stop(d.id);
   });

@@ -76,8 +76,20 @@ export function NodeMetrics({
   return (
     <Card title={node.label} headingLevel={headingLevel}>
       <div className="grid grid-cols-1 gap-2">
-        <MetricChart client={client} deploymentId={deploymentId} node={node} metric="throughput" height={height} />
-        <MetricChart client={client} deploymentId={deploymentId} node={node} metric="lag" height={height} />
+        <MetricChart
+          client={client}
+          deploymentId={deploymentId}
+          node={node}
+          metric="throughput"
+          height={height}
+        />
+        <MetricChart
+          client={client}
+          deploymentId={deploymentId}
+          node={node}
+          metric="lag"
+          height={height}
+        />
       </div>
     </Card>
   );

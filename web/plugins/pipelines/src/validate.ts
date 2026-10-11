@@ -18,23 +18,39 @@ function configIssues(node: PipelineNode, lookup: Lookup): Issue[] {
   const issues: Issue[] = [];
   if (node.kind === 'transform') {
     if (node.ref === 'filter' && isBlank(node.config.expression)) {
-      issues.push({ level: 'error', nodeId: node.id, message: `${node.label}: the filter has no expression.` });
+      issues.push({
+        level: 'error',
+        nodeId: node.id,
+        message: `${node.label}: the filter has no expression.`,
+      });
     }
     if (node.ref === 'map' && (node.mappings ?? []).filter((m) => m.to).length === 0) {
-      issues.push({ level: 'warning', nodeId: node.id, message: `${node.label}: no fields mapped; records pass through unchanged.` });
+      issues.push({
+        level: 'warning',
+        nodeId: node.id,
+        message: `${node.label}: no fields mapped; records pass through unchanged.`,
+      });
     }
     return issues;
   }
   const def = lookup(node.ref);
   if (!def) {
-    issues.push({ level: 'error', nodeId: node.id, message: `${node.label}: unknown connector ${node.ref}.` });
+    issues.push({
+      level: 'error',
+      nodeId: node.id,
+      message: `${node.label}: unknown connector ${node.ref}.`,
+    });
     return issues;
   }
   for (const f of def.config) {
     if (!f.required) continue;
     const missing = f.kind === 'secret' ? !node.secrets[f.key] : isBlank(node.config[f.key]);
     if (missing) {
-      issues.push({ level: 'error', nodeId: node.id, message: `${node.label}: ${f.label} is required.` });
+      issues.push({
+        level: 'error',
+        nodeId: node.id,
+        message: `${node.label}: ${f.label} is required.`,
+      });
     }
   }
   return issues;
@@ -46,14 +62,18 @@ export function validateGraph(graph: PipelineGraph, lookup: Lookup): Issue[] {
   if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(graph.name)) {
     issues.push({
       level: 'error',
-      message: 'The pipeline name must be lowercase letters, digits and dashes, starting with a letter or digit.',
+      message:
+        'The pipeline name must be lowercase letters, digits and dashes, starting with a letter or digit.',
     });
   }
-  if (!graph.nodes.some((n) => n.kind === 'source')) issues.push({ level: 'error', message: 'Add a source.' });
-  if (!graph.nodes.some((n) => n.kind === 'sink')) issues.push({ level: 'error', message: 'Add a sink.' });
+  if (!graph.nodes.some((n) => n.kind === 'source'))
+    issues.push({ level: 'error', message: 'Add a source.' });
+  if (!graph.nodes.some((n) => n.kind === 'sink'))
+    issues.push({ level: 'error', message: 'Add a sink.' });
 
   const ordered = new Set(topoOrder(graph));
-  if (ordered.size < graph.nodes.length) issues.push({ level: 'error', message: 'The pipeline has a cycle.' });
+  if (ordered.size < graph.nodes.length)
+    issues.push({ level: 'error', message: 'The pipeline has a cycle.' });
 
   for (const node of graph.nodes) {
     const hasIn = graph.edges.some((e) => e.target === node.id);
@@ -62,7 +82,11 @@ export function validateGraph(graph: PipelineGraph, lookup: Lookup): Issue[] {
       issues.push({ level: 'error', nodeId: node.id, message: `${node.label} has no input.` });
     }
     if (node.kind !== 'sink' && !hasOut) {
-      issues.push({ level: 'error', nodeId: node.id, message: `${node.label} goes nowhere; connect it to a sink.` });
+      issues.push({
+        level: 'error',
+        nodeId: node.id,
+        message: `${node.label} goes nowhere; connect it to a sink.`,
+      });
     }
     issues.push(...configIssues(node, lookup));
   }
@@ -72,7 +96,8 @@ export function validateGraph(graph: PipelineGraph, lookup: Lookup): Issue[] {
     if (check.ok) continue;
     const edge = graph.edges.find((e) => e.id === edgeId);
     const name = edge ? `${labels.get(edge.source)} → ${labels.get(edge.target)}` : edgeId;
-    for (const p of check.problems) issues.push({ level: 'error', edgeId, nodeId: edge?.target, message: `${name}: ${p}` });
+    for (const p of check.problems)
+      issues.push({ level: 'error', edgeId, nodeId: edge?.target, message: `${name}: ${p}` });
   }
 
   return issues.sort((a, b) => (a.level === b.level ? 0 : a.level === 'error' ? -1 : 1));

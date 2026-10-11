@@ -46,7 +46,10 @@ export function createMockPipelinesClient(opts: MockOptions = {}): MockPipelines
   const deployMs = opts.deployMs ?? 300;
   const now = opts.now ?? (() => Date.now());
   const random = opts.random ?? Math.random;
-  const deployments = new Map<string, Deployment & { nodes: Set<string>; stopped: { stopped: boolean } }>();
+  const deployments = new Map<
+    string,
+    Deployment & { nodes: Set<string>; stopped: { stopped: boolean } }
+  >();
   const calls: MockPipelinesClient['calls'] = [];
   let failNext = opts.failDeploy;
   let seq = 0;
@@ -72,14 +75,21 @@ export function createMockPipelinesClient(opts: MockOptions = {}): MockPipelines
       for (const step of spec.steps) {
         const [prefix, ref] = step.uses.split(':', 2);
         if (prefix === 'connector' && !known.has(ref ?? '')) {
-          issues.push({ level: 'error', nodeId: step.id, message: `Server: unknown connector ${ref}.` });
+          issues.push({
+            level: 'error',
+            nodeId: step.id,
+            message: `Server: unknown connector ${ref}.`,
+          });
         }
       }
       return issues;
     },
     async deploy(spec: PipelineSpec, secrets) {
       const refs = spec.steps.flatMap((s) => Object.values(s.secrets).map((r) => r.secretRef));
-      calls.push({ method: 'deploy', arg: { name: spec.metadata.name, secretRefs: [...secrets.keys()] } });
+      calls.push({
+        method: 'deploy',
+        arg: { name: spec.metadata.name, secretRefs: [...secrets.keys()] },
+      });
       const missing = refs.filter((r) => !secrets.has(r));
       await new Promise((r) => setTimeout(r, deployMs));
       if (failNext) {
@@ -96,7 +106,9 @@ export function createMockPipelinesClient(opts: MockOptions = {}): MockPipelines
         name: spec.metadata.name,
         state: 'running' as const,
         revision: (prior?.revision ?? 0) + 1,
-        ...(missing.length ? { message: `${missing.length} secret(s) reused from the store.` } : {}),
+        ...(missing.length
+          ? { message: `${missing.length} secret(s) reused from the store.` }
+          : {}),
         nodes: new Set(spec.steps.map((s) => s.id)),
         stopped: { stopped: false },
       };
@@ -116,7 +128,7 @@ export function createMockPipelinesClient(opts: MockOptions = {}): MockPipelines
       const base = seedOf(`${nodeId}/${metric}`);
       return {
         async *[Symbol.asyncIterator]() {
-          if (!d || !d.nodes.has(nodeId)) return;
+          if (!d?.nodes.has(nodeId)) return;
           // A short backfill, so a chart opens with a line rather than a dot.
           const t0 = now();
           let level = metric === 'throughput' ? 200 + base * 1800 : 0.2 + base * 3;
