@@ -2,5 +2,8 @@
 //! binding mode, the record layout, round trips and validation errors.
 
 mod binary;
+#[cfg(feature = "protobuf")]
+mod protobuf;
+#[cfg(feature = "record")]
 mod records;
 mod structured;

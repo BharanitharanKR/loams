@@ -4,9 +4,10 @@
 //! with, in arrival order, plus the type of each extension, so an event
 //! read back from a stream round-trips byte for byte on its attributes. The
 //! formats are [`json`] (structured and batched mode), [`http`] (binary
-//! mode) and [`record`] (the record layout of the Kafka binding's binary
-//! mode, which is how an event is stored). The protobuf format lives with
-//! the gRPC service, which compiles its schema.
+//! mode), `record` (the record layout of the Kafka binding's binary mode,
+//! which is how an event is stored; feature `record`, on by default) and
+//! `protobuf` (the protobuf format and its batch, which the gRPC service and
+//! Git WAL segments use; feature `protobuf`).
 //!
 //! `cloudevents-sdk` is not used: it normalizes `time` and typed extension
 //! values when it writes them back, which breaks the round trip.
@@ -19,6 +20,9 @@ use time::format_description::well_known::Rfc3339;
 pub mod http;
 pub mod json;
 pub mod partition;
+#[cfg(feature = "protobuf")]
+pub mod protobuf;
+#[cfg(feature = "record")]
 pub mod record;
 
 /// The only `specversion` accepted.
