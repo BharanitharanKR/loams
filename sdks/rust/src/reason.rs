@@ -295,24 +295,21 @@ impl Reason {
             | Reason::HouseQueryNotFound
             | Reason::ProjectNotFound
             | Reason::NotFound => Code::NotFound,
-            Reason::NotImplemented
-            | Reason::FeatureNotInVariant
-            | Reason::HouseNotConfigured => Code::Unimplemented,
-            Reason::EndpointExistsForBranch
-            | Reason::AlreadyExists => Code::AlreadyExists,
+            Reason::NotImplemented | Reason::FeatureNotInVariant | Reason::HouseNotConfigured => {
+                Code::Unimplemented
+            }
+            Reason::EndpointExistsForBranch | Reason::AlreadyExists => Code::AlreadyExists,
             Reason::HouseMemoryLimit
             | Reason::HouseTooManyQueries
             | Reason::HouseQuotaExceeded
             | Reason::QuotaExceeded
             | Reason::ResourceExhausted => Code::ResourceExhausted,
-            Reason::ComputeStartFailed
-            | Reason::StorageUnavailable
-            | Reason::Unavailable => Code::Unavailable,
-            Reason::HouseTimeout
-            | Reason::DeadlineExceeded => Code::DeadlineExceeded,
+            Reason::ComputeStartFailed | Reason::StorageUnavailable | Reason::Unavailable => {
+                Code::Unavailable
+            }
+            Reason::HouseTimeout | Reason::DeadlineExceeded => Code::DeadlineExceeded,
             Reason::Aborted => Code::Aborted,
-            Reason::LiveWorkerCrashed
-            | Reason::Internal => Code::Internal,
+            Reason::LiveWorkerCrashed | Reason::Internal => Code::Internal,
             Reason::HouseCancelled => Code::Canceled,
             Reason::HouseQueryFailed => Code::Unknown,
         }
