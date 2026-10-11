@@ -109,7 +109,10 @@ fn config(listen: SocketAddr) -> UpcallConfig {
 }
 
 async fn rig_with(tweak: impl FnOnce(&mut UpcallConfig)) -> Rig {
-    let store = factory().store(common::options()).await.unwrap();
+    rig_on(factory().store(common::options()).await.unwrap(), tweak).await
+}
+
+async fn rig_on(store: KvControlStore, tweak: impl FnOnce(&mut UpcallConfig)) -> Rig {
     let older = ComputeKeys::generate().unwrap();
     let keys = Arc::new(ComputeKeys::generate().unwrap().trust(&older));
     let ctl = Arc::new(FakeCtl::default());
@@ -785,4 +788,113 @@ async fn it_compute_ctl_reads_the_spec_upcall() {
         // Still starting (and failing) without storage: accepted.
         Err(e) => assert!(e.is_timeout(), "{e}"),
     }
+}
+
+/// Injects `fault` at `point` of the first `pg.batch` transaction only, and
+/// signals `reached` when it does.
+struct FirstBatchOnce {
+    point: loams_kv::FaultPoint,
+    fault: loams_kv::Fault,
+    fired: std::sync::atomic::AtomicBool,
+    reached: Arc<tokio::sync::Notify>,
+}
+
+impl loams_kv::FaultPlan for FirstBatchOnce {
+    fn at(&self, op: &str, point: loams_kv::FaultPoint, _: u32) -> Option<loams_kv::Fault> {
+        if op != "pg.batch" || point != self.point {
+            return None;
+        }
+        if self.fired.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return None;
+        }
+        self.reached.notify_one();
+        Some(self.fault)
+    }
+}
+
+/// A rig whose store faults its first batch: the shard-map write.
+async fn faulty_rig(
+    point: loams_kv::FaultPoint,
+    fault: loams_kv::Fault,
+    commit_tokens: bool,
+) -> (Rig, Arc<tokio::sync::Notify>) {
+    let kv = factory().kv().await.unwrap();
+    let reached = Arc::new(tokio::sync::Notify::new());
+    let plan = FirstBatchOnce {
+        point,
+        fault,
+        fired: std::sync::atomic::AtomicBool::new(false),
+        reached: reached.clone(),
+    };
+    let options = loams_pg_control::StoreOptions {
+        commit_tokens,
+        ..common::options()
+    };
+    let store = KvControlStore::new(kv.with_faults(Arc::new(plan)), options);
+    (rig_on(store, |_| {}).await, reached)
+}
+
+/// The shard-map write under faults (CodeRabbit, PR #417):
+/// - a transaction conflict at commit is redone by the store's runner: 200;
+/// - a branch written between the notification's read and its batch makes
+///   the batch's compare-and-set fail; `record` reads again and writes
+///   both changes: 200, and the concurrent change is kept;
+/// - a lost acknowledgement (no commit tokens) is 503; the controller's
+///   retry finds the map already written, writes nothing and answers 200.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn notify_attach_shard_map_write_survives_faults() {
+    use loams_kv::{Fault, FaultPoint};
+
+    // A transaction conflict at commit.
+    let (r, _) = faulty_rig(FaultPoint::BeforeCommit, Fault::Conflict, true).await;
+    let (status, text) = r.notify(Some(NOTIFY_TOKEN), &r.attach_body(7)).await;
+    assert_eq!(status, 200, "{text}");
+    assert_eq!(r.branch(r.ids.main).await.shards[0].node_id, 7);
+
+    // A concurrent write between the read and the batch.
+    let (r, reached) = faulty_rig(
+        FaultPoint::BeforeBegin,
+        Fault::Delay(Duration::from_secs(2)),
+        true,
+    )
+    .await;
+    let r = Arc::new(r);
+    let notify = {
+        let r = r.clone();
+        tokio::spawn(async move { r.notify(Some(NOTIFY_TOKEN), &r.attach_body(7)).await })
+    };
+    reached.notified().await;
+    let key = BranchKey {
+        project_id: r.ids.project.to_string(),
+        id: r.ids.dev.to_string(),
+    };
+    let dev = r.store.get::<BranchRec>(&key).await.unwrap().unwrap();
+    let mut rec = dev.record.clone();
+    rec.protected = true;
+    r.store
+        .api_writer()
+        .put(&rec, Some(dev.version))
+        .await
+        .unwrap();
+    let (status, text) = notify.await.unwrap();
+    assert_eq!(status, 200, "{text}");
+    let dev = r.branch(r.ids.dev).await;
+    assert!(dev.protected, "the concurrent change is kept");
+    assert_eq!(dev.shards[0].node_id, 7);
+    assert_eq!(r.branch(r.ids.main).await.shards[0].node_id, 7);
+
+    // A lost acknowledgement after the commit.
+    let (r, _) = faulty_rig(FaultPoint::AfterCommit, Fault::LoseAck, false).await;
+    let (status, text) = r.notify(Some(NOTIFY_TOKEN), &r.attach_body(7)).await;
+    assert_eq!(status, 503, "{text}");
+    let main_key = BranchKey {
+        project_id: r.ids.project.to_string(),
+        id: r.ids.main.to_string(),
+    };
+    let written = r.store.get::<BranchRec>(&main_key).await.unwrap().unwrap();
+    assert_eq!(written.record.shards[0].node_id, 7, "the batch applied");
+    let (status, text) = r.notify(Some(NOTIFY_TOKEN), &r.attach_body(7)).await;
+    assert_eq!(status, 200, "{text}");
+    let again = r.store.get::<BranchRec>(&main_key).await.unwrap().unwrap();
+    assert_eq!(again.version, written.version, "the retry wrote nothing");
 }

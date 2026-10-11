@@ -32,7 +32,7 @@ base64.workspace = true
 futures.workspace = true
 hex.workspace = true
 hyper = { version = "1", features = ["server", "http1"] }
-hyper-util = { version = "0.1", features = ["tokio", "service"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
 jsonwebtoken.workspace = true
 k8s-openapi = { workspace = true, optional = true }
 keyring = { workspace = true, optional = true }
