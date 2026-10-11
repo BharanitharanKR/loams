@@ -176,15 +176,50 @@ export function checkSchemas(emitted: Schema | undefined, accepted: Schema): Edg
       };
 }
 
+/**
+ * Fields that more than one input carries with different types. A transform merges its
+ * inputs by name, so a conflict would otherwise be hidden by whichever input came first.
+ */
+export function inputConflicts(inputs: readonly (Schema | undefined)[]): string[] {
+  const types = new Map<string, FieldType>();
+  const problems: string[] = [];
+  const reported = new Set<string>();
+  for (const s of inputs) {
+    for (const f of fieldsOf(s) ?? []) {
+      const first = types.get(f.name);
+      if (first === undefined) types.set(f.name, f.type);
+      else if (first !== f.type && !reported.has(f.name)) {
+        reported.add(f.name);
+        problems.push(`Field ${f.name} is ${first} on one input and ${f.type} on another.`);
+      }
+    }
+  }
+  return problems;
+}
+
 /** Checks every edge of the graph against the propagated schemas. */
 export function checkEdges(graph: PipelineGraph, lookup: Lookup): Map<string, EdgeCheck> {
   const schemas = propagate(graph, lookup);
   const byId = new Map(graph.nodes.map((n) => [n.id, n]));
+  const conflicts = new Map<string, string[]>();
+  for (const n of graph.nodes) {
+    if (n.kind !== 'transform') continue;
+    const inputs = graph.edges.filter((e) => e.target === n.id).map((e) => schemas.get(e.source));
+    if (inputs.length < 2) continue;
+    const problems = inputConflicts(inputs);
+    if (problems.length) conflicts.set(n.id, problems);
+  }
   const result = new Map<string, EdgeCheck>();
   for (const e of graph.edges) {
     const target = byId.get(e.target);
     if (!target) continue;
-    result.set(e.id, checkSchemas(schemas.get(e.source), acceptedSchema(target, lookup)));
+    const conflict = conflicts.get(target.id);
+    result.set(
+      e.id,
+      conflict
+        ? { ok: false, message: 'Conflicting inputs', problems: conflict }
+        : checkSchemas(schemas.get(e.source), acceptedSchema(target, lookup)),
+    );
   }
   return result;
 }

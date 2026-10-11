@@ -166,6 +166,24 @@ describe('pipelines page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
     await screen.findByRole('button', { name: 'Deploy' });
     expect(screen.queryByRole('region', { name: 'Live metrics' })).toBeNull();
+
+    // A rename changes every secret ref, and the page sent its values already: the
+    // secret reads unset again, so the next deploy cannot name a ref with no value.
+    fireEvent.change(screen.getByLabelText('Pipeline name'), { target: { value: 'orders' } });
+    fireEvent.click(outline().getByRole('button', { name: /Webhook/ }));
+    p = panel('Webhook');
+    expect(p.queryByText('set')).toBeNull();
+    expect(p.queryByRole('button', { name: 'Replace' })).toBeNull();
+  });
+
+  it('a rename keeps a secret the page still holds', async () => {
+    await mount();
+    fireEvent.click(palette().getByRole('button', { name: 'Add Webhook source' }));
+    const s = panel('Webhook').getByLabelText(/^Signing secret/);
+    fireEvent.change(s, { target: { value: 'x' } });
+    fireEvent.keyDown(s, { key: 'Enter' });
+    fireEvent.change(screen.getByLabelText('Pipeline name'), { target: { value: 'orders' } });
+    expect(panel('Webhook').getByText('set')).toBeTruthy();
   });
 
   it('refuses to deploy an invalid graph and lists why', async () => {

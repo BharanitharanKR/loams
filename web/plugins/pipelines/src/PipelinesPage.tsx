@@ -98,6 +98,22 @@ export function PipelinesPage({ client, initial }: PipelinesPageProps) {
     setShownIssues(undefined);
   };
 
+  // Secret refs carry the pipeline name, so a rename leaves the store's values behind:
+  // a node keeps a secret as set only while the page still holds a value to send.
+  const rename = (name: string) => {
+    if (name === graph.name) return;
+    edit({
+      ...graph,
+      name,
+      nodes: graph.nodes.map((n) => ({
+        ...n,
+        secrets: Object.fromEntries(
+          Object.keys(n.secrets).map((k) => [k, secrets.current.has(secretKey(n.id, k))]),
+        ),
+      })),
+    });
+  };
+
   const onAdd = (item: PaletteItem, position?: { x: number; y: number }) => {
     if (readOnly) return;
     const r = addNode(graph, item, position);
@@ -310,7 +326,7 @@ export function PipelinesPage({ client, initial }: PipelinesPageProps) {
             value={graph.name}
             disabled={readOnly}
             spellCheck={false}
-            onChange={(e) => edit({ ...graph, name: e.target.value.toLowerCase() })}
+            onChange={(e) => rename(e.target.value.toLowerCase())}
           />
         </div>
         <span className="text-sm text-muted">

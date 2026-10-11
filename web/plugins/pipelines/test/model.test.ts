@@ -151,6 +151,32 @@ describe('schema propagation', () => {
     ]);
   });
 
+  it('fails every input of a transform whose inputs disagree on a field type', () => {
+    let g = build(
+      add('source', 'postgres-cdc'),
+      add('source', 'otlp'),
+      add('transform', 'map'),
+      add('transform', 'map'),
+      add('transform', 'filter'),
+      link('postgres-cdc-1', 'map-1'),
+      link('otlp-1', 'map-2'),
+      link('map-1', 'filter-1'),
+      link('map-2', 'filter-1'),
+    );
+    g = updateNode(g, 'map-1', { mappings: [{ from: 'order_id', to: 'key' }] });
+    g = updateNode(g, 'map-2', { mappings: [{ from: 'body', to: 'key' }] });
+    const checks = checkEdges(g, lookup);
+    for (const id of ['map-1->filter-1', 'map-2->filter-1']) {
+      expect(checks.get(id)).toEqual({
+        ok: false,
+        message: 'Conflicting inputs',
+        problems: ['Field key is int on one input and string on another.'],
+      });
+    }
+    g = updateNode(g, 'map-2', { mappings: [{ from: 'body', to: 'text' }] });
+    expect(checkEdges(g, lookup).get('map-2->filter-1')?.ok).toBe(true);
+  });
+
   it('a filter passes its input through unchanged', () => {
     const g = build(add('source', 'otlp'), add('transform', 'filter'), link('otlp-1', 'filter-1'));
     const s = propagate(g, lookup);

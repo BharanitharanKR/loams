@@ -46,10 +46,8 @@ export function createMockPipelinesClient(opts: MockOptions = {}): MockPipelines
   const deployMs = opts.deployMs ?? 300;
   const now = opts.now ?? (() => Date.now());
   const random = opts.random ?? Math.random;
-  const deployments = new Map<
-    string,
-    Deployment & { nodes: Set<string>; stopped: { stopped: boolean } }
-  >();
+  type Held = Deployment & { nodes: Set<string>; stopped: { stopped: boolean } };
+  const deployments = new Map<string, Held>();
   const calls: MockPipelinesClient['calls'] = [];
   let failNext = opts.failDeploy;
   let seq = 0;
@@ -99,12 +97,18 @@ export function createMockPipelinesClient(opts: MockOptions = {}): MockPipelines
       }
       // A secret ref the spec names but the caller did not send is fine on a redeploy
       // (the store has it); the mock only notes it.
-      const prior = [...deployments.values()].find((d) => d.name === spec.metadata.name);
-      if (prior) prior.stopped.stopped = true;
-      const d = {
+      // The latest deployment of this pipeline, which the new revision supersedes.
+      const prior = [...deployments.values()]
+        .filter((d) => d.name === spec.metadata.name)
+        .reduce<Held | undefined>((a, d) => (a && a.revision >= d.revision ? a : d), undefined);
+      if (prior) {
+        prior.stopped.stopped = true;
+        prior.state = 'stopped';
+      }
+      const d: Held = {
         id: `dep-${++seq}`,
         name: spec.metadata.name,
-        state: 'running' as const,
+        state: 'running',
         revision: (prior?.revision ?? 0) + 1,
         ...(missing.length
           ? { message: `${missing.length} secret(s) reused from the store.` }
@@ -128,7 +132,8 @@ export function createMockPipelinesClient(opts: MockOptions = {}): MockPipelines
       const base = seedOf(`${nodeId}/${metric}`);
       return {
         async *[Symbol.asyncIterator]() {
-          if (!d?.nodes.has(nodeId)) return;
+          // A stopped or superseded deployment has no live series.
+          if (!d?.nodes.has(nodeId) || d.stopped.stopped) return;
           // A short backfill, so a chart opens with a line rather than a dot.
           const t0 = now();
           let level = metric === 'throughput' ? 200 + base * 1800 : 0.2 + base * 3;

@@ -73,6 +73,17 @@ describe('mock pipelines client', () => {
     expect((await third).done).toBe(true);
   });
 
+  it('a redeploy stops the deployment it supersedes and bumps the revision', async () => {
+    const client = createMockPipelinesClient({ deployMs: 0 });
+    const first = await client.deploy(spec(), new Map());
+    const second = await client.deploy(spec(), new Map());
+    const third = await client.deploy(spec(), new Map());
+    expect([first.revision, second.revision, third.revision]).toEqual([1, 2, 3]);
+    expect((await client.stop(first.id)).state).toBe('stopped');
+    const it = client.metrics(second.id, 'kafka-1', 'lag')[Symbol.asyncIterator]();
+    expect((await it.next()).done).toBe(true);
+  });
+
   it('yields nothing for a node the deployment does not have', async () => {
     const client = createMockPipelinesClient({ deployMs: 0 });
     const d = await client.deploy(spec(), new Map());
