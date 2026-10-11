@@ -1008,7 +1008,9 @@ impl Graph {
         // The gate and the row building run inside the same panic containment as the engine
         // call (security review M5).
         let verdict = self.call(|| self.admit(statement, read_only, limits))?;
-        if verdict.access != Access::Read
+        // A statement that names a version runs in the lane even when it reads, so the version
+        // is checked against the durable state before it runs (PR #424 review).
+        if (verdict.access != Access::Read || options.if_version.is_some())
             && let Some(durable) = &self.durable
         {
             let job = crate::durable::lane::LaneJob {
@@ -1805,8 +1807,13 @@ impl Engine {
             return Err(GraphError::Failed);
         }
         drop(old);
-        let fresh = Arc::new(Graph::open_db(&namespace, &name, spec, self)?);
-        graphs.insert(key, Arc::clone(&fresh));
+        // The reopen runs outside the registry lock, under the graph's opening latch (PR #424
+        // review): a durable graph replays its whole stream, which must not stall every other
+        // graph's lookups, nor the async handlers that list graphs while the replay needs the
+        // runtime. The old graph is out of the registry, so the latch opens a fresh one, or
+        // answers one a concurrent opener registered meanwhile.
+        drop(graphs);
+        let fresh = Graph::open_latched(self, &namespace, &name, || spec)?;
         tracing::info!(%namespace, %name, durable, "reopened a graph");
         Ok(fresh)
     }

@@ -28,6 +28,11 @@ pub struct GroupCommit {
     /// writer's default buffer, so one record can always be appended. A transaction past it is
     /// answered `INVALID_ARGUMENT`, and the graph reloads, which undoes its commit.
     pub max_record_bytes: usize,
+    /// The longest a group's append may take. The lane holds the graph's gate exclusively while
+    /// it waits, so a stalled log would stall every read of the graph (PR #424 review). Past it
+    /// the append's outcome is unknown, and the graph reloads from its stream as for a failed
+    /// append (R11.8). Default 10 s.
+    pub append_timeout: Duration,
 }
 
 impl Default for GroupCommit {
@@ -36,6 +41,7 @@ impl Default for GroupCommit {
             window: Duration::from_millis(2),
             max_bytes: 256 * 1024,
             max_record_bytes: 32 << 20,
+            append_timeout: Duration::from_secs(10),
         }
     }
 }
@@ -197,13 +203,15 @@ impl GraphLog {
     }
 
     /// Appends one group's records to `stream` as one batch, in order, and waits until they
-    /// are durable. Blocks (see [`GraphLog::wait`]).
+    /// are durable, at most [`GroupCommit::append_timeout`]: past it the answer is
+    /// [`LogError::CommitUnknown`]. Blocks (see [`GraphLog::wait`]).
     pub(crate) fn append(
         &self,
         stream: StreamId,
         records: Vec<loams_log::Record>,
     ) -> Result<AppendAck, LogError> {
-        self.wait(async {
+        let limit = self.inner.group.append_timeout;
+        let append = async {
             #[cfg(feature = "failpoints")]
             fail::fail_point!("loams_graph::durable::append", |_| Err(LogError::Closed));
             #[cfg(feature = "test-hooks")]
@@ -219,6 +227,15 @@ impl GraphLog {
                 }
             }
             self.inner.writer.append(stream, 0, records).await
+        };
+        self.wait(async {
+            tokio::time::timeout(limit, append)
+                .await
+                .unwrap_or_else(|_| {
+                    Err(LogError::CommitUnknown(format!(
+                        "the graph's append took longer than {limit:?}"
+                    )))
+                })
         })
     }
 

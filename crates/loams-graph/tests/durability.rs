@@ -999,3 +999,79 @@ async fn a_change_set_larger_than_a_record_is_refused_and_undone() {
     );
     assert_eq!(values(&admin, "kg").await.len(), 1);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_non_atomic_batch_checks_its_version_before_a_leading_read() {
+    // `if_version` guards a non-atomic batch's first statement, even when that one only reads:
+    // the write after it must not run at a stale version.
+    let fx = Fixture::start().await;
+    let admin = fx.admin_with(&fx.log());
+    create(&admin, "kg").await;
+    let at = token(&write(&admin, "kg", "INSERT (:N {k: 1, v: 'a'})").await).offset;
+    let response = admin
+        .execute_batch(pb::ExecuteBatchRequest {
+            namespace: "acme".to_string(),
+            graph: "kg".to_string(),
+            atomic: false,
+            if_version: Some(at - 1),
+            statements: [
+                "MATCH (n:N) RETURN count(n)",
+                "MATCH (n:N {k: 1}) SET n.v = 'b'",
+            ]
+            .iter()
+            .map(|s| pb::Statement {
+                statement: (*s).to_string(),
+                ..Default::default()
+            })
+            .collect(),
+            ..Default::default()
+        })
+        .await
+        .expect("a non-atomic batch answers its failure in `error`");
+    assert_eq!(response.committed_through, 0);
+    let error = response
+        .error
+        .as_option()
+        .expect("the first statement failed");
+    assert_eq!(error.index, 0);
+    assert_eq!(
+        error.info.as_option().expect("info").reason,
+        "graph_version_mismatch"
+    );
+    assert_eq!(
+        values(&admin, "kg").await.get(&1).map(String::as_str),
+        Some("a")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_stalled_append_times_out_and_reloads() {
+    // The lane holds the gate while it appends: an append that takes too long is given up as
+    // unknown, so reads are never stalled behind the log for longer than the timeout.
+    let fx = Fixture::start().await;
+    let log = fx.log().with_group_commit(GroupCommit {
+        append_timeout: Duration::from_millis(200),
+        ..GroupCommit::default()
+    });
+    let admin = fx.admin_with(&log);
+    create(&admin, "kg").await;
+    write(&admin, "kg", "INSERT (:N {k: 1, v: 'old'})").await;
+    log.set_append_fault(Some(Arc::new(|| {
+        Box::pin(async {
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            Ok(())
+        })
+    })));
+    let started = std::time::Instant::now();
+    let err = admin
+        .execute(request("kg", "MATCH (n:N {k: 1}) SET n.v = 'stalled'", ""))
+        .await
+        .expect_err("a stalled append is not acknowledged");
+    assert_eq!(reason(&err), "graph_reloading");
+    assert!(started.elapsed() < Duration::from_secs(10));
+    log.set_append_fault(None);
+    assert_eq!(
+        values(&admin, "kg").await.get(&1).map(String::as_str),
+        Some("old")
+    );
+}

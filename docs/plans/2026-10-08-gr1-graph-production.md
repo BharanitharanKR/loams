@@ -1549,7 +1549,7 @@ The group's refusals and index replays are answered `graph_reloading` too, becau
 - `loams`'s `GraphRuntime` always sets it. It starts a graph `LogWriter` on the log node's id with the server's `LogReader`, and shuts it down after the graphs.
 - The lane runs on the statement pool and blocks on the runtime's handle for the append. A caller inside a runtime gets a scoped thread.
 
-**R11.13 Tests** (`tests/durability.rs`, 16):
+**R11.13 Tests** (`tests/durability.rs`, 16; 18 after R11.14):
 - The nine planned ones:
   - `group_commit_preserves_epoch_order` is a proptest of 8 cases of 2–6 concurrent writers. It checks that `txn_seq` is dense and `commit_epoch` increases in log order, that each writer's tokens increase, and that the replay equals the live graph.
 - Beyond them:
@@ -1561,3 +1561,8 @@ The group's refusals and index replays are answered `graph_reloading` too, becau
   - `a_group_ends_at_its_byte_limit`;
   - `a_change_set_larger_than_a_record_is_refused_and_undone`.
 - Unit tests: idempotency (3), token text (1), conflict mapping (1).
+
+**R11.14 PR #424 review (CodeRabbit), one commit.**
+- **The append is bounded under the gate.** `GroupCommit.append_timeout` (default 10 s) wraps the append. Past it the answer is `LogError::CommitUnknown`, and the graph reloads as for a failed append (R11.8). A stalled log therefore stalls a graph's reads for at most the timeout (`a_stalled_append_times_out_and_reloads`).
+- **`Engine::reopen_if_poisoned` no longer replays inside the registry lock.** It removes the old graph and runs the ownership and close checks under the lock. It then reopens outside the lock, under the graph's opening latch (`Graph::open_latched`). Before this, a durable replay blocked every other graph's lookups and the async handlers that list graphs, while the replay itself needed the runtime.
+- **A statement that names `if_version` runs in the lane even when it only reads.** Before this, a non-atomic batch whose first statement was a read skipped the version check (`a_non_atomic_batch_checks_its_version_before_a_leading_read`).
