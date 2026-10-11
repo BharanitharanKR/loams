@@ -6,7 +6,7 @@
 // localStorage (it is an address, not a credential); the deploy may fix it instead
 // (LOAMS_ENGINE_URL), and then it is not asked for.
 
-import { originOf } from '../runtime-config.js';
+import { AUTH_MODES, type AuthMode, originOf } from '../runtime-config.js';
 
 const KEY = 'loams.engine.url';
 
@@ -35,6 +35,29 @@ export function saveEngine(url: string | undefined, store: Store | undefined = l
     else store?.removeItem(KEY);
   } catch {
     // Private mode: the person enters it again next time.
+  }
+}
+
+const MODE_KEY = 'loams.auth.mode';
+
+/** The sign-in mode this browser picked last (a choice, not a credential), if any. */
+export function savedMode(store: Store | undefined = local()): AuthMode | undefined {
+  try {
+    const v = store?.getItem(MODE_KEY);
+    return (AUTH_MODES as readonly (string | null | undefined)[]).includes(v)
+      ? (v as AuthMode)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function saveMode(mode: AuthMode | undefined, store: Store | undefined = local()) {
+  try {
+    if (mode) store?.setItem(MODE_KEY, mode);
+    else store?.removeItem(MODE_KEY);
+  } catch {
+    // Private mode: the deploy's default applies next time.
   }
 }
 

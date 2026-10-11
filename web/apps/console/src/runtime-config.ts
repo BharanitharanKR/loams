@@ -9,18 +9,29 @@
  */
 
 /**
- * How a hosted console signs in (`authMode`, from LOAMS_AUTH_MODE):
- * - `oidc`: Authorization Code + PKCE against `auth.issuer` (auth.loams.dev or the
- *   person's own IdP); the access token goes to the engine as a bearer.
- * - `tailscale`: no sign-in screen; the engine identifies the caller from the tailnet
- *   and the console shows whoever the engine says it is.
+ * How a hosted console signs in. `authMode` in `config.json` (LOAMS_AUTH_MODE) is the
+ * default, and the person may pick another offered one on the connect screen:
+ * - `tailscale` (the default): no sign-in screen; the engine identifies the caller from
+ *   the tailnet and the console shows whoever the engine says it is.
+ * - `oidc`: Authorization Code + PKCE against `auth.issuer` (auth.loams.dev with the
+ *   `loams-console` client); the access token goes to the engine as a bearer. Offered
+ *   only when the deploy has a client.
  * - `apikey`: the connect screen asks for an API key, kept in memory only.
  */
 export type AuthMode = 'oidc' | 'tailscale' | 'apikey';
-export const AUTH_MODES: readonly AuthMode[] = ['oidc', 'tailscale', 'apikey'];
+export const AUTH_MODES: readonly AuthMode[] = ['tailscale', 'oidc', 'apikey'];
+export const DEFAULT_AUTH_MODE: AuthMode = 'tailscale';
 
-/** Where a self-hosted console registers its own OIDC client on auth.loams.dev. */
+/**
+ * Self-service OIDC client registration on auth.loams.dev, for a console deployed on
+ * your own account. Coming soon (the URL is to be confirmed): not linked from the UI.
+ */
 export const CLIENT_REGISTRATION_URL = 'https://auth.loams.dev/register';
+
+/** The modes this console offers: oidc only with a client. */
+export function offeredModes(config: RuntimeConfig): AuthMode[] {
+  return AUTH_MODES.filter((m) => m !== 'oidc' || Boolean(config.auth));
+}
 
 export type RuntimeConfig = {
   /**
@@ -30,17 +41,17 @@ export type RuntimeConfig = {
    */
   server?: string;
   /**
-   * Set on a console that is not served by the engine (Ostrium's, or one deployed on
-   * Vercel or Cloudflare): it signs in with OIDC, asks which engine to talk to and
-   * sends a bearer token instead of the engine's session cookie.
+   * Set on a console that is not served by the engine (Ostrium's at console.loams.dev):
+   * it asks which engine to talk to and how to sign in, and sends a bearer token (or,
+   * on a tailnet, nothing) instead of the engine's session cookie.
    */
   hosted?: boolean;
   /** The OIDC provider (`authIssuer`, `authClientId`, optional `authScope`). */
   auth?: { issuer: string; clientId: string; scope: string };
   /**
-   * How a hosted console signs in; unset in a hosted `config.json`, it is `oidc` (the
-   * default). Never guessed from what else is set: an unknown mode, or `oidc` without a
-   * usable issuer and client id, is a `configError`.
+   * The default sign-in mode; unset in a hosted `config.json`, `tailscale`. Never guessed
+   * from what else is set: an unknown mode, or `oidc` without a usable issuer and client
+   * id, is a `configError`.
    */
   authMode?: AuthMode;
   /** Why the hosted config cannot be used; the console shows it instead of starting. */
@@ -99,7 +110,7 @@ export function parseRuntimeConfig(raw: unknown): RuntimeConfig {
   if (!config.hosted) return config;
   const mode =
     rawMode === undefined
-      ? 'oidc'
+      ? DEFAULT_AUTH_MODE
       : typeof rawMode === 'string'
         ? rawMode.trim().toLowerCase()
         : '';
@@ -112,13 +123,11 @@ export function parseRuntimeConfig(raw: unknown): RuntimeConfig {
     return config;
   }
   config.authMode = mode as AuthMode;
-  if (mode !== 'oidc') {
-    // Only the oidc mode signs in with the issuer.
-    delete config.auth;
-  } else if (!config.auth) {
+  // The client stays in every mode: it is what lets the person pick oidc.
+  if (mode === 'oidc' && !config.auth) {
     config.configError =
-      'This console signs in with OIDC (authMode oidc, the default) but config.json has no ' +
-      'usable authIssuer and authClientId (the issuer must be https, or http on loopback).';
+      'This console signs in with OIDC (authMode oidc) but config.json has no usable ' +
+      'authIssuer and authClientId (the issuer must be https, or http on loopback).';
   }
   return config;
 }

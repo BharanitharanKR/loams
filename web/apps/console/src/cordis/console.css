@@ -837,6 +837,66 @@ button.lc-hosted-engine {
   color: var(--op-faint);
   font-size: 13px;
 }
+.lc-gate-modes {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.lc-gate-modes legend {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.lc-gate-mode {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--op-rule);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.lc-gate-mode:has(input:checked) {
+  border-color: var(--op-ink);
+}
+.lc-gate-mode input {
+  margin-top: 3px;
+}
+.lc-gate-mode-body {
+  display: block;
+  color: var(--op-muted);
+  line-height: 1.4;
+}
+.lc-gate-soon h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.lc-gate-soon ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lc-gate-soon li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--op-faint);
+  font-size: 13px;
+  cursor: not-allowed;
+}
+.lc-gate-soon-tag {
+  flex: none;
+  padding: 0 8px;
+  border: 1px solid var(--op-rule);
+  border-radius: 999px;
+  font-size: 11px;
+}
 .lc-gate-help {
   color: var(--op-muted);
   font-size: 13px;

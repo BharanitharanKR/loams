@@ -1,17 +1,20 @@
-// The hosted and BYOC console's boot, by the deploy's LOAMS_AUTH_MODE:
-//   oidc       sign in (Authorization Code + PKCE), then the access token is the bearer;
+// The hosted console's boot. The person picks how to sign in on the connect screen
+// (the deploy's LOAMS_AUTH_MODE is the default, tailscale unless set; the choice is
+// remembered in this browser):
 //   tailscale  no sign-in: the engine identifies the tailnet user, and the header shows
 //              whoever GET /api/v1/session says it is;
+//   oidc       sign in at auth.loams.dev (Authorization Code + PKCE, the deploy's
+//              client), then the access token is the bearer;
 //   apikey     the connect screen asks for an API key (memory only), sent as the bearer.
-// Then pick the engine (the deploy's LOAMS_ENGINE_URL, or the one the person connects
-// on first run) and start the cordis console against it. A config the console cannot
-// use (an unknown mode, oidc without a client) stops at a screen that says so.
+// The engine is the deploy's LOAMS_ENGINE_URL or the one the person connects on first
+// run. A config the console cannot use (an unknown mode, oidc without a client) stops
+// at a screen that says so; it never falls back to another mode.
 
 import type { ConsoleHandle } from '@loams/console-host';
 import { createWebPlatform } from '@loams/platform-web';
 import { type ReactNode, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import type { RuntimeConfig } from '../runtime-config.js';
+import { type AuthMode, offeredModes, type RuntimeConfig } from '../runtime-config.js';
 import { type Callback, OidcAuth } from './auth.js';
 import { demoEnabled, setDemoEnabled } from './demo.js';
 import {
@@ -24,7 +27,7 @@ import {
   webModules,
   webPatches,
 } from './edition.js';
-import { fetchIdentity, savedEngine, saveEngine } from './engine.js';
+import { fetchIdentity, savedEngine, savedMode, saveEngine, saveMode } from './engine.js';
 import {
   BootError,
   ConfigErrorScreen,
@@ -64,21 +67,24 @@ export async function startHosted(
   start: StartFn,
 ): Promise<ConsoleHandle | undefined> {
   const here = new URL(globalThis.location.href);
-  const mode = config.authMode;
-  if (config.configError || !mode) {
+  if (config.configError || !config.authMode) {
     show(
       root,
-      <ConfigErrorScreen
-        message={config.configError ?? 'config.json sets no sign-in mode.'}
-        mode={mode}
-      />,
+      <ConfigErrorScreen message={config.configError ?? 'config.json sets no sign-in mode.'} />,
     );
     return undefined;
   }
-  const auth =
-    mode === 'oidc' && config.auth ? new OidcAuth(config.auth, redirectUri()) : undefined;
+  const modes = offeredModes(config);
+  const remembered = savedMode();
+  let mode: AuthMode = remembered && modes.includes(remembered) ? remembered : config.authMode;
+  const oidc = config.auth;
+  const auth = oidc ? new OidcAuth(oidc, redirectUri()) : undefined;
+  const fixed = config.server;
+  const knownEngine = fixed ?? savedEngine();
+  const reconnect = here.searchParams.has(CONNECT_PARAM) && (!fixed || modes.length > 1);
+  const toConnect = () => globalThis.location.assign(`${redirectUri()}?${CONNECT_PARAM}`);
 
-  if (auth && config.auth) {
+  if (mode === 'oidc' && auth && oidc && !reconnect) {
     const result = await auth
       .completeSignIn(here)
       .catch((e: unknown): Callback => ({ kind: 'error', message: errorText(e) }));
@@ -102,36 +108,48 @@ export async function startHosted(
           error = errorText(e);
         }
       }
-      const issuer = config.auth.issuer;
       show(
         root,
-        <SignInScreen issuer={issuer} error={error} onSignIn={() => auth.signIn(here.hash)} />,
+        <SignInScreen
+          issuer={oidc.issuer}
+          error={error}
+          onSignIn={() => auth.signIn(here.hash)}
+          onOtherMode={toConnect}
+        />,
       );
       return undefined;
     }
   }
 
-  const fixed = config.server;
   let apiKey: string | undefined;
-  const engine = await new Promise<string>((resolve) => {
-    const remembered = fixed ?? savedEngine();
+  const engine = await new Promise<string | undefined>((resolve) => {
     // In apikey mode the screen also takes the API key, which lives in memory only, so
     // it is shown on every load (prefilled, and testing the remembered engine at once).
-    const reconnect = here.searchParams.has(CONNECT_PARAM) && !fixed;
-    if (remembered && mode !== 'apikey' && !reconnect) {
-      resolve(remembered);
+    if (knownEngine && remembered && mode !== 'apikey' && !reconnect) {
+      resolve(knownEngine);
       return;
     }
     const screen = show(
       root,
       <ConnectScreen
-        initial={remembered}
+        initial={knownEngine}
         fixed={Boolean(fixed)}
-        askApiKey={mode === 'apikey'}
-        mode={mode}
+        modes={modes}
+        initialMode={mode}
         onConnect={(r: ConnectResult) => {
           saveEngine(r.engine);
+          saveMode(r.mode);
+          mode = r.mode;
           apiKey = r.apiKey;
+          if (r.mode === 'oidc' && auth && !auth.signedIn()) {
+            // Off to the issuer; the callback comes back here with the mode remembered.
+            void auth.signIn('').catch((e: unknown) => {
+              screen.unmount();
+              show(root, <BootError message={errorText(e)} />);
+            });
+            resolve(undefined);
+            return;
+          }
           screen.unmount();
           globalThis.history.replaceState(null, '', redirectUri());
           resolve(r.engine);
@@ -139,10 +157,11 @@ export async function startHosted(
       />,
     );
   });
+  if (!engine) return undefined;
 
   let user: string | undefined;
   let identityProblem: string | undefined;
-  if (auth) {
+  if (mode === 'oidc' && auth) {
     user = auth.user()?.email ?? auth.user()?.name;
   } else if (mode === 'tailscale') {
     // Not a gate: the engine refuses what it cannot attribute, and the header says why
@@ -163,24 +182,27 @@ export async function startHosted(
       setDemoEnabled(on);
       globalThis.location.reload();
     },
-    changeEngine: fixed
-      ? undefined
-      : () => globalThis.location.assign(`${redirectUri()}?${CONNECT_PARAM}`),
+    // Back to the connect screen: another engine, or another way to sign in.
+    changeEngine: !fixed || modes.length > 1 ? toConnect : undefined,
     // Tailscale mode has nothing to sign out of: the identity is the device's tailnet login.
-    signOut: auth
-      ? () => void auth.signOut()
-      : mode === 'apikey'
-        ? // The key lives in memory: drop it and ask again on the connect screen.
-          () => globalThis.location.assign(`${redirectUri()}?${CONNECT_PARAM}`)
-        : undefined,
+    signOut:
+      mode === 'oidc' && auth
+        ? () => void auth.signOut()
+        : mode === 'apikey'
+          ? // The key lives in memory: drop it and ask again on the connect screen.
+            toConnect
+          : undefined,
   };
 
+  const bearer =
+    mode === 'oidc' && auth
+      ? () => auth.accessToken()
+      : mode === 'apikey'
+        ? () => apiKey
+        : () => undefined;
   try {
     return await start({
-      platform: createWebPlatform({
-        baseUrl: engine,
-        token: auth ? () => auth.accessToken() : mode === 'apikey' ? () => apiKey : () => undefined,
-      }),
+      platform: createWebPlatform({ baseUrl: engine, token: bearer }),
       root,
       patches: [...webPatches(demo), hostedPatch],
       extraModules: { ...webModules, [HOSTED_PACKAGE]: async () => hostedPlugin(session) },

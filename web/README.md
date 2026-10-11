@@ -78,23 +78,23 @@ The console bundles Archivo and Martian Mono from Fontsource, both under the SIL
 
 ## Deploy the console (hosted, Cloudflare, Vercel) — preview
 
-Loams ships as a preview. Ostrium hosts only the console ([console.loams.dev](https://console.loams.dev)) and the auth service; everything else runs on your machine or your own VMs (Docker Compose, `deploy/release/compose.yaml`). The browser talks to **your** engine over your tailnet (Tailscale, or a self-hosted Headscale): the device running the browser needs the Tailscale client, logged in to the engine's tailnet. The engine is never exposed on the public internet. You can also deploy the same console on your own Cloudflare or Vercel account.
+Loams ships as a preview. Ostrium hosts only the console ([console.loams.dev](https://console.loams.dev)) and the auth service; everything else runs on your machine or your own VMs (Docker Compose, `deploy/release/compose.yaml`). The browser talks to **your** engine over your tailnet (Tailscale; Headscale is coming soon): the device running the browser needs the Tailscale client, logged in to the engine's tailnet. The engine is never exposed on the public internet. Deploying the same console on your own Cloudflare or Vercel account is coming soon.
 
 The hosted console is the cordis console (`cordis.html`) served at `/`. On first load it:
 
-1. signs in the way the deploy's `LOAMS_AUTH_MODE` says (below);
-2. shows **Connect your engine** unless the deploy fixes one: enter the tailnet URL (`https://loams.<tailnet>.ts.net`), **Test connection** calls `GET /health`, and the URL is remembered in this browser;
+1. shows **Connect your engine** on first run (and whenever the API key is needed): the person picks how to sign in and, unless the deploy fixes one, enters the tailnet URL (`https://loams.<tailnet>.ts.net`); **Test connection** calls `GET /health`. The engine URL and the chosen mode are remembered in this browser (neither is a credential);
+2. signs in the chosen way (below);
 3. boots the console against that engine (no cookies); the header shows who the engine is talking to.
 
-| `LOAMS_AUTH_MODE` | Sign-in |
+| Mode | Sign-in |
 |---|---|
-| `oidc` (default) | Authorization Code + PKCE against `LOAMS_AUTH_ISSUER` (default `https://auth.loams.dev`, or your own IdP), sent as `Authorization: Bearer <token>`. Tokens stay in memory; a reload renews silently with `prompt=none`, a refresh token is used while the page lives; nothing that grants access goes to `localStorage` or `sessionStorage`. |
-| `tailscale` | No sign-in screen. The engine identifies the caller from the tailnet; the header shows the user `GET /api/v1/session` returns. |
+| `tailscale` (default) | No sign-in screen. The engine identifies the caller from the tailnet; the header shows the user `GET /api/v1/session` returns. |
+| `oidc` | A Loams account: Authorization Code + PKCE at `https://auth.loams.dev` with the `loams-console` client, sent as `Authorization: Bearer <token>`. Tokens stay in memory; a reload renews silently with `prompt=none`, a refresh token is used while the page lives; nothing that grants access goes to `localStorage` or `sessionStorage`. Offered when the deploy has a client. |
 | `apikey` | The connect screen requires an engine API key on every load, kept in the tab's memory only and sent as the bearer. |
 
-Any other value fails the deploy (`config.mjs`), and a `config.json` with an unknown mode, or `oidc` without a client, stops at a screen that explains the three modes; the console never falls back to another mode on its own.
+`LOAMS_AUTH_MODE` sets the default. Any other value fails the deploy (`config.mjs`), and a `config.json` with an unknown mode, or `oidc` without a client, stops at a screen that says so; the console never falls back to another mode on its own.
 
-A console you deploy yourself (Cloudflare, Vercel) in `oidc` mode needs its own client id at auth.loams.dev: register it at <https://auth.loams.dev/register> (to confirm) with the console's exact origin + `/` as the redirect URI.
+**Coming soon** (shown as such on the connect screen, not linked): deploying this console to your own Vercel or Cloudflare account, self-service client registration at auth.loams.dev (`https://auth.loams.dev/register`, URL to confirm), and Headscale networks.
 
 Pages whose backend the engine serves (Live, Graph, Analytics/House, Status, Namespaces, Approvals) are on; pages that still run on built-in sample data (Deployments, Live deployments, SQL, Metrics, Pipelines, Git) appear only with the **Demo data** toggle in the header. Every page shows the **Preview** badge.
 
@@ -102,35 +102,37 @@ Runtime config is written at deploy time from the environment by `apps/console/d
 
 | Variable | Meaning |
 |---|---|
-| `LOAMS_AUTH_MODE` | `oidc` (default), `tailscale` or `apikey`; anything else is an error. |
-| `LOAMS_AUTH_ISSUER` | `oidc`: the issuer, default `https://auth.loams.dev`. |
-| `LOAMS_AUTH_CLIENT_ID` | `oidc`, required: the console's public client id at the issuer (redirect URI: the console's origin + `/`). |
+| `LOAMS_AUTH_MODE` | the default mode: `tailscale` (default), `oidc` or `apikey`; anything else is an error. |
+| `LOAMS_AUTH_CLIENT_ID` | the console's public client id at the issuer (`loams-console`; redirect URI: the console's origin + `/`). With it, `oidc` is offered; required for `LOAMS_AUTH_MODE=oidc`. |
+| `LOAMS_AUTH_ISSUER` | the issuer, default `https://auth.loams.dev`. Your own IdP is accepted here but not offered in the UI yet (coming soon). |
 | `LOAMS_AUTH_SCOPE` | optional, default `openid profile email offline_access`. |
 | `LOAMS_ENGINE_URL` | optional: fixes the engine (skips the connect screen and adds its origin to the CSP). |
 
 `config.json` keys: `hosted`, `engineUrl`, `authMode`, `authIssuer`, `authClientId`, `authScope`. The engine-embedded console keeps serving `{}` (same origin, cookie session).
 
-The stage step injects a Content-Security-Policy `<meta>`: no inline scripts in the cordis console, no eval, `connect-src` limited to the console itself, `https://*.ts.net` (port 443, where `tailscale serve` publishes the engine), the issuer and the fixed engine. Headscale issues no HTTPS certificates, so a Headscale engine needs its own certificate and a console deployed with `LOAMS_ENGINE_URL` set to it.
+The stage step injects a Content-Security-Policy `<meta>`: no inline scripts in the cordis console, no eval, `connect-src` limited to the console itself, `https://*.ts.net` (port 443, where `tailscale serve` publishes the engine), the issuer and the fixed engine. Headscale networks are coming soon (Headscale issues no HTTPS certificates, so such an engine needs its own certificate and a console deployed with `LOAMS_ENGINE_URL` set to it).
 
 The engine must answer CORS for the console's origin, and the issuer must answer CORS on its discovery and token endpoints (the browser exchanges the code itself).
 
 ### Cloudflare
 
+Ostrium deploys console.loams.dev this way. Deploying to your own Cloudflare account (`--env byoc`) is coming soon.
+
 Workers static assets, configured in [`apps/console/wrangler.jsonc`](apps/console/wrangler.jsonc): assets only, SPA fallback, free plan.
 
 ```bash
 pnpm build
-LOAMS_AUTH_MODE=oidc LOAMS_AUTH_CLIENT_ID=loams-console \
+LOAMS_AUTH_CLIENT_ID=loams-console \
   node apps/console/deploy/stage.mjs     # dist/ -> dist-cloudflare/: /, ui/, config.json, _headers, _redirects
 cd apps/console && wrangler deploy        # console.loams.dev
-cd apps/console && wrangler deploy --env byoc   # your account, on workers.dev
+cd apps/console && wrangler deploy --env byoc   # your account, on workers.dev (coming soon)
 node deploy/smoke.mjs https://console.loams.dev
 ```
 
-`.github/workflows/console-deploy.yml` deploys on every push to `main` that touches `web/` (or the root workspace configuration, or the workflow), and on demand. It deploys in `oidc` mode only and needs `LOAMS_AUTH_CLIENT_ID` (variable; `LOAMS_AUTH_MODE` and `LOAMS_AUTH_ISSUER` default to `oidc` and `https://auth.loams.dev`) plus `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the `production` environment; without the secrets it builds and stages, then skips the deploy.
+`.github/workflows/console-deploy.yml` deploys on every push to `main` that touches `web/` (or the root workspace configuration, or the workflow), and on demand. It needs `LOAMS_AUTH_CLIENT_ID` (variable, `loams-console`; `LOAMS_AUTH_MODE` and `LOAMS_AUTH_ISSUER` default to `tailscale` and `https://auth.loams.dev`) plus `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the `production` environment; without the secrets it builds and stages, then skips the deploy.
 
-### Vercel
+### Vercel (coming soon)
 
-[`apps/console/vercel.json`](apps/console/vercel.json): set the project's Root Directory to `web/apps/console` and the environment variables above. It installs from the workspace, runs `pnpm build` and `stage.mjs --target vercel` into `dist-vercel/`, rewrites unknown paths to the console and sends the security headers. Vercel headers are static, so its CSP names `https://*.ts.net` and `https://auth.loams.dev`; the stage step fails the build when the configured issuer or engine is missing from it — edit `connect-src` in `vercel.json` for another issuer.
+Deploying the console to your own Vercel account is coming soon: the configuration below is kept but not yet supported or advertised in the console. [`apps/console/vercel.json`](apps/console/vercel.json): set the project's Root Directory to `web/apps/console` and the environment variables above. It installs from the workspace, runs `pnpm build` and `stage.mjs --target vercel` into `dist-vercel/`, rewrites unknown paths to the console and sends the security headers. Vercel headers are static, so its CSP names `https://*.ts.net` and `https://auth.loams.dev`; the stage step fails the build when the configured issuer or engine is missing from it — edit `connect-src` in `vercel.json` for another issuer.
 
 `node --test apps/console/deploy/*.test.mjs` tests the config, stage and smoke scripts, `wrangler.jsonc` and `vercel.json`. Sandbox frames receive their own response CSP with `sandbox allow-scripts`; HTML paths stay exact so their security headers apply without canonical redirects.

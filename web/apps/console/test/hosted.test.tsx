@@ -25,11 +25,13 @@ import {
   fetchIdentity,
   parseEngineUrl,
   savedEngine,
+  savedMode,
   saveEngine,
+  saveMode,
 } from '../src/hosted/engine.js';
 import { ConfigErrorScreen, ConnectScreen } from '../src/hosted/screens.js';
 import { redirectUri, startHosted } from '../src/hosted/start.js';
-import { CLIENT_REGISTRATION_URL, parseRuntimeConfig } from '../src/runtime-config.js';
+import { AUTH_MODES, parseRuntimeConfig } from '../src/runtime-config.js';
 
 let dispose: (() => Promise<void>) | undefined;
 afterEach(async () => {
@@ -121,7 +123,9 @@ describe('Connect your engine', () => {
   it('tests the engine, then connects to its origin', async () => {
     const check = vi.fn(async () => ({ ok: true as const, status: 200, ms: 12 }));
     const onConnect = vi.fn();
-    render(<ConnectScreen askApiKey check={check} onConnect={onConnect} />);
+    render(
+      <ConnectScreen modes={AUTH_MODES} initialMode="apikey" check={check} onConnect={onConnect} />,
+    );
     expect(screen.getByText('Preview')).toBeTruthy();
     expect(screen.getByText(/needs Tailscale running/)).toBeTruthy();
     const connect = screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement;
@@ -140,6 +144,7 @@ describe('Connect your engine', () => {
     fireEvent.click(connect);
     expect(onConnect).toHaveBeenCalledWith({
       engine: 'https://loams.tail1.ts.net',
+      mode: 'apikey',
       apiKey: 'lk_1',
     });
   });
@@ -150,7 +155,8 @@ describe('Connect your engine', () => {
       <ConnectScreen
         initial="https://loams.tail1.ts.net"
         fixed
-        askApiKey
+        modes={AUTH_MODES}
+        initialMode="apikey"
         check={check}
         onConnect={() => {}}
       />,
@@ -167,7 +173,14 @@ describe('Connect your engine', () => {
       message: 'Failed to fetch.',
     }));
     const onConnect = vi.fn();
-    render(<ConnectScreen askApiKey={false} check={check} onConnect={onConnect} />);
+    render(
+      <ConnectScreen
+        modes={['tailscale', 'apikey']}
+        initialMode="tailscale"
+        check={check}
+        onConnect={onConnect}
+      />,
+    );
     expect(screen.queryByLabelText('API key')).toBeNull();
     fireEvent.change(screen.getByLabelText('Engine URL'), {
       target: { value: 'https://loams.tail1.ts.net' },
@@ -178,6 +191,7 @@ describe('Connect your engine', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Connect anyway' }));
     expect(onConnect).toHaveBeenCalledWith({
       engine: 'https://loams.tail1.ts.net',
+      mode: 'tailscale',
       apiKey: undefined,
     });
   });
@@ -261,6 +275,7 @@ describe('sign-in modes', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     saveEngine(undefined);
+    saveMode(undefined);
   });
 
   const json = (status: number, body: unknown) =>
@@ -327,15 +342,48 @@ describe('sign-in modes', () => {
     expect(signOut).toHaveBeenCalled();
   });
 
-  it('explains the three modes and links client registration on a config error', () => {
-    render(<ConfigErrorScreen message="bad mode" mode="oidc" />);
-    expect(screen.getByText('bad mode')).toBeTruthy();
-    for (const mode of ['oidc (default)', 'tailscale', 'apikey']) {
-      expect(screen.getByText(mode)).toBeTruthy();
+  it('offers the modes with Tailscale first, and lists what is coming soon without links', () => {
+    const onConnect = vi.fn();
+    render(
+      <ConnectScreen
+        modes={AUTH_MODES}
+        initialMode="tailscale"
+        check={async () => ({ ok: true, status: 200, ms: 1 })}
+        onConnect={onConnect}
+      />,
+    );
+    const radios = screen.getAllByRole('radio') as HTMLInputElement[];
+    expect(radios.map((r) => r.value)).toEqual(['tailscale', 'oidc', 'apikey']);
+    expect(radios[0]?.checked).toBe(true);
+    expect(screen.getByText('Loams account')).toBeTruthy();
+    // No API key field until apikey is picked.
+    expect(screen.queryByLabelText('API key')).toBeNull();
+    fireEvent.click(radios[2] as HTMLInputElement);
+    expect(screen.getByLabelText('API key')).toBeTruthy();
+
+    const soon = screen.getByRole('region', { name: 'Coming soon' });
+    for (const item of [
+      /own Vercel or Cloudflare/,
+      /Register your own sign-in client/,
+      /Headscale/,
+    ]) {
+      expect(soon.textContent).toMatch(item);
     }
-    const link = screen.getByRole('link', { name: /auth\.loams\.dev\/register/ });
-    expect(link.getAttribute('href')).toBe(CLIENT_REGISTRATION_URL);
-    expect(document.querySelector('[aria-current="true"]')?.textContent).toMatch(/^oidc/);
+    expect(soon.querySelectorAll('a')).toHaveLength(0);
+    expect(document.body.innerHTML).not.toContain('/register');
+  });
+
+  it('says what is wrong with the config', () => {
+    render(<ConfigErrorScreen message="bad mode" />);
+    expect(screen.getByText('bad mode')).toBeTruthy();
+    expect(screen.getByText('This console is not set up yet')).toBeTruthy();
+  });
+
+  it('remembers the picked mode, and only a known one', () => {
+    saveMode('apikey');
+    expect(savedMode()).toBe('apikey');
+    localStorage.setItem('loams.auth.mode', 'password');
+    expect(savedMode()).toBeUndefined();
   });
 
   it('stops at the config error screen for an unknown mode, never falling back', async () => {
@@ -349,7 +397,26 @@ describe('sign-in modes', () => {
     expect(start).not.toHaveBeenCalled();
   });
 
+  it('first run asks how to sign in, even with a fixed engine', async () => {
+    const root = document.createElement('div');
+    document.body.append(root);
+    const start = vi.fn();
+    const config = parseRuntimeConfig({ hosted: true, engineUrl: 'https://loams.tail1.ts.net' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json(200, {})),
+    );
+    void startHosted(config, root, start);
+    await waitFor(() => expect(root.textContent).toContain('Connect your engine'));
+    // No client in this config: oidc is not offered; Tailscale is the default.
+    const radios = [...root.querySelectorAll('input[type=radio]')] as HTMLInputElement[];
+    expect(radios.map((r) => r.value)).toEqual(['tailscale', 'apikey']);
+    expect(radios[0]?.checked).toBe(true);
+    expect(start).not.toHaveBeenCalled();
+  });
+
   it('tailscale: no sign-in or connect screen, the engine names the user', async () => {
+    saveMode('tailscale');
     const fetcher = vi.fn(async () => json(200, { user: { email: 'ada@example.com' } }));
     vi.stubGlobal('fetch', fetcher);
     const root = document.createElement('div');

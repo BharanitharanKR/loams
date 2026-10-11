@@ -1,10 +1,10 @@
 // The hosted console's screens before the console itself: sign-in, the
-// first-run "Connect your engine" screen, and the screen for a deploy whose
-// sign-in mode is not set up.
+// first-run "Connect your engine" screen (engine and sign-in mode), and the
+// screen for a deploy whose sign-in configuration is wrong.
 
 import { Button, Field, Input, Logo, Notice } from '@loams/ui';
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
-import { type AuthMode, CLIENT_REGISTRATION_URL } from '../runtime-config.js';
+import type { AuthMode } from '../runtime-config.js';
 import { checkHealth, type Health, isTailnetHost, parseEngineUrl } from './engine.js';
 
 export function PreviewBadge() {
@@ -33,77 +33,57 @@ function Frame({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-const MODES: { mode: AuthMode; title: string; body: ReactNode }[] = [
-  {
-    mode: 'oidc',
-    title: 'oidc (default)',
-    body: (
-      <>
-        Sign in with a Loams account at <code>auth.loams.dev</code>, or with your own identity
-        provider (<code>LOAMS_AUTH_ISSUER</code>), using Authorization Code + PKCE. A console you
-        deploy yourself on Vercel or Cloudflare needs its own client id: register it at{' '}
-        <a href={CLIENT_REGISTRATION_URL} target="_blank" rel="noreferrer">
-          {new URL(CLIENT_REGISTRATION_URL).host}
-          {new URL(CLIENT_REGISTRATION_URL).pathname}
-        </a>{' '}
-        with the console's exact address as the redirect URI, and set{' '}
-        <code>LOAMS_AUTH_CLIENT_ID</code>.
-      </>
-    ),
+/** How each sign-in mode reads on the connect screen. */
+export const MODE_TEXT: Record<AuthMode, { title: string; body: string }> = {
+  tailscale: {
+    title: 'Tailscale',
+    body: "No sign-in. The engine knows you from this device's tailnet login.",
   },
-  {
-    mode: 'tailscale',
-    title: 'tailscale',
-    body: (
-      <>
-        No sign-in screen. The engine knows who you are from your tailnet login, and the console
-        shows that identity.
-      </>
-    ),
+  oidc: {
+    title: 'Loams account',
+    body: 'Sign in at auth.loams.dev; the engine checks the token it is given.',
   },
-  {
-    mode: 'apikey',
-    title: 'apikey',
-    body: (
-      <>
-        The console asks for an engine API key on every load and keeps it in this tab's memory only.
-      </>
-    ),
+  apikey: {
+    title: 'API key',
+    body: "Enter an engine API key on every load; it stays in this tab's memory only.",
   },
+};
+
+/** Planned, and shown as such: no links, nothing to click. */
+const COMING_SOON = [
+  'Deploy this console to your own Vercel or Cloudflare account',
+  'Register your own sign-in client at auth.loams.dev',
+  'Headscale networks',
 ];
 
-/** The three ways a hosted console signs in (LOAMS_AUTH_MODE), the deploy's marked. */
-export function AuthModes({ current, open = false }: { current?: AuthMode; open?: boolean }) {
+export function ComingSoon() {
   return (
-    <details className="lc-gate-help" open={open}>
-      <summary>How this console signs in</summary>
-      <p>
-        The deploy picks one with <code>LOAMS_AUTH_MODE</code>, and the engine must be set up for
-        the same mode.
-      </p>
+    <section className="lc-gate-soon" aria-label="Coming soon">
+      <h2>Coming soon</h2>
       <ul>
-        {MODES.map((m) => (
-          <li key={m.mode} aria-current={m.mode === current ? 'true' : undefined}>
-            <strong>{m.title}</strong>
-            {m.mode === current && <span className="lc-gate-faint"> (this console)</span>}: {m.body}
+        {COMING_SOON.map((item) => (
+          <li key={item} aria-disabled="true">
+            <span>{item}</span>
+            <span className="lc-gate-soon-tag">Coming soon</span>
           </li>
         ))}
       </ul>
-    </details>
+    </section>
   );
 }
 
 /** The deploy's config.json cannot be used (an unknown mode, oidc without a client). */
-export function ConfigErrorScreen({ message, mode }: { message: string; mode?: AuthMode }) {
+export function ConfigErrorScreen({ message }: { message: string }) {
   return (
     <Frame title="This console is not set up yet">
       <p className="lc-gate-lead">
-        Whoever deployed this console needs to choose how it signs in, then deploy it again.
+        The console's sign-in configuration is wrong. Whoever deployed it needs to set{' '}
+        <code>LOAMS_AUTH_MODE</code> to <code>tailscale</code>, <code>oidc</code> or{' '}
+        <code>apikey</code> and deploy it again.
       </p>
       <Notice tone="danger" title="Sign-in is not configured">
         {message}
       </Notice>
-      <AuthModes current={mode} open />
     </Frame>
   );
 }
@@ -112,10 +92,13 @@ export function SignInScreen({
   issuer,
   error,
   onSignIn,
+  onOtherMode,
 }: {
   issuer: string;
   error?: string;
   onSignIn: () => Promise<void>;
+  /** Back to the connect screen, to pick Tailscale or an API key instead. */
+  onOtherMode?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string>();
@@ -144,23 +127,29 @@ export function SignInScreen({
           {busy ? 'Opening sign-in…' : 'Sign in'}
         </Button>
         <span className="lc-gate-faint">via {new URL(issuer).host}</span>
+        {onOtherMode && (
+          <Button variant="quiet" onClick={onOtherMode}>
+            Use another sign-in mode
+          </Button>
+        )}
       </div>
-      <AuthModes current="oidc" />
     </Frame>
   );
 }
 
 export interface ConnectResult {
   engine: string;
-  /** The engine API key (LOAMS_AUTH_MODE=apikey); held in memory only. */
+  /** How the person signs in to this engine. */
+  mode: AuthMode;
+  /** The engine API key, in apikey mode; held in memory only. */
   apiKey?: string;
 }
 
 export function ConnectScreen({
   initial,
   fixed = false,
-  askApiKey,
-  mode,
+  modes,
+  initialMode,
   check = checkHealth,
   onConnect,
 }: {
@@ -168,15 +157,17 @@ export function ConnectScreen({
   initial?: string;
   /** The deploy fixes the engine (LOAMS_ENGINE_URL): the URL cannot be changed. */
   fixed?: boolean;
-  /** LOAMS_AUTH_MODE=apikey: an API key is required to connect. */
-  askApiKey: boolean;
-  /** The deploy's sign-in mode, marked in the explanation of the three. */
-  mode?: AuthMode;
+  /** The sign-in modes on offer, in order; one of them is picked. */
+  modes: readonly AuthMode[];
+  /** The mode picked at first: the remembered one, else the deploy's default. */
+  initialMode: AuthMode;
   check?: (origin: string) => Promise<Health>;
   onConnect: (result: ConnectResult) => void;
 }) {
   const [url, setUrl] = useState(initial ?? '');
+  const [mode, setMode] = useState<AuthMode>(initialMode);
   const [apiKey, setApiKey] = useState('');
+  const askApiKey = mode === 'apikey';
   const [problem, setProblem] = useState<string>();
   const [testing, setTesting] = useState(false);
   const [health, setHealth] = useState<{ origin: string; result: Health }>();
@@ -208,7 +199,7 @@ export function ConnectScreen({
   const keyMissing = askApiKey && apiKey.trim() === '';
   const connect = () => {
     if (!parsed.ok || keyMissing) return;
-    onConnect({ engine: parsed.origin, apiKey: askApiKey ? apiKey.trim() : undefined });
+    onConnect({ engine: parsed.origin, mode, apiKey: askApiKey ? apiKey.trim() : undefined });
   };
 
   return (
@@ -239,6 +230,27 @@ export function ConnectScreen({
             />
           )}
         </Field>
+        {modes.length > 1 && (
+          <fieldset className="lc-gate-modes">
+            <legend>Sign in with</legend>
+            {modes.map((m) => (
+              <label key={m} className="lc-gate-mode">
+                <input
+                  type="radio"
+                  name="lc-auth-mode"
+                  value={m}
+                  checked={mode === m}
+                  onChange={() => setMode(m)}
+                />
+                <span>
+                  <strong>{MODE_TEXT[m].title}</strong>
+                  {m === 'tailscale' && <span className="lc-gate-faint"> (default)</span>}
+                  <span className="lc-gate-mode-body">{MODE_TEXT[m].body}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        )}
         {askApiKey && (
           <Field
             label="API key"
@@ -294,20 +306,12 @@ export function ConnectScreen({
             MagicDNS name, <code>https://loams.&lt;tailnet&gt;.ts.net</code>.
           </li>
           <li>
-            Headscale: start Compose with the <code>headscale</code> profile (or point{' '}
-            <code>TS_LOGIN_SERVER</code> at yours), then run{' '}
-            <code>tailscale up --login-server https://your-headscale</code> on this device.
-            Headscale issues no HTTPS certificates, so put a certificate in front of the engine, or
-            deploy this console yourself on the tailnet, and add the engine's address to the
-            console's <code>LOAMS_ENGINE_URL</code>.
-          </li>
-          <li>
             The engine must allow this console's origin (CORS) and accept your sign-in: see{' '}
             <code>LOAMS_AUTH_MODE</code> in the Compose <code>.env</code>.
           </li>
         </ul>
       </details>
-      <AuthModes current={mode} />
+      <ComingSoon />
     </Frame>
   );
 }

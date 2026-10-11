@@ -1,19 +1,23 @@
 // Writes the hosted console's runtime config.json from the deploy's environment
 // (src/runtime-config.ts reads it in the browser):
 //
-//   LOAMS_AUTH_CLIENT_ID=<your client id> node deploy/config.mjs dist-hosted/config.json
+//   LOAMS_AUTH_CLIENT_ID=loams-console node deploy/config.mjs dist-hosted/config.json
 //
 //   LOAMS_ENGINE_URL      optional: fixes the engine (https://loams.<tailnet>.ts.net); unset,
 //                         the person connects one on first run. LOAMS_CONSOLE_SERVER is
 //                         its older name.
-//   LOAMS_AUTH_MODE       oidc (default) | tailscale | apikey:
-//                           oidc       sign in with Authorization Code + PKCE at the issuer
+//   LOAMS_AUTH_MODE       the default sign-in mode: tailscale (default) | oidc | apikey.
 //                           tailscale  no sign-in; the engine identifies the tailnet user
+//                           oidc       sign in with Authorization Code + PKCE at the issuer
 //                           apikey     ask for an API key, kept in the tab's memory only
-//   LOAMS_AUTH_ISSUER     oidc: the issuer, default https://auth.loams.dev (or your own IdP).
-//   LOAMS_AUTH_CLIENT_ID  oidc: the console's public client id at the issuer. A console you
-//                         deploy yourself registers its own at https://auth.loams.dev/register,
-//                         with its exact origin as the redirect URI.
+//                         The person can pick another one on the connect screen; oidc is
+//                         offered when the deploy has a client. Anything else is an error.
+//   LOAMS_AUTH_CLIENT_ID  the console's public client id at the issuer (Ostrium's console:
+//                         loams-console); required for LOAMS_AUTH_MODE=oidc and for a
+//                         --require-auth deploy. Self-service client registration
+//                         (REGISTER_URL) is coming soon.
+//   LOAMS_AUTH_ISSUER     the issuer, default https://auth.loams.dev (your own IdP: coming
+//                         soon in the UI, already accepted here).
 //   LOAMS_AUTH_SCOPE      optional, default "openid profile email offline_access".
 //
 // stage.mjs calls `hostedConfig` too, so Cloudflare and Vercel deploys get the same file.
@@ -42,33 +46,40 @@ const get = (env, name) => {
   return typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined;
 };
 
-export const AUTH_MODES = ['oidc', 'tailscale', 'apikey'];
+export const AUTH_MODES = ['tailscale', 'oidc', 'apikey'];
+export const DEFAULT_MODE = 'tailscale';
 export const DEFAULT_ISSUER = 'https://auth.loams.dev';
+/** Self-service OIDC client registration on auth.loams.dev: coming soon (URL to confirm). */
 export const REGISTER_URL = 'https://auth.loams.dev/register';
 
-/** The config.json object for a hosted deploy, validated. */
+/**
+ * The config.json object for a hosted deploy, validated. `requireAuth` (Ostrium's
+ * console.loams.dev) requires the OIDC client, so the console offers a Loams account.
+ */
 export function hostedConfig(env = process.env, { requireAuth = false } = {}) {
   const config = { hosted: true };
   const engine = get(env, 'LOAMS_ENGINE_URL') ?? get(env, 'LOAMS_CONSOLE_SERVER');
   if (engine) config.engineUrl = secureUrl(engine, 'LOAMS_ENGINE_URL').origin;
-  const mode = (get(env, 'LOAMS_AUTH_MODE') ?? 'oidc').toLowerCase();
+  const mode = (get(env, 'LOAMS_AUTH_MODE') ?? DEFAULT_MODE).toLowerCase();
   if (!AUTH_MODES.includes(mode)) {
     throw new Error(`LOAMS_AUTH_MODE must be one of ${AUTH_MODES.join(', ')}, got ${mode}`);
   }
-  if (requireAuth && mode !== 'oidc') {
-    throw new Error('this deploy requires LOAMS_AUTH_MODE=oidc');
-  }
   config.authMode = mode;
-  if (mode !== 'oidc') return config;
-  const issuer = get(env, 'LOAMS_AUTH_ISSUER') ?? DEFAULT_ISSUER;
   const clientId = get(env, 'LOAMS_AUTH_CLIENT_ID');
   if (!clientId) {
-    throw new Error(
-      'LOAMS_AUTH_MODE=oidc needs LOAMS_AUTH_CLIENT_ID: register this console at ' +
-        `${REGISTER_URL} (or your own IdP), or set LOAMS_AUTH_MODE=tailscale or apikey`,
-    );
+    if (mode === 'oidc' || requireAuth) {
+      throw new Error(
+        `${requireAuth ? 'this deploy' : 'LOAMS_AUTH_MODE=oidc'} needs LOAMS_AUTH_CLIENT_ID ` +
+          "(the console's client at the issuer; self-service registration at auth.loams.dev " +
+          'is coming soon), or set LOAMS_AUTH_MODE=tailscale or apikey',
+      );
+    }
+    if (get(env, 'LOAMS_AUTH_ISSUER')) {
+      throw new Error('LOAMS_AUTH_ISSUER is set without LOAMS_AUTH_CLIENT_ID');
+    }
+    return config;
   }
-  const url = secureUrl(issuer, 'LOAMS_AUTH_ISSUER');
+  const url = secureUrl(get(env, 'LOAMS_AUTH_ISSUER') ?? DEFAULT_ISSUER, 'LOAMS_AUTH_ISSUER');
   config.authIssuer = `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
   config.authClientId = clientId;
   const scope = get(env, 'LOAMS_AUTH_SCOPE');
