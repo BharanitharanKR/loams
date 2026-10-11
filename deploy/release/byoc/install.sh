@@ -16,10 +16,10 @@
 #   --headscale URL         also run Headscale on the host (`--profile
 #                           headscale`) at this public URL, mint the auth key
 #                           there, and serve the engine over http
-#   --version V             image tag [default: preview]
+#   --version V             image tag [default: 0.1.0-preview.1]
 #   --all                   start every service, the Postgres stack included
 #   --services "A B"        start these services (and what they depend on)
-#                           [default: loams house tailscale tidb]
+#                           [default: loams tailscale tidb]
 #   --reconfigure           rewrite an existing .env on the host
 #   -y, --yes               do not ask; take keys from flags or the environment
 #
@@ -36,9 +36,9 @@ dir="loams"
 authkey="${TS_AUTHKEY:-}"
 login_server="${TS_LOGIN_SERVER-__ask__}"
 headscale=""
-version="preview"
+version="0.1.0-preview.1"
 all=0
-services="loams house tailscale tidb"
+services="loams tailscale tidb"
 reconfigure=0
 assume_yes=0
 target=""

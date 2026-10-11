@@ -3,7 +3,7 @@
 `tailscale serve` configurations for the sidecar, picked by `TS_SERVE_MODE`:
 
 - `serve-https.json` (default): `https://<TS_HOSTNAME>.<tailnet>.ts.net/` to the
-  engine's HTTP API on `127.0.0.1:8080`, with a certificate from Tailscale. Needs
+  engine's tailscale listener on `127.0.0.1:7781` (`LOAMS_TAILSCALE_LISTEN`), with a certificate from Tailscale. Needs
   MagicDNS and HTTPS certificates turned on for the tailnet. Funnel stays off:
   the engine is never on the public internet.
 - `serve-http.json`: HTTP on port 80 of the node to the engine, for Headscale,

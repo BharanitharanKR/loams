@@ -4,16 +4,19 @@
 #
 #   docker compose up -d loams tailscale
 #
-# or the whole stack (adds house, tidb and the Postgres stack) with `up -d`.
+# or the whole stack (adds tidb and the Postgres stack) with `up -d`.
 #
-# Network exposure: nothing binds a host port on 0.0.0.0. The engine, House and
-# the Tailscale sidecar share one network namespace (the `loams` service's);
-# the sidecar joins the user's tailnet (Tailscale, or Headscale through
-# TS_LOGIN_SERVER) and `tailscale serve` proxies https://loams.<tailnet>/ to
-# the engine's HTTP API on 127.0.0.1:8080. That tailnet URL is LOAMS_ENGINE_URL
-# for the console. Everything else talks over the compose network. The few
-# published ports (console, headscale, the Postgres stack's) are on 127.0.0.1
-# unless .env says otherwise.
+# Network exposure: nothing binds a host port on 0.0.0.0. Only the engine and
+# the Tailscale sidecar share a network namespace (the `loams` service's); no
+# other container may join it, because the engine trusts Tailscale identity
+# headers on its tailscale listener (LOAMS_TAILSCALE_LISTEN, 127.0.0.1:7781),
+# whose only client is the sidecar's `tailscale serve` proxy. The sidecar joins
+# the user's tailnet (Tailscale, or Headscale through TS_LOGIN_SERVER) and
+# serves https://loams.<tailnet>/ from that listener; that tailnet URL is
+# LOAMS_ENGINE_URL for the console. Every other service (pd, tikv, tidb, house,
+# agentd, the Postgres stack) is on the compose network and cannot reach the
+# engine's loopback listeners. The few published ports (console, headscale,
+# the Postgres stack's) are on 127.0.0.1 unless .env says otherwise.
 name: loams
 
 include:
@@ -90,7 +93,7 @@ services:
 
   loams:
     <<: *restart
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-preview}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.0-preview.1}
     command:
       - standalone
       - --bucket=${LOAMS_BUCKET:-file:///var/lib/loams/bucket}
@@ -99,13 +102,16 @@ services:
       - --graph-data-dir=/var/lib/loams/graph
       - --meta=tikv://pd:2379/loams_meta
       - --live-store=tikv://pd:2379/loams_live_dev
-      - --house-endpoint=http://127.0.0.1:8123
+      # No --house-endpoint yet: the House serves loopback plaintext only until
+      # TLS (D111, HS1 Task 20), and it no longer shares this namespace.
     environment:
       RUST_LOG: ${RUST_LOG:-info}
       # Engine auth (preview): tailscale | oidc | apikey | off (loopback only).
       # tailscale trusts the Tailscale-User-Login headers that the sidecar's
-      # `tailscale serve` proxy adds, and only from that local proxy.
+      # `tailscale serve` proxy adds, on LOAMS_TAILSCALE_LISTEN only: a loopback
+      # port of its own that is the serve target and nothing else.
       LOAMS_AUTH_MODE: ${LOAMS_AUTH_MODE:-tailscale}
+      LOAMS_TAILSCALE_LISTEN: ${LOAMS_TAILSCALE_LISTEN:-127.0.0.1:7781}
       LOAMS_OIDC_ISSUER: ${LOAMS_OIDC_ISSUER:-https://auth.loams.dev}
       LOAMS_OIDC_AUDIENCE: ${LOAMS_OIDC_AUDIENCE:-loams-engine}
       LOAMS_API_KEYS_FILE: /etc/loams/secrets/api-keys
@@ -130,20 +136,20 @@ services:
       retries: 3
 
   # Loams House (the ClickHouse HTTP interface, loams-fabric with its chDB
-  # workers). It serves loopback only (D111), so it runs in the engine's
-  # network namespace, where the engine proxies loams.house.v1 to it.
+  # workers), `--profile house`. It may not share the engine's namespace, and it
+  # serves loopback plaintext only until TLS (D111, HS1 Task 20), so for now
+  # nothing reaches it: the engine answers loams.house.v1 with
+  # house_not_configured. Once TLS lands, it listens on the compose network and
+  # the engine gets --house-endpoint.
   house:
     <<: *restart
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-fabric:${LOAMS_VERSION:-preview}
-    network_mode: service:loams
+    profiles: [house]
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-fabric:${LOAMS_VERSION:-0.1.0-preview.1}
     volumes:
       - house-data:/var/lib/loams-house
-    depends_on:
-      loams:
-        condition: service_started
 
   # The only way in from outside: a tailnet node named TS_HOSTNAME in the
-  # engine's network namespace. Userspace networking needs no extra
+  # engine's network namespace, the only container besides the engine there. Userspace networking needs no extra
   # capabilities or /dev/net/tun.
   tailscale:
     <<: *restart
@@ -202,18 +208,15 @@ services:
       - ./console/default.conf.template:/etc/nginx/templates/default.conf.template:ro
 
   # The optional agent daemon (`--profile agentd`); its config is
-  # agentd/config.toml.
+  # agentd/config.toml. It supervises its own engine, so it needs nothing from
+  # this one and stays on the compose network.
   agentd:
     <<: *restart
     profiles: [agentd]
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-agentd:${LOAMS_VERSION:-preview}
-    network_mode: service:loams
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-agentd:${LOAMS_VERSION:-0.1.0-preview.1}
     volumes:
       - ./agentd:/etc/loams-agentd:ro
       - agentd-data:/home/loams
-    depends_on:
-      loams:
-        condition: service_started
 
 volumes:
   pd-data:
