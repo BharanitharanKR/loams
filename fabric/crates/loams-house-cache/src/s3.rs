@@ -45,7 +45,7 @@ pub async fn handle(
         .path_and_query()
         .map(|pq| pq.as_str().to_string())
         .unwrap_or_default();
-    proxy.record(SeenRequest {
+    proxy.record_with(|| SeenRequest {
         worker: worker.to_string(),
         method: method.to_string(),
         target: target.clone(),

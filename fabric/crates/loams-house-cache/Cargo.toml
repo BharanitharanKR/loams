@@ -9,8 +9,8 @@ authors.workspace = true
 publish = false
 
 [features]
-# `HouseCache::requests_seen` (what workers sent) and `RangeCache`'s raw-block
-# hook, for the tests of this crate and of the worker. Never in a release build.
+# `RangeCache`'s raw-block hook (`loams-cache/test-hooks`), for the tests of
+# this crate and of the worker; dev-dependencies only.
 test-hooks = ["loams-cache/test-hooks"]
 
 [dependencies]
