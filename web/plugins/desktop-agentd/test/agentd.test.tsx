@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AgentdSection } from '../src/agentd-section.js';
-import { createMockAgentdApi } from '../src/mock.js';
+import { createMockAgentdApi, sampleSessions } from '../src/mock.js';
 
 HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
   this.setAttribute('open', '');
@@ -9,13 +9,23 @@ HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
 HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
   this.removeAttribute('open');
 };
+// The empty state's grain canvas observes its size; jsdom has no ResizeObserver.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
 
 afterEach(cleanup);
 
 const NOW = 1_791_500_000_000;
 
 function renderSection(opts: Parameters<typeof createMockAgentdApi>[0] = {}) {
-  const mock = createMockAgentdApi({ now: NOW, dataDir: '/home/u/.config/Loams Desktop/agentd', ...opts });
+  const mock = createMockAgentdApi({
+    now: NOW,
+    dataDir: '/home/u/.config/Loams Desktop/agentd',
+    ...opts,
+  });
   const routes: string[] = [];
   render(<AgentdSection agentd={mock.api} navigate={(p) => routes.push(p)} />);
   return { ...mock, routes };
@@ -108,6 +118,18 @@ describe('background agents section', () => {
     act(() => emit({ state: 'unavailable', reason: 'protocol_mismatch' }));
     expect(screen.getByText('Unavailable')).toBeTruthy();
     expect(screen.getByText('protocol_mismatch')).toBeTruthy();
+  });
+
+  it('status_push_refetches_sessions_with_unchanged_counts', async () => {
+    const sessions = sampleSessions(NOW);
+    const { api, emit } = renderSection({ running: true, background: 'off', sessions });
+    await screen.findByText('Refactor the ingest pipeline tests');
+    const same = await api.status();
+    const first = sessions[0];
+    if (!first) throw new Error('fixture has sessions');
+    first.title = 'Renamed while running';
+    act(() => emit({ ...same }));
+    await screen.findByText('Renamed while running');
   });
 
   it('stopped_shows_empty_sessions', async () => {

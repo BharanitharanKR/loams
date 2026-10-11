@@ -105,7 +105,9 @@ export function createMockAgentdApi(o: MockAgentdOptions = {}): MockAgentd {
       return () => void listeners.delete(cb);
     },
     sessions: async (): Promise<IpcResult<AgentdSession[]>> =>
-      status.state === 'running' ? { ok: true, value: sessions.map((s) => ({ ...s })) } : notRunning,
+      status.state === 'running'
+        ? { ok: true, value: sessions.map((s) => ({ ...s })) }
+        : notRunning,
     reattach: async (id) => {
       calls.push(`reattach:${id}`);
       if (status.state !== 'running') return notRunning;

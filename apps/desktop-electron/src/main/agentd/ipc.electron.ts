@@ -34,7 +34,20 @@ export function registerAgentdIpc(svc: AgentdService): () => void {
 		assertTrustedSender(e);
 		return svc.setBackground(v);
 	});
-	return svc.onStatus((s) => {
+	const off = svc.onStatus((s) => {
 		getMainWindow()?.webContents.send(CH.agentdEvent, s);
 	});
+	return () => {
+		off();
+		for (const ch of [
+			CH.agentdStatus,
+			CH.agentdSessions,
+			CH.agentdReattach,
+			CH.agentdStart,
+			CH.agentdStop,
+			CH.agentdBackgroundGet,
+			CH.agentdBackgroundSet,
+		])
+			ipcMain.removeHandler(ch);
+	};
 }

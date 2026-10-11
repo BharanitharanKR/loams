@@ -484,6 +484,12 @@ body {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.lc-agentd-choice {
+  min-width: 0;
+  margin-inline: 0;
+  padding: 0;
+  border: 0;
+}
 .lc-agentd-sessions {
   display: grid;
   gap: 8px;

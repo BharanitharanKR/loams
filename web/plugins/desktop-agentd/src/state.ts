@@ -5,7 +5,7 @@ import type {
   AgentdStatus,
 } from '@loams/desktop/contracts';
 import type { Status } from '@loams/ui';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AgentdApi } from './mock.js';
 
 /** The daemon's status: read once, then pushed by main. `null` while loading. */
@@ -40,24 +40,26 @@ export type SessionsState =
   | { kind: 'ready'; sessions: AgentdSession[] }
   | { kind: 'error'; message: string };
 
-/** Sessions, refetched whenever the daemon's state or counts change. */
+/**
+ * Sessions, refetched on every status push while the daemon runs: a push can
+ * mean a session changed even when the daemon's counts did not.
+ */
 export function useSessions(api: AgentdApi, status: AgentdStatus | null) {
   const [st, setSt] = useState<SessionsState>({ kind: 'loading' });
-  const key =
-    status?.state === 'running'
-      ? `${status.pid}:${status.runningTurns}:${status.pendingApprovals}`
-      : (status?.state ?? 'none');
-  const reload = useCallback(async () => {
-    const r = await api.sessions();
-    setSt(r.ok ? { kind: 'ready', sessions: r.value } : { kind: 'error', message: r.message });
-  }, [api]);
   useEffect(() => {
-    if (key.startsWith('stopped') || key.startsWith('unavailable') || key === 'none') {
+    if (status?.state !== 'running') {
       setSt({ kind: 'ready', sessions: [] });
       return;
     }
-    void reload();
-  }, [key, reload]);
+    let live = true;
+    void api.sessions().then((r) => {
+      if (!live) return;
+      setSt(r.ok ? { kind: 'ready', sessions: r.value } : { kind: 'error', message: r.message });
+    });
+    return () => {
+      live = false;
+    };
+  }, [api, status]);
   return st;
 }
 

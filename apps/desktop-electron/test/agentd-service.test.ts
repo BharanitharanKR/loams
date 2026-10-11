@@ -5,7 +5,15 @@ import { AgentdService } from "../src/main/agentd/service";
 import { AgentdError } from "../src/main/agentd/types";
 import type { AgentdBackground } from "../src/shared/contracts";
 
-function setup(init: { bg?: AgentdBackground; running?: boolean; mode?: "service" | "child" } = {}) {
+function setup(
+	init: {
+		bg?: AgentdBackground;
+		running?: boolean;
+		mode?: "service" | "child";
+		stopServiceFails?: number;
+	} = {},
+) {
+	let stopFailures = init.stopServiceFails ?? 0;
 	let bg: AgentdBackground = init.bg ?? "ask";
 	let up = init.running ?? false;
 	const log: string[] = [];
@@ -28,7 +36,13 @@ function setup(init: { bg?: AgentdBackground; running?: boolean; mode?: "service
 			log.push(`launch:${mode}`);
 			up = true;
 		},
-		stopService: async () => void log.push("service.stop"),
+		stopService: async () => {
+			log.push("service.stop");
+			if (stopFailures > 0) {
+				stopFailures--;
+				throw new Error("systemctl failed");
+			}
+		},
 	});
 	return { svc, client, log };
 }
@@ -99,6 +113,19 @@ describe("agentd service", () => {
 		expect(client.calls).toContain("Drain");
 		expect(client.calls).not.toContain("Shutdown");
 		expect(log).toEqual(["service.stop"]);
+	});
+
+	it("failed_service_stop_keeps_the_daemon_for_a_retry", async () => {
+		const { svc, log } = setup({ running: true, mode: "service", stopServiceFails: 1 });
+		await svc.attach();
+		expect(await svc.stop({ confirmed: true })).toMatchObject({
+			ok: false,
+			code: "service_stop_failed",
+		});
+		expect(svc.status().state).toBe("running");
+		expect((await svc.stop({ confirmed: true })).ok).toBe(true);
+		expect(log).toEqual(["service.stop", "service.stop"]);
+		expect(svc.status().state).toBe("stopped");
 	});
 
 	it("status_updates_from_watch", async () => {

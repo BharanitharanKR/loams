@@ -127,11 +127,7 @@ export function AgentdSection({
             <dd>
               {bg === null ? '…' : backgroundLabel(bg)}{' '}
               {bg !== null && (
-                <Button
-                  variant="quiet"
-                  onClick={() => setConsentOpen(true)}
-                  aria-haspopup="dialog"
-                >
+                <Button variant="quiet" onClick={() => setConsentOpen(true)} aria-haspopup="dialog">
                   Change
                 </Button>
               )}
@@ -181,8 +177,7 @@ export function AgentdSection({
                   <strong>{s.title || s.id}</strong>
                   <span className="lc-muted">
                     {' '}
-                    {s.harness} · updated{' '}
-                    {formatRelative(new Date(s.updatedAtMs).toISOString())}
+                    {s.harness} · updated {formatRelative(new Date(s.updatedAtMs).toISOString())}
                   </span>
                 </div>
                 <StatusTag status={SESSION_TONE[s.state]}>{SESSION_LABEL[s.state]}</StatusTag>

@@ -22,14 +22,14 @@ export function ConsentDialog({
       onClose={onClose}
       title="Keep agents running in the background?"
       footer={
-        <div className="lc-actions" role="group" aria-label="Background mode">
+        <fieldset className="lc-actions lc-agentd-choice" aria-label="Background mode">
           <Button disabled={busy} onClick={() => onAnswer('on')}>
             Keep running in the background
           </Button>
           <Button disabled={busy} onClick={() => onAnswer('off')}>
             Only while the app is open
           </Button>
-        </div>
+        </fieldset>
       }
     >
       <p>

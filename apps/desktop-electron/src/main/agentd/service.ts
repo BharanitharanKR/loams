@@ -188,10 +188,8 @@ export class AgentdService {
 		} catch (e) {
 			return errorResult(e);
 		}
-		this.#watch?.cancel();
-		this.#watch = null;
-		this.#client = null;
-		await c.close().catch(() => {});
+		// Stop the service before letting go of the client, so a failed stop
+		// leaves the daemon attached for a confirmed retry.
 		if (mode === "service") {
 			try {
 				await this.deps.stopService();
@@ -199,6 +197,10 @@ export class AgentdService {
 				return fail("service_stop_failed", "The background service did not stop");
 			}
 		}
+		this.#watch?.cancel();
+		this.#watch = null;
+		this.#client = null;
+		await c.close().catch(() => {});
 		this.#set({ state: "stopped", dataDir: this.deps.agentdDir, version: c.hello.version });
 		return ok;
 	}
