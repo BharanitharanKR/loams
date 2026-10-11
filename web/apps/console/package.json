@@ -26,6 +26,7 @@
     "@loams/plugin-approvals": "workspace:*",
     "@loams/plugin-connectors": "workspace:*",
     "@loams/plugin-data-studio": "workspace:*",
+    "@loams/plugin-deployments": "workspace:*",
     "@loams/plugin-durable": "workspace:*",
     "@loams/plugin-desktop-agentd": "workspace:*",
     "@loams/plugin-desktop-servers": "workspace:*",

@@ -6,6 +6,7 @@
 import type { ModuleTable } from '@loams/console-host';
 import helloPkg from '@loams/example-plugin-hello/package.json';
 import approvalsPkg from '@loams/plugin-approvals/package.json';
+import deploymentsPkg from '@loams/plugin-deployments/package.json';
 import identityPkg from '@loams/plugin-identity/package.json';
 import namespacesPkg from '@loams/plugin-namespaces/package.json';
 import rpcPkg from '@loams/plugin-rpc/package.json';
@@ -19,6 +20,7 @@ export const modules: ModuleTable = {
   '@loams/plugin-stack-status': () => import('@loams/plugin-stack-status'),
   '@loams/plugin-namespaces': () => import('@loams/plugin-namespaces'),
   '@loams/plugin-approvals': () => import('@loams/plugin-approvals'),
+  '@loams/plugin-deployments': () => import('@loams/plugin-deployments'),
 };
 
 export const manifests: unknown[] = [
@@ -28,6 +30,7 @@ export const manifests: unknown[] = [
   stackStatusPkg,
   namespacesPkg,
   approvalsPkg,
+  deploymentsPkg,
   helloPkg,
 ];
 

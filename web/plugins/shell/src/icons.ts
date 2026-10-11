@@ -12,6 +12,7 @@ import {
   Network,
   Plug,
   Radio,
+  Rocket,
   Settings,
   ShieldCheck,
   Table2,
@@ -38,6 +39,7 @@ const ICONS: Record<string, LucideIcon> = {
   settings: Settings,
   approvals: ShieldCheck,
   namespaces: Boxes,
+  deployments: Rocket,
 };
 
 export const ICON_NAMES = Object.keys(ICONS);
