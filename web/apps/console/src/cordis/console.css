@@ -460,6 +460,51 @@ body {
   white-space: nowrap;
 }
 
+/* Desktop: Settings › Background agents (plugin-desktop-agentd). */
+.lc-agentd {
+  display: grid;
+  gap: 16px;
+}
+.lc-agentd-facts {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.lc-agentd-facts > div {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+}
+.lc-agentd-facts dt {
+  color: var(--op-muted);
+  font-size: 13px;
+}
+.lc-agentd-facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.lc-agentd-sessions {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lc-agentd-sessions > li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--op-rule);
+}
+.lc-agentd-sessions > li > div {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
 /* Data Studio (plugin-data-studio). */
 .ds-page {
   max-width: 1180px;

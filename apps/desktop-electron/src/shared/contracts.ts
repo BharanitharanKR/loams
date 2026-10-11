@@ -336,6 +336,14 @@ export const CH = {
 	wesqlSchemas: "wesql:schemas",
 	wesqlTables: "wesql:tables",
 	wesqlQuery: "wesql:query",
+	agentdStatus: "agentd:status",
+	agentdEvent: "agentd:event",
+	agentdSessions: "agentd:sessions",
+	agentdReattach: "agentd:reattach",
+	agentdStart: "agentd:start",
+	agentdStop: "agentd:stop",
+	agentdBackgroundGet: "agentd:background-get",
+	agentdBackgroundSet: "agentd:background-set",
 } as const;
 
 // ---- D675: the agent panel ----
@@ -512,5 +520,69 @@ export interface LoamsDesktopApi {
 		schemas(): Promise<IpcResult<WesqlSchema[]>>;
 		tables(schema: string): Promise<IpcResult<WesqlTable[]>>;
 		query(sql: string): Promise<IpcResult<SqlResult>>;
+	};
+}
+
+// ---- DD1 Tasks 6, 10, 12: the loams-agentd daemon, as the renderer sees it ----
+// Electron main holds the daemon's token and client; none of these types carry it.
+
+/** `HelloReply.mode` (§50 §5.4): a per-user service, or Electron's child. */
+export type AgentdMode = "service" | "child";
+/** `daemon.background` in settings.json; `ask` until the user answers the consent dialog. */
+export type AgentdBackground = "ask" | "on" | "off";
+/** The renderer-facing status: what main learned from `Hello` and `WatchDaemonStatus`. */
+export type AgentdStatus =
+	| {
+			state: "running";
+			mode: AgentdMode;
+			version: string;
+			protocol: number;
+			pid: number;
+			startedAtMs: number;
+			/** `<userData>/agentd`, a local path. */
+			dataDir: string;
+			draining: boolean;
+			runningTurns: number;
+			pendingApprovals: number;
+	  }
+	| { state: "stopped"; dataDir: string; version?: string }
+	| { state: "unavailable"; reason: string };
+export type AgentdSessionState =
+	| "running"
+	| "waiting_approval"
+	| "idle"
+	| "interrupted"
+	| "failed";
+export interface AgentdSession {
+	id: string;
+	title: string;
+	/** Harness id on the wire, e.g. "loams-agent", "claude-code". */
+	harness: string;
+	state: AgentdSessionState;
+	updatedAtMs: number;
+	pendingApprovals: number;
+	/** Whether a renderer can reattach (a live or resumable session). */
+	resumable: boolean;
+}
+
+export interface LoamsDesktopApi {
+	agentd: {
+		status(): Promise<AgentdStatus>;
+		onStatus(cb: (s: AgentdStatus) => void): () => void;
+		sessions(): Promise<IpcResult<AgentdSession[]>>;
+		/** Reattach to a session; the value is the console route that shows it. */
+		reattach(sessionId: string): Promise<IpcResult<{ route: string }>>;
+		/** Start the daemon in the mode `daemon.background` names; `consent_required` while it is `ask`. */
+		start(): Promise<IpcResult<void>>;
+		/**
+		 * Drain, then stop. `confirmed` must be true: the renderer asks first
+		 * (D785, explicit stop); otherwise the result is `consent_required`.
+		 */
+		stop(opts: { confirmed: boolean }): Promise<IpcResult<void>>;
+		background: {
+			get(): Promise<AgentdBackground>;
+			/** The consent dialog's answer, or a later change in Settings. */
+			set(v: "on" | "off"): Promise<IpcResult<void>>;
+		};
 	};
 }

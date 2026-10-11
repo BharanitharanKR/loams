@@ -11,6 +11,7 @@ import {
 import agentPkg from '@loams/plugin-agent/package.json';
 import connectorsPkg from '@loams/plugin-connectors/package.json';
 import dataStudioPkg from '@loams/plugin-data-studio/package.json';
+import desktopAgentdPkg from '@loams/plugin-desktop-agentd/package.json';
 import desktopServersPkg from '@loams/plugin-desktop-servers/package.json';
 import desktopSettingsPkg from '@loams/plugin-desktop-settings/package.json';
 import durablePkg from '@loams/plugin-durable/package.json';
@@ -46,6 +47,7 @@ export const desktopModules: typeof modules = {
   '@loams/plugin-postgres': () => import('@loams/plugin-postgres'),
   '@loams/plugin-wesql': () => import('@loams/plugin-wesql'),
   '@loams/plugin-sql': () => import('@loams/plugin-sql'),
+  '@loams/plugin-desktop-agentd': () => import('@loams/plugin-desktop-agentd'),
 };
 /** Their package.json manifests. */
 export const desktopManifests: unknown[] = [
@@ -65,6 +67,7 @@ export const desktopManifests: unknown[] = [
   postgresPkg,
   wesqlPkg,
   sqlPkg,
+  desktopAgentdPkg,
 ];
 
 export async function startDesktop(

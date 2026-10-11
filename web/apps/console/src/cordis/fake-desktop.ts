@@ -32,6 +32,7 @@ import type {
   StackState,
 } from '@loams/desktop/contracts';
 import { validateConfig } from '@loams/desktop/validate';
+import { createMockAgentdApi } from '@loams/plugin-desktop-agentd';
 
 // The generated connector catalog (apps/desktop-electron/scripts/connectors-catalog.mjs), the same
 // JSON the desktop app serves. Loaded lazily and only here, so it never reaches a production bundle.
@@ -465,6 +466,8 @@ export function createFakeDesktop(): LoamsDesktopApi {
     update: previewUpdate(),
     stacks: previewStacks(),
     chat: createFakeChat(),
+    // DD1: the agent daemon's panel, against the plugin's fixture mock.
+    agentd: createMockAgentdApi({ running: true, background: 'off' }).api,
     // FAKE sample data for previews; no database is contacted.
     pg: {
       tenants: async () => ({ ok: true, value: ['f4k3'.repeat(8)] }),

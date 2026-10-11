@@ -116,6 +116,19 @@ const api: LoamsDesktopApi = {
 		tables: (schema) => invoke(CH.wesqlTables, schema),
 		query: (sql) => invoke(CH.wesqlQuery, sql),
 	},
+	// DD1: the daemon's token stays in main; these are named, validated channels.
+	agentd: {
+		status: () => invoke(CH.agentdStatus),
+		onStatus: (cb) => subscribe(CH.agentdEvent, cb),
+		sessions: () => invoke(CH.agentdSessions),
+		reattach: (sessionId) => invoke(CH.agentdReattach, sessionId),
+		start: () => invoke(CH.agentdStart),
+		stop: (opts) => invoke(CH.agentdStop, opts),
+		background: {
+			get: () => invoke(CH.agentdBackgroundGet),
+			set: (v) => invoke(CH.agentdBackgroundSet, v),
+		},
+	},
 };
 
 contextBridge.exposeInMainWorld("loamsDesktop", api);

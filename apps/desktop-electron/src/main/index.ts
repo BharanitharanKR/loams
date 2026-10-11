@@ -14,6 +14,8 @@ import {
 import type { EngineState } from "../shared/contracts";
 import { VERSION_ARG } from "../shared/version";
 import { registerChatIpc } from "./agent/ipc.electron";
+import { registerAgentdIpc } from "./agentd/ipc.electron";
+import { createAgentdService } from "./agentd/setup";
 import type { ChatService } from "./agent/service";
 import { registerTools } from "./agent/tools";
 import { appPaths } from "./app-paths";
@@ -262,6 +264,15 @@ const singleInstance = initSingleInstance({
 			});
 			registerStacksIpc(stacks, paths.logs);
 			registerSqlIpc(sql);
+			// DD1: the agent daemon's status panel (mock daemon in development builds).
+			const agentd = createAgentdService({
+				userData: app.getPath("userData"),
+				settingsFile: settingsFile(),
+				version: app.getVersion(),
+				mock: !app.isPackaged,
+			});
+			registerAgentdIpc(agentd);
+			void agentd.attach();
 			// With the TiKV stack chosen, a stack left running from last time starts the engine
 			// with Live on it directly, but a slow or absent runtime must not hold the engine
 			// back for long.
