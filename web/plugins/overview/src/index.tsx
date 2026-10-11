@@ -10,10 +10,10 @@ import type {} from '@loams/platform-electron';
 import { OverviewPage } from './overview-page.js';
 
 export * from './cards.js';
-export * from './load.js';
 export { LiveDashboard } from './live/live-dashboard.js';
 export { mockOverviewMetrics } from './live/mock.js';
 export type * from './live/types.js';
+export * from './load.js';
 export { OverviewPage } from './overview-page.js';
 
 const plugin: PluginModule = {

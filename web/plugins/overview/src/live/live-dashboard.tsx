@@ -4,7 +4,7 @@
 // client serves fixtures the section says "Sample data" so nobody mistakes it
 // for their own numbers.
 
-import { Badge } from '@loams/ui';
+import { Badge, Notice } from '@loams/ui';
 import { useLoad } from '../load.js';
 import { TrafficChart, UsageChart } from './charts.js';
 import { KpiStrip } from './kpis.js';
@@ -24,12 +24,20 @@ export function LiveDashboard({
   return (
     <section aria-labelledby="overview-live" className="flex flex-col gap-4 mb-6">
       <div className="flex items-center gap-2">
+        {/* Not "Live": that is a product, with its own card below. */}
         <h2 id="overview-live" className="m-0">
-          Live
+          Activity
         </h2>
-        {client.sample && <Badge title="Generated in the browser, not read from a server">Sample data</Badge>}
+        {client.sample && (
+          <Badge title="Generated in the browser, not read from a server">Sample data</Badge>
+        )}
       </div>
       {kpis.state === 'ok' && <KpiStrip kpis={kpis.data} client={client} />}
+      {kpis.state === 'error' && (
+        <Notice tone="danger" title="Not reachable">
+          {kpis.message}
+        </Notice>
+      )}
       <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(22rem,1fr))]">
         <TrafficChart client={client} />
         <UsageChart client={client} />

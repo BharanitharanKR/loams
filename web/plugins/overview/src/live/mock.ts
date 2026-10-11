@@ -138,12 +138,54 @@ const MIN = 60_000;
 
 export function deploymentFixtures(now: number): Deployment[] {
   return [
-    { id: 'dep-6', service: 'api-gateway', version: 'v2.14.0', state: 'building', at: now - 2 * MIN, by: 'ci' },
-    { id: 'dep-5', service: 'orders-db', version: 'pg-17.2', state: 'live', at: now - 26 * MIN, by: 'ana' },
-    { id: 'dep-4', service: 'events', version: 'v0.9.3', state: 'failed', at: now - 74 * MIN, by: 'ci' },
-    { id: 'dep-3', service: 'worker', version: 'v1.8.1', state: 'rolled-back', at: now - 3 * 60 * MIN, by: 'li' },
-    { id: 'dep-2', service: 'api-gateway', version: 'v2.13.2', state: 'live', at: now - 9 * 60 * MIN, by: 'ci' },
-    { id: 'dep-1', service: 'sessions', version: 'v3.0.0', state: 'live', at: now - 26 * 60 * MIN, by: 'sam' },
+    {
+      id: 'dep-6',
+      service: 'api-gateway',
+      version: 'v2.14.0',
+      state: 'building',
+      at: now - 2 * MIN,
+      by: 'ci',
+    },
+    {
+      id: 'dep-5',
+      service: 'orders-db',
+      version: 'pg-17.2',
+      state: 'live',
+      at: now - 26 * MIN,
+      by: 'ana',
+    },
+    {
+      id: 'dep-4',
+      service: 'events',
+      version: 'v0.9.3',
+      state: 'failed',
+      at: now - 74 * MIN,
+      by: 'ci',
+    },
+    {
+      id: 'dep-3',
+      service: 'worker',
+      version: 'v1.8.1',
+      state: 'rolled-back',
+      at: now - 3 * 60 * MIN,
+      by: 'li',
+    },
+    {
+      id: 'dep-2',
+      service: 'api-gateway',
+      version: 'v2.13.2',
+      state: 'live',
+      at: now - 9 * 60 * MIN,
+      by: 'ci',
+    },
+    {
+      id: 'dep-1',
+      service: 'sessions',
+      version: 'v3.0.0',
+      state: 'live',
+      at: now - 26 * 60 * MIN,
+      by: 'sam',
+    },
   ];
 }
 

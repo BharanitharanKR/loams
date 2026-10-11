@@ -1,10 +1,12 @@
+import { compileSpec, readChartTheme } from '@loams/charts';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { formatKpi, kpiDelta, KpiCard } from '../src/live/kpis.js';
+import { UsageChart } from '../src/live/charts.js';
+import { formatKpi, KpiCard, kpiDelta } from '../src/live/kpis.js';
 import { LiveDashboard } from '../src/live/live-dashboard.js';
 import { MiniCanvas, nextService, toFlow } from '../src/live/mini-canvas.js';
-import { KPIS, mockOverviewMetrics, TOPOLOGY } from '../src/live/mock.js';
-import { usageSpec } from '../src/live/specs.js';
+import { KPIS, mockOverviewMetrics, PRODUCTS, TOPOLOGY } from '../src/live/mock.js';
+import { trafficSpec, usageSpec } from '../src/live/specs.js';
 import { startWith, ticker } from '../src/live/ticker.js';
 import type { OverviewMetricsClient } from '../src/live/types.js';
 
@@ -33,7 +35,10 @@ describe('ticker', () => {
 
   it('startWith yields the snapshot first, then the stream, and forwards return', async () => {
     vi.useFakeTimers();
-    const it = startWith(async () => 'snap', ticker(500, () => 'tick'))[Symbol.asyncIterator]();
+    const it = startWith(
+      async () => 'snap',
+      ticker(500, () => 'tick'),
+    )[Symbol.asyncIterator]();
     expect(await it.next()).toEqual({ done: false, value: 'snap' });
     const n = it.next();
     await vi.advanceTimersByTimeAsync(500);
@@ -65,9 +70,9 @@ describe('mock metrics', () => {
     t += 1000;
     await vi.advanceTimersByTimeAsync(1000);
     const r = await next;
-    expect(r.done).toBe(false);
-    expect(r.value?.map((s) => s.series)).toEqual(['Requests/s', 'Errors/s']);
-    expect(r.value?.[0]?.t).toBe(NOW + 1000);
+    if (r.done) throw new Error('stream ended early');
+    expect(r.value.map((s) => s.series)).toEqual(['Requests/s', 'Errors/s']);
+    expect(r.value[0]?.t).toBe(NOW + 1000);
     await it.return?.();
   });
 
@@ -90,7 +95,12 @@ describe('kpis', () => {
     expect(formatKpi({ unit: 'ms' }, 47.6)).toBe('48 ms');
     expect(formatKpi({ unit: 'bytes' }, 38e9)).toBe('38.0 GB');
     expect(kpiDelta([{ t: 0, v: 100 }])).toBeUndefined();
-    expect(kpiDelta([{ t: 0, v: 100 }, { t: 1, v: 110 }])).toBeCloseTo(10);
+    expect(
+      kpiDelta([
+        { t: 0, v: 100 },
+        { t: 1, v: 110 },
+      ]),
+    ).toBeCloseTo(10);
   });
 
   it('a KPI card shows the latest value and a labelled sparkline', async () => {
@@ -98,8 +108,12 @@ describe('kpis', () => {
     const kpi = KPIS[0];
     if (!kpi) throw new Error('no KPIs');
     render(<KpiCard kpi={kpi} client={client} />);
-    const spark = await screen.findByLabelText('Requests, last 5 minutes');
-    await waitFor(() => expect(spark.getAttribute('data-sparkline')).toBe('5'));
+    // The real Sparkline: its name carries the latest/min/max, its path one
+    // segment per point after the first.
+    const spark = await screen.findByRole('img', { name: /^Requests, last 5 minutes: latest / });
+    await waitFor(() =>
+      expect(spark.querySelector('path')?.getAttribute('d')?.match(/L/g)).toHaveLength(4),
+    );
     expect(screen.getByText(/\/s$/)).toBeTruthy();
     expect(screen.queryByText('Loading')).toBeNull();
   });
@@ -114,8 +128,10 @@ describe('live dashboard', () => {
     expect(screen.getAllByRole('listitem').length).toBeGreaterThanOrEqual(4);
 
     const traffic = within(panel('traffic')).getByLabelText(/Requests and errors per second/);
-    expect(traffic.getAttribute('data-chart')).toBe('Line Chart');
-    await waitFor(() => expect(traffic.getAttribute('data-rows')).toBe('120'));
+    // 60 points, two series each; the hidden table lists the latest 50.
+    await waitFor(() =>
+      expect(traffic.querySelector('caption')?.textContent).toMatch(/latest 50 of 120 rows/),
+    );
 
     await within(panel('deployments')).findByText('v2.14.0');
     expect(within(panel('deployments')).getByText('Rolled back')).toBeTruthy();
@@ -136,8 +152,14 @@ describe('live dashboard', () => {
     fireEvent.click(mem);
     expect(mem.getAttribute('aria-pressed')).toBe('true');
     const chart = await within(usage).findByLabelText(/Memory usage per product, stacked/);
-    expect(chart.getAttribute('data-chart')).toBe('Area Chart');
-    expect(usageSpec('memory').chartProperties).toEqual({ stack: 'total' });
+    await waitFor(() =>
+      expect(
+        within(chart)
+          .getAllByRole('columnheader')
+          .map((h) => h.textContent),
+      ).toContain('product'),
+    );
+    expect(within(chart).getByText(/Memory usage per product, stacked.*: data/)).toBeTruthy();
   });
 
   it('shows a failed read as Not reachable, not as numbers', async () => {
@@ -151,6 +173,55 @@ describe('live dashboard', () => {
     render(<LiveDashboard client={client} now={() => NOW} />);
     await within(panel('alerts')).findByText('alerts service down');
     expect(within(panel('alerts')).getByText('Not reachable')).toBeTruthy();
+  });
+
+  it('says so when the KPI list cannot be read, instead of dropping the row', async () => {
+    const base = mockOverviewMetrics({ now: () => NOW });
+    const client: OverviewMetricsClient = {
+      ...base,
+      kpis: async () => {
+        throw new Error('metrics service down');
+      },
+    };
+    render(<LiveDashboard client={client} now={() => NOW} />);
+    await screen.findByText('metrics service down');
+    expect(screen.queryByRole('list', { name: 'Key metrics' })).toBeNull();
+  });
+
+  it('reloads usage history when the client changes, not only the resource', async () => {
+    const a = mockOverviewMetrics({ now: () => NOW, historyPoints: 4 });
+    const b = mockOverviewMetrics({ now: () => NOW, historyPoints: 2 });
+    const { rerender } = render(<UsageChart client={a} />);
+    const rows = () =>
+      within(panel('usage'))
+        .getByLabelText(/CPU usage per product/)
+        .querySelectorAll('tbody tr').length;
+    // Five products per point.
+    await waitFor(() => expect(rows()).toBe(20));
+    rerender(<UsageChart client={b} />);
+    await waitFor(() => expect(rows()).toBe(10));
+  });
+});
+
+describe('chart specs', () => {
+  // Through the real compiler: a spec it would draw differently fails here, not on screen.
+  const theme = readChartTheme();
+  it('traffic is one line per series over a time axis', async () => {
+    const rows = await mockOverviewMetrics({ now: () => NOW }).trafficHistory();
+    const out = compileSpec(trafficSpec, rows, { theme });
+    expect(out.kind).toBe('line');
+    expect(out.temporal).toBe(true);
+    expect(out.yFields).toEqual(['Requests/s', 'Errors/s']);
+  });
+
+  it('usage stacks one area per product', async () => {
+    const rows = await mockOverviewMetrics({ now: () => NOW }).usageHistory('memory');
+    const out = compileSpec(usageSpec('memory'), rows, { theme });
+    expect(out.kind).toBe('area');
+    expect(out.yFields).toEqual(PRODUCTS);
+    const series = out.option.series as { stack?: string }[];
+    expect(series).toHaveLength(PRODUCTS.length);
+    expect(series.every((x) => x.stack === 'total')).toBe(true);
   });
 });
 
@@ -184,10 +255,10 @@ describe('mini canvas', () => {
     const client = mockOverviewMetrics({ now: () => NOW });
     render(<MiniCanvas client={client} />);
     const list = await screen.findByRole('list', { name: 'Services and their connections' });
-    expect(within(list).getByText(/api-gateway, gateway, Healthy; calls worker, events, sessions/)).toBeTruthy();
     expect(
-      screen.getByRole('group', { name: /Service map\. Use the arrow keys/ }),
+      within(list).getByText(/api-gateway, gateway, Healthy; calls worker, events, sessions/),
     ).toBeTruthy();
+    expect(screen.getByRole('group', { name: /Service map\. Use the arrow keys/ })).toBeTruthy();
   });
 
   it('moves focus between nodes with the arrow keys', async () => {

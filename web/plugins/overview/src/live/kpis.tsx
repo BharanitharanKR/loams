@@ -37,13 +37,12 @@ function Delta({ kpi, delta }: { kpi: Kpi; delta: number | undefined }) {
   const good = kpi.better === 'higher' ? up : !up;
   const text = `${up ? '+' : '-'}${Math.abs(delta).toFixed(1)}%`;
   return (
-    <span
-      className={good ? 'text-[var(--op-grow-deep)]' : 'text-[var(--op-danger)]'}
-      aria-label={`${up ? 'Up' : 'Down'} ${Math.abs(delta).toFixed(1)} percent over 5 minutes`}
-    >
-      {/* The arrow is decoration; the label above says the direction in words. */}
+    <span className={good ? 'text-[var(--op-grow-deep)]' : 'text-[var(--op-danger)]'}>
+      {/* The arrow is decoration; the hidden words say the direction and the span. */}
       <span aria-hidden="true">{up ? '↑' : '↓'} </span>
+      <span className="sr-only">{up ? 'Up' : 'Down'} </span>
       {text}
+      <span className="sr-only"> over 5 minutes</span>
     </span>
   );
 }

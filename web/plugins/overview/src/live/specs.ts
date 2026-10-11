@@ -25,16 +25,18 @@ const RESOURCE_TITLE: Record<Resource, string> = {
   storage: 'Storage by product',
 };
 
-/** One resource, stacked by product, so the top line is the total. */
+/**
+ * One resource, stacked by product, so the top line is the total. The chart
+ * package stacks on the chart type's name ("Stacked ..."), not on a property.
+ */
 export function usageSpec(resource: Resource): ChartSpec {
   return {
-    chartType: 'Area Chart',
+    chartType: 'Stacked Area Chart',
     title: RESOURCE_TITLE[resource],
     encodings: {
       x: { field: 't', type: 'temporal' },
-      y: { field: 'v', type: 'quantitative', aggregate: 'sum' },
+      y: { field: 'v', type: 'quantitative' },
       color: { field: 'product', type: 'nominal' },
     },
-    chartProperties: { stack: 'total' },
   };
 }

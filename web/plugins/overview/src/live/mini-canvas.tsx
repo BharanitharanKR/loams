@@ -168,7 +168,7 @@ function Graph({ topo }: { topo: Topology }) {
   );
   return (
     <>
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: delegates arrow keys to the focusable nodes inside */}
+      {/* biome-ignore lint/a11y/useSemanticElements: a React Flow viewport holding focusable nodes, not a set of form controls; the group names it and delegates arrow keys */}
       <div
         ref={ref}
         role="group"

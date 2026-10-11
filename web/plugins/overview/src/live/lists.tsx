@@ -1,10 +1,16 @@
 // Recent deployments and open alerts: plain tables, states in words as well
 // as colour, times as relative text with the exact time in a <time> element.
 
-import { Card, Empty, Notice, type Status, StatusTag, Table, formatRelative } from '@loams/ui';
+import { Card, Empty, formatRelative, Notice, type Status, StatusTag, Table } from '@loams/ui';
 import type { ReactNode } from 'react';
 import { type Load, useLoad } from '../load.js';
-import type { AlertItem, Deployment, DeploymentState, OverviewMetricsClient, Severity } from './types.js';
+import type {
+  AlertItem,
+  Deployment,
+  DeploymentState,
+  OverviewMetricsClient,
+  Severity,
+} from './types.js';
 
 const DEPLOY_TONE: Record<DeploymentState, { status: Status; label: string }> = {
   live: { status: 'done', label: 'Live' },
@@ -62,7 +68,9 @@ export function DeploymentsPanel({
               caption="Recent deployments"
               rows={rows}
               rowKey={(d) => d.id}
-              empty={<Empty title="No deployments yet">Deployments show here as they roll out.</Empty>}
+              empty={
+                <Empty title="No deployments yet">Deployments show here as they roll out.</Empty>
+              }
               columns={[
                 { key: 'service', header: 'Service', cell: (d) => d.service },
                 { key: 'version', header: 'Version', cell: (d) => <code>{d.version}</code> },

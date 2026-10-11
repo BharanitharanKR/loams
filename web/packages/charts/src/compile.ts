@@ -16,7 +16,7 @@ import {
   compileNativeWidget,
   declineChartRender,
   deepMerge,
-} from '@loams-core/charts/src/compiler.ts';
+} from '@loams-core/charts/src/compiler';
 import type { ChartTheme } from './theme';
 import type { ChartSpec, Row } from './types';
 import { timeOf } from './window';

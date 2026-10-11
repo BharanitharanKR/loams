@@ -255,7 +255,7 @@ describe('overview page', () => {
     expect(within(card('postgres')).getByText('Running')).toBeTruthy();
     expect(within(card('wesql')).getByText('Not running')).toBeTruthy();
     // The live dashboard sits above the cards, on sample data until a server API exists.
-    expect(screen.getByRole('heading', { name: 'Live' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Activity' })).toBeTruthy();
     expect(screen.getByText('Sample data')).toBeTruthy();
   });
 

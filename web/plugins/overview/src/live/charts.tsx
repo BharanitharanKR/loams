@@ -45,7 +45,10 @@ const RESOURCES: { id: Resource; label: string }[] = [
 
 export function UsageChart({ client }: { client: OverviewMetricsClient }) {
   const [resource, setResource] = useState<Resource>('cpu');
-  const history = useLoad(() => client.usageHistory(resource), resource, true, resource);
+  // Key and scope on both: a new client or a new resource drops the old history
+  // rather than pairing it with the new stream.
+  const scope = useMemo(() => ({ client, resource }), [client, resource]);
+  const history = useLoad(() => client.usageHistory(resource), scope, true, scope);
   const stream = useMemo(() => client.usageStream(resource), [client, resource]);
   const spec = useMemo(() => usageSpec(resource), [resource]);
   const label = RESOURCES.find((r) => r.id === resource)?.label ?? resource;
@@ -56,7 +59,7 @@ export function UsageChart({ client }: { client: OverviewMetricsClient }) {
         actions={
           // Buttons, not tabs: each is a toggle the keyboard reaches with Tab,
           // and `aria-pressed` says which one is showing.
-          <div className="flex gap-1" role="group" aria-label="Resource">
+          <fieldset className="m-0 flex min-w-0 gap-1 border-0 p-0" aria-label="Resource">
             {RESOURCES.map((r) => (
               <Button
                 key={r.id}
@@ -68,7 +71,7 @@ export function UsageChart({ client }: { client: OverviewMetricsClient }) {
                 {r.label}
               </Button>
             ))}
-          </div>
+          </fieldset>
         }
       >
         {history.state === 'error' ? (

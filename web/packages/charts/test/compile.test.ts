@@ -39,7 +39,7 @@ describe('compileSpec', () => {
     expect((option.dataset as Dict).source).toEqual(dailyRows);
     const [line] = series(option);
     expect(line).toMatchObject({ type: 'line', name: 'hours', encode: { x: 'day', y: 'hours' } });
-    expect((line.lineStyle as Dict).width).toBe(2);
+    expect((line?.lineStyle as Dict | undefined)?.width).toBe(2);
     expect(axis(option, 'xAxis').type).toBe('category');
     expect(option.color).toEqual([...LIGHT_PALETTE]);
     expect(option.backgroundColor).toBe('transparent');
@@ -126,7 +126,7 @@ describe('compileSpec', () => {
     const { option } = compileSpec(spec, [{ name: 'a', n: 1 }], { theme });
     const [pie] = series(option);
     expect(pie).toMatchObject({ type: 'pie', encode: { itemName: 'name', value: 'n' } });
-    expect((pie.itemStyle as Dict).borderColor).toBe(theme.bg);
+    expect((pie?.itemStyle as Dict | undefined)?.borderColor).toBe(theme.bg);
   });
 
   it('scales a heatmap to its data on a single-hue ramp', () => {

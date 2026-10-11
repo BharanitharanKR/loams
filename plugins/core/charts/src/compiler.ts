@@ -337,7 +337,7 @@ registerChartKind("funnel", {
 });
 
 registerChartKind("sankey", {
-  compile(widget, rows) {
+  compile(_widget, _rows) {
     // Sankey requires nodes/links data transform
     return {
       series: [
@@ -365,10 +365,10 @@ registerChartKind("waterfall", {
     for (let i = 0; i < values.length; i++) {
       if (i === 0) {
         baseData.push(0);
-        running = values[0];
+        running = values[0] ?? 0;
       } else {
         baseData.push(running);
-        running += values[i];
+        running += values[i] ?? 0;
       }
     }
     return {
@@ -397,7 +397,7 @@ registerChartKind("waterfall", {
 });
 
 registerChartKind("custom", {
-  compile(widget, rows) {
+  compile(_widget, rows) {
     return {
       dataset: { source: rows },
       xAxis: { type: "category" },
