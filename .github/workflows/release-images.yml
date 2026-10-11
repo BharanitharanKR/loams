@@ -1,0 +1,78 @@
+name: Release images
+
+# Builds the preview images (deploy/release/Containerfile.<name>) on a tag
+# vX.Y.Z[-pre], one native runner per architecture, and publishes
+# ghcr.io/ostrium-labs/<name>:<version> and :preview as amd64+arm64 manifests.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build, vX.Y.Z[-pre]"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-images-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    name: ${{ matrix.image }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [loams, loams-fabric, loams-agentd]
+        arch: [amd64, arm64]
+        include:
+          - { arch: amd64, runner: ubuntu-24.04 }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: build and push ${{ matrix.image }}:<version>-${{ matrix.arch }}
+        run: |
+          deploy/release/build.sh "${{ matrix.image }}" --version "$TAG" \
+            --registry "$REGISTRY" --platforms "linux/${{ matrix.arch }}" --arch-tag --push
+
+  manifest:
+    name: ${{ matrix.image }} manifest
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+    strategy:
+      matrix:
+        image: [loams, loams-fabric, loams-agentd]
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: join amd64 and arm64 into :<version> and :preview
+        run: |
+          v="${TAG#v}"
+          ref="$REGISTRY/${{ matrix.image }}"
+          docker buildx imagetools create -t "$ref:$v" -t "$ref:preview" \
+            "$ref:$v-amd64" "$ref:$v-arm64"

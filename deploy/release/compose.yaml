@@ -102,8 +102,10 @@ services:
       - --house-endpoint=http://127.0.0.1:8123
     environment:
       RUST_LOG: ${RUST_LOG:-info}
-      # Engine auth (preview contract): oidc | apikey | off (loopback only).
-      LOAMS_AUTH_MODE: ${LOAMS_AUTH_MODE:-oidc}
+      # Engine auth (preview): tailscale | oidc | apikey | off (loopback only).
+      # tailscale trusts the Tailscale-User-Login headers that the sidecar's
+      # `tailscale serve` proxy adds, and only from that local proxy.
+      LOAMS_AUTH_MODE: ${LOAMS_AUTH_MODE:-tailscale}
       LOAMS_OIDC_ISSUER: ${LOAMS_OIDC_ISSUER:-https://auth.loams.dev}
       LOAMS_OIDC_AUDIENCE: ${LOAMS_OIDC_AUDIENCE:-loams-engine}
       LOAMS_API_KEYS_FILE: /etc/loams/secrets/api-keys

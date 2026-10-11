@@ -57,11 +57,15 @@ down`; add `--volumes` to delete the data.
 
 ### Auth
 
-The engine reads `LOAMS_AUTH_MODE` (`oidc`, `apikey`, or `off`, which serves
-loopback only), `LOAMS_OIDC_ISSUER` and `LOAMS_OIDC_AUDIENCE` (JWTs checked
-against the issuer's JWKS) and `LOAMS_API_KEYS_FILE`, which compose points at
-`secrets/api-keys`. The default is OIDC against `https://auth.loams.dev` plus
-API keys for the CLI and SDKs.
+The engine reads `LOAMS_AUTH_MODE` (`tailscale`, `oidc`, `apikey`, or `off`,
+which serves loopback only). The default is `tailscale`: the engine listens on
+loopback in the sidecar's network namespace, so the sidecar's `tailscale serve`
+proxy is the only way in, and the engine trusts the `Tailscale-User-Login`
+headers that proxy adds (only from it). `oidc` checks JWTs from
+`LOAMS_OIDC_ISSUER` (default `https://auth.loams.dev`) against its JWKS with
+audience `LOAMS_OIDC_AUDIENCE`; `apikey` checks hashed keys in
+`LOAMS_API_KEYS_FILE`, which compose points at `secrets/api-keys`. See
+`.env.example`.
 
 ### Headscale
 
