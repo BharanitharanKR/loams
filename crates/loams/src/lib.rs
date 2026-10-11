@@ -3,6 +3,7 @@
 //! (design §10 §1: `loams dev` and `loams standalone`).
 
 pub mod api;
+pub mod auth;
 pub mod cluster;
 mod meta_backend;
 #[cfg(feature = "mysql-wire")]

@@ -36,7 +36,7 @@ use loams_meta::{
     HttpTransport, HttpTransportConfig, MetaClient, MetaClientConfig, MetaConfig, MetaNode, Router,
     SystemClock, Transport,
 };
-use loams_query::flight::{FlightConfig, PutTasks, serve_flight_sql_tracked};
+use loams_query::flight::{FlightConfig, PutTasks, serve_flight_sql_wrapped};
 use loams_query::flight_ingest::StreamProducer;
 use loams_query::placement::Placement;
 use loams_query::{CollectionService, ServiceConfig};
@@ -285,6 +285,11 @@ pub struct ServerConfig {
     /// `/loams.house.v1.*` to (HS1 Task 7, design §49 §18.1). No endpoint (the
     /// default) answers `house_not_configured`.
     pub house: crate::api::house_proxy::HouseProxyConfig,
+    /// Who may call the engine (`LOAMS_AUTH_MODE`, [`crate::auth`]). Off
+    /// (the default) refuses to start unless every listener is loopback.
+    /// `dev` and `standalone` only: a cluster node refuses any other mode
+    /// until MT1.
+    pub auth: crate::auth::AuthConfig,
 }
 
 /// The largest engine statement time limit (§48 §13.1's maximum statement timeout).
@@ -407,6 +412,7 @@ impl ServerConfig {
             #[cfg(feature = "graph")]
             graph: GraphConfig::under(data_dir_for_graph),
             house: crate::api::house_proxy::HouseProxyConfig::default(),
+            auth: crate::auth::AuthConfig::off(),
         }
     }
 
@@ -434,6 +440,7 @@ impl ServerConfig {
             }
         }
         self.validate_durable()?;
+        self.validate_auth()?;
         #[cfg(feature = "graph")]
         self.validate_graph()?;
         #[cfg(feature = "live")]
@@ -492,6 +499,42 @@ impl ServerConfig {
         Ok(())
     }
 
+    /// The network listeners [`crate::auth`] guards, by flag name.
+    fn guarded_listeners(&self) -> Vec<(&'static str, SocketAddr)> {
+        let mut listeners = vec![("--listen", self.listen)];
+        if let Some(addr) = flight_addr(self) {
+            listeners.push(("--flight-sql-listen", addr));
+        }
+        #[cfg(feature = "qdrant")]
+        if let Some(qdrant) = &self.qdrant {
+            listeners.push(("--qdrant-listen", qdrant.rest_listen));
+            listeners.push(("--qdrant-grpc-listen", qdrant.grpc_listen));
+        }
+        #[cfg(feature = "es")]
+        if let Some(es) = &self.es {
+            listeners.push(("--es-listen", es.listen));
+        }
+        listeners
+    }
+
+    /// `off` only on loopback (preview contract); a cluster node keeps its
+    /// private-network routes and refuses any other mode until MT1.
+    fn validate_auth(&self) -> Result<(), ServerError> {
+        if self.cluster.is_some() {
+            if self.auth.enforced() {
+                return Err(ServerError::Config(format!(
+                    "{} is for dev and standalone; a cluster node's listeners must stay on a \
+                     private network until MT1",
+                    crate::auth::MODE_ENV
+                )));
+            }
+            return Ok(());
+        }
+        self.auth
+            .check_listeners(&self.guarded_listeners())
+            .map_err(ServerError::Config)
+    }
+
     /// Whether this server serves Loams Graph (GR1 Task 5): unless `--no-graph`, and not on a
     /// cluster node, which gets the `graph` role in Task 12 (R5.2). Otherwise every graph RPC
     /// answers `feature_not_in_variant`.
@@ -512,7 +555,10 @@ impl ServerConfig {
         if self.graph.data_dir.is_none() && !self.graph.ephemeral {
             return Err(ServerError::GraphNeedsDataDir);
         }
-        if !self.listen.ip().is_loopback() {
+        // Authenticated principals stand in for D750's authorizer until MT1:
+        // the preview engine is single-tenant, so everyone admitted is its
+        // owner.
+        if !self.listen.ip().is_loopback() && !self.auth.enforced() {
             return Err(ServerError::GraphListenNotLoopback { addr: self.listen });
         }
         if self.graph.maintenance_every.is_zero() {
@@ -1232,6 +1278,7 @@ impl Flight {
         collections: Arc<CollectionService>,
         streams: Arc<dyn StreamProducer>,
         config: FlightConfig,
+        guard: crate::auth::AuthLayerState,
     ) -> Self {
         let stop = CancellationToken::new();
         let puts = PutTasks::new();
@@ -1242,6 +1289,7 @@ impl Flight {
             config,
             stop.clone(),
             puts.clone(),
+            guard,
         ));
         Self {
             addr,
@@ -1282,9 +1330,18 @@ async fn serve(
     config: FlightConfig,
     stop: CancellationToken,
     puts: PutTasks,
+    guard: crate::auth::AuthLayerState,
 ) {
-    let served =
-        serve_flight_sql_tracked(listener, collections, Some(streams), config, stop, puts).await;
+    let served = serve_flight_sql_wrapped(
+        listener,
+        collections,
+        Some(streams),
+        config,
+        stop,
+        puts,
+        |routes| guard.wrap_grpc(routes),
+    )
+    .await;
     if let Err(err) = served {
         tracing::error!(%err, "Flight SQL server failed");
     }
@@ -1848,6 +1905,16 @@ impl Server {
             extra_sources,
             node_info,
         } = setup;
+        // Built before anything is bound: a bad key file or OIDC setting
+        // stops the start with nothing to undo. A cluster node is not
+        // guarded (validate_auth keeps it off).
+        let auth = match config.cluster {
+            None => crate::auth::Auth::from_config(&config.auth).map_err(ServerError::Config)?,
+            Some(_) => crate::auth::Auth::off(),
+        };
+        let guard = crate::auth::AuthLayerState::new(auth.clone(), &[]);
+        let main_guard =
+            crate::auth::AuthLayerState::new(auth, crate::auth::layer::MAIN_PUBLIC_PATHS);
         // Scan plans name the Lance datasets under the bucket (Task 14 rule 8).
         config.query.lance_base_url = Some(bucket_url(config)?);
         let cache = RangeCache::new(store.clone(), config.cache.clone()).await?;
@@ -2155,7 +2222,13 @@ impl Server {
             Some((qdrant, (rest, grpc))) => {
                 let stop = CancellationToken::new();
                 let handle = loams_qdrant::QdrantGateway::new(collections.clone(), qdrant)
-                    .serve(rest, grpc, stop.clone())
+                    .serve_with(
+                        rest,
+                        grpc,
+                        stop.clone(),
+                        |router| guard.wrap(router),
+                        |routes| guard.wrap_grpc(routes),
+                    )
                     .await;
                 Some(Qdrant { handle, stop })
             }
@@ -2164,8 +2237,11 @@ impl Server {
         #[cfg(feature = "es")]
         let es = es_listener.map(|(es, listener)| {
             let stop = CancellationToken::new();
-            let handle =
-                loams_es::EsGateway::new(collections.clone(), es).serve(listener, stop.clone());
+            let handle = loams_es::EsGateway::new(collections.clone(), es).serve_with(
+                listener,
+                stop.clone(),
+                |router| guard.wrap(router),
+            );
             Es { handle, stop }
         });
         let internal = reqwest::Client::builder()
@@ -2217,9 +2293,10 @@ impl Server {
             graph: graph.as_ref().map(|g| g.admin.clone()),
             house,
         };
-        let app = match roles.gateway {
-            true => api::router(state),
-            false => api::internal_router(state),
+        let app = match (roles.gateway, config.cluster.is_some()) {
+            (true, false) => main_guard.wrap(api::router(state)),
+            (true, true) => api::router(state),
+            (false, _) => api::internal_router(state),
         };
         let flight = flight_listener.map(|(listener, addr)| {
             let streams: Arc<dyn StreamProducer> = Arc::new(NativeStreamProducer {
@@ -2232,6 +2309,7 @@ impl Server {
                 collections.clone(),
                 streams,
                 config.flight.clone(),
+                guard.clone(),
             )
         });
         #[cfg(feature = "stream-grpc")]

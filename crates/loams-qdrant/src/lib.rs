@@ -329,9 +329,24 @@ impl QdrantGateway {
         grpc: tokio::net::TcpListener,
         shutdown: CancellationToken,
     ) -> QdrantHandle {
+        self.serve_with(rest, grpc, shutdown, |router| router, |routes| routes)
+            .await
+    }
+
+    /// [`QdrantGateway::serve`], with the REST router and the gRPC routes
+    /// passed through `wrap_rest` and `wrap_grpc` first (the server's
+    /// authentication layer).
+    pub async fn serve_with(
+        self,
+        rest: tokio::net::TcpListener,
+        grpc: tokio::net::TcpListener,
+        shutdown: CancellationToken,
+        wrap_rest: impl FnOnce(axum::Router) -> axum::Router,
+        wrap_grpc: impl FnOnce(tonic::service::Routes) -> tonic::service::Routes,
+    ) -> QdrantHandle {
         let rest_addr = rest.local_addr().unwrap_or(self.config().rest_listen);
         let grpc_addr = grpc.local_addr().unwrap_or(self.config().grpc_listen);
-        let router = self.rest_router();
+        let router = wrap_rest(self.rest_router());
         let stop = shutdown.clone();
         let rest_task = tokio::spawn(async move {
             axum::serve(rest, router)
@@ -339,7 +354,7 @@ impl QdrantGateway {
                 .await
                 .map_err(QdrantError::Rest)
         });
-        let routes = self.grpc_routes();
+        let routes = wrap_grpc(self.grpc_routes());
         let grpc_task = tokio::spawn(async move {
             let incoming = pace_accept_errors(
                 tonic::transport::server::TcpIncoming::from(grpc),

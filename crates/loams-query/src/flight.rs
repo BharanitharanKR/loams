@@ -879,6 +879,20 @@ pub async fn serve_flight_sql_tracked(
     shutdown: CancellationToken,
     puts: PutTasks,
 ) -> Result<(), tonic::transport::Error> {
+    serve_flight_sql_wrapped(listener, service, streams, config, shutdown, puts, |r| r).await
+}
+
+/// [`serve_flight_sql_tracked`], with the Flight service's routes passed
+/// through `wrap` first (the server's authentication layer).
+pub async fn serve_flight_sql_wrapped(
+    listener: tokio::net::TcpListener,
+    service: Arc<CollectionService>,
+    streams: Option<Arc<dyn StreamProducer>>,
+    config: FlightConfig,
+    shutdown: CancellationToken,
+    puts: PutTasks,
+    wrap: impl FnOnce(tonic::service::Routes) -> tonic::service::Routes,
+) -> Result<(), tonic::transport::Error> {
     let hot = HotLayer::new(service.config().hot_default);
     let max_message_bytes = config.max_message_bytes;
     let mut flight_sql =
@@ -889,7 +903,7 @@ pub async fn serve_flight_sql_tracked(
     let flight = FlightServiceServer::new(flight_sql).max_decoding_message_size(max_message_bytes);
     let result = tonic::transport::Server::builder()
         .layer(hot)
-        .add_service(flight)
+        .add_routes(wrap(tonic::service::Routes::new(flight)))
         .serve_with_incoming_shutdown(
             pace_accept_errors(
                 tonic::transport::server::TcpIncoming::from(listener),

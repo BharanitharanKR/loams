@@ -1125,6 +1125,11 @@ enum Command {
         #[command(subcommand)]
         command: DurableCommand,
     },
+    /// Engine authentication (LOAMS_AUTH_MODE): API keys.
+    Auth {
+        #[command(subcommand)]
+        command: AuthCommand,
+    },
     /// One isolated Loams Live function worker (LV1 plan Task 5): started
     /// by the server with piped stdio, never by hand. It speaks
     /// `loams.live.worker.v1` frames on stdin and stdout and sandboxes
@@ -1141,6 +1146,50 @@ enum Command {
     /// key (shown only this once) and the entry to add to the keys file.
     #[cfg(feature = "postgres")]
     PgApiKey(pg_control_cli::PgApiKeyArgs),
+}
+
+/// `loams auth …`: commands that start no server.
+#[derive(Debug, Subcommand)]
+enum AuthCommand {
+    /// Create an API key: prints the key once (keep it; it is not stored)
+    /// on stdout, and on stderr the line to append to LOAMS_API_KEYS_FILE
+    /// (with --append, appends it there itself).
+    NewKey {
+        /// A label for the key, shown as the principal's name.
+        #[arg(long, default_value = "")]
+        label: String,
+        /// Append the hashed line to this key file (created mode 0600).
+        #[arg(long)]
+        append: Option<PathBuf>,
+    },
+}
+
+/// `loams auth new-key`.
+fn auth_command(command: &AuthCommand) -> ExitCode {
+    match command {
+        AuthCommand::NewKey { label, append } => {
+            let (key, line) = loams::auth::api_key::new_key(label);
+            if let Some(path) = append {
+                use std::io::Write as _;
+                let mut options = std::fs::OpenOptions::new();
+                options.create(true).append(true);
+                #[cfg(unix)]
+                std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+                let written = options
+                    .open(path)
+                    .and_then(|mut file| writeln!(file, "{line}"));
+                if let Err(err) = written {
+                    eprintln!("loams: {}: {err}", path.display());
+                    return ExitCode::FAILURE;
+                }
+                eprintln!("appended the key's hash to {}", path.display());
+            } else {
+                eprintln!("append this line to LOAMS_API_KEYS_FILE:\n{line}");
+            }
+            println!("{key}");
+            ExitCode::SUCCESS
+        }
+    }
 }
 
 /// `loams durable …`: commands that start no server.
@@ -1226,6 +1275,7 @@ fn config(command: Command) -> ServerConfig {
         }
         Command::Warm { .. } => unreachable!("loams warm starts no server"),
         Command::Durable { .. } => unreachable!("loams durable starts no server"),
+        Command::Auth { .. } => unreachable!("loams auth starts no server"),
         #[cfg(feature = "live")]
         Command::LiveWorker => unreachable!("loams live-worker starts no server"),
         #[cfg(feature = "postgres")]
@@ -1444,6 +1494,9 @@ async fn serve(cli: Cli) -> ExitCode {
     if let Command::Durable { command } = &cli.command {
         return durable(command).await;
     }
+    if let Command::Auth { command } = &cli.command {
+        return auth_command(command);
+    }
     #[cfg(feature = "postgres")]
     let cli = match cli.command {
         Command::PgControl(args) => return pg_control_cli::run(*args).await,
@@ -1454,7 +1507,15 @@ async fn serve(cli: Cli) -> ExitCode {
         eprintln!("loams: {err}");
         return ExitCode::FAILURE;
     }
-    let server = match Server::start(config(cli.command)).await {
+    let mut config = config(cli.command);
+    config.auth = match loams::auth::AuthConfig::from_env() {
+        Ok(auth) => auth,
+        Err(err) => {
+            eprintln!("loams: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let server = match Server::start(config).await {
         Ok(server) => server,
         Err(err) => {
             eprintln!("loams: {err}");

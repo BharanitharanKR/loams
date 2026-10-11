@@ -20,6 +20,12 @@ name = "loams"
 path = "src/main.rs"
 
 [dependencies]
+# Engine authentication (preview, API2 Task 6): API keys hashed with argon2id
+# (0.6.0, as loams-sqlgate), compared in constant time (subtle 2.6, as
+# loams-sqlgate) by their SHA-256 once verified, and OIDC JWTs (jsonwebtoken,
+# the workspace pin). getrandom 0.3 generates the keys. All already in the
+# lockfile.
+argon2 = "0.6.0"
 async-trait.workspace = true
 axum.workspace = true
 base64.workspace = true
@@ -35,8 +41,10 @@ connectrpc-reflection.workspace = true
 datafusion = { workspace = true, optional = true }
 datafusion-postgres = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
+getrandom = "0.3"
 fail = { workspace = true, optional = true }
 http.workspace = true
+jsonwebtoken.workspace = true
 # The `loams.house.v1` proxy's streamed request body (HS1 Task 7).
 http-body.workspace = true
 loams-cache.workspace = true
@@ -84,10 +92,15 @@ loams-worker.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+subtle = "2.6"
 sync_wrapper.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
+# The auth layer wraps the Qdrant gRPC and Flight SQL routes (tonic's axum
+# routes); already a dependency of loams-query and loams-qdrant.
+tonic.workspace = true
 tower.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
@@ -176,6 +189,8 @@ loams-es = { workspace = true, features = ["test-util"] }
 # The reference evaluator of the Qdrant filter tests (plan M1.4 Task 4).
 loams-qdrant = { workspace = true, features = ["test-util"] }
 proptest.workspace = true
+# Ed25519 keys that sign the auth tests' OIDC tokens.
+ring.workspace = true
 prost.workspace = true
 prost-types.workspace = true
 # HTTP/2 with prior knowledge, so `connect_api.rs` can put a gRPC frame on the

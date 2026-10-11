@@ -41,7 +41,8 @@ use loams_live_proto::loams::live::v1::{
 use loams_proto::loams::errors::v1::ErrorInfo;
 use loams_proto::loams::instance::v1::{
     Edition, GetInstanceRequest, GetInstanceResponse, InstanceService, InstanceServiceExt,
-    ServiceStatus, SignInKind, SignInMethod, WhoAmIRequest, WhoAmIResponse,
+    Principal as PrincipalMsg, PrincipalKind as PrincipalKindMsg, ServiceStatus, SignInKind,
+    SignInMethod, WhoAmIRequest, WhoAmIResponse,
 };
 use ulid::Ulid;
 
@@ -284,16 +285,33 @@ impl InstanceService for Instance {
         })
     }
 
-    /// There is no authentication on this port yet (design §19 §5 is the auth
-    /// plan; MT and API1 Task 7 build it), so there is no principal to
-    /// report. The refusal names the RPC and the reason so a caller can tell
-    /// it apart from a token that was rejected.
+    /// The principal the auth layer ([`crate::auth`]) admitted. Without one
+    /// (a router served without the layer) the refusal names the RPC, so a
+    /// caller can tell it apart from a token that was rejected.
     async fn who_am_i(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         _request: ServiceRequest<'_, WhoAmIRequest>,
     ) -> ServiceResult<WhoAmIResponse> {
-        Err(not_implemented("loams.instance.v1.InstanceService/WhoAmI"))
+        use crate::auth::PrincipalKind as Kind;
+        let Some(principal) = ctx.extensions().get::<crate::auth::Principal>() else {
+            return Err(not_implemented("loams.instance.v1.InstanceService/WhoAmI"));
+        };
+        let kind = match principal.kind {
+            Kind::User => PrincipalKindMsg::PRINCIPAL_KIND_USER,
+            Kind::ApiKey => PrincipalKindMsg::PRINCIPAL_KIND_SERVICE_ACCOUNT,
+            Kind::DevLoopback => PrincipalKindMsg::PRINCIPAL_KIND_UNSPECIFIED,
+        };
+        Response::ok(WhoAmIResponse {
+            principal: buffa::MessageField::some(PrincipalMsg {
+                id: principal.subject.clone(),
+                kind: EnumValue::Known(kind),
+                display_name: principal.display_name.clone(),
+                email: principal.email.clone().unwrap_or_default(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
     }
 }
 
