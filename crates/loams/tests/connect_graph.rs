@@ -607,7 +607,9 @@ async fn graph_requires_a_data_dir() {
 }
 
 /// Graph RPCs have no authorizer until MT1 (D750): serving them on a non-loopback address is
-/// refused with a clear message.
+/// refused with a clear message. Since the preview auth modes landed, the listener check
+/// (`LOAMS_AUTH_MODE` off) refuses it first, and names the loopback rule; the graph check
+/// stands behind it.
 #[cfg(feature = "graph")]
 #[tokio::test]
 async fn non_loopback_listen_without_authorizer_refused() {
@@ -620,7 +622,6 @@ async fn non_loopback_listen_without_authorizer_refused() {
         let err = Server::start(config).await.expect_err("refused");
         let text = err.to_string();
         assert!(text.contains("loopback"), "{listen}: {text}");
-        assert!(text.contains("graph"), "{listen}: {text}");
     }
 }
 
