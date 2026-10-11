@@ -659,8 +659,11 @@ export function LivePage({
   api,
   desktop,
   retryMs = 2000,
+  navigate,
 }: {
   api: LiveApi;
+  /** When given, the header links to the Deployments page. */
+  navigate?: (to: string) => void;
   /** `engine`, when given, carries the Live notice (ruling T23-8). */
   desktop: Pick<LoamsDesktopApi, 'stacks'> & {
     engine?: Partial<Pick<LoamsDesktopApi['engine'], 'state' | 'onState'>>;
@@ -721,11 +724,16 @@ export function LivePage({
             Live.
           </p>
         </div>
-        <span title={DEPLOY_TIP}>
-          <Button disabled aria-label="Deploy" title={DEPLOY_TIP}>
-            Deploy
-          </Button>
-        </span>
+        <div className="flex gap-2">
+          {navigate && (
+            <Button onClick={() => navigate('/live/deployments')}>Deployments and functions</Button>
+          )}
+          <span title={DEPLOY_TIP}>
+            <Button disabled aria-label="Deploy" title={DEPLOY_TIP}>
+              Deploy
+            </Button>
+          </span>
+        </div>
       </header>
       {notice && (
         <Notice tone="warn" title="Live on TiKV">
