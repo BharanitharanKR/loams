@@ -14,6 +14,7 @@ import {
   Radio,
   Rocket,
   Settings,
+  Shapes,
   ShieldCheck,
   Table2,
   Waypoints,
@@ -40,6 +41,7 @@ const ICONS: Record<string, LucideIcon> = {
   approvals: ShieldCheck,
   namespaces: Boxes,
   deployments: Rocket,
+  canvas: Shapes,
 };
 
 export const ICON_NAMES = Object.keys(ICONS);

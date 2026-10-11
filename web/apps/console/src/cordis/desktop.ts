@@ -9,6 +9,7 @@ import {
   wireDeepLinks,
 } from '@loams/platform-electron';
 import agentPkg from '@loams/plugin-agent/package.json';
+import canvasPkg from '@loams/plugin-canvas/package.json';
 import connectorsPkg from '@loams/plugin-connectors/package.json';
 import dataStudioPkg from '@loams/plugin-data-studio/package.json';
 import desktopAgentdPkg from '@loams/plugin-desktop-agentd/package.json';
@@ -50,6 +51,7 @@ export const desktopModules: typeof modules = {
   '@loams/plugin-wesql': () => import('@loams/plugin-wesql'),
   '@loams/plugin-sql': () => import('@loams/plugin-sql'),
   '@loams/plugin-desktop-agentd': () => import('@loams/plugin-desktop-agentd'),
+  '@loams/plugin-canvas': () => import('@loams/plugin-canvas'),
 };
 /** Their package.json manifests. */
 export const desktopManifests: unknown[] = [
@@ -71,6 +73,7 @@ export const desktopManifests: unknown[] = [
   wesqlPkg,
   sqlPkg,
   desktopAgentdPkg,
+  canvasPkg,
 ];
 
 export async function startDesktop(

@@ -41,3 +41,5 @@
       name: '@loams/plugin-sql'
     - id: desktop-agentd
       name: '@loams/plugin-desktop-agentd'
+    - id: canvas
+      name: '@loams/plugin-canvas'

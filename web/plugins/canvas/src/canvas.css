@@ -1,0 +1,69 @@
+/* The project canvas: React Flow's variables mapped onto the Loams tokens, so the canvas
+   follows light and dark with the rest of the console. */
+
+.lc-canvas {
+  --xy-background-color: var(--op-bg);
+  --xy-background-pattern-color: var(--op-rule);
+  --xy-node-color: var(--op-ink);
+  --xy-node-background-color: transparent;
+  --xy-node-border: none;
+  --xy-node-border-radius: 0;
+  --xy-node-boxshadow-hover: none;
+  --xy-node-boxshadow-selected: none;
+  --xy-edge-stroke: var(--op-faint);
+  --xy-edge-stroke-selected: var(--op-accent);
+  --xy-edge-label-color: var(--op-muted);
+  --xy-edge-label-background-color: var(--op-bg);
+  --xy-handle-background-color: var(--op-rule);
+  --xy-handle-border-color: var(--op-surface);
+  --xy-minimap-background-color: var(--op-surface);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--op-bg) 70%, transparent);
+  --xy-minimap-mask-stroke-color: var(--op-accent);
+  --xy-minimap-node-background-color: var(--op-raised);
+  --xy-controls-button-background-color: var(--op-surface);
+  --xy-controls-button-background-color-hover: var(--op-raised);
+  --xy-controls-button-color: var(--op-ink);
+  --xy-controls-button-color-hover: var(--op-ink);
+  --xy-controls-button-border-color: var(--op-rule);
+  --xy-attribution-background-color: transparent;
+  background: var(--op-bg);
+}
+
+.lc-canvas .react-flow__node {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* The focus ring sits on the node wrapper, which React Flow makes focusable. */
+.lc-canvas .react-flow__node:focus-visible {
+  outline: 2px solid var(--op-accent);
+  outline-offset: 3px;
+}
+.lc-canvas .react-flow__controls-button:focus-visible {
+  outline: 2px solid var(--op-accent);
+  outline-offset: -2px;
+}
+
+.lc-canvas .lc-edge-flow path.react-flow__edge-path {
+  stroke: var(--op-accent);
+}
+.lc-canvas .lc-edge-dep path.react-flow__edge-path {
+  stroke-dasharray: 5 4;
+}
+
+.lc-canvas .lc-mini-healthy { fill: var(--op-grow); }
+.lc-canvas .lc-mini-deploying,
+.lc-canvas .lc-mini-degraded { fill: var(--op-accent); }
+.lc-canvas .lc-mini-failed { fill: var(--op-danger); }
+.lc-canvas .lc-mini-stopped { fill: var(--op-faint); }
+
+@media (prefers-reduced-motion: reduce) {
+  .lc-canvas .react-flow__edge.animated path {
+    animation: none;
+  }
+  .lc-canvas .react-flow__viewport {
+    transition: none;
+  }
+}
