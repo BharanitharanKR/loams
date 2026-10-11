@@ -1244,14 +1244,29 @@ mod initial_command_tests {
             .unwrap();
         assert_eq!(session.shell, "sh");
         let output = root.path().join("result");
-        let expected = format!("{0}|{0}", home.display());
+        // The shell gets the isolated HOME, but a host's login profile may
+        // assign HOME itself (Blacksmith's runners reset it to /home/runner),
+        // and that is the host's choice, not a leak: expect whatever a plain
+        // login `sh` given the same HOME ends up with.
+        let login_home = std::process::Command::new("/bin/sh")
+            .args(["-lc", "printf %s \"$HOME\""])
+            .env("HOME", &home)
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+            .unwrap_or_else(|_| home.display().to_string());
+        let expected = format!("{login_home}|{}", home.display());
         tokio::time::timeout(Duration::from_secs(10), async {
             while std::fs::read_to_string(&output).ok().as_deref() != Some(expected.as_str()) {
                 tokio::time::sleep(Duration::from_millis(20)).await;
             }
         })
         .await
-        .expect("the override shell ran with the isolated HOME and ZDOTDIR");
+        .unwrap_or_else(|_| {
+            panic!(
+                "the override shell did not write {expected:?}: found {:?}",
+                std::fs::read_to_string(&output).ok()
+            )
+        });
         terminals.close(&session.id).unwrap();
     }
 
