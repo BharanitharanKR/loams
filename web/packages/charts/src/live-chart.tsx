@@ -32,7 +32,14 @@ export interface LiveChartProps {
  * hidden from assistive tech; the figure carries `ariaLabel` and a visually
  * hidden table of the latest rows stands in for it.
  */
-export function LiveChart({ spec, data, stream, windowMs, height = 240, ariaLabel }: LiveChartProps) {
+export function LiveChart({
+  spec,
+  data,
+  stream,
+  windowMs,
+  height = 240,
+  ariaLabel,
+}: LiveChartProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const chart = useECharts(hostRef);
   const theme = useChartTheme();
@@ -83,15 +90,16 @@ export function LiveChart({ spec, data, stream, windowMs, height = 240, ariaLabe
   useEffect(() => () => throttle.cancel(), [throttle]);
 
   // New data, window or spec: reset and paint at once.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: specKey is the trigger that stands in for spec; paintRef reads the current spec.
   useEffect(() => {
     seriesOrderRef.current = [];
     rowsRef.current = win ? appendWindow([], stableData as Row[], win) : [...(stableData as Row[])];
     throttle.cancel();
     paintRef.current();
-    // specKey stands in for spec; paintRef always reads the current one.
   }, [stableData, win, specKey, throttle]);
 
   // Theme or motion preference changed: repaint the same rows.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: theme and reducedMotion are triggers; paintRef reads their current values.
   useEffect(() => {
     paintRef.current();
   }, [theme, reducedMotion]);

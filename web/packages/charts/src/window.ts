@@ -57,7 +57,7 @@ export function latestTime(rows: readonly Row[], timeField: string): number | un
  * Returns a new array; neither input is mutated. Rows stay in time order: a
  * batch that arrives out of order is merged by a stable sort, so equal times
  * keep their arrival order. Rows without a readable time sort last and survive
- * the time trim, but still count toward `maxRows`.
+ * the time trim; under `maxRows` they only take room the newest timed rows leave.
  */
 export function appendWindow<T extends Row>(
   rows: readonly T[],
@@ -91,7 +91,18 @@ export function appendWindow<T extends Row>(
     }
   }
 
-  if (maxRows >= 0 && merged.length > maxRows) merged = merged.slice(merged.length - maxRows);
+  if (maxRows >= 0 && merged.length > maxRows) {
+    // Timed samples outrank untimed rows for the cap: keep the newest timed rows,
+    // then fill what is left with the latest untimed ones, each group in order.
+    const timed: T[] = [];
+    const untimed: T[] = [];
+    for (const row of merged) {
+      (timeOf(row[timeField]) === undefined ? untimed : timed).push(row);
+    }
+    const keptTimed = timed.slice(Math.max(0, timed.length - maxRows));
+    const room = maxRows - keptTimed.length;
+    merged = keptTimed.concat(room > 0 ? untimed.slice(untimed.length - room) : []);
+  }
   return merged;
 }
 

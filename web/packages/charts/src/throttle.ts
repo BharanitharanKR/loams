@@ -27,7 +27,11 @@ const realClock: Clock = {
   clearTimeout: (handle) => globalThis.clearTimeout(handle as ReturnType<typeof setTimeout>),
 };
 
-export function createThrottle(fn: () => void, intervalMs: number, clock: Clock = realClock): Throttle {
+export function createThrottle(
+  fn: () => void,
+  intervalMs: number,
+  clock: Clock = realClock,
+): Throttle {
   let last = Number.NEGATIVE_INFINITY;
   let timer: unknown;
   let pending = false;

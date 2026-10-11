@@ -39,5 +39,5 @@ validates), re-exported here.
 
 ## Gallery
 
-`import { ChartGallery } from '@loams/charts/gallery'` renders every kind on mock streams,
+`import { ChartGallery } from '@loams/charts/gallery'` renders selected chart kinds (line, area, stacked bar, donut) on mock data,
 with a dark-mode toggle.

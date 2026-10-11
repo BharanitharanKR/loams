@@ -103,7 +103,9 @@ export function mockMetricStream(options: MockMetricOptions = {}): AsyncIterable
 }
 
 /** The same stream as rows (`{ t, v, series }`), for {@link LiveChart}'s `stream`. */
-export function mockRowStream(options: MockMetricOptions = {}): AsyncIterable<Record<string, unknown>[]> {
+export function mockRowStream(
+  options: MockMetricOptions = {},
+): AsyncIterable<Record<string, unknown>[]> {
   const points = mockMetricStream(options);
   return {
     [Symbol.asyncIterator]() {

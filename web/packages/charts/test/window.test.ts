@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Row } from '../src/types';
 import { appendWindow, latestTime, timeOf, windowBounds, windowPoints } from '../src/window';
 
 const row = (t: unknown, v = 0) => ({ t, v });
@@ -48,12 +49,23 @@ describe('appendWindow', () => {
   });
 
   it('accepts Date and ISO times', () => {
-    const next = appendWindow(
-      [{ t: new Date(0) }],
-      [{ t: '1970-01-01T00:00:20.000Z' }],
-      opts,
-    );
+    const next = appendWindow([{ t: new Date(0) }], [{ t: '1970-01-01T00:00:20.000Z' }], opts);
     expect(next).toHaveLength(1);
+  });
+
+  it('keeps timed rows ahead of untimed ones under maxRows', () => {
+    const timed: Row[] = [{ t: 1_000 }, { t: 2_000 }, { t: 3_000 }];
+    const untimed: Row[] = [{ t: 'x' }, { t: 'y' }, { t: 'z' }];
+    expect(appendWindow(timed, untimed, { ...opts, maxRows: 2 })).toEqual([
+      { t: 2_000 },
+      { t: 3_000 },
+    ]);
+    expect(appendWindow(timed, untimed, { ...opts, maxRows: 4 })).toEqual([
+      { t: 1_000 },
+      { t: 2_000 },
+      { t: 3_000 },
+      { t: 'z' },
+    ]);
   });
 
   it('caps rows at maxRows, newest kept', () => {

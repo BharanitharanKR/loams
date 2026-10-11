@@ -77,9 +77,10 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const lastOption = () => {
-  const inst = echartsMock.instances.at(-1);
-  return inst?.setOption.mock.calls.at(-1)?.[0] as Record<string, unknown> | undefined;
+const lastOption = (): Record<string, unknown> => {
+  const option = echartsMock.instances.at(-1)?.setOption.mock.calls.at(-1)?.[0];
+  if (option === undefined) throw new Error('setOption was never called');
+  return option as Record<string, unknown>;
 };
 
 describe('LiveChart', () => {
@@ -95,7 +96,9 @@ describe('LiveChart', () => {
       />,
     );
     const figure = screen.getByRole('figure', { name: 'Requests per second' });
-    expect(within(figure).getByTestId('loams-chart-canvas').getAttribute('aria-hidden')).toBe('true');
+    expect(within(figure).getByTestId('loams-chart-canvas').getAttribute('aria-hidden')).toBe(
+      'true',
+    );
     const table = within(figure).getByRole('table', { name: /Requests per second: data/ });
     expect(within(table).getAllByRole('row')).toHaveLength(3);
     expect(within(table).getByText('1970-01-01T00:00:02.000Z')).toBeTruthy();
@@ -105,7 +108,7 @@ describe('LiveChart', () => {
     const { unmount } = render(<LiveChart spec={spec} data={[{ t: 1, v: 1 }]} ariaLabel="x" />);
     expect(echartsMock.init).toHaveBeenCalledTimes(1);
     const option = lastOption();
-    expect((option?.series as { type: string }[])[0]?.type).toBe('line');
+    expect((option.series as { type: string }[])[0]?.type).toBe('line');
     const inst = echartsMock.instances[0];
     unmount();
     expect(inst?.dispose).toHaveBeenCalled();
@@ -131,11 +134,14 @@ describe('LiveChart', () => {
       await new Promise((r) => setTimeout(r, REPAINT_INTERVAL_MS + 20));
     });
     const option = lastOption();
-    expect((option?.dataset as { source: unknown[] }).source).toEqual([
+    expect((option.dataset as { source: unknown[] }).source).toEqual([
       { t: 5_000, v: 2 },
       { t: 15_000, v: 3 },
     ]);
-    expect((option?.xAxis as Record<string, unknown>[])[0]).toMatchObject({ min: 5_000, max: 15_000 });
+    expect((option.xAxis as Record<string, unknown>[])[0]).toMatchObject({
+      min: 5_000,
+      max: 15_000,
+    });
     expect(screen.getAllByRole('row')).toHaveLength(3);
   });
 
@@ -178,7 +184,7 @@ describe('LiveChart', () => {
     })) as unknown as typeof window.matchMedia;
     try {
       render(<LiveChart spec={spec} data={[{ t: 1, v: 1 }]} ariaLabel="x" />);
-      expect(lastOption()?.animation).toBe(false);
+      expect(lastOption().animation).toBe(false);
     } finally {
       window.matchMedia = original;
     }

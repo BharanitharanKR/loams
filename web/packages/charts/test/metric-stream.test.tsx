@@ -25,9 +25,12 @@ describe('mock metric stream', () => {
       ['a', 1_500],
       ['b', 1_500],
     ]);
-    const again = mockMetricStream({ series: ['a', 'b'], intervalMs: 500, seed: 1, now: () => 1_500 })[
-      Symbol.asyncIterator
-    ]();
+    const again = mockMetricStream({
+      series: ['a', 'b'],
+      intervalMs: 500,
+      seed: 1,
+      now: () => 1_500,
+    })[Symbol.asyncIterator]();
     const p2 = again.next();
     await vi.advanceTimersByTimeAsync(500);
     expect((await p2).value).toEqual(first.value);
@@ -64,7 +67,10 @@ describe('useMetricStream', () => {
     vi.useFakeTimers();
     let now = 0;
     const { result, unmount } = renderHook(() =>
-      useMetricStream(() => mockMetricStream({ intervalMs: 1_000, now: () => (now += 1_000) }), 2_500),
+      useMetricStream(
+        () => mockMetricStream({ intervalMs: 1_000, now: () => (now += 1_000) }),
+        2_500,
+      ),
     );
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5_000);

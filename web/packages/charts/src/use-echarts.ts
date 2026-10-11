@@ -10,7 +10,9 @@ export type EChartsInstance = echarts.ECharts;
  * grid resize without a window resize event), and disposes on unmount so a
  * page that mounts and drops charts does not leak canvases or listeners.
  */
-export function useECharts(host: RefObject<HTMLDivElement | null>): RefObject<EChartsInstance | null> {
+export function useECharts(
+  host: RefObject<HTMLDivElement | null>,
+): RefObject<EChartsInstance | null> {
   const instance = useRef<EChartsInstance | null>(null);
   useEffect(() => {
     const el = host.current;

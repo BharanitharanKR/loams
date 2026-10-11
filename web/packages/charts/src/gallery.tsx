@@ -1,5 +1,5 @@
 /**
- * A gallery of every chart this package draws, on mock data.
+ * A gallery of selected chart kinds (line, area, stacked bar, donut) on mock data.
  *
  * Mount it in any React page (`import { ChartGallery } from '@loams/charts/gallery'`)
  * to eyeball light and dark, reduced motion and the screen-reader table. It is
@@ -52,9 +52,16 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section
       aria-label={title}
-      style={{ border: '1px solid var(--op-rule)', background: 'var(--op-surface)', padding: 16, minWidth: 0 }}
+      style={{
+        border: '1px solid var(--op-rule)',
+        background: 'var(--op-surface)',
+        padding: 16,
+        minWidth: 0,
+      }}
     >
-      <h2 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: 'var(--op-ink)' }}>{title}</h2>
+      <h2 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600, color: 'var(--op-ink)' }}>
+        {title}
+      </h2>
       {children}
     </section>
   );
@@ -63,7 +70,9 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
 function SparkRow({ name, seed }: { name: string; seed: number }) {
   const points = useMetricStream(() => mockMetricStream({ intervalMs: 1_000, seed }), WINDOW_MS);
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '6rem 1fr', alignItems: 'center', gap: 12 }}>
+    <div
+      style={{ display: 'grid', gridTemplateColumns: '6rem 1fr', alignItems: 'center', gap: 12 }}
+    >
       <span style={{ fontSize: 12, color: 'var(--op-muted)' }}>{name}</span>
       <Sparkline points={points} ariaLabel={`${name}, last minute`} height={28} />
     </div>
@@ -81,7 +90,8 @@ export function ChartGallery() {
   };
 
   const latencySeed = useMemo(
-    () => seedMetricPoints(WINDOW_MS, 1_000, { series: SERIES, seed: 11, base: 120, amplitude: 60 }),
+    () =>
+      seedMetricPoints(WINDOW_MS, 1_000, { series: SERIES, seed: 11, base: 120, amplitude: 60 }),
     [],
   );
   const latencyStream = useMemo(
@@ -92,8 +102,12 @@ export function ChartGallery() {
   const writeStream = useMemo(() => mockRowStream({ seed: 3, intervalMs: 2_000 }), []);
 
   return (
-    <main style={{ background: 'var(--op-bg)', color: 'var(--op-ink)', padding: 16, minHeight: '100%' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+    <main
+      style={{ background: 'var(--op-bg)', color: 'var(--op-ink)', padding: 16, minHeight: '100%' }}
+    >
+      <header
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}
+      >
         <h1 style={{ fontSize: 16, margin: 0 }}>@loams/charts gallery</h1>
         <button type="button" onClick={toggleTheme} aria-pressed={dark}>
           Dark mode
@@ -126,7 +140,11 @@ export function ChartGallery() {
           />
         </Panel>
         <Panel title="Static stacked bar">
-          <LiveChart spec={barSpec} data={BAR_ROWS} ariaLabel="Compute hours per day, stacked by region" />
+          <LiveChart
+            spec={barSpec}
+            data={BAR_ROWS}
+            ariaLabel="Compute hours per day, stacked by region"
+          />
         </Panel>
         <Panel title="Static donut">
           <LiveChart spec={pieSpec} data={PIE_ROWS} ariaLabel="Spend in US dollars by service" />

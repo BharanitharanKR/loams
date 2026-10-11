@@ -83,7 +83,9 @@ export function Sparkline({ points, ariaLabel, height = 32 }: SparklineProps) {
       {clean.length > 1 &&
         [...groups].map(([name, pts], i) => {
           const sorted = [...pts].sort((a, b) => a.t - b.t);
-          const color = single ? theme.accent : (theme.palette[i % theme.palette.length] ?? theme.accent);
+          const color = single
+            ? theme.accent
+            : (theme.palette[i % theme.palette.length] ?? theme.accent);
           return (
             <path
               key={name || 'series'}

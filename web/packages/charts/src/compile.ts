@@ -22,7 +22,15 @@ import type { ChartSpec, Row } from './types';
 import { timeOf } from './window';
 
 /** The core compiler's kinds this package drives. */
-export type NativeKind = 'line' | 'area' | 'bar' | 'pie' | 'scatter' | 'heatmap' | 'funnel' | 'waterfall';
+export type NativeKind =
+  | 'line'
+  | 'area'
+  | 'bar'
+  | 'pie'
+  | 'scatter'
+  | 'heatmap'
+  | 'funnel'
+  | 'waterfall';
 
 /** A spec this package cannot draw, with a message fit to show the viewer. */
 export class ChartSpecError extends Error {
@@ -94,7 +102,12 @@ export interface FieldRef {
 /** Read one encoding channel, which may be a bare field name or `{ field, type }`. */
 export function fieldOf(encoding: Encoding | undefined): FieldRef | undefined {
   if (typeof encoding === 'string') return encoding === '' ? undefined : { field: encoding };
-  if (encoding && typeof encoding === 'object' && typeof encoding.field === 'string' && encoding.field !== '') {
+  if (
+    encoding &&
+    typeof encoding === 'object' &&
+    typeof encoding.field === 'string' &&
+    encoding.field !== ''
+  ) {
     return { field: encoding.field, type: encoding.type };
   }
   return undefined;
@@ -180,7 +193,11 @@ function asArray(value: unknown): Dict[] {
 }
 
 /** Compile a spec and rows to a themed ECharts option. Throws {@link ChartSpecError}. */
-export function compileSpec(spec: ChartSpec, rows: readonly Row[], options: CompileOptions): CompiledChart {
+export function compileSpec(
+  spec: ChartSpec,
+  rows: readonly Row[],
+  options: CompileOptions,
+): CompiledChart {
   const kind = resolveKind(spec.chartType);
   const enc = spec.encodings ?? {};
   const x = fieldOf(enc.x) ?? fieldOf(enc.category) ?? fieldOf(enc.theta);
@@ -206,7 +223,11 @@ export function compileSpec(spec: ChartSpec, rows: readonly Row[], options: Comp
       encode = { x: x?.field, value: y?.field };
       break;
     case 'heatmap':
-      encode = { x: x?.field, y: fieldOf(enc.y)?.field, value: (fieldOf(enc.color) ?? fieldOf(enc.value))?.field };
+      encode = {
+        x: x?.field,
+        y: fieldOf(enc.y)?.field,
+        value: (fieldOf(enc.color) ?? fieldOf(enc.value))?.field,
+      };
       break;
     case 'scatter':
     case 'waterfall':
@@ -287,7 +308,12 @@ export function compileSpec(spec: ChartSpec, rows: readonly Row[], options: Comp
 }
 
 /** Lay token ink over a compiled option. Compiled values win over these defaults where both set a key. */
-export function applyTheme(option: Dict, kind: NativeKind, theme: ChartTheme, animate: boolean): Dict {
+export function applyTheme(
+  option: Dict,
+  kind: NativeKind,
+  theme: ChartTheme,
+  animate: boolean,
+): Dict {
   const label = { color: theme.muted, fontFamily: theme.fontMono, fontSize: 11 };
   const axis = (split: boolean): Dict => ({
     axisLine: { lineStyle: { color: theme.rule } },
@@ -308,9 +334,15 @@ export function applyTheme(option: Dict, kind: NativeKind, theme: ChartTheme, an
         return deepMerge({ itemStyle: { borderRadius: [4, 4, 0, 0] }, barMaxWidth: 32 }, s);
       case 'pie':
       case 'funnel':
-        return deepMerge({ itemStyle: { borderColor: theme.bg, borderWidth: 2 }, label: { color: theme.muted } }, s);
+        return deepMerge(
+          { itemStyle: { borderColor: theme.bg, borderWidth: 2 }, label: { color: theme.muted } },
+          s,
+        );
       case 'scatter':
-        return deepMerge({ symbolSize: 8, itemStyle: { borderColor: theme.bg, borderWidth: 1 } }, s);
+        return deepMerge(
+          { symbolSize: 8, itemStyle: { borderColor: theme.bg, borderWidth: 1 } },
+          s,
+        );
       default:
         return s;
     }
@@ -343,7 +375,14 @@ export function applyTheme(option: Dict, kind: NativeKind, theme: ChartTheme, an
   };
   if (hasLegend) {
     themed.legend = deepMerge(
-      { type: 'scroll', top: 0, icon: 'roundRect', itemWidth: 12, itemHeight: 4, textStyle: { color: theme.muted } },
+      {
+        type: 'scroll',
+        top: 0,
+        icon: 'roundRect',
+        itemWidth: 12,
+        itemHeight: 4,
+        textStyle: { color: theme.muted },
+      },
       option.legend,
     );
   }

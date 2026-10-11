@@ -22,7 +22,10 @@ describe('kindForChartType', () => {
 });
 
 describe('compileSpec', () => {
-  const daily: ChartSpec = { chartType: 'Line Chart', encodings: { x: 'day', y: { field: 'hours' } } };
+  const daily: ChartSpec = {
+    chartType: 'Line Chart',
+    encodings: { x: 'day', y: { field: 'hours' } },
+  };
   const dailyRows = [
     { day: 'Mon', hours: 3 },
     { day: 'Tue', hours: 5 },
@@ -36,7 +39,7 @@ describe('compileSpec', () => {
     expect((option.dataset as Dict).source).toEqual(dailyRows);
     const [line] = series(option);
     expect(line).toMatchObject({ type: 'line', name: 'hours', encode: { x: 'day', y: 'hours' } });
-    expect((line?.lineStyle as Dict).width).toBe(2);
+    expect((line.lineStyle as Dict).width).toBe(2);
     expect(axis(option, 'xAxis').type).toBe('category');
     expect(option.color).toEqual([...LIGHT_PALETTE]);
     expect(option.backgroundColor).toBe('transparent');
@@ -68,7 +71,10 @@ describe('compileSpec', () => {
       { t: '1970-01-01T00:00:01.000Z', v: 1 },
       { t: 2_000, v: 2 },
     ];
-    const { option, temporal } = compileSpec(spec, rows, { theme, window: { start: 0, end: 2_000 } });
+    const { option, temporal } = compileSpec(spec, rows, {
+      theme,
+      window: { start: 0, end: 2_000 },
+    });
     expect(temporal).toBe(true);
     expect(axis(option, 'xAxis')).toMatchObject({ type: 'time', min: 0, max: 2_000 });
     expect((option.dataset as Dict).source).toEqual([
@@ -100,7 +106,10 @@ describe('compileSpec', () => {
   });
 
   it('stacks a stacked bar and rounds its data ends', () => {
-    const spec: ChartSpec = { chartType: 'Stacked Bar Chart', encodings: { x: 'day', y: 'h', color: 'r' } };
+    const spec: ChartSpec = {
+      chartType: 'Stacked Bar Chart',
+      encodings: { x: 'day', y: 'h', color: 'r' },
+    };
     const rows = [
       { day: 'Mon', r: 'eu', h: 1 },
       { day: 'Mon', r: 'us', h: 2 },
@@ -117,7 +126,7 @@ describe('compileSpec', () => {
     const { option } = compileSpec(spec, [{ name: 'a', n: 1 }], { theme });
     const [pie] = series(option);
     expect(pie).toMatchObject({ type: 'pie', encode: { itemName: 'name', value: 'n' } });
-    expect((pie?.itemStyle as Dict).borderColor).toBe(theme.bg);
+    expect((pie.itemStyle as Dict).borderColor).toBe(theme.bg);
   });
 
   it('scales a heatmap to its data on a single-hue ramp', () => {
@@ -127,7 +136,11 @@ describe('compileSpec', () => {
       { h: 2, d: 'Mon', n: 9 },
     ];
     const { option } = compileSpec(spec, rows, { theme });
-    expect(option.visualMap).toMatchObject({ min: 4, max: 9, inRange: { color: [...theme.sequential] } });
+    expect(option.visualMap).toMatchObject({
+      min: 4,
+      max: 9,
+      inRange: { color: [...theme.sequential] },
+    });
   });
 
   it('declines a graph spec and names its renderer', () => {
@@ -137,7 +150,9 @@ describe('compileSpec', () => {
   });
 
   it('refuses an unknown chart type', () => {
-    expect(() => compileSpec({ chartType: 'Sankey', encodings: {} }, [], { theme })).toThrow(/not supported/);
+    expect(() => compileSpec({ chartType: 'Sankey', encodings: {} }, [], { theme })).toThrow(
+      /not supported/,
+    );
   });
 });
 

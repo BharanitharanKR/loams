@@ -228,7 +228,7 @@ registerChartKind("bar", {
         series: [{ type: "bar" }],
       };
     }
-    const { x, y, series } = encode;
+    const { x, y } = encode;
     const yFields = Array.isArray(y) ? y : y ? [y] : [];
     return {
       dataset: { source: rows },

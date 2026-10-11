@@ -42,7 +42,8 @@ export function DataTable({
 }) {
   const shown = rows.length > limit ? rows.slice(rows.length - limit) : rows;
   const columns: string[] = [];
-  for (const row of shown) for (const key of Object.keys(row)) if (!columns.includes(key)) columns.push(key);
+  for (const row of shown)
+    for (const key of Object.keys(row)) if (!columns.includes(key)) columns.push(key);
   const note = rows.length > shown.length ? ` (latest ${shown.length} of ${rows.length} rows)` : '';
   return (
     <table style={srOnly}>
