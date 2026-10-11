@@ -5,16 +5,20 @@
 //! ([`table_for_insert`]); [`define_table`] creates a table or changes its
 //! indexes, and refuses an index change on a non-empty table (R1 plan
 //! Ruling 5). Table ids come from the catalog counter, from 1; index ids from
-//! the table's `next_index_id`, from 2, and are never reused.
+//! the table's `next_index_id`, from 2, and are never reused. A table's
+//! [`TableValidation`] (LV1 plan Task 8) rides in its record, so every write
+//! that loads the table has its validators.
 
-use buffa::Message;
+use buffa::{Message, MessageField};
 use loams_kv::Txn;
+use ulid::Ulid;
 
 use crate::cursor::CursorKey;
 use crate::docs::Reads;
 use crate::ids::{IndexId, TableId};
 use crate::journal::MAX_SHARDS;
 use crate::keys::AppKeys;
+use crate::validate::Validator;
 use crate::{Limits, LiveError, pb};
 
 /// The longest table or index name, in bytes.
@@ -37,6 +41,37 @@ pub struct TableDef {
     pub indexes: Vec<IndexDef>,
     /// The id the next user index gets.
     pub next_index_id: u32,
+    /// The validators its writes must match (LV1 plan Task 8).
+    pub validation: TableValidation,
+}
+
+/// A table's validators (design §45 §4.1; LV1 plan Task 8): the one every
+/// write must match, as the active deployment's schema declares it, and a
+/// stricter one a deploy is checking the table's documents against, which
+/// writes must match too until that deploy activates or fails.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TableValidation {
+    pub validator: Option<Validator>,
+    pub enforcing: Option<Enforcing>,
+}
+
+/// A validator enforced ahead of its deploy, which is checking it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Enforcing {
+    pub validator: Validator,
+    pub deployment: Ulid,
+}
+
+impl TableValidation {
+    /// The validators a write must match, with the deployment checking the
+    /// second one.
+    pub fn validators(&self) -> impl Iterator<Item = (&Validator, Option<Ulid>)> {
+        self.validator.iter().map(|v| (v, None)).chain(
+            self.enforcing
+                .iter()
+                .map(|e| (&e.validator, Some(e.deployment))),
+        )
+    }
 }
 
 /// A user index: up to 16 top-level fields, then `_creationTime` and `_id`.
@@ -93,6 +128,24 @@ impl TableDef {
                 })
                 .collect(),
             next_index_id: self.next_index_id,
+            validator: self
+                .validation
+                .validator
+                .as_ref()
+                .map(|v| MessageField::some(v.to_proto()))
+                .unwrap_or_default(),
+            enforcing: self
+                .validation
+                .enforcing
+                .as_ref()
+                .map(|e| {
+                    MessageField::some(pb::EnforcingValidator {
+                        validator: MessageField::some(e.validator.to_proto()),
+                        deployment: e.deployment.to_bytes().to_vec(),
+                        ..Default::default()
+                    })
+                })
+                .unwrap_or_default(),
             ..Default::default()
         }
     }
@@ -118,6 +171,31 @@ impl TableDef {
                 })
                 .collect(),
             next_index_id: p.next_index_id,
+            validation: TableValidation {
+                validator: p.validator.as_option().map(stored_validator).transpose()?,
+                enforcing: p
+                    .enforcing
+                    .as_option()
+                    .map(|e| {
+                        let validator = e.validator.as_option().ok_or_else(|| {
+                            LiveError::Corrupt(
+                                "table record: an enforcing entry with no validator".into(),
+                            )
+                        })?;
+                        let deployment: [u8; 16] =
+                            e.deployment.as_slice().try_into().map_err(|_| {
+                                LiveError::Corrupt(format!(
+                                    "table record: a {}-byte enforcing deployment",
+                                    e.deployment.len()
+                                ))
+                            })?;
+                        Ok::<_, LiveError>(Enforcing {
+                            validator: stored_validator(validator)?,
+                            deployment: Ulid::from_bytes(deployment),
+                        })
+                    })
+                    .transpose()?,
+            },
         })
     }
 
@@ -126,6 +204,11 @@ impl TableDef {
             .map_err(|e| LiveError::Corrupt(format!("table record: {e}")))?;
         TableDef::from_proto(p)
     }
+}
+
+/// A validator read from a stored record.
+fn stored_validator(p: &pb::Validator) -> Result<Validator, LiveError> {
+    Validator::from_proto(p).map_err(|e| LiveError::Corrupt(format!("table record: {e}")))
 }
 
 /// Checks a table or index name: 1 to 64 bytes of ASCII letters, digits and
@@ -301,6 +384,7 @@ async fn create_table(
             })
             .collect(),
         next_index_id: index_id,
+        validation: TableValidation::default(),
     };
     txn.put(&counter, next.to_be_bytes().to_vec()).await?;
     txn.put(&app.table_name(name), id.to_be_bytes().to_vec())

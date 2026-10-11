@@ -173,6 +173,7 @@ mod tests {
                 fields: vec!["name".into()],
             }],
             next_index_id: IndexId::FIRST_USER + 1,
+            validation: Default::default(),
         };
         let LiveValue::Object(o) = table_value(&t) else {
             panic!("an object")

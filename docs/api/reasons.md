@@ -67,6 +67,7 @@ The rules, in the order they bite:
 | `live_bad_cursor` | invalid_argument | `loams.live.v1` Query, Mutate and the session's queries: a function's `paginate` got a cursor that is malformed, altered, or from another app, table or index (LV1 Task 4) | |
 | `live_worker_crashed` | internal | `loams.live.v1` Query, Mutate and the session's queries: the isolated worker process running the function crashed or was killed; the call's transaction never committed, and a mutation is not retried (LV1 Task 5, design §45 §3.1). Live's own wire code is `ERROR_CODE_FUNCTION_ERROR`; `internal` is provisional until Task 19 maps Live errors to Connect codes | |
 | `live_deploy_conflict` | failed_precondition | `loams.live.v1` Deploy (LiveAdminService's Deploy and ActivateDeployment from LV1 Task 10): the deploy's `expected_active` is not the app's active deployment, because another deploy activated in between; the message names both. The deployment's record is `failed` (LV1 Task 6, design §45 §3.3) | |
+| `live_schema_violation` | invalid_argument | `loams.live.v1` Mutate (and every write a function makes, `_system:*` included): the document does not match its table's validator, or a stricter validator a deploy is checking; the message names the table and the field paths, never the values (LV1 Task 8, design §45 §4.1) | `field_violations` (path, description) |
 | `invalid_argument` | invalid_argument | any RPC: a malformed field, an unparseable value | `field` |
 | `not_found` | not_found | any RPC: the named resource does not exist | `kind`, `name` |
 | `already_exists` | already_exists | any RPC that creates a named resource | |
@@ -82,7 +83,7 @@ The rules, in the order they bite:
 
 The `loams.postgres.v1` rows (`project_not_found` to `secret_already_issued`) are design §46 §4.1's, registered by PG2 Task 1 before `pg-control` raises them (PG2 Task 9); `reasons_registered` (`crates/loams-proto/tests/postgres.rs`) fails if one §46 §4.1 names is missing. A replayed create under a taken name with another key answers the generic `already_exists`, and a `RestartEndpoint` with `promote` while the branch's read-write endpoint runs the generic `failed_precondition` (PG2 Task 1 ruling R1.8).
 
-`live_bad_cursor` is LV1 Task 4's, `live_worker_crashed` LV1 Task 5's and `live_deploy_conflict` LV1 Task 6's: `loams_live::LiveError::reason` names them, and they reach the wire when Live moves onto the main Connect port (LV1 Task 12) and their errors are mapped there (Task 19).
+`live_bad_cursor` is LV1 Task 4's, `live_worker_crashed` LV1 Task 5's, `live_deploy_conflict` LV1 Task 6's and `live_schema_violation` LV1 Task 8's: `loams_live::LiveError::reason` names them, and they reach the wire when Live moves onto the main Connect port (LV1 Task 12) and their errors are mapped there (Task 19).
 
 The generic rows (`invalid_argument` and below) are the code-to-class mapping of D611's error hierarchy: they are what an SDK turns into its own `InvalidArgument`, `NotFound`, ... types. They carry no Loams-specific semantics, so they were already the native REST API's `error` values (`crates/loams/src/api/errors.rs`) and become the RPC `reason` unchanged. The rows above them are the specific causes AP0 registered; the specific causes API1 Tasks 2–8 add are appended as their services land, and `unavailable_service_reports_reason` covers the variant case.
 

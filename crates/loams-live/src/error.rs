@@ -3,6 +3,7 @@
 use loams_kv::TxnError;
 
 use crate::pb;
+use crate::validate::FieldViolation;
 
 /// Why a Loams Live operation failed. Each variant maps to one
 /// [`pb::ErrorCode`], which is what clients see (design §20 §7.1).
@@ -16,6 +17,16 @@ pub enum LiveError {
     /// `live_bad_cursor`.
     #[error("invalid argument: {0}")]
     BadCursor(String),
+    /// A write whose document does not match its table's validator (LV1
+    /// plan Task 8, design §45 §4.1): `INVALID_ARGUMENT`, reason
+    /// `live_schema_violation`. The message names the table and the field
+    /// paths (never the values); `violations` holds them (up to
+    /// [`MAX_VIOLATIONS`](crate::validate::MAX_VIOLATIONS)).
+    #[error("invalid argument: {message}")]
+    SchemaViolation {
+        message: String,
+        violations: Vec<FieldViolation>,
+    },
     /// A document, table or index does not exist.
     #[error("not found: {0}")]
     NotFound(String),
@@ -100,6 +111,7 @@ impl LiveError {
         match self {
             LiveError::InvalidArgument(_)
             | LiveError::BadCursor(_)
+            | LiveError::SchemaViolation { .. }
             | LiveError::NotLoopback(_)
             | LiveError::IsolationRequired
             | LiveError::IsolationUnavailable => pb::ErrorCode::ERROR_CODE_INVALID_ARGUMENT,
@@ -134,9 +146,20 @@ impl LiveError {
     pub fn reason(&self) -> Option<&'static str> {
         match self {
             LiveError::BadCursor(_) => Some("live_bad_cursor"),
+            LiveError::SchemaViolation { .. } => Some("live_schema_violation"),
             LiveError::DeployConflict(_) => Some("live_deploy_conflict"),
             LiveError::WorkerCrashed(_) => Some("live_worker_crashed"),
             _ => None,
+        }
+    }
+
+    /// The field violations of a [`LiveError::SchemaViolation`]; empty for
+    /// every other error. (They reach the wire's `field_violations` when
+    /// Live's errors are mapped onto the main Connect port, LV1 Task 19.)
+    pub fn field_violations(&self) -> &[FieldViolation] {
+        match self {
+            LiveError::SchemaViolation { violations, .. } => violations,
+            _ => &[],
         }
     }
 

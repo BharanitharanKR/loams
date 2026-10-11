@@ -21,8 +21,10 @@
 //! arguments and schemas in [`validate`]. Versioned deployments, their
 //! bundle store and their activation (LV1 Task 6) are in [`deploy`], with
 //! the [`AppEngine`] that serves an app's active deployment; the schema a
-//! deployment declares is in [`schema`].
+//! deployment declares, with its table validators (LV1 Task 8), is in
+//! [`schema`], and the leased table scans that check them in [`backfill`].
 
+pub mod backfill;
 pub mod catalog;
 mod config;
 pub mod cursor;
@@ -48,7 +50,7 @@ mod value;
 /// The `loams.live.v1` protobuf messages.
 pub use loams_live_proto::loams::live::v1 as pb;
 
-pub use catalog::{IndexDef, IndexSpec, TableDef};
+pub use catalog::{IndexDef, IndexSpec, TableDef, TableValidation};
 pub use config::{
     DEFAULT_JANITOR_INTERVAL, DEFAULT_JOURNAL_SHARDS, DEFAULT_LISTEN, Isolation, KEYSPACE_PREFIX,
     LiveConfig, Tenancy, check_isolation, check_listen, keyspace_of, store_path,

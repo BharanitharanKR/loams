@@ -30,12 +30,13 @@ use std::time::Duration;
 
 use buffa::Message;
 use futures::future::BoxFuture;
-use loams_kv::{CommitMode, Snap, Store, Ts, Txn, TxnError, TxnOptions};
+use loams_kv::{CommitMode, Committed, Snap, Store, Ts, Txn, TxnError, TxnOptions};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use sha2::{Digest, Sha256};
 use ulid::Ulid;
 
+use crate::backfill::JobOptions;
 use crate::catalog::{self, TableDef};
 use crate::cursor::{self, CursorKey};
 use crate::docs::{self, Doc, IndexRange, Reads, WriteRecord};
@@ -382,6 +383,7 @@ impl<'a> LiveTxn<'a> {
                 name: format!("#{}", range.table.0),
                 indexes: Vec::new(),
                 next_index_id: crate::IndexId::FIRST_USER,
+                validation: Default::default(),
             },
         };
         let remaining = self
@@ -753,6 +755,9 @@ pub struct RunnerOptions {
     /// Correct but coarse (such mutations serialize with all writers); off
     /// by default until Q31 is decided (R1 plan row T10-4).
     pub serializable_ranges: bool,
+    /// How the app's table jobs scan (LV1 plan Task 8): batch size, rate
+    /// and lease.
+    pub jobs: JobOptions,
 }
 
 impl Default for RunnerOptions {
@@ -761,6 +766,7 @@ impl Default for RunnerOptions {
             max_attempts: DEFAULT_MUTATION_ATTEMPTS,
             commit_mode: CommitMode::TwoPc,
             serializable_ranges: false,
+            jobs: JobOptions::default(),
         }
     }
 }
@@ -1331,6 +1337,59 @@ fn lock(state: &Mutex<Attempts>) -> std::sync::MutexGuard<'_, Attempts> {
     state
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Why [`atomic`] did not commit.
+#[derive(Debug)]
+pub(crate) enum Refusal {
+    /// The body's own error; the transaction rolled back.
+    Own(LiveError),
+    /// A storage error the runner's retries did not outlast.
+    Storage(LiveError),
+}
+
+/// Runs `body` in a catalog transaction of `runner` named `op`, committing
+/// only a body that succeeds: its own error (anything but a storage error)
+/// rolls the transaction back, unlike [`lift`], which commits what the body
+/// wrote before failing.
+pub(crate) async fn atomic<T, F>(
+    runner: &Runner,
+    op: &'static str,
+    mut body: F,
+) -> Result<Committed<T>, Refusal>
+where
+    T: Send + 'static,
+    F: for<'t> FnMut(&'t mut Txn) -> BoxFuture<'t, Result<T, LiveError>> + Send,
+{
+    let failure: Arc<Mutex<Option<LiveError>>> = Arc::default();
+    let run = runner
+        .store()
+        .run(catalog_txn(op, runner.options()), |txn| {
+            let failure = failure.clone();
+            let attempt = body(txn);
+            Box::pin(async move {
+                match attempt.await {
+                    Ok(value) => Ok(value),
+                    Err(e) => match e.into_txn() {
+                        Err(storage) => Err(storage),
+                        Ok(own) => {
+                            *failure
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(own);
+                            Err(TxnError::Fatal("the change was refused".into()))
+                        }
+                    },
+                }
+            })
+        })
+        .await;
+    run.map_err(|e| {
+        let own = failure
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        own.map_or_else(|| Refusal::Storage(LiveError::Txn(e)), Refusal::Own)
+    })
 }
 
 /// A run body's result: a storage error goes back to the runner (which

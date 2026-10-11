@@ -144,6 +144,7 @@ fn table() -> TableDef {
             fields: vec!["a".to_string(), "b".to_string()],
         }],
         next_index_id: 3,
+        validation: Default::default(),
     }
 }
 
