@@ -100,7 +100,11 @@ def audit_info(data: bytes) -> list:
     with tempfile.NamedTemporaryFile(prefix="nf1-audit-", suffix=".elf") as f:
         f.write(data)
         f.flush()
-        r = subprocess.run(["rust-audit-info", f.name], capture_output=True, text=True)
+        try:
+            r = subprocess.run(["rust-audit-info", f.name], capture_output=True, text=True,
+                               timeout=300)
+        except subprocess.TimeoutExpired as err:
+            raise RuntimeError(f"rust-audit-info timed out on {f.name}") from err
     if r.returncode != 0:
         raise RuntimeError(f"rust-audit-info failed: {r.stderr.strip()}")
     return json.loads(r.stdout)["packages"]
