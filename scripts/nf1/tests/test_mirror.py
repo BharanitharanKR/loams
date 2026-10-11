@@ -331,7 +331,7 @@ class Audit(unittest.TestCase):
 class Runbook(unittest.TestCase):
     """audit_runs_before_visibility: the README's mirror runbook audits before
     any package is made public. (The pin-file half, `pins.py check` refusing a
-    `mirror:` source without its audit file, belongs to Task 2's pins.py.)"""
+    `mirror:` source without its audit file, is in test_pins.py.)"""
 
     def test_audit_runs_before_visibility(self):
         text = README.read_text()

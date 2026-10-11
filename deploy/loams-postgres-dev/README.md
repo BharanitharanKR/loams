@@ -17,14 +17,30 @@ the caller.
 
 Not a production layout: no storage controller, no Neon proxy, no TLS, default credentials,
 `fsync = off` in the compute spec, and the safekeeper keeps WAL in its container filesystem.
-Images are pinned by digest (PG2 Task 2): Neon's last public build, 2025-08-26, git
-`77e22e4b`. The fork `ostrium-labs/loams-postgres` publishes no images yet (PG2 ruling R2.1);
-`NEON_IMAGE` and `COMPUTE_IMAGE` override the pins.
+Images are pinned by digest in [`deploy/pins/loams-postgres-images.toml`](../pins/loams-postgres-images.toml)
+(NF1 Task 2). `scripts/nf1/pins.py set` writes that file and generates every consumer from it:
+this stack's and `deploy/loams-pg-bench`'s `x-neon-image` and `x-compute-image`, `PG_HEADERS_IMAGE`
+in `pg2.yml`, `pg2-e2e.yml` and `loams-pg-bench.yml`, and the table below; `pins.py check` fails on
+any difference. `NEON_IMAGE` and `COMPUTE_IMAGE` still override the pins.
 
-| Image | Digest (multi-arch index) | amd64 manifest |
-|---|---|---|
-| `ghcr.io/neondatabase/neon` | `sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f` | `sha256:ead56a7b33925ca4df9f1ee0d29f55fa25e165a3fee6a4f19055050c68e8cad0` |
-| `ghcr.io/neondatabase/compute-node-v17` | `sha256:13ab146d3e7bbabb25a8532f315ac443e7512351d1ede0bab586def5c70e26c3` | `sha256:9b86e3ecb2267fbdeb0fd2478db0e662959ccdfa4526efa4a558410a93c6c46f` |
+Until our own builds (NF1 Task 14), the pins are Neon's last public build, 2025-08-26, git
+`77e22e4b`, at Neon's own repositories. Every mirrored package stayed private (see Mirror), so
+the `mirror:` sources record Neon's reference, and no pin names `neon-archive`: those packages
+are never deployed. The amd64 manifests of that build are
+`sha256:ead56a7b33925ca4df9f1ee0d29f55fa25e165a3fee6a4f19055050c68e8cad0` (`neon`) and
+`sha256:9b86e3ecb2267fbdeb0fd2478db0e662959ccdfa4526efa4a558410a93c6c46f` (`compute-node-v17`).
+
+<!-- pins.py: begin images (generated from deploy/pins/loams-postgres-images.toml) -->
+Pinned in [`deploy/pins/loams-postgres-images.toml`](../pins/loams-postgres-images.toml): `fork_release` `mirror-77e22e4b`, `fork_commit` `77e22e4bf09d88b70b4a83a38c2f6de6301816b4`.
+
+| Pin | Image (multi-arch index) | Source | Postgres |
+|---|---|---|---|
+| `storage` | `ghcr.io/neondatabase/neon@sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f` | `mirror:ghcr.io/neondatabase/neon@sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f` | 16.9, 17.5 |
+| `compute-v16` | `ghcr.io/neondatabase/compute-node-v16@sha256:b3e151661bd2ee11eb2843c8926001966cb23969227e9673c5f42fc3fbe14249` | `mirror:ghcr.io/neondatabase/compute-node-v16@sha256:b3e151661bd2ee11eb2843c8926001966cb23969227e9673c5f42fc3fbe14249` | 16.9 |
+| `compute-v17` | `ghcr.io/neondatabase/compute-node-v17@sha256:13ab146d3e7bbabb25a8532f315ac443e7512351d1ede0bab586def5c70e26c3` | `mirror:ghcr.io/neondatabase/compute-node-v17@sha256:13ab146d3e7bbabb25a8532f315ac443e7512351d1ede0bab586def5c70e26c3` | 17.5 |
+
+Postgres majors: supported 17; beta none; maintenance 16; default 17.
+<!-- pins.py: end images -->
 
 Postgres is 17 (PG2 Task 0 ruling 7).
 

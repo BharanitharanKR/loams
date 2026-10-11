@@ -65,8 +65,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # deploy/loams-pg-bench's pinned `neon` image, the server headers' source
-  # (as in pg2.yml; PG2 Task 2, R2.1).
+  # The server headers' source: images.storage in deploy/pins/loams-postgres-images.toml,
+  # written by scripts/nf1/pins.py (as in pg2.yml; NF1 Task 2).
   PG_HEADERS_IMAGE: ghcr.io/neondatabase/neon@sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
