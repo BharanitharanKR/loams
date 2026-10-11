@@ -890,7 +890,7 @@ impl SessionTask {
                 })();
                 let subscribed = match prepared {
                     Ok((f, args)) => {
-                        let key = SubKey::new(f.name(), &args);
+                        let key = SubKey::for_function(&*f, &args);
                         subs.subscribe(key.clone(), f.clone(), args.clone())
                             .await
                             .map(|(id, result)| (id, key, f, args, result))

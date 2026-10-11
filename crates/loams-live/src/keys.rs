@@ -18,10 +18,13 @@
 //! `key_hash` is the first 16 bytes of SHA-256 of the idempotency key.
 //! Catalog kinds: `0x00` counters (`"table"`: the next table id, u32 BE),
 //! `0x01` a table's name (→ its id, u32 BE), `0x02` a table (name =
-//! id:u32 BE → `TableDef`), `0x03` the deployment pointer and `0x04` the
-//! deployed schema (both Task 13), `0x05` the app's own settings (empty
-//! name → `AppDef`: the journal shard count, Task 10; `"cursor"` → the
-//! app's 32-byte pagination cursor key, LV1 Task 4).
+//! id:u32 BE → `TableDef`), `0x03` the deployment pointer (empty name →
+//! the active deployment's 16-byte id) and `0x04` the deployed schema
+//! (empty name → `Schema`; both LV1 Task 6), `0x05` the app's own settings
+//! (empty name → `AppDef`: the journal shard count, Task 10; `"cursor"` →
+//! the app's 32-byte pagination cursor key, LV1 Task 4), `0x06` the
+//! deployment records (name = the deployment's 16-byte id →
+//! `DeploymentRecord`, LV1 Task 6).
 
 use loams_kv::tuple;
 
@@ -52,12 +55,14 @@ pub const KIND_COUNTER: u8 = 0x00;
 pub const KIND_TABLE_NAME: u8 = 0x01;
 /// Catalog kind: a table record, by id.
 pub const KIND_TABLE: u8 = 0x02;
-/// Catalog kind: the deployment pointer (Task 13).
+/// Catalog kind: the deployment pointer (LV1 Task 6).
 pub const KIND_DEPLOYMENT: u8 = 0x03;
-/// Catalog kind: the deployed schema (Task 13).
+/// Catalog kind: the deployed schema (LV1 Task 6).
 pub const KIND_SCHEMA: u8 = 0x04;
 /// Catalog kind: the app's own settings (Task 10).
 pub const KIND_APP: u8 = 0x05;
+/// Catalog kind: a deployment record, by id (LV1 Task 6).
+pub const KIND_DEPLOYMENT_RECORD: u8 = 0x06;
 
 /// The length of an idempotency record's key hash.
 pub const IDEMPOTENCY_HASH_BYTES: usize = 16;
@@ -141,9 +146,25 @@ impl AppKeys {
         self.catalog(KIND_TABLE, &id.0.to_be_bytes())
     }
 
-    /// The deployed schema record (Task 13).
+    /// The deployed schema record (LV1 Task 6): present while the active
+    /// deployment declares tables.
     pub fn schema(&self) -> Vec<u8> {
         self.catalog(KIND_SCHEMA, b"")
+    }
+
+    /// The deployment pointer (LV1 Task 6): the active deployment's id.
+    pub fn deployment_pointer(&self) -> Vec<u8> {
+        self.catalog(KIND_DEPLOYMENT, b"")
+    }
+
+    /// A deployment's record (LV1 Task 6), by its 16-byte id.
+    pub fn deployment(&self, id: &[u8; 16]) -> Vec<u8> {
+        self.catalog(KIND_DEPLOYMENT_RECORD, id)
+    }
+
+    /// Every deployment record, in id order (oldest first).
+    pub fn deployments(&self) -> KeyRange {
+        prefix_range(self.catalog(KIND_DEPLOYMENT_RECORD, b""))
     }
 
     /// The app's settings record (its journal shard count).

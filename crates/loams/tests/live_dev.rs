@@ -37,6 +37,11 @@ fn addr_after(line: &str, prefix: &str) -> Option<SocketAddr> {
 /// `loams dev` on `data_dir`, every listener on an ephemeral loopback port,
 /// with no PD configured.
 fn start(data_dir: &Path) -> Dev {
+    start_with(data_dir, &[])
+}
+
+/// [`start`] with `extra` flags.
+fn start_with(data_dir: &Path, extra: &[&str]) -> Dev {
     let mut child = Command::new(env!("CARGO_BIN_EXE_loams"))
         .args([
             "dev",
@@ -52,6 +57,7 @@ fn start(data_dir: &Path) -> Dev {
             "--data-dir",
         ])
         .arg(data_dir)
+        .args(extra)
         .env_remove("LOAMS_TEST_PD")
         .env("RUST_LOG", "warn")
         .stdout(Stdio::piped())
@@ -263,5 +269,105 @@ export const notes = {
             assert!(e.to_string().contains("SIGSYS"), "{e}");
         }
         other => panic!("the sandbox kills the worker, not {other:?}"),
+    }
+}
+
+const NOTES: &str = r#"
+import { query, mutation } from "loams:server";
+export const notes = {
+  add: mutation(async (ctx, { body }) => await ctx.db.insert("notes", { body })),
+  count: query(async (ctx) => (await ctx.db.query("notes").collect()).length),
+};
+"#;
+
+/// `notes:count` at `ts`.
+async fn count_notes(live: SocketAddr, ts: &Value) -> Option<f64> {
+    let (status, body) = connect(
+        live,
+        "/loams.live.v1.LiveService/Query",
+        &json!({ "function": "notes:count", "args": object(json!({})), "ts": ts }),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    body["result"]["doubleValue"].as_f64()
+}
+
+/// The processes whose parent is `pid` and whose command line names
+/// `live-worker`.
+#[cfg(target_os = "linux")]
+fn live_workers_of(pid: u32) -> usize {
+    let mut found = 0;
+    for entry in std::fs::read_dir("/proc").expect("/proc") {
+        let path = entry.expect("an entry").path();
+        let Ok(stat) = std::fs::read_to_string(path.join("stat")) else {
+            continue;
+        };
+        // `pid (comm) state ppid …`; comm may hold spaces, so split after
+        // its closing parenthesis.
+        let ppid = stat
+            .rsplit_once(')')
+            .and_then(|(_, rest)| rest.split_whitespace().nth(1))
+            .and_then(|p| p.parse::<u32>().ok());
+        let cmdline = std::fs::read(path.join("cmdline")).unwrap_or_default();
+        if ppid == Some(pid) && String::from_utf8_lossy(&cmdline).contains("live-worker") {
+            found += 1;
+        }
+    }
+    found
+}
+
+/// LV1 plan Task 6: `loams dev` deploys a bundle over the Live API and runs
+/// its functions, in process by default and, with `--live-isolation
+/// isolated`, in `loams live-worker` children of the server. The deployment
+/// survives a restart: its bundle is in the data directory's bucket.
+#[tokio::test(flavor = "multi_thread")]
+async fn dev_serves_deployed_functions() {
+    let modes: &[(&[&str], bool)] = if cfg!(target_os = "linux") {
+        &[(&[], false), (&["--live-isolation", "isolated"], true)]
+    } else {
+        &[(&[], false)]
+    };
+    for &(extra, isolated) in modes {
+        let dir = TempDir::new().expect("a temp dir");
+        let dev = start_with(dir.path(), extra);
+        use base64::Engine as _;
+        let (status, body) = connect(
+            dev.live,
+            "/loams.live.v1.LiveService/Deploy",
+            &json!({
+                "bundle": base64::engine::general_purpose::STANDARD.encode(NOTES),
+                "schema": {},
+            }),
+        )
+        .await;
+        assert_eq!(status, 200, "{extra:?}: {body}");
+        assert!(body["deploymentId"].is_string(), "{body}");
+        let args = object(json!({ "body": { "stringValue": "hi" } }));
+        let (status, body) = connect(
+            dev.live,
+            "/loams.live.v1.LiveService/Mutate",
+            &json!({ "function": "notes:add", "args": args }),
+        )
+        .await;
+        assert_eq!(status, 200, "{extra:?}: {body}");
+        let ts = body["commitTs"].clone();
+        assert_eq!(count_notes(dev.live, &ts).await, Some(1.0));
+        #[cfg(target_os = "linux")]
+        assert_eq!(
+            live_workers_of(dev.child.id()) > 0,
+            isolated,
+            "{extra:?}: workers run only when isolated"
+        );
+        #[cfg(not(target_os = "linux"))]
+        let _ = isolated;
+        stop(dev);
+
+        let dev = start_with(dir.path(), extra);
+        assert_eq!(
+            count_notes(dev.live, &ts).await,
+            Some(1.0),
+            "{extra:?}: the deployment serves after a restart"
+        );
+        drop(dev);
     }
 }

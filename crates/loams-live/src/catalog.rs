@@ -310,7 +310,9 @@ async fn create_table(
     Ok(table)
 }
 
-fn check_indexes(indexes: &[IndexSpec], limits: &Limits) -> Result<(), LiveError> {
+/// Checks a table's index specs: their count, names (unique, not
+/// built-in) and fields.
+pub(crate) fn check_indexes(indexes: &[IndexSpec], limits: &Limits) -> Result<(), LiveError> {
     if indexes.len() > limits.max_indexes {
         return Err(LiveError::limit(
             "max_indexes",

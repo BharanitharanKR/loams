@@ -16,10 +16,12 @@
 //! manager (Task 11), [`Subscriptions`], and its read-set index,
 //! [`ReadSetIndex`], are in [`subs`] and [`readset`]. Sessions and their
 //! versioned Transitions (Task 12) are in [`session`], and the connect-rust
-//! sync service, [`LiveServer`], in [`service`]; [`deploy`] resolves the
-//! functions an app serves. Pagination cursors (LV1 Task 4) are in
-//! [`cursor`], and the validators shared by function arguments and schemas
-//! in [`validate`].
+//! sync service, [`LiveServer`], in [`service`]. Pagination cursors (LV1
+//! Task 4) are in [`cursor`], and the validators shared by function
+//! arguments and schemas in [`validate`]. Versioned deployments, their
+//! bundle store and their activation (LV1 Task 6) are in [`deploy`], with
+//! the [`AppEngine`] that serves an app's active deployment; the schema a
+//! deployment declares is in [`schema`].
 
 pub mod catalog;
 mod config;
@@ -33,6 +35,7 @@ pub mod keys;
 mod limits;
 pub mod query;
 pub mod readset;
+pub mod schema;
 pub mod service;
 pub mod session;
 pub mod subs;
@@ -50,6 +53,7 @@ pub use config::{
     DEFAULT_JANITOR_INTERVAL, DEFAULT_JOURNAL_SHARDS, DEFAULT_LISTEN, Isolation, KEYSPACE_PREFIX,
     LiveConfig, Tenancy, check_isolation, check_listen, keyspace_of, store_path,
 };
+pub use deploy::AppEngine;
 pub use docs::{Doc, IndexRange, Order, Reads, WriteRecord};
 pub use error::LiveError;
 pub use ids::{DocId, IndexId, TableId};

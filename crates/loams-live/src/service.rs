@@ -5,9 +5,12 @@
 //!
 //! `Watch` opens a session and streams its Transitions; `ModifyQuerySet`
 //! changes a session's query set; `Query` and `Mutate` run through the
-//! app's [`Runner`]; `Deploy` answers `UNIMPLEMENTED` until Task 13. Connect,
-//! gRPC and gRPC-Web, JSON and binary, over HTTP/1.1 and HTTP/2 (cleartext,
-//! loopback only).
+//! app's [`Runner`], resolving functions through its [`AppEngine`]: the
+//! `_system:*` functions, else the active deployment's. `Deploy` deploys a
+//! bundle against the active deployment (LV1 plan Task 6; Task 10 moves it
+//! to `LiveAdminService`) when the server has a function [`Runtime`].
+//! Connect, gRPC and gRPC-Web, JSON and binary, over HTTP/1.1 and HTTP/2
+//! (cleartext, loopback only).
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -22,10 +25,12 @@ use loams_kv::Store;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
+use crate::deploy::{self, AppEngine, DeployRequest, Runtime};
 use crate::pb::{self, LiveService, LiveServiceServer};
+use crate::schema::Schema;
 use crate::session::{Outbox, SESSION_HEADER, Sessions, Start, args_of, chunks, ts_of};
 use crate::subs::{SubsConfig, SubsStats, Subscriptions};
-use crate::{Janitor, LiveConfig, LiveError, Runner, check_isolation, check_listen, deploy};
+use crate::{Janitor, LiveConfig, LiveError, Runner, check_isolation, check_listen};
 
 /// How long stopping waits for in-flight requests before aborting them.
 const STOP_GRACE: Duration = Duration::from_secs(10);
@@ -48,13 +53,25 @@ pub struct LiveHandle {
 }
 
 impl LiveServer {
-    /// Checks that `config.listen` is loopback, opens the app's store
-    /// (whichever backend `config.store` names), opens its runner, starts the subscription manager (its
-    /// consumer is `config.node` unless set) and the janitor, binds the
-    /// listener and serves until `shutdown` is cancelled or
-    /// [`LiveHandle::stop`]. Logs once that the API is unauthenticated.
+    /// [`start_with`](Self::start_with) without a function runtime: only
+    /// the `_system:*` functions serve, and `Deploy` is refused.
     pub async fn start(
         config: LiveConfig,
+        shutdown: CancellationToken,
+    ) -> Result<LiveHandle, LiveError> {
+        LiveServer::start_with(config, Runtime::none(), shutdown).await
+    }
+
+    /// Checks that `config.listen` is loopback, opens the app's store
+    /// (whichever backend `config.store` names), opens its runner and its
+    /// [`AppEngine`] on `runtime` (loading the active deployment), starts
+    /// the subscription manager (its consumer is `config.node` unless set)
+    /// and the janitor, binds the listener and serves until `shutdown` is
+    /// cancelled or [`LiveHandle::stop`]. Logs once that the API is
+    /// unauthenticated.
+    pub async fn start_with(
+        config: LiveConfig,
+        runtime: Runtime,
         shutdown: CancellationToken,
     ) -> Result<LiveHandle, LiveError> {
         check_listen(config.listen)?;
@@ -66,6 +83,7 @@ impl LiveServer {
             ))
         })?;
         let runner = Runner::open(store.clone(), &config).await?;
+        let engine = AppEngine::open(&config.app, runner.clone(), runtime).await?;
         let listener = tokio::net::TcpListener::bind(config.listen)
             .await
             .map_err(|e| LiveError::Internal(format!("live listen on {}: {e}", config.listen)))?;
@@ -86,20 +104,22 @@ impl LiveServer {
             subs_config,
             stop.clone(),
         ));
+        let resolver = engine.clone();
         let sessions = Sessions::new(
             subs.clone(),
-            Arc::new(deploy::resolve),
+            Arc::new(move |name: &str| deploy::resolve(&resolver, name)),
             config.session.clone(),
             config.node.clone(),
             stop.clone(),
         );
         let janitor = tokio::spawn(janitor_loop(
-            runner.clone(),
+            engine.clone(),
             config.janitor_interval,
             stop.clone(),
         ));
         let service = Live {
             runner,
+            engine,
             subs: subs.clone(),
             sessions: sessions.clone(),
             max_transition_bytes: config.session.max_transition_bytes,
@@ -165,9 +185,12 @@ impl LiveHandle {
     }
 }
 
-/// Runs the journal janitor every `interval` (the first run one interval
-/// after start).
-async fn janitor_loop(runner: Runner, interval: Duration, stop: CancellationToken) {
+/// Runs the journal janitor and the deployment janitor every `interval`
+/// (the first run one interval after start), and refreshes the deployment
+/// this node serves, so it picks up a deploy made on another node (until
+/// LV1 plan Task 11 switches every node at the activation's tick).
+async fn janitor_loop(engine: AppEngine, interval: Duration, stop: CancellationToken) {
+    let runner = engine.runner().clone();
     let mut every = tokio::time::interval_at(tokio::time::Instant::now() + interval, interval);
     every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
@@ -185,12 +208,18 @@ async fn janitor_loop(runner: Runner, interval: Duration, stop: CancellationToke
             Ok(report) => tracing::debug!(?report, "the Live journal janitor ran"),
             Err(e) => tracing::warn!(error = %e, "the Live journal janitor failed; retrying"),
         }
+        // A refresh logs its own failures; the next round retries.
+        let _ = engine.refresh().await;
+        if let Err(e) = deploy::retain(&engine).await {
+            tracing::warn!(error = %e, "the Live deployment janitor failed; retrying");
+        }
     }
 }
 
 /// The `LiveService` implementation.
 struct Live {
     runner: Runner,
+    engine: AppEngine,
     subs: Arc<Subscriptions>,
     sessions: Sessions,
     max_transition_bytes: usize,
@@ -283,7 +312,7 @@ impl LiveService for Live {
     ) -> ServiceResult<pb::QueryResponse> {
         let req = request.to_owned_message();
         let run = async {
-            let f = deploy::resolve(&req.function)?;
+            let f = deploy::resolve(&self.engine, &req.function)?;
             let args = args_of(req.args.into_option())?;
             let at = match req.ts {
                 Some(ts) => ts_of(ts),
@@ -314,7 +343,7 @@ impl LiveService for Live {
     ) -> ServiceResult<pb::MutateResponse> {
         let req = request.to_owned_message();
         let run = async {
-            let f = deploy::resolve(&req.function)?;
+            let f = deploy::resolve(&self.engine, &req.function)?;
             let args = args_of(req.args.into_option())?;
             self.runner.mutate(f, args, req.idempotency_key).await
         };
@@ -333,8 +362,35 @@ impl LiveService for Live {
     async fn deploy(
         &self,
         _ctx: RequestContext,
-        _request: ServiceRequest<'_, pb::DeployRequest>,
+        request: ServiceRequest<'_, pb::DeployRequest>,
     ) -> ServiceResult<pb::DeployResponse> {
-        Err(ConnectError::unimplemented(deploy::DEPLOY_UNIMPLEMENTED))
+        let req = request.to_owned_message();
+        let run = async {
+            // R1's request has no `expected_active`: deploy against the
+            // active deployment, as the catalog names it now.
+            let expected_active = self.engine.read_active().await?;
+            let schema = req
+                .schema
+                .as_option()
+                .map(Schema::from_proto)
+                .unwrap_or_default();
+            deploy::deploy(
+                &self.engine,
+                DeployRequest {
+                    bundle: req.bundle,
+                    schema,
+                    expected_active,
+                    message: String::new(),
+                    dry_run: false,
+                },
+                deploy::UNAUTHENTICATED,
+            )
+            .await
+        };
+        let outcome = run.await.map_err(|e| connect_error(&e))?;
+        Ok(Response::new(pb::DeployResponse {
+            deployment_id: outcome.record.id.to_string(),
+            ..Default::default()
+        }))
     }
 }

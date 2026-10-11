@@ -8018,6 +8018,7 @@ version = "0.0.1"
 dependencies = [
  "axum 0.8.9",
  "buffa",
+ "bytes",
  "connectrpc",
  "crc",
  "data-encoding",
@@ -8025,8 +8026,10 @@ dependencies = [
  "hmac 0.13.0",
  "loams-kv",
  "loams-live",
+ "loams-live-js",
  "loams-live-proto",
  "loams-sim",
+ "loams-store",
  "proptest",
  "rand 0.9.5",
  "rand_chacha 0.9.0",
@@ -8035,6 +8038,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "ulid 3.0.0",
 ]
 
 [[package]]
@@ -8049,6 +8053,7 @@ dependencies = [
  "loams-live",
  "loams-live-js-alloc",
  "loams-live-proto",
+ "loams-store",
  "proptest",
  "rand 0.9.5",
  "rand_chacha 0.9.0",

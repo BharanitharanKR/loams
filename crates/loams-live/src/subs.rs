@@ -41,6 +41,7 @@ use futures::future::{BoxFuture, FutureExt};
 use loams_kv::{Ts, TxnError};
 use tokio::sync::{Notify, broadcast, mpsc, oneshot, watch};
 use tokio_util::sync::CancellationToken;
+use ulid::Ulid;
 
 use crate::journal::Tailer;
 use crate::readset::{ReadSetIndex, SubId};
@@ -106,20 +107,34 @@ impl Default for SubsConfig {
     }
 }
 
-/// A subscription's identity: the function and the digest of its
-/// arguments. The caller's identity joins it in R3.
+/// A subscription's identity: the deployment that serves the function
+/// (LV1 plan Task 6; the nil ULID for system functions), the function and
+/// the digest of its arguments, so two deployments never share a result.
+/// The caller's identity joins it in R3.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SubKey {
+    pub deployment: Ulid,
     pub function: String,
     pub args_digest: [u8; 32],
 }
 
 impl SubKey {
-    /// The key of `function` called with `args` ([`LiveValue::digest`]).
+    /// The key of `function` called with `args` ([`LiveValue::digest`]),
+    /// outside any deployment.
     pub fn new(function: &str, args: &LiveValue) -> Self {
         SubKey {
+            deployment: Ulid::nil(),
             function: function.to_string(),
             args_digest: args.digest(),
+        }
+    }
+
+    /// The key of `f`, in the deployment that serves it, called with
+    /// `args`.
+    pub fn for_function(f: &dyn Function, args: &LiveValue) -> Self {
+        SubKey {
+            deployment: f.deployment(),
+            ..SubKey::new(f.name(), args)
         }
     }
 }

@@ -901,11 +901,28 @@ struct LiveRuntime {
 
 #[cfg(feature = "live")]
 impl LiveRuntime {
-    /// Starts Live; with `own_gc`, a cluster GC loop on Live's handle too
-    /// (the openraft metastore, or a TiKV metastore on another cluster).
+    /// Starts Live with its function runtime: deployments' bundles in
+    /// `bundles` (the data bucket, R1 plan Ruling 10) and run by
+    /// `loams-live-js`, in process or, with `isolation = "isolated"`, in
+    /// `loams live-worker` processes of this binary (LV1 plan Task 6).
+    /// With `own_gc`, a cluster GC loop on Live's handle too (the openraft
+    /// metastore, or a TiKV metastore on another cluster).
     #[cfg_attr(not(feature = "live-tikv"), allow(unused_variables))]
-    async fn start(config: loams_live::LiveConfig, own_gc: bool) -> Result<Self, ServerError> {
-        let handle = loams_live::LiveServer::start(config, CancellationToken::new())
+    async fn start(
+        config: loams_live::LiveConfig,
+        bundles: Store,
+        own_gc: bool,
+    ) -> Result<Self, ServerError> {
+        let loader = loams_live_js::JsLoader::new(loams_live_js::JsConfig {
+            isolation: config.isolation,
+            ..loams_live_js::JsConfig::default()
+        })
+        .map_err(ServerError::Live)?;
+        let runtime = loams_live::deploy::Runtime {
+            bundles,
+            loader: Arc::new(loader),
+        };
+        let handle = loams_live::LiveServer::start_with(config, runtime, CancellationToken::new())
             .await
             .map_err(|err| match err {
                 loams_live::LiveError::NotLoopback(addr) => {
@@ -1347,7 +1364,9 @@ impl Server {
                     );
                     #[cfg(not(feature = "live-tikv"))]
                     let covered = false;
-                    Some(LiveRuntime::start(live, !covered).await?)
+                    let bundles =
+                        Store::from_url(&bucket_url(&config)?, Vec::<(String, String)>::new())?;
+                    Some(LiveRuntime::start(live, bundles, !covered).await?)
                 }
                 None => None,
             };

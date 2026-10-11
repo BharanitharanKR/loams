@@ -38,11 +38,16 @@
 //! past its CPU limit plus [`KILL_GRACE`]. A worker that crashes fails its
 //! call with `live_worker_crashed`. [`worker_main`] is the worker process's
 //! entry point (`loams live-worker`).
+//!
+//! [`JsLoader`] is the runtime of `loams-live`'s deployments (LV1 plan
+//! Task 6): it loads a deployment's bundle in either mode, and a bundle on
+//! isolated workers reports when they degrade.
 
 mod child;
 mod host;
 mod ipc;
 mod limits;
+mod loader;
 mod runtime;
 #[cfg(target_os = "linux")]
 mod sandbox_linux;
@@ -50,6 +55,7 @@ mod validators;
 mod worker;
 
 pub use child::worker_main;
+pub use loader::JsLoader;
 /// Who may call a function (D699).
 pub use loams_live::Visibility;
 /// A function's argument validator (`loams:server`'s `v`), shared with

@@ -50,6 +50,8 @@ seccompiler.workspace = true
 
 [dev-dependencies]
 loams-kv.workspace = true
+# The bundle store of the deployment tests (LV1 Task 6).
+loams-store.workspace = true
 # The suites run the TiKV cases too (with LOAMS_TEST_PD).
 loams-live = { workspace = true, features = ["tikv"] }
 # The validator vocabulary round trip (LV1 Task 4).

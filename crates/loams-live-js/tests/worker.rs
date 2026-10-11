@@ -339,3 +339,182 @@ async fn host_call_latency_recorded() {
         println!("  {line}");
     }
 }
+
+// ---- deployments on isolated workers (LV1 plan Task 6) ----
+
+/// The bundle store and engine of app `deployed` on `store`, loading
+/// bundles with `loader`.
+#[cfg(target_os = "linux")]
+async fn deployed_app(
+    store: &TestStore,
+    loader: std::sync::Arc<dyn loams_live::deploy::BundleLoader>,
+) -> loams_live::AppEngine {
+    let runner = loams_live::Runner::open(store.store(), &store.live_config("deployed"))
+        .await
+        .expect("the runner opens");
+    loams_live::AppEngine::open(
+        "deployed",
+        runner,
+        loams_live::deploy::Runtime {
+            bundles: loams_store::Store::in_memory(),
+            loader,
+        },
+    )
+    .await
+    .expect("the engine opens")
+}
+
+#[cfg(target_os = "linux")]
+fn deploy_request(bundle: &str) -> loams_live::deploy::DeployRequest {
+    loams_live::deploy::DeployRequest {
+        bundle: bundle.as_bytes().to_vec(),
+        schema: loams_live::schema::Schema::default(),
+        expected_active: None,
+        message: String::new(),
+        dry_run: false,
+    }
+}
+
+/// A deployment loaded by an isolated [`JsLoader`] runs its functions in
+/// sandboxed workers: the deploy validates the bundle in a worker, and the
+/// active deployment's mutations and queries run there.
+#[cfg(target_os = "linux")]
+async fn deployments_run_in_isolated_workers(store: TestStore) {
+    let loader = loams_live_js::JsLoader::with_workers(
+        isolated(JsConfig {
+            contexts: 1,
+            ..JsConfig::default()
+        }),
+        workers(),
+    );
+    let app = deployed_app(&store, std::sync::Arc::new(loader)).await;
+    let deployed = loams_live::deploy::deploy(&app, deploy_request(BUNDLE), "test")
+        .await
+        .expect("the deploy");
+    let insert = loams_live::deploy::resolve(&app, "w:insert").expect("w:insert");
+    assert_eq!(insert.deployment(), deployed.record.id);
+    let id = app
+        .runner()
+        .mutate(insert, obj(&[("body", s("hi"))]), None)
+        .await
+        .expect("a mutation in a worker")
+        .result;
+    let get = loams_live::deploy::resolve(&app, "w:get").expect("w:get");
+    let at = app.runner().store().now().await.expect("now");
+    let doc = app
+        .runner()
+        .query(&*get, obj(&[("id", id)]), at)
+        .await
+        .expect("a query in a worker")
+        .result;
+    assert_eq!(field(&doc, "body"), s("hi"));
+    // A bundle that fails in the worker fails the deploy, and the pointer
+    // stays.
+    let err = loams_live::deploy::deploy(
+        &app,
+        loams_live::deploy::DeployRequest {
+            expected_active: Some(deployed.record.id),
+            ..deploy_request("throw new Error('no');")
+        },
+        "test",
+    )
+    .await
+    .expect_err("a failing bundle");
+    // A bundle that throws at load is invalid (LV1 row T3-4).
+    assert!(matches!(err, LiveError::InvalidArgument(_)), "{err}");
+    assert!(err.to_string().contains("no"), "{err}");
+    assert_eq!(app.active(), Some(deployed.record.id));
+}
+#[cfg(target_os = "linux")]
+live_test!(deployments_run_in_isolated_workers);
+
+/// Five worker crashes within a minute mark the active deployment's record
+/// `degraded` (design §45 §3.1); its functions are still served.
+#[cfg(target_os = "linux")]
+async fn degraded_workers_mark_their_deployment_degraded(store: TestStore) {
+    use loams_live::deploy::{self, DeploymentState};
+
+    let keeping = std::sync::Arc::new(Keeping::default());
+    let app = deployed_app(&store, keeping.clone()).await;
+    let deployed = deploy::deploy(&app, deploy_request(BUNDLE), "test")
+        .await
+        .expect("the deploy");
+    let handle = keeping.last();
+    for _ in 0..5 {
+        expect_crash(
+            handle.probe(loams_live_js::Probe::OpenFile).await,
+            "a probe",
+        );
+    }
+    assert!(handle.degraded());
+    let mut state = DeploymentState::Active;
+    for _ in 0..100 {
+        let page = deploy::list_deployments(&app, deploy::PageRequest::default())
+            .await
+            .expect("the deployments");
+        state = page.items[0].state.clone();
+        if state == DeploymentState::Degraded {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert_eq!(state, DeploymentState::Degraded, "{}", deployed.record.id);
+    let ok = deploy::resolve(&app, "w:ok").expect("still resolved");
+    let at = app.runner().store().now().await.expect("now");
+    assert_eq!(
+        app.runner()
+            .query(&*ok, unit(), at)
+            .await
+            .expect("still served")
+            .result,
+        s("fine")
+    );
+}
+#[cfg(target_os = "linux")]
+live_test!(degraded_workers_mark_their_deployment_degraded);
+
+/// A loader that spawns isolated workers itself and keeps their handles,
+/// so a test can make them crash.
+#[cfg(target_os = "linux")]
+#[derive(Default)]
+struct Keeping {
+    handles: std::sync::Mutex<Vec<WorkerHandle>>,
+}
+
+#[cfg(target_os = "linux")]
+impl Keeping {
+    fn last(&self) -> WorkerHandle {
+        self.handles
+            .lock()
+            .expect("unpoisoned")
+            .last()
+            .cloned()
+            .expect("a loaded bundle")
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl loams_live::deploy::BundleLoader for Keeping {
+    fn load<'a>(
+        &'a self,
+        app: &'a str,
+        bundle: &'a [u8],
+    ) -> futures::future::BoxFuture<
+        'a,
+        Result<std::sync::Arc<dyn loams_live::deploy::LoadedBundle>, LiveError>,
+    > {
+        Box::pin(async move {
+            let config = isolated(JsConfig {
+                contexts: 1,
+                ..JsConfig::default()
+            });
+            let handle = workers().spawn(app, bundle, config).await?;
+            self.handles
+                .lock()
+                .expect("unpoisoned")
+                .push(handle.clone());
+            Ok(std::sync::Arc::new(loams_live_js::Bundle::from(handle))
+                as std::sync::Arc<dyn loams_live::deploy::LoadedBundle>)
+        })
+    }
+}

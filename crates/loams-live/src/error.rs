@@ -23,6 +23,11 @@ pub enum LiveError {
     /// change on a non-empty table, R1 plan Ruling 5).
     #[error("failed precondition: {0}")]
     FailedPrecondition(String),
+    /// A deploy whose `expected_active` is not the active deployment (LV1
+    /// plan Task 6, design §45 §3.3): `FAILED_PRECONDITION`, reason
+    /// `live_deploy_conflict`. The text names both deployments.
+    #[error("failed precondition: {0}")]
+    DeployConflict(String),
     /// A limit of [`Limits`](crate::Limits) was exceeded. `limit` is the
     /// field name of the limit.
     #[error("limit {limit} exceeded: {message}")]
@@ -99,9 +104,9 @@ impl LiveError {
             | LiveError::IsolationRequired
             | LiveError::IsolationUnavailable => pb::ErrorCode::ERROR_CODE_INVALID_ARGUMENT,
             LiveError::NotFound(_) => pb::ErrorCode::ERROR_CODE_NOT_FOUND,
-            LiveError::FailedPrecondition(_) | LiveError::JournalTrimmed { .. } => {
-                pb::ErrorCode::ERROR_CODE_FAILED_PRECONDITION
-            }
+            LiveError::FailedPrecondition(_)
+            | LiveError::DeployConflict(_)
+            | LiveError::JournalTrimmed { .. } => pb::ErrorCode::ERROR_CODE_FAILED_PRECONDITION,
             LiveError::LimitExceeded { .. } => pb::ErrorCode::ERROR_CODE_RESOURCE_EXHAUSTED,
             LiveError::Corrupt(_) | LiveError::Internal(_) => pb::ErrorCode::ERROR_CODE_INTERNAL,
             LiveError::FunctionError(_) | LiveError::WorkerCrashed(_) => {
@@ -129,6 +134,7 @@ impl LiveError {
     pub fn reason(&self) -> Option<&'static str> {
         match self {
             LiveError::BadCursor(_) => Some("live_bad_cursor"),
+            LiveError::DeployConflict(_) => Some("live_deploy_conflict"),
             LiveError::WorkerCrashed(_) => Some("live_worker_crashed"),
             _ => None,
         }

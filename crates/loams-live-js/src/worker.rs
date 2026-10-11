@@ -35,7 +35,7 @@ use futures::future::BoxFuture;
 use loams_live::{FnKind, Function, LiveError, LiveTxn, LiveValue, Visibility};
 use tokio::io::AsyncReadExt;
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
-use tokio::sync::Semaphore;
+use tokio::sync::{Semaphore, watch};
 
 use crate::host::HostOp;
 use crate::ipc::{
@@ -141,6 +141,7 @@ impl WorkerPool {
             idle: Mutex::new(Vec::new()),
             pids: Arc::new(Mutex::new(BTreeSet::new())),
             health: Mutex::new(Health::default()),
+            degraded: watch::Sender::new(false),
         });
         let (process, metas) = shared.start().await?;
         check_exports(metas.len())?;
@@ -205,6 +206,13 @@ impl WorkerHandle {
     /// deployment is degraded. It stays set; calls are still served.
     pub fn degraded(&self) -> bool {
         lock(&self.shared.health).degraded
+    }
+
+    /// A signal that turns `true` when the handle becomes
+    /// [degraded](Self::degraded) (LV1 plan Task 6 turns it into the
+    /// deployment's state).
+    pub fn degraded_signal(&self) -> watch::Receiver<bool> {
+        self.shared.degraded.subscribe()
     }
 
     /// How many workers have crashed (died, or broken the protocol).
@@ -293,6 +301,8 @@ struct Shared {
     idle: Mutex<Vec<Process>>,
     pids: Arc<Mutex<BTreeSet<u32>>>,
     health: Mutex<Health>,
+    /// Set once with `health.degraded`.
+    degraded: watch::Sender<bool>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -670,6 +680,7 @@ impl Shared {
         tracing::warn!(app = %self.app, crashes = health.total, "{message}");
         if !health.degraded && health.recent.len() >= DEGRADED_AFTER {
             health.degraded = true;
+            self.degraded.send_replace(true);
             tracing::error!(
                 app = %self.app,
                 crashes = health.recent.len(),

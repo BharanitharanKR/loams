@@ -509,7 +509,7 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
     ));
     let sessions = Sessions::new(
         subs.clone(),
-        Arc::new(deploy::resolve),
+        Arc::new(deploy::resolve_system),
         SessionConfig::default(),
         "checker".into(),
         shutdown.clone(),

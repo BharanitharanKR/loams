@@ -34,6 +34,7 @@ use loams_kv::{CommitMode, Snap, Store, Ts, Txn, TxnError, TxnOptions};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use sha2::{Digest, Sha256};
+use ulid::Ulid;
 
 use crate::catalog::{self, TableDef};
 use crate::cursor::{self, CursorKey};
@@ -107,6 +108,12 @@ pub trait Function: Send + Sync {
     /// Who may call it; public unless the function says otherwise.
     fn visibility(&self) -> Visibility {
         Visibility::Public
+    }
+    /// The deployment that serves it (LV1 plan Task 6): the nil ULID for
+    /// the built-in functions and for functions not served through a
+    /// deployment.
+    fn deployment(&self) -> Ulid {
+        Ulid::nil()
     }
     /// Runs the function in `txn` with `args`.
     fn call<'a>(
@@ -920,6 +927,11 @@ impl Runner {
         &self.inner.options
     }
 
+    /// The app's limits.
+    pub fn limits(&self) -> &Limits {
+        &self.inner.limits
+    }
+
     /// Exclusive admission for a change that must not race mutations
     /// (Task 13's index-changing `Deploy`, R1 plan row T9-1 and the review
     /// of #73): `None` while a mutation of this runner is in flight (the
@@ -1308,7 +1320,8 @@ fn no_app_record() -> LiveError {
     )
 }
 
-fn catalog_txn(op: &'static str, options: &RunnerOptions) -> TxnOptions {
+/// The options of a catalog transaction named `op`.
+pub(crate) fn catalog_txn(op: &'static str, options: &RunnerOptions) -> TxnOptions {
     let mut opts = TxnOptions::new(op);
     opts.commit_mode = Some(options.commit_mode);
     opts
@@ -1322,7 +1335,7 @@ fn lock(state: &Mutex<Attempts>) -> std::sync::MutexGuard<'_, Attempts> {
 
 /// A run body's result: a storage error goes back to the runner (which
 /// retries conflicts); any other stays in the value.
-fn lift<T>(r: Result<T, LiveError>) -> Result<Result<T, LiveError>, TxnError> {
+pub(crate) fn lift<T>(r: Result<T, LiveError>) -> Result<Result<T, LiveError>, TxnError> {
     match r {
         Ok(v) => Ok(Ok(v)),
         Err(e) => e.into_txn().map(Err),
@@ -1334,6 +1347,15 @@ async fn snapshot(store: &Store, at: Ts) -> Result<Snap, LiveError> {
         .snapshot(at)
         .await
         .map_err(|e| LiveError::Internal(format!("a snapshot: {e}")))
+}
+
+/// A snapshot of `store` at a fresh timestamp.
+pub(crate) async fn latest_snapshot(store: &Store) -> Result<Snap, LiveError> {
+    let at = store
+        .now()
+        .await
+        .map_err(|e| LiveError::Internal(format!("a timestamp: {e}")))?;
+    snapshot(store, at).await
 }
 
 #[cfg(test)]

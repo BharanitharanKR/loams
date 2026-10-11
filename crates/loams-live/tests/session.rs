@@ -253,14 +253,14 @@ async fn resume_sends_full_results_at_or_after_last_ts(store: TestStore) {
     ));
     let sessions = Sessions::new(
         subs,
-        Arc::new(deploy::resolve),
+        Arc::new(deploy::resolve_system),
         SessionConfig::default(),
         "1".into(),
         stop.clone(),
     );
     runner
         .mutate(
-            deploy::resolve(INSERT).expect("insert"),
+            deploy::resolve_system(INSERT).expect("insert"),
             obj(&[
                 ("table", LiveValue::Str("rooms".into())),
                 ("fields", obj(&[("n", LiveValue::I64(1))])),

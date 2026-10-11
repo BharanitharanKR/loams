@@ -330,6 +330,14 @@ impl Bundle {
         self.metas.to_vec()
     }
 
+    /// The isolated workers that serve the bundle, if it runs isolated.
+    pub fn workers(&self) -> Option<&WorkerHandle> {
+        match &self.exec {
+            Exec::Slots(_) => None,
+            Exec::Workers(handle) => Some(handle),
+        }
+    }
+
     /// The function `path` (`module:export`), or `None`.
     pub fn function(&self, path: &str) -> Option<Arc<dyn Function>> {
         match &self.exec {

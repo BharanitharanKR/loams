@@ -158,6 +158,8 @@ jobs:
               - "crates/loams-live*/**"
               # The transaction checker's elle (LV1 plan Task 2).
               - "crates/loams-sim/**"
+              # The bundle store of deployments (LV1 plan Task 6).
+              - "crates/loams-store/**"
               - "proto/loams/live/**"
             durable:
               - *toolchain

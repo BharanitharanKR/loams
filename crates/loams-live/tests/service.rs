@@ -438,7 +438,7 @@ async fn watch_resumes_after_reconnect(store: TestStore) {
 live_test!(watch_resumes_after_reconnect);
 
 /// Per-query errors stay inside the stream; call errors use Connect codes;
-/// `Deploy` is Task 13's.
+/// a server without a function runtime refuses `Deploy` (LV1 Task 6).
 async fn errors_map_to_connect_codes(store: TestStore) {
     let handle = server(&store, SessionConfig::default()).await;
     let c = client(&handle, false);
@@ -465,8 +465,8 @@ async fn errors_map_to_connect_codes(store: TestStore) {
     let e = c
         .deploy(pb::DeployRequest::default())
         .await
-        .expect_err("not yet");
-    assert_eq!(e.code, ErrorCode::Unimplemented);
+        .expect_err("this server has no function runtime");
+    assert_eq!(e.code, ErrorCode::FailedPrecondition);
     let dup = c
         .watch(pb::WatchRequest {
             start: Some(Start::Initial(Box::new(set(
