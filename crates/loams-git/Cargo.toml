@@ -26,6 +26,9 @@ loams-store.workspace = true
 prost.workspace = true
 # Retry jitter.
 rand.workspace = true
+# The `head` hint is a small JSON object (§36 §4.1).
+serde.workspace = true
+serde_json.workspace = true
 # `derived_blame` names hash the path.
 sha2.workspace = true
 thiserror.workspace = true
@@ -42,7 +45,8 @@ prost-build.workspace = true
 object_store.workspace = true
 proptest.workspace = true
 tempfile.workspace = true
-tokio.workspace = true
+# `test-util`: paused time for the fault proptests.
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true

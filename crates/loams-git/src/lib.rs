@@ -8,14 +8,17 @@
 //! and opens no listener.
 
 pub mod blob;
+pub mod clock;
 pub mod error;
 pub mod format;
 pub mod ids;
 pub mod limits;
 pub mod paths;
 mod retry;
+pub mod wal;
 
 pub use blob::{BlobError, BlobId, BlobStore, LpkWriter, Put, StoreBlobStore};
+pub use clock::{Clock, SystemClock};
 pub use error::IdError;
 pub use format::FormatError;
 pub use format::segment::{WalBatch, WalSegment};
@@ -24,3 +27,4 @@ pub use ids::{
     SecretId, Seq, SnapN, TraceParent, WsId, WsName,
 };
 pub use paths::RepoPaths;
+pub use wal::{Appended, Hint, StoreWalStore, WalError, WalStore};
