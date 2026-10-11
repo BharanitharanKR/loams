@@ -7,7 +7,7 @@
 import { Code, type Transport } from '@connectrpc/connect';
 import { NamespacePicker, PageHead } from '@loams/desktop-ui';
 import { graph } from '@loams/proto';
-import { Badge, Button, Empty, Notice } from '@loams/ui';
+import { Badge, Button, ComingSoon, Empty, isNotServed, Notice } from '@loams/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createGraphClient,
@@ -30,6 +30,7 @@ const NAMESPACES_KEY = 'loams.graph.namespaces';
 type Detected =
   | { state: 'loading' }
   | { state: 'error'; message: string }
+  | { state: 'not-served' }
   | { state: 'ready'; availability: GraphAvailability; variant?: string; server: string };
 
 export interface GraphPageProps {
@@ -58,7 +59,14 @@ export function GraphPage({ transport, openExternal, storage, namespace }: Graph
         const variant = availability === 'not_in_variant' ? await client.notInVariant() : undefined;
         if (live) setDetected({ state: 'ready', availability, variant, server: info.instanceId });
       } catch (e) {
-        if (live) setDetected({ state: 'error', message: toFailure(e).message });
+        if (!live) return;
+        const f = toFailure(e);
+        // A backend not served yet (a not-configured reason, unimplemented): coming soon.
+        setDetected(
+          isNotServed({ code: f.codeName, reason: f.reason })
+            ? { state: 'not-served' }
+            : { state: 'error', message: f.message },
+        );
       }
     })();
     return () => {
@@ -80,6 +88,14 @@ export function GraphPage({ transport, openExternal, storage, namespace }: Graph
         <p className="text-muted" role="status">
           Asking the server about Loams Graph…
         </p>
+      </div>
+    );
+  }
+  if (detected.state === 'not-served') {
+    return (
+      <div className="lc-page">
+        {head}
+        <ComingSoon feature="Graph" />
       </div>
     );
   }

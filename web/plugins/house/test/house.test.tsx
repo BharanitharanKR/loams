@@ -162,6 +162,40 @@ describe('analytics page', () => {
     expect(screen.queryByLabelText('SQL')).toBeNull();
   });
 
+  it('house_not_configured_shows_coming_soon_without_an_error', async () => {
+    // The engine lists House, but the House answers house_not_configured (the preview).
+    const notConfigured = () =>
+      new HouseError({
+        code: 'failed_precondition',
+        message: 'House is not configured on this engine',
+        reason: 'house_not_configured',
+        metadata: {},
+      });
+    const client = createMockHouseClient({ delayMs: 0 });
+    client.listDatabases = async () => {
+      throw notConfigured();
+    };
+    client.executeQuery = () => ({
+      [Symbol.asyncIterator]: () => ({
+        next: () => Promise.reject(notConfigured()),
+      }),
+    });
+    render(<HousePage client={client} />);
+    expect(await screen.findByText('Analytics — coming soon in a later preview')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByLabelText('SQL')).toBeNull();
+  });
+
+  it('an_unimplemented_house_probe_shows_coming_soon', async () => {
+    const client = createMockHouseClient({ delayMs: 0 });
+    client.available = async () => {
+      throw new HouseError({ code: 'unimplemented', message: 'not served', metadata: {} });
+    };
+    render(<HousePage client={client} />);
+    expect(await screen.findByText('Analytics — coming soon in a later preview')).toBeTruthy();
+    expect(screen.queryByText('Could not reach the server')).toBeNull();
+  });
+
   it('console_runs_read_only_by_default', async () => {
     const client = mount();
     await screen.findByLabelText('SQL');

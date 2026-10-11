@@ -3,6 +3,7 @@
 // call, the page's request must equal it.
 
 import { create, fromJson, type JsonObject } from '@bufbuild/protobuf';
+import { Code, ConnectError, createRouterTransport } from '@connectrpc/connect';
 import { validateManifest } from '@loams/console-host';
 import { graph, instance } from '@loams/proto';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -107,6 +108,19 @@ describe('detect', () => {
     mount();
     expect(await screen.findByRole('button', { name: /^movies/ })).toBeTruthy();
     expect(screen.queryByText(/not served|variant/)).toBeNull();
+  });
+
+  it('a backend not served yet is coming soon, not an error', async () => {
+    const transport = createRouterTransport(({ service }) => {
+      service(instance.InstanceService, {
+        getInstance: () => {
+          throw new ConnectError('not here yet', Code.Unimplemented);
+        },
+      });
+    });
+    render(<GraphPage transport={transport} openExternal={vi.fn()} storage={memoryStorage()} />);
+    expect(await screen.findByText('Graph — coming soon in a later preview')).toBeTruthy();
+    expect(screen.queryByText('Could not reach the server')).toBeNull();
   });
 });
 

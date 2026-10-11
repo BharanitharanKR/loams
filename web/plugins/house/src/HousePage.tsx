@@ -9,7 +9,17 @@
 // table functions, settings off the allowlist) are shown with their ClickHouse code.
 
 import { PageHead } from '@loams/desktop-ui';
-import { Badge, Button, Checkbox, Dialog, Empty, Notice, Select } from '@loams/ui';
+import {
+  Badge,
+  Button,
+  Checkbox,
+  ComingSoon,
+  Dialog,
+  Empty,
+  isNotServed,
+  Notice,
+  Select,
+} from '@loams/ui';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   type Cell,
@@ -44,11 +54,18 @@ export interface HousePageProps {
   sample?: boolean;
 }
 
-type Detected = 'loading' | 'available' | 'absent' | { error: string };
+/**
+ * Inside the workspace only the House's own word counts (house_not_configured): one
+ * method a server leaves unimplemented (ListDatabases, say) is not the whole page.
+ */
+const houseNotServed = (f: HouseFailure) => isNotServed({ reason: f.reason });
+
+type Detected = 'loading' | 'available' | 'absent' | 'not-served' | { error: string };
 
 export function HousePage({ client, sample }: HousePageProps) {
   const [detected, setDetected] = useState<Detected>('loading');
   const [tick, setTick] = useState(0);
+  const notServed = useCallback(() => setDetected('not-served'), []);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: tick retries on purpose
   useEffect(() => {
@@ -56,7 +73,11 @@ export function HousePage({ client, sample }: HousePageProps) {
     setDetected('loading');
     client.available().then(
       (ok) => live && setDetected(ok ? 'available' : 'absent'),
-      (e) => live && setDetected({ error: toFailure(e).message }),
+      (e) => {
+        if (!live) return;
+        const f = toFailure(e);
+        setDetected(isNotServed(f) ? 'not-served' : { error: f.message });
+      },
     );
     return () => {
       live = false;
@@ -96,7 +117,17 @@ export function HousePage({ client, sample }: HousePageProps) {
       </div>
     );
   }
-  return <Workspace client={client} sample={sample} />;
+  if (detected === 'not-served') {
+    // The engine lists House but answers house_not_configured (a preview without it):
+    // a feature to come, so no error and no sample data.
+    return (
+      <div className="lc-page">
+        {head}
+        <ComingSoon feature="Analytics" seed={33} />
+      </div>
+    );
+  }
+  return <Workspace client={client} sample={sample} onNotServed={notServed} />;
 }
 
 interface RunState {
@@ -108,7 +139,16 @@ interface RunState {
   maxRows: number;
 }
 
-function Workspace({ client, sample }: { client: HouseClient; sample?: boolean }) {
+function Workspace({
+  client,
+  sample,
+  onNotServed,
+}: {
+  client: HouseClient;
+  sample?: boolean;
+  /** The House answered house_not_configured: the page shows "coming soon" instead. */
+  onNotServed: () => void;
+}) {
   const ids = useId();
   const failureId = `${ids}-failure`;
   const [databases, setDatabases] = useState<Database[]>([]);
@@ -141,7 +181,9 @@ function Workspace({ client, sample }: { client: HouseClient; sample?: boolean }
         if (p.items.length && !p.items.some((d) => d.name === 'default'))
           setDatabase(p.items[0]?.name ?? 'default');
       },
-      () => undefined,
+      (e) => {
+        if (live && houseNotServed(toFailure(e))) onNotServed();
+      },
     );
     // The function list, fetched once through ExecuteQuery (§49 §18.3).
     (async () => {
@@ -173,7 +215,7 @@ function Workspace({ client, sample }: { client: HouseClient; sample?: boolean }
       // Leaving the page stops the function-list stream rather than reading it out.
       ac.abort();
     };
-  }, [client]);
+  }, [client, onNotServed]);
 
   const words = useMemo(() => [...KEYWORDS, ...functions], [functions]);
 
@@ -230,6 +272,10 @@ function Workspace({ client, sample }: { client: HouseClient; sample?: boolean }
         const f = toFailure(e);
         // A run that a newer one replaced reports nothing.
         if (abort.current !== c) return;
+        if (houseNotServed(f)) {
+          onNotServed();
+          return;
+        }
         if (f.reason === 'house_cancelled' || c.signal.aborted) {
           setNotice('Cancelled. The House stops the statement.');
         } else if (
@@ -253,7 +299,7 @@ function Workspace({ client, sample }: { client: HouseClient; sample?: boolean }
         setHistoryTick((t) => t + 1);
       }
     },
-    [client, database, settings, allowWrites],
+    [client, database, settings, allowWrites, onNotServed],
   );
 
   const cancel = () => {
@@ -270,7 +316,9 @@ function Workspace({ client, sample }: { client: HouseClient; sample?: boolean }
       setRun(undefined);
       setPlan(res.text);
     } catch (e) {
-      setFailure(toFailure(e));
+      const f = toFailure(e);
+      if (houseNotServed(f)) onNotServed();
+      else setFailure(f);
     }
   };
 
