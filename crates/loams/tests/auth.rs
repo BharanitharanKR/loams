@@ -66,7 +66,7 @@ impl Running {
         let reason = response
             .headers()
             .get("loams-auth-reason")
-            .map(|v| v.to_str().unwrap().to_owned());
+            .map(|v| v.to_str().expect("test fixture").to_owned());
         let body = response.json().await.unwrap_or(Value::Null);
         (status, reason, body)
     }
@@ -81,7 +81,7 @@ async fn grpc_status(
     let client = reqwest::Client::builder()
         .http2_prior_knowledge()
         .build()
-        .unwrap();
+        .expect("test fixture");
     let mut request = client
         .post(format!("http://{addr}{path}"))
         .header("content-type", "application/grpc")
@@ -95,7 +95,7 @@ async fn grpc_status(
         response
             .headers()
             .get(name)
-            .map(|v| v.to_str().unwrap().to_owned())
+            .map(|v| v.to_str().expect("test fixture").to_owned())
             .unwrap_or_default()
     };
     (header("grpc-status"), header("loams-auth-reason"))
@@ -110,7 +110,7 @@ async fn http_get(url: &str, headers: &[(&str, &str)]) -> (u16, String) {
     let reason = response
         .headers()
         .get("loams-auth-reason")
-        .map(|v| v.to_str().unwrap().to_owned())
+        .map(|v| v.to_str().expect("test fixture").to_owned())
         .unwrap_or_default();
     (response.status().as_u16(), reason)
 }
@@ -118,7 +118,7 @@ async fn http_get(url: &str, headers: &[(&str, &str)]) -> (u16, String) {
 fn keys_file(dir: &TempDir) -> (String, std::path::PathBuf) {
     let (key, line) = loams::auth::api_key::new_key("test");
     let path = dir.path().join("api-keys");
-    std::fs::write(&path, format!("# test keys\n{line}\n")).unwrap();
+    std::fs::write(&path, format!("# test keys\n{line}\n")).expect("test fixture");
     (key, path)
 }
 
@@ -283,18 +283,21 @@ struct Issuer {
 }
 
 fn ed25519() -> (EncodingKey, String) {
-    let pkcs8 = Ed25519KeyPair::generate_pkcs8(&ring::rand::SystemRandom::new()).unwrap();
-    let pair = Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).unwrap();
+    let pkcs8 =
+        Ed25519KeyPair::generate_pkcs8(&ring::rand::SystemRandom::new()).expect("test fixture");
+    let pair = Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).expect("test fixture");
     let x = URL_SAFE_NO_PAD.encode(pair.public_key().as_ref());
     (EncodingKey::from_ed_der(pkcs8.as_ref()), x)
 }
 
 impl Issuer {
     async fn start() -> Self {
-        let listener = tokio::net::TcpListener::bind(LOOPBACK0).await.unwrap();
+        let listener = tokio::net::TcpListener::bind(LOOPBACK0)
+            .await
+            .expect("test fixture");
         let url = format!(
             "http://{}/application/o/loams/",
-            listener.local_addr().unwrap()
+            listener.local_addr().expect("test fixture")
         );
         let (signer, x) = ed25519();
         let (other, _) = ed25519();
@@ -310,7 +313,7 @@ impl Issuer {
                 axum::routing::get(move || async move { axum::Json(jwks) }),
             );
         let task = tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
+            axum::serve(listener, app).await.expect("test fixture");
         });
         Self {
             url,
@@ -323,7 +326,7 @@ impl Issuer {
     fn token(&self, edit: impl FnOnce(&mut Value, &mut Header) -> bool) -> String {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .expect("test fixture")
             .as_secs();
         let mut claims = json!({
             "iss": self.url, "aud": AUDIENCE, "sub": "user-1", "exp": now + 300, "iat": now,
@@ -333,7 +336,7 @@ impl Issuer {
         header.kid = Some("k1".into());
         let use_other = edit(&mut claims, &mut header);
         let key = if use_other { &self.other } else { &self.signer };
-        jsonwebtoken::encode(&header, &claims, key).unwrap()
+        jsonwebtoken::encode(&header, &claims, key).expect("test fixture")
     }
 }
 
@@ -624,6 +627,52 @@ async fn tailscale_identities_count_only_on_the_serve_target() {
     assert_eq!((status, reason.as_str()), (403, "principal_not_allowed"));
     let (status, reason, _) = who_am_i(target, None).await;
     assert_eq!((status, reason.as_str()), (401, "token_missing"));
+    // The identity there is ambient: a foreign page gets no CORS and is
+    // refused; the hosted console (the default origin) gets both.
+    let from = |origin: &'static str| async move {
+        reqwest::Client::new()
+            .post(format!(
+                "http://{target}/loams.instance.v1.InstanceService/WhoAmI"
+            ))
+            .header("content-type", "application/json")
+            .header("connect-protocol-version", "1")
+            .header("origin", origin)
+            .header("tailscale-user-login", "me@example.com")
+            .body("{}")
+            .send()
+            .await
+            .expect("call")
+    };
+    let foreign = from("https://evil.example").await;
+    assert_eq!(foreign.status().as_u16(), 403);
+    assert!(
+        foreign
+            .headers()
+            .get("access-control-allow-origin")
+            .is_none()
+    );
+    let preflight = reqwest::Client::new()
+        .request(
+            reqwest::Method::OPTIONS,
+            format!("http://{target}/loams.instance.v1.InstanceService/WhoAmI"),
+        )
+        .header("origin", "https://evil.example")
+        .header("access-control-request-method", "POST")
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        preflight
+            .headers()
+            .get("access-control-allow-origin")
+            .is_none()
+    );
+    let console = from("https://console.loams.dev").await;
+    assert_eq!(console.status().as_u16(), 200);
+    assert_eq!(
+        console.headers()["access-control-allow-origin"],
+        "https://console.loams.dev"
+    );
     running.server.shutdown().await.unwrap();
 
     // The serve target must be loopback.

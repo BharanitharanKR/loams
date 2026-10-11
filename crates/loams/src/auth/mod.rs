@@ -246,7 +246,10 @@ pub struct AuthConfig {
     /// `LOAMS_CORS_ORIGINS`: the browser origins (the console's) allowed to
     /// call the engine cross-origin. Empty: any origin when authentication
     /// is on (credentials are bearer headers, never cookies, so CORS guards
-    /// nothing a page could not already do), none when it is off.
+    /// nothing a page could not already do), none when it is off. The
+    /// `tailscale serve` target is the exception: its identity is ambient,
+    /// so it takes only these origins (empty: the hosted console's) and
+    /// refuses a request from any other.
     pub cors_origins: Vec<String>,
 }
 
@@ -441,6 +444,9 @@ pub struct Auth {
     tailscale: Option<tailscale::TailscaleAuth>,
     enforced: bool,
     cors: Cors,
+    /// CORS on the `tailscale serve` target: never any origin, since the
+    /// tailnet identity there is ambient, like a cookie.
+    tailscale_cors: Cors,
 }
 
 impl fmt::Debug for Auth {
@@ -494,15 +500,21 @@ impl Auth {
                 authenticators.push(Arc::new(oidc::OidcAuthenticator::new(oidc.clone())?));
             }
         }
-        let cors = match (config.enforced(), config.cors_origins.is_empty()) {
+        let origins = config.cors_origins.iter().cloned().collect::<BTreeSet<_>>();
+        let cors = match (config.enforced(), origins.is_empty()) {
             (true, true) => Cors::any(),
-            _ => Cors::new(config.cors_origins.iter().cloned().collect::<BTreeSet<_>>()),
+            _ => Cors::new(origins.clone()),
+        };
+        let tailscale_cors = match origins.is_empty() {
+            true => Cors::new([tailscale::DEFAULT_CONSOLE_ORIGIN.to_owned()].into()),
+            false => Cors::new(origins),
         };
         Ok(Arc::new(Self {
             authenticators,
             tailscale,
             enforced: config.enforced(),
             cors,
+            tailscale_cors,
         }))
     }
 
@@ -516,6 +528,7 @@ impl Auth {
             tailscale: None,
             enforced: true,
             cors: Cors::new(cors_origins),
+            tailscale_cors: Cors::default(),
         })
     }
 
@@ -526,6 +539,7 @@ impl Auth {
             tailscale: None,
             enforced: false,
             cors: Cors::new(BTreeSet::new()),
+            tailscale_cors: Cors::default(),
         })
     }
 
@@ -535,6 +549,10 @@ impl Auth {
 
     pub(crate) fn tailscale(&self) -> Option<&tailscale::TailscaleAuth> {
         self.tailscale.as_ref()
+    }
+
+    pub(crate) fn tailscale_cors(&self) -> &Cors {
+        &self.tailscale_cors
     }
 
     pub(crate) fn cors(&self) -> &Cors {

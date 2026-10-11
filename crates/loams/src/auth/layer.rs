@@ -15,7 +15,10 @@
 //! included, carries `Access-Control-Allow-Origin`.
 //!
 //! Tailscale identity headers are stripped on every listener but the
-//! `tailscale serve` target ([`AuthLayerState::tailscale_target`]).
+//! `tailscale serve` target ([`AuthLayerState::tailscale_target`]). There
+//! the identity is ambient (like a cookie), so CORS never allows any origin:
+//! only `LOAMS_CORS_ORIGINS` (empty: the hosted console) and the target's
+//! own host, and a request from any other origin is refused outright.
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -130,7 +133,10 @@ async fn guard(State(state): State<AuthLayerState>, mut request: Request, next: 
         .then(|| tailscale::identity(request.headers()))
         .flatten();
     tailscale::strip(request.headers_mut());
-    let cors = state.auth.cors();
+    let cors = match state.trust_tailscale {
+        true => state.auth.tailscale_cors(),
+        false => state.auth.cors(),
+    };
     let origin = request
         .headers()
         .get(header::ORIGIN)
@@ -140,6 +146,21 @@ async fn guard(State(state): State<AuthLayerState>, mut request: Request, next: 
         .as_deref()
         .filter(|o| cors.allows(o))
         .map(str::to_owned);
+    // On the serve target, a foreign page must not ride the ambient tailnet
+    // identity, not even with a request that skips the preflight.
+    if state.trust_tailscale
+        && let Some(o) = origin.as_deref()
+        && allowed_origin.is_none()
+        && !same_host(o, request.headers())
+    {
+        return refuse(
+            request.headers(),
+            &AuthError::forbidden(
+                reason::CORS_ORIGIN_NOT_ALLOWED,
+                "this origin is not in LOAMS_CORS_ORIGINS",
+            ),
+        );
+    }
     let with_cors = |mut response: Response| {
         if let Some(origin) = &allowed_origin {
             add_cors(response.headers_mut(), origin);
@@ -203,6 +224,15 @@ async fn guard(State(state): State<AuthLayerState>, mut request: Request, next: 
             with_cors(refuse(request.headers(), &err))
         }
     }
+}
+
+/// Whether `origin` is the request's own host (a page the engine serves).
+fn same_host(origin: &str, headers: &HeaderMap) -> bool {
+    let host = headers.get(header::HOST).and_then(|v| v.to_str().ok());
+    let origin_host = origin
+        .split_once("://")
+        .map(|(_, rest)| rest.trim_end_matches('/'));
+    matches!((host, origin_host), (Some(h), Some(o)) if h.eq_ignore_ascii_case(o))
 }
 
 fn credential_in_query(query: Option<&str>) -> bool {

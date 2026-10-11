@@ -11,6 +11,12 @@
 //! them ([`strip`]), so a request that reaches the main port with a forged
 //! login is a request without a credential: `401`.
 //!
+//! The tailnet identity is ambient: `tailscale serve` adds it to whatever
+//! the user's browser sends, as a cookie would be. So the serve target
+//! takes no request from a browser origin outside `LOAMS_CORS_ORIGINS`
+//! (empty: [`DEFAULT_CONSOLE_ORIGIN`]) or its own host, and answers CORS
+//! for those origins only; any other site gets `403`.
+//!
 //! `LOAMS_TAILSCALE_ALLOWED_USERS` (logins, case-insensitive) narrows who is
 //! admitted; without it, every user the tailnet's ACLs let reach the node.
 
@@ -23,6 +29,10 @@ use super::{AuthError, Principal, PrincipalKind, reason};
 
 /// The default `tailscale serve` target.
 pub const DEFAULT_LISTEN: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 7781);
+
+/// The browser origin the `tailscale serve` target accepts when
+/// `LOAMS_CORS_ORIGINS` is empty: the hosted console.
+pub const DEFAULT_CONSOLE_ORIGIN: &str = "https://console.loams.dev";
 
 /// The headers `tailscale serve` sets.
 pub const LOGIN_HEADER: &str = "tailscale-user-login";
