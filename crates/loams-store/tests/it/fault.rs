@@ -253,3 +253,52 @@ async fn a_fault_can_target_a_later_call() {
     assert_eq!(faults.pending(Op::Get), 0);
     store.get("a").await.unwrap();
 }
+
+#[tokio::test]
+async fn faulty_store_injects_on_new_ops() {
+    use futures::StreamExt;
+
+    let (faults, store) = faulty();
+    let body = || futures::stream::iter([Ok(Bytes::from_static(b"pack"))]).boxed();
+
+    // Multipart: an error writes nothing; a lost acknowledgement completes the upload.
+    faults.inject(Op::PutMultipart, Fault::Error);
+    let err = store.put_multipart("m", body(), 1).await.unwrap_err();
+    assert!(matches!(err, StoreError::Backend(_)), "got {err:?}");
+    assert!(matches!(
+        store.head("m").await.unwrap_err(),
+        StoreError::NotFound { .. }
+    ));
+    faults.inject(Op::PutMultipart, Fault::ErrorAfterApply);
+    let err = store.put_multipart("m", body(), 1).await.unwrap_err();
+    assert!(matches!(err, StoreError::Backend(_)), "got {err:?}");
+    assert_eq!(store.get("m").await.unwrap().0, Bytes::from_static(b"pack"));
+    assert_eq!(faults.calls(Op::PutMultipart), 2);
+
+    // Copy: the same two shapes.
+    faults.inject(Op::Copy, Fault::Error);
+    let err = store.copy("m", "c").await.unwrap_err();
+    assert!(matches!(err, StoreError::Backend(_)), "got {err:?}");
+    assert!(matches!(
+        store.head("c").await.unwrap_err(),
+        StoreError::NotFound { .. }
+    ));
+    faults.inject(Op::Copy, Fault::ErrorAfterApply);
+    let err = store.copy("m", "c").await.unwrap_err();
+    assert!(matches!(err, StoreError::Backend(_)), "got {err:?}");
+    assert_eq!(store.get("c").await.unwrap().0, Bytes::from_static(b"pack"));
+    assert_eq!(faults.calls(Op::Copy), 2);
+
+    // A paged listing is a list.
+    let lists = faults.calls(Op::List);
+    faults.inject(Op::List, Fault::Error);
+    let err = store.list_page("", None, 10).await.unwrap_err();
+    assert!(matches!(err, StoreError::Backend(_)), "got {err:?}");
+    let resumed = store.list_page("", Some("c"), 10).await.unwrap();
+    assert_eq!(resumed.len(), 1);
+    assert_eq!(resumed[0].path, "m");
+    assert_eq!(faults.calls(Op::List), lists + 2);
+
+    // Neither new op is a plain PUT.
+    assert_eq!(faults.calls(Op::Put), 0);
+}

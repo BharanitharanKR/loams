@@ -13,7 +13,7 @@ use futures::stream::BoxStream;
 use object_store::path::Path;
 use object_store::{
     CopyOptions, GetOptions, GetResult, ListResult, MultipartUpload, ObjectMeta, ObjectStore,
-    PutMode, PutMultipartOptions, PutOptions, PutPayload, PutResult,
+    PutMode, PutMultipartOptions, PutOptions, PutPayload, PutResult, UploadPart,
 };
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -24,13 +24,22 @@ use rand_chacha::ChaCha8Rng;
 /// write ([`Store::put_if_absent`](crate::Store::put_if_absent)),
 /// [`Op::PutIfMatch`] a compare-and-swap write
 /// ([`Store::put_if_match`](crate::Store::put_if_match)). [`Op::Put`]
-/// covers *every* PUT: a fault queued for `Put` applies to the next PUT of
-/// any mode, and `calls(Put)` counts them all.
+/// covers *every* single-request PUT: a fault queued for `Put` applies to the
+/// next PUT of any mode, and `calls(Put)` counts them all. A multipart upload
+/// is [`Op::PutMultipart`] and a server-side copy [`Op::Copy`], never `Put`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Op {
     Put,
     PutCreate,
     PutIfMatch,
+    /// A multipart upload ([`Store::put_multipart`](crate::Store::put_multipart)),
+    /// counted once per upload. [`Fault::ErrorAfterApply`] completes the
+    /// upload and then fails its completion; the other faults fail it before
+    /// any part is sent.
+    PutMultipart,
+    /// A server-side copy between two paths ([`Store::copy`](crate::Store::copy);
+    /// a copy onto itself is a GET and a PUT instead).
+    Copy,
     /// Covers [`Store::get`](crate::Store::get), [`Store::get_range`](crate::Store::get_range)
     /// and [`Store::head`](crate::Store::head): `object_store` routes all three through
     /// `get_opts`, so a fault queued for `Get` applies to any of them.
@@ -105,7 +114,8 @@ struct Rules {
 /// Queued faults are consumed in FIFO order per [`Op`] (a mode-specific PUT
 /// queue before the [`Op::Put`] queue); calls with no queued fault may draw a
 /// random fault from the store's [`FaultRates`] (none by default), and
-/// otherwise pass through. Multipart uploads and copies always pass through.
+/// otherwise pass through. The parts of a multipart upload are not faulted
+/// one by one: the upload is one [`Op::PutMultipart`].
 pub struct FaultyStore {
     inner: Arc<dyn ObjectStore>,
     rules: Arc<Mutex<Rules>>,
@@ -313,7 +323,18 @@ impl ObjectStore for FaultyStore {
         location: &Path,
         opts: PutMultipartOptions,
     ) -> object_store::Result<Box<dyn MultipartUpload>> {
-        self.inner.put_multipart_opts(location, opts).await
+        match self.next_fault(&[Op::PutMultipart]) {
+            None => self.inner.put_multipart_opts(location, opts).await,
+            Some(Fault::Delay(delay)) => {
+                tokio::time::sleep(delay).await;
+                self.inner.put_multipart_opts(location, opts).await
+            }
+            Some(Fault::ErrorAfterApply) => {
+                let inner = self.inner.put_multipart_opts(location, opts).await?;
+                Ok(Box::new(LostCompletion { inner }))
+            }
+            Some(Fault::Error | Fault::Precondition) => Err(injected(Op::PutMultipart)),
+        }
     }
 
     async fn get_opts(
@@ -394,6 +415,40 @@ impl ObjectStore for FaultyStore {
         to: &Path,
         options: CopyOptions,
     ) -> object_store::Result<()> {
-        self.inner.copy_opts(from, to, options).await
+        match self.next_fault(&[Op::Copy]) {
+            None => self.inner.copy_opts(from, to, options).await,
+            Some(Fault::Delay(delay)) => {
+                tokio::time::sleep(delay).await;
+                self.inner.copy_opts(from, to, options).await
+            }
+            Some(Fault::ErrorAfterApply) => {
+                self.inner.copy_opts(from, to, options).await?;
+                Err(injected(Op::Copy))
+            }
+            Some(Fault::Error | Fault::Precondition) => Err(injected(Op::Copy)),
+        }
+    }
+}
+
+/// A multipart upload whose completion applies and then reports failure: the
+/// lost acknowledgement of [`Fault::ErrorAfterApply`] on [`Op::PutMultipart`].
+#[derive(Debug)]
+struct LostCompletion {
+    inner: Box<dyn MultipartUpload>,
+}
+
+#[async_trait]
+impl MultipartUpload for LostCompletion {
+    fn put_part(&mut self, data: PutPayload) -> UploadPart {
+        self.inner.put_part(data)
+    }
+
+    async fn complete(&mut self) -> object_store::Result<PutResult> {
+        self.inner.complete().await?;
+        Err(injected(Op::PutMultipart))
+    }
+
+    async fn abort(&mut self) -> object_store::Result<()> {
+        self.inner.abort().await
     }
 }

@@ -15,12 +15,16 @@ pub enum StoreError {
     InvalidPath(String),
     #[error("object store error: {0}")]
     Backend(#[source] object_store::Error),
+    /// The body stream of a [`Store::put_multipart`](crate::Store::put_multipart)
+    /// failed; the upload was aborted.
+    #[error("upload body failed: {0}")]
+    Body(#[source] std::io::Error),
 }
 
 impl StoreError {
     /// Whether retrying the whole operation, after re-reading anything it depends on, may
     /// succeed (plan M1.1 ruling 21): Backend, AlreadyExists and PreconditionFailed are; NotFound,
-    /// NotSupported, InvalidUrl and InvalidPath are not.
+    /// NotSupported, InvalidUrl, InvalidPath and Body (the caller's own stream failed) are not.
     pub fn is_retryable(&self) -> bool {
         match self {
             StoreError::Backend(_)
@@ -29,7 +33,8 @@ impl StoreError {
             StoreError::NotFound { .. }
             | StoreError::NotSupported(_)
             | StoreError::InvalidUrl(_)
-            | StoreError::InvalidPath(_) => false,
+            | StoreError::InvalidPath(_)
+            | StoreError::Body(_) => false,
         }
     }
 }

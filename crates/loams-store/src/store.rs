@@ -1,16 +1,20 @@
 //! Object store handles: the backend-agnostic surface every Loams crate
 //! writes through, and the object metadata it reads back.
 
+use std::cmp::Ordering;
+use std::collections::BinaryHeap;
+use std::io;
 use std::ops::Range;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use futures::TryStreamExt;
+use futures::stream::BoxStream;
+use futures::{StreamExt, TryStreamExt};
 use object_store::memory::InMemory;
 use object_store::path::Path;
 use object_store::{
-    GetOptions, GetRange, ObjectStore, ObjectStoreExt, PutMode, PutOptions, PutPayload,
-    UpdateVersion,
+    GetOptions, GetRange, ObjectStore, ObjectStoreExt, ObjectStoreScheme, PutMode, PutOptions,
+    PutPayload, UpdateVersion, WriteMultipart,
 };
 
 use crate::error::{StoreError, map_err};
@@ -52,12 +56,39 @@ pub struct ObjectInfo {
 #[derive(Clone, Debug)]
 pub struct Store {
     inner: Arc<dyn ObjectStore>,
+    /// Whether the backend lists keys in lexicographic order, so a paged
+    /// listing can stop after its page (GT1 Task 0, T0-3).
+    sorted_listing: bool,
 }
 
 impl Store {
+    /// The smallest part [`Store::put_multipart`] sends, except the last: S3
+    /// and the stores that copy its API refuse smaller parts.
+    pub const MIN_PART_SIZE: usize = 5 * 1024 * 1024;
+
+    /// How many parts of one [`Store::put_multipart`] may be uploading before
+    /// it reads more of the body.
+    pub const PARTS_IN_FLIGHT: usize = 4;
+
     /// Wraps an existing object store.
+    ///
+    /// `object_store` promises no listing order, so the store is assumed to
+    /// list in any order (see [`Store::with_sorted_listing`]).
     pub fn new(inner: Arc<dyn ObjectStore>) -> Self {
-        Self { inner }
+        Self {
+            inner,
+            sorted_listing: false,
+        }
+    }
+
+    /// Declares whether the backend lists keys in lexicographic order.
+    ///
+    /// [`Store::list_page`] is correct either way; with a sorted backend it
+    /// reads only one page of the listing instead of the whole tail.
+    /// [`Store::from_url`] and [`Store::in_memory`] set this themselves.
+    pub fn with_sorted_listing(mut self, sorted: bool) -> Self {
+        self.sorted_listing = sorted;
+        self
     }
 
     /// An in-memory store, for tests and `loams dev`.
@@ -67,7 +98,7 @@ impl Store {
     /// pointer) will find those objects missing after a restart; use a
     /// `file://` store where state must survive restarts.
     pub fn in_memory() -> Self {
-        Self::new(Arc::new(InMemory::new()))
+        Self::new(Arc::new(InMemory::new())).with_sorted_listing(true)
     }
 
     /// Opens a store from a URL such as `s3://bucket/prefix`, `gs://bucket`,
@@ -86,6 +117,18 @@ impl Store {
         V: Into<String>,
     {
         let parsed = url::Url::parse(url).map_err(|e| StoreError::InvalidUrl(e.to_string()))?;
+        // S3, GCS and Azure list keys in lexicographic order, and so does the
+        // in-memory store; a local directory and WebDAV do not.
+        let sorted = matches!(
+            ObjectStoreScheme::parse(&parsed),
+            Ok((
+                ObjectStoreScheme::Memory
+                    | ObjectStoreScheme::AmazonS3
+                    | ObjectStoreScheme::GoogleCloudStorage
+                    | ObjectStoreScheme::MicrosoftAzure,
+                _
+            ))
+        );
         if parsed.scheme() == "file" {
             let dir = parsed
                 .to_file_path()
@@ -104,7 +147,7 @@ impl Store {
         } else {
             Arc::new(object_store::prefix::PrefixStore::new(store, prefix))
         };
-        Ok(Self::new(store))
+        Ok(Self::new(store).with_sorted_listing(sorted))
     }
 
     /// The underlying object store, for integrations that need it directly.
@@ -234,6 +277,125 @@ impl Store {
         }
     }
 
+    /// Writes `body` to `path` as a multipart upload, replacing any existing
+    /// object, and returns the new object's version.
+    ///
+    /// Parts are `part_size` bytes (raised to [`Store::MIN_PART_SIZE`]), the
+    /// last one shorter. The next body chunk is read only once fewer than
+    /// [`Store::PARTS_IN_FLIGHT`] parts are uploading, so memory stays near
+    /// that many parts plus one chunk.
+    /// The object appears only when the upload completes. A failed body
+    /// ([`StoreError::Body`]) or a failed part aborts the upload, so the call
+    /// leaves no object and no parts behind. A failed completion is aborted
+    /// too, but its outcome is unknown, as with any lost acknowledgement: the
+    /// object may exist.
+    pub async fn put_multipart(
+        &self,
+        path: &str,
+        mut body: BoxStream<'static, io::Result<Bytes>>,
+        part_size: usize,
+    ) -> Result<ObjectVersion, StoreError> {
+        let location = parse_path(path)?;
+        let upload = self
+            .inner
+            .put_multipart(&location)
+            .await
+            .map_err(|e| map_err(path, e))?;
+        let mut upload =
+            WriteMultipart::new_with_chunk_size(upload, part_size.max(Self::MIN_PART_SIZE));
+        let failure = loop {
+            let chunk = match body.next().await {
+                None => break None,
+                Some(Ok(chunk)) => chunk,
+                Some(Err(e)) => break Some(StoreError::Body(e)),
+            };
+            if let Err(e) = upload.wait_for_capacity(Self::PARTS_IN_FLIGHT).await {
+                break Some(map_err(path, e));
+            }
+            upload.put(chunk);
+        };
+        match failure {
+            None => {
+                let result = upload.finish().await.map_err(|e| map_err(path, e))?;
+                Ok(ObjectVersion {
+                    e_tag: result.e_tag,
+                    version: result.version,
+                })
+            }
+            Some(err) => {
+                // The upload's own failure is the one to report; an abort that
+                // also fails leaves parts the store's lifecycle rules expire.
+                if let Err(abort) = upload.abort().await {
+                    tracing::warn!(path, error = %abort, "aborting a failed multipart upload also failed");
+                }
+                Err(err)
+            }
+        }
+    }
+
+    /// Copies the object at `from` to `to`, replacing any object there.
+    ///
+    /// Distinct paths use the store's server-side copy. Copying an object
+    /// onto itself refreshes its last-modified time instead: neither S3 (which
+    /// refuses a self-copy without a metadata change) nor a local directory
+    /// (whose self-copy is a no-op) does that with a copy, so the object is
+    /// read and its bytes written back (GT1 Task 0, T0-4). An overwrite that
+    /// races the refresh can be lost, so refresh only content-named objects.
+    pub async fn copy(&self, from: &str, to: &str) -> Result<(), StoreError> {
+        if from == to {
+            let (data, _) = self.get(from).await?;
+            self.put(to, data).await?;
+            return Ok(());
+        }
+        let source = parse_path(from)?;
+        let target = parse_path(to)?;
+        self.inner
+            .copy(&source, &target)
+            .await
+            .map_err(|e| map_err(from, e))
+    }
+
+    /// Lists up to `limit` objects under `prefix` (recursively) whose paths
+    /// sort strictly after `after`, sorted by path.
+    ///
+    /// Passing the last path of one page as `after` resumes with the next;
+    /// `after` need not name an object. Memory holds at most `limit` entries
+    /// on any backend; a backend that lists in order is read only as far as
+    /// the page (see [`Store::with_sorted_listing`]).
+    pub async fn list_page(
+        &self,
+        prefix: &str,
+        after: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<ObjectInfo>, StoreError> {
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
+        let prefix_path = if prefix.is_empty() {
+            None
+        } else {
+            Some(parse_path(prefix)?)
+        };
+        let mut listed = match after {
+            Some(after) => self
+                .inner
+                .list_with_offset(prefix_path.as_ref(), &parse_path(after)?),
+            None => self.inner.list(prefix_path.as_ref()),
+        };
+        // A max-heap of the `limit` smallest paths seen so far.
+        let mut page: BinaryHeap<ByPath> = BinaryHeap::new();
+        while let Some(meta) = listed.try_next().await.map_err(|e| map_err(prefix, e))? {
+            page.push(ByPath(to_info(&meta)));
+            if page.len() > limit {
+                page.pop();
+            }
+            if self.sorted_listing && page.len() == limit {
+                break;
+            }
+        }
+        Ok(page.into_sorted_vec().into_iter().map(|e| e.0).collect())
+    }
+
     /// Lists all objects under `prefix` (recursively), sorted by path.
     ///
     /// An empty `prefix` lists the whole store.
@@ -252,6 +414,29 @@ impl Store {
             .map_err(|e| map_err(prefix, e))?;
         infos.sort_by(|a, b| a.path.cmp(&b.path));
         Ok(infos)
+    }
+}
+
+/// An [`ObjectInfo`] ordered by its path alone, for [`Store::list_page`]'s heap.
+struct ByPath(ObjectInfo);
+
+impl PartialEq for ByPath {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.path == other.0.path
+    }
+}
+
+impl Eq for ByPath {}
+
+impl PartialOrd for ByPath {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ByPath {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.path.cmp(&other.0.path)
     }
 }
 
