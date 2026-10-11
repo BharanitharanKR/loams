@@ -43,3 +43,5 @@
       name: '@loams/plugin-desktop-agentd'
     - id: canvas
       name: '@loams/plugin-canvas'
+    - id: metrics
+      name: '@loams/plugin-metrics'

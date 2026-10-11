@@ -22,6 +22,7 @@ import graphPkg from '@loams/plugin-graph/package.json';
 import jobsPkg from '@loams/plugin-jobs/package.json';
 import housePkg from '@loams/plugin-house/package.json';
 import livePkg from '@loams/plugin-live/package.json';
+import metricsPkg from '@loams/plugin-metrics/package.json';
 import overviewPkg from '@loams/plugin-overview/package.json';
 import postgresPkg from '@loams/plugin-postgres/package.json';
 import sqlPkg from '@loams/plugin-sql/package.json';
@@ -52,6 +53,7 @@ export const desktopModules: typeof modules = {
   '@loams/plugin-sql': () => import('@loams/plugin-sql'),
   '@loams/plugin-desktop-agentd': () => import('@loams/plugin-desktop-agentd'),
   '@loams/plugin-canvas': () => import('@loams/plugin-canvas'),
+  '@loams/plugin-metrics': () => import('@loams/plugin-metrics'),
 };
 /** Their package.json manifests. */
 export const desktopManifests: unknown[] = [
@@ -74,6 +76,7 @@ export const desktopManifests: unknown[] = [
   sqlPkg,
   desktopAgentdPkg,
   canvasPkg,
+  metricsPkg,
 ];
 
 export async function startDesktop(

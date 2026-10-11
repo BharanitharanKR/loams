@@ -1,4 +1,5 @@
 import {
+  Activity,
   Boxes,
   Circle,
   Cloud,
@@ -42,6 +43,7 @@ const ICONS: Record<string, LucideIcon> = {
   namespaces: Boxes,
   deployments: Rocket,
   canvas: Shapes,
+  metrics: Activity,
 };
 
 export const ICON_NAMES = Object.keys(ICONS);

@@ -39,6 +39,7 @@
     "@loams/plugin-identity": "workspace:*",
     "@loams/plugin-jobs": "workspace:*",
     "@loams/plugin-live": "workspace:*",
+    "@loams/plugin-metrics": "workspace:*",
     "@loams/plugin-agent": "workspace:*",
     "@loams/plugin-namespaces": "workspace:*",
     "@loams/plugin-overview": "workspace:*",
