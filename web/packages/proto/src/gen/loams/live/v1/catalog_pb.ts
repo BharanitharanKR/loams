@@ -6,15 +6,17 @@
 // @generated from file loams/live/v1/catalog.proto (package loams.live.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import type { Schema } from "./live_pb.js";
+import { file_loams_live_v1_live } from "./live_pb.js";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file loams/live/v1/catalog.proto.
  */
 export const file_loams_live_v1_catalog: GenFile = /*@__PURE__*/
-  fileDesc("Chtsb2Ftcy9saXZlL3YxL2NhdGFsb2cucHJvdG8SDWxvYW1zLmxpdmUudjEidQoIVGFibGVEZWYSDgoGZm9ybWF0GAEgASgNEgoKAmlkGAIgASgNEgwKBG5hbWUYAyABKAkSKAoHaW5kZXhlcxgEIAMoCzIXLmxvYW1zLmxpdmUudjEuSW5kZXhEZWYSFQoNbmV4dF9pbmRleF9pZBgFIAEoDSI0CghJbmRleERlZhIKCgJpZBgBIAEoDRIMCgRuYW1lGAIgASgJEg4KBmZpZWxkcxgDIAMoCSIwCgZBcHBEZWYSDgoGZm9ybWF0GAEgASgNEhYKDmpvdXJuYWxfc2hhcmRzGAIgASgNYgZwcm90bzM");
+  fileDesc("Chtsb2Ftcy9saXZlL3YxL2NhdGFsb2cucHJvdG8SDWxvYW1zLmxpdmUudjEidQoIVGFibGVEZWYSDgoGZm9ybWF0GAEgASgNEgoKAmlkGAIgASgNEgwKBG5hbWUYAyABKAkSKAoHaW5kZXhlcxgEIAMoCzIXLmxvYW1zLmxpdmUudjEuSW5kZXhEZWYSFQoNbmV4dF9pbmRleF9pZBgFIAEoDSI0CghJbmRleERlZhIKCgJpZBgBIAEoDRIMCgRuYW1lGAIgASgJEg4KBmZpZWxkcxgDIAMoCSIwCgZBcHBEZWYSDgoGZm9ybWF0GAEgASgNEhYKDmpvdXJuYWxfc2hhcmRzGAIgASgNIv8BChBEZXBsb3ltZW50UmVjb3JkEg4KBmZvcm1hdBgBIAEoDRIKCgJpZBgCIAEoDBIVCg1idW5kbGVfc2hhMjU2GAMgASgMEiUKBnNjaGVtYRgEIAEoCzIVLmxvYW1zLmxpdmUudjEuU2NoZW1hEhUKDWNyZWF0ZWRfYXRfbXMYBSABKAQSEgoKY3JlYXRlZF9ieRgGIAEoCRIPCgdtZXNzYWdlGAcgASgJEg4KBnBhcmVudBgIIAEoDBItCgVzdGF0ZRgJIAEoDjIeLmxvYW1zLmxpdmUudjEuRGVwbG95bWVudFN0YXRlEhYKDmZhaWx1cmVfcmVhc29uGAogASgJKo4CCg9EZXBsb3ltZW50U3RhdGUSIAocREVQTE9ZTUVOVF9TVEFURV9VTlNQRUNJRklFRBAAEhwKGERFUExPWU1FTlRfU1RBVEVfUEVORElORxABEh8KG0RFUExPWU1FTlRfU1RBVEVfVkFMSURBVElORxACEiAKHERFUExPWU1FTlRfU1RBVEVfQkFDS0ZJTExJTkcQAxIbChdERVBMT1lNRU5UX1NUQVRFX0FDVElWRRAEEh8KG0RFUExPWU1FTlRfU1RBVEVfU1VQRVJTRURFRBAFEhsKF0RFUExPWU1FTlRfU1RBVEVfRkFJTEVEEAYSHQoZREVQTE9ZTUVOVF9TVEFURV9ERUdSQURFRBAHYgZwcm90bzM", [file_loams_live_v1_live]);
 
 /**
  * A table: the value of its catalog record `0x01 ‖ 0x02 ‖ id:u32 BE`. The
@@ -130,4 +132,160 @@ export type AppDef = Message<"loams.live.v1.AppDef"> & {
  */
 export const AppDefSchema: GenMessage<AppDef> = /*@__PURE__*/
   messageDesc(file_loams_live_v1_catalog, 2);
+
+/**
+ * One deployment of the app (design §45 §3.3, D683; LV1 plan Task 6): the
+ * value of its catalog record `0x01 ‖ 0x06 ‖ id[16]`. Immutable but for
+ * `state` and `failure_reason`. The bundle itself is an object of the
+ * bundle store at `live/<app>/deployments/<id>.js` (R1 plan Ruling 10),
+ * checked against `bundle_sha256` whenever a node loads it. The active
+ * deployment is the pointer record `0x01 ‖ 0x03`, whose value is the
+ * active id's 16 bytes.
+ *
+ * @generated from message loams.live.v1.DeploymentRecord
+ */
+export type DeploymentRecord = Message<"loams.live.v1.DeploymentRecord"> & {
+  /**
+   * The encoding version; 1 in LV1.
+   *
+   * @generated from field: uint32 format = 1;
+   */
+  format: number;
+
+  /**
+   * The deployment's ULID, 16 bytes (big-endian, so ids sort by time).
+   *
+   * @generated from field: bytes id = 2;
+   */
+  id: Uint8Array;
+
+  /**
+   * SHA-256 of the bundle, 32 bytes.
+   *
+   * @generated from field: bytes bundle_sha256 = 3;
+   */
+  bundleSha256: Uint8Array;
+
+  /**
+   * The schema the deployment declares (only additive table creation in
+   * Task 6; validators and index changes in Tasks 8 and 9).
+   *
+   * @generated from field: loams.live.v1.Schema schema = 4;
+   */
+  schema?: Schema | undefined;
+
+  /**
+   * The TSO physical time of the deploy's first transaction, in ms.
+   *
+   * @generated from field: uint64 created_at_ms = 5;
+   */
+  createdAtMs: bigint;
+
+  /**
+   * The principal that deployed it.
+   *
+   * @generated from field: string created_by = 6;
+   */
+  createdBy: string;
+
+  /**
+   * @generated from field: string message = 7;
+   */
+  message: string;
+
+  /**
+   * The deployment that was active when this one was deployed (16 bytes);
+   * empty for the app's first deployment.
+   *
+   * @generated from field: bytes parent = 8;
+   */
+  parent: Uint8Array;
+
+  /**
+   * @generated from field: loams.live.v1.DeploymentState state = 9;
+   */
+  state: DeploymentState;
+
+  /**
+   * Why the deployment failed, when `state` is `DEPLOYMENT_STATE_FAILED`.
+   *
+   * @generated from field: string failure_reason = 10;
+   */
+  failureReason: string;
+};
+
+/**
+ * Describes the message loams.live.v1.DeploymentRecord.
+ * Use `create(DeploymentRecordSchema)` to create a new message.
+ */
+export const DeploymentRecordSchema: GenMessage<DeploymentRecord> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_catalog, 3);
+
+/**
+ * Where a deployment is in its life (design §45 §3.3).
+ *
+ * @generated from enum loams.live.v1.DeploymentState
+ */
+export enum DeploymentState {
+  /**
+   * @generated from enum value: DEPLOYMENT_STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Its record is written; its schema is not applied yet.
+   *
+   * @generated from enum value: DEPLOYMENT_STATE_PENDING = 1;
+   */
+  PENDING = 1,
+
+  /**
+   * A stricter validator scans existing data (LV1 plan Task 8).
+   *
+   * @generated from enum value: DEPLOYMENT_STATE_VALIDATING = 2;
+   */
+  VALIDATING = 2,
+
+  /**
+   * A new index is backfilled (LV1 plan Task 9).
+   *
+   * @generated from enum value: DEPLOYMENT_STATE_BACKFILLING = 3;
+   */
+  BACKFILLING = 3,
+
+  /**
+   * The pointer names it: new calls run its functions.
+   *
+   * @generated from enum value: DEPLOYMENT_STATE_ACTIVE = 4;
+   */
+  ACTIVE = 4,
+
+  /**
+   * A later deployment replaced it.
+   *
+   * @generated from enum value: DEPLOYMENT_STATE_SUPERSEDED = 5;
+   */
+  SUPERSEDED = 5,
+
+  /**
+   * It never became active; `failure_reason` says why.
+   *
+   * @generated from enum value: DEPLOYMENT_STATE_FAILED = 6;
+   */
+  FAILED = 6,
+
+  /**
+   * It is active, but its isolated workers crashed five times within a
+   * minute (design §45 §3.1). Calls are still served.
+   *
+   * @generated from enum value: DEPLOYMENT_STATE_DEGRADED = 7;
+   */
+  DEGRADED = 7,
+}
+
+/**
+ * Describes the enum loams.live.v1.DeploymentState.
+ */
+export const DeploymentStateSchema: GenEnum<DeploymentState> = /*@__PURE__*/
+  enumDesc(file_loams_live_v1_catalog, 0);
 
