@@ -16,8 +16,7 @@ from this stack (`--profile console`).
 ```
 
 The engine is never on the public internet: the only way in is the Tailscale
-sidecar, which joins your tailnet (Tailscale, or Headscale through
-`TS_LOGIN_SERVER`) and proxies `https://loams.<tailnet>.ts.net` to the engine's
+sidecar, which joins your own Tailscale tailnet and proxies `https://loams.<tailnet>.ts.net` to the engine's
 tailscale listener (`LOAMS_TAILSCALE_LISTEN`, `127.0.0.1:7781`). Only the
 engine and the sidecar share that network namespace; every other service is on
 the compose network and cannot reach the engine's loopback listeners.
@@ -53,7 +52,7 @@ docker compose logs tailscale            # the node name, or a login URL
 ```
 
 Set the console's `LOAMS_ENGINE_URL` to `https://loams.<tailnet>.ts.net`.
-Profiles add `headscale`, `console` (the console from `LOAMS_CONSOLE_DIR`, with
+Profiles add `headscale` (coming soon, unsupported in 0.1.0-preview.1), `console` (the console from `LOAMS_CONSOLE_DIR`, with
 `/config.json` built from `LOAMS_ENGINE_URL`, `LOAMS_AUTH_ISSUER` and
 `LOAMS_AUTH_CLIENT_ID`), `agentd` and `house` (see Known gaps). Stop with `docker compose --profile '*'
 down`; add `--volumes` to delete the data.
@@ -71,7 +70,12 @@ audience `LOAMS_OIDC_AUDIENCE`; `apikey` checks hashed keys in
 `LOAMS_API_KEYS_FILE`, which compose points at `secrets/api-keys`. See
 `.env.example`.
 
-### Headscale
+### Headscale (coming soon, unsupported in 0.1.0-preview.1)
+
+0.1.0-preview.1 supports one setup: your own Tailscale tailnet and the hosted
+console. Headscale issues no `ts.net` HTTPS certificates, so the hosted console
+(served over HTTPS) cannot reach an engine on a Headscale tailnet. The profile
+stays in the bundle for a later release; the steps below are unsupported.
 
 ```sh
 # .env: HEADSCALE_SERVER_URL=https://hs.example.com, TS_LOGIN_SERVER=the same,
@@ -93,7 +97,6 @@ tailnet or this machine.
 
 ```sh
 deploy/release/byoc/install.sh ubuntu@203.0.113.10            # asks for TS_AUTHKEY
-deploy/release/byoc/install.sh --headscale https://hs.example.com ubuntu@vm
 deploy/release/byoc/uninstall.sh ubuntu@203.0.113.10          # --purge deletes the data
 ```
 

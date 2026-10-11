@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Installs the Loams preview stack on a machine of your own (BYOC) over SSH:
 # installs Docker if it is missing, copies the compose bundle, writes .env
-# (asking for the tailnet auth key and login server) and starts the stack. The
+# (asking for the Tailscale auth key) and starts the stack. The
 # machine needs no inbound port: the engine is reached over your tailnet.
 #
 #   deploy/release/byoc/install.sh [options] user@host
@@ -11,9 +11,9 @@
 #   --dir DIR               install directory on the host, relative to the SSH
 #                           user's home unless absolute [default: loams]
 #   --authkey KEY           tailnet auth key [default: $TS_AUTHKEY, else asked]
-#   --login-server URL      Headscale URL; empty for Tailscale
-#                           [default: $TS_LOGIN_SERVER, else asked]
-#   --headscale URL         also run Headscale on the host (`--profile
+#   --login-server URL      Headscale URL (coming soon, unsupported in 0.1.0-preview.1);
+#                           [default: $TS_LOGIN_SERVER, else empty = Tailscale]
+#   --headscale URL         (coming soon, unsupported in 0.1.0-preview.1) also run Headscale on the host (`--profile
 #                           headscale`) at this public URL, mint the auth key
 #                           there, and serve the engine over http
 #   --version V             image tag [default: 0.1.0-preview.1]
@@ -34,7 +34,7 @@ port=22
 identity=""
 dir="loams"
 authkey="${TS_AUTHKEY:-}"
-login_server="${TS_LOGIN_SERVER-__ask__}"
+login_server="${TS_LOGIN_SERVER-}"
 headscale=""
 version="0.1.0-preview.1"
 all=0
@@ -119,13 +119,9 @@ tar -C "$deploy" -czf - \
 if ssh_cmd "test -f $(printf '%q' "$dir")/release/.env" && ((!reconfigure)); then
   say "keeping the existing .env (pass --reconfigure to rewrite it)"
 else
-  if [[ -n "$headscale" ]]; then
-    login_server="$headscale"
-  elif [[ "$login_server" == "__ask__" ]]; then
-    login_server=""
-    if ((!assume_yes)); then
-      read -r -p "Headscale login server URL (empty for Tailscale): " login_server
-    fi
+  [[ -n "$headscale" ]] && login_server="$headscale"
+  if [[ -n "$login_server" ]]; then
+    say "warning: Headscale is coming soon and unsupported in 0.1.0-preview.1; the hosted console cannot reach an engine served over its http"
   fi
   if [[ -z "$authkey" && -z "$headscale" && $assume_yes -eq 0 ]]; then
     read -r -s -p "Tailnet auth key (TS_AUTHKEY; empty to log in from the sidecar's log): " authkey

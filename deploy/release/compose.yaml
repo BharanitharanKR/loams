@@ -11,7 +11,7 @@
 # other container may join it, because the engine trusts Tailscale identity
 # headers on its tailscale listener (LOAMS_TAILSCALE_LISTEN, 127.0.0.1:7781),
 # whose only client is the sidecar's `tailscale serve` proxy. The sidecar joins
-# the user's tailnet (Tailscale, or Headscale through TS_LOGIN_SERVER) and
+# the user's Tailscale tailnet (Headscale is coming soon) and
 # serves https://loams.<tailnet>/ from that listener; that tailnet URL is
 # LOAMS_ENGINE_URL for the console. Every other service (pd, tikv, tidb, house,
 # agentd, the Postgres stack) is on the compose network and cannot reach the
@@ -161,8 +161,8 @@ services:
       TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "true"
       TS_AUTH_ONCE: "true"
-      # https (Tailscale: MagicDNS + HTTPS certificates) or http (Headscale,
-      # which issues no certificates); see tailscale/serve-*.json.
+      # https (Tailscale: MagicDNS + HTTPS certificates), or http for Headscale
+      # (coming soon, unsupported in 0.1.0-preview.1); see tailscale/serve-*.json.
       TS_SERVE_CONFIG: /config/serve-${TS_SERVE_MODE:-https}.json
       TS_EXTRA_ARGS: --login-server=${TS_LOGIN_SERVER:-https://controlplane.tailscale.com} ${TS_EXTRA_ARGS:-}
     volumes:
@@ -172,6 +172,8 @@ services:
       loams:
         condition: service_started
 
+  # COMING SOON, unsupported in 0.1.0-preview.1: Headscale issues no ts.net
+  # HTTPS certificates, so the hosted console cannot reach an engine on it.
   # A self-hosted tailnet control server (`--profile headscale`). Clients,
   # including the browser's device, must reach HEADSCALE_SERVER_URL, so on a VM
   # set HEADSCALE_BIND=0.0.0.0 (and TLS in front of it) or reach it over SSH.
