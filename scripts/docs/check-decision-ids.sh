@@ -48,27 +48,38 @@ if [[ "$log_file" == "$root/docs/design/13-decision-log.md" ]]; then
   done
   # Rows that declare several IDs at once ("| D366–D371, D373 | … | Moved |")
   # and struck-through answered questions ("| ~~Q568 | …") also declare IDs
-  # for citations; the duplicate check above stays on single-ID rows.
-  for id in $(awk -F '|' '
+  # for citations. A plain single-ID row was declared above; any ID these rows
+  # declare again (there or in another such row) is a duplicate.
+  declare -A multi_line
+  while IFS=$'\t' read -r line id; do
+    if [[ -n "${declared_ids[$id]:-}" ]]; then
+      first="${multi_line[$id]:-a single-ID row}"
+      echo "$log_file:$line: duplicate $id (also declared at ${first})" >&2
+      failed=1
+    fi
+    declared_ids["$id"]=1
+    multi_line["$id"]="line $line"
+  done < <(awk -F '|' '
     {
       cell = ($1 ~ /^[[:space:]]*$/) ? $2 : $1
+      struck = (cell ~ /~~/)
       gsub(/~~/, "", cell)
       if (cell !~ /^[[:space:]]*[DQ][0-9]+(([[:space:]]*(–|,)[[:space:]]*)[DQ][0-9]+)*[[:space:]]*$/) next
+      # A plain single-ID row is the first pass'"'"'s.
+      if (!struck && cell !~ /(–|,)/) next
       n = split(cell, parts, ",")
       for (i = 1; i <= n; i++) {
         part = parts[i]
         gsub(/[[:space:]]/, "", part)
         if (split(part, ends, "–") == 2) {
           kind = substr(ends[1], 1, 1)
-          for (k = substr(ends[1], 2) + 0; k <= substr(ends[2], 2) + 0; k++) print kind k
+          for (k = substr(ends[1], 2) + 0; k <= substr(ends[2], 2) + 0; k++) print FNR "\t" kind k
         } else {
-          print part
+          print FNR "\t" part
         }
       }
     }
-  ' "$log_file"); do
-    declared_ids["$id"]=1
-  done
+  ' "$log_file")
 
   while IFS=: read -r file line match; do
     if [[ "$file" == *"/docs/design/13-decision-log.md" ]] || [[ "$file" == *"/scripts/docs/testdata/"* ]]; then

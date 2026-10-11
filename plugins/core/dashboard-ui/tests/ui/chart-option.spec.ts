@@ -291,6 +291,13 @@ describe("paramFilterFor", () => {
     expect(filter).toEqual({ region: "APAC" });
   });
 
+  it("keeps a zero-valued datum", () => {
+    const filter = paramFilterFor(widget([{ on: "click", set: { bucket: "bucket" } }]), {
+      data: { bucket: 0 },
+    });
+    expect(filter).toEqual({ bucket: 0 });
+  });
+
   it("ignores non-click interactions", () => {
     expect(
       paramFilterFor(widget([{ on: "brush", set: { region: "region" } }]), { data: {} }),
