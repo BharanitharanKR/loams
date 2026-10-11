@@ -35,6 +35,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2fcatalog_2eproto, /* tracker*/ nullptr,},
         // ::loams::live::v1::AppDef
         {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2fcatalog_2eproto, /* tracker*/ nullptr,},
+        // ::loams::live::v1::DeploymentRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2fcatalog_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -539,11 +541,243 @@ const ::_pbi::ClassData* TableDef_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class DeploymentRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<DeploymentRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_._has_bits_);
+};
+
+constexpr DeploymentRecord::ParseTableT_ DeploymentRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      10, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294966272,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      10,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::MpUnknownFields,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::loams::live::v1::DeploymentRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 format = 1 [json_name = "format"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DeploymentRecord, _impl_.format_), 8>(),
+       {8, 8, 0,
+        PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.format_)}},
+      // bytes id = 2 [json_name = "id"];
+      {::_pbi::TcParser::FastBS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.id_)}},
+      // bytes bundle_sha256 = 3 [json_name = "bundleSha256"];
+      {::_pbi::TcParser::FastBS1,
+       {26, 1, 0,
+        PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.bundle_sha256_)}},
+      // .loams.live.v1.Schema schema = 4 [json_name = "schema"];
+      {::_pbi::TcParser::FastMtS1,
+       {34, 6, 0,
+        PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.schema_)}},
+      // uint64 created_at_ms = 5 [json_name = "createdAtMs"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DeploymentRecord, _impl_.created_at_ms_), 7>(),
+       {40, 7, 0,
+        PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.created_at_ms_)}},
+      // string created_by = 6 [json_name = "createdBy"];
+      {::_pbi::TcParser::FastUS1,
+       {50, 2, 0,
+        PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.created_by_)}},
+      // string message = 7 [json_name = "message"];
+      {::_pbi::TcParser::FastUS1,
+       {58, 3, 0,
+        PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.message_)}},
+      // bytes parent = 8 [json_name = "parent"];
+      {::_pbi::TcParser::FastBS1,
+       {66, 4, 0,
+        PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.parent_)}},
+      // .loams.live.v1.DeploymentState state = 9 [json_name = "state"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DeploymentRecord, _impl_.state_), 9>(),
+       {72, 9, 0,
+        PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.state_)}},
+      // string failure_reason = 10 [json_name = "failureReason"];
+      {::_pbi::TcParser::FastUS1,
+       {82, 5, 0,
+        PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.failure_reason_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 format = 1 [json_name = "format"];
+      {PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.format_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // bytes id = 2 [json_name = "id"];
+      {PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // bytes bundle_sha256 = 3 [json_name = "bundleSha256"];
+      {PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.bundle_sha256_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // .loams.live.v1.Schema schema = 4 [json_name = "schema"];
+      {PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.schema_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint64 created_at_ms = 5 [json_name = "createdAtMs"];
+      {PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.created_at_ms_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string created_by = 6 [json_name = "createdBy"];
+      {PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.created_by_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string message = 7 [json_name = "message"];
+      {PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.message_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // bytes parent = 8 [json_name = "parent"];
+      {PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.parent_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // .loams.live.v1.DeploymentState state = 9 [json_name = "state"];
+      {PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.state_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // string failure_reason = 10 [json_name = "failureReason"];
+      {PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.failure_reason_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::loams::live::v1::Schema>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::Schema_globals_},
+        #endif
+    }},
+    {{
+      "\36\0\0\0\0\0\12\7\0\0\16\0\0\0\0\0"
+      "loams.live.v1.DeploymentRecord"
+      "created_by"
+      "message"
+      "failure_reason"
+    }},
+  };
+}
+
+
+inline constexpr DeploymentRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        bundle_sha256_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        created_by_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        message_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        parent_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        failure_reason_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        schema_{nullptr},
+        created_at_ms_{::uint64_t{0u}},
+        format_{0u},
+        state_{static_cast< ::loams::live::v1::DeploymentState >(0)} {}
+
+template <typename>
+constexpr DeploymentRecord::DeploymentRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : Super_(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL DeploymentRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) DeploymentRecord(arena);
+}
+constexpr auto DeploymentRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(DeploymentRecord), alignof(DeploymentRecord));
+}
+constexpr auto DeploymentRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &DeploymentRecord::MergeImpl,
+          Super_::GetNewImpl<DeploymentRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &DeploymentRecord::SharedDtor,
+          Super_::GetClearImpl<DeploymentRecord>(), &DeploymentRecord::ByteSizeLong,
+              &DeploymentRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[3],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_loams_2flive_2fv1_2fcatalog_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct DeploymentRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr DeploymentRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 DeploymentRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(DeploymentRecord::InternalGenerateClassData_(
+            _default, &DeploymentRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<DeploymentRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~DeploymentRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) DeploymentRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<DeploymentRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(DeploymentRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST DeploymentRecordGlobalsTypeInternal DeploymentRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* DeploymentRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return DeploymentRecord_globals_.GetClassData();
+#else
+  return DeploymentRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace v1
 }  // namespace live
 }  // namespace loams
-static constexpr const ::_pb::EnumDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
-    file_level_enum_descriptors_loams_2flive_2fv1_2fcatalog_2eproto = nullptr;
+static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
+    file_level_enum_descriptors_loams_2flive_2fv1_2fcatalog_2eproto[1];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_loams_2flive_2fv1_2fcatalog_2eproto = nullptr;
 const ::uint32_t
@@ -578,6 +812,29 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::AppDef, _impl_.journal_shards_),
         0,
         1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeploymentRecord, _impl_._has_bits_),
+        13, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeploymentRecord, _impl_.format_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeploymentRecord, _impl_.id_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeploymentRecord, _impl_.bundle_sha256_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeploymentRecord, _impl_.schema_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeploymentRecord, _impl_.created_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeploymentRecord, _impl_.created_by_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeploymentRecord, _impl_.message_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeploymentRecord, _impl_.parent_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeploymentRecord, _impl_.state_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeploymentRecord, _impl_.failure_reason_),
+        8,
+        0,
+        1,
+        6,
+        7,
+        2,
+        3,
+        4,
+        9,
+        5,
 };
 
 static const ::_pbi::MigrationSchema
@@ -585,36 +842,59 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::loams::live::v1::TableDef)},
         {13, sizeof(::loams::live::v1::IndexDef)},
         {22, sizeof(::loams::live::v1::AppDef)},
+        {29, sizeof(::loams::live::v1::DeploymentRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::loams::live::v1::TableDef_globals_,
         &::loams::live::v1::IndexDef_globals_,
         &::loams::live::v1::AppDef_globals_,
+        &::loams::live::v1::DeploymentRecord_globals_,
 };
 const char descriptor_table_protodef_loams_2flive_2fv1_2fcatalog_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\033loams/live/v1/catalog.proto\022\rloams.liv"
-    "e.v1\"\235\001\n\010TableDef\022\026\n\006format\030\001 \001(\rR\006forma"
-    "t\022\016\n\002id\030\002 \001(\rR\002id\022\022\n\004name\030\003 \001(\tR\004name\0221\n"
-    "\007indexes\030\004 \003(\0132\027.loams.live.v1.IndexDefR"
-    "\007indexes\022\"\n\rnext_index_id\030\005 \001(\rR\013nextInd"
-    "exId\"F\n\010IndexDef\022\016\n\002id\030\001 \001(\rR\002id\022\022\n\004name"
-    "\030\002 \001(\tR\004name\022\026\n\006fields\030\003 \003(\tR\006fields\"G\n\006"
-    "AppDef\022\026\n\006format\030\001 \001(\rR\006format\022%\n\016journa"
-    "l_shards\030\002 \001(\rR\rjournalShardsb\006proto3"
+    "e.v1\032\030loams/live/v1/live.proto\"\235\001\n\010Table"
+    "Def\022\026\n\006format\030\001 \001(\rR\006format\022\016\n\002id\030\002 \001(\rR"
+    "\002id\022\022\n\004name\030\003 \001(\tR\004name\0221\n\007indexes\030\004 \003(\013"
+    "2\027.loams.live.v1.IndexDefR\007indexes\022\"\n\rne"
+    "xt_index_id\030\005 \001(\rR\013nextIndexId\"F\n\010IndexD"
+    "ef\022\016\n\002id\030\001 \001(\rR\002id\022\022\n\004name\030\002 \001(\tR\004name\022\026"
+    "\n\006fields\030\003 \003(\tR\006fields\"G\n\006AppDef\022\026\n\006form"
+    "at\030\001 \001(\rR\006format\022%\n\016journal_shards\030\002 \001(\r"
+    "R\rjournalShards\"\340\002\n\020DeploymentRecord\022\026\n\006"
+    "format\030\001 \001(\rR\006format\022\016\n\002id\030\002 \001(\014R\002id\022#\n\r"
+    "bundle_sha256\030\003 \001(\014R\014bundleSha256\022-\n\006sch"
+    "ema\030\004 \001(\0132\025.loams.live.v1.SchemaR\006schema"
+    "\022\"\n\rcreated_at_ms\030\005 \001(\004R\013createdAtMs\022\035\n\n"
+    "created_by\030\006 \001(\tR\tcreatedBy\022\030\n\007message\030\007"
+    " \001(\tR\007message\022\026\n\006parent\030\010 \001(\014R\006parent\0224\n"
+    "\005state\030\t \001(\0162\036.loams.live.v1.DeploymentS"
+    "tateR\005state\022%\n\016failure_reason\030\n \001(\tR\rfai"
+    "lureReason*\216\002\n\017DeploymentState\022 \n\034DEPLOY"
+    "MENT_STATE_UNSPECIFIED\020\000\022\034\n\030DEPLOYMENT_S"
+    "TATE_PENDING\020\001\022\037\n\033DEPLOYMENT_STATE_VALID"
+    "ATING\020\002\022 \n\034DEPLOYMENT_STATE_BACKFILLING\020"
+    "\003\022\033\n\027DEPLOYMENT_STATE_ACTIVE\020\004\022\037\n\033DEPLOY"
+    "MENT_STATE_SUPERSEDED\020\005\022\033\n\027DEPLOYMENT_ST"
+    "ATE_FAILED\020\006\022\035\n\031DEPLOYMENT_STATE_DEGRADE"
+    "D\020\007b\006proto3"
+};
+static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
+    descriptor_table_loams_2flive_2fv1_2fcatalog_2eproto_deps[1] = {
+        &::descriptor_table_loams_2flive_2fv1_2flive_2eproto,
 };
 static ::absl::once_flag descriptor_table_loams_2flive_2fv1_2fcatalog_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_loams_2flive_2fv1_2fcatalog_2eproto = {
     false,
     false,
-    357,
+    1011,
     descriptor_table_protodef_loams_2flive_2fv1_2fcatalog_2eproto,
     "loams/live/v1/catalog.proto",
     &descriptor_table_loams_2flive_2fv1_2fcatalog_2eproto_once,
-    nullptr,
-    0,
-    3,
+    descriptor_table_loams_2flive_2fv1_2fcatalog_2eproto_deps,
+    1,
+    4,
     schemas,
     file_message_globals,
     TableStruct_loams_2flive_2fv1_2fcatalog_2eproto::offsets,
@@ -624,6 +904,13 @@ PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_loams_2flive_2
 namespace loams {
 namespace live {
 namespace v1 {
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+DeploymentState_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_loams_2flive_2fv1_2fcatalog_2eproto);
+  return file_level_enum_descriptors_loams_2flive_2fv1_2fcatalog_2eproto[0];
+}
+PROTOBUF_CONSTINIT const uint32_t DeploymentState_internal_data_[] = {
+    524288u, 0u, };
 // ===================================================================
 
 TableDef::TableDef(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
@@ -1473,6 +1760,508 @@ void AppDef::InternalSwap(AppDef* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
 }
 
 ::google::protobuf::Metadata AppDef::GetMetadata() const {
+  return Super_::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void DeploymentRecord::clear_schema() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.schema_ != nullptr) _impl_.schema_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+DeploymentRecord::DeploymentRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : Super_(arena, DeploymentRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : Super_(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:loams.live.v1.DeploymentRecord)
+}
+PROTOBUF_NDEBUG_INLINE DeploymentRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::loams::live::v1::DeploymentRecord& from_msg)
+      : _has_bits_{from._has_bits_},
+        id_(arena, from.id_),
+        bundle_sha256_(arena, from.bundle_sha256_),
+        created_by_(arena, from.created_by_),
+        message_(arena, from.message_),
+        parent_(arena, from.parent_),
+        failure_reason_(arena, from.failure_reason_) {}
+
+DeploymentRecord::DeploymentRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const DeploymentRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : Super_(arena, DeploymentRecord_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : Super_(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  DeploymentRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.schema_ = (CheckHasBit(cached_has_bits, 0x00000040U))
+                 ? Super_::CopyConstruct(arena, *from._impl_.schema_)
+                 : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, created_at_ms_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, created_at_ms_),
+           offsetof(Impl_, state_) -
+               offsetof(Impl_, created_at_ms_) +
+               sizeof(Impl_::state_));
+
+  // @@protoc_insertion_point(copy_constructor:loams.live.v1.DeploymentRecord)
+}
+PROTOBUF_NDEBUG_INLINE DeploymentRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : id_(arena),
+        bundle_sha256_(arena),
+        created_by_(arena),
+        message_(arena),
+        parent_(arena),
+        failure_reason_(arena) {}
+
+inline void DeploymentRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, schema_),
+           0,
+           offsetof(Impl_, state_) -
+               offsetof(Impl_, schema_) +
+               sizeof(Impl_::state_));
+}
+DeploymentRecord::~DeploymentRecord() {
+  // @@protoc_insertion_point(destructor:loams.live.v1.DeploymentRecord)
+  SharedDtor(*this);
+}
+inline void DeploymentRecord::SharedDtor(MessageLite& self) {
+  DeploymentRecord& this_ = static_cast<DeploymentRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.id_.Destroy();
+  this_._impl_.bundle_sha256_.Destroy();
+  this_._impl_.created_by_.Destroy();
+  this_._impl_.message_.Destroy();
+  this_._impl_.parent_.Destroy();
+  this_._impl_.failure_reason_.Destroy();
+  delete this_._impl_.schema_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull DeploymentRecord_class_data_ =
+        DeploymentRecord::InternalGenerateClassData_(DeploymentRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+DeploymentRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&DeploymentRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(DeploymentRecord_class_data_.tc_table);
+  return DeploymentRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+DeploymentRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&DeploymentRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&DeploymentRecord_globals_));
+  return DeploymentRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const DeploymentRecord::ParseTableT_
+    DeploymentRecord::_table_ =
+        DeploymentRecord::InternalGenerateParseTable_(DeploymentRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void DeploymentRecord::Clear() {
+  auto& this_ [[maybe_unused]] = *this;
+  // @@protoc_insertion_point(message_clear_start:loams.live.v1.DeploymentRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      this_._impl_.id_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      this_._impl_.bundle_sha256_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      this_._impl_.created_by_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      this_._impl_.message_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      this_._impl_.parent_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      this_._impl_.failure_reason_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      ABSL_DCHECK(this_._impl_.schema_ != nullptr);
+      this_._impl_.schema_->Clear();
+    }
+  }
+  this_._impl_.created_at_ms_ = ::uint64_t{0u};
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&this_._impl_.format_, 0,
+             static_cast<::size_t>(
+                 reinterpret_cast<char*>(&this_._impl_.state_) -
+                 reinterpret_cast<char*>(&this_._impl_.format_)) +
+                 sizeof(_impl_.state_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL DeploymentRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const DeploymentRecord& this_ = static_cast<const DeploymentRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL DeploymentRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const DeploymentRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:loams.live.v1.DeploymentRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 format = 1 [json_name = "format"];
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_format() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_format(), target);
+    }
+  }
+
+  // bytes id = 2 [json_name = "id"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_id().empty()) {
+      const ::std::string& _s = this_._internal_id();
+      target = stream->WriteBytesMaybeAliased(2, _s, target);
+    }
+  }
+
+  // bytes bundle_sha256 = 3 [json_name = "bundleSha256"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_bundle_sha256().empty()) {
+      const ::std::string& _s = this_._internal_bundle_sha256();
+      target = stream->WriteBytesMaybeAliased(3, _s, target);
+    }
+  }
+
+  // .loams.live.v1.Schema schema = 4 [json_name = "schema"];
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        4, *this_._impl_.schema_, this_._impl_.schema_->GetCachedSize(), target,
+        stream);
+  }
+
+  // uint64 created_at_ms = 5 [json_name = "createdAtMs"];
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_created_at_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_created_at_ms(), target);
+    }
+  }
+
+  // string created_by = 6 [json_name = "createdBy"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_created_by().empty()) {
+      const ::std::string& _s = this_._internal_created_by();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "loams.live.v1.DeploymentRecord.created_by");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
+    }
+  }
+
+  // string message = 7 [json_name = "message"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_message().empty()) {
+      const ::std::string& _s = this_._internal_message();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "loams.live.v1.DeploymentRecord.message");
+      target = stream->WriteStringMaybeAliased(7, _s, target);
+    }
+  }
+
+  // bytes parent = 8 [json_name = "parent"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_parent().empty()) {
+      const ::std::string& _s = this_._internal_parent();
+      target = stream->WriteBytesMaybeAliased(8, _s, target);
+    }
+  }
+
+  // .loams.live.v1.DeploymentState state = 9 [json_name = "state"];
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_state() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          9, this_._internal_state(), target);
+    }
+  }
+
+  // string failure_reason = 10 [json_name = "failureReason"];
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_failure_reason().empty()) {
+      const ::std::string& _s = this_._internal_failure_reason();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "loams.live.v1.DeploymentRecord.failure_reason");
+      target = stream->WriteStringMaybeAliased(10, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:loams.live.v1.DeploymentRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t DeploymentRecord::ByteSizeLong(const MessageLite& base) {
+  const DeploymentRecord& this_ = static_cast<const DeploymentRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t DeploymentRecord::ByteSizeLong() const {
+  const DeploymentRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:loams.live.v1.DeploymentRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // bytes id = 2 [json_name = "id"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_id());
+      }
+    }
+    // bytes bundle_sha256 = 3 [json_name = "bundleSha256"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_bundle_sha256().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_bundle_sha256());
+      }
+    }
+    // string created_by = 6 [json_name = "createdBy"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_created_by().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_created_by());
+      }
+    }
+    // string message = 7 [json_name = "message"];
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_message().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_message());
+      }
+    }
+    // bytes parent = 8 [json_name = "parent"];
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_parent().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_parent());
+      }
+    }
+    // string failure_reason = 10 [json_name = "failureReason"];
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_failure_reason().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_failure_reason());
+      }
+    }
+    // .loams.live.v1.Schema schema = 4 [json_name = "schema"];
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.schema_);
+    }
+    // uint64 created_at_ms = 5 [json_name = "createdAtMs"];
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_created_at_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_created_at_ms());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    // uint32 format = 1 [json_name = "format"];
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_format() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_format());
+      }
+    }
+    // .loams.live.v1.DeploymentState state = 9 [json_name = "state"];
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_state() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_state());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void DeploymentRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<DeploymentRecord*>(&to_msg);
+  auto& from = static_cast<const DeploymentRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:loams.live.v1.DeploymentRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_id().empty()) {
+        _this->_internal_set_id(from._internal_id());
+      } else {
+        if (_this->_impl_.id_.IsDefault()) {
+          _this->_internal_set_id("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_bundle_sha256().empty()) {
+        _this->_internal_set_bundle_sha256(from._internal_bundle_sha256());
+      } else {
+        if (_this->_impl_.bundle_sha256_.IsDefault()) {
+          _this->_internal_set_bundle_sha256("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_created_by().empty()) {
+        _this->_internal_set_created_by(from._internal_created_by());
+      } else {
+        if (_this->_impl_.created_by_.IsDefault()) {
+          _this->_internal_set_created_by("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_message().empty()) {
+        _this->_internal_set_message(from._internal_message());
+      } else {
+        if (_this->_impl_.message_.IsDefault()) {
+          _this->_internal_set_message("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_parent().empty()) {
+        _this->_internal_set_parent(from._internal_parent());
+      } else {
+        if (_this->_impl_.parent_.IsDefault()) {
+          _this->_internal_set_parent("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_failure_reason().empty()) {
+        _this->_internal_set_failure_reason(from._internal_failure_reason());
+      } else {
+        if (_this->_impl_.failure_reason_.IsDefault()) {
+          _this->_internal_set_failure_reason("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      ABSL_DCHECK(from._impl_.schema_ != nullptr);
+      if (_this->_impl_.schema_ == nullptr) {
+        _this->_impl_.schema_ = Super_::CopyConstruct(arena, *from._impl_.schema_);
+      } else {
+        _this->_impl_.schema_->MergeFrom(*from._impl_.schema_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_created_at_ms() != 0) {
+        _this->_impl_.created_at_ms_ = from._impl_.created_at_ms_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_format() != 0) {
+        _this->_impl_.format_ = from._impl_.format_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_state() != 0) {
+        _this->_impl_.state_ = from._impl_.state_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void DeploymentRecord::CopyFrom(const DeploymentRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:loams.live.v1.DeploymentRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void DeploymentRecord::InternalSwap(DeploymentRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.id_, &other->_impl_.id_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.bundle_sha256_, &other->_impl_.bundle_sha256_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.created_by_, &other->_impl_.created_by_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.message_, &other->_impl_.message_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.parent_, &other->_impl_.parent_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.failure_reason_, &other->_impl_.failure_reason_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.state_)
+      + sizeof(DeploymentRecord::_impl_.state_)
+      - PROTOBUF_FIELD_OFFSET(DeploymentRecord, _impl_.schema_)>(
+          reinterpret_cast<char*>(&_impl_.schema_),
+          reinterpret_cast<char*>(&other->_impl_.schema_));
+}
+
+::google::protobuf::Metadata DeploymentRecord::GetMetadata() const {
   return Super_::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)
