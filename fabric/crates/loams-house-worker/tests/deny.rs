@@ -954,6 +954,42 @@ async fn the_engine_lists_follow_chdb() {
     }
 }
 
+/// Every database engine chDB has is on one of the House's three lists (HS1 Task
+/// 10, the Task 5 fix round's note): `Atomic` is a House database, the denied
+/// ones read or write outside the namespace (`344`), the rest are `48`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_database_engine_lists_follow_chdb() {
+    use loams_house::deny::{
+        ALLOWED_DATABASE_ENGINES, DENIED_DATABASE_ENGINES, OTHER_DATABASE_ENGINES,
+    };
+    let (house, _pool) = house("deny-db-engines").await;
+    let addr = house.local_addr();
+    let engines = post(addr, "SELECT name FROM system.database_engines").await;
+    assert_eq!(engines.status, 200, "{}", engines.text());
+    let engines: HashSet<String> = engines.text().lines().map(str::to_string).collect();
+    let listed = |e: &str| {
+        DENIED_DATABASE_ENGINES.contains(&e)
+            || ALLOWED_DATABASE_ENGINES.contains(&e)
+            || OTHER_DATABASE_ENGINES.contains(&e)
+    };
+    let unlisted: Vec<_> = engines.iter().filter(|e| !listed(e)).collect();
+    assert!(
+        unlisted.is_empty(),
+        "database engines on no list: {unlisted:?}"
+    );
+    assert!(engines.contains("Atomic"));
+    // Without a catalog no database is made, but the engine is refused first.
+    for engine in DENIED_DATABASE_ENGINES {
+        let response = post(addr, &format!("CREATE DATABASE d ENGINE = {engine}")).await;
+        assert_eq!(
+            code(&response),
+            Some("344"),
+            "{engine}: {}",
+            response.text()
+        );
+    }
+}
+
 /// A denied table function called as a function, in a scalar or in an `IN`, is
 /// `344` too (fix round 1): `file('/etc/hostname')` reads the host as a scalar.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

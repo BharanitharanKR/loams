@@ -1,0 +1,21 @@
+[package]
+name = "loams-house-lake"
+description = "Iceberg table metadata for the Loams House's lake tables: schemas, partition specs, sort orders, metadata files and the commit rules the House's own catalogs apply, over iceberg-rust 0.10 with its arrow 58 kept inside this crate (HS1 Task 10, design §49 §5, R0.3)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+# Only the spec, the metadata builder and the commit types: nothing of
+# iceberg's Arrow API is re-exported, so arrow 58 never meets the workspace's
+# arrow 59 in a signature (R0.3; `arrow_58_stays_in_the_lake` checks the graph).
+iceberg.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

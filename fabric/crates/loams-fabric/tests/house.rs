@@ -159,6 +159,68 @@ fn house_role_starts_and_serves_ping() {
     drop(fabric);
 }
 
+/// `--single-node`'s local catalog (HS1 Task 10): a table made over HTTP is in
+/// the SQLite file, its metadata in the bucket under `ns/1/house/`, and it is
+/// still there after a restart.
+#[test]
+fn single_node_keeps_lake_tables() {
+    let dir = scratch("lake");
+    let worker = worker_binary();
+    let flags = [
+        "--single-node",
+        "--house-listen",
+        "127.0.0.1:0",
+        "--data-dir",
+        dir.to_str().expect("utf-8"),
+        "--worker-binary",
+        worker.to_str().expect("utf-8"),
+    ];
+    let post = |addr: SocketAddr, sql: &str| {
+        let key = std::fs::read_to_string(dir.join(house::LOCAL_KEY_FILE)).expect("key");
+        http(
+            addr,
+            &format!(
+                "POST / HTTP/1.1\r\nHost: house\r\nX-ClickHouse-User: {}\r\n\
+                 X-ClickHouse-Key: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{sql}",
+                house::LOCAL_USER,
+                key.trim(),
+                sql.len()
+            ),
+        )
+    };
+    let (fabric, addr) = Fabric::start(&flags);
+    let created = post(
+        addr,
+        "CREATE TABLE t (a UInt64, b String) ENGINE = MergeTree ORDER BY a",
+    );
+    assert!(created.starts_with("HTTP/1.1 200"), "{created}");
+    drop(fabric);
+    assert!(dir.join("catalog.sqlite").is_file());
+    let tables = dir.join("bucket/ns/1/house/default");
+    let entries: Vec<_> = std::fs::read_dir(&tables)
+        .expect("table directory")
+        .collect();
+    assert_eq!(
+        entries.len(),
+        1,
+        "one table directory under {}",
+        tables.display()
+    );
+
+    let (fabric, addr) = Fabric::start(&flags);
+    let exists = post(addr, "EXISTS TABLE t");
+    assert!(
+        exists.ends_with("\r\n\r\n1\n") || exists.ends_with("\r\n1\n"),
+        "{exists}"
+    );
+    let shown = post(addr, "SHOW CREATE TABLE t FORMAT TSVRaw");
+    assert!(
+        shown.contains("CREATE TABLE t (a UInt64, b String)"),
+        "{shown}"
+    );
+    drop(fabric);
+}
+
 /// An existing local key that others can read is put back to 0600 before use
 /// (PR #398 review).
 #[test]

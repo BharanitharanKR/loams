@@ -72,9 +72,11 @@
 pub mod admission;
 pub mod api;
 pub mod auth;
+pub mod catalog;
 pub mod classify;
 pub mod compress;
 pub mod config;
+pub mod ddl;
 pub mod deny;
 pub mod errors;
 #[cfg(feature = "test-hooks")]
@@ -85,12 +87,13 @@ pub mod request;
 pub mod sandbox;
 pub mod session;
 pub mod settings;
+pub mod types;
 pub mod watchdog;
 
 pub use admission::{Collected, Event, Outcome, PoolConfig, PoolStats, WorkerLease, WorkerPool};
 pub use config::{CatalogSpec, HouseConfig, HouseFile, UserMap, WorkersMode};
 pub use errors::{CODES, ChError, HouseError, MidStreamBody};
-pub use http::{HouseHandle, serve, serve_with_catalog};
+pub use http::{HouseHandle, serve, serve_with_catalog, serve_with_lake};
 pub use sandbox::{CgroupLimits, Forward, ForwardSlot, ForwardTarget, SandboxMode, WorkerCgroups};
 #[cfg(feature = "inproc-worker")]
 pub use watchdog::InprocWorker;

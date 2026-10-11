@@ -485,8 +485,9 @@ pub const ALLOWED_SYSTEM_TABLES: &[&str] = &[
     "metrics",
 ];
 
-/// The database a session reads, which `merge()` may name: `default` until HS1
-/// Task 10 maps databases onto the namespace's catalog.
+/// The database a session reads in chDB, which `merge()` may name: `default`
+/// until HS1 Task 11 builds the catalog's databases as views in the worker
+/// (Task 10 keeps them in the catalog only).
 pub const OWN_DATABASE: &str = "default";
 
 /// The statements an `EXPLAIN AST` may open with (fix round 1): what the surface
@@ -505,6 +506,10 @@ pub const STATEMENT_ROOTS: &[&str] = &[
     "ExistsViewQuery",
     "ExistsDictionaryQuery",
     "DropQuery",
+    // HS1 Task 10: `ALTER TABLE … ADD COLUMN` of a lake table, whose column
+    // defaults the deny list reads before the catalog changes; every other
+    // `ALTER` is refused by the front before any worker is asked.
+    "AlterQuery",
 ];
 
 /// The `SHOW` forms a statement may use, by the label chDB's `EXPLAIN AST` gives
@@ -565,6 +570,54 @@ pub fn check_engine(engine: &str, temporary: bool) -> Result<(), ChError> {
         )));
     }
     Ok(())
+}
+
+/// Database engines a `CREATE DATABASE` may not name (`344`, HS1 Task 10; the
+/// Task 5 fix round's note): they read or write the host, the network or another
+/// system (chDB 26.9's `system.database_engines`, measured).
+pub const DENIED_DATABASE_ENGINES: &[&str] = &[
+    "Filesystem",
+    "DataLakeCatalog",
+    "Backup",
+    "SQLite",
+    "MySQL",
+    "MaterializedMySQL",
+    "PostgreSQL",
+    "MaterializedPostgreSQL",
+    "S3",
+    "HDFS",
+    "URL",
+    "Remote",
+    "RemoteSecure",
+    "Replicated",
+];
+
+/// The database engine a House database is: a namespace of the catalog, which
+/// ClickHouse calls `Atomic` (its default).
+pub const ALLOWED_DATABASE_ENGINES: &[&str] = &["Atomic"];
+
+/// Database engines that are harmless but not what a House database is: `48`.
+/// `the_database_engine_lists_follow_chdb` fails when chDB has an engine on none of
+/// the three lists.
+pub const OTHER_DATABASE_ENGINES: &[&str] =
+    &["Ordinary", "Memory", "Lazy", "Dictionary", "Overlay"];
+
+/// `344` for a database engine on [`DENIED_DATABASE_ENGINES`] (or one no list
+/// knows), `48` for one of [`OTHER_DATABASE_ENGINES`].
+pub fn check_database_engine(engine: &str) -> Result<(), ChError> {
+    if listed(ALLOWED_DATABASE_ENGINES, engine) {
+        return Ok(());
+    }
+    if listed(OTHER_DATABASE_ENGINES, engine) {
+        return Err(ChError::not_implemented(format!(
+            "Database engine {engine} is not on the House's surface: a House database is a \
+             catalog namespace (ENGINE = Atomic, the default)"
+        )));
+    }
+    Err(disabled(format!(
+        "Database engine {engine} is disabled on the House: it reads or writes outside the \
+         namespace's tables"
+    )))
 }
 
 /// `344` for a statement on [`DENIED_STATEMENTS`].
