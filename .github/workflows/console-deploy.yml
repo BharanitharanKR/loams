@@ -5,8 +5,10 @@
 # Needs the `production` environment's CLOUDFLARE_API_TOKEN (Workers Scripts
 # edit, on the loams.dev account) and CLOUDFLARE_ACCOUNT_ID. Without them the
 # job builds and stages, then skips the deploy with a notice, and stays green.
-# LOAMS_CONSOLE_SERVER is required for a credentialed hosted deployment.
-# Engine-hosted builds retain the same-origin empty config.
+# The hosted console signs in with OIDC: LOAMS_AUTH_ISSUER and
+# LOAMS_AUTH_CLIENT_ID (environment variables) are required for the deploy.
+# Each person connects their own engine on first run (LOAMS_ENGINE_URL stays
+# unset here). Engine-hosted builds retain the same-origin empty config.
 name: console deploy
 
 on:
@@ -68,10 +70,12 @@ jobs:
       - run: pnpm build
       - name: stage for Workers static assets
         env:
-          LOAMS_CONSOLE_SERVER: ${{ vars.LOAMS_CONSOLE_SERVER }}
+          LOAMS_AUTH_ISSUER: ${{ vars.LOAMS_AUTH_ISSUER }}
+          LOAMS_AUTH_CLIENT_ID: ${{ vars.LOAMS_AUTH_CLIENT_ID }}
+          DEPLOYING: ${{ steps.secrets.outputs.ok }}
         run: |
-          if [ "${{ steps.secrets.outputs.ok }}" = true ]; then
-            node apps/console/deploy/stage.mjs --require-server
+          if [ "$DEPLOYING" = true ]; then
+            node apps/console/deploy/stage.mjs --require-auth
           else
             node apps/console/deploy/stage.mjs
           fi
@@ -86,6 +90,6 @@ jobs:
           command: deploy
       - name: smoke check
         env:
-          LOAMS_CONSOLE_SERVER: ${{ vars.LOAMS_CONSOLE_SERVER }}
+          LOAMS_AUTH_ISSUER: ${{ vars.LOAMS_AUTH_ISSUER }}
         if: steps.secrets.outputs.ok == 'true'
         run: node apps/console/deploy/smoke.mjs https://console.loams.dev

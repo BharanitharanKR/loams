@@ -664,8 +664,11 @@ export function LivePage({
   api: LiveApi;
   /** When given, the header links to the Deployments page. */
   navigate?: (to: string) => void;
-  /** `engine`, when given, carries the Live notice (ruling T23-8). */
-  desktop: Pick<LoamsDesktopApi, 'stacks'> & {
+  /**
+   * The desktop bridge, on the desktop only: it starts the TiKV stack, and its `engine`,
+   * when given, carries the Live notice (ruling T23-8). A browser console has neither.
+   */
+  desktop?: Pick<LoamsDesktopApi, 'stacks'> & {
     engine?: Partial<Pick<LoamsDesktopApi['engine'], 'state' | 'onState'>>;
   };
   retryMs?: number;
@@ -675,7 +678,7 @@ export function LivePage({
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
   const [tick, setTick] = useState(0);
   const gone = useCallback(() => setLoaded({ state: 'needs-tikv' }), []);
-  const notice = useLiveNotice(desktop.engine);
+  const notice = useLiveNotice(desktop?.engine);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` is the reload trigger
   useEffect(() => {
@@ -743,16 +746,28 @@ export function LivePage({
       {loaded.state === 'loading' && <Loading what="tables" />}
       {loaded.state === 'needs-tikv' && (
         <div className="flex flex-col gap-4">
-          <Notice tone="info" title="Live needs the TiKV stack">
-            This engine is running without Live. Start the TiKV stack and Loams restarts the engine
-            with Live on.
-          </Notice>
-          <StackCard stacks={desktop.stacks} />
+          {desktop ? (
+            <>
+              <Notice tone="info" title="Live needs the TiKV stack">
+                This engine is running without Live. Start the TiKV stack and Loams restarts the
+                engine with Live on.
+              </Notice>
+              <StackCard stacks={desktop.stacks} />
+            </>
+          ) : (
+            <Notice tone="info" title="Live needs the TiKV stack">
+              This engine is running without Live. Start it with the TiKV stack (the <Mono>pd</Mono>
+              , <Mono>tikv</Mono> and <Mono>loams</Mono> services of the release Compose file) and
+              this page picks it up.
+            </Notice>
+          )}
         </div>
       )}
       {loaded.state === 'unserved' && (
         <Empty title="This server does not serve Live.">
-          Switch to a server that does, such as This computer.
+          {desktop
+            ? 'Switch to a server that does, such as This computer.'
+            : 'Connect to an engine built with Live (the live or live-tikv feature).'}
         </Empty>
       )}
       {loaded.state === 'error' && (

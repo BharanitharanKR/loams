@@ -1,0 +1,19 @@
+# "Demo data": the pages that run on built-in sample data until their API is
+# served. Applied after web.yml only while the person turns the toggle on in
+# the console header (src/hosted/demo.ts). Every one of these pages says on
+# the page that it shows sample data.
+
+- id: deployments
+  disabled: false
+- id: live
+  config:
+    deployments: true
+- insert:
+    - id: sql
+      name: '@loams/plugin-sql'
+    - id: metrics
+      name: '@loams/plugin-metrics'
+    - id: pipelines
+      name: '@loams/plugin-pipelines'
+    - id: git
+      name: '@loams/plugin-git'

@@ -305,6 +305,12 @@ export function Layout({ router, session }: { router: HashRouter; session: Sessi
             <Mark size={28} />
           </span>
         </a>
+        <span
+          className="lc-preview lc-side-preview"
+          title="Loams is in preview: interfaces and data formats may change between releases."
+        >
+          Preview
+        </span>
         <Nav router={router} />
       </div>
       <div className="lc-body">

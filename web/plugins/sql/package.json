@@ -19,7 +19,7 @@
       "entry": ".",
       "tier": "first-party",
       "inject": [
-        "desktop",
+        "platform",
         "router",
         "slots"
       ],
@@ -33,7 +33,9 @@
         "console": "^0.1.0"
       },
       "editions": [
-        "desktop"
+        "oss",
+        "desktop",
+        "cloud"
       ]
     }
   },

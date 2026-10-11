@@ -225,6 +225,14 @@ describe('live page', () => {
     await waitFor(() => expect(start).toHaveBeenCalledWith('tikv'));
   });
 
+  it('needs_tikv_state_in_a_browser_names_the_compose_services', async () => {
+    const tablesError = new ConnectError(LIVE_NOT_RUNNING, Code.Unavailable);
+    render(<LivePage api={apiWith({ tablesError })} retryMs={60_000} />);
+    expect(await screen.findByText('Live needs the TiKV stack')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Start' })).toBeNull();
+    expect(screen.getByText(/release\s+Compose file/)).toBeTruthy();
+  });
+
   it('leaves_the_needs_state_once_live_answers', async () => {
     const s: Server = { tablesError: new ConnectError(LIVE_NOT_RUNNING, Code.Unavailable) };
     render(<LivePage api={apiWith(s)} desktop={stacksFake().desktop} retryMs={30} />);
@@ -396,7 +404,7 @@ describe('values', () => {
 describe('manifest', () => {
   it('is_a_valid_desktop_plugin', () => {
     const m = validateManifest(pkg);
-    expect(m.editions).toEqual(['desktop']);
+    expect(m.editions).toEqual(['oss', 'desktop', 'cloud']);
     expect(m.inject).toContain('desktop');
     expect(m.inject).toContain('transport');
   });

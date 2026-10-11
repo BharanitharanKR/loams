@@ -16,6 +16,7 @@ import './console.css';
 import { THIRD_PARTY_FLAG } from '@loams/console-host';
 import { createMockTransport } from '@loams/console-host/testing';
 import { createWebPlatform } from '@loams/platform-web';
+import { startHosted } from '../hosted/start.js';
 import { loadRuntimeConfig } from '../runtime-config.js';
 import { startDesktop } from './desktop.js';
 import { startConsole } from './start.js';
@@ -39,6 +40,10 @@ if (root) {
       // The Electron shell exposes `loamsDesktop` (preload); everything else is the web path.
       if (globalThis.loamsDesktop) return startDesktop(globalThis.loamsDesktop, root);
 
+      // A console that is not served by the engine (console.loams.dev, a Vercel or
+      // Cloudflare deploy, the Compose console): sign in, connect an engine, then boot.
+      if (config.hosted && !demo && !appsUrl) return startHosted(config, root, startConsole);
+
       const platform = createWebPlatform(
         demo
           ? { transport: createMockTransport({ features: { [THIRD_PARTY_FLAG]: true } }) }
@@ -58,6 +63,8 @@ if (root) {
       });
     })
     .then((handle) => {
+      // The hosted path may stop at a sign-in or connect screen, or leave for the issuer.
+      if (!handle) return;
       // For debugging in the browser console: the plugin table and the sweep.
       Object.assign(globalThis, { loamsConsole: handle });
       setTimeout(() => {

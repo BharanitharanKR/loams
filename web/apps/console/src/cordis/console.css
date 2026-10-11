@@ -709,3 +709,139 @@ body {
 .ds-fields .ds-field-row {
   align-items: center;
 }
+
+/* Preview: every Loams surface ships as a preview release. */
+.lc-preview {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--op-accent);
+  border-radius: 999px;
+  background: var(--op-accent-soft);
+  color: var(--op-accent-ink);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.lc-side-preview {
+  margin: -12px 8px 16px;
+}
+
+/* The hosted console's header: engine, Demo data toggle, sign-out. */
+.lc-hosted {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.lc-hosted-engine {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--op-rule);
+  border-radius: 6px;
+  background: var(--op-surface);
+  color: inherit;
+  font: inherit;
+  font-family: var(--loams-font-mono);
+  font-size: 12px;
+}
+button.lc-hosted-engine {
+  cursor: pointer;
+}
+.lc-hosted-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--op-grow);
+}
+.lc-hosted-demo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.lc-hosted-demo-on {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--op-danger-soft);
+  color: var(--op-danger);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Sign-in and "Connect your engine", before the console boots. */
+.lc-gate {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px 16px;
+  box-sizing: border-box;
+}
+.lc-gate-card {
+  width: 100%;
+  max-width: 560px;
+  display: grid;
+  gap: 16px;
+  padding: 28px;
+  border: 1px solid var(--op-rule);
+  border-radius: 10px;
+  background: var(--op-surface);
+  box-sizing: border-box;
+}
+.lc-gate-card h1 {
+  margin: 0;
+  font-size: 22px;
+}
+.lc-gate-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lc-gate-lead {
+  margin: 0;
+  color: var(--op-muted);
+  line-height: 1.5;
+}
+.lc-gate-form {
+  display: grid;
+  gap: 14px;
+}
+.lc-gate-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.lc-gate-faint {
+  color: var(--op-faint);
+  font-size: 13px;
+}
+.lc-gate-help {
+  color: var(--op-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.lc-gate-help summary {
+  cursor: pointer;
+  color: var(--op-ink);
+}
+.lc-gate-help ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+@media (max-width: 1100px) {
+  .lc-side-preview {
+    margin: -12px 0 16px;
+    padding: 0 4px;
+    font-size: 9px;
+    letter-spacing: 0.02em;
+  }
+}

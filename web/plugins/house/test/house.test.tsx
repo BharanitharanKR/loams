@@ -57,7 +57,7 @@ const base = {
 describe('manifest', () => {
   it('manifest_is_valid', () => {
     expect(() => validateManifest(pkg)).not.toThrow();
-    expect(pkg.loams.plugin.editions).toEqual(['desktop']);
+    expect(pkg.loams.plugin.editions).toEqual(['oss', 'desktop', 'cloud']);
   });
 });
 

@@ -2,7 +2,7 @@
   "name": "@loams/plugin-house",
   "version": "0.1.0",
   "private": true,
-  "description": "Loams Desktop: the Analytics (House) page. ClickHouse-dialect SQL editor, streaming results grid, query history and allowed settings over loams.house.v1.",
+  "description": "The Analytics (House) page: ClickHouse-dialect SQL editor, streaming results grid, query history and allowed settings over loams.house.v1.",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -19,9 +19,9 @@
       "entry": ".",
       "tier": "first-party",
       "inject": [
-        "desktop",
         "router",
-        "slots"
+        "slots",
+        "transport"
       ],
       "provides": [],
       "slots": [
@@ -33,7 +33,9 @@
         "console": "^0.1.0"
       },
       "editions": [
-        "desktop"
+        "oss",
+        "desktop",
+        "cloud"
       ]
     }
   },
@@ -42,9 +44,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "2.16.0",
+    "@connectrpc/connect": "2.2.0",
     "@loams/console-host": "workspace:*",
     "@loams/cordis": "workspace:*",
     "@loams/desktop-ui": "workspace:*",
+    "@loams/proto": "workspace:*",
     "@loams/ui": "workspace:*"
   },
   "peerDependencies": {

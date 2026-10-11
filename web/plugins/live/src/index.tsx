@@ -20,30 +20,48 @@ export { LivePage } from './pages.js';
 export { liveTransport } from './transport.js';
 export { fromJs, toJs } from './value.js';
 
+/** Catalog config. */
+export interface LiveConfig {
+  /**
+   * Register the Deployments page, which runs on sample data until LiveAdminService is
+   * served (default true). A browser console turns it on only under "Demo data".
+   */
+  deployments?: boolean;
+}
+
 const plugin: PluginModule = {
   name: 'live',
-  inject: ['desktop', 'router', 'slots', 'transport'],
-  apply(ctx: Context) {
+  inject: ['desktop', 'platform', 'router', 'slots', 'transport'],
+  apply(ctx: Context, config?: LiveConfig) {
     const router = service(ctx, 'router');
     const slots = service(ctx, 'slots');
-    const desktop = service(ctx, 'desktop') as LoamsDesktopApi;
+    // The desktop bridge exists only in the Electron shell; a browser console's catalog
+    // row narrows `inject` to leave it out, so it is read only on the desktop platform.
+    const desktop =
+      service(ctx, 'platform').kind === 'desktop'
+        ? (service(ctx, 'desktop') as LoamsDesktopApi)
+        : undefined;
     const api = createLiveApi(liveTransport({ transport: service(ctx, 'transport') }));
     // LiveAdminService (LV1 Task 10) is not served yet: the Deployments page
     // runs on fixtures until it is, then this becomes a client over the transport.
     const admin = createMockAdminApi();
-    const navigate = (to: string) => router.navigate(to);
+    const go = (to: string) => router.navigate(to);
+    const deployments = config?.deployments ?? true;
     // The router takes the first match: the longer path goes first.
-    ctx.effect(() =>
-      router.page(
-        {
-          id: 'live-deployments',
-          path: '/live/deployments',
-          title: 'Live deployments',
-          plugin: 'live',
-        },
-        () => <DeploymentsPage api={admin} navigate={navigate} />,
-      ),
-    );
+    if (deployments)
+      ctx.effect(() =>
+        router.page(
+          {
+            id: 'live-deployments',
+            path: '/live/deployments',
+            title: 'Live deployments',
+            plugin: 'live',
+          },
+          () => <DeploymentsPage api={admin} navigate={go} />,
+        ),
+      );
+    // Without the Deployments page, the Live page has nowhere to link to.
+    const navigate = deployments ? go : undefined;
     ctx.effect(() =>
       router.page({ id: 'live', path: '/live', title: 'Live', plugin: 'live' }, () => (
         <LivePage api={api} desktop={desktop} navigate={navigate} />

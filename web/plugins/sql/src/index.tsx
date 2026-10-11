@@ -6,8 +6,6 @@
 
 import { type PluginModule, service } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
-// Brings in the `desktop` service type (a module augmentation of `Services`).
-import type {} from '@loams/platform-electron';
 import { createMockSqlClient } from './mock.js';
 import { SqlPage } from './SqlPage.js';
 
@@ -25,13 +23,13 @@ export { SqlPage } from './SqlPage.js';
 
 const plugin: PluginModule = {
   name: 'sql',
-  inject: ['desktop', 'router', 'slots'],
+  inject: ['platform', 'router', 'slots'],
   apply(ctx: Context) {
-    const desktop = service(ctx, 'desktop');
+    const platform = service(ctx, 'platform');
     const router = service(ctx, 'router');
     const slots = service(ctx, 'slots');
     const client = createMockSqlClient();
-    const copy = (text: string) => desktop.shell.clipboardWrite(text);
+    const copy = (text: string) => platform.clipboardWrite(text);
     ctx.effect(() =>
       router.page({ id: 'sql', path: '/sql', title: 'Loams SQL', plugin: 'sql' }, () => (
         <SqlPage client={client} copy={copy} mocked />

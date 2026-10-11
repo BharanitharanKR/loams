@@ -2,8 +2,10 @@
 //
 //   node deploy/smoke.mjs https://console.loams.dev
 //
-// The page loads, deep links fall back to the app, and every script the page
-// loads comes back as JavaScript rather than as the HTML fallback.
+// The page loads, deep links fall back to the app, every script the page
+// loads comes back as JavaScript rather than as the HTML fallback, and
+// /config.json is the hosted console's runtime config (with the engine and
+// issuer the deploy was given, when LOAMS_ENGINE_URL / LOAMS_AUTH_ISSUER are set).
 
 /** The script and stylesheet URLs a page loads, resolved against `base`. */
 export function assetUrls(html, base) {
@@ -19,7 +21,7 @@ export function isJavaScript(type) {
   return /^(text|application)\/javascript\b/i.test(type ?? '');
 }
 
-export async function smoke(origin, fetcher = fetch, expectedServer) {
+export async function smoke(origin, fetcher = fetch, expectedServer, expectedIssuer) {
   const failures = [];
   const get = async (path) => {
     const res = await fetcher(new URL(path, origin), { redirect: 'follow' });
@@ -33,7 +35,7 @@ export async function smoke(origin, fetcher = fetch, expectedServer) {
   expect(page.res.status === 200, `/ returned ${page.res.status}`);
   expect(page.type.startsWith('text/html'), `/ is ${page.type}, not text/html`);
 
-  const deep = await get('/ui/projects/smoke-check');
+  const deep = await get('/projects/smoke-check');
   expect(deep.res.status === 200, `a deep link returned ${deep.res.status}`);
   expect(deep.type.startsWith('text/html'), `a deep link is ${deep.type}, not text/html`);
 
@@ -51,22 +53,35 @@ export async function smoke(origin, fetcher = fetch, expectedServer) {
       expect(asset.type.startsWith('text/css'), `${url} is ${asset.type}, not CSS`);
   }
 
-  const config = await get('/ui/config.json');
-  expect(config.res.status === 200, `/ui/config.json returned ${config.res.status}`);
-  expect(config.type.includes('json'), `/ui/config.json is ${config.type}, not JSON`);
-  if (expectedServer) {
-    let expectedOrigin;
-    let actualOrigin;
+  const config = await get('/config.json');
+  expect(config.res.status === 200, `/config.json returned ${config.res.status}`);
+  expect(config.type.includes('json'), `/config.json is ${config.type}, not JSON`);
+  let body;
+  try {
+    body = JSON.parse(config.body);
+  } catch {
+    body = undefined;
+  }
+  expect(body?.hosted === true, '/config.json does not mark the console as hosted');
+  const originOf = (value) => {
     try {
-      expectedOrigin = new URL(expectedServer).origin;
-      const server = JSON.parse(config.body)?.server;
-      if (typeof server === 'string') actualOrigin = new URL(server).origin;
+      return typeof value === 'string' ? new URL(value).origin : undefined;
     } catch {
-      // Invalid or missing configuration fails the deployed-origin comparison.
+      return undefined;
     }
+  };
+  if (expectedServer) {
+    const expectedOrigin = originOf(expectedServer);
+    const actualOrigin = originOf(body?.engineUrl ?? body?.server);
     expect(
       expectedOrigin !== undefined && actualOrigin === expectedOrigin,
-      `/ui/config.json server origin is ${actualOrigin ?? '<missing or invalid>'}, expected ${expectedOrigin ?? '<invalid>'}`,
+      `/config.json server origin is ${actualOrigin ?? '<missing or invalid>'}, expected ${expectedOrigin ?? '<invalid>'}`,
+    );
+  }
+  if (expectedIssuer) {
+    expect(
+      originOf(body?.authIssuer) === originOf(expectedIssuer),
+      `/config.json authIssuer is ${body?.authIssuer ?? '<missing>'}, expected ${expectedIssuer}`,
     );
   }
   return failures;
@@ -74,7 +89,12 @@ export async function smoke(origin, fetcher = fetch, expectedServer) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const origin = process.argv[2] ?? 'https://console.loams.dev';
-  const failures = await smoke(origin, fetch, process.env.LOAMS_CONSOLE_SERVER);
+  const failures = await smoke(
+    origin,
+    fetch,
+    process.env.LOAMS_ENGINE_URL || process.env.LOAMS_CONSOLE_SERVER,
+    process.env.LOAMS_AUTH_ISSUER,
+  );
   for (const f of failures) console.error(`FAIL ${f}`);
   if (failures.length) process.exit(1);
   console.log(`${origin}: ok`);

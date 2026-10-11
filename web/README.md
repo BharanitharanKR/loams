@@ -76,21 +76,50 @@ Put the class `dark` on `<html>` for dark mode, and set `--loams-font-sans` and 
 
 The console bundles Archivo and Martian Mono from Fontsource, both under the SIL Open Font License 1.1 (see `NOTICE`).
 
-## Deploy to Cloudflare
+## Deploy the console (hosted, Cloudflare, Vercel) — preview
 
-[console.loams.dev](https://console.loams.dev) is the console on Cloudflare Workers static assets: the assets-only Worker `loams-console` on the free plan, configured in [`apps/console/wrangler.jsonc`](apps/console/wrangler.jsonc). It is the same build the engine embeds, staged under `/ui/`:
+Loams ships as a preview. Ostrium hosts only the console ([console.loams.dev](https://console.loams.dev)) and the auth service; everything else runs on your machine or your own VMs (Docker Compose, `deploy/release/compose.yaml`). The browser talks to **your** engine over your tailnet (Tailscale, or a self-hosted Headscale): the device running the browser needs the Tailscale client, logged in to the engine's tailnet. The engine is never exposed on the public internet. You can also deploy the same console on your own Cloudflare or Vercel account.
+
+The hosted console is the cordis console (`cordis.html`) served at `/`. On first load it:
+
+1. signs in with OIDC Authorization Code + PKCE against `LOAMS_AUTH_ISSUER` (tokens stay in memory; a reload renews silently with `prompt=none`, a refresh token is used while the page lives; nothing that grants access goes to `localStorage` or `sessionStorage`);
+2. shows **Connect your engine** unless the deploy fixes one: enter the tailnet URL (`https://loams.<tailnet>.ts.net`), **Test connection** calls `GET /health`, and the URL is remembered in this browser;
+3. boots the console against that engine with `Authorization: Bearer <token>` (no cookies). Without an issuer, the connect screen offers an API key field instead (kept in memory only).
+
+Pages whose backend the engine serves (Live, Graph, Analytics/House, Status, Namespaces, Approvals) are on; pages that still run on built-in sample data (Deployments, Live deployments, SQL, Metrics, Pipelines, Git) appear only with the **Demo data** toggle in the header. Every page shows the **Preview** badge.
+
+Runtime config is written at deploy time from the environment by `apps/console/deploy/config.mjs` (and by the stage step), never baked into the bundle:
+
+| Variable | Meaning |
+|---|---|
+| `LOAMS_AUTH_ISSUER` | OIDC issuer, e.g. `https://auth.loams.dev`. With the client id, enables sign-in. |
+| `LOAMS_AUTH_CLIENT_ID` | the console's public client id at the issuer (redirect URI: the console's origin + `/`). |
+| `LOAMS_AUTH_SCOPE` | optional, default `openid profile email offline_access`. |
+| `LOAMS_ENGINE_URL` | optional: fixes the engine (skips the connect screen and adds its origin to the CSP). |
+
+`config.json` keys: `hosted`, `engineUrl`, `authIssuer`, `authClientId`, `authScope`. The engine-embedded console keeps serving `{}` (same origin, cookie session).
+
+The stage step injects a Content-Security-Policy `<meta>`: no inline scripts in the cordis console, no eval, `connect-src` limited to the console itself, `https://*.ts.net` (port 443, where `tailscale serve` publishes the engine), the issuer and the fixed engine. Headscale issues no HTTPS certificates, so a Headscale engine needs its own certificate and a console deployed with `LOAMS_ENGINE_URL` set to it.
+
+The engine must answer CORS for the console's origin, and the issuer must answer CORS on its discovery and token endpoints (the browser exchanges the code itself).
+
+### Cloudflare
+
+Workers static assets, configured in [`apps/console/wrangler.jsonc`](apps/console/wrangler.jsonc): assets only, SPA fallback, free plan.
 
 ```bash
 pnpm build
-node apps/console/deploy/stage.mjs      # dist/ -> dist-cloudflare/: ui/, a root index.html for the SPA fallback, _headers, _redirects
-cd apps/console && wrangler deploy
+LOAMS_AUTH_ISSUER=https://auth.loams.dev LOAMS_AUTH_CLIENT_ID=loams-console \
+  node apps/console/deploy/stage.mjs     # dist/ -> dist-cloudflare/: /, ui/, config.json, _headers, _redirects
+cd apps/console && wrangler deploy        # console.loams.dev
+cd apps/console && wrangler deploy --env byoc   # your account, on workers.dev
 node deploy/smoke.mjs https://console.loams.dev
 ```
 
-The stage step adds a Content-Security-Policy `<meta>` (inline scripts by hash, no eval, fetches only to itself and the configured server), security headers, long caching for hashed assets and `/` → `/ui/`. Set `LOAMS_CONSOLE_SERVER=https://...` to write both `/config.json` and `/ui/config.json`: both console entries read the server's origin from it at runtime, so nothing is baked into the bundle. The engine serves the default `{}` (same origin).
+`.github/workflows/console-deploy.yml` deploys on every push to `main` that touches `web/` (or the root workspace configuration, or the workflow), and on demand. It needs `LOAMS_AUTH_ISSUER` and `LOAMS_AUTH_CLIENT_ID` (variables) plus `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the `production` environment; without the secrets it builds and stages, then skips the deploy.
 
-`.github/workflows/console-deploy.yml` deploys on every push to `main` that touches `web/`, the root workspace configuration (`package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `nx.json`), or the deploy workflow itself, and on demand. It needs `LOAMS_CONSOLE_SERVER` plus `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the `production` environment; without them it builds and stages, then skips the deploy. `node --test apps/console/deploy/*.test.mjs` tests the stage and smoke scripts and the runtime config. The live smoke check verifies that deployed runtime configuration matches the configured API origin.
+### Vercel
 
-The staging step replaces the cordis build CSP with the configured HTTPS API
-origin. Sandbox frames receive their own response CSP with `sandbox allow-scripts`;
-HTML paths stay exact so their security headers apply without canonical redirects.
+[`apps/console/vercel.json`](apps/console/vercel.json): set the project's Root Directory to `web/apps/console` and the environment variables above. It installs from the workspace, runs `pnpm build` and `stage.mjs --target vercel` into `dist-vercel/`, rewrites unknown paths to the console and sends the security headers. Vercel headers are static, so its CSP names `https://*.ts.net` and `https://auth.loams.dev`; the stage step fails the build when the configured issuer or engine is missing from it — edit `connect-src` in `vercel.json` for another issuer.
+
+`node --test apps/console/deploy/*.test.mjs` tests the config, stage and smoke scripts, `wrangler.jsonc` and `vercel.json`. Sandbox frames receive their own response CSP with `sandbox allow-scripts`; HTML paths stay exact so their security headers apply without canonical redirects.
