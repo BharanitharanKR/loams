@@ -26,15 +26,16 @@ export { isAllowedSetting, settingProblem } from './settings.js';
 
 const plugin: PluginModule = {
   name: 'house',
-  inject: ['router', 'slots'],
+  inject: ['desktop', 'router', 'slots'],
   apply(ctx: Context) {
     const router = service(ctx, 'router');
     const slots = service(ctx, 'slots');
     const client = createMockHouseClient();
     ctx.effect(() =>
-      router.page({ id: 'analytics', path: '/analytics', title: 'Analytics', plugin: 'house' }, () => (
-        <HousePage client={client} sample />
-      )),
+      router.page(
+        { id: 'analytics', path: '/analytics', title: 'Analytics', plugin: 'house' },
+        () => <HousePage client={client} sample />,
+      ),
     );
     ctx.effect(() =>
       slots.register(

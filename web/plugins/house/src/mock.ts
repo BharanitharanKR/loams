@@ -45,8 +45,10 @@ export function stripSql(sql: string): string {
     .replace(/`[^`]*`/g, '``');
 }
 
-const WRITE = /^\s*(INSERT|CREATE|DROP|ALTER|TRUNCATE|RENAME|OPTIMIZE|DELETE|UPDATE|EXCHANGE|ATTACH|DETACH|SYSTEM|GRANT|REVOKE|KILL)\b/i;
-const HOST_FUNCTIONS = /\b(file|url|s3|s3Cluster|remote|remoteSecure|hdfs|mysql|postgresql|jdbc|odbc|executable|azureBlobStorage)\s*\(/i;
+const WRITE =
+  /^\s*(INSERT|CREATE|DROP|ALTER|TRUNCATE|RENAME|OPTIMIZE|DELETE|UPDATE|EXCHANGE|ATTACH|DETACH|SYSTEM|GRANT|REVOKE|KILL)\b/i;
+const HOST_FUNCTIONS =
+  /\b(file|url|s3|s3Cluster|remote|remoteSecure|hdfs|mysql|postgresql|jdbc|odbc|executable|azureBlobStorage)\s*\(/i;
 
 function refuse(f: Omit<HouseFailure, 'metadata'> & { metadata?: Record<string, string> }): never {
   const metadata = { ...(f.metadata ?? {}) };

@@ -19,6 +19,7 @@
       "entry": ".",
       "tier": "first-party",
       "inject": [
+        "desktop",
         "router",
         "slots"
       ],

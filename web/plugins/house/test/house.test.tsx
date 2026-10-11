@@ -132,10 +132,12 @@ describe('settings', () => {
     expect(settingProblem('max_memory_usage', String(5 * 1024 ** 3))).toMatch(/4 GiB/);
     expect(settingProblem('max_execution_time', '301')).toMatch(/300/);
     expect(settingProblem('max_execution_time', '60')).toBeUndefined();
-    expect(settingsMap([
-      { id: 1, name: 'max_threads', value: '4' },
-      { id: 2, name: 'MAX_THREADS', value: '2' },
-    ])).toEqual({ ok: false, problem: 'MAX_THREADS is set twice.' });
+    expect(
+      settingsMap([
+        { id: 1, name: 'max_threads', value: '4' },
+        { id: 2, name: 'MAX_THREADS', value: '2' },
+      ]),
+    ).toEqual({ ok: false, problem: 'MAX_THREADS is set twice.' });
   });
 });
 
@@ -166,7 +168,7 @@ describe('analytics page', () => {
     run();
     const results = await screen.findByRole('region', { name: 'Result rows' });
     expect(within(results).getByText('kind')).toBeTruthy();
-    expect(within(results).getByText("LowCardinality(String)")).toBeTruthy();
+    expect(within(results).getByText('LowCardinality(String)')).toBeTruthy();
     const req = client.requests.at(-1);
     expect(req?.readOnly).toBe(true);
     expect(req?.maxRows).toBe(PAGE_MAX_ROWS);
@@ -191,8 +193,7 @@ describe('analytics page', () => {
     setSql("SELECT * FROM default.events INTO OUTFILE 'out.csv'");
     run();
     const alert = await screen.findByTestId('house-failure');
-    expect(within(alert).getByText(/Code 344/)).toBeTruthy();
-    expect(within(alert).getByText(/SUPPORT_IS_DISABLED/)).toBeTruthy();
+    expect(within(alert).getByText(/^Code 344 · SUPPORT_IS_DISABLED · /)).toBeTruthy();
     expect(sqlBox().getAttribute('aria-invalid')).toBe('true');
   });
 
@@ -207,7 +208,9 @@ describe('analytics page', () => {
 
     fireEvent.click(screen.getByLabelText('Allow writes'));
     run();
-    const dialog = await screen.findByRole('dialog', { name: 'Run a statement that changes data?' });
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Run a statement that changes data?',
+    });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Run' }));
     await waitFor(() => expect(client.requests.at(-1)?.readOnly).toBe(false));
   });

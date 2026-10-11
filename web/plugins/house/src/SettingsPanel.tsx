@@ -82,7 +82,10 @@ export function SettingsPanel({
         })}
       </ul>
       <div>
-        <Button size="sm" onClick={() => onChange([...rows, { id: nextId(), name: '', value: '' }])}>
+        <Button
+          size="sm"
+          onClick={() => onChange([...rows, { id: nextId(), name: '', value: '' }])}
+        >
           Add setting
         </Button>
       </div>

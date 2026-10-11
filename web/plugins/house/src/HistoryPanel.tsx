@@ -4,13 +4,8 @@
 // loads it into the editor.
 
 import { Button, Input, Select } from '@loams/ui';
-import { useCallback, useEffect, useId, useState } from 'react';
-import {
-  type HistoryEntry,
-  type HouseClient,
-  type QueryStatus,
-  toFailure,
-} from './client.js';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { type HistoryEntry, type HouseClient, type QueryStatus, toFailure } from './client.js';
 
 const STATUSES: QueryStatus[] = ['FINISHED', 'FAILED', 'CANCELLED', 'RUNNING'];
 const fmt = new Intl.NumberFormat('en');
@@ -32,9 +27,13 @@ export function HistoryPanel({
   const [next, setNext] = useState('');
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
+  // Only the latest request may touch the list: a slow response for an older filter
+  // (or a "More" page from one) is dropped rather than shown under the new filter.
+  const seq = useRef(0);
 
   const load = useCallback(
     async (pageToken?: string) => {
+      const mine = ++seq.current;
       setLoading(true);
       setError(undefined);
       try {
@@ -45,12 +44,13 @@ export function HistoryPanel({
           pageSize: 20,
           pageToken,
         });
+        if (mine !== seq.current) return;
         setItems((prev) => (pageToken ? [...prev, ...page.items] : page.items));
         setNext(page.nextPageToken);
       } catch (e) {
-        setError(toFailure(e).message);
+        if (mine === seq.current) setError(toFailure(e).message);
       } finally {
-        setLoading(false);
+        if (mine === seq.current) setLoading(false);
       }
     },
     [client, status, text],

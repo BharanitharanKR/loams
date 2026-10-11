@@ -25,7 +25,7 @@ export const EVENTS: { columns: ColumnHeader[]; rows: Cell[][] } = {
   columns: [
     { name: 'id', clickhouseType: 'UInt64' },
     { name: 'ts', clickhouseType: "DateTime64(3, 'UTC')" },
-    { name: 'kind', clickhouseType: "LowCardinality(String)" },
+    { name: 'kind', clickhouseType: 'LowCardinality(String)' },
     { name: 'amount', clickhouseType: 'Nullable(Decimal(18, 2))' },
     { name: 'tags', clickhouseType: 'Array(String)' },
   ],
@@ -78,7 +78,8 @@ export const HISTORY: HistoryEntry[] = [
     durationMs: 48,
     status: 'FINISHED',
     errorCode: 0,
-    query: 'SELECT kind, count() AS n, sum(amount) AS total\nFROM default.events\nGROUP BY kind\nORDER BY n DESC',
+    query:
+      'SELECT kind, count() AS n, sum(amount) AS total\nFROM default.events\nGROUP BY kind\nORDER BY n DESC',
     readRows: 6,
     readBytes: 288,
     resultRows: 3,

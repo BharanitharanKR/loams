@@ -103,7 +103,6 @@ export function Editor(p: EditorProps) {
         ref={ref}
         aria-label="SQL"
         role="combobox"
-        aria-multiline="true"
         aria-autocomplete="list"
         aria-expanded={shown}
         aria-controls={listId}
@@ -124,18 +123,21 @@ export function Editor(p: EditorProps) {
         onBlur={() => setOpen(false)}
         onKeyDown={onKey}
       />
-      <ul
+      <div
         id={listId}
         role="listbox"
         aria-label="Completions"
         hidden={!shown}
-        className="absolute left-2 z-10 m-0 max-h-60 list-none overflow-auto rounded-md border border-solid border-rule bg-surface p-1 font-mono text-[13px] shadow"
+        className="absolute left-2 z-10 m-0 max-h-60 overflow-auto rounded-md border border-solid border-rule bg-surface p-1 font-mono text-[13px] shadow"
       >
         {options.map((w, i) => (
-          <li
+          <div
             key={w}
             id={`${listId}-${i}`}
             role="option"
+            // Focus stays in the textarea (aria-activedescendant); -1 keeps options out of
+            // the tab order.
+            tabIndex={-1}
             aria-selected={i === active}
             className={`cursor-pointer rounded px-2 py-1 ${i === active ? 'bg-accent-soft' : ''}`}
             // mousedown, not click: the textarea's blur would close the list first.
@@ -145,9 +147,9 @@ export function Editor(p: EditorProps) {
             }}
           >
             {w}
-          </li>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }

@@ -146,7 +146,8 @@ export function settingsMap(
     const problem = settingProblem(r.name, r.value);
     if (problem) return { ok: false, problem };
     const key = r.name.trim();
-    if (Object.keys(out).some((k) => eq(k, key))) return { ok: false, problem: `${key} is set twice.` };
+    if (Object.keys(out).some((k) => eq(k, key)))
+      return { ok: false, problem: `${key} is set twice.` };
     out[key] = r.value.trim();
   }
   return { ok: true, settings: out };

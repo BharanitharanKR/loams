@@ -16,8 +16,8 @@ import {
   type ColumnHeader,
   type Database,
   type HouseClient,
-  type HouseFailure,
   HouseError,
+  type HouseFailure,
   newQueryId,
   PAGE_MAX_ROWS,
   PAGE_TIMEOUT_MS,
@@ -133,6 +133,7 @@ function Workspace({ client, sample }: { client: HouseClient; sample?: boolean }
 
   useEffect(() => {
     let live = true;
+    const ac = new AbortController();
     client.listDatabases().then(
       (p) => {
         if (!live) return;
@@ -146,17 +147,21 @@ function Workspace({ client, sample }: { client: HouseClient; sample?: boolean }
     (async () => {
       const names: string[] = [];
       try {
-        for await (const f of client.executeQuery({
-          sql: 'SELECT name, is_aggregate FROM system.functions ORDER BY name',
-          database: 'system',
-          settings: {},
-          params: {},
-          format: 'ARROW_IPC',
-          maxRows: SERVER_MAX_ROWS,
-          timeoutMs: PAGE_TIMEOUT_MS,
-          readOnly: true,
-        })) {
-          if (f.kind === 'batch') for (const r of f.rows) if (typeof r[0] === 'string') names.push(r[0]);
+        for await (const f of client.executeQuery(
+          {
+            sql: 'SELECT name, is_aggregate FROM system.functions ORDER BY name',
+            database: 'system',
+            settings: {},
+            params: {},
+            format: 'ARROW_IPC',
+            maxRows: SERVER_MAX_ROWS,
+            timeoutMs: PAGE_TIMEOUT_MS,
+            readOnly: true,
+          },
+          ac.signal,
+        )) {
+          if (f.kind === 'batch')
+            for (const r of f.rows) if (typeof r[0] === 'string') names.push(r[0]);
         }
       } catch {
         // completions are a convenience: keywords alone still work
@@ -165,6 +170,8 @@ function Workspace({ client, sample }: { client: HouseClient; sample?: boolean }
     })();
     return () => {
       live = false;
+      // Leaving the page stops the function-list stream rather than reading it out.
+      ac.abort();
     };
   }, [client]);
 
@@ -339,7 +346,9 @@ function Workspace({ client, sample }: { client: HouseClient; sample?: boolean }
                 checked={allowWrites}
                 onChange={(e) => setAllowWrites(e.target.checked)}
               />
-              <span className="text-xs text-muted">Ctrl or Cmd + Enter runs. Ctrl + Space completes.</span>
+              <span className="text-xs text-muted">
+                Ctrl or Cmd + Enter runs. Ctrl + Space completes.
+              </span>
             </div>
           </section>
 
@@ -348,9 +357,7 @@ function Workspace({ client, sample }: { client: HouseClient; sample?: boolean }
 
           {busy && (
             <div className="flex items-center gap-3 text-sm text-muted" role="status">
-              <span>
-                Running… {progress ? `${fmt.format(progress.readRows)} rows read` : ''}
-              </span>
+              <span>Running… {progress ? `${fmt.format(progress.readRows)} rows read` : ''}</span>
               {pct !== undefined && (
                 <progress
                   max={100}
@@ -377,7 +384,9 @@ function Workspace({ client, sample }: { client: HouseClient; sample?: boolean }
                 {fmt.format(rows.length)} {rows.length === 1 ? 'row' : 'rows'}
                 {summary &&
                   ` in ${fmt.format(summary.elapsedMs)} ms · ${fmt.format(summary.readRows)} rows read`}
-                {summary && summary.writtenRows > 0 && ` · ${fmt.format(summary.writtenRows)} written`}
+                {summary &&
+                  summary.writtenRows > 0 &&
+                  ` · ${fmt.format(summary.writtenRows)} written`}
               </p>
               {summary?.truncated && (
                 <div

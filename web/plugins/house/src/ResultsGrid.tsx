@@ -33,16 +33,18 @@ export function ResultsGrid({ columns, rows }: { columns: ColumnHeader[]; rows: 
 
   if (!columns.length) return null;
   return (
-    <div
+    <section
       className="overflow-auto rounded-md border border-solid border-rule"
       style={{ maxHeight: ROW_HEIGHT * (VIEW_ROWS + 1) + 2 }}
       onScroll={(e) => setTop(e.currentTarget.scrollTop)}
       // Focusable so the keyboard can scroll it.
       // biome-ignore lint/a11y/noNoninteractiveTabindex: a scroll region must take focus
       tabIndex={0}
-      role="region"
       aria-labelledby={caption}
     >
+      {/* Spacers outside the table stand in for the rows not drawn, so the table holds
+          only real rows and the sticky header stays inside the drawn slice. */}
+      <div aria-hidden="true" style={{ height: before }} />
       <table
         className="w-full border-collapse font-mono text-[13px]"
         aria-rowcount={rows.length + 1}
@@ -66,11 +68,6 @@ export function ResultsGrid({ columns, rows }: { columns: ColumnHeader[]; rows: 
           </tr>
         </thead>
         <tbody>
-          {before > 0 && (
-            <tr aria-hidden="true" style={{ height: before }}>
-              <td colSpan={columns.length} />
-            </tr>
-          )}
           {rows.slice(first, last).map((row, j) => {
             const i = first + j;
             return (
@@ -93,13 +90,9 @@ export function ResultsGrid({ columns, rows }: { columns: ColumnHeader[]; rows: 
               </tr>
             );
           })}
-          {after > 0 && (
-            <tr aria-hidden="true" style={{ height: after }}>
-              <td colSpan={columns.length} />
-            </tr>
-          )}
         </tbody>
       </table>
-    </div>
+      <div aria-hidden="true" style={{ height: after }} />
+    </section>
   );
 }

@@ -3,6 +3,10 @@
 // file defines the calls the page makes as a typed interface. `mock.ts` implements it
 // from fixtures; a Connect implementation over the console's transport replaces the
 // mock once `loams.house.v1` lands, decoding `ARROW_IPC` batches into `Cell` rows.
+//
+// TODO(HS1 Task 8): replace every request, frame, history and failure interface below
+// with the generated `loams.house.v1` types from `@loams/proto`, keeping only the
+// page-side helpers (`toFailure`, `reasonText`, the row caps).
 
 /** The service name `GetInstance.services[]` lists when a House is configured. */
 export const HOUSE_SERVICE = 'loams.house.v1.HouseService';
