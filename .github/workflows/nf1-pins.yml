@@ -1,8 +1,11 @@
 # NF1 (docs/plans/2026-10-09-nf1-neon-fork.md): Loams Postgres's names and pins.
 #
-# names (Task 1b, D823): no pre-rename name is left (the crate loams-neon, the
-# dev stack deploy/neon, the fork's old URL ostrium-labs/neon). Task 2 adds
+# names (Task 1b, D823): no pre-rename name is left (the old crate, dev stack
+# and fork URL; see scripts/nf1/check-names.sh). Task 2 adds
 # `pins.py check`; Task 12 adds `verify`.
+#
+# mirror (Task 1): mirror-images.sh against a local registry, audit-image.sh on
+# fixture `.dep-v0` payloads, and the README runbook order.
 name: NF1 pins
 
 on:
@@ -29,3 +32,26 @@ jobs:
           persist-credentials: false
       - name: check-names.sh and its tests
         run: scripts/nf1/tests/test_check_names.sh
+
+  mirror:
+    name: mirror and audit scripts (Task 1)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      registry:
+        # registry:3.0.0 (2026-01-28)
+        image: docker.io/library/registry@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e
+        ports:
+          - 5000:5000
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: skopeo and rust-audit-info
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q skopeo
+          cargo install --locked rust-audit-info@0.5.4
+      - name: test_mirror.py
+        env:
+          MIRROR_TEST_REGISTRY: localhost:5000
+        run: python3 -I scripts/nf1/tests/test_mirror.py
