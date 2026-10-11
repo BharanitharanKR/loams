@@ -199,9 +199,9 @@ fn language_from_tag(tag: u8) -> Option<QueryLanguage> {
 
 fn checked_offset(seconds: i32) -> Result<i32, CodecError> {
     if seconds.unsigned_abs() > MAX_OFFSET_SECONDS.unsigned_abs() {
-        return Err(CodecError::Unrepresentable(format!(
-            "a UTC offset of {seconds} seconds, outside ±18 hours"
-        )));
+        return Err(CodecError::Unrepresentable(
+            "a UTC offset outside ±18 hours".into(),
+        ));
     }
     Ok(seconds)
 }

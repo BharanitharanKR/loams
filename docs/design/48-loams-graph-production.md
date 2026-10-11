@@ -182,7 +182,7 @@ SchemaChange    v1  { graph_id, lease_epoch, commit_epoch, statement, language }
 ```
 
 - The encoding is the Loams record codec with an explicit version byte. Property values use the same typed value model as the API (§8.3), so a value written over the wire is the value replayed.
-- **Amended by GR1 Task 10 (R10.1–R10.4).**
+- **Amended by GR1 Task 10 (R10.1–R10.5).**
   - Version 1 is specified in `conformance/graph/records/v1/README.md` and frozen by the golden vectors beside it.
   - The body is written by hand (varints, tagged values) rather than through serde, so decoding is total and bounded, and each record has one encoding.
   - Values are the typed model's kinds in exact units, not its protobuf bytes.
