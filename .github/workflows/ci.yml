@@ -14,6 +14,11 @@ on:
 permissions:
   contents: read
 
+# Runners (owner, 2026-10-11; Depot removed): GitHub-hosted ubuntu-24.04 by
+# default, free for this public repository. Only the heavy Rust jobs that
+# starve a 4 vCPU / 16 GB runner (fmt and clippy, Rust tests, feature tests,
+# Live, Graph, agentd, durable linearizability) run on Blacksmith 8 vCPU,
+# whose free minutes are counted per vCPU: keep light jobs off it.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
@@ -29,7 +34,7 @@ jobs:
   changes:
     name: changed paths
     if: github.event_name == 'pull_request'
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       pull-requests: read
@@ -341,7 +346,7 @@ jobs:
     name: fmt and clippy
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - name: protoc
@@ -415,7 +420,7 @@ jobs:
     name: Rust tests (${{ matrix.partition }}/2)
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     # A hung test fails its partition instead of holding the runner; nextest
     # also terminates a loams-agentd* test after 3 minutes (.config/nextest.toml).
     timeout-minutes: 90
@@ -448,7 +453,7 @@ jobs:
     name: loams-agentd (headless guard, clippy, tests)
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.agentd == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     # PTY, shell and harness-fixture tests; a hung one fails the job.
     timeout-minutes: 60
     steps:
@@ -487,7 +492,7 @@ jobs:
     name: Rust feature tests
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - name: protoc
@@ -528,7 +533,7 @@ jobs:
     name: kill -9 crash gate
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || (github.base_ref == 'main' && needs.changes.outputs.engine == 'true')) }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: protoc
@@ -543,7 +548,7 @@ jobs:
     name: multi-process cluster
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || (github.base_ref == 'main' && needs.changes.outputs.engine == 'true')) }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: protoc
@@ -561,7 +566,7 @@ jobs:
     name: Python qdrant-client smoke
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.engine == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: protoc
@@ -598,7 +603,7 @@ jobs:
     name: Elasticsearch client suite
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.es == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     # The Elasticsearch 8.19 oracle (plan M1.5 Task 11, owner ruling
     # O-M15-6): a CI-only test oracle, never vendored or shipped (R14).
     services:
@@ -631,13 +636,10 @@ jobs:
         run: conformance/es-client/run.sh
 
   # The remaining light jobs (docs, TLA+, Lean, the boundary guard and the
-  # required summary) run the same light expression as `changes`: main takes
-  # RUNNER_MAIN, dev takes RUNNER_LIGHT. Until #268's routing reached them they
-  # pinned ubuntu-latest, so a single change to RUNNER_MAIN left five jobs
-  # behind on the default pool (ruling 6).
+  # required summary) run on GitHub-hosted ubuntu-24.04, like `changes`.
   docs:
     name: decision log IDs
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -655,7 +657,7 @@ jobs:
     name: TLA+ specs
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.spec == 'true' || needs.changes.outputs.router == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -684,7 +686,7 @@ jobs:
     name: Lean proofs
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.lean == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: spec/lean
@@ -724,7 +726,7 @@ jobs:
     name: loams-specview
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.specview == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -757,7 +759,7 @@ jobs:
     name: simulation seed sweep
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sim == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: protoc
@@ -785,7 +787,7 @@ jobs:
     name: TiKV suites
     needs: changes
     if: ${{ !cancelled() && github.event_name != 'schedule' && (github.event_name != 'pull_request' || (github.base_ref == 'main' && needs.changes.outputs.tikv == 'true')) }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: protoc
@@ -858,7 +860,7 @@ jobs:
     name: Live suites on the embedded store
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.live-embedded == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - name: protoc
@@ -878,7 +880,7 @@ jobs:
   tikv-nightly:
     name: TiKV suites (nightly)
     if: github.event_name == 'schedule'
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: paths
@@ -980,7 +982,7 @@ jobs:
     name: durable execution (SQLite linearizability)
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.durable == 'true')) }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     timeout-minutes: 120
     env:
       DURABLE_FORK_TARGET_DIR: ${{ github.workspace }}/target/durable-fork-build
@@ -1021,7 +1023,7 @@ jobs:
   durable-tidb:
     name: durable execution on TiDB (nightly)
     if: github.event_name == 'schedule'
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
       DURABLE_FORK_TARGET_DIR: ${{ github.workspace }}/target/durable-fork-build
@@ -1087,7 +1089,7 @@ jobs:
     name: loams.live.v1 protos and generated TypeScript
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.protos == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -1126,7 +1128,7 @@ jobs:
     name: app protos, @loams/proto and the mobile templates
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.app-protos == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1179,7 +1181,7 @@ jobs:
     name: the TypeScript SDK and its conformance suite
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-typescript == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: protoc
@@ -1271,7 +1273,7 @@ jobs:
     name: the Rust SDK and its conformance suite
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-rust == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       # crates/loams-live-proto/build.rs shells out to the system protoc
@@ -1327,7 +1329,7 @@ jobs:
     name: the Python SDK and its conformance suite
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-python == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
@@ -1383,7 +1385,7 @@ jobs:
     name: the Go SDK and its conformance suite
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-go == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -1413,7 +1415,7 @@ jobs:
     name: the C++ SDK and its conformance suite
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-cpp == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       # `pkg-config` is what protobuf's link line comes from: the SDK parses
@@ -1515,7 +1517,7 @@ jobs:
     name: the C# SDK and its conformance suite
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-csharp == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v5
@@ -1562,7 +1564,7 @@ jobs:
     name: Loams Graph (loams-graph, no grafeo by default)
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.graph == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - name: protoc
@@ -1604,7 +1606,7 @@ jobs:
     name: Loams SQL gate codec fuzzing
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sqlgate == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     # Five targets x 60 s plus the build.
     timeout-minutes: 20
     steps:
@@ -1683,7 +1685,7 @@ jobs:
     name: licenses, advisories, sources
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.deny == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2
@@ -1692,7 +1694,7 @@ jobs:
     name: console and @loams/ui
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.web == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: web
@@ -1758,7 +1760,7 @@ jobs:
     name: console in a real Chrome (WebMCP detection)
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.web == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: web
@@ -1814,7 +1816,7 @@ jobs:
     name: Dapr trigger edge
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.dapr-edge == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: deploy/dapr/edge
@@ -1837,7 +1839,7 @@ jobs:
 
   no-metering:
     name: open-core boundary (no metering)
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: boundary guard regression fixtures
@@ -1854,7 +1856,7 @@ jobs:
   # script. The self-test is pure-python fixtures and takes about a second.
   signing:
     name: Linux signing scope
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1875,7 +1877,7 @@ jobs:
   # layout is reported as skipped by the self-test rather than passing silently.
   packaging:
     name: Linux packaging definitions
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1932,7 +1934,7 @@ jobs:
       - deny
       - web
       - dapr-edge
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - name: Require all selected CI jobs to pass
         env:

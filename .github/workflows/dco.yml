@@ -14,7 +14,7 @@ concurrency:
 jobs:
   dco:
     name: DCO sign-off
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
         with:
