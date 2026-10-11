@@ -1,0 +1,25 @@
+[package]
+name = "loams-fs"
+description = "The Fs trait for warm, rebuildable state and scratch (design §36 §17, D382): a native and an in-memory backend, spill directories and one conformance suite."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+bytes.workspace = true
+# `conformance` races writers with `join_all`.
+futures.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+# Unique spill-directory and staging names.
+ulid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

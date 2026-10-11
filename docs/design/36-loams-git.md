@@ -644,6 +644,18 @@ pub trait Fs: fmt::Debug {
 }
 ```
 
+**As built (GT1a, Task 2; `crates/loams-fs`).** The trait is as above, with these additions and precise rules:
+- `Fs: fmt::Debug + MaybeSendSync`. `MaybeSendSync` is `Send + Sync` on native targets and empty on `wasm32`, so an `Arc<dyn Fs>` can cross tokio tasks (GT1 Task 0, T0-32).
+- `FsPath::new` refuses NUL bytes as well, with an `FsPathError`.
+- `FsPath::root()` (the empty path) names the whole backend. It is a directory for `list`, never a file.
+- `read_range` needs the range inside the file. An empty range up to the length reads nothing; a range past the end, or an inverted one, is an error, never a short read.
+- `append` creates a missing file.
+- `list` is recursive, returns files only, and takes `dir` as a prefix of whole segments.
+- `FsMeta` and `FsCaps` also derive `PartialEq` and `Eq`.
+- `NativeFs::new(root, survives_restart)` keeps files under `root/files/`. Each write is staged whole in `root/staging/`, then renamed (`Overwrite`) or hard-linked (`CreateNew`) into place. Opening a root clears its staging directory, and removing a file prunes the directories it empties.
+- `SpillDir::new(fs, parent)` makes `<parent>/spill-<ulid>`. `close` removes its files, and so does a task spawned on drop.
+- `fs_conformance!` expands the suite into one test per case.
+
 
 ## 18. Sources
 

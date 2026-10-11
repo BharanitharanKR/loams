@@ -250,6 +250,8 @@ loams-cloudevents = { path = "crates/loams-cloudevents", version = "0.0.1" }
 loams-common = { path = "crates/loams-common", version = "0.0.1" }
 loams-durable = { path = "crates/loams-durable", version = "0.0.1" }
 loams-es = { path = "crates/loams-es", version = "0.0.1" }
+# The Fs trait for warm, rebuildable state and scratch (design §36 §17, GT1 Task 2).
+loams-fs = { path = "crates/loams-fs", version = "0.0.1" }
 loams-graph = { path = "crates/loams-graph", version = "0.0.1" }
 loams-hnsw = { path = "crates/loams-hnsw", version = "0.0.1" }
 loams-hot = { path = "crates/loams-hot", version = "0.0.1" }

@@ -7858,6 +7858,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "loams-fs"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "futures",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "ulid 3.0.0",
+]
+
+[[package]]
 name = "loams-graph"
 version = "0.0.1"
 dependencies = [
