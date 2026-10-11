@@ -790,7 +790,7 @@ live_test!(a_table_is_validated_by_one_deploy_at_a_time);
 /// job is gone, and the next tightening validates afresh. A live lease
 /// keeps the janitor off.
 async fn janitor_releases_abandoned_validations(store: TestStore) {
-    let app = node_with(&store, slow_scans(4, 10_000, Duration::from_millis(300))).await;
+    let app = node_with(&store, slow_scans(4, 10_000, Duration::from_secs(3))).await;
     let v1 = deploy(&app, schema(Some(loose()), true), None).await;
     for n in 0..20 {
         add(&app, obj(&[("body", s("a")), ("n", i(n))]))
@@ -812,7 +812,7 @@ async fn janitor_releases_abandoned_validations(store: TestStore) {
     let early = deploy::retain(&app).await.expect("a janitor round");
     assert!(early.validations_released.is_empty(), "the lease lives");
     assert_eq!(state_of(&app, v2).await, DeploymentState::Validating);
-    tokio::time::sleep(Duration::from_millis(400)).await;
+    tokio::time::sleep(Duration::from_millis(3_200)).await;
 
     let retained = deploy::retain(&app).await.expect("the janitor round");
     assert_eq!(retained.validations_released, [v2]);
@@ -919,7 +919,7 @@ impl Visitor for Every {
 /// so every document is visited once (a failed batch's findings roll back
 /// with it).
 async fn table_job_resumes_from_its_checkpoint(store: TestStore) {
-    let app = node_with(&store, slow_scans(4, 10_000, Duration::from_millis(400))).await;
+    let app = node_with(&store, slow_scans(4, 10_000, Duration::from_secs(3))).await;
     deploy(&app, schema(None, true), None).await;
     let mut all = BTreeSet::new();
     for _ in 0..30 {
@@ -928,7 +928,7 @@ async fn table_job_resumes_from_its_checkpoint(store: TestStore) {
     let notes = table(&app, "notes").await.id;
     let keys = AppKeys::dedicated();
     let deployment = Ulid::from_parts(1_700_000_000_000, 1);
-    let lease = Duration::from_millis(400);
+    let lease = Duration::from_secs(3);
     app.runner()
         .store()
         .run(TxnOptions::new("test.job.create"), |txn| {
@@ -974,7 +974,7 @@ async fn table_job_resumes_from_its_checkpoint(store: TestStore) {
         .await
         .expect_err("the first owner's lease lives");
     assert!(matches!(err, LiveError::FailedPrecondition(_)), "{err}");
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    tokio::time::sleep(Duration::from_millis(3_200)).await;
     let done = second
         .run(every, usize::MAX)
         .await

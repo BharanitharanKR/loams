@@ -89,8 +89,11 @@ pub struct SchemaChanges {
 /// A stricter validator a deploy checks a table's documents against.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Validation {
+    /// The table whose documents are checked.
     pub table: TableId,
+    /// The table's name, for findings and messages.
     pub name: String,
+    /// The stricter validator the documents must match.
     pub validator: Validator,
 }
 
@@ -526,6 +529,7 @@ pub async fn check_document(
 /// validator is a [`Finding`] whose detail names the field paths.
 #[derive(Debug)]
 pub struct Conformance {
+    /// The validator each scanned document must match.
     pub validator: Validator,
 }
 

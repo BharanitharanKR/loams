@@ -331,7 +331,9 @@ impl TableJob {
         let docs_per_s = f64::from(options.docs_per_s.max(1));
         loop {
             let started = Instant::now();
-            let (record, scanned) = self.batch(&visitor, batch, options.lease).await?;
+            let (record, scanned) = self
+                .batch(&visitor, batch, options.lease, docs_per_s)
+                .await?;
             if record.done || record.findings.len() >= stop_after {
                 return Ok(record);
             }
@@ -344,12 +346,15 @@ impl TableJob {
 
     /// One batch in one transaction: the record (checked and taken over if
     /// its lease expired), up to `batch` documents after the checkpoint,
-    /// the visitor, and the record written back.
+    /// the visitor, and the record written back. The renewed lease covers
+    /// `lease` plus the rate pause that follows the batch, so a slow rate
+    /// never lets the lease lapse between batches (PR #446 review).
     async fn batch(
         &self,
         visitor: &Arc<dyn Visitor>,
         batch: usize,
         lease: Duration,
+        docs_per_s: f64,
     ) -> Result<(JobRecord, usize), LiveError> {
         let app = self.runner.app().clone();
         let (kind, table) = (self.kind, self.table);
@@ -401,7 +406,8 @@ impl TableJob {
                 if let Some((last, _)) = pairs.last() {
                     record.checkpoint = last.clone();
                 }
-                record.lease_expires_ms = now_ms.saturating_add(millis(lease));
+                let pause = Duration::from_secs_f64(docs.len() as f64 / docs_per_s);
+                record.lease_expires_ms = now_ms.saturating_add(millis(lease + pause));
                 txn.put(
                     &app.table_job(table, kind.byte()),
                     record.to_proto().encode_to_vec(),
