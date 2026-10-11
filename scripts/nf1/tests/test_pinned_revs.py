@@ -183,7 +183,7 @@ class UnreachableRevFails(Fake):
         self.tags("loams-postgres")
         r = self.run_check()
         self.assertEqual(r.returncode, 1)
-        self.assertIn("FAIL", r.stdout)
+        self.assertIn("compare failed", r.stdout)
 
     def test_missing_loams_branch_fails(self):
         self.toml("Cargo.toml", cargo("tokio-epoll-uring", TRIM_1))
@@ -266,24 +266,32 @@ class ForcePushRejected(unittest.TestCase):
             self.fail(f"git {' '.join(args)}: {r.stderr}")
         return r
 
+    def remote_head(self):
+        out = self.git("ls-remote", self.REMOTE, self.BRANCH).stdout.split()
+        return out[0] if out else None
+
     def test_force_push_rejected(self):
         with tempfile.TemporaryDirectory(prefix="nf1-probe-") as self.dir:
             self.git("init", "-q")
+            self.assertIsNone(self.remote_head(), "loams/probe already exists; not ours to touch")
             ident = ["-c", "user.name=nf1-probe", "-c", "user.email=nf1-probe@invalid"]
             self.git(*ident, "commit", "-q", "--allow-empty", "-m", "nf1 probe: first")
             first = self.git("rev-parse", "HEAD").stdout.strip()
             self.git(*ident, "commit", "-q", "--allow-empty", "-m", "nf1 probe: second")
+            second = self.git("rev-parse", "HEAD").stdout.strip()
             self.git("push", "-q", self.REMOTE, f"HEAD:{self.BRANCH}")
             try:
                 r = self.git("push", "--force", self.REMOTE, f"{first}:{self.BRANCH}", check=False)
                 print("\nforce push:", r.returncode, r.stderr.strip().replace("\n", " | "))
                 self.assertNotEqual(r.returncode, 0, "the force push was accepted")
-                self.assertRegex(r.stderr, r"(?i)rule|protected|non-fast-forward|declined")
+                self.assertRegex(r.stderr, r"GH013|Cannot force-push")
+                self.assertEqual(self.remote_head(), second, "loams/probe moved")
             finally:
-                d = self.git("push", self.REMOTE, f":{self.BRANCH}", check=False)
+                # Delete only the commit this test pushed.
+                d = self.git("push", f"--force-with-lease={self.BRANCH}:{second}", self.REMOTE, f":{self.BRANCH}", check=False)
                 print("delete:", d.returncode, d.stderr.strip().replace("\n", " | "))
             self.assertEqual(d.returncode, 0, d.stderr)
-
+            self.assertIsNone(self.remote_head())
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

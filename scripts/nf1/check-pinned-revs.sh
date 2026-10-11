@@ -87,7 +87,7 @@ while read -r repo rev; do
         ;;
     esac
   else
-    status="not found"
+    status="compare failed"
   fi
   if [ -z "${tags_of[$repo]+x}" ]; then
     tags_of[$repo]=$(tag_targets "$repo") || tags_of[$repo]=""
