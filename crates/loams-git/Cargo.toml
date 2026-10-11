@@ -1,0 +1,25 @@
+[package]
+name = "loams-git"
+description = "Loams Git's portable core (design §36, §19): identifiers, object paths, limits, and the bucket WAL formats."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+# The gitoxide 0.88 train, pinned exactly in the workspace (plan GT1 R0.8).
+gix-hash.workspace = true
+gix-validate.workspace = true
+loams-common.workspace = true
+# `derived_blame` names hash the path.
+sha2.workspace = true
+thiserror.workspace = true
+# Generated ids (`r`, `w`, `m`, `s` + a lowercase ULID).
+ulid.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

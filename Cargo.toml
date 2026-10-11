@@ -91,6 +91,11 @@ grafeo-common = { version = "=0.5.43", default-features = false }
 # statement classification matches on (GR1 Task 3, R0.10). Already in the tree
 # under grafeo-engine with the features above; this adds none.
 grafeo-adapters = { version = "=0.5.43", default-features = false }
+# Loams Git (GT1): the gitoxide 0.88 train of 2026-09-25, pinned exactly
+# (R0.8, T0-21), SHA-1 only (Ruling 8). A move to 0.89 is its own PR after
+# 2026-10-22. MIT OR Apache-2.0.
+gix-hash = { version = "=0.27.0", default-features = false, features = ["sha1"] }
+gix-validate = { version = "=0.12.0", default-features = false }
 hex = "0.4"
 # Live pagination cursors are HMAC-SHA256 tagged with the app's key (LV1
 # Task 4); 0.13 is the line on sha2 0.11's digest.
@@ -252,6 +257,8 @@ loams-durable = { path = "crates/loams-durable", version = "0.0.1" }
 loams-es = { path = "crates/loams-es", version = "0.0.1" }
 # The Fs trait for warm, rebuildable state and scratch (design §36 §17, GT1 Task 2).
 loams-fs = { path = "crates/loams-fs", version = "0.0.1" }
+# Loams Git's portable core (design §36, §19; GT1 Tasks 4 onwards).
+loams-git = { path = "crates/loams-git", version = "0.0.1" }
 loams-graph = { path = "crates/loams-graph", version = "0.0.1" }
 loams-hnsw = { path = "crates/loams-hnsw", version = "0.0.1" }
 loams-hot = { path = "crates/loams-hot", version = "0.0.1" }
