@@ -27,7 +27,14 @@ import {
   webModules,
   webPatches,
 } from './edition.js';
-import { fetchIdentity, savedEngine, savedMode, saveEngine, saveMode } from './engine.js';
+import {
+  fetchIdentity,
+  parseEngineUrl,
+  savedEngine,
+  savedMode,
+  saveEngine,
+  saveMode,
+} from './engine.js';
 import {
   BootError,
   ConfigErrorScreen,
@@ -80,7 +87,11 @@ export async function startHosted(
   const oidc = config.auth;
   const auth = oidc ? new OidcAuth(oidc, redirectUri()) : undefined;
   const fixed = config.server;
-  const knownEngine = fixed ?? savedEngine();
+  // A remembered engine goes through the same check as a typed one: on an https page a
+  // plain-http engine off loopback is mixed content, so it is asked for again.
+  const saved = savedEngine();
+  const checked = saved ? parseEngineUrl(saved) : undefined;
+  const knownEngine = fixed ?? (checked?.ok ? checked.origin : undefined);
   const reconnect = here.searchParams.has(CONNECT_PARAM) && (!fixed || modes.length > 1);
   const toConnect = () => globalThis.location.assign(`${redirectUri()}?${CONNECT_PARAM}`);
 

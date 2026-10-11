@@ -415,6 +415,21 @@ describe('sign-in modes', () => {
     expect(start).not.toHaveBeenCalled();
   });
 
+  it('asks again for a remembered engine the page cannot reach (plain http)', async () => {
+    saveMode('tailscale');
+    saveEngine('http://10.0.0.5:8080');
+    const root = document.createElement('div');
+    document.body.append(root);
+    const start = vi.fn();
+    const config = parseRuntimeConfig({ hosted: true });
+    // An https page, as console.loams.dev is.
+    vi.stubGlobal('location', new URL('https://console.loams.dev/'));
+    void startHosted(config, root, start);
+    await waitFor(() => expect(root.textContent).toContain('Connect your engine'));
+    expect((root.querySelector('input[type=text]') as HTMLInputElement).value).toBe('');
+    expect(start).not.toHaveBeenCalled();
+  });
+
   it('tailscale: no sign-in or connect screen, the engine names the user', async () => {
     saveMode('tailscale');
     const fetcher = vi.fn(async () => json(200, { user: { email: 'ada@example.com' } }));
