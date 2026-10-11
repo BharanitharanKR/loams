@@ -22,6 +22,7 @@ const ICONS: Record<string, LucideIcon> = {
   overview: LayoutDashboard,
   data: Table2,
   postgres: Database,
+  sql: Database,
   wesql: Layers,
   live: Radio,
   durable: Workflow,

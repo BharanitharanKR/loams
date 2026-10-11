@@ -40,6 +40,7 @@
     "@loams/plugin-rpc": "workspace:*",
     "@loams/plugin-sandbox": "workspace:*",
     "@loams/plugin-shell": "workspace:*",
+    "@loams/plugin-sql": "workspace:*",
     "@loams/plugin-stack-status": "workspace:*",
     "@loams/plugin-streams": "workspace:*",
     "@loams/plugin-wesql": "workspace:*",

@@ -19,6 +19,7 @@ import graphPkg from '@loams/plugin-graph/package.json';
 import livePkg from '@loams/plugin-live/package.json';
 import overviewPkg from '@loams/plugin-overview/package.json';
 import postgresPkg from '@loams/plugin-postgres/package.json';
+import sqlPkg from '@loams/plugin-sql/package.json';
 import streamsPkg from '@loams/plugin-streams/package.json';
 import wesqlPkg from '@loams/plugin-wesql/package.json';
 import desktopYml from '../../catalog/desktop.yml?raw';
@@ -40,6 +41,7 @@ export const desktopModules: typeof modules = {
   '@loams/plugin-agent': () => import('@loams/plugin-agent'),
   '@loams/plugin-postgres': () => import('@loams/plugin-postgres'),
   '@loams/plugin-wesql': () => import('@loams/plugin-wesql'),
+  '@loams/plugin-sql': () => import('@loams/plugin-sql'),
 };
 /** Their package.json manifests. */
 export const desktopManifests: unknown[] = [
@@ -56,6 +58,7 @@ export const desktopManifests: unknown[] = [
   agentPkg,
   postgresPkg,
   wesqlPkg,
+  sqlPkg,
 ];
 
 export async function startDesktop(

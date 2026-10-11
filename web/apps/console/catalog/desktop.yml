@@ -31,3 +31,5 @@
       name: '@loams/plugin-postgres'
     - id: wesql
       name: '@loams/plugin-wesql'
+    - id: sql
+      name: '@loams/plugin-sql'
