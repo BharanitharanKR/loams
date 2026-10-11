@@ -351,6 +351,12 @@ impl GraphCatalog {
         &self.counters
     }
 
+    /// The metastore the catalog commits through.
+    #[must_use]
+    pub fn meta(&self) -> &Arc<dyn MetaStore> {
+        &self.meta
+    }
+
     /// The metastore clock, in milliseconds.
     #[must_use]
     pub fn now_ms(&self) -> u64 {
@@ -457,8 +463,9 @@ impl GraphCatalog {
         .await
     }
 
-    /// Graph `meta`'s implicit stream, `graph.<gr_id>`, created when absent (GR1 Task 11).
-    /// Creating it again answers the same stream, so a retry is safe.
+    /// Graph `meta`'s implicit stream, `_graph.<gr_id>`, created when absent (GR1 Task 11), or
+    /// renamed from GR1 Task 11's `graph.<gr_id>` in place (GR1 Task 12). Creating it again
+    /// answers the same stream, so a retry is safe.
     ///
     /// # Errors
     ///
@@ -470,6 +477,28 @@ impl GraphCatalog {
         let namespace = self.ensure_namespace(&meta.namespace).await?;
         crate::durable::GraphLog::ensure_stream(&self.meta, namespace, &meta.id)
             .await
+            .map_err(unavailable)
+    }
+
+    /// Drops graph `meta`'s implicit stream, while `fence` holds (a deleted graph's purge, GR1
+    /// Task 12): its records become unreadable and its objects are retired for garbage
+    /// collection. Answers whether there was one; a retry finds none.
+    ///
+    /// # Errors
+    ///
+    /// [`CatalogError::Unavailable`], also when the fence is broken (nothing changes).
+    pub async fn drop_stream(
+        &self,
+        meta: &GraphMeta,
+        fence: Option<loams_common::meta::Fence>,
+    ) -> Result<bool, CatalogError> {
+        let Some(namespace) = self.namespace_id(&meta.namespace).await? else {
+            return Ok(false);
+        };
+        self.meta
+            .drop_graph_stream(namespace, &meta.id, fence)
+            .await
+            .map(|dropped| dropped.is_some())
             .map_err(unavailable)
     }
 

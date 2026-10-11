@@ -258,7 +258,7 @@ impl WriteLane {
                     } else {
                         let record = GraphRecord::ChangeSet(GraphChangeSet {
                             graph: durable.graph,
-                            lease_epoch: 0,
+                            lease_epoch: durable.lease_epoch(),
                             commit_epoch,
                             txn_seq: durable.take_txn_seq(),
                             idempotency_key: key.clone(),
@@ -334,12 +334,22 @@ impl WriteLane {
                 .into_iter()
                 .map(|value| log_record(value, now))
                 .collect();
-            match durable.log.append(durable.stream, batch) {
+            match durable
+                .log
+                .append(durable.stream, batch, durable.fence.as_ref())
+            {
                 Ok(ack) if ack.last_offset.checked_sub(ack.base_offset) == Some(count - 1) => {
                     Some((ack.base_offset, ack.last_offset + 1, now))
                 }
                 Ok(ack) => {
                     tracing::error!(graph = %durable.graph, ?ack, count, "the log acknowledged another number of records than the group appended; the graph reloads");
+                    return fail(graph, answers);
+                }
+                Err(err) if super::is_fenced(&err) => {
+                    // Another node owns the graph now (I5): this engine never serves again, and
+                    // nothing of the group is in the log.
+                    tracing::warn!(graph = %durable.graph, epoch = durable.lease_epoch(), "a write group was refused: the graph's owner lease moved on; the graph is fenced here");
+                    graph.mark_fenced();
                     return fail(graph, answers);
                 }
                 Err(err) => {

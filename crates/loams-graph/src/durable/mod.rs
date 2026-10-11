@@ -27,7 +27,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use grafeo::GrafeoDB;
 use loams_common::StreamId;
 
-pub use append::{AppendFault, GraphLog, GroupCommit, stream_name};
+pub use append::{AppendFault, GraphLog, GroupCommit, is_fenced, stream_name};
 pub use visibility::Visibility;
 
 use crate::GraphId;
@@ -126,6 +126,10 @@ pub struct DurableSpec {
     /// and appends them as its first record, if its stream is still empty (R11.5). Cleared once
     /// the graph has opened, so a reload never trusts local files.
     pub adopt: bool,
+    /// The owner lease this engine serves under (GR1 Task 12): every append carries it, and the
+    /// metastore refuses one once the lease has moved on. `None` appends unfenced (tests of the
+    /// write path alone).
+    pub fence: Option<loams_common::meta::Fence>,
 }
 
 impl fmt::Debug for DurableSpec {
@@ -133,14 +137,15 @@ impl fmt::Debug for DurableSpec {
         f.debug_struct("DurableSpec")
             .field("stream", &self.stream)
             .field("adopt", &self.adopt)
+            .field("fence", &self.fence)
             .finish_non_exhaustive()
     }
 }
 
-/// Two specs agree when they name the same stream.
+/// Two specs agree when they name the same stream under the same lease epoch.
 impl PartialEq for DurableSpec {
     fn eq(&self, other: &Self) -> bool {
-        self.stream == other.stream
+        self.stream == other.stream && self.fence == other.fence
     }
 }
 
@@ -161,6 +166,8 @@ pub(crate) struct Durable {
     pub(crate) log: GraphLog,
     pub(crate) graph: GraphId,
     pub(crate) stream: StreamId,
+    /// The owner lease every append carries (GR1 Task 12).
+    pub(crate) fence: Option<loams_common::meta::Fence>,
     pub(crate) lane: WriteLane,
     pub(crate) position: Position,
     pub(crate) idempotency: Mutex<Idempotency>,
@@ -215,7 +222,7 @@ impl Durable {
             if !ops.is_empty() {
                 let record = GraphRecord::ChangeSet(GraphChangeSet {
                     graph,
-                    lease_epoch: 0,
+                    lease_epoch: spec.fence.as_ref().map_or(0, |fence| fence.epoch),
                     commit_epoch: db.current_epoch().as_u64(),
                     txn_seq: next_txn_seq,
                     idempotency_key: None,
@@ -226,7 +233,11 @@ impl Durable {
                     GraphError::engine(format!("adopting the graph's local files: {err}"))
                 })?;
                 let ack = log
-                    .append(spec.stream, vec![lane::log_record(bytes, now)])
+                    .append(
+                        spec.stream,
+                        vec![lane::log_record(bytes, now)],
+                        spec.fence.as_ref(),
+                    )
                     .map_err(|err| {
                         tracing::warn!(error = %err, "appending an adopted graph failed");
                         GraphError::LogUnavailable(
@@ -301,12 +312,18 @@ impl Durable {
         Ok(Self {
             graph,
             stream: spec.stream,
+            fence: spec.fence.clone(),
             lane: WriteLane::default(),
             position: Position::new(offset, db.current_epoch().as_u64(), counts),
             idempotency: Mutex::new(idempotency),
             next_txn_seq: AtomicU64::new(next_txn_seq),
             log,
         })
+    }
+
+    /// The lease epoch this engine's appends carry (0 when unfenced).
+    pub(crate) fn lease_epoch(&self) -> u64 {
+        self.fence.as_ref().map_or(0, |fence| fence.epoch)
     }
 
     /// The next `txn_seq`, taken. Only the lane calls it, under the exclusive gate. A group that

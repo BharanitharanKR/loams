@@ -208,6 +208,7 @@ SchemaChange    v1  { graph_id, lease_epoch, commit_epoch, statement, language }
 - A graph's owner is chosen by rendezvous hashing over nodes with the `graph` role (§04 §5's affinity), and holds a lease `graph/<graph_id>/owner` with an epoch in the metastore (M0.4's lease framework). Lease TTL is 10 s, renewed every 3 s (defaults).
 - Every append carries the lease epoch, and the log refuses a stale epoch, so two owners can never both commit (I5).
 - Writes that reach a non-owner are forwarded to the owner; if no owner holds the lease, the receiving node attempts to acquire it.
+- *As built by GR1 Task 12 (R12.1–R12.7):* the metastore checks a commit's fences atomically with the offset assignment (`WalCommit.fences`). Each engine instance runs under one epoch, taken fresh before it reads the stream, so a reload's new epoch refuses any commit of the old engine that lands late. A free lease goes to the rendezvous choice among the `graph` nodes. Every data-plane call (not only writes) is forwarded to the owner, over `/internal/v1/graph/<method>` until `loams.internal.v1` exists. The graph's stream is the reserved `_graph.<gr_id>`.
 
 ### 7.2 Reads and tokens
 
@@ -276,7 +277,7 @@ message ExecuteRequest {
   bool read_only = 6;                                                     // an assertion: a write is refused
   Consistency consistency = 7;                                            // strong | eventual | at_least(token)
   uint32 timeout_ms = 8; uint32 max_rows = 9;                             // capped by D752
-  string idempotency_key = 10;                                            // required when the statement writes
+  string idempotency_key = 10;                                            // optional in preview; required for writes from GR1 Task 24
 }
 
 message ExecuteResponse {

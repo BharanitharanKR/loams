@@ -24,7 +24,7 @@ mod connect_query_filters;
 mod connect_query_ir;
 mod errors;
 pub mod events;
-mod graph;
+pub(crate) mod graph;
 pub mod hot;
 pub mod house_proxy;
 pub mod internal;

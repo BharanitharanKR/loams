@@ -332,3 +332,152 @@ impl GraphService for Served {
         )
     }
 }
+
+/// Graph forwarding between a cluster's graph nodes (GR1 Task 12, `GraphForward`): API1 Task 8
+/// (`loams.internal.v1`) has not landed, so it is an internal REST route beside the hot and read
+/// routes, `POST /internal/v1/graph/<method>` with the request's protobuf bytes, answered with
+/// the response's protobuf bytes (`200`) or the Connect error as JSON (`422`). It moves to
+/// `loams.internal.v1` with API1 Task 8 (R0.16). Unauthenticated, like every internal route
+/// before MT1.
+#[cfg(feature = "graph")]
+pub(crate) const FORWARD_PATH: &str = "/internal/v1/graph/";
+
+/// The node registry as Loams Graph's ownership sees it: the live nodes with the `graph` role.
+#[cfg(feature = "graph")]
+#[derive(Debug)]
+pub(crate) struct RegistryMembership {
+    registry: Arc<loams_hot::NodeRegistry>,
+}
+
+#[cfg(feature = "graph")]
+impl RegistryMembership {
+    pub(crate) fn new(registry: Arc<loams_hot::NodeRegistry>) -> Self {
+        Self { registry }
+    }
+}
+
+#[cfg(feature = "graph")]
+fn graph_node(node: &loams_hot::NodeDescriptor) -> loams_graph::owner::GraphNode {
+    loams_graph::owner::GraphNode {
+        node_id: node.node_id,
+        incarnation: node.incarnation,
+        addr: node.addr.to_string(),
+    }
+}
+
+#[cfg(feature = "graph")]
+impl loams_graph::owner::Membership for RegistryMembership {
+    fn me(&self) -> loams_graph::owner::GraphNode {
+        graph_node(self.registry.me())
+    }
+
+    fn graph_nodes(&self) -> Vec<loams_graph::owner::GraphNode> {
+        self.registry
+            .live()
+            .iter()
+            .filter(|node| node.roles.graph)
+            .map(graph_node)
+            .collect()
+    }
+}
+
+/// Forwards a graph call to its owner over [`FORWARD_PATH`].
+#[cfg(feature = "graph")]
+#[derive(Debug)]
+pub(crate) struct HttpForwarder {
+    client: reqwest::Client,
+}
+
+#[cfg(feature = "graph")]
+impl HttpForwarder {
+    pub(crate) fn new() -> Result<Self, reqwest::Error> {
+        Ok(Self {
+            client: reqwest::Client::builder()
+                .connect_timeout(super::hot::OWNER_CONNECT_TIMEOUT)
+                .build()?,
+        })
+    }
+}
+
+#[cfg(feature = "graph")]
+impl loams_graph::owner::Forwarder for HttpForwarder {
+    fn forward(
+        &self,
+        to: &loams_graph::owner::GraphNode,
+        method: loams_graph::owner::ForwardMethod,
+        request: bytes::Bytes,
+        timeout: std::time::Duration,
+    ) -> loams_graph::owner::ForwardFuture {
+        use connectrpc::{ConnectError, ErrorCode};
+        let url = format!("http://{}{FORWARD_PATH}{}", to.addr, method.as_str());
+        let node = to.node_id;
+        let call = self
+            .client
+            .post(url)
+            .timeout(timeout)
+            .header(reqwest::header::CONTENT_TYPE, "application/proto")
+            .body(request);
+        Box::pin(async move {
+            let unreachable = |err: &dyn std::fmt::Display| {
+                tracing::warn!(node, error = %err, "forwarding a graph call failed");
+                ConnectError::new(
+                    ErrorCode::Unavailable,
+                    format!("the graph's owner (node {node}) did not answer; retry"),
+                )
+            };
+            let response = call.send().await.map_err(|err| unreachable(&err))?;
+            let status = response.status();
+            let body = response.bytes().await.map_err(|err| unreachable(&err))?;
+            if status == reqwest::StatusCode::OK {
+                return Ok(body);
+            }
+            serde_json::from_slice::<ConnectError>(&body)
+                .map_err(|err| unreachable(&err))
+                .and_then(Err)
+        })
+    }
+}
+
+/// `POST /internal/v1/graph/{method}`: serves a call another graph node forwarded here.
+#[cfg(feature = "graph")]
+pub(crate) fn internal_routes() -> axum::Router<AppState> {
+    use axum::extract::{DefaultBodyLimit, Path, State};
+    use axum::http::{StatusCode, header};
+    use axum::response::IntoResponse;
+    async fn serve(
+        State(state): State<AppState>,
+        Path(method): Path<String>,
+        body: bytes::Bytes,
+    ) -> axum::response::Response {
+        let refused = |err: connectrpc::ConnectError| {
+            let json = serde_json::to_vec(&err).unwrap_or_default();
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                [(header::CONTENT_TYPE, "application/json")],
+                json,
+            )
+                .into_response()
+        };
+        let Some(admin) = &state.graph else {
+            return refused(not_in_variant("loams.graph.v1 (forwarded)"));
+        };
+        let Some(method) = loams_graph::owner::ForwardMethod::parse(&method) else {
+            return (StatusCode::NOT_FOUND, "no such graph method").into_response();
+        };
+        match admin.serve_forwarded(method, body).await {
+            Ok(answer) => (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "application/proto")],
+                answer,
+            )
+                .into_response(),
+            Err(err) => refused(err),
+        }
+    }
+    axum::Router::new()
+        .route(
+            &format!("{FORWARD_PATH}{{method}}"),
+            axum::routing::post(serve),
+        )
+        .layer(DefaultBodyLimit::max(super::MAX_BODY_BYTES))
+}

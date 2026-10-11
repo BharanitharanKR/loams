@@ -1566,3 +1566,54 @@ The group's refusals and index replays are answered `graph_reloading` too, becau
 - **The append is bounded under the gate.** `GroupCommit.append_timeout` (default 10 s) wraps the append. Past it the answer is `LogError::CommitUnknown`, and the graph reloads as for a failed append (R11.8). A stalled log therefore stalls a graph's reads for at most the timeout (`a_stalled_append_times_out_and_reloads`).
 - **`Engine::reopen_if_poisoned` no longer replays inside the registry lock.** It removes the old graph and runs the ownership and close checks under the lock. It then reopens outside the lock, under the graph's opening latch (`Graph::open_latched`). Before this, a durable replay blocked every other graph's lookups and the async handlers that list graphs, while the replay itself needed the runtime.
 - **A statement that names `if_version` runs in the lane even when it only reads.** Before this, a non-atomic batch whose first statement was a read skipped the version check (`a_non_atomic_batch_checks_its_version_before_a_leading_read`).
+
+### Task 12 (2026-10-11, on `backend/gr1`)
+
+Controller rulings carried in: a reserved `_graph.<gr_id>` stream created by a metastore command, existing `graph.<gr_id>` streams moved to it on open; fenced appends that close R11.8's late-landing `CommitUnknown` race; purge drops the graph's stream; `idempotency_key` stays optional in preview (enforced by Task 24) and the proto says so.
+
+**R12.1 Fenced WAL commits (R0.18's metastore change).**
+- `WalCommit` gains `fences: Vec<Fence>`. A commit of an object not seen before is applied only while every fence's lease is at its epoch, checked atomically with the offset assignment; a broken one is `ApplyError::Fenced` naming its lease, and nothing changes. A retry of an object already committed answers its offsets whatever the fences say now (it was made under them).
+- `loams-meta`: the new `Command::CommitWalFenced` (appended last, so every earlier variant keeps its postcard index; an unfenced commit is still sent as `CommitWal`). Golden files `commands-gr1.12.bin` and `replies-gr1.12.bin`.
+- `loams-meta-tikv`: each partition-group transaction checks and locks every fence (`get_for_update`). A fence that breaks after an earlier group of the same call committed is answered with `earlier_unknown`, so the writer treats it as an unknown outcome, not a refusal.
+- `loams-log`: `LogWriter::append_fenced`. A flush carries the union of its appends' fences. A definite `Fenced` refusal fails only the appends made under that lease; the others go out again in the next WAL object (the refused object becomes an orphan for GC).
+- Conformance: `a_fenced_commit_wal_is_refused_once_its_lease_moves`.
+
+**R12.2 The graph stream is `_graph.<gr_id>`, created by `MetaStore::ensure_graph_stream`.**
+- One partition, standard class, default retention. The name is reserved (`_`), so no user can create or seed it. The command is idempotent and also renames a stream named `graph.<gr_id>` (Task 11's name, R11.2) in place, keeping its id and records, so a graph's catalog record (which holds the stream id) does not change.
+- `GraphAdmin` ensures the stream on every engine open and refuses (`Corrupt`) a record that names another stream. This closes R11.2's residual seeding risk for new graphs; an adopted graph (R11.5) still gets its stream at its first open.
+- `MetaStore::drop_graph_stream(ns, graph, fence)` drops either name, retiring the objects only its entries referenced; a retry answers `None`. The openraft invariants accept `_graph.` streams.
+- Conformance: `graph_streams_are_reserved_idempotent_and_migrated`, `drop_graph_stream_is_fenced_and_retires_its_objects`.
+
+**R12.3 Ownership (`src/owner.rs`).**
+- Lease `graph/<gr_id>/owner`, TTL 10 s, renewed every 3 s; owner string `v1;<node_id>;<incarnation>;<addr>`.
+- Placement: a held lease is here; a lease another node holds is there; a free one goes to the rendezvous choice (FNV-1a + SplitMix64 over the graph id and node id) among the live nodes with the `graph` role, and the choice takes it. `loams-hot`'s rendezvous was not reused: `loams-graph` does not depend on `loams-hot` (it would pull DataFusion and Lance in), and its ranking filters on the `query` role.
+- **One epoch per engine.** An engine is opened under exactly one epoch, taken fresh before it reads the stream. Every reload (a failed or unknown append, a refused capture, a panic) first gives the lease up and takes it again (`Ownership::refresh`), so a commit still in flight from the old engine is refused when it lands. This closes R11.8's race (`a_late_commit_after_a_reload_is_fenced`).
+- An append refused by its fence marks the graph fenced (`Graph::mark_fenced`): it never serves again here, the lease is forgotten and the graph placed anew. A renewal refused (`LeaseLost`), or one that cannot reach the metastore before the deadline, ends the ownership the same way (the lost hook fences and drops the engine).
+- `GraphChangeSet.lease_epoch` is now the owner's epoch.
+- A single node (`GraphAdmin::with_log`) has a one-node ownership: it owns every graph and still fences its appends.
+
+**R12.4 Forwarding (deviation in scope and transport).**
+- `GraphForward` covers every data-plane call, not only `Execute`/`ExecuteBatch`: `ExecuteStream`, `Explain` and `GetSchema` too, because only the owner opens a graph (a non-owner engine would serve stale strong reads until Task 15's followers).
+- API1 Task 8 (`loams.internal.v1`) has not landed, so per R0.16 it is `POST /internal/v1/graph/<method>` on `internal::routes()`: the request's protobuf bytes in, the response's bytes out (`200`), or the Connect error as JSON (`422`). `ExecuteStream` answers every chunk length-delimited. It moves to `loams.internal.v1` with API1 Task 8.
+- A forwarded call is never forwarded again: a node that does not own the graph answers `UNAVAILABLE`/`graph_reloading` (new `GraphError::OwnerMoved`) and the client retries.
+- The forward waits at most the statement's deadline plus 5 s (`FORWARD_SLACK`), and never past the client's own deadline.
+
+**R12.5 Server wiring (R5.2 closed).**
+- `loams_hot::Roles` gains `graph`. `Roles::all()` leaves it out (a node runs it only when named), and a peer descriptor's unknown roles are skipped (`Roles::parse_lenient`), so mixed-version clusters keep seeing every node.
+- A cluster node serves `loams.graph.v1` only with the `graph` role. Its ownership uses the node registry (`RegistryMembership`) and `HttpForwarder`. The loopback rule (D750, R5.3) still applies to every graph node until MT1, so a multi-node graph cluster runs on one host until then.
+
+**R12.6 Maintenance under a lease (Task 4 review M3).** `GraphAdmin::maintain` replaces the two calls of R5.4:
+- every node closes the open graphs the catalog no longer serves, gives their leases up, and removes the local caches of graphs the catalog does not serve (not open, untouched for 10 min: `sweep_local`);
+- the holder of `graph/maintenance` (TTL 120 s) purges expired graphs, dropping each graph's stream under that lease's fence before its record, and sweeps catalog documents. A node that cannot take the lease skips this part.
+- A deleted graph's engine on its owner closes on that owner's next pass (default 10 min); every statement is refused at once, since each reads the catalog first. Its owner lease record stays in the metastore (there is no lease delete).
+- Bucket snapshots and the manifest are Task 13's.
+
+**R12.7 A graceful leave** is `GraphAdmin::shutdown`, which now gives every lease up, so the next node takes the graph at once. There is nothing to checkpoint before Task 13: the stream is the graph.
+
+**R12.8 Tests** (`tests/ownership.rs`, 9):
+- the four planned: `two_nodes_one_writer`, `stale_owner_append_is_fenced` (the old owner's held append is refused by the metastore after another node took the lease, and the old owner then forwards), `forwarded_write_answers_owner_token` (with batch, stream, explain and schema forwarded), `owner_moves_on_node_leave`;
+- fault injection: `a_late_commit_after_a_reload_is_fenced` (a 2 s WAL put against a 300 ms append timeout), `an_unreachable_owner_is_unavailable_until_its_lease_moves`, `a_forwarded_call_is_never_forwarded_again`;
+- `graph_streams_have_the_reserved_name_and_old_ones_move_to_it`, `a_purge_drops_the_graphs_stream_under_the_maintenance_lease`;
+- plus three conformance cases (both metastores), `loams-log`'s `a_broken_fence_fails_only_its_appends_and_commits_nothing_of_them`, `loams-hot`'s `a_descriptor_with_an_unknown_role_keeps_the_known_ones`, and `owner.rs` unit tests.
+
+**R12.9 `ExecuteRequest.idempotency_key`** is documented as optional in preview and required for a writing statement from Task 24 (R11.9), in the proto and in the generated TypeScript.
