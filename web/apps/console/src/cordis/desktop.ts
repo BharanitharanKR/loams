@@ -24,6 +24,7 @@ import housePkg from '@loams/plugin-house/package.json';
 import livePkg from '@loams/plugin-live/package.json';
 import metricsPkg from '@loams/plugin-metrics/package.json';
 import overviewPkg from '@loams/plugin-overview/package.json';
+import pipelinesPkg from '@loams/plugin-pipelines/package.json';
 import postgresPkg from '@loams/plugin-postgres/package.json';
 import sqlPkg from '@loams/plugin-sql/package.json';
 import streamsPkg from '@loams/plugin-streams/package.json';
@@ -43,6 +44,7 @@ export const desktopModules: typeof modules = {
   '@loams/plugin-jobs': () => import('@loams/plugin-jobs'),
   '@loams/plugin-house': () => import('@loams/plugin-house'),
   '@loams/plugin-git': () => import('@loams/plugin-git'),
+  '@loams/plugin-pipelines': () => import('@loams/plugin-pipelines'),
   '@loams/plugin-streams': () => import('@loams/plugin-streams'),
   '@loams/plugin-overview': () => import('@loams/plugin-overview'),
   '@loams/plugin-desktop-settings': () => import('@loams/plugin-desktop-settings'),
@@ -66,6 +68,7 @@ export const desktopManifests: unknown[] = [
   jobsPkg,
   housePkg,
   gitPkg,
+  pipelinesPkg,
   streamsPkg,
   overviewPkg,
   desktopSettingsPkg,

@@ -23,6 +23,8 @@
       name: '@loams/plugin-house'
     - id: git
       name: '@loams/plugin-git'
+    - id: pipelines
+      name: '@loams/plugin-pipelines'
     - id: streams
       name: '@loams/plugin-streams'
     - id: overview
