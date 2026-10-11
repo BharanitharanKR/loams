@@ -4,8 +4,9 @@
 //
 // The page loads, deep links fall back to the app, every script the page
 // loads comes back as JavaScript rather than as the HTML fallback, and
-// /config.json is the hosted console's runtime config (with the engine and
-// issuer the deploy was given, when LOAMS_ENGINE_URL / LOAMS_AUTH_ISSUER are set).
+// /config.json is the hosted console's runtime config (with the engine, issuer
+// and sign-in mode the deploy was given, when LOAMS_ENGINE_URL / LOAMS_AUTH_ISSUER /
+// LOAMS_AUTH_MODE are set).
 
 /** The script and stylesheet URLs a page loads, resolved against `base`. */
 export function assetUrls(html, base) {
@@ -21,7 +22,7 @@ export function isJavaScript(type) {
   return /^(text|application)\/javascript\b/i.test(type ?? '');
 }
 
-export async function smoke(origin, fetcher = fetch, expectedServer, expectedIssuer) {
+export async function smoke(origin, fetcher = fetch, expectedServer, expectedIssuer, expectedMode) {
   const failures = [];
   const get = async (path) => {
     const res = await fetcher(new URL(path, origin), { redirect: 'follow' });
@@ -95,6 +96,13 @@ export async function smoke(origin, fetcher = fetch, expectedServer, expectedIss
       `/config.json authIssuer is ${body?.authIssuer ?? '<missing>'}, expected ${expectedIssuer}`,
     );
   }
+  if (expectedMode) {
+    const want = expectedMode.trim().toLowerCase();
+    expect(
+      body?.authMode === want,
+      `/config.json authMode is ${body?.authMode ?? '<missing>'}, expected ${want}`,
+    );
+  }
   return failures;
 }
 
@@ -105,6 +113,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     fetch,
     process.env.LOAMS_ENGINE_URL || process.env.LOAMS_CONSOLE_SERVER,
     process.env.LOAMS_AUTH_ISSUER,
+    process.env.LOAMS_AUTH_MODE,
   );
   for (const f of failures) console.error(`FAIL ${f}`);
   if (failures.length) process.exit(1);

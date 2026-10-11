@@ -4,8 +4,24 @@
  * serves its own `config.json` (an empty object, so the console talks to
  * the origin it came from), and a hosted or BYOC deploy (Cloudflare, Vercel,
  * the Compose console) writes one from its environment at deploy time
- * (deploy/config.mjs: LOAMS_ENGINE_URL, LOAMS_AUTH_ISSUER, LOAMS_AUTH_CLIENT_ID).
+ * (deploy/config.mjs: LOAMS_ENGINE_URL, LOAMS_AUTH_MODE, LOAMS_AUTH_ISSUER,
+ * LOAMS_AUTH_CLIENT_ID).
  */
+
+/**
+ * How a hosted console signs in (`authMode`, from LOAMS_AUTH_MODE):
+ * - `oidc`: Authorization Code + PKCE against `auth.issuer` (auth.loams.dev or the
+ *   person's own IdP); the access token goes to the engine as a bearer.
+ * - `tailscale`: no sign-in screen; the engine identifies the caller from the tailnet
+ *   and the console shows whoever the engine says it is.
+ * - `apikey`: the connect screen asks for an API key, kept in memory only.
+ */
+export type AuthMode = 'oidc' | 'tailscale' | 'apikey';
+export const AUTH_MODES: readonly AuthMode[] = ['oidc', 'tailscale', 'apikey'];
+
+/** Where a self-hosted console registers its own OIDC client on auth.loams.dev. */
+export const CLIENT_REGISTRATION_URL = 'https://auth.loams.dev/register';
+
 export type RuntimeConfig = {
   /**
    * The Loams engine's origin, for example `https://loams.tailnet.ts.net`. Unset means
@@ -21,6 +37,14 @@ export type RuntimeConfig = {
   hosted?: boolean;
   /** The OIDC provider (`authIssuer`, `authClientId`, optional `authScope`). */
   auth?: { issuer: string; clientId: string; scope: string };
+  /**
+   * How a hosted console signs in; unset in a hosted `config.json`, it is `oidc` (the
+   * default). Never guessed from what else is set: an unknown mode, or `oidc` without a
+   * usable issuer and client id, is a `configError`.
+   */
+  authMode?: AuthMode;
+  /** Why the hosted config cannot be used; the console shows it instead of starting. */
+  configError?: string;
 };
 
 /** The scopes asked for when `authScope` is unset. */
@@ -69,7 +93,32 @@ export function parseRuntimeConfig(raw: unknown): RuntimeConfig {
     const scope = typeof r.authScope === 'string' && r.authScope.trim() ? r.authScope.trim() : '';
     config.auth = { issuer, clientId, scope: scope || DEFAULT_SCOPE };
   }
-  if (r.hosted === true || config.auth) config.hosted = true;
+  const rawMode = r.authMode;
+  if (r.hosted === true || config.auth || rawMode !== undefined) config.hosted = true;
+  if (!config.hosted) return config;
+  const mode =
+    rawMode === undefined
+      ? 'oidc'
+      : typeof rawMode === 'string'
+        ? rawMode.trim().toLowerCase()
+        : '';
+  if (!(AUTH_MODES as readonly string[]).includes(mode)) {
+    // Not a silent fallback to another way of signing in: the deploy is wrong.
+    config.configError =
+      `config.json has authMode ${JSON.stringify(rawMode)}; ` +
+      `it must be one of ${AUTH_MODES.join(', ')}.`;
+    delete config.auth;
+    return config;
+  }
+  config.authMode = mode as AuthMode;
+  if (mode !== 'oidc') {
+    // Only the oidc mode signs in with the issuer.
+    delete config.auth;
+  } else if (!config.auth) {
+    config.configError =
+      'This console signs in with OIDC (authMode oidc, the default) but config.json has no ' +
+      'usable authIssuer and authClientId (the issuer must be https, or http on loopback).';
+  }
   return config;
 }
 

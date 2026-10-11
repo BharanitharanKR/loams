@@ -315,7 +315,7 @@ describe("WidgetCard still wires the gate up", () => {
   });
 
   it("re-renders when the flag or the params change", () => {
-    expect(source).toContain("}, [widget, JSON.stringify(params), hasTheme]);");
+    expect(source).toContain("}, [widget, JSON.stringify(params), hasTheme, live]);");
   });
 });
 

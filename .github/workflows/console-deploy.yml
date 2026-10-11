@@ -5,8 +5,10 @@
 # Needs the `production` environment's CLOUDFLARE_API_TOKEN (Workers Scripts
 # edit, on the loams.dev account) and CLOUDFLARE_ACCOUNT_ID. Without them the
 # job builds and stages, then skips the deploy with a notice, and stays green.
-# The hosted console signs in with OIDC: LOAMS_AUTH_ISSUER and
-# LOAMS_AUTH_CLIENT_ID (environment variables) are required for the deploy.
+# console.loams.dev signs in with OIDC at auth.loams.dev: LOAMS_AUTH_MODE
+# (variable, default oidc; the deploy refuses any other mode) and
+# LOAMS_AUTH_CLIENT_ID are required, LOAMS_AUTH_ISSUER defaults to
+# https://auth.loams.dev.
 # Each person connects their own engine on first run (LOAMS_ENGINE_URL stays
 # unset here). Engine-hosted builds retain the same-origin empty config.
 name: console deploy
@@ -70,6 +72,7 @@ jobs:
       - run: pnpm build
       - name: stage for Workers static assets
         env:
+          LOAMS_AUTH_MODE: ${{ vars.LOAMS_AUTH_MODE || 'oidc' }}
           LOAMS_AUTH_ISSUER: ${{ vars.LOAMS_AUTH_ISSUER }}
           LOAMS_AUTH_CLIENT_ID: ${{ vars.LOAMS_AUTH_CLIENT_ID }}
           DEPLOYING: ${{ steps.secrets.outputs.ok }}
@@ -77,7 +80,10 @@ jobs:
           if [ "$DEPLOYING" = true ]; then
             node apps/console/deploy/stage.mjs --require-auth
           else
-            node apps/console/deploy/stage.mjs
+            # Nothing is deployed: stage the oidc config with a placeholder client
+            # when none is set, so the check still covers the hosted path.
+            LOAMS_AUTH_CLIENT_ID="${LOAMS_AUTH_CLIENT_ID:-stage-check-only}" \
+              node apps/console/deploy/stage.mjs
           fi
       - name: deploy
         if: steps.secrets.outputs.ok == 'true'
@@ -90,6 +96,7 @@ jobs:
           command: deploy
       - name: smoke check
         env:
-          LOAMS_AUTH_ISSUER: ${{ vars.LOAMS_AUTH_ISSUER }}
+          LOAMS_AUTH_MODE: ${{ vars.LOAMS_AUTH_MODE || 'oidc' }}
+          LOAMS_AUTH_ISSUER: ${{ vars.LOAMS_AUTH_ISSUER || 'https://auth.loams.dev' }}
         if: steps.secrets.outputs.ok == 'true'
         run: node apps/console/deploy/smoke.mjs https://console.loams.dev

@@ -5,7 +5,7 @@
 //   node deploy/stage.mjs --target vercel    # dist/ -> dist-vercel/
 //
 // The runtime config comes from the environment (deploy/config.mjs:
-// LOAMS_ENGINE_URL, LOAMS_AUTH_ISSUER, LOAMS_AUTH_CLIENT_ID) and lands in
+// LOAMS_ENGINE_URL, LOAMS_AUTH_MODE, LOAMS_AUTH_ISSUER, LOAMS_AUTH_CLIENT_ID) and lands in
 // /config.json and /ui/config.json; nothing is baked into the bundle.
 //
 // The build is the one the engine embeds (base path /ui/), so it lands under

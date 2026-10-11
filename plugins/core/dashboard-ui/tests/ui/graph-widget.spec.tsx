@@ -42,6 +42,8 @@ const GRAPH_PAYLOAD = {
 const WIDGET = {
   id: "w-graph",
   type: "graph",
+  // `data` is required on a Widget; a BI graph does not poll.
+  data: { source: "bi" },
   graph: {
     nodes: [
       { id: "web", label: "Web tier" },
@@ -193,7 +195,7 @@ describe("GraphWidget interaction", () => {
     renderWidget({
       // No `interactions` at all. The payload has to match this widget's own
       // spec, because the mock answers with whatever it was told to.
-      widget: { id: "w", type: "graph", graph: { nodes: [{ id: "web" }] } } as Widget,
+      widget: { id: "w", type: "graph", data: { source: "bi" }, graph: { nodes: [{ id: "web" }] } } as Widget,
       onParamChange,
     });
     await waitFor(() => expect(screen.getByText("Web tier")).toBeTruthy());

@@ -122,3 +122,55 @@ export async function checkHealth(
     clearTimeout(timer);
   }
 }
+
+export type Identity = { ok: true; user: string } | { ok: false; message: string };
+
+/**
+ * `GET <engine>/api/v1/session` with no credentials, for LOAMS_AUTH_MODE=tailscale: the
+ * engine identifies the caller from the tailnet (Tailscale's WhoIs on the connection),
+ * not from anything the browser sends, and answers with that user.
+ */
+export async function fetchIdentity(
+  origin: string,
+  fetcher: typeof globalThis.fetch = (...a) => globalThis.fetch(...a),
+  timeoutMs = 6_000,
+): Promise<Identity> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetcher(`${origin}/api/v1/session`, {
+      method: 'GET',
+      mode: 'cors',
+      credentials: 'omit',
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      return {
+        ok: false,
+        message:
+          res.status === 401
+            ? 'The engine did not identify you from the tailnet.'
+            : `The engine answered ${res.status} on /api/v1/session.`,
+      };
+    }
+    const body = (await res.json()) as { user?: { email?: unknown; name?: unknown } } | null;
+    const pick = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+    const user = pick(body?.user?.email) ?? pick(body?.user?.name);
+    return user
+      ? { ok: true, user }
+      : { ok: false, message: 'The engine answered /api/v1/session without a user.' };
+  } catch (e) {
+    return {
+      ok: false,
+      message: controller.signal.aborted
+        ? `No answer from /api/v1/session within ${Math.round(timeoutMs / 1000)} s.`
+        : e instanceof Error
+          ? e.message
+          : String(e),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}

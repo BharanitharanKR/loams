@@ -82,9 +82,19 @@ Loams ships as a preview. Ostrium hosts only the console ([console.loams.dev](ht
 
 The hosted console is the cordis console (`cordis.html`) served at `/`. On first load it:
 
-1. signs in with OIDC Authorization Code + PKCE against `LOAMS_AUTH_ISSUER` (tokens stay in memory; a reload renews silently with `prompt=none`, a refresh token is used while the page lives; nothing that grants access goes to `localStorage` or `sessionStorage`);
+1. signs in the way the deploy's `LOAMS_AUTH_MODE` says (below);
 2. shows **Connect your engine** unless the deploy fixes one: enter the tailnet URL (`https://loams.<tailnet>.ts.net`), **Test connection** calls `GET /health`, and the URL is remembered in this browser;
-3. boots the console against that engine with `Authorization: Bearer <token>` (no cookies). Without an issuer, the connect screen offers an API key field instead (kept in memory only).
+3. boots the console against that engine (no cookies); the header shows who the engine is talking to.
+
+| `LOAMS_AUTH_MODE` | Sign-in |
+|---|---|
+| `oidc` (default) | Authorization Code + PKCE against `LOAMS_AUTH_ISSUER` (default `https://auth.loams.dev`, or your own IdP), sent as `Authorization: Bearer <token>`. Tokens stay in memory; a reload renews silently with `prompt=none`, a refresh token is used while the page lives; nothing that grants access goes to `localStorage` or `sessionStorage`. |
+| `tailscale` | No sign-in screen. The engine identifies the caller from the tailnet; the header shows the user `GET /api/v1/session` returns. |
+| `apikey` | The connect screen requires an engine API key on every load, kept in the tab's memory only and sent as the bearer. |
+
+Any other value fails the deploy (`config.mjs`), and a `config.json` with an unknown mode, or `oidc` without a client, stops at a screen that explains the three modes; the console never falls back to another mode on its own.
+
+A console you deploy yourself (Cloudflare, Vercel) in `oidc` mode needs its own client id at auth.loams.dev: register it at <https://auth.loams.dev/register> (to confirm) with the console's exact origin + `/` as the redirect URI.
 
 Pages whose backend the engine serves (Live, Graph, Analytics/House, Status, Namespaces, Approvals) are on; pages that still run on built-in sample data (Deployments, Live deployments, SQL, Metrics, Pipelines, Git) appear only with the **Demo data** toggle in the header. Every page shows the **Preview** badge.
 
@@ -92,12 +102,13 @@ Runtime config is written at deploy time from the environment by `apps/console/d
 
 | Variable | Meaning |
 |---|---|
-| `LOAMS_AUTH_ISSUER` | OIDC issuer, e.g. `https://auth.loams.dev`. With the client id, enables sign-in. |
-| `LOAMS_AUTH_CLIENT_ID` | the console's public client id at the issuer (redirect URI: the console's origin + `/`). |
+| `LOAMS_AUTH_MODE` | `oidc` (default), `tailscale` or `apikey`; anything else is an error. |
+| `LOAMS_AUTH_ISSUER` | `oidc`: the issuer, default `https://auth.loams.dev`. |
+| `LOAMS_AUTH_CLIENT_ID` | `oidc`, required: the console's public client id at the issuer (redirect URI: the console's origin + `/`). |
 | `LOAMS_AUTH_SCOPE` | optional, default `openid profile email offline_access`. |
 | `LOAMS_ENGINE_URL` | optional: fixes the engine (skips the connect screen and adds its origin to the CSP). |
 
-`config.json` keys: `hosted`, `engineUrl`, `authIssuer`, `authClientId`, `authScope`. The engine-embedded console keeps serving `{}` (same origin, cookie session).
+`config.json` keys: `hosted`, `engineUrl`, `authMode`, `authIssuer`, `authClientId`, `authScope`. The engine-embedded console keeps serving `{}` (same origin, cookie session).
 
 The stage step injects a Content-Security-Policy `<meta>`: no inline scripts in the cordis console, no eval, `connect-src` limited to the console itself, `https://*.ts.net` (port 443, where `tailscale serve` publishes the engine), the issuer and the fixed engine. Headscale issues no HTTPS certificates, so a Headscale engine needs its own certificate and a console deployed with `LOAMS_ENGINE_URL` set to it.
 
@@ -109,14 +120,14 @@ Workers static assets, configured in [`apps/console/wrangler.jsonc`](apps/consol
 
 ```bash
 pnpm build
-LOAMS_AUTH_ISSUER=https://auth.loams.dev LOAMS_AUTH_CLIENT_ID=loams-console \
+LOAMS_AUTH_MODE=oidc LOAMS_AUTH_CLIENT_ID=loams-console \
   node apps/console/deploy/stage.mjs     # dist/ -> dist-cloudflare/: /, ui/, config.json, _headers, _redirects
 cd apps/console && wrangler deploy        # console.loams.dev
 cd apps/console && wrangler deploy --env byoc   # your account, on workers.dev
 node deploy/smoke.mjs https://console.loams.dev
 ```
 
-`.github/workflows/console-deploy.yml` deploys on every push to `main` that touches `web/` (or the root workspace configuration, or the workflow), and on demand. It needs `LOAMS_AUTH_ISSUER` and `LOAMS_AUTH_CLIENT_ID` (variables) plus `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the `production` environment; without the secrets it builds and stages, then skips the deploy.
+`.github/workflows/console-deploy.yml` deploys on every push to `main` that touches `web/` (or the root workspace configuration, or the workflow), and on demand. It deploys in `oidc` mode only and needs `LOAMS_AUTH_CLIENT_ID` (variable; `LOAMS_AUTH_MODE` and `LOAMS_AUTH_ISSUER` default to `oidc` and `https://auth.loams.dev`) plus `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the `production` environment; without the secrets it builds and stages, then skips the deploy.
 
 ### Vercel
 

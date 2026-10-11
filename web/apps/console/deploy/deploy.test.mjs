@@ -146,14 +146,29 @@ describe('hosted config', () => {
       {
         hosted: true,
         engineUrl: 'https://loams.tail1.ts.net',
+        authMode: 'oidc',
         authIssuer: 'https://auth.loams.dev',
         authClientId: 'loams-console',
         authScope: 'openid',
       },
     );
-    assert.deepEqual(hostedConfig({}), { hosted: true });
+    // oidc is the default mode and auth.loams.dev the default issuer.
+    assert.deepEqual(hostedConfig({ LOAMS_AUTH_CLIENT_ID: 'mine' }), {
+      hosted: true,
+      authMode: 'oidc',
+      authIssuer: 'https://auth.loams.dev',
+      authClientId: 'mine',
+    });
+    // tailscale and apikey carry no OIDC client, even when one is set.
+    for (const mode of ['tailscale', 'apikey']) {
+      assert.deepEqual(hostedConfig({ ...AUTH, LOAMS_AUTH_MODE: mode }), {
+        hosted: true,
+        authMode: mode,
+      });
+    }
     assert.equal(
-      hostedConfig({ LOAMS_CONSOLE_SERVER: 'https://a.example' }).engineUrl,
+      hostedConfig({ LOAMS_AUTH_MODE: 'apikey', LOAMS_CONSOLE_SERVER: 'https://a.example' })
+        .engineUrl,
       'https://a.example',
     );
     assert.equal(
@@ -162,15 +177,23 @@ describe('hosted config', () => {
     );
   });
 
-  test('refuses plain http off loopback, half an OIDC client, and a missing one when required', () => {
+  test('refuses plain http off loopback, oidc without a client id, and an unknown mode', () => {
     assert.throws(() => hostedConfig({ LOAMS_ENGINE_URL: 'http://loams.tail1.ts.net' }), /HTTPS/);
     assert.throws(() => hostedConfig({ LOAMS_ENGINE_URL: 'not a url' }), /HTTPS/);
     assert.equal(
-      hostedConfig({ LOAMS_ENGINE_URL: 'http://127.0.0.1:8080' }).engineUrl,
+      hostedConfig({ ...AUTH, LOAMS_ENGINE_URL: 'http://127.0.0.1:8080' }).engineUrl,
       'http://127.0.0.1:8080',
     );
-    assert.throws(() => hostedConfig({ LOAMS_AUTH_ISSUER: 'https://a.example' }), /together/);
-    assert.throws(() => hostedConfig({}, { requireAuth: true }), /required/);
+    assert.throws(() => hostedConfig({}), /LOAMS_AUTH_CLIENT_ID.*auth\.loams\.dev\/register/);
+    assert.throws(
+      () => hostedConfig({ LOAMS_AUTH_ISSUER: 'https://a.example' }),
+      /LOAMS_AUTH_CLIENT_ID/,
+    );
+    assert.throws(() => hostedConfig({ ...AUTH, LOAMS_AUTH_MODE: 'basic' }), /LOAMS_AUTH_MODE/);
+    assert.throws(
+      () => hostedConfig({ LOAMS_AUTH_MODE: 'tailscale' }, { requireAuth: true }),
+      /oidc/,
+    );
   });
 });
 
@@ -240,11 +263,12 @@ describe('stage', () => {
       { LOAMS_ENGINE_URL: 'javascript:alert(1)' },
       { LOAMS_ENGINE_URL: 'not a url' },
       { LOAMS_AUTH_ISSUER: 'https://auth.loams.dev' },
+      { LOAMS_AUTH_MODE: 'password' },
     ]) {
-      assert.throws(() => stage({ dist, out, env }), /HTTPS|together/);
+      assert.throws(() => stage({ dist, out, env }), /HTTPS|LOAMS_AUTH_CLIENT_ID|LOAMS_AUTH_MODE/);
       assert.equal(readFileSync(join(out, 'sentinel'), 'utf8'), 'keep');
     }
-    assert.throws(() => stage({ dist, out, env: {}, requireAuth: true }), /LOAMS_AUTH_ISSUER/);
+    assert.throws(() => stage({ dist, out, env: {}, requireAuth: true }), /LOAMS_AUTH_CLIENT_ID/);
     assert.throws(
       () =>
         stage({
@@ -277,6 +301,7 @@ describe('stage', () => {
     const want = {
       hosted: true,
       engineUrl: 'https://loams.tail1.ts.net',
+      authMode: 'oidc',
       authIssuer: 'https://auth.loams.dev',
       authClientId: 'loams-console',
     };
@@ -295,9 +320,12 @@ describe('stage', () => {
     assert.ok(frameCsp);
     assert.ok(sandbox.includes(`Content-Security-Policy: ${frameCsp}; sandbox allow-scripts`));
 
-    // With nothing set the console asks for the engine on first run.
-    stage({ dist, out, env: {} });
-    assert.deepEqual(JSON.parse(readFileSync(join(out, 'config.json'), 'utf8')), { hosted: true });
+    // Without LOAMS_ENGINE_URL the console asks for the engine on first run.
+    stage({ dist, out, env: { LOAMS_AUTH_MODE: 'tailscale' } });
+    assert.deepEqual(JSON.parse(readFileSync(join(out, 'config.json'), 'utf8')), {
+      hosted: true,
+      authMode: 'tailscale',
+    });
   });
 
   test('stages for Vercel without Cloudflare files or source maps', () => {
@@ -335,16 +363,50 @@ describe('runtime config', () => {
       {
         hosted: true,
         server: 'https://loams.tail1.ts.net',
+        authMode: 'oidc',
         auth: { issuer: 'https://auth.loams.dev', clientId: 'loams-console', scope: DEFAULT_SCOPE },
       },
     );
-    assert.deepEqual(parseRuntimeConfig({ hosted: true }), { hosted: true });
+    // Hosted without a mode is oidc, the default; without a client that is a config
+    // error, never a quiet fall back to an API key.
+    const noClient = parseRuntimeConfig({ hosted: true });
+    assert.equal(noClient.authMode, 'oidc');
+    assert.match(noClient.configError, /authIssuer and authClientId/);
     // An issuer without a client id (or over plain http off loopback) is no sign-in.
     assert.deepEqual(parseRuntimeConfig({ authIssuer: 'https://auth.loams.dev' }), {});
     assert.deepEqual(
       parseRuntimeConfig({ authIssuer: 'http://auth.example', authClientId: 'c' }),
       {},
     );
+    // The mode wins: tailscale and apikey drop the OIDC client; oidc without one stays oidc.
+    assert.deepEqual(
+      parseRuntimeConfig({
+        authMode: 'Tailscale',
+        authIssuer: 'https://auth.loams.dev',
+        authClientId: 'c',
+      }),
+      { hosted: true, authMode: 'tailscale' },
+    );
+    assert.deepEqual(parseRuntimeConfig({ authMode: 'apikey' }), {
+      hosted: true,
+      authMode: 'apikey',
+    });
+    assert.match(
+      parseRuntimeConfig({ hosted: true, authMode: 'oidc' }).configError,
+      /authClientId/,
+    );
+    // An unknown mode is a config error, and keeps no OIDC client.
+    for (const authMode of ['nope', 42, '']) {
+      const bad = parseRuntimeConfig({
+        authMode,
+        authIssuer: 'https://a.example',
+        authClientId: 'c',
+      });
+      assert.equal(bad.hosted, true);
+      assert.equal(bad.authMode, undefined);
+      assert.equal(bad.auth, undefined);
+      assert.match(bad.configError, /authMode .* must be one of oidc, tailscale, apikey/);
+    }
     assert.equal(
       parseRuntimeConfig({
         authIssuer: 'http://localhost:9000/application/o/loams/',
@@ -480,6 +542,28 @@ describe('smoke', () => {
     );
     assert.deepEqual(
       await smoke('https://console.loams.dev', realm(`${want}/`), undefined, want),
+      [],
+    );
+  });
+
+  test('fails a deploy whose config has another sign-in mode', async () => {
+    const mode = (authMode) => async (url) =>
+      new URL(url).pathname === '/config.json'
+        ? Response.json({ hosted: true, authMode })
+        : site(false)(url);
+    const wrong = await smoke(
+      'https://console.loams.dev',
+      mode('apikey'),
+      undefined,
+      undefined,
+      'oidc',
+    );
+    assert.ok(
+      wrong.some((f) => f.includes('authMode is apikey, expected oidc')),
+      wrong.join('\n'),
+    );
+    assert.deepEqual(
+      await smoke('https://console.loams.dev', mode('oidc'), undefined, undefined, 'OIDC'),
       [],
     );
   });

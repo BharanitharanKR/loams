@@ -11,6 +11,7 @@ import baseCatalog from '../catalog/base.yml?raw';
 import { startConsole } from '../src/cordis/start.js';
 import {
   HOSTED_PACKAGE,
+  HostedHeader,
   type HostedSession,
   hostedManifest,
   hostedPatch,
@@ -19,9 +20,16 @@ import {
   webModules,
   webPatches,
 } from '../src/hosted/edition.js';
-import { checkHealth, parseEngineUrl, savedEngine, saveEngine } from '../src/hosted/engine.js';
-import { ConnectScreen } from '../src/hosted/screens.js';
-import { redirectUri } from '../src/hosted/start.js';
+import {
+  checkHealth,
+  fetchIdentity,
+  parseEngineUrl,
+  savedEngine,
+  saveEngine,
+} from '../src/hosted/engine.js';
+import { ConfigErrorScreen, ConnectScreen } from '../src/hosted/screens.js';
+import { redirectUri, startHosted } from '../src/hosted/start.js';
+import { CLIENT_REGISTRATION_URL, parseRuntimeConfig } from '../src/runtime-config.js';
 
 let dispose: (() => Promise<void>) | undefined;
 afterEach(async () => {
@@ -122,10 +130,12 @@ describe('Connect your engine', () => {
     fireEvent.change(screen.getByLabelText('Engine URL'), {
       target: { value: 'loams.tail1.ts.net' },
     });
-    fireEvent.change(screen.getByLabelText('API key (optional)'), { target: { value: 'lk_1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
     await screen.findByText('The engine answered');
     expect(check).toHaveBeenCalledWith('https://loams.tail1.ts.net');
+    // apikey mode: the key is required.
+    expect(connect.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('API key'), { target: { value: ' lk_1 ' } });
     expect(connect.disabled).toBe(false);
     fireEvent.click(connect);
     expect(onConnect).toHaveBeenCalledWith({
@@ -158,7 +168,7 @@ describe('Connect your engine', () => {
     }));
     const onConnect = vi.fn();
     render(<ConnectScreen askApiKey={false} check={check} onConnect={onConnect} />);
-    expect(screen.queryByLabelText('API key (optional)')).toBeNull();
+    expect(screen.queryByLabelText('API key')).toBeNull();
     fireEvent.change(screen.getByLabelText('Engine URL'), {
       target: { value: 'https://loams.tail1.ts.net' },
     });
@@ -181,6 +191,8 @@ async function boot(demo: boolean) {
   document.body.append(root);
   const session: HostedSession = {
     engine: 'https://loams.tail1.ts.net',
+    authMode: 'oidc',
+    user: 'ada@example.com',
     demo,
     setDemo: vi.fn(),
     changeEngine: vi.fn(),
@@ -228,6 +240,7 @@ describe('the browser edition', () => {
     expect(toggle.checked).toBe(false);
     fireEvent.click(toggle);
     expect(session.setDemo).toHaveBeenCalledWith(true);
+    expect(root.querySelector('.lc-hosted-user')?.textContent).toBe('ada@example.com');
     const signOut = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Sign out');
     expect(signOut).toBeTruthy();
     if (signOut) fireEvent.click(signOut);
@@ -241,5 +254,117 @@ describe('the browser edition', () => {
       expect.arrayContaining(['Live', 'Deployments', 'SQL', 'Metrics', 'Pipelines', 'Git']),
     );
     expect(root.textContent).toContain('Sample pages on');
+  });
+});
+
+describe('sign-in modes', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    saveEngine(undefined);
+  });
+
+  const json = (status: number, body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  it('reads the tailnet identity from the engine session, without credentials', async () => {
+    const fetcher = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) =>
+      json(200, { user: { email: 'ada@example.com', name: 'Ada' } }),
+    );
+    expect(await fetchIdentity('https://loams.tail1.ts.net', fetcher)).toEqual({
+      ok: true,
+      user: 'ada@example.com',
+    });
+    const [url, init] = fetcher.mock.calls[0] ?? [];
+    expect(url).toBe('https://loams.tail1.ts.net/api/v1/session');
+    expect(init?.credentials).toBe('omit');
+    expect(
+      await fetchIdentity('https://e', async () => json(200, { user: { name: 'Ada' } })),
+    ).toEqual({ ok: true, user: 'Ada' });
+    const refused = await fetchIdentity('https://e', async () => json(401, {}));
+    expect(refused).toEqual({ ok: false, message: expect.stringMatching(/tailnet/) });
+    const empty = await fetchIdentity('https://e', async () => json(200, { user: {} }));
+    expect(empty.ok).toBe(false);
+  });
+
+  it('shows the tailnet identity, or why there is none, and no sign-out', () => {
+    const base = {
+      engine: 'https://loams.tail1.ts.net',
+      authMode: 'tailscale' as const,
+      demo: false,
+      setDemo: vi.fn(),
+    };
+    const { container, rerender } = render(
+      <HostedHeader session={{ ...base, user: 'ada@example.com' }} />,
+    );
+    expect(container.querySelector('.lc-hosted-user')?.textContent).toBe(
+      'ada@example.com via tailnet',
+    );
+    expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
+    rerender(<HostedHeader session={{ ...base, identityProblem: 'nope' }} />);
+    const unknown = container.querySelector('.lc-hosted-user-unknown');
+    expect(unknown?.textContent).toBe('Tailnet user unknown');
+    expect(unknown?.getAttribute('title')).toBe('nope');
+  });
+
+  it('labels an API key session and offers to forget the key', () => {
+    const signOut = vi.fn();
+    render(
+      <HostedHeader
+        session={{
+          engine: 'https://loams.tail1.ts.net',
+          authMode: 'apikey',
+          demo: false,
+          setDemo: vi.fn(),
+          signOut,
+        }}
+      />,
+    );
+    expect(screen.getByText('API key')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Forget key' }));
+    expect(signOut).toHaveBeenCalled();
+  });
+
+  it('explains the three modes and links client registration on a config error', () => {
+    render(<ConfigErrorScreen message="bad mode" mode="oidc" />);
+    expect(screen.getByText('bad mode')).toBeTruthy();
+    for (const mode of ['oidc (default)', 'tailscale', 'apikey']) {
+      expect(screen.getByText(mode)).toBeTruthy();
+    }
+    const link = screen.getByRole('link', { name: /auth\.loams\.dev\/register/ });
+    expect(link.getAttribute('href')).toBe(CLIENT_REGISTRATION_URL);
+    expect(document.querySelector('[aria-current="true"]')?.textContent).toMatch(/^oidc/);
+  });
+
+  it('stops at the config error screen for an unknown mode, never falling back', async () => {
+    const root = document.createElement('div');
+    document.body.append(root);
+    const start = vi.fn();
+    const config = parseRuntimeConfig({ authMode: 'password', engineUrl: 'https://e.ts.net' });
+    expect(await startHosted(config, root, start)).toBeUndefined();
+    await waitFor(() => expect(root.textContent).toContain('This console is not set up yet'));
+    expect(root.textContent).toContain('"password"');
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('tailscale: no sign-in or connect screen, the engine names the user', async () => {
+    const fetcher = vi.fn(async () => json(200, { user: { email: 'ada@example.com' } }));
+    vi.stubGlobal('fetch', fetcher);
+    const root = document.createElement('div');
+    document.body.append(root);
+    const start = vi.fn(async () => ({ dispose: async () => {} }) as never);
+    const config = parseRuntimeConfig({
+      authMode: 'tailscale',
+      engineUrl: 'https://loams.tail1.ts.net',
+    });
+    await startHosted(config, root, start);
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://loams.tail1.ts.net/api/v1/session',
+      expect.objectContaining({ credentials: 'omit' }),
+    );
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(root.textContent).not.toContain('Sign in');
   });
 });

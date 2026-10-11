@@ -1,7 +1,11 @@
-// The hosted and BYOC console's boot: sign in (OIDC + PKCE) when an issuer is
-// configured, pick the engine (the deploy's LOAMS_ENGINE_URL, or the one the
-// person connects on first run), then start the cordis console against that
-// engine with the access token as a bearer.
+// The hosted and BYOC console's boot, by the deploy's LOAMS_AUTH_MODE:
+//   oidc       sign in (Authorization Code + PKCE), then the access token is the bearer;
+//   tailscale  no sign-in: the engine identifies the tailnet user, and the header shows
+//              whoever GET /api/v1/session says it is;
+//   apikey     the connect screen asks for an API key (memory only), sent as the bearer.
+// Then pick the engine (the deploy's LOAMS_ENGINE_URL, or the one the person connects
+// on first run) and start the cordis console against it. A config the console cannot
+// use (an unknown mode, oidc without a client) stops at a screen that says so.
 
 import type { ConsoleHandle } from '@loams/console-host';
 import { createWebPlatform } from '@loams/platform-web';
@@ -20,8 +24,14 @@ import {
   webModules,
   webPatches,
 } from './edition.js';
-import { savedEngine, saveEngine } from './engine.js';
-import { BootError, type ConnectResult, ConnectScreen, SignInScreen } from './screens.js';
+import { fetchIdentity, savedEngine, saveEngine } from './engine.js';
+import {
+  BootError,
+  ConfigErrorScreen,
+  type ConnectResult,
+  ConnectScreen,
+  SignInScreen,
+} from './screens.js';
 
 /** `?connect` opens the connect screen even when an engine is remembered (and not fixed). */
 const CONNECT_PARAM = 'connect';
@@ -54,7 +64,19 @@ export async function startHosted(
   start: StartFn,
 ): Promise<ConsoleHandle | undefined> {
   const here = new URL(globalThis.location.href);
-  const auth = config.auth ? new OidcAuth(config.auth, redirectUri()) : undefined;
+  const mode = config.authMode;
+  if (config.configError || !mode) {
+    show(
+      root,
+      <ConfigErrorScreen
+        message={config.configError ?? 'config.json sets no sign-in mode.'}
+        mode={mode}
+      />,
+    );
+    return undefined;
+  }
+  const auth =
+    mode === 'oidc' && config.auth ? new OidcAuth(config.auth, redirectUri()) : undefined;
 
   if (auth && config.auth) {
     const result = await auth
@@ -93,10 +115,10 @@ export async function startHosted(
   let apiKey: string | undefined;
   const engine = await new Promise<string>((resolve) => {
     const remembered = fixed ?? savedEngine();
-    // Without OIDC the screen also takes the API key, which lives in memory only, so it
-    // is shown on every load (prefilled, and testing the remembered engine at once).
+    // In apikey mode the screen also takes the API key, which lives in memory only, so
+    // it is shown on every load (prefilled, and testing the remembered engine at once).
     const reconnect = here.searchParams.has(CONNECT_PARAM) && !fixed;
-    if (remembered && auth && !reconnect) {
+    if (remembered && mode !== 'apikey' && !reconnect) {
       resolve(remembered);
       return;
     }
@@ -105,7 +127,8 @@ export async function startHosted(
       <ConnectScreen
         initial={remembered}
         fixed={Boolean(fixed)}
-        askApiKey={!auth}
+        askApiKey={mode === 'apikey'}
+        mode={mode}
         onConnect={(r: ConnectResult) => {
           saveEngine(r.engine);
           apiKey = r.apiKey;
@@ -117,10 +140,24 @@ export async function startHosted(
     );
   });
 
+  let user: string | undefined;
+  let identityProblem: string | undefined;
+  if (auth) {
+    user = auth.user()?.email ?? auth.user()?.name;
+  } else if (mode === 'tailscale') {
+    // Not a gate: the engine refuses what it cannot attribute, and the header says why
+    // it shows no one.
+    const identity = await fetchIdentity(engine);
+    if (identity.ok) user = identity.user;
+    else identityProblem = identity.message;
+  }
+
   const demo = demoEnabled();
   const session: HostedSession = {
     engine,
-    user: auth?.user()?.email ?? auth?.user()?.name,
+    authMode: mode,
+    user,
+    identityProblem,
     demo,
     setDemo(on) {
       setDemoEnabled(on);
@@ -129,9 +166,10 @@ export async function startHosted(
     changeEngine: fixed
       ? undefined
       : () => globalThis.location.assign(`${redirectUri()}?${CONNECT_PARAM}`),
+    // Tailscale mode has nothing to sign out of: the identity is the device's tailnet login.
     signOut: auth
       ? () => void auth.signOut()
-      : apiKey
+      : mode === 'apikey'
         ? // The key lives in memory: drop it and ask again on the connect screen.
           () => globalThis.location.assign(`${redirectUri()}?${CONNECT_PARAM}`)
         : undefined,
@@ -141,7 +179,7 @@ export async function startHosted(
     return await start({
       platform: createWebPlatform({
         baseUrl: engine,
-        token: auth ? () => auth.accessToken() : () => apiKey,
+        token: auth ? () => auth.accessToken() : mode === 'apikey' ? () => apiKey : () => undefined,
       }),
       root,
       patches: [...webPatches(demo), hostedPatch],

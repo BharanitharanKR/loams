@@ -20,6 +20,7 @@ import sqlPkg from '@loams/plugin-sql/package.json';
 import { Button } from '@loams/ui';
 import demoYml from '../../catalog/demo.yml?raw';
 import webYml from '../../catalog/web.yml?raw';
+import type { AuthMode } from '../runtime-config.js';
 import { DEMO_PAGES } from './demo.js';
 
 export const webModules: ModuleTable = {
@@ -50,8 +51,12 @@ export function webPatches(demo: boolean): CatalogPatch[] {
 /** What the header shows and does; the hosted gate provides it. */
 export interface HostedSession {
   engine: string;
-  /** Who is signed in, if the console signed in with OIDC. */
+  /** How this console signs in (LOAMS_AUTH_MODE). */
+  authMode: AuthMode;
+  /** Who the engine is talking to: the OIDC user, or the tailnet user the engine named. */
   user?: string;
+  /** Tailscale mode: why the engine did not say who this is. */
+  identityProblem?: string;
   demo: boolean;
   setDemo(on: boolean): void;
   /** Back to the connect screen; unset when the deploy fixes the engine. */
@@ -115,12 +120,46 @@ export function HostedHeader({ session }: { session: HostedSession }) {
           Sample pages on
         </span>
       )}
+      <HostedIdentity session={session} />
       {session.signOut && (
-        <Button size="sm" variant="quiet" onClick={session.signOut} title={session.user}>
-          Sign out
+        <Button size="sm" variant="quiet" onClick={session.signOut}>
+          {session.authMode === 'apikey' ? 'Forget key' : 'Sign out'}
         </Button>
       )}
     </div>
+  );
+}
+
+/** Who the console is acting as, and how the engine knows. */
+function HostedIdentity({ session }: { session: HostedSession }) {
+  if (session.authMode === 'apikey')
+    return (
+      <span className="lc-hosted-user" title="Signed in to the engine with an API key">
+        API key
+      </span>
+    );
+  if (session.authMode === 'tailscale' && !session.user)
+    return (
+      <span
+        className="lc-hosted-user lc-hosted-user-unknown"
+        title={session.identityProblem ?? 'The engine did not say who you are.'}
+      >
+        Tailnet user unknown
+      </span>
+    );
+  if (!session.user) return null;
+  return (
+    <span
+      className="lc-hosted-user"
+      title={
+        session.authMode === 'tailscale'
+          ? `${session.user}, identified by the engine from your tailnet login`
+          : `Signed in as ${session.user}`
+      }
+    >
+      {session.user}
+      {session.authMode === 'tailscale' && <span className="lc-hosted-via"> via tailnet</span>}
+    </span>
   );
 }
 

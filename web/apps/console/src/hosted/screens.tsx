@@ -1,8 +1,10 @@
-// The hosted console's screens before the console itself: sign-in, and the
-// first-run "Connect your engine" screen.
+// The hosted console's screens before the console itself: sign-in, the
+// first-run "Connect your engine" screen, and the screen for a deploy whose
+// sign-in mode is not set up.
 
 import { Button, Field, Input, Logo, Notice } from '@loams/ui';
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
+import { type AuthMode, CLIENT_REGISTRATION_URL } from '../runtime-config.js';
 import { checkHealth, type Health, isTailnetHost, parseEngineUrl } from './engine.js';
 
 export function PreviewBadge() {
@@ -28,6 +30,81 @@ function Frame({ title, children }: { title: string; children: ReactNode }) {
         {children}
       </div>
     </main>
+  );
+}
+
+const MODES: { mode: AuthMode; title: string; body: ReactNode }[] = [
+  {
+    mode: 'oidc',
+    title: 'oidc (default)',
+    body: (
+      <>
+        Sign in with a Loams account at <code>auth.loams.dev</code>, or with your own identity
+        provider (<code>LOAMS_AUTH_ISSUER</code>), using Authorization Code + PKCE. A console you
+        deploy yourself on Vercel or Cloudflare needs its own client id: register it at{' '}
+        <a href={CLIENT_REGISTRATION_URL} target="_blank" rel="noreferrer">
+          {new URL(CLIENT_REGISTRATION_URL).host}
+          {new URL(CLIENT_REGISTRATION_URL).pathname}
+        </a>{' '}
+        with the console's exact address as the redirect URI, and set{' '}
+        <code>LOAMS_AUTH_CLIENT_ID</code>.
+      </>
+    ),
+  },
+  {
+    mode: 'tailscale',
+    title: 'tailscale',
+    body: (
+      <>
+        No sign-in screen. The engine knows who you are from your tailnet login, and the console
+        shows that identity.
+      </>
+    ),
+  },
+  {
+    mode: 'apikey',
+    title: 'apikey',
+    body: (
+      <>
+        The console asks for an engine API key on every load and keeps it in this tab's memory only.
+      </>
+    ),
+  },
+];
+
+/** The three ways a hosted console signs in (LOAMS_AUTH_MODE), the deploy's marked. */
+export function AuthModes({ current, open = false }: { current?: AuthMode; open?: boolean }) {
+  return (
+    <details className="lc-gate-help" open={open}>
+      <summary>How this console signs in</summary>
+      <p>
+        The deploy picks one with <code>LOAMS_AUTH_MODE</code>, and the engine must be set up for
+        the same mode.
+      </p>
+      <ul>
+        {MODES.map((m) => (
+          <li key={m.mode} aria-current={m.mode === current ? 'true' : undefined}>
+            <strong>{m.title}</strong>
+            {m.mode === current && <span className="lc-gate-faint"> (this console)</span>}: {m.body}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/** The deploy's config.json cannot be used (an unknown mode, oidc without a client). */
+export function ConfigErrorScreen({ message, mode }: { message: string; mode?: AuthMode }) {
+  return (
+    <Frame title="This console is not set up yet">
+      <p className="lc-gate-lead">
+        Whoever deployed this console needs to choose how it signs in, then deploy it again.
+      </p>
+      <Notice tone="danger" title="Sign-in is not configured">
+        {message}
+      </Notice>
+      <AuthModes current={mode} open />
+    </Frame>
   );
 }
 
@@ -68,13 +145,14 @@ export function SignInScreen({
         </Button>
         <span className="lc-gate-faint">via {new URL(issuer).host}</span>
       </div>
+      <AuthModes current="oidc" />
     </Frame>
   );
 }
 
 export interface ConnectResult {
   engine: string;
-  /** An API key for an engine without OIDC (LOAMS_AUTH_MODE=apikey); held in memory only. */
+  /** The engine API key (LOAMS_AUTH_MODE=apikey); held in memory only. */
   apiKey?: string;
 }
 
@@ -82,6 +160,7 @@ export function ConnectScreen({
   initial,
   fixed = false,
   askApiKey,
+  mode,
   check = checkHealth,
   onConnect,
 }: {
@@ -89,8 +168,10 @@ export function ConnectScreen({
   initial?: string;
   /** The deploy fixes the engine (LOAMS_ENGINE_URL): the URL cannot be changed. */
   fixed?: boolean;
-  /** No OIDC issuer is configured: offer an API key field. */
+  /** LOAMS_AUTH_MODE=apikey: an API key is required to connect. */
   askApiKey: boolean;
+  /** The deploy's sign-in mode, marked in the explanation of the three. */
+  mode?: AuthMode;
   check?: (origin: string) => Promise<Health>;
   onConnect: (result: ConnectResult) => void;
 }) {
@@ -124,9 +205,10 @@ export function ConnectScreen({
     void test();
   });
 
+  const keyMissing = askApiKey && apiKey.trim() === '';
   const connect = () => {
-    if (!parsed.ok) return;
-    onConnect({ engine: parsed.origin, apiKey: apiKey.trim() || undefined });
+    if (!parsed.ok || keyMissing) return;
+    onConnect({ engine: parsed.origin, apiKey: askApiKey ? apiKey.trim() : undefined });
   };
 
   return (
@@ -159,14 +241,15 @@ export function ConnectScreen({
         </Field>
         {askApiKey && (
           <Field
-            label="API key (optional)"
-            hint="For an engine that uses API keys. Kept in this tab's memory only."
+            label="API key"
+            hint="This console signs in to the engine with an API key. Kept in this tab's memory only, so it is asked for on every load."
           >
             {(props) => (
               <Input
                 {...props}
                 type="password"
                 autoComplete="off"
+                aria-required="true"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.currentTarget.value)}
               />
@@ -177,11 +260,11 @@ export function ConnectScreen({
           <Button type="submit" disabled={testing || url.trim() === ''}>
             {testing ? 'Testing…' : 'Test connection'}
           </Button>
-          <Button variant="primary" onClick={connect} disabled={!tested?.ok}>
+          <Button variant="primary" onClick={connect} disabled={!tested?.ok || keyMissing}>
             Connect
           </Button>
           {tested && !tested.ok && (
-            <Button variant="quiet" onClick={connect}>
+            <Button variant="quiet" onClick={connect} disabled={keyMissing}>
               Connect anyway
             </Button>
           )}
@@ -224,6 +307,7 @@ export function ConnectScreen({
           </li>
         </ul>
       </details>
+      <AuthModes current={mode} />
     </Frame>
   );
 }

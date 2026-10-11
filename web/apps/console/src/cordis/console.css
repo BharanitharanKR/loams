@@ -775,6 +775,21 @@ button.lc-hosted-engine {
   font-weight: 600;
 }
 
+.lc-hosted-user {
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--op-muted);
+  font-size: 12px;
+}
+.lc-hosted-via {
+  color: var(--op-faint);
+}
+.lc-hosted-user-unknown {
+  color: var(--op-danger);
+}
+
 /* Sign-in and "Connect your engine", before the console boots. */
 .lc-gate {
   display: grid;
