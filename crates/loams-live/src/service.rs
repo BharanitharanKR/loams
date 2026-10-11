@@ -371,6 +371,7 @@ impl LiveService for Live {
                 .schema
                 .as_option()
                 .map(Schema::from_proto)
+                .transpose()?
                 .unwrap_or_default();
             deploy::deploy(
                 &self.engine,

@@ -61,6 +61,7 @@ fn notes_schema() -> Schema {
                 name: "by_body".into(),
                 fields: vec!["body".into()],
             }],
+            ..TableSchema::default()
         }],
     }
 }
@@ -459,6 +460,7 @@ async fn invalid_bundle_fails_without_pointer_change(store: TestStore) {
             tables: vec![TableSchema {
                 name: "1bad".into(),
                 indexes: Vec::new(),
+                ..TableSchema::default()
             }],
         },
         Schema {
@@ -466,10 +468,12 @@ async fn invalid_bundle_fails_without_pointer_change(store: TestStore) {
                 TableSchema {
                     name: "twice".into(),
                     indexes: Vec::new(),
+                    ..TableSchema::default()
                 },
                 TableSchema {
                     name: "twice".into(),
                     indexes: Vec::new(),
+                    ..TableSchema::default()
                 },
             ],
         },
@@ -507,6 +511,7 @@ async fn invalid_bundle_fails_without_pointer_change(store: TestStore) {
                 tables: vec![TableSchema {
                     name: "notes".into(),
                     indexes: Vec::new(),
+                    ..TableSchema::default()
                 }],
             },
             ..request(bundle(2), Some(v1.record.id))
@@ -668,6 +673,7 @@ async fn system_functions_survive_any_deploy(store: TestStore) {
                 tables: vec![TableSchema {
                     name: "notes".into(),
                     indexes: Vec::new(),
+                    ..TableSchema::default()
                 }],
             },
             ..request(bundle(1), None)
@@ -738,6 +744,7 @@ async fn schema_creates_tables_additively(store: TestStore) {
             TableSchema {
                 name: "notes".into(),
                 indexes: Vec::new(),
+                ..TableSchema::default()
             },
             TableSchema {
                 name: "tags".into(),
@@ -745,6 +752,7 @@ async fn schema_creates_tables_additively(store: TestStore) {
                     name: "by_name".into(),
                     fields: vec!["name".into()],
                 }],
+                ..TableSchema::default()
             },
         ],
     };

@@ -8,6 +8,10 @@
 //! (an entry in both lists is kept, not rewritten). Index entries are the
 //! `by_creation_time` entry and one per user index; `by_id` is the document
 //! key itself. A missing indexed field is indexed as `null`.
+//!
+//! Every insert, patch (the merged document) and replace is checked against
+//! the table's validators first ([`schema::check_document`], LV1 plan
+//! Task 8).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::future::Future;
@@ -21,7 +25,7 @@ use crate::catalog::TableDef;
 use crate::ids::{DocId, IndexId, TableId};
 use crate::keys::{AppKeys, KeyRange, key_after};
 use crate::value::{fields_from_proto, fields_to_proto};
-use crate::{Limits, LiveError, LiveValue, pb};
+use crate::{Limits, LiveError, LiveValue, pb, schema};
 
 /// A journal write record (§20 §5.3).
 pub type WriteRecord = pb::WriteRecord;
@@ -62,7 +66,7 @@ impl Doc {
         })
     }
 
-    fn decode(id: DocId, bytes: &[u8]) -> Result<Self, LiveError> {
+    pub(crate) fn decode(id: DocId, bytes: &[u8]) -> Result<Self, LiveError> {
         let record = pb::DocumentRecord::decode_from_slice(bytes)
             .map_err(|e| LiveError::Corrupt(format!("document {id}: {e}")))?;
         Doc::from_record(id, record)
@@ -210,6 +214,7 @@ pub(crate) async fn insert_sized(
     limits: &Limits,
 ) -> Result<(DocId, WriteRecord, usize), LiveError> {
     limits.check_fields(&fields)?;
+    schema::check_document(txn, app, table, &fields).await?;
     let doc = Doc {
         id: DocId::random(table.id)?,
         creation_ms: txn.start_ts().physical_ms(),
@@ -604,6 +609,7 @@ async fn rewrite(
     limits: &Limits,
 ) -> Result<(WriteRecord, usize), LiveError> {
     limits.check_fields(&fields)?;
+    schema::check_document(txn, app, table, &fields).await?;
     let removed = index_keys(app, table, &old, limits)?;
     let new = Doc { fields, ..old };
     let record = encode(&new, limits)?;

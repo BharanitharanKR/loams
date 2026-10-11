@@ -169,6 +169,30 @@ impl Journal {
         Ok((shard, seq))
     }
 
+    /// Rewrites every shard's head unchanged in `txn` (a head that exists
+    /// with its own value; one never written is deleted, which stays
+    /// absent): a **fence** (LV1 plan Task 8). Every mutation that writes
+    /// also writes a head, so one that started before `txn`'s commit and
+    /// commits after it conflicts on that head and reruns, at a start
+    /// timestamp past the fence, where it sees what `txn` wrote. A rewrite
+    /// leaves a version of each head on both backends, which `lock_keys`
+    /// does not on the embedded store (there it only makes the locking
+    /// transaction conflict). Concurrent appends make `txn` itself
+    /// conflict, and the runner retries it.
+    pub async fn fence(&self, txn: &mut Txn) -> Result<(), LiveError> {
+        let keys: Vec<Vec<u8>> = (0..self.shards)
+            .map(|shard| self.app.journal_head(shard))
+            .collect();
+        let found = Reads::batch_get(txn, keys.clone()).await?;
+        for key in keys {
+            match found.iter().find(|(k, _)| *k == key) {
+                Some((_, value)) => txn.put(&key, value.clone()).await?,
+                None => txn.delete(&key).await?,
+            }
+        }
+        Ok(())
+    }
+
     /// Every shard's head (0 for a shard never written), in one batch get.
     pub async fn heads(&self, reads: &mut impl Reads) -> Result<Vec<u64>, LiveError> {
         // Head keys sort by shard, so a key's index in this list is its shard.

@@ -22,7 +22,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file loams/live/v1/live.proto.
  */
 export const file_loams_live_v1_live: GenFile = /*@__PURE__*/
-  fileDesc("Chhsb2Ftcy9saXZlL3YxL2xpdmUucHJvdG8SDWxvYW1zLmxpdmUudjEiPwoMU3RhdGVWZXJzaW9uEhEKCXF1ZXJ5X3NldBgBIAEoBBIQCghpZGVudGl0eRgCIAEoBBIKCgJ0cxgDIAEoBCJsCgxXYXRjaFJlcXVlc3QSKgoHaW5pdGlhbBgBIAEoCzIXLmxvYW1zLmxpdmUudjEuUXVlcnlTZXRIABInCgZyZXN1bWUYAiABKAsyFS5sb2Ftcy5saXZlLnYxLlJlc3VtZUgAQgcKBXN0YXJ0ImcKBlJlc3VtZRIxCgxsYXN0X3ZlcnNpb24YASABKAsyGy5sb2Ftcy5saXZlLnYxLlN0YXRlVmVyc2lvbhIqCglxdWVyeV9zZXQYAiABKAsyFy5sb2Ftcy5saXZlLnYxLlF1ZXJ5U2V0IkYKCFF1ZXJ5U2V0Eg8KB3ZlcnNpb24YASABKAQSKQoHcXVlcmllcxgCIAMoCzIYLmxvYW1zLmxpdmUudjEuUXVlcnlTcGVjIlMKCVF1ZXJ5U3BlYxIQCghxdWVyeV9pZBgBIAEoDRIQCghmdW5jdGlvbhgCIAEoCRIiCgRhcmdzGAMgASgLMhQubG9hbXMubGl2ZS52MS5WYWx1ZSKGAQoVTW9kaWZ5UXVlcnlTZXRSZXF1ZXN0EhIKCnNlc3Npb25faWQYASABKAkSFAoMYmFzZV92ZXJzaW9uGAIgASgEEhMKC25ld192ZXJzaW9uGAMgASgEEi4KB2NoYW5nZXMYBCADKAsyHS5sb2Ftcy5saXZlLnYxLlF1ZXJ5U2V0Q2hhbmdlIlUKDlF1ZXJ5U2V0Q2hhbmdlEicKA2FkZBgBIAEoCzIYLmxvYW1zLmxpdmUudjEuUXVlcnlTcGVjSAASEAoGcmVtb3ZlGAIgASgNSABCCAoGY2hhbmdlIhgKFk1vZGlmeVF1ZXJ5U2V0UmVzcG9uc2UisQEKClRyYW5zaXRpb24SEgoKc2Vzc2lvbl9pZBgBIAEoCRIqCgVzdGFydBgCIAEoCzIbLmxvYW1zLmxpdmUudjEuU3RhdGVWZXJzaW9uEigKA2VuZBgDIAEoCzIbLmxvYW1zLmxpdmUudjEuU3RhdGVWZXJzaW9uEisKB3VwZGF0ZXMYBCADKAsyGi5sb2Ftcy5saXZlLnYxLlF1ZXJ5VXBkYXRlEgwKBG1vcmUYBSABKAgipgEKC1F1ZXJ5VXBkYXRlEhAKCHF1ZXJ5X2lkGAEgASgNEiUKBXZhbHVlGAIgASgLMhQubG9hbXMubGl2ZS52MS5WYWx1ZUgAEikKBWVycm9yGAMgASgLMhgubG9hbXMubGl2ZS52MS5MaXZlRXJyb3JIABIpCgdyZW1vdmVkGAQgASgLMhYubG9hbXMubGl2ZS52MS5SZW1vdmVkSABCCAoGdXBkYXRlIgkKB1JlbW92ZWQiXAoMUXVlcnlSZXF1ZXN0EhAKCGZ1bmN0aW9uGAEgASgJEiIKBGFyZ3MYAiABKAsyFC5sb2Ftcy5saXZlLnYxLlZhbHVlEg8KAnRzGAMgASgESACIAQFCBQoDX3RzIkEKDVF1ZXJ5UmVzcG9uc2USCgoCdHMYASABKAQSJAoGcmVzdWx0GAIgASgLMhQubG9hbXMubGl2ZS52MS5WYWx1ZSJ3Cg1NdXRhdGVSZXF1ZXN0EhAKCGZ1bmN0aW9uGAEgASgJEiIKBGFyZ3MYAiABKAsyFC5sb2Ftcy5saXZlLnYxLlZhbHVlEhwKD2lkZW1wb3RlbmN5X2tleRgDIAEoCUgAiAEBQhIKEF9pZGVtcG90ZW5jeV9rZXkiSQoOTXV0YXRlUmVzcG9uc2USEQoJY29tbWl0X3RzGAEgASgEEiQKBnJlc3VsdBgCIAEoCzIULmxvYW1zLmxpdmUudjEuVmFsdWUiRgoNRGVwbG95UmVxdWVzdBIOCgZidW5kbGUYASABKAwSJQoGc2NoZW1hGAIgASgLMhUubG9hbXMubGl2ZS52MS5TY2hlbWEiJwoORGVwbG95UmVzcG9uc2USFQoNZGVwbG95bWVudF9pZBgBIAEoCSI0CgZTY2hlbWESKgoGdGFibGVzGAEgAygLMhoubG9hbXMubGl2ZS52MS5UYWJsZVNjaGVtYSJICgtUYWJsZVNjaGVtYRIMCgRuYW1lGAEgASgJEisKB2luZGV4ZXMYAiADKAsyGi5sb2Ftcy5saXZlLnYxLkluZGV4U2NoZW1hIisKC0luZGV4U2NoZW1hEgwKBG5hbWUYASABKAkSDgoGZmllbGRzGAIgAygJIkQKCUxpdmVFcnJvchImCgRjb2RlGAEgASgOMhgubG9hbXMubGl2ZS52MS5FcnJvckNvZGUSDwoHbWVzc2FnZRgCIAEoCSrFAgoJRXJyb3JDb2RlEhoKFkVSUk9SX0NPREVfVU5TUEVDSUZJRUQQABIfChtFUlJPUl9DT0RFX0lOVkFMSURfQVJHVU1FTlQQARIYChRFUlJPUl9DT0RFX05PVF9GT1VORBACEiIKHkVSUk9SX0NPREVfRkFJTEVEX1BSRUNPTkRJVElPThADEiEKHUVSUk9SX0NPREVfUkVTT1VSQ0VfRVhIQVVTVEVEEAQSHQoZRVJST1JfQ09ERV9GVU5DVElPTl9FUlJPUhAFEh8KG0VSUk9SX0NPREVfRlVOQ1RJT05fVElNRU9VVBAGEiUKIUVSUk9SX0NPREVfRlVOQ1RJT05fT1VUX09GX01FTU9SWRAHEhoKFkVSUk9SX0NPREVfVU5BVkFJTEFCTEUQCBIXChNFUlJPUl9DT0RFX0lOVEVSTkFMEAkypwQKC0xpdmVTZXJ2aWNlEk4KBVdhdGNoEhsubG9hbXMubGl2ZS52MS5XYXRjaFJlcXVlc3QaGS5sb2Ftcy5saXZlLnYxLlRyYW5zaXRpb24iC5K1GAcSBXdhdGNoMAEScwoOTW9kaWZ5UXVlcnlTZXQSJC5sb2Ftcy5saXZlLnYxLk1vZGlmeVF1ZXJ5U2V0UmVxdWVzdBolLmxvYW1zLmxpdmUudjEuTW9kaWZ5UXVlcnlTZXRSZXNwb25zZSIUkrUYEBIObW9kaWZ5UXVlcnlTZXQSVwoFUXVlcnkSGy5sb2Ftcy5saXZlLnYxLlF1ZXJ5UmVxdWVzdBocLmxvYW1zLmxpdmUudjEuUXVlcnlSZXNwb25zZSITkrUYDwoGdGFibGVzEgVxdWVyeRJbCgZNdXRhdGUSHC5sb2Ftcy5saXZlLnYxLk11dGF0ZVJlcXVlc3QaHS5sb2Ftcy5saXZlLnYxLk11dGF0ZVJlc3BvbnNlIhSStRgQCgZ0YWJsZXMSBm11dGF0ZRJbCgZEZXBsb3kSHC5sb2Ftcy5saXZlLnYxLkRlcGxveVJlcXVlc3QaHS5sb2Ftcy5saXZlLnYxLkRlcGxveVJlc3BvbnNlIhSStRgQCgZ0YWJsZXMSBmRlcGxveRpAirUYPAoEbGl2ZRIyTGl2ZSBzeW5jOiB3YXRjaCBhIHF1ZXJ5IHNldCBvdmVyIGEgc2VydmVyIHN0cmVhbS4YAWIGcHJvdG8z", [file_loams_live_v1_value, file_loams_options_v1_options]);
+  fileDesc("Chhsb2Ftcy9saXZlL3YxL2xpdmUucHJvdG8SDWxvYW1zLmxpdmUudjEiPwoMU3RhdGVWZXJzaW9uEhEKCXF1ZXJ5X3NldBgBIAEoBBIQCghpZGVudGl0eRgCIAEoBBIKCgJ0cxgDIAEoBCJsCgxXYXRjaFJlcXVlc3QSKgoHaW5pdGlhbBgBIAEoCzIXLmxvYW1zLmxpdmUudjEuUXVlcnlTZXRIABInCgZyZXN1bWUYAiABKAsyFS5sb2Ftcy5saXZlLnYxLlJlc3VtZUgAQgcKBXN0YXJ0ImcKBlJlc3VtZRIxCgxsYXN0X3ZlcnNpb24YASABKAsyGy5sb2Ftcy5saXZlLnYxLlN0YXRlVmVyc2lvbhIqCglxdWVyeV9zZXQYAiABKAsyFy5sb2Ftcy5saXZlLnYxLlF1ZXJ5U2V0IkYKCFF1ZXJ5U2V0Eg8KB3ZlcnNpb24YASABKAQSKQoHcXVlcmllcxgCIAMoCzIYLmxvYW1zLmxpdmUudjEuUXVlcnlTcGVjIlMKCVF1ZXJ5U3BlYxIQCghxdWVyeV9pZBgBIAEoDRIQCghmdW5jdGlvbhgCIAEoCRIiCgRhcmdzGAMgASgLMhQubG9hbXMubGl2ZS52MS5WYWx1ZSKGAQoVTW9kaWZ5UXVlcnlTZXRSZXF1ZXN0EhIKCnNlc3Npb25faWQYASABKAkSFAoMYmFzZV92ZXJzaW9uGAIgASgEEhMKC25ld192ZXJzaW9uGAMgASgEEi4KB2NoYW5nZXMYBCADKAsyHS5sb2Ftcy5saXZlLnYxLlF1ZXJ5U2V0Q2hhbmdlIlUKDlF1ZXJ5U2V0Q2hhbmdlEicKA2FkZBgBIAEoCzIYLmxvYW1zLmxpdmUudjEuUXVlcnlTcGVjSAASEAoGcmVtb3ZlGAIgASgNSABCCAoGY2hhbmdlIhgKFk1vZGlmeVF1ZXJ5U2V0UmVzcG9uc2UisQEKClRyYW5zaXRpb24SEgoKc2Vzc2lvbl9pZBgBIAEoCRIqCgVzdGFydBgCIAEoCzIbLmxvYW1zLmxpdmUudjEuU3RhdGVWZXJzaW9uEigKA2VuZBgDIAEoCzIbLmxvYW1zLmxpdmUudjEuU3RhdGVWZXJzaW9uEisKB3VwZGF0ZXMYBCADKAsyGi5sb2Ftcy5saXZlLnYxLlF1ZXJ5VXBkYXRlEgwKBG1vcmUYBSABKAgipgEKC1F1ZXJ5VXBkYXRlEhAKCHF1ZXJ5X2lkGAEgASgNEiUKBXZhbHVlGAIgASgLMhQubG9hbXMubGl2ZS52MS5WYWx1ZUgAEikKBWVycm9yGAMgASgLMhgubG9hbXMubGl2ZS52MS5MaXZlRXJyb3JIABIpCgdyZW1vdmVkGAQgASgLMhYubG9hbXMubGl2ZS52MS5SZW1vdmVkSABCCAoGdXBkYXRlIgkKB1JlbW92ZWQiXAoMUXVlcnlSZXF1ZXN0EhAKCGZ1bmN0aW9uGAEgASgJEiIKBGFyZ3MYAiABKAsyFC5sb2Ftcy5saXZlLnYxLlZhbHVlEg8KAnRzGAMgASgESACIAQFCBQoDX3RzIkEKDVF1ZXJ5UmVzcG9uc2USCgoCdHMYASABKAQSJAoGcmVzdWx0GAIgASgLMhQubG9hbXMubGl2ZS52MS5WYWx1ZSJ3Cg1NdXRhdGVSZXF1ZXN0EhAKCGZ1bmN0aW9uGAEgASgJEiIKBGFyZ3MYAiABKAsyFC5sb2Ftcy5saXZlLnYxLlZhbHVlEhwKD2lkZW1wb3RlbmN5X2tleRgDIAEoCUgAiAEBQhIKEF9pZGVtcG90ZW5jeV9rZXkiSQoOTXV0YXRlUmVzcG9uc2USEQoJY29tbWl0X3RzGAEgASgEEiQKBnJlc3VsdBgCIAEoCzIULmxvYW1zLmxpdmUudjEuVmFsdWUiRgoNRGVwbG95UmVxdWVzdBIOCgZidW5kbGUYASABKAwSJQoGc2NoZW1hGAIgASgLMhUubG9hbXMubGl2ZS52MS5TY2hlbWEiJwoORGVwbG95UmVzcG9uc2USFQoNZGVwbG95bWVudF9pZBgBIAEoCSI0CgZTY2hlbWESKgoGdGFibGVzGAEgAygLMhoubG9hbXMubGl2ZS52MS5UYWJsZVNjaGVtYSKrAQoLVGFibGVTY2hlbWESDAoEbmFtZRgBIAEoCRIrCgdpbmRleGVzGAIgAygLMhoubG9hbXMubGl2ZS52MS5JbmRleFNjaGVtYRIrCgl2YWxpZGF0b3IYAyABKAsyGC5sb2Ftcy5saXZlLnYxLlZhbGlkYXRvchIeChFzY2hlbWFfdmFsaWRhdGlvbhgEIAEoCEgAiAEBQhQKEl9zY2hlbWFfdmFsaWRhdGlvbiIrCgtJbmRleFNjaGVtYRIMCgRuYW1lGAEgASgJEg4KBmZpZWxkcxgCIAMoCSK9AgoJVmFsaWRhdG9yEjYKCXByaW1pdGl2ZRgBIAEoDjIhLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yUHJpbWl0aXZlSAASKQoFYXJyYXkYAiABKAsyGC5sb2Ftcy5saXZlLnYxLlZhbGlkYXRvckgAEjAKBm9iamVjdBgDIAEoCzIeLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yT2JqZWN0SAASJwoHbGl0ZXJhbBgEIAEoCzIULmxvYW1zLmxpdmUudjEuVmFsdWVIABIuCgV1bmlvbhgFIAEoCzIdLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yVW5pb25IABIsCghvcHRpb25hbBgGIAEoCzIYLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9ySAASDAoCaWQYByABKAlIAEIGCgRraW5kIpYBCg9WYWxpZGF0b3JPYmplY3QSOgoGZmllbGRzGAEgAygLMioubG9hbXMubGl2ZS52MS5WYWxpZGF0b3JPYmplY3QuRmllbGRzRW50cnkaRwoLRmllbGRzRW50cnkSCwoDa2V5GAEgASgJEicKBXZhbHVlGAIgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3I6AjgBIjsKDlZhbGlkYXRvclVuaW9uEikKB21lbWJlcnMYASADKAsyGC5sb2Ftcy5saXZlLnYxLlZhbGlkYXRvciJECglMaXZlRXJyb3ISJgoEY29kZRgBIAEoDjIYLmxvYW1zLmxpdmUudjEuRXJyb3JDb2RlEg8KB21lc3NhZ2UYAiABKAkqlAIKElZhbGlkYXRvclByaW1pdGl2ZRIjCh9WQUxJREFUT1JfUFJJTUlUSVZFX1VOU1BFQ0lGSUVEEAASHAoYVkFMSURBVE9SX1BSSU1JVElWRV9OVUxMEAESHQoZVkFMSURBVE9SX1BSSU1JVElWRV9JTlQ2NBACEh8KG1ZBTElEQVRPUl9QUklNSVRJVkVfRkxPQVQ2NBADEh8KG1ZBTElEQVRPUl9QUklNSVRJVkVfQk9PTEVBThAEEh4KGlZBTElEQVRPUl9QUklNSVRJVkVfU1RSSU5HEAUSHQoZVkFMSURBVE9SX1BSSU1JVElWRV9CWVRFUxAGEhsKF1ZBTElEQVRPUl9QUklNSVRJVkVfQU5ZEAcqxQIKCUVycm9yQ29kZRIaChZFUlJPUl9DT0RFX1VOU1BFQ0lGSUVEEAASHwobRVJST1JfQ09ERV9JTlZBTElEX0FSR1VNRU5UEAESGAoURVJST1JfQ09ERV9OT1RfRk9VTkQQAhIiCh5FUlJPUl9DT0RFX0ZBSUxFRF9QUkVDT05ESVRJT04QAxIhCh1FUlJPUl9DT0RFX1JFU09VUkNFX0VYSEFVU1RFRBAEEh0KGUVSUk9SX0NPREVfRlVOQ1RJT05fRVJST1IQBRIfChtFUlJPUl9DT0RFX0ZVTkNUSU9OX1RJTUVPVVQQBhIlCiFFUlJPUl9DT0RFX0ZVTkNUSU9OX09VVF9PRl9NRU1PUlkQBxIaChZFUlJPUl9DT0RFX1VOQVZBSUxBQkxFEAgSFwoTRVJST1JfQ09ERV9JTlRFUk5BTBAJMqcECgtMaXZlU2VydmljZRJOCgVXYXRjaBIbLmxvYW1zLmxpdmUudjEuV2F0Y2hSZXF1ZXN0GhkubG9hbXMubGl2ZS52MS5UcmFuc2l0aW9uIguStRgHEgV3YXRjaDABEnMKDk1vZGlmeVF1ZXJ5U2V0EiQubG9hbXMubGl2ZS52MS5Nb2RpZnlRdWVyeVNldFJlcXVlc3QaJS5sb2Ftcy5saXZlLnYxLk1vZGlmeVF1ZXJ5U2V0UmVzcG9uc2UiFJK1GBASDm1vZGlmeVF1ZXJ5U2V0ElcKBVF1ZXJ5EhsubG9hbXMubGl2ZS52MS5RdWVyeVJlcXVlc3QaHC5sb2Ftcy5saXZlLnYxLlF1ZXJ5UmVzcG9uc2UiE5K1GA8KBnRhYmxlcxIFcXVlcnkSWwoGTXV0YXRlEhwubG9hbXMubGl2ZS52MS5NdXRhdGVSZXF1ZXN0Gh0ubG9hbXMubGl2ZS52MS5NdXRhdGVSZXNwb25zZSIUkrUYEAoGdGFibGVzEgZtdXRhdGUSWwoGRGVwbG95EhwubG9hbXMubGl2ZS52MS5EZXBsb3lSZXF1ZXN0Gh0ubG9hbXMubGl2ZS52MS5EZXBsb3lSZXNwb25zZSIUkrUYEAoGdGFibGVzEgZkZXBsb3kaQIq1GDwKBGxpdmUSMkxpdmUgc3luYzogd2F0Y2ggYSBxdWVyeSBzZXQgb3ZlciBhIHNlcnZlciBzdHJlYW0uGAFiBnByb3RvMw", [file_loams_live_v1_value, file_loams_options_v1_options]);
 
 /**
  * A session's state: (query-set version, identity version, ts). A client
@@ -493,7 +493,7 @@ export const DeployResponseSchema: GenMessage<DeployResponse> = /*@__PURE__*/
   messageDesc(file_loams_live_v1_live, 16);
 
 /**
- * A deployed schema: tables and their indexes (validators arrive in R2).
+ * A deployed schema: tables, their indexes and their validators.
  *
  * @generated from message loams.live.v1.Schema
  */
@@ -526,6 +526,24 @@ export type TableSchema = Message<"loams.live.v1.TableSchema"> & {
    * @generated from field: repeated loams.live.v1.IndexSchema indexes = 2;
    */
   indexes: IndexSchema[];
+
+  /**
+   * The validator every write to the table must match (design §45 §4.1,
+   * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+   * own fields (not `_id` or `_creationTime`). Absent: any document.
+   *
+   * @generated from field: loams.live.v1.Validator validator = 3;
+   */
+  validator?: Validator | undefined;
+
+  /**
+   * Whether a deploy that makes the validator stricter checks the table's
+   * existing documents first (absent: true). With `false` the new validator
+   * applies at once to new writes only, as Convex's `schemaValidation`.
+   *
+   * @generated from field: optional bool schema_validation = 4;
+   */
+  schemaValidation?: boolean | undefined;
 };
 
 /**
@@ -560,6 +578,125 @@ export const IndexSchemaSchema: GenMessage<IndexSchema> = /*@__PURE__*/
   messageDesc(file_loams_live_v1_live, 19);
 
 /**
+ * A validator (design §45 §4.1, D684): the `v.*` vocabulary of
+ * `loams:server`. Values match strictly: `int64` takes only an int64 and
+ * `float64` only a double; an object has exactly its fields, except that an
+ * `optional` field may be missing.
+ *
+ * @generated from message loams.live.v1.Validator
+ */
+export type Validator = Message<"loams.live.v1.Validator"> & {
+  /**
+   * Exactly one is set; a Validator with none set is invalid.
+   *
+   * @generated from oneof loams.live.v1.Validator.kind
+   */
+  kind: {
+    /**
+     * `v.null()`, `v.int64()`, `v.float64()`, `v.boolean()`, `v.string()`,
+     * `v.bytes()` or `v.any()`.
+     *
+     * @generated from field: loams.live.v1.ValidatorPrimitive primitive = 1;
+     */
+    value: ValidatorPrimitive;
+    case: "primitive";
+  } | {
+    /**
+     * `v.array(element)`: every element matches.
+     *
+     * @generated from field: loams.live.v1.Validator array = 2;
+     */
+    value: Validator;
+    case: "array";
+  } | {
+    /**
+     * `v.object(fields)`.
+     *
+     * @generated from field: loams.live.v1.ValidatorObject object = 3;
+     */
+    value: ValidatorObject;
+    case: "object";
+  } | {
+    /**
+     * `v.literal(value)`: exactly this scalar (null, boolean, int64, a
+     * finite double or a string).
+     *
+     * @generated from field: loams.live.v1.Value literal = 4;
+     */
+    value: Value;
+    case: "literal";
+  } | {
+    /**
+     * `v.union(...members)`: at least one member matches.
+     *
+     * @generated from field: loams.live.v1.ValidatorUnion union = 5;
+     */
+    value: ValidatorUnion;
+    case: "union";
+  } | {
+    /**
+     * `v.optional(inner)`: an object field that may be missing; only valid
+     * as a field of `object`.
+     *
+     * @generated from field: loams.live.v1.Validator optional = 6;
+     */
+    value: Validator;
+    case: "optional";
+  } | {
+    /**
+     * `v.id(table)`: a document id (its text form) of the named table.
+     *
+     * @generated from field: string id = 7;
+     */
+    value: string;
+    case: "id";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message loams.live.v1.Validator.
+ * Use `create(ValidatorSchema)` to create a new message.
+ */
+export const ValidatorSchema: GenMessage<Validator> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_live, 20);
+
+/**
+ * @generated from message loams.live.v1.ValidatorObject
+ */
+export type ValidatorObject = Message<"loams.live.v1.ValidatorObject"> & {
+  /**
+   * @generated from field: map<string, loams.live.v1.Validator> fields = 1;
+   */
+  fields: { [key: string]: Validator };
+};
+
+/**
+ * Describes the message loams.live.v1.ValidatorObject.
+ * Use `create(ValidatorObjectSchema)` to create a new message.
+ */
+export const ValidatorObjectSchema: GenMessage<ValidatorObject> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_live, 21);
+
+/**
+ * @generated from message loams.live.v1.ValidatorUnion
+ */
+export type ValidatorUnion = Message<"loams.live.v1.ValidatorUnion"> & {
+  /**
+   * At least one.
+   *
+   * @generated from field: repeated loams.live.v1.Validator members = 1;
+   */
+  members: Validator[];
+};
+
+/**
+ * Describes the message loams.live.v1.ValidatorUnion.
+ * Use `create(ValidatorUnionSchema)` to create a new message.
+ */
+export const ValidatorUnionSchema: GenMessage<ValidatorUnion> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_live, 22);
+
+/**
  * An error for one query in a Transition. Call errors use the Connect error
  * codes; this carries the same meaning inside a stream that stays open.
  *
@@ -582,7 +719,58 @@ export type LiveError = Message<"loams.live.v1.LiveError"> & {
  * Use `create(LiveErrorSchema)` to create a new message.
  */
 export const LiveErrorSchema: GenMessage<LiveError> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_live, 20);
+  messageDesc(file_loams_live_v1_live, 23);
+
+/**
+ * @generated from enum loams.live.v1.ValidatorPrimitive
+ */
+export enum ValidatorPrimitive {
+  /**
+   * @generated from enum value: VALIDATOR_PRIMITIVE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: VALIDATOR_PRIMITIVE_NULL = 1;
+   */
+  NULL = 1,
+
+  /**
+   * @generated from enum value: VALIDATOR_PRIMITIVE_INT64 = 2;
+   */
+  INT64 = 2,
+
+  /**
+   * @generated from enum value: VALIDATOR_PRIMITIVE_FLOAT64 = 3;
+   */
+  FLOAT64 = 3,
+
+  /**
+   * @generated from enum value: VALIDATOR_PRIMITIVE_BOOLEAN = 4;
+   */
+  BOOLEAN = 4,
+
+  /**
+   * @generated from enum value: VALIDATOR_PRIMITIVE_STRING = 5;
+   */
+  STRING = 5,
+
+  /**
+   * @generated from enum value: VALIDATOR_PRIMITIVE_BYTES = 6;
+   */
+  BYTES = 6,
+
+  /**
+   * @generated from enum value: VALIDATOR_PRIMITIVE_ANY = 7;
+   */
+  ANY = 7,
+}
+
+/**
+ * Describes the enum loams.live.v1.ValidatorPrimitive.
+ */
+export const ValidatorPrimitiveSchema: GenEnum<ValidatorPrimitive> = /*@__PURE__*/
+  enumDesc(file_loams_live_v1_live, 0);
 
 /**
  * @generated from enum loams.live.v1.ErrorCode
@@ -655,7 +843,7 @@ export enum ErrorCode {
  * Describes the enum loams.live.v1.ErrorCode.
  */
 export const ErrorCodeSchema: GenEnum<ErrorCode> = /*@__PURE__*/
-  enumDesc(file_loams_live_v1_live, 0);
+  enumDesc(file_loams_live_v1_live, 1);
 
 /**
  * @generated from service loams.live.v1.LiveService

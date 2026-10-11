@@ -13,13 +13,20 @@
 //!    bundle then serves, if this deploy activates;
 //! 2. store the bundle and read it back to check its hash;
 //! 3. write the `pending` record;
-//! 4. and 5., in one transaction: compare-and-swap the pointer against
+//! 4. when the schema makes a table's validator stricter (Task 8, design
+//!    §45 §4.1): in one transaction, check the pointer, mark the record
+//!    `validating`, [enforce](schema::enforce) the new validators on new
+//!    writes and fence the journal; then scan each such table in a
+//!    [`TableJob`](backfill::TableJob). A document that does not match
+//!    fails the deployment (listing up to 100 ids) and the new validators
+//!    are [released](schema::release);
+//! 5. in one transaction: compare-and-swap the pointer against
 //!    `expected_active` (a mismatch fails the deployment with
 //!    `FAILED_PRECONDITION`, reason `live_deploy_conflict`), apply the
-//!    schema ([`schema::apply`], additive table creation only until Tasks 8
-//!    and 9), mark the deployment `active` and the one it replaces
-//!    `superseded`. A failure at 4 or 5 marks the record `failed` with the
-//!    reason;
+//!    schema ([`schema::apply`]: additive table creation, and the
+//!    validators; index changes are Task 9's), mark the deployment `active`
+//!    and the one it replaces `superseded`. A failure at 4 or 5 marks the
+//!    record `failed` with the reason;
 //! 6. the `catalog` journal entry that switches every node at one tick is
 //!    Task 11's. Until then a node picks up another node's deploy when it
 //!    [refreshes](AppEngine::refresh) (the server does each janitor round).
@@ -46,7 +53,8 @@
 //! the newest [`KEEP_DEPLOYMENTS`] deployments, the active one and its
 //! parent, and deletes the rest with their bundles; it also fails a
 //! `pending` record older than [`PENDING_GRACE`], left by a deploy that
-//! crashed before activating.
+//! crashed before activating, and releases the validator checks whose jobs'
+//! leases expired, failing their `validating` records.
 //!
 //! The runtime lives in `loams-live-js`, which depends on this crate, so
 //! it is reached through [`BundleLoader`] and [`LoadedBundle`]. A bundle
@@ -62,15 +70,17 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use buffa::Message;
 use bytes::Bytes;
 use futures::future::BoxFuture;
-use loams_kv::{Ts, Txn, TxnError};
+use loams_kv::{Ts, Txn};
 use sha2::{Digest, Sha256};
 use tokio::sync::watch;
 use ulid::Ulid;
 
+use crate::backfill::{Finding, JobKind, MAX_FINDINGS, TableJob};
 use crate::docs::Reads;
+use crate::journal::Journal;
 use crate::keys::{AppKeys, KeyRange};
-use crate::schema::{self, Schema, SchemaChanges};
-use crate::txn::{catalog_txn, latest_snapshot, lift, snapshot};
+use crate::schema::{self, Conformance, Schema, SchemaChanges};
+use crate::txn::{Refusal, atomic, catalog_txn, latest_snapshot, lift, snapshot};
 use crate::{
     FnKind, Function, LiveError, LiveTxn, LiveValue, Runner, Visibility, catalog, pb, system,
 };
@@ -93,6 +103,12 @@ pub const PENDING_GRACE: Duration = Duration::from_secs(10 * 60);
 /// The reason the janitor gives a `pending` record it fails.
 const ABANDONED: &str = "the deploy did not finish (its record stayed pending past the grace \
                          period; it was failed by the janitor)";
+
+/// The reason the janitor gives a `validating` record whose checks it
+/// released.
+const ABANDONED_VALIDATION: &str = "the deploy did not finish validating its stricter \
+                                    validators (its validation jobs' leases expired; the \
+                                    janitor released them)";
 
 /// The records a [`PageRequest`] returns by default.
 pub const DEFAULT_PAGE: usize = 100;
@@ -208,6 +224,10 @@ pub struct Retained {
     /// The `pending` records older than the grace period that were failed
     /// (deploys that never activated).
     pub abandoned: Vec<Ulid>,
+    /// The deployments whose validator checks were released because their
+    /// jobs' leases expired (LV1 plan Task 8); a `validating` record among
+    /// them is failed.
+    pub validations_released: Vec<Ulid>,
 }
 
 /// Turns a bundle into functions: the function runtime (`loams-live-js`'s
@@ -300,6 +320,9 @@ struct Engine {
     switch: tokio::sync::Mutex<()>,
     /// Deployment ids, monotonic on this node.
     ids: Mutex<ulid::Generator>,
+    /// Testing: the next validation stops right after its fence commits,
+    /// as if its node died ([`AppEngine::crash_after_next_fence`]).
+    crash_after_fence: std::sync::atomic::AtomicBool,
 }
 
 /// What an app's engine serves on this node (LV1 plan Task 7), as the
@@ -438,6 +461,7 @@ impl AppEngine {
                 serving: watch::Sender::new(Serving::default()),
                 switch: tokio::sync::Mutex::default(),
                 ids: Mutex::new(ulid::Generator::new()),
+                crash_after_fence: std::sync::atomic::AtomicBool::new(false),
             }),
         };
         // Nothing else holds the engine yet, so `switch` needs no lock.
@@ -447,6 +471,17 @@ impl AppEngine {
             let _ = engine.serve_id(id, at).await;
         }
         Ok(engine)
+    }
+
+    /// Testing: the next deploy's validation (LV1 plan Task 8) stops right
+    /// after its fence commits, without scanning or releasing anything, as
+    /// if this node died there; the deploy returns
+    /// [`LiveError::Internal`]. The janitor's release is tested this way.
+    #[doc(hidden)]
+    pub fn crash_after_next_fence(&self) {
+        self.inner
+            .crash_after_fence
+            .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// The app's name.
@@ -696,8 +731,9 @@ pub async fn deploy(
     // 3. The pending record.
     record.created_at_ms = write_pending(&engine.runner, &record).await?;
 
-    // 4. and 5. Apply the schema and swap the pointer, in one transaction.
-    commit(app, loaded, id, req.expected_active, by, Path::Deploy).await
+    // 4. Check stricter validators against the tables' documents; 5.
+    // apply the schema and swap the pointer, in one transaction.
+    finish(app, loaded, id, req.expected_active, by, Path::Deploy).await
 }
 
 /// Activates deployment `id` of `app` as principal `by`: rollback (design
@@ -726,30 +762,215 @@ pub async fn activate(
     let record = read_record(&mut snap, app.app_keys(), id)
         .await?
         .ok_or_else(|| LiveError::NotFound(format!("deployment {id} does not exist")))?;
-    if record.state == DeploymentState::Pending {
-        return Err(still_pending(id));
-    }
+    check_state(&record, Path::Activate)?;
     record.schema.check(engine.runner.limits())?;
     let bundle = app.fetch_bundle(id, &record.bundle_sha256).await?;
     let loaded = engine.runtime.loader.load(&engine.name, &bundle).await?;
-    commit(app, loaded, id, expected_active, by, Path::Activate).await
+    finish(app, loaded, id, expected_active, by, Path::Activate).await
 }
 
-/// Which path reaches [`commit`].
+/// Which path reaches [`finish`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Path {
-    /// A new deployment: its record must still be `pending`.
+    /// A new deployment: its record must still be `pending` (or
+    /// `validating`, its own step 4).
     Deploy,
-    /// An existing deployment: its record must not be `pending`.
+    /// An existing deployment: its record must not be `pending` or
+    /// `validating` (its deploy has not finished).
     Activate,
 }
 
-/// Steps 4 and 5 for deployment `id`, loaded as `loaded`: apply its schema
-/// and swap the pointer against `expected`, then serve it. While the swap
-/// is in flight the engine reports [`Serving::switching`], so the
+/// Refuses deployment `record` for `path` in a state that path cannot take.
+fn check_state(record: &DeploymentRecord, path: Path) -> Result<(), LiveError> {
+    let in_flight = matches!(
+        record.state,
+        DeploymentState::Pending | DeploymentState::Validating
+    );
+    match path {
+        Path::Deploy if !in_flight => Err(LiveError::FailedPrecondition(format!(
+            "deployment {} is no longer pending ({}): its deploy took too long and the janitor \
+             failed it",
+            record.id,
+            record.state.name()
+        ))),
+        Path::Activate if in_flight => Err(still_pending(record.id)),
+        _ => Ok(()),
+    }
+}
+
+/// Step 4 for deployment `id` (LV1 plan Task 8, design §45 §4.1): when its
+/// schema makes a table's validator stricter, checks the table's documents
+/// first. One transaction compares the pointer with `expected`, marks a new
+/// deployment's record `validating`, [enforces](schema::enforce) the new
+/// validators on new writes (alongside the old ones) and fences the journal,
+/// so every mutation in flight reruns and sees them; then each table is
+/// scanned by a [`TableJob`] with the [`Conformance`] visitor, at batches
+/// that all read after that commit. Returns whether there was anything to
+/// check.
+///
+/// A document that does not match (up to [`MAX_FINDINGS`] are listed) is
+/// [`LiveError::FailedPrecondition`] naming them; the checks are released
+/// and a new deployment's record is `failed`, as on a conflict or any
+/// other error of this step. The pointer never changes here.
+async fn validate(
+    app: &AppEngine,
+    id: Ulid,
+    expected: Option<Ulid>,
+    path: Path,
+) -> Result<bool, LiveError> {
+    let runner = &app.inner.runner;
+    let keys = app.app_keys().clone();
+    let fail_reason = |err: &LiveError| (path == Path::Deploy).then(|| err.to_string());
+    let planned = async {
+        let mut snap = latest_snapshot(runner.store()).await?;
+        let record = read_record(&mut snap, &keys, id)
+            .await?
+            .ok_or_else(|| LiveError::NotFound(format!("deployment {id} does not exist")))?;
+        schema::plan(&mut snap, &keys, &record.schema).await
+    };
+    let planned = match planned.await {
+        Ok(planned) => planned,
+        // A schema the catalog refuses fails the deployment, as at step 5;
+        // after a storage error a new record stays `pending`.
+        Err(err) => {
+            if !matches!(err, LiveError::Txn(_)) {
+                fail(runner, id, fail_reason(&err).as_deref(), false).await;
+            }
+            return Err(err);
+        }
+    };
+    if planned.validate.is_empty() {
+        return Ok(false);
+    }
+    let owner = app.next_id().to_string();
+    let lease = runner.options().jobs.lease;
+    let fenced = atomic(runner, "live.deploy.validate", |txn| {
+        let (keys, owner) = (keys.clone(), owner.clone());
+        Box::pin(async move {
+            let active = read_pointer(txn, &keys).await?;
+            if active != expected {
+                return Err(conflict(expected, active));
+            }
+            let mut record = read_record(txn, &keys, id)
+                .await?
+                .ok_or_else(|| LiveError::NotFound(format!("deployment {id} does not exist")))?;
+            check_state(&record, path)?;
+            let checks = schema::enforce(txn, &keys, &record.schema, id, &owner, lease).await?;
+            if path == Path::Deploy {
+                record.state = DeploymentState::Validating;
+                txn.put(&keys.deployment(&id.to_bytes()), record.encode())
+                    .await?;
+            }
+            let shards = catalog::load_journal_shards(txn, &keys)
+                .await?
+                .ok_or_else(|| LiveError::Internal("the app has no journal record".into()))?;
+            Journal::new(keys.clone(), shards)?.fence(txn).await?;
+            Ok(checks)
+        })
+    })
+    .await;
+    let checks = match fenced {
+        Ok(committed) => committed.value,
+        Err(Refusal::Own(err)) => {
+            if err.reason() == Some("live_deploy_conflict") {
+                // This node's view was stale: serve what is active.
+                let _ = app.refresh().await;
+            }
+            fail(runner, id, fail_reason(&err).as_deref(), false).await;
+            return Err(err);
+        }
+        // The outcome may be unknown: release whatever it enforced.
+        Err(Refusal::Storage(err)) => {
+            fail(runner, id, None, true).await;
+            return Err(err);
+        }
+    };
+    if app
+        .inner
+        .crash_after_fence
+        .swap(false, std::sync::atomic::Ordering::SeqCst)
+    {
+        return Err(LiveError::Internal(
+            "a simulated crash right after the validation's fence".into(),
+        ));
+    }
+    let mut findings: Vec<(String, Finding)> = Vec::new();
+    for check in &checks {
+        let job = TableJob::new(
+            runner.clone(),
+            JobKind::Validate,
+            check.table,
+            owner.clone(),
+        );
+        let visitor = Arc::new(Conformance {
+            validator: check.validator.clone(),
+        });
+        match job.run(visitor, MAX_FINDINGS - findings.len()).await {
+            Ok(done) => findings.extend(
+                done.findings
+                    .into_iter()
+                    .take(MAX_FINDINGS - findings.len())
+                    .map(|f| (check.name.clone(), f)),
+            ),
+            Err(err) => {
+                fail(runner, id, fail_reason(&err).as_deref(), true).await;
+                return Err(err);
+            }
+        }
+        if findings.len() >= MAX_FINDINGS {
+            break;
+        }
+    }
+    if !findings.is_empty() {
+        let err = LiveError::FailedPrecondition(describe_findings(id, &findings));
+        tracing::warn!(
+            app = %app.inner.name,
+            deployment = %id,
+            documents = findings.len(),
+            "a deploy's stricter validators do not match existing documents; it failed"
+        );
+        fail(runner, id, fail_reason(&err).as_deref(), true).await;
+        return Err(err);
+    }
+    Ok(true)
+}
+
+/// The error text of a failed check: the offending ids by table, and what
+/// is wrong with the first (field paths and types, never values).
+fn describe_findings(id: Ulid, findings: &[(String, Finding)]) -> String {
+    let mut by_table: Vec<(&str, Vec<String>)> = Vec::new();
+    for (table, finding) in findings {
+        match by_table.iter_mut().find(|(t, _)| *t == table.as_str()) {
+            Some((_, ids)) => ids.push(finding.id.to_string()),
+            None => by_table.push((table, vec![finding.id.to_string()])),
+        }
+    }
+    let listed = by_table
+        .iter()
+        .map(|(table, ids)| format!("table '{table}': {}", ids.join(", ")))
+        .collect::<Vec<_>>()
+        .join("; ");
+    let count = if findings.len() >= MAX_FINDINGS {
+        format!("at least {MAX_FINDINGS} (the check stopped there)")
+    } else {
+        findings.len().to_string()
+    };
+    let (table, first) = &findings[0];
+    format!(
+        "deployment {id}: existing documents do not match its stricter validators: {count} \
+         found ({listed}); document {} of table '{table}': {}. Fix the documents (a \
+         migration), or declare the table with schemaValidation: false, then deploy again",
+        first.id, first.detail
+    )
+}
+
+/// Steps 4 and 5 for deployment `id`, loaded as `loaded`: check its
+/// stricter validators ([`validate`]), then apply its schema and swap the
+/// pointer against `expected`, and serve it ([`commit_now`]). While the
+/// swap is in flight the engine reports [`Serving::switching`], so the
 /// subscription manager holds its ticks until it knows which deployment
 /// serves past the swap's commit.
-async fn commit(
+async fn finish(
     app: &AppEngine,
     loaded: Arc<dyn LoadedBundle>,
     id: Ulid,
@@ -757,17 +978,21 @@ async fn commit(
     by: &str,
     path: Path,
 ) -> Result<DeployOutcome, LiveError> {
-    // Detached: once the swap starts it runs to the end (serve, or refresh)
-    // even if the caller's future is dropped (a client that disconnects),
-    // so a committed activation is always served here before the hold on
-    // the subscription manager's ticks ends.
+    // Detached: once they start, steps 4 and 5 run to the end even if the
+    // caller's future is dropped (a client that disconnects). So a
+    // committed activation is always served here before the hold on the
+    // subscription manager's ticks ends, and a validation never leaves its
+    // stricter validator enforced past its own outcome.
     let (app, by) = (app.clone(), by.to_string());
-    tokio::spawn(async move { commit_now(&app, loaded, id, expected, &by, path).await })
-        .await
-        .map_err(|e| LiveError::Internal(format!("the activation task failed: {e}")))?
+    tokio::spawn(async move {
+        let validated = validate(&app, id, expected, path).await?;
+        commit_now(&app, loaded, id, expected, &by, path, validated).await
+    })
+    .await
+    .map_err(|e| LiveError::Internal(format!("the activation task failed: {e}")))?
 }
 
-/// [`commit`]'s body, in its own task.
+/// Step 5, in [`finish`]'s task.
 async fn commit_now(
     app: &AppEngine,
     loaded: Arc<dyn LoadedBundle>,
@@ -775,6 +1000,7 @@ async fn commit_now(
     expected: Option<Ulid>,
     by: &str,
     path: Path,
+    validated: bool,
 ) -> Result<DeployOutcome, LiveError> {
     let engine = &app.inner;
     let switch = engine.switch.lock().await;
@@ -808,26 +1034,29 @@ async fn commit_now(
             let _ = app.refresh().await;
             drop(switching);
             let err = conflict(expected, active);
-            if path == Path::Deploy {
-                mark_failed(&engine.runner, id, &err.to_string()).await;
-            }
+            let reason = (path == Path::Deploy).then(|| err.to_string());
+            fail(&engine.runner, id, reason.as_deref(), validated).await;
             Err(err)
         }
         Err(SwapError::Refused(err)) => {
             drop(switching);
             drop(switch);
-            if path == Path::Deploy {
-                mark_failed(&engine.runner, id, &err.to_string()).await;
-            }
+            let reason = (path == Path::Deploy).then(|| err.to_string());
+            fail(&engine.runner, id, reason.as_deref(), validated).await;
             Err(err)
         }
-        // The outcome may be unknown: a new record stays `pending` unless
-        // the activation committed. If it did, the refresh serves it now,
-        // before the subscription manager may tick again.
+        // The outcome may be unknown: a new record stays `pending` (or
+        // `validating`) unless the activation committed. If it did, the
+        // refresh serves it now, before the subscription manager may tick
+        // again; if not, its validator checks are released (a committed
+        // swap ended them itself).
         Err(SwapError::Storage(err)) => {
             drop(switch);
             let _ = app.refresh().await;
             drop(switching);
+            if validated {
+                fail(&engine.runner, id, None, true).await;
+            }
             Err(err)
         }
     }
@@ -922,12 +1151,20 @@ pub async fn retain_with(app: &AppEngine, pending_grace: Duration) -> Result<Ret
         records_deleted: trimmed.deleted,
         bundles_deleted: 0,
         abandoned: trimmed.abandoned,
+        validations_released: trimmed.released,
     };
     for id in &report.abandoned {
         tracing::warn!(
             app = %engine.name,
             deployment = %id,
             "a deploy never activated; the janitor failed its pending record"
+        );
+    }
+    for id in &report.validations_released {
+        tracing::warn!(
+            app = %engine.name,
+            deployment = %id,
+            "a deploy's validator checks were abandoned; the janitor released them"
         );
     }
     let objects = engine
@@ -972,13 +1209,16 @@ struct Trimmed {
     deleted: Vec<Ulid>,
     kept: Vec<Ulid>,
     abandoned: Vec<Ulid>,
+    released: Vec<Ulid>,
 }
 
-/// Deletes the records retention does not keep, and fails the kept
-/// `pending` ones at least `grace_ms` old (by the transaction's start
-/// timestamp).
+/// Releases the validator checks whose jobs' leases expired, deletes the
+/// records retention does not keep, fails the kept `pending` ones at least
+/// `grace_ms` old (by the transaction's start timestamp) and the
+/// `validating` ones with no live check.
 async fn trim_records(txn: &mut Txn, keys: &AppKeys, grace_ms: u64) -> Result<Trimmed, LiveError> {
     let now_ms = txn.start_ts().physical_ms();
+    let checks = schema::release_abandoned(txn, keys, now_ms).await?;
     let active = read_pointer(txn, keys).await?;
     let records = Reads::scan(txn, &keys.deployments(), usize::MAX, true).await?;
     let records = records
@@ -990,6 +1230,7 @@ async fn trim_records(txn: &mut Txn, keys: &AppKeys, grace_ms: u64) -> Result<Tr
         deleted: Vec::new(),
         kept: Vec::new(),
         abandoned: Vec::new(),
+        released: checks.released,
     };
     for (n, record) in records.into_iter().enumerate() {
         let key = keys.deployment(&record.id.to_bytes());
@@ -1002,6 +1243,19 @@ async fn trim_records(txn: &mut Txn, keys: &AppKeys, grace_ms: u64) -> Result<Tr
                 let failed = DeploymentRecord {
                     state: DeploymentState::Failed {
                         reason: ABANDONED.to_string(),
+                    },
+                    ..record
+                };
+                txn.put(&key, failed.encode()).await?;
+            } else if record.state == DeploymentState::Validating
+                && !checks.live.contains(&record.id)
+            {
+                if !trimmed.released.contains(&record.id) {
+                    trimmed.released.push(record.id);
+                }
+                let failed = DeploymentRecord {
+                    state: DeploymentState::Failed {
+                        reason: ABANDONED_VALIDATION.to_string(),
                     },
                     ..record
                 };
@@ -1091,106 +1345,67 @@ enum SwapError {
 
 /// What a swap's transaction body decided.
 enum Swap {
-    Done(SchemaChanges, DeploymentRecord),
+    Done(Box<(SchemaChanges, DeploymentRecord)>),
     Conflict(Option<Ulid>),
-    Refused(LiveError),
 }
 
 /// Steps 4 and 5: compare-and-swap the pointer against `expected`, apply
 /// deployment `id`'s schema, and mark it active and the one it replaces
 /// superseded, in one transaction. The record is read inside it: a new
-/// deployment's must still be `pending` (the janitor may have failed it),
-/// an existing one's must not be. A schema error rolls the transaction
-/// back.
+/// deployment's must still be `pending` or `validating` (the janitor may
+/// have failed it), an existing one's must not be. A refusal (the record's
+/// state, a schema error) rolls the transaction back.
 async fn swap(
     runner: &Runner,
     id: Ulid,
     expected: Option<Ulid>,
     path: Path,
 ) -> Result<Swapped, SwapError> {
-    let failure: Arc<Mutex<Option<LiveError>>> = Arc::default();
     let keys = runner.app().clone();
     let limits = runner.limits().clone();
-    let body_failure = failure.clone();
-    let run = runner
-        .store()
-        .run(
-            catalog_txn("live.deploy.activate", runner.options()),
-            move |txn| {
-                let keys = keys.clone();
-                let limits = limits.clone();
-                let failure = body_failure.clone();
-                Box::pin(async move {
-                    let attempt = async {
-                        let active = read_pointer(txn, &keys).await?;
-                        if active != expected {
-                            return Ok::<_, LiveError>(Swap::Conflict(active));
-                        }
-                        let Some(mut record) = read_record(txn, &keys, id).await? else {
-                            return Ok(Swap::Refused(LiveError::NotFound(format!(
-                                "deployment {id} does not exist"
-                            ))));
-                        };
-                        let pending = record.state == DeploymentState::Pending;
-                        match path {
-                            Path::Deploy if !pending => {
-                                return Ok(Swap::Refused(LiveError::FailedPrecondition(format!(
-                                    "deployment {id} is no longer pending ({}): its deploy took \
-                                     too long and the janitor failed it",
-                                    record.state.name()
-                                ))));
-                            }
-                            Path::Activate if pending => {
-                                return Ok(Swap::Refused(still_pending(id)));
-                            }
-                            _ => {}
-                        }
-                        let changes = schema::apply(txn, &keys, &record.schema, &limits).await?;
-                        if let Some(previous) = active.filter(|p| *p != id) {
-                            set_state(txn, &keys, previous, |s| {
-                                matches!(s, DeploymentState::Active | DeploymentState::Degraded)
-                                    .then_some(DeploymentState::Superseded)
-                            })
-                            .await?;
-                        }
-                        record.state = DeploymentState::Active;
-                        txn.put(&keys.deployment(&id.to_bytes()), record.encode())
-                            .await?;
-                        txn.put(&keys.deployment_pointer(), id.to_bytes().to_vec())
-                            .await?;
-                        Ok(Swap::Done(changes, record))
-                    };
-                    match attempt.await {
-                        Ok(done) => Ok(done),
-                        Err(e) => match e.into_txn() {
-                            Err(storage) => Err(storage),
-                            Ok(own) => {
-                                *failure.lock().unwrap_or_else(PoisonError::into_inner) = Some(own);
-                                Err(TxnError::Fatal("the schema could not apply".into()))
-                            }
-                        },
-                    }
+    let run = atomic(runner, "live.deploy.activate", |txn| {
+        let keys = keys.clone();
+        let limits = limits.clone();
+        Box::pin(async move {
+            let active = read_pointer(txn, &keys).await?;
+            if active != expected {
+                return Ok(Swap::Conflict(active));
+            }
+            let mut record = read_record(txn, &keys, id)
+                .await?
+                .ok_or_else(|| LiveError::NotFound(format!("deployment {id} does not exist")))?;
+            check_state(&record, path)?;
+            let changes = schema::apply(txn, &keys, &record.schema, &limits, id).await?;
+            if let Some(previous) = active.filter(|p| *p != id) {
+                set_state(txn, &keys, previous, |s| {
+                    matches!(s, DeploymentState::Active | DeploymentState::Degraded)
+                        .then_some(DeploymentState::Superseded)
                 })
-            },
-        )
-        .await;
+                .await?;
+            }
+            record.state = DeploymentState::Active;
+            txn.put(&keys.deployment(&id.to_bytes()), record.encode())
+                .await?;
+            txn.put(&keys.deployment_pointer(), id.to_bytes().to_vec())
+                .await?;
+            Ok(Swap::Done(Box::new((changes, record))))
+        })
+    })
+    .await;
     match run {
         Ok(committed) => match committed.value {
-            Swap::Done(changes, record) => Ok(Swapped {
-                changes,
-                record,
-                at: committed.commit_ts,
-            }),
+            Swap::Done(done) => {
+                let (changes, record) = *done;
+                Ok(Swapped {
+                    changes,
+                    record,
+                    at: committed.commit_ts,
+                })
+            }
             Swap::Conflict(active) => Err(SwapError::Conflict(active)),
-            Swap::Refused(err) => Err(SwapError::Refused(err)),
         },
-        Err(e) => {
-            let own = failure
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .take();
-            Err(own.map_or_else(|| SwapError::Storage(LiveError::Txn(e)), SwapError::Refused))
-        }
+        Err(Refusal::Own(err)) => Err(SwapError::Refused(err)),
+        Err(Refusal::Storage(err)) => Err(SwapError::Storage(err)),
     }
 }
 
@@ -1226,18 +1441,39 @@ async fn write_pending(runner: &Runner, record: &DeploymentRecord) -> Result<u64
         .map_err(LiveError::Txn)
 }
 
-/// Marks a pending deployment failed with `reason`; logged, not returned,
-/// on a storage error (the deploy's own error is what the caller needs).
-async fn mark_failed(runner: &Runner, id: Ulid, reason: &str) {
-    let failed = DeploymentState::Failed {
+/// Ends deployment `id`'s deploy after a failure, in one transaction:
+/// with `release`, its validator checks ([`schema::release`]); with a
+/// `reason`, its record `failed` if it is still `pending` or `validating`.
+/// Logged, not returned, on a storage error (the deploy's own error is what
+/// the caller needs; the janitor releases what is left).
+async fn fail(runner: &Runner, id: Ulid, reason: Option<&str>, release: bool) {
+    if reason.is_none() && !release {
+        return;
+    }
+    let keys = runner.app().clone();
+    let failed = reason.map(|reason| DeploymentState::Failed {
         reason: reason.to_string(),
-    };
-    let marked = transition(runner, "live.deploy.failed", id, move |s| {
-        (*s == DeploymentState::Pending).then(|| failed.clone())
+    });
+    let done = atomic(runner, "live.deploy.failed", |txn| {
+        let keys = keys.clone();
+        let failed = failed.clone();
+        Box::pin(async move {
+            if release {
+                schema::release(txn, &keys, id).await?;
+            }
+            if let Some(failed) = failed {
+                set_state(txn, &keys, id, |s| {
+                    matches!(s, DeploymentState::Pending | DeploymentState::Validating)
+                        .then(|| failed.clone())
+                })
+                .await?;
+            }
+            Ok(())
+        })
     })
     .await;
-    if let Err(error) = marked {
-        tracing::warn!(deployment = %id, %error, "marking a failed deployment failed");
+    if let Err(Refusal::Own(error) | Refusal::Storage(error)) = done {
+        tracing::warn!(deployment = %id, %error, "ending a failed deploy failed");
     }
 }
 
@@ -1419,6 +1655,8 @@ impl DeploymentRecord {
                 .schema
                 .as_option()
                 .map(Schema::from_proto)
+                .transpose()
+                .map_err(|e| LiveError::Corrupt(format!("deployment record: {e}")))?
                 .unwrap_or_default(),
             created_at_ms: p.created_at_ms,
             created_by: p.created_by,
