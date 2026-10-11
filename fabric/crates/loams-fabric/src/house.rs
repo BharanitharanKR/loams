@@ -17,10 +17,13 @@
 //! * `--sandbox=none` needs `--unsafe-no-sandbox` (HS1 R1.10, R6.8), except on a
 //!   system with no L3 (macOS) in `--single-node` mode, and is logged either way.
 //! * `--workers=inproc` needs `--single-node` and a build with `inproc-worker`.
-//! * The native listener (Task 31), admin (Task 23) and the catalog (Task 10)
-//!   are resolved and validated now, and [`start`] says on stderr that they are
-//!   not served yet. The store is read through `house-cache` by process workers
-//!   (Task 9) and written from Task 12.
+//! * The native listener (Task 31) and admin (Task 23) are resolved and
+//!   validated now, and [`start`] says on stderr that they are not served yet.
+//!   The store is read through `house-cache` by process workers (Task 9) and
+//!   written from Task 12.
+//! * `--catalog` (HS1 Task 10) needs `--store`: the catalog of lake tables writes
+//!   their metadata there (local) or places them there (REST, whose URL names the
+//!   warehouse: `rest:<url>?warehouse=<name>`).
 
 use std::io::{self, Write as _};
 use std::net::SocketAddr;
@@ -29,6 +32,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use loams_cache::RangeCacheConfig;
+use loams_house::catalog::{
+    HouseCatalog, Lake, LakeRoot, LocalCatalog, PrefixGrants, RestCatalog, RestOptions,
+};
 use loams_house::config::{DEFAULT_ADMIN_LISTEN, DEFAULT_LISTEN, DEFAULT_NATIVE_LISTEN};
 use loams_house::{
     CatalogSpec, CgroupLimits, ChError, HouseConfig, HouseError, HouseFile, HouseHandle, Launcher,
@@ -267,9 +273,13 @@ pub async fn start(mut settings: HouseSettings) -> Result<Running, HouseError> {
             .push(UserMap::dev(LOCAL_USER, &password, LOCAL_NAMESPACE, false));
     }
     let cache = house_cache(&settings).await?;
+    let lake = lake(&settings, cache.as_ref()).await?;
     let launcher = launcher(&settings, cache)?;
     let pool = WorkerPool::start(settings.pool.clone(), launcher).await?;
-    let handle = loams_house::serve(settings.http, pool.clone()).await?;
+    let handle = match lake {
+        Some(lake) => loams_house::serve_with_lake(settings.http, pool.clone(), lake).await?,
+        None => loams_house::serve(settings.http, pool.clone()).await?,
+    };
     Ok(Running { handle, pool })
 }
 
@@ -285,9 +295,6 @@ pub fn not_served_yet(settings: &HouseSettings) -> Vec<String> {
         "admin and metrics {}: not served until HS1 Task 23",
         settings.admin_listen
     ));
-    if let Some(catalog) = &settings.catalog {
-        out.push(format!("catalog {catalog}: not used until HS1 Task 10"));
-    }
     if let Some(store) = &settings.store {
         out.push(match settings.workers {
             WorkersMode::Process => {
@@ -300,6 +307,71 @@ pub fn not_served_yet(settings: &HouseSettings) -> Vec<String> {
         });
     }
     out
+}
+
+/// The catalog of lake tables (HS1 Task 10): `--catalog` over `--store`, with
+/// external tables' locations vouched to `house-cache`. A REST catalog names its
+/// warehouse in the URL's query, `rest:http://lakekeeper:8181/catalog?warehouse=house`.
+async fn lake(
+    settings: &HouseSettings,
+    cache: Option<&HouseCache>,
+) -> Result<Option<Arc<Lake>>, HouseError> {
+    let Some(spec) = &settings.catalog else {
+        return Ok(None);
+    };
+    let Some(store_url) = &settings.store else {
+        return Err(bad(format!(
+            "--catalog {spec}: needs --store, where the House keeps its tables"
+        )));
+    };
+    let root = LakeRoot::from_store_url(store_url).map_err(bad)?;
+    let catalog: Arc<dyn HouseCatalog> = match spec {
+        CatalogSpec::Local(path) => {
+            if let Some(dir) = store_url.strip_prefix("file://") {
+                std::fs::create_dir_all(dir)
+                    .map_err(|err| bad(format!("--store {store_url:?}: {err}")))?;
+            }
+            let store = loams_store::Store::from_url(store_url, Vec::<(String, String)>::new())
+                .map_err(|err| bad(format!("--store {store_url:?}: {err}")))?;
+            Arc::new(
+                LocalCatalog::open(path, store, root.clone())
+                    .map_err(|err| bad(format!("--catalog {spec}: {err}")))?,
+            )
+        }
+        CatalogSpec::Rest(url) => {
+            let (uri, warehouse) = rest_warehouse(url)?;
+            Arc::new(
+                RestCatalog::connect(RestOptions {
+                    uri,
+                    warehouse,
+                    token: None,
+                })
+                .await
+                .map_err(|err| bad(format!("--catalog {spec}: {err}")))?,
+            )
+        }
+    };
+    let mut lake = Lake::new(catalog, root);
+    if let Some(cache) = cache {
+        lake = lake.with_grants(Arc::new(cache.clone()) as Arc<dyn PrefixGrants>);
+    }
+    Ok(Some(Arc::new(lake)))
+}
+
+/// A REST catalog URL and its `?warehouse=` name.
+pub fn rest_warehouse(url: &str) -> Result<(String, String), HouseError> {
+    let missing = || {
+        bad(format!(
+            "--catalog rest:{url}: name the warehouse, as rest:<url>?warehouse=<name>"
+        ))
+    };
+    let (base, query) = url.split_once('?').ok_or_else(missing)?;
+    let warehouse = query
+        .split('&')
+        .find_map(|pair| pair.strip_prefix("warehouse="))
+        .filter(|w| !w.is_empty())
+        .ok_or_else(missing)?;
+    Ok((base.to_string(), warehouse.to_string()))
 }
 
 /// `house-cache` over `--store` (HS1 Task 9): the only way process workers

@@ -146,19 +146,11 @@ impl Upstream {
 
 /// The bucket and prefix of a store URL.
 pub fn bucket_and_prefix(url: &str) -> Result<(String, String), UpstreamError> {
-    let bad = || UpstreamError::Url(url.to_string());
-    let (scheme, rest) = url.split_once("://").ok_or_else(bad)?;
-    match scheme {
-        "s3" | "s3a" | "gs" | "az" | "abfs" | "abfss" => {
-            let (bucket, prefix) = rest.split_once('/').unwrap_or((rest, ""));
-            if bucket.is_empty() {
-                return Err(bad());
-            }
-            Ok((bucket.to_string(), prefix.trim_matches('/').to_string()))
-        }
-        "file" | "memory" => Ok(("local".to_string(), String::new())),
-        _ => Err(bad()),
-    }
+    // One rule for the proxy and the catalog's table locations (HS1 Task 10):
+    // a location the catalog writes reads through the proxy as is.
+    let root = loams_house::catalog::LakeRoot::from_store_url(url)
+        .map_err(|_| UpstreamError::Url(url.to_string()))?;
+    Ok((root.bucket().to_string(), root.prefix().to_string()))
 }
 
 /// Which upstream serves a namespace.

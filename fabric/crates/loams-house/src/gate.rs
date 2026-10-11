@@ -8,8 +8,13 @@ use std::collections::HashSet;
 
 use loams_house_ipc::QueryClass;
 
-use crate::admission::{WorkerLease, WorkerPool};
+use async_trait::async_trait;
+use loams_house_ipc::{Execute, Limits, Output};
+
+use crate::admission::{Outcome, WorkerLease, WorkerPool};
+use crate::catalog::Lake;
 use crate::classify::{Expect, Stmt, decide};
+use crate::ddl::{self, ChColumn, Described, Kind, Oracle};
 use crate::deny;
 use crate::errors::{ChError, HouseError};
 use crate::session::SessionGuard;
@@ -58,21 +63,24 @@ pub fn admit(
 }
 
 /// The task that will serve an owned statement this front does not yet (`48`).
+/// The catalog's statements reach here only when the House has no catalog
+/// ([`catalog_answer`] takes them otherwise).
 fn later(stmt: &Stmt) -> Option<String> {
+    if catalog_kind(stmt).is_some_and(|kind| kind.needs_catalog()) {
+        return Some(
+            "This House has no catalog (start it with --catalog or --single-node), so it holds \
+             no lake tables"
+                .to_string(),
+        );
+    }
     let (what, task) = match stmt {
-        Stmt::CreateDatabase { .. } => ("CREATE DATABASE", "HS1 Task 10"),
-        Stmt::CreateTable { .. } => ("CREATE TABLE (a lake table)", "HS1 Task 10"),
         Stmt::CreateTableAs { .. } => ("CREATE TABLE … AS SELECT", "HS1 Task 12"),
         Stmt::CreatePipe { .. } => (
             "A pipe (LoamsStream, IggyTopic, S3Queue)",
             "HS1 Tasks 16 and 18",
         ),
         Stmt::CreateMaterializedView { .. } => ("CREATE MATERIALIZED VIEW", "HS1 Task 17"),
-        Stmt::Drop(drop) if !drop.temporary => ("DROP (a lake object)", "HS1 Task 10"),
         Stmt::Truncate { .. } => ("TRUNCATE", "HS1 Task 12"),
-        Stmt::AlterAddColumns { .. } => ("ALTER TABLE … ADD COLUMN", "HS1 Task 10"),
-        Stmt::Rename { .. } => ("RENAME TABLE", "HS1 Task 10"),
-        Stmt::Undrop { .. } => ("UNDROP TABLE", "HS1 Task 15"),
         Stmt::Optimize { .. } => ("OPTIMIZE TABLE", "HS1 Task 13"),
         Stmt::KillQuery(_) => ("KILL QUERY", "HS1 Task 21"),
         Stmt::Unsupported { kind } => {
@@ -150,4 +158,266 @@ pub async fn acquire_for(
         return Ok(lease);
     }
     pool.acquire(namespace).await
+}
+
+/// The catalog statement a [`Stmt`] is (HS1 Task 10), if any.
+pub fn catalog_kind(stmt: &Stmt) -> Option<Kind> {
+    Some(match stmt {
+        Stmt::CreateDatabase { .. } => Kind::CreateDatabase,
+        Stmt::CreateTable { .. } => Kind::CreateTable,
+        Stmt::Drop(drop) if !drop.temporary => Kind::Drop,
+        Stmt::Undrop { .. } => Kind::Undrop,
+        Stmt::Rename { .. } => Kind::Rename,
+        Stmt::AlterAddColumns { .. } => Kind::AlterAdd,
+        Stmt::Describe { .. } => Kind::Describe,
+        Stmt::Show { .. } => Kind::Show,
+        Stmt::Exists { .. } => Kind::Exists,
+        Stmt::Insert(_) => Kind::Insert,
+        _ => return None,
+    })
+}
+
+impl Kind {
+    /// Whether the statement means nothing without a catalog (`48` then); the
+    /// others fall through to chDB.
+    pub fn needs_catalog(self) -> bool {
+        !matches!(
+            self,
+            Kind::Describe | Kind::Show | Kind::Exists | Kind::Insert
+        )
+    }
+}
+
+/// What the catalog made of a statement.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CatalogOutcome {
+    /// Done: an empty success.
+    Done,
+    /// Answer with this query's rows (a `SELECT` over constants).
+    Rows(String),
+    /// Not the catalog's: on to [`front_answer`] and chDB.
+    NotOurs,
+}
+
+/// The catalog's answer to a statement (HS1 Task 10): DDL, `USE`, and
+/// `DESCRIBE`/`SHOW CREATE`/`EXISTS`/`INSERT` naming a catalog table. `text` is
+/// the statement without its `FORMAT`; `current` the request's database.
+#[allow(clippy::too_many_arguments)]
+pub async fn catalog_answer(
+    lake: Option<&Lake>,
+    pool: &WorkerPool,
+    namespace: u64,
+    current: &str,
+    stmt: &Stmt,
+    text: &str,
+    session: Option<&SessionGuard>,
+    query_id: &str,
+) -> Result<CatalogOutcome, HouseError> {
+    let Some(lake) = lake else {
+        return Ok(CatalogOutcome::NotOurs);
+    };
+    if let Stmt::Use(database) = stmt {
+        lake.require_database(namespace, database).await?;
+        if let Some(guard) = session {
+            guard.state().database = database.clone();
+        }
+        return Ok(CatalogOutcome::Done);
+    }
+    let Some(kind) = catalog_kind(stmt) else {
+        return Ok(CatalogOutcome::NotOurs);
+    };
+    let text = match stmt {
+        Stmt::Insert(insert) => insert.text.as_str(),
+        _ => text,
+    };
+    let mut oracle = WorkerOracle::new(pool, namespace, query_id);
+    let answer = ddl::execute(lake, namespace, current, kind, text, &mut oracle).await;
+    oracle.finish();
+    Ok(match answer? {
+        ddl::Answer::Done => CatalogOutcome::Done,
+        ddl::Answer::Rows(query) => CatalogOutcome::Rows(query),
+        ddl::Answer::PassThrough => CatalogOutcome::NotOurs,
+    })
+}
+
+/// The deny list over a catalog statement's syntax tree (HS1 Tasks 5 and 10):
+/// one statement that ClickHouse can parse, nothing denied anywhere in it.
+pub fn admit_ddl(analysis: &loams_house_ipc::Analysis, sql: &str) -> Result<(), HouseError> {
+    let classification = analysis.classification;
+    if classification.statements > 1 {
+        return Err(HouseError::from(ChError::syntax_error(
+            "Multi-statements are not allowed: send one statement per request",
+        )));
+    }
+    if classification.class == QueryClass::Unknown {
+        return Err(HouseError::from(ChError::syntax_error(format!(
+            "ClickHouse's parser cannot parse this statement: {}",
+            crate::classify::OUTSIDE_SURFACE
+        ))));
+    }
+    let tree = deny::QueryTree::from_explain(&analysis.ast, analysis.query_tree.as_deref())
+        .shared_create(crate::classify::creates_shared_object(sql))
+        .statement(sql);
+    deny::check(&tree).map_err(HouseError::from)
+}
+
+/// [`Oracle`] on a worker of the namespace, taken at the first question and
+/// given back by [`WorkerOracle::finish`] (or when dropped).
+struct WorkerOracle<'a> {
+    pool: &'a WorkerPool,
+    namespace: String,
+    query_id: String,
+    lease: Option<WorkerLease>,
+}
+
+impl<'a> WorkerOracle<'a> {
+    fn new(pool: &'a WorkerPool, namespace: u64, query_id: &str) -> Self {
+        Self {
+            pool,
+            namespace: namespace.to_string(),
+            query_id: query_id.to_string(),
+            lease: None,
+        }
+    }
+
+    async fn lease(&mut self) -> Result<&mut WorkerLease, HouseError> {
+        if self.lease.is_none() {
+            self.lease = Some(self.pool.acquire(&self.namespace).await?);
+        }
+        self.lease
+            .as_mut()
+            .ok_or_else(|| HouseError::from(ChError::network_error("no worker")))
+    }
+
+    fn finish(&mut self) {
+        if let Some(lease) = self.lease.take() {
+            self.pool.release(lease, Outcome::Completed);
+        }
+    }
+
+    /// Runs an internal read and answers its `JSONCompactEachRow` lines.
+    async fn rows(
+        &mut self,
+        sql: &str,
+        params: Vec<(String, String)>,
+        settings: Vec<(String, String)>,
+    ) -> Result<Vec<Vec<String>>, HouseError> {
+        let execute = Execute {
+            query_id: format!("{}-ddl", self.query_id),
+            session: None,
+            settings,
+            views: Vec::new(),
+            sql: sql.to_string(),
+            format: "JSONCompactEachRow".to_string(),
+            params,
+            limits: Limits::default(),
+            input: None,
+            output: Output::Blocks,
+        };
+        let collected = self.lease().await?.run(execute).await?;
+        let text = String::from_utf8_lossy(&collected.bytes);
+        text.lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| {
+                serde_json::from_str::<Vec<serde_json::Value>>(line)
+                    .map(|values| {
+                        values
+                            .into_iter()
+                            .map(|v| match v {
+                                serde_json::Value::String(s) => s,
+                                other => other.to_string(),
+                            })
+                            .collect()
+                    })
+                    .map_err(|err| {
+                        HouseError::from(ChError::network_error(format!(
+                            "the worker's answer is unreadable: {err}"
+                        )))
+                    })
+            })
+            .collect()
+    }
+}
+
+impl Drop for WorkerOracle<'_> {
+    fn drop(&mut self) {
+        self.finish();
+    }
+}
+
+impl std::fmt::Debug for WorkerOracle<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WorkerOracle")
+            .field("namespace", &self.namespace)
+            .finish_non_exhaustive()
+    }
+}
+
+/// `Array(String)` as a query parameter's text.
+fn string_array(values: &[String]) -> String {
+    let quoted: Vec<String> = values
+        .iter()
+        .map(|v| format!("'{}'", v.replace('\\', "\\\\").replace('\'', "\\'")))
+        .collect();
+    format!("[{}]", quoted.join(","))
+}
+
+#[async_trait]
+impl Oracle for WorkerOracle<'_> {
+    async fn check(&mut self, sql: &str) -> Result<(), HouseError> {
+        let analysis = self
+            .lease()
+            .await?
+            .analyze(sql, &[])
+            .await
+            .map_err(deny::as_setting_refusal)?;
+        admit_ddl(&analysis, sql)
+    }
+
+    async fn describe(&mut self, columns: &str) -> Result<Vec<Described>, HouseError> {
+        // `flatten_nested = 0`: a `Nested` column stays one column, which the type
+        // table refuses, rather than arrays under dotted names.
+        let rows = self
+            .rows(
+                "DESCRIBE TABLE null({columns:String})",
+                vec![("columns".to_string(), columns.to_string())],
+                vec![("flatten_nested".to_string(), "0".to_string())],
+            )
+            .await?;
+        rows.into_iter()
+            .map(|row| {
+                let get = |i: usize| row.get(i).cloned().unwrap_or_default();
+                if row.len() < 7 {
+                    return Err(HouseError::from(ChError::network_error(
+                        "the worker's DESCRIBE answered too few columns",
+                    )));
+                }
+                Ok(Described {
+                    column: ChColumn {
+                        name: get(0),
+                        ch_type: get(1),
+                        default_kind: get(2),
+                        default_expression: get(3),
+                        comment: get(4),
+                        codec: get(5),
+                    },
+                    ttl: get(6),
+                })
+            })
+            .collect()
+    }
+
+    async fn merge_tree_settings(&mut self, names: &[String]) -> Result<Vec<String>, HouseError> {
+        let rows = self
+            .rows(
+                "SELECT name FROM system.merge_tree_settings WHERE name IN {names:Array(String)}",
+                vec![("names".to_string(), string_array(names))],
+                Vec::new(),
+            )
+            .await?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|r| r.into_iter().next())
+            .collect())
+    }
 }

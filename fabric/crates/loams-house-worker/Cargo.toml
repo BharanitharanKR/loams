@@ -79,6 +79,8 @@ http.workspace = true
 # `cache.rs` (HS1 Task 9): sealed workers reading through `house-cache`.
 loams-house-cache = { path = "../loams-house-cache" }
 loams-cache = { path = "../../../crates/loams-cache" }
+# `lake.rs` (HS1 Task 10): the catalog's Iceberg metadata, read back.
+loams-house-lake = { path = "../loams-house-lake" }
 
 [lints]
 workspace = true

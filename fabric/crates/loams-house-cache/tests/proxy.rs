@@ -398,3 +398,56 @@ async fn connections_are_known_by_their_channel() {
         }
     }
 }
+
+/// An external table's location, vouched by the catalog (HS1 Task 10, R9.5),
+/// joins the namespace's grants: bound workers at once, later ones at bind; other
+/// namespaces never.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn vouched_prefixes_join_the_namespace_grant() {
+    use loams_house::ForwardTarget;
+    let upstream = memory_upstream(4096).await;
+    fill(upstream.store()).await;
+    upstream
+        .store()
+        .put(
+            "spark/events/data/x.parquet",
+            Bytes::from_static(b"external"),
+        )
+        .await
+        .expect("put");
+    let proxy = HouseCache::new(Arc::new(OneStore(upstream)));
+    proxy.bound("w1", "1");
+    proxy.bound("w2", "2");
+    let w1 = proxy.endpoint("w1").expect("endpoint");
+    let w2 = proxy.endpoint("w2").expect("endpoint");
+    let target = "/bucket/spark/events/data/x.parquet";
+    assert_eq!(
+        tcp(w1, "GET", target, &[]).await.status,
+        403,
+        "not vouched yet"
+    );
+
+    // Unsound prefixes are ignored.
+    for bad in ["/", "", "spark/../ns/2/", "spark", "/spark/"] {
+        loams_house::catalog::PrefixGrants::vouch(&proxy, "1", bad);
+    }
+    assert_eq!(proxy.grant_of("w1").expect("grant").prefixes, ["ns/1/"]);
+
+    loams_house::catalog::PrefixGrants::vouch(&proxy, "1", "spark/events/");
+    let reply = tcp(w1, "GET", target, &[]).await;
+    assert_eq!((reply.status, reply.text().as_str()), (200, "external"));
+    assert_eq!(
+        tcp(w2, "GET", target, &[]).await.status,
+        403,
+        "namespace 2 was not vouched"
+    );
+    // A worker bound later gets it with its namespace's own prefix.
+    proxy.bound("w3", "1");
+    assert_eq!(
+        proxy.grant_of("w3").expect("grant").prefixes,
+        ["ns/1/", "spark/events/"]
+    );
+    // Vouching twice adds nothing.
+    loams_house::catalog::PrefixGrants::vouch(&proxy, "1", "spark/events/");
+    assert_eq!(proxy.grant_of("w1").expect("grant").prefixes.len(), 2);
+}

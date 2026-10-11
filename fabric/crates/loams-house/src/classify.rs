@@ -696,6 +696,20 @@ pub fn classify(sql: &str) -> Result<Classified, HouseError> {
             if let Some(what) = denied_create(&text) {
                 return Err(HouseError::from(deny::denied_statement(what)));
             }
+            // HS1 Task 10: a database is a catalog namespace; its engine is held
+            // to the database engine lists before anything else.
+            if second == "DATABASE" {
+                let database = crate::ddl::parse_create_database(&text)?;
+                if let Some(engine) = &database.engine {
+                    deny::check_database_engine(engine).map_err(HouseError::from)?;
+                }
+                return known(
+                    Stmt::CreateDatabase {
+                        name: database.name,
+                    },
+                    format,
+                );
+            }
         }
         "GRANT" | "REVOKE" | "DETACH" | "CHECK" => {
             return known(
@@ -716,6 +730,12 @@ pub fn classify(sql: &str) -> Result<Classified, HouseError> {
         }
         Ok(_) => return Err(multi_statement()),
         Err(err) => {
+            // HS1 Task 10: DDL of lake tables is the front's, read by its own
+            // reader and ClickHouse's (column codecs, which sqlparser 0.63 lacks,
+            // R4.1); every other unparsed statement is ClickHouse's to class.
+            if let Some(stmt) = lake_ddl(&text, first, second)? {
+                return known(stmt, format);
+            }
             return Ok(Classified::Unparsed {
                 text,
                 format,
@@ -840,6 +860,43 @@ pub fn classify(sql: &str) -> Result<Classified, HouseError> {
         },
     };
     known(stmt, format)
+}
+
+/// A lake table's `CREATE TABLE` or `ALTER TABLE … ADD COLUMN` that sqlparser
+/// could not parse, read with the DDL reader instead (HS1 Task 10).
+fn lake_ddl(text: &str, first: &str, second: &str) -> Result<Option<Stmt>, HouseError> {
+    if first == "CREATE" && (second == "TABLE" || second == "OR") {
+        let Ok(create) = crate::ddl::parse_create_table(text) else {
+            return Ok(None);
+        };
+        let engine = create.engine.as_ref().map(|(name, _)| name.clone());
+        if let Some(engine) = &engine
+            && !PIPE_ENGINES.iter().any(|p| p.eq_ignore_ascii_case(engine))
+        {
+            deny::check_engine(engine, false).map_err(HouseError::from)?;
+        }
+        let name = create.name.clone();
+        return Ok(Some(
+            match engine
+                .clone()
+                .filter(|e| PIPE_ENGINES.iter().any(|p| p.eq_ignore_ascii_case(e)))
+            {
+                Some(pipe) => Stmt::CreatePipe { name, engine: pipe },
+                None if create.as_select => Stmt::CreateTableAs { name, engine },
+                None => Stmt::CreateTable { name, engine },
+            },
+        ));
+    }
+    if first == "ALTER" && second == "TABLE" {
+        return Ok(match crate::ddl::parse_alter_add(text) {
+            Ok(((_, table), adds)) => Some(Stmt::AlterAddColumns {
+                table,
+                columns: adds.into_iter().map(|a| a.definition).collect(),
+            }),
+            Err(_) => None,
+        });
+    }
+    Ok(None)
 }
 
 fn use_name(used: &sqlparser::ast::Use) -> String {

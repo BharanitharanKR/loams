@@ -129,6 +129,9 @@ struct Inner {
     workers: Mutex<HashMap<String, WorkerEntry>>,
     metrics: Mutex<Metrics>,
     recorded: Mutex<Option<Vec<SeenRequest>>>,
+    /// Prefixes the catalog vouched for, per namespace (external tables'
+    /// locations, HS1 Task 10, R9.5): added to every grant of that namespace.
+    vouched: Mutex<HashMap<String, Vec<String>>>,
 }
 
 /// The proxy. Cheap to clone; every clone is the same proxy.
@@ -154,6 +157,7 @@ impl HouseCache {
                 workers: Mutex::new(HashMap::new()),
                 metrics: Mutex::new(Metrics::default()),
                 recorded: Mutex::new(None),
+                vouched: Mutex::new(HashMap::new()),
             }),
         }
     }
@@ -174,6 +178,49 @@ impl HouseCache {
         {
             listener.abort();
         }
+    }
+
+    /// Lets namespace `namespace`'s workers read under `prefix` too (store-relative,
+    /// ending in `/`): what the catalog vouches for an external table's location
+    /// (HS1 Task 10, R9.5). Workers bound now get it at once; workers bound later
+    /// get it with their namespace's own prefix. A prefix that is not a whole
+    /// directory (`/`, empty, `..`) is ignored.
+    pub fn vouch(&self, namespace: &str, prefix: &str) {
+        let sound = prefix.ends_with('/')
+            && prefix.len() > 1
+            && !prefix.starts_with('/')
+            && prefix
+                .trim_end_matches('/')
+                .split('/')
+                .all(|segment| !segment.is_empty() && segment != "." && segment != "..");
+        if !sound {
+            return;
+        }
+        {
+            let mut vouched = lock(&self.inner.vouched);
+            let prefixes = vouched.entry(namespace.to_string()).or_default();
+            if prefixes.iter().any(|p| p == prefix) {
+                return;
+            }
+            prefixes.push(prefix.to_string());
+        }
+        for entry in lock(&self.inner.workers).values_mut() {
+            if let Some(grant) = entry.grant.as_mut()
+                && grant.namespace == namespace
+                && !grant.prefixes.iter().any(|p| p == prefix)
+            {
+                grant.prefixes.push(prefix.to_string());
+            }
+        }
+    }
+
+    /// A newly bound worker's grant: its namespace's prefix and what was vouched.
+    fn grant_for(&self, namespace: &str) -> Grant {
+        let mut grant = Grant::for_namespace(namespace);
+        if let Some(extra) = lock(&self.inner.vouched).get(namespace) {
+            grant.prefixes.extend(extra.iter().cloned());
+        }
+        grant
     }
 
     /// The grant `worker` has now.
@@ -297,11 +344,17 @@ impl ForwardTarget for HouseCache {
     }
 
     fn bound(&self, worker: &str, namespace: &str) {
-        self.grant(worker, Grant::for_namespace(namespace));
+        self.grant(worker, self.grant_for(namespace));
     }
 
     fn gone(&self, worker: &str) {
         self.revoke(worker);
+    }
+}
+
+impl loams_house::catalog::PrefixGrants for HouseCache {
+    fn vouch(&self, namespace: &str, prefix: &str) {
+        HouseCache::vouch(self, namespace, prefix);
     }
 }
 
