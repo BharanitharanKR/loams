@@ -93,7 +93,7 @@ jobs:
     name: fabric workspace (fmt, clippy, tests, deny)
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.fabric == 'true') }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'depot-ubuntu-24.04-4') }}
+    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
     steps:
       - uses: actions/checkout@v7
       # The flow protos are compiled by build.rs, exactly as ci.yml's `check`
@@ -203,7 +203,7 @@ jobs:
     name: loams-connect routes (connect/**)
     needs: changes
     if: false
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'depot-ubuntu-24.04-4') }}
+    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_DEV_HEAVY || 'ubuntu-latest') }}
     steps:
       # Replaced by CN1 Task 12: checkout, a Camel JBang `camel validate` over
       # connect/routes/**/*.yaml, and `rendered_routes_are_valid_yaml_dsl`.

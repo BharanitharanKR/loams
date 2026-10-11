@@ -16,11 +16,16 @@ gRPC-Web (D600), and this SDK speaks the two HTTP-shaped ones:
 
 ## Requirements
 
-C++17, CMake ≥ 3.20, **protobuf 36.1**, **libcurl 8.x**, and pthreads. All three
-are preinstalled on the machines and CI runners that develop this repository:
+C++17, CMake ≥ 3.20, **protobuf 36.1**, **libcurl 8.x**, and pthreads. The
+protobuf runtime must be exactly 36.1 (the stubs' gencode version). A distribution
+that ships it (Arch does) is enough; Ubuntu 24.04's `libprotobuf-dev` is 3.21, so
+CI builds the v36.1 tag from source with its vendored Abseil and caches it (the
+`sdk-cpp` job in `.github/workflows/ci.yml` has the exact CMake flags):
 
 ```sh
-sudo apt-get install -y cmake clang protobuf-compiler libprotobuf-dev libcurl4-openssl-dev
+sudo apt-get install -y cmake clang libcurl4-openssl-dev pkg-config
+# then protobuf v36.1 as in the sdk-cpp job, with PKG_CONFIG_PATH and
+# CMAKE_PREFIX_PATH pointing at its install prefix
 ```
 
 ## Build and test
