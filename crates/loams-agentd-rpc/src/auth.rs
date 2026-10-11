@@ -18,6 +18,7 @@ use subtle::ConstantTimeEq;
 pub struct Secret(String);
 
 impl Secret {
+    /// Wrap a token value read from elsewhere (`agentd.token`, the shim's env).
     pub fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
@@ -31,6 +32,9 @@ impl Secret {
         ))
     }
 
+    /// The token's value, for the one place that must send or write it (an
+    /// `Authorization` header, `agentd.token`, the shim's env). Never log,
+    /// format or return it in a reply.
     pub fn expose(&self) -> &str {
         &self.0
     }
@@ -57,6 +61,7 @@ pub struct Identity {
 }
 
 impl Identity {
+    /// The main token's identity.
     pub fn owner() -> Self {
         Self {
             role: Role::Owner,
@@ -106,6 +111,7 @@ impl std::fmt::Debug for ScopedTokens {
 }
 
 impl ScopedTokens {
+    /// No live tokens.
     pub fn new() -> Self {
         Self::default()
     }
@@ -144,6 +150,7 @@ impl ScopedTokens {
         self.revoked.subscribe()
     }
 
+    /// Whether `run_id`'s token is still valid.
     pub fn is_live(&self, run_id: &str) -> bool {
         self.lock().contains_key(run_id)
     }
@@ -174,10 +181,12 @@ pub struct Credentials {
 }
 
 impl Credentials {
+    /// Accept the main `owner` token and the live `scoped` run tokens.
     pub fn new(owner: Secret, scoped: Arc<ScopedTokens>) -> Self {
         Self { owner, scoped }
     }
 
+    /// The scoped run tokens this server accepts.
     pub fn scoped(&self) -> &Arc<ScopedTokens> {
         &self.scoped
     }
