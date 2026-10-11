@@ -268,7 +268,7 @@ describe('the browser edition', () => {
       expect.arrayContaining(['Live', 'Deployments', 'SQL', 'Metrics', 'Pipelines', 'Git']),
     );
     expect(root.textContent).toContain('Sample pages on');
-  });
+  }, 20_000); // boots the browser edition's whole catalog; a cold macOS runner needs over 5 s
 });
 
 describe('sign-in modes', () => {

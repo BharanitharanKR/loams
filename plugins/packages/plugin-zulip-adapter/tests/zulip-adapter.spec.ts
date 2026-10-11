@@ -671,10 +671,12 @@ describe("ZulipAdapterService", () => {
       .mockResolvedValueOnce(reply(envelope({ streams: [] })));
 
     await service.listStreams();
-    const second = Date.now();
     await service.listStreams();
 
-    expect(Date.now() - second).toBeGreaterThanOrEqual(100);
+    // The second call waited for the reset. Measured against the reset itself,
+    // not from after the first call, whose own duration (slow on Windows
+    // runners) eats into the 120ms window; 20ms covers timer granularity.
+    expect(Date.now()).toBeGreaterThanOrEqual(reset * 1000 - 20);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

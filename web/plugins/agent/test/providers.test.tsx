@@ -62,7 +62,13 @@ describe('agent providers section', () => {
       baseUrl: 'https://api.deepseek.com/v1',
       model: 'deepseek-reasoner',
     });
+    // The first save holds the form busy ("Saving…", disabled) until it settles;
+    // a click before then is ignored, so wait for Save to come back.
+    await waitFor(() => expect(c.getByRole('button', { name: 'Save' })).toBeTruthy());
     fireEvent.change(c.getByLabelText('API key'), { target: { value: 'sk-new-key-123456' } });
+    await waitFor(() =>
+      expect((c.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(false),
+    );
     fireEvent.click(c.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(chat.configureProvider).toHaveBeenCalledTimes(2));
     expect(chat.configureProvider.mock.calls[1]?.[1]).toMatchObject({
