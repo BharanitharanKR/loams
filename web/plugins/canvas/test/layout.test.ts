@@ -47,7 +47,10 @@ describe('layeredLayout', () => {
       ids,
       ids.slice(1).map((t) => ({ source: 'src', target: t })),
     );
-    const ys = ids.slice(1).map((id) => pos[id]?.y ?? 0).sort((a, b) => a - b);
+    const ys = ids
+      .slice(1)
+      .map((id) => pos[id]?.y ?? 0)
+      .sort((a, b) => a - b);
     for (let i = 1; i < ys.length; i++) {
       expect((ys[i] as number) - (ys[i - 1] as number)).toBeGreaterThanOrEqual(NODE_HEIGHT);
     }

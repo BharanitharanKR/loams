@@ -38,6 +38,7 @@ describe('compileSpec', () => {
     expect(yFields).toEqual(['hours']);
     expect((option.dataset as Dict).source).toEqual(dailyRows);
     const [line] = series(option);
+    if (!line) throw new Error('no line series');
     expect(line).toMatchObject({ type: 'line', name: 'hours', encode: { x: 'day', y: 'hours' } });
     expect((line?.lineStyle as Dict | undefined)?.width).toBe(2);
     expect(axis(option, 'xAxis').type).toBe('category');
@@ -125,6 +126,7 @@ describe('compileSpec', () => {
     const spec: ChartSpec = { chartType: 'Pie Chart', encodings: { x: 'name', y: 'n' } };
     const { option } = compileSpec(spec, [{ name: 'a', n: 1 }], { theme });
     const [pie] = series(option);
+    if (!pie) throw new Error('no pie series');
     expect(pie).toMatchObject({ type: 'pie', encode: { itemName: 'name', value: 'n' } });
     expect((pie?.itemStyle as Dict | undefined)?.borderColor).toBe(theme.bg);
   });

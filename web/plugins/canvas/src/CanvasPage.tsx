@@ -41,12 +41,7 @@ import {
 } from './client.js';
 import { layeredLayout, nextFreePosition } from './layout.js';
 import { ARROW_DIRECTIONS, nearestInDirection, readingOrder } from './navigate.js';
-import {
-  CanvasContext,
-  nodeLabel,
-  ServiceNode,
-  type ServiceFlowNode,
-} from './ServiceNode.js';
+import { CanvasContext, nodeLabel, type ServiceFlowNode, ServiceNode } from './ServiceNode.js';
 import { SidePanel } from './SidePanel.js';
 
 const NODE_TYPES = { service: ServiceNode };
@@ -127,6 +122,7 @@ export function CanvasPage({
   const [failure, setFailure] = useState<string>();
   const [attempt, setAttempt] = useState(0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `attempt` retries on purpose
   useEffect(() => {
     const abort = new AbortController();
     setProject(undefined);
@@ -140,7 +136,7 @@ export function CanvasPage({
 
   // Live status: patch each service's status as updates arrive. Restarts only when the
   // project loads, not on every status change.
-  const loaded = project !== undefined;
+  const loaded = project?.id === projectId;
   useEffect(() => {
     if (!loaded) return;
     const abort = new AbortController();
@@ -149,14 +145,15 @@ export function CanvasPage({
         for await (const batch of client.watchStatus(projectId, abort.signal)) {
           if (abort.signal.aborted) break;
           const next = new Map(batch.map((u) => [u.serviceId, u.status]));
-          setProject((p) =>
-            p && {
-              ...p,
-              services: p.services.map((s) => {
-                const st = next.get(s.id);
-                return st && st !== s.status ? { ...s, status: st } : s;
-              }),
-            },
+          setProject(
+            (p) =>
+              p && {
+                ...p,
+                services: p.services.map((s) => {
+                  const st = next.get(s.id);
+                  return st && st !== s.status ? { ...s, status: st } : s;
+                }),
+              },
           );
         }
       } catch {
@@ -227,7 +224,7 @@ function ProjectCanvas({
 }) {
   const { fitView } = useReactFlow();
   const reducedMotion = useReducedMotion();
-  const wrapper = useRef<HTMLDivElement>(null);
+  const wrapper = useRef<HTMLElement>(null);
   const hintId = useId();
   const [nodes, setNodes] = useState<ServiceFlowNode[]>(() => {
     const pos = initialPositions(project);
@@ -312,13 +309,14 @@ function ProjectCanvas({
     const { service, edges: added } = await client.createService(project.id, req);
     const position = nextFreePosition(nodes.map((n) => n.position));
     // The sync effect places the node at `position` from the project's saved positions.
-    onProject((p) =>
-      p && {
-        ...p,
-        services: [...p.services, service],
-        edges: [...p.edges, ...added],
-        positions: { ...p.positions, [service.id]: position },
-      },
+    onProject(
+      (p) =>
+        p && {
+          ...p,
+          services: [...p.services, service],
+          edges: [...p.edges, ...added],
+          positions: { ...p.positions, [service.id]: position },
+        },
     );
     save({ [service.id]: position });
     setAdding(false);
@@ -396,12 +394,11 @@ function ProjectCanvas({
         </div>
       )}
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
-        <div
+        <section
           ref={wrapper}
           className="lc-canvas relative min-w-0 flex-1 border border-rule"
           style={{ height: 'min(70vh, 720px)', minHeight: 420 }}
           onKeyDownCapture={onKeyDownCapture}
-          role="region"
           aria-label={`${project.name} services canvas`}
           aria-describedby={hintId}
         >
@@ -436,7 +433,7 @@ function ProjectCanvas({
             />
             <Controls showInteractive={false} aria-label="Zoom controls" />
           </ReactFlow>
-        </div>
+        </section>
         {selected && (
           <SidePanel
             service={selected}
@@ -449,8 +446,8 @@ function ProjectCanvas({
         )}
       </div>
       <p id={hintId} className="mt-2 text-xs text-muted">
-        Tab to a service, then use the arrow keys to move between services, Shift with an arrow
-        to move the service, and Enter to open its details.
+        Tab to a service, then use the arrow keys to move between services, Shift with an arrow to
+        move the service, and Enter to open its details.
       </p>
       <div className="sr-only" role="status" aria-live="polite">
         {announcement}

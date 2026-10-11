@@ -6,8 +6,8 @@ import { StatusTag } from '@loams/ui';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { createContext, memo, useCallback, useContext } from 'react';
 import type { CanvasClient, Service } from './client.js';
-import { NODE_HEIGHT, NODE_WIDTH } from './layout.js';
 import { kindInfo, STATUS_LABEL, STATUS_TONE } from './kinds.js';
+import { NODE_HEIGHT, NODE_WIDTH } from './layout.js';
 
 /** The sparkline's window. */
 export const METRIC_WINDOW_MS = 2 * 60 * 1000;
@@ -70,7 +70,9 @@ function ServiceNodeView({ data, selected }: NodeProps<ServiceFlowNode>) {
           {info.glyph}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[11px] uppercase tracking-wide text-faint">{info.label}</div>
+          <div className="truncate text-[11px] uppercase tracking-wide text-faint">
+            {info.label}
+          </div>
           <div className="truncate font-mono text-sm">{s.name}</div>
         </div>
         <StatusTag status={STATUS_TONE[s.status]}>{STATUS_LABEL[s.status]}</StatusTag>
@@ -85,7 +87,9 @@ function ServiceNodeView({ data, selected }: NodeProps<ServiceFlowNode>) {
         </div>
         <div className="shrink-0 text-right">
           <div className="text-[10px] text-faint">{info.metric.name}</div>
-          <div className="font-mono text-xs tabular-nums">{latestValue(points, info.metric.unit)}</div>
+          <div className="font-mono text-xs tabular-nums">
+            {latestValue(points, info.metric.unit)}
+          </div>
         </div>
       </div>
       <Handle type="source" position={Position.Right} isConnectable={false} />

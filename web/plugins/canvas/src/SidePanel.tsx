@@ -5,7 +5,7 @@ import { LiveChart } from '@loams/charts';
 import { Badge, Button, StatusTag } from '@loams/ui';
 import { type ComponentProps, useEffect, useId, useMemo, useRef } from 'react';
 import type { Service, ServiceEdge } from './client.js';
-import { kindInfo, serviceHref, STATUS_LABEL, STATUS_TONE } from './kinds.js';
+import { kindInfo, STATUS_LABEL, STATUS_TONE, serviceHref } from './kinds.js';
 import { useServiceMetric } from './ServiceNode.js';
 
 type ChartSpec = ComponentProps<typeof LiveChart>['spec'];
@@ -56,6 +56,7 @@ export function SidePanel({
   const outgoing = edges.filter((e) => e.source === service.id);
 
   // Focus follows the panel open, so keyboard and screen reader users land in it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refocus whenever the service changes
   useEffect(() => {
     heading.current?.focus();
   }, [service.id]);
@@ -94,7 +95,12 @@ export function SidePanel({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-xs uppercase tracking-wide text-faint">{info.label}</div>
-          <h2 id={headingId} ref={heading} tabIndex={-1} className="m-0 truncate font-mono text-base">
+          <h2
+            id={headingId}
+            ref={heading}
+            tabIndex={-1}
+            className="m-0 truncate font-mono text-base"
+          >
             {service.name}
           </h2>
         </div>

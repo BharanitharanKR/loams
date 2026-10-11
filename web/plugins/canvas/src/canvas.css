@@ -53,11 +53,19 @@
   stroke-dasharray: 5 4;
 }
 
-.lc-canvas .lc-mini-healthy { fill: var(--op-grow); }
+.lc-canvas .lc-mini-healthy {
+  fill: var(--op-grow);
+}
 .lc-canvas .lc-mini-deploying,
-.lc-canvas .lc-mini-degraded { fill: var(--op-accent); }
-.lc-canvas .lc-mini-failed { fill: var(--op-danger); }
-.lc-canvas .lc-mini-stopped { fill: var(--op-faint); }
+.lc-canvas .lc-mini-degraded {
+  fill: var(--op-accent);
+}
+.lc-canvas .lc-mini-failed {
+  fill: var(--op-danger);
+}
+.lc-canvas .lc-mini-stopped {
+  fill: var(--op-faint);
+}
 
 @media (prefers-reduced-motion: reduce) {
   .lc-canvas .react-flow__edge.animated path {

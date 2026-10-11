@@ -72,15 +72,19 @@ export function layeredLayout(
   const layers: string[][] = Array.from({ length: depth }, () => []);
   for (const id of ids) (layers[rank.get(id) as number] as string[]).push(id);
   const pos = new Map<string, number>();
-  const reindex = (layer: string[]) => layer.forEach((id, i) => pos.set(id, i));
-  layers.forEach(reindex);
+  const reindex = (layer: string[]) => {
+    for (const [i, id] of layer.entries()) pos.set(id, i);
+  };
+  for (const layer of layers) reindex(layer);
   const sortBy = (layer: string[], neighbours: (id: string) => string[]) => {
     const key = new Map<string, number>();
     for (const id of layer) {
       const ns = neighbours(id).filter((n) => pos.has(n));
       key.set(
         id,
-        ns.length ? ns.reduce((a, n) => a + (pos.get(n) as number), 0) / ns.length : (pos.get(id) as number),
+        ns.length
+          ? ns.reduce((a, n) => a + (pos.get(n) as number), 0) / ns.length
+          : (pos.get(id) as number),
       );
     }
     layer.sort(

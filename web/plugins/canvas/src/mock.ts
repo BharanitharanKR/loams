@@ -41,7 +41,13 @@ export function seedProject(): Project {
     name: string,
     status: ServiceStatus,
     details: [string, string][],
-  ): Service => ({ id, kind, name, status, details: details.map(([label, value]) => ({ label, value })) });
+  ): Service => ({
+    id,
+    kind,
+    name,
+    status,
+    details: details.map(([label, value]) => ({ label, value })),
+  });
   const services: Service[] = [
     s('repo-storefront', 'git-repo', 'storefront', 'healthy', [
       ['Default branch', 'main'],
@@ -88,7 +94,12 @@ export function seedProject(): Project {
       ['Mode', 'Change data capture'],
     ]),
   ];
-  const e = (source: string, target: string, kind: ServiceEdge['kind'], label?: string): ServiceEdge => ({
+  const e = (
+    source: string,
+    target: string,
+    kind: ServiceEdge['kind'],
+    label?: string,
+  ): ServiceEdge => ({
     id: `${source}->${target}`,
     source,
     target,

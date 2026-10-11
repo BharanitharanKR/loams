@@ -7,10 +7,11 @@
  * client: a time axis pinned to the live window, long-to-wide pivoting for a
  * `color`/`series` encoding, stacking, and token ink.
  *
- * The compiler is imported from its source file rather than the package root:
+ * The compiler is imported from its source module rather than the package root:
  * the root also exports the Cordis render service, which pulls in the Node-only
  * data and BI services. `compiler.ts` itself has no imports and no side effects
- * beyond registering the built-in kinds.
+ * beyond registering the built-in kinds, and it compiles under this workspace's
+ * strict settings, so every consumer of this package typechecks it as is.
  */
 import {
   compileNativeWidget,

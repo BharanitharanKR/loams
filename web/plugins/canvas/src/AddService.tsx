@@ -75,6 +75,7 @@ export function AddServiceDialog({
     <Dialog
       open={open}
       onClose={close}
+      dismissible={!busy}
       title="Add a service"
       footer={
         <>

@@ -3,15 +3,7 @@
 // positions and the plugin manifest.
 
 import { validateManifest } from '@loams/console-host';
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import pkg from '../package.json';
 import { CanvasPage, initialPositions, toFlowEdges } from '../src/CanvasPage.js';
@@ -169,7 +161,10 @@ describe('CanvasPage', () => {
     expect(projectId).toBe(SEED_PROJECT_ID);
     const laid = initialPositions(seedProject());
     expect(positions).toEqual({
-      'repo-storefront': { x: laid['repo-storefront']?.x, y: (laid['repo-storefront']?.y ?? 0) + 24 },
+      'repo-storefront': {
+        x: laid['repo-storefront']?.x,
+        y: (laid['repo-storefront']?.y ?? 0) + 24,
+      },
     });
   });
 
@@ -229,6 +224,32 @@ describe('CanvasPage', () => {
     expect(await within(dialog).findByText(/already exists/)).toBeTruthy();
   });
 
+  it('keeps the palette open on Escape while a service is being added', async () => {
+    const client = quietClient();
+    let finish: (() => void) | undefined;
+    vi.spyOn(client, 'createService').mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          finish = () => reject(new Error('stopped'));
+        }),
+    );
+    mount(client);
+    await screen.findByText('Storefront');
+    fireEvent.click(screen.getByRole('button', { name: 'Add service' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add a service' });
+    fireEvent.click(within(dialog).getByLabelText(/^Postgres branch/));
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'pg-new' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add service' }));
+    await within(dialog).findByRole('button', { name: 'Adding…' });
+    expect(fireEvent(dialog, new Event('cancel', { cancelable: true }))).toBe(false);
+    expect(
+      (within(dialog).getByRole('button', { name: 'Close' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    finish?.();
+    expect(await within(dialog).findByText('stopped')).toBeTruthy();
+    expect(fireEvent(dialog, new Event('cancel', { cancelable: true }))).toBe(true);
+  });
+
   it('validates the name before calling the client', async () => {
     const client = quietClient();
     const create = vi.spyOn(client, 'createService');
@@ -285,17 +306,20 @@ describe('helpers', () => {
   });
 
   it('deep links every kind, a connector to its own page', () => {
-    const [repo] = seedProject().services;
-    expect(serviceHref({ ...(repo as never), kind: 'connector', id: 'c 1' })).toBe(
-      '/connectors/c%201',
-    );
-    expect(serviceHref({ ...(repo as never), kind: 'graph', href: '/graph?g=x' })).toBe(
-      '/graph?g=x',
-    );
+    const repo = seedProject().services[0];
+    if (!repo) throw new Error('the seed project has services');
+    expect(serviceHref({ ...repo, kind: 'connector', id: 'c 1' })).toBe('/connectors/c%201');
+    expect(serviceHref({ ...repo, kind: 'graph', href: '/graph?g=x' })).toBe('/graph?g=x');
   });
 
   it('reads a connection from either end', () => {
-    const e = { id: 'x', source: 'a', target: 'b', kind: 'data-flow' as const, label: 'streams to' };
+    const e = {
+      id: 'x',
+      source: 'a',
+      target: 'b',
+      kind: 'data-flow' as const,
+      label: 'streams to',
+    };
     expect(relation(e, 'out')).toBe('streams to');
     expect(relation(e, 'in')).toBe('streams to this');
     expect(relation({ ...e, kind: 'depends-on' }, 'out')).toBe('depends on');

@@ -29,7 +29,11 @@ describe('seedProject', () => {
       expect.objectContaining({ source: 'live-api', target: 'pg-main', kind: 'depends-on' }),
     );
     expect(p.edges).toContainEqual(
-      expect.objectContaining({ source: 'sql-orders', target: 'conn-orders-cdc', kind: 'data-flow' }),
+      expect.objectContaining({
+        source: 'sql-orders',
+        target: 'conn-orders-cdc',
+        kind: 'data-flow',
+      }),
     );
     expect(p.edges).toContainEqual(
       expect.objectContaining({ source: 'conn-orders-cdc', target: 'house-analytics' }),
@@ -108,7 +112,8 @@ describe('createMockCanvasClient', () => {
       const it = c.metricStream(SEED_PROJECT_ID, 'sql-orders')[Symbol.asyncIterator]();
       const r = await it.next();
       await it.return?.();
-      return r.value?.map((p) => p.v);
+      if (r.done) throw new Error('the metric stream ended');
+      return r.value.map((p) => p.v);
     };
     expect(await take(3)).toEqual(await take(3));
     expect(await take(3)).not.toEqual(await take(4));
