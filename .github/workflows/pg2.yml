@@ -37,14 +37,17 @@ on:
       - "crates/loams-postgres/**"
       - "crates/loams-pg-control/**"
       - "crates/loams/Cargo.toml"
+      - "crates/loams/src/lib.rs"
       - "crates/loams/src/main.rs"
       - "crates/loams/src/pg_control.rs"
       - "crates/loams/src/pg_control_cli.rs"
+      - "crates/loams/src/api/mod.rs"
       - "crates/loams/src/api/connect.rs"
       - "crates/loams/src/api/connect_postgres.rs"
       - "crates/loams/src/api/postgres_messages.rs"
       - "crates/loams/tests/pg_control.rs"
       - "scripts/ci/no-metering.py"
+      - "scripts/ci/test-no-metering.py"
       - "crates/loams-kv/**"
       - "scripts/pg2/**"
       - "proto/**"
@@ -65,14 +68,17 @@ on:
       - "crates/loams-postgres/**"
       - "crates/loams-pg-control/**"
       - "crates/loams/Cargo.toml"
+      - "crates/loams/src/lib.rs"
       - "crates/loams/src/main.rs"
       - "crates/loams/src/pg_control.rs"
       - "crates/loams/src/pg_control_cli.rs"
+      - "crates/loams/src/api/mod.rs"
       - "crates/loams/src/api/connect.rs"
       - "crates/loams/src/api/connect_postgres.rs"
       - "crates/loams/src/api/postgres_messages.rs"
       - "crates/loams/tests/pg_control.rs"
       - "scripts/ci/no-metering.py"
+      - "scripts/ci/test-no-metering.py"
       - "crates/loams-kv/**"
       - "scripts/pg2/**"
       - "proto/**"
@@ -230,8 +236,8 @@ jobs:
         with:
           shared-key: pg2-loams-pg-control-role
           save-if: ${{ github.ref == 'refs/heads/dev' }}
-      - name: test (feature postgres)
-        run: cargo test -p loams --features postgres --locked --test pg_control
+      - name: test (feature postgres; the binary's unit tests too)
+        run: cargo test -p loams --features postgres --locked --test pg_control --bins
       - name: test (default features)
         run: cargo test -p loams --locked --test pg_control
       - name: clippy (postgres, postgres-kubernetes)

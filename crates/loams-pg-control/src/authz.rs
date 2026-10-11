@@ -506,7 +506,7 @@ impl KeysFile {
                         return Err(invalid("a grant names an empty namespace"));
                     }
                     GrantObject::Project(id) if !id.starts_with("prj-") => {
-                        return Err(invalid("a project grant names a prj- id"));
+                        return Err(invalid("a project grant must name a prj- id"));
                     }
                     _ => {}
                 }
