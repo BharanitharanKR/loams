@@ -1404,3 +1404,54 @@ How these were measured: `crates/loams-graph/tests/capture_spike.rs` (kept) runs
 3. **MVCC for properties, labels and deletes**: honour the viewing epoch for in-place properties and the `is_deleted` flag, and never return another transaction's pending writes. This is a large change, in `node_ops.rs`, `edge_ops.rs`, `property_ops.rs` and `temporal.rs`. It would let reads stop waiting on the gate (R9.3).
 4. `count(n)` honouring the viewing epoch, and `gc` honouring pinned sessions under `temporal`.
 5. Already listed in R0.5 and R0.7: return the manager's commit epoch, and a public caller-chosen-id API.
+
+### Task 10 (2026-10-11, on `backend/gr1`)
+
+**R10.1 The format is written by hand, not through serde (deviation from "the Loams record codec").** A record starts with the version byte `1`, as the collection stream's `0x01 ‖ postcard` does. The body is LEB128/zigzag varints, length-prefixed strings and tagged values, specified in `conformance/graph/records/v1/README.md`. The reasons:
+- `decode` must be total on whatever the log holds (`decode_is_total_on_random_bytes`). A serde decoder recurses with no bound, so it overflows the stack on deeply nested bytes. postcard also drops a custom error's message.
+- Here nesting is bounded (`MAX_VALUE_DEPTH` = 128 lists, maps and paths per value, the same as Grafeo's bracket limit). No count is believed before its bytes are present, and preallocation is capped, so a hostile length allocates nothing.
+- **One encoding per record.** Varints must be minimal, booleans and option tags are 0 or 1, and every map's keys strictly increase. Whatever `decode` accepts re-encodes to the same bytes. The proptest checks that for every accepted input.
+- Errors carry the byte offset and what is wrong there (`CodecError::{Empty, UnknownVersion, Truncated, Malformed, Unrepresentable}`).
+
+**R10.2 `encode` is fallible (deviation).** It is `encode(&GraphRecord) -> Result<Bytes, CodecError>`, not `-> Bytes`. It refuses three things, each as `Unrepresentable`:
+- a value nested deeper than 128 levels;
+- a UTC offset outside ±18 hours (the typed model's bound, R2.4);
+- a Grafeo value kind added after 0.5.43, since `grafeo::Value` is `#[non_exhaustive]`.
+
+It never refuses what `decode` accepts. Task 11 treats an encode failure like a failed capture (R9.8): the write is not acknowledged and the graph reloads. No current statement can produce such a value.
+
+**R10.3 Values are the typed model of Task 2, not its protobuf bytes.** The record's values have the kinds of `loams.graph.v1.Value`, with the same meaning, in exact units:
+- dates in days since 1970-01-01;
+- times in nanoseconds since midnight;
+- TIMESTAMP in microseconds since the epoch;
+- a zoned datetime as UTC microseconds plus its offset;
+- durations as months, days and nanoseconds;
+- floats as their IEEE bits (NaN payloads and `-0.0` are kept).
+
+`pb::Value` bytes are not used, for three reasons:
+- its map fields are hash maps, so equal values would give unequal bytes;
+- the package stays `unstable` until Task 39;
+- `to_proto` answers a node-shaped map as a `Node`.
+
+A node or relationship is the map Grafeo holds. `uint64` and `decimal` cannot occur (Grafeo holds neither).
+
+**R10.4 Additions to the v1 record (so they are not a v2).** Each is in `src/changeset/mod.rs`, and §48 §6.4 has a note:
+- `GraphChangeSet.link: Option<LinkApply { link: LinkId, version, applied_after: BTreeMap<u32, u64> }>`, as R0.17 asked.
+- `SchemaChange` gains `txn_seq` and `idempotency_key`.
+  - DDL goes through the lane (R9.7, Task 24), so it takes a `txn_seq` like any other lane transaction. R9.5 makes `txn_seq` Loams' per-graph counter, which is **one per record of either kind**. Task 11 assigns it.
+  - A retried DDL with a key must answer from the idempotency index, which is rebuilt from records.
+- `commit_epoch` is kept and documented as informational (R9.5). Order and replay idempotency use the record's log offset.
+- A group commit (R9.3) appends one record per transaction in one log batch. There is no group framing.
+- The idempotency window (24 h) uses the log record's timestamp. The record carries none.
+
+**R10.5 No CRC** (R0.18): the log's batches carry a crc32c.
+
+**R10.6 Tests** (`tests/codec.rs`): the five planned ones, plus:
+- `non_canonical_encodings_refused`;
+- `trailing_bytes_refused`;
+- `value_depth_is_bounded_both_ways` (a million nested lists are refused without a stack overflow);
+- `offsets_outside_eighteen_hours_refused`;
+- `float_bits_survive`;
+- `captured_change_sets_round_trip_and_replay` (a real `CdcCapture` through the codec and `apply_to_store`).
+
+`truncated_input_refused_not_panics` requires `Truncated` for every strict prefix of every golden vector. The golden vectors are `changeset_{empty,ops,values}.bin` and `schema_change.bin`, generated with `UPDATE_GOLDEN=1` and frozen. `decode` is the Task 31 fuzz target's entry point.

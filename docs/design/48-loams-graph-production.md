@@ -182,6 +182,13 @@ SchemaChange    v1  { graph_id, lease_epoch, commit_epoch, statement, language }
 ```
 
 - The encoding is the Loams record codec with an explicit version byte. Property values use the same typed value model as the API (§8.3), so a value written over the wire is the value replayed.
+- **Amended by GR1 Task 10 (R10.1–R10.4).**
+  - Version 1 is specified in `conformance/graph/records/v1/README.md` and frozen by the golden vectors beside it.
+  - The body is written by hand (varints, tagged values) rather than through serde, so decoding is total and bounded, and each record has one encoding.
+  - Values are the typed model's kinds in exact units, not its protobuf bytes.
+  - `GraphChangeSet` also carries `link?` (a link target's progress, R0.17), and `SchemaChange` also carries `txn_seq` and `idempotency_key?`.
+  - `commit_epoch` is informational (R9.5).
+  - There is no per-record CRC, because log batches carry one.
 - **Snapshots.** A checkpoint job on the owner runs every 15 minutes or every 64 MiB of log, whichever comes first (defaults). It writes a native snapshot (Grafeo `backup_full` of a checkpointed database) to `ns/<ns_id>/graphs/<graph_id>/snap/<epoch>/`, then CAS-commits the manifest `{snapshot, covered_offset, covered_epoch, format, engine_version}` in the metastore. Weekly, and before any engine upgrade, it also writes a **portable snapshot**: Parquet files of nodes and edges with the typed values, which is the I6 escape hatch and the export format (§14.3).
 - **Retention.** The log is trimmed below the oldest retained snapshot's offset, never below the PITR window (7 days by default). GC follows §09's rules for unreferenced objects.
 

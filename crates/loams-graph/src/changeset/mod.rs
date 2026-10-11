@@ -16,11 +16,17 @@
 //! are gone before it).
 
 pub mod capture;
+pub mod codec;
 
 use std::collections::BTreeMap;
 
 use grafeo::{EdgeId, GrafeoDB, NodeId, Value};
+use loams_common::meta::LinkId;
+use loams_proto::loams::graph::v1::QueryLanguage;
 
+pub use codec::{CodecError, RECORD_VERSION, decode, encode};
+
+use crate::GraphId;
 use crate::engine::GraphError;
 
 /// A property map with a stable order, so two equal maps encode to equal bytes (Task 10).
@@ -85,6 +91,79 @@ pub enum ChangeOp {
         /// Properties removed.
         removed: Vec<String>,
     },
+}
+
+/// One record of a graph's implicit stream (shared contract; design §48 §6.4). Its byte form is
+/// [`codec`]'s, version [`RECORD_VERSION`].
+///
+/// Every record is one transaction of the graph's write lane. A group commit (GR1 Task 11) appends
+/// several records in one log batch, each at its own offset; there is no group framing.
+#[derive(Debug, Clone, PartialEq)]
+pub enum GraphRecord {
+    /// A committed data transaction.
+    ChangeSet(GraphChangeSet),
+    /// A schema statement (DDL), which Grafeo's CDC does not see (R0.6 (d), R9.7).
+    Schema(SchemaChange),
+}
+
+/// What one committed write transaction changed (shared contract; design §48 §6.4).
+///
+/// Ordering and replay idempotency use the record's **log offset**, never `commit_epoch` (R9.5): a
+/// replayed engine restarts at epoch 0, so Grafeo's epochs do not survive recovery.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphChangeSet {
+    /// The graph.
+    pub graph: GraphId,
+    /// The owner's lease epoch when it appended (D744; checked by the append, GR1 Task 12).
+    pub lease_epoch: u64,
+    /// Grafeo's commit epoch on the owner that ran the transaction. Informational only (R9.5).
+    pub commit_epoch: u64,
+    /// Loams' own per-graph transaction counter, assigned by the write lane, one per record of
+    /// either kind, and persisted with the manifest (R9.5).
+    pub txn_seq: u64,
+    /// The client's idempotency key, from which the owner rebuilds its idempotency index on open
+    /// (§48 §7.3).
+    pub idempotency_key: Option<String>,
+    /// When a link target committed this transaction: the link's progress, committed atomically
+    /// with its data (R0.17).
+    pub link: Option<LinkApply>,
+    /// The transaction's net effect, in canonical order (R9.2).
+    pub ops: Vec<ChangeOp>,
+}
+
+/// A link's progress, carried by the change set its target committed (R0.17).
+///
+/// The graph's link target (`loams-link`'s `LinkTarget`) recovers its `TargetState` from the
+/// latest of these per link, so the batch's data and the offsets it applied are durable in one
+/// append.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkApply {
+    /// The link.
+    pub link: LinkId,
+    /// The target's version after this commit (the link framework's optimistic concurrency).
+    pub version: u64,
+    /// The source offsets applied through, by partition.
+    pub applied_after: BTreeMap<u32, u64>,
+}
+
+/// A schema statement, recorded as its text and replayed by running it (design §48 §6.3).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SchemaChange {
+    /// The graph.
+    pub graph: GraphId,
+    /// The owner's lease epoch when it appended.
+    pub lease_epoch: u64,
+    /// Grafeo's epoch when the statement ran. Informational only (R9.5); DDL does not advance it
+    /// (R0.6).
+    pub commit_epoch: u64,
+    /// Loams' per-graph transaction counter, shared with [`GraphChangeSet::txn_seq`].
+    pub txn_seq: u64,
+    /// The client's idempotency key, as for a change set.
+    pub idempotency_key: Option<String>,
+    /// The statement, exactly as the client sent it (D634).
+    pub statement: String,
+    /// The statement's language.
+    pub language: QueryLanguage,
 }
 
 /// Applies change operations to a graph that is not serving yet, keeping element ids (R0.7, R9.4).
