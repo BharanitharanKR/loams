@@ -1,0 +1,53 @@
+// Loams Git's on-disk WAL data messages, verbatim from design §36 §4.3
+// (D390, D415). Crate-local and pinned by the golden files in
+// crates/loams-git/tests/golden/, not by buf (plan GT1 R0.5).
+
+syntax = "proto3";
+package loams.git.v1;
+
+enum ObjectFormat { OBJECT_FORMAT_UNSPECIFIED = 0; SHA1 = 1; SHA256 = 2; }
+
+message RefUpdate {
+  string name = 1;                       // "refs/heads/main"; validated as git check-ref-format
+  oneof expect {
+    bytes old_oid = 2;                   // must currently point here
+    bool must_not_exist = 3;             // create
+    bool any = 4;                        // only for force updates the policy allows
+  }
+  bytes new_oid = 5;                     // empty = delete
+}
+
+message PackRef {
+  string checksum = 1;                   // hex of the pack trailer checksum; names packs/<checksum>.lpk
+  uint64 object_count = 2;
+  uint64 pack_len = 3;                   // bytes of the pack section
+  uint64 idx_offset = 4;                 // the idx section's offset in the .lpk
+  uint64 idx_len = 5;
+  bool has_bitmap = 6;
+}
+
+message RefTransaction {
+  repeated RefUpdate updates = 1;        // applied atomically, all or none
+  repeated PackRef packs = 2;            // packs this transaction adds (usually 0 or 1)
+  string principal = 3;                  // who pushed (credential subject)
+  repeated string push_options = 4;
+  ObjectFormat object_format = 5;
+}
+
+message PackSetChange { repeated PackRef added = 1; repeated string removed = 2; string midx = 3; string commit_graph = 4; }
+message SymRef { string name = 1; string target = 2; }
+message Protection { string pattern = 1; bool deny_delete = 2; bool deny_force = 3; }
+message ConfigChange { repeated SymRef symrefs = 1; repeated Protection protections = 2; }
+
+message ForkParent { string repo_id = 1; uint64 seq = 2; }
+message IdemEntry { string key = 1; bytes request_digest = 2; uint64 seq = 3; uint32 index = 4; int64 expires_unix_ms = 5; }
+message Checkpoint {
+  uint64 seq = 1;
+  ObjectFormat object_format = 2;
+  map<string, bytes> refs = 3;
+  repeated SymRef symrefs = 4;
+  repeated Protection protections = 5;
+  repeated PackRef packs = 6;            // the live pack set
+  ForkParent parent = 7;                 // set on forks: packs fall through to the parent at its seq
+  repeated IdemEntry idempotency = 8;    // entries still inside the window
+}

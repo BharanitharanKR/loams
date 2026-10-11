@@ -183,6 +183,15 @@ message Checkpoint {
 
 **Pack object** `packs/<checksum>.lpk`: the pack bytes exactly as received or generated, then the version 2 `.idx` bytes, then a 32-byte footer `magic "LGITLPK\0" | pack_len u64 | idx_len u64 | crc32c u32 | reserved u32`. Range reads fetch the footer, the idx's fan-out table and object entries without downloading the pack. A local mirror (D396, GT5) splits it into `pack-<checksum>.pack` and `.idx`.
 
+**As built (GT1a, Tasks 3–5; `crates/loams-git/src/format/`).** The layouts are as above, pinned by `crates/loams-git/tests/golden/{segment_v1.lgw,checkpoint_v1.lgc,lpk_v1_footer.bin}`, with these precise rules:
+- `wal.proto` is crate-local, at `crates/loams-git/proto/loams/git/v1/wal.proto`, and is verbatim; buf does not lint it (GT1 R0.5). It is generated with prost, with every map in key order, so equal checkpoints have equal bytes.
+- The segment body is `loams_cloudevents::protobuf::encode_batch` (GT1 Task 3). That function writes a typed attribute value with its protobuf type only when the type prints back the same string; otherwise it writes `ce_string`, so `time` keeps Loams' millisecond form (GT1 ruling T3.1).
+- `encode_segment(seq, batch, created_unix_ms)` takes the header's time, because `WalBatch` has none. It refuses a body over `MAX_SEGMENT_BYTES` and any event whose `loamsseq` is not `seq`. `decode_segment` refuses non-zero flags, a length that disagrees with `body_len`, a body over 1 MiB, and an event whose `loamsseq` is not the header's seq. Readers accept versions 1..=1 (N−1 = N until version 2 exists).
+- The checkpoint header has no body length: the body is everything between the 18-byte header and the 12-byte trailer. A header seq that differs from `Checkpoint.seq` is corrupt.
+- `LpkFooter` also carries the CRC32C, for scrubs. A non-zero `reserved` word is corrupt.
+- Transaction events are written with their attributes in the order the protobuf format reads them back: `specversion`, `id`, `source`, `type`, then `datacontenttype`, `dataschema`, `loamsseq`, `tenantid`, `time` and `traceparent`. A decoded segment therefore equals the batch that was written. `time` is RFC 3339 in UTC with milliseconds. The reader refuses any other attribute.
+- The event `id` is the `IdemKey` string itself (a derived push key is already lowercase hex). `to_cloudevent(event, seq)` takes no index: an event's position is its place in the batch.
+
 ### 4.4 The sequencer and group commit (D391)
 
 One sequencer task serves each active repository. It holds the state after the last segment it has seen (refs, symrefs, protections, the pack set, the idempotency index) and a queue of validated transactions.
