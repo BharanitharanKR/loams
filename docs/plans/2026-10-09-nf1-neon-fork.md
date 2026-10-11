@@ -1309,3 +1309,40 @@ Owner decision of 2026-10-09: "let the neon fork be hard fork, neon stopped open
 5. **The README's image table is a consumer.** It is generated between the `pins.py` markers in `deploy/loams-postgres-dev/README.md`. The old table's amd64 manifest column is now one sentence of prose about the `77e22e4b` build, because the pin file holds index digests only.
 6. **`majors.rs`.** `pins.py rust` writes `crates/loams-postgres/src/majors.rs`; once that file exists, `check` compares it and `set` rewrites it. This task does not create it (Task 29 owns it).
 7. **CI and the e2e check.** `nf1-pins.yml` gains the job `pins` (`pins.py check`, then `test_pins.py`). It runs on every PR, so on every PR that touches the pin file or a consumer. CI workflows are disabled (owner, 2026-10-10), so the suite ran locally. `pg2-e2e.yml` was not run: that would mean pulling the images, and this machine's root disk is full. The generated lines are byte-identical to `dev`, since the digests did not change; only comments changed. `override_envs_still_work` runs `docker compose config --images` against both compose files, with and without `NEON_IMAGE` and `COMPUTE_IMAGE`.
+
+### Task 3 rulings (2026-10-11, at `dev` `4a458a9f`)
+
+Applied with `gh api` (account `dina-kar`, org admin; the token now has `admin:org`) and `git push` over ssh.
+
+1. **`loams-postgres` refs.** `main` was fast-forwarded `fa504217` → `1218fb7a` (a plain push, before any ruleset existed). Annotated tags `neon-fork-point` (`fa504217`, "Neon's last public commit; Loams Postgres is a hard fork from here") and `loams-20261012-1` (`1218fb7a`) were pushed; the name keeps the plan's date although it was created on 2026-10-11. `main` stays the default branch. Pushing `main` registered Neon's 43 workflow files as `active`, but no run has started (0 runs after the push and after PR #1): the fork does not run them. LP-0002 (Task 7) deletes them; until then a PR into `main` should be watched for queued runs.
+2. **The decoder's current pin is not on `main`.** Since the decoder-trim-2 round, `crates/loams-wal-decoder` pins `80356b29` (`loams/decoder-trim-2`, one commit on `1218fb7a`, annotated tag `loams-decoder-trim-2`). Task 3 fast-forwards `main` to `1218fb7a` only, as written; `80356b29` stays reachable through its `loams-*` tag, which `check-pinned-revs.sh` accepts. `main` is now PR-only, so moving `80356b29` onto `main` would be a merge PR (Task 4 or later; it also needs an `LP-` row, as `1218fb7a` does).
+3. **Protection is rulesets, not classic branch protection** (rulesets take `loams/**` patterns through REST and are the organisation's convention, as on `ostrium-labs/loams`). On `loams-postgres`:
+   - `loams: no force-push (main, loams/*)`: `non_fast_forward` on `refs/heads/main` and `refs/heads/loams/**`, **no bypass actors** (an admin cannot rewrite history either);
+   - `loams: no deletion (main, loams/*)`: `deletion`, same refs except `refs/heads/loams/probe`, no bypass actors. The probe branch is left out so `force_push_rejected` can clean up after itself while being under the same force-push rule;
+   - `main: PRs only, one code-owner approval`: `pull_request` (1 approval, code-owner review, stale reviews dismissed) on `main`, with `OrganizationAdmin` as a bypass actor in mode `pull_request` only: an admin can merge a PR without the approval, but cannot push to `main` directly;
+   - `loams: pinned tags are immutable`: `deletion`, `non_fast_forward` and `update` on tags `neon-fork-point`, `loams-*` and `lp-*`, no bypass actors (the Global Constraints' "no deletion of a `loams-*`, `lp-*` or `neon-fork-point` tag", enforced). The same tag ruleset is on every fork below.
+4. **Deviations from "as in the shared contract".**
+   - **No required status checks yet.** `loams-gate / g0`, `g1`, `g2`, `dco` and `patches` do not exist; requiring them now would block every PR. Each is added to the `main` ruleset by the task that creates its workflow (Task 4 `patches`, Task 5 `dco`, Task 16 `g0`/`g1`). `g2` runs only when triggered, so it cannot be a plain required check; Task 16 decides how it gates.
+   - **The approval rule is bypassable by org admins in PRs.** The organisation has two members and no `loams-postgres-maintainers` team or CODEOWNERS file yet (Task 5, Q722, Q734), so a strict one-approval rule would stop every fork PR on one person. Removing the bypass once the team has two maintainers is an owner decision.
+   - **`loams/*` work branches get no-force-push and no-deletion only, not the PR rule.** A PR rule on work branches would make them unpushable; §3.5's "a PR, one CODEOWNER approval" applies to `main`.
+5. **The other forks.** `loams/<the branch Neon used>` was created at that branch's head, with a ruleset `loams/*: no force-push, no deletion` (`non_fast_forward` and `deletion` on `refs/heads/loams/**`, no bypass) and the tag ruleset:
+
+   | Fork | Branch | At |
+   |---|---|---|
+   | `rust-postgres` | `loams/neon` | `f3cf448f` (the decoder's pin) |
+   | `azure-sdk-for-rust` | `loams/neon` | `39ab8c6f` (Neon's `Cargo.toml` used branch `neon`) |
+   | `framed-websockets` | `loams/main` | `34eff3d6` |
+   | `tokio-epoll-uring` | `loams/main` | `478ab1a3` |
+   | `pg_session_jwt` | `loams/main` | `937a79a6` (Neon built tag `v0.3.1`; the branch is `main`) |
+   | `autoscaling` | `loams/main` | `a4bce09e` |
+
+   `autoscaling` and `framed-websockets` were then archived. `azure-sdk-for-rust` stays unarchived. Default branches are unchanged.
+6. **`postgres`.** Actions disabled (`PUT actions/permissions {enabled:false}`; now `{"enabled":false}`). Rulesets: `REL_*_STABLE_neon: frozen history` (`update`, `non_fast_forward`, `deletion` on `refs/heads/REL_*_STABLE_neon`, no bypass; `REL_14…18_STABLE_neon` match, the point-release `_neon` branches such as `REL_17_5_neon` do not), `loams/*: no force-push, no deletion`, and the tag ruleset. Neon's submodule revisions (17.5 `1e01fcea`, 16.9 `a42351fc`) are ancestors of the now-frozen `_neon` heads (Task 0 ruling 4), so no tag was added for them.
+7. **`check-pinned-revs.sh`.**
+   - **The compare direction is reversed from the plan.** GitHub's `compare/<base>...<head>` reports `behind` when *head* is behind *base*. `compare/<rev>...main` is therefore `ahead` (not `behind`) when `rev` is on `main`. The script asks `compare/<branch>...<rev>` and accepts `behind` or `identical`, which is the plan's intent (checked live: `compare/main...1218fb7a` was `ahead` before the fast-forward and `identical` after).
+   - **Target branches** are fixed in the script: `main` for `loams-postgres` (and the old name `neon`), `loams/neon` for `rust-postgres` and `azure-sdk-for-rust`, `loams/main` for the other small forks.
+   - **Other `ostrium-labs` repositories are listed as `skip`, not checked.** `Cargo.toml` here also pins `ostrium-labs/resonate` (`e3606698`, only on the unprotected branch `loam/0.10.1`) and `ostrium-labs/client-rust` (`1f8962b0`, only on the unprotected branch `loam`). They are not NF1 forks and have no `loams/` branch; checking them would fail today. Protecting them (a `loams-*` tag or a ruleset) belongs to their own tracks.
+   - It reads `Cargo.toml` only (not `Cargo.lock`), both inline tables and `[dependencies.x]` tables; a `loams-*` tag counts when it points (through annotated tag objects) at the rev; any `gh` error fails the rev.
+   - The job `revs` in `nf1-pins.yml` runs it and `test_pinned_revs.py` with `GH_TOKEN: github.token`.
+8. **Test results.** `check-pinned-revs.sh .` on `dev`: `ok loams-postgres 80356b29 (tag loams-decoder-trim-2)`, `ok rust-postgres f3cf448f (identical loams/neon)`, `skip` for `resonate` and `client-rust`. `force_push_rejected` (opt-in, `NF1_PROBE=1`): the non-fast-forward push to `loams/probe` was refused with `GH013 … Cannot force-push to this branch`, and the probe was deleted.
+9. **Owner actions still open:** the teams and `loams-postgres-bot` (Q733), detaching the fork network (Q730), and the admin bypass on `main` (ruling 4).
