@@ -34,6 +34,8 @@ import {
   type TaskState,
   type Value,
 } from './envelope.js';
+import { GraphTab } from './graph/GraphTab.js';
+import type { RunGraphSource } from './graph/source.js';
 import { buildRuns, countNodes, type RunNode } from './runs.js';
 
 const PAGE = 50;
@@ -943,11 +945,13 @@ const TABS = [
   { id: 'schedules', label: 'Schedules' },
   { id: 'tasks', label: 'Tasks' },
   { id: 'runs', label: 'Runs' },
+  { id: 'graph', label: 'Run graph' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
-export function DurablePage({ api }: { api: DurableApi }) {
+export function DurablePage({ api, graph }: { api: DurableApi; graph?: RunGraphSource }) {
   const [tab, setTab] = useState<TabId>('promises');
+  const tabs = TABS.filter((t) => t.id !== 'graph' || graph);
   return (
     <div className="flex flex-col gap-6 p-6 max-w-6xl">
       <header>
@@ -957,7 +961,7 @@ export function DurablePage({ api }: { api: DurableApi }) {
         </p>
       </header>
       <div role="tablist" aria-label="Durable views" className="flex gap-4 border-b border-rule">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -978,6 +982,7 @@ export function DurablePage({ api }: { api: DurableApi }) {
       {tab === 'schedules' && <SchedulesTab api={api} />}
       {tab === 'tasks' && <TasksTab api={api} />}
       {tab === 'runs' && <RunsTab api={api} />}
+      {tab === 'graph' && graph && <GraphTab source={graph} />}
     </div>
   );
 }

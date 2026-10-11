@@ -1,0 +1,188 @@
+/* The durable execution graph. Colours come from @loams/ui tokens only, so
+   light and dark follow the shell's theme. */
+
+.dg-root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dg-canvas {
+  border: 1px solid var(--op-rule);
+  background: var(--op-surface);
+  --xy-background-color: var(--op-surface);
+  --xy-background-pattern-color: var(--op-rule-soft);
+  --xy-edge-stroke: var(--op-muted);
+  --xy-edge-stroke-selected: var(--op-ink);
+  --xy-node-background-color: transparent;
+  --xy-node-border: none;
+  --xy-node-boxshadow-hover: none;
+  --xy-node-boxshadow-selected: none;
+}
+
+.dg-canvas .react-flow__node {
+  border-radius: 0;
+}
+.dg-canvas .react-flow__node:focus-visible {
+  outline: 2px solid var(--op-accent);
+  outline-offset: 3px;
+}
+.dg-canvas .react-flow__handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dg-node {
+  --dg-tone: var(--op-muted);
+  width: 180px;
+  padding: 0.5rem 0.625rem;
+  background: var(--op-raised);
+  color: var(--op-ink);
+  border: 1px solid var(--op-rule);
+  border-left: 4px solid var(--dg-tone);
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.dg-node[data-status='running'],
+.dg-chip[data-status='running'] {
+  --dg-tone: var(--op-accent);
+}
+.dg-node[data-status='retrying'],
+.dg-chip[data-status='retrying'] {
+  --dg-tone: var(--op-accent);
+}
+.dg-node[data-status='sleeping'],
+.dg-chip[data-status='sleeping'] {
+  --dg-tone: var(--op-info);
+}
+.dg-node[data-status='succeeded'],
+.dg-chip[data-status='succeeded'] {
+  --dg-tone: var(--op-grow);
+}
+.dg-node[data-status='failed'],
+.dg-chip[data-status='failed'] {
+  --dg-tone: var(--op-danger);
+}
+.dg-node[data-status='retrying'] {
+  border-left-style: dashed;
+}
+
+/* Retries: earlier attempts peek out behind the card as a stack. */
+.dg-node[data-stack='2'] {
+  box-shadow:
+    4px 4px 0 -1px var(--op-raised),
+    4px 4px 0 0 var(--op-rule);
+}
+.dg-node[data-stack='3'] {
+  box-shadow:
+    4px 4px 0 -1px var(--op-raised),
+    4px 4px 0 0 var(--op-rule),
+    8px 8px 0 -1px var(--op-raised),
+    8px 8px 0 0 var(--op-rule);
+}
+
+/* Timers are pills; awaits are dashed: neither is work the run is doing. */
+.dg-node[data-kind='timer'] {
+  border-radius: 999px;
+  border-left-width: 1px;
+  border-color: var(--dg-tone);
+  padding-inline: 0.875rem;
+}
+.dg-node[data-kind='await'] {
+  border-style: dashed;
+  border-left-width: 1px;
+  border-color: var(--dg-tone);
+}
+.dg-node[data-kind='workflow'] {
+  background: var(--op-accent-soft);
+  font-weight: 600;
+}
+.dg-node[data-chosen] {
+  outline: 2px solid var(--op-ink);
+  outline-offset: 2px;
+}
+
+.dg-node-head {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+.dg-node-name {
+  font-family: var(--loams-font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dg-node-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--op-muted);
+}
+.dg-meta {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.dg-attempts {
+  font-family: var(--loams-font-mono);
+  color: var(--op-ink);
+}
+.dg-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--dg-tone, var(--op-muted));
+  flex: none;
+}
+
+.dg-edge-failed path {
+  stroke: var(--op-danger);
+}
+.dg-edge-succeeded path {
+  stroke: var(--op-grow);
+}
+
+.dg-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dg-chip {
+  --dg-tone: var(--op-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--op-rule);
+  background: var(--op-surface);
+  color: var(--op-ink);
+  font-family: var(--loams-font-mono);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.dg-chip[aria-current='true'] {
+  border-color: var(--op-ink);
+  background: var(--op-raised);
+}
+.dg-chip:focus-visible {
+  outline: 2px solid var(--op-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dg-node[data-status='running'] .dg-dot,
+  .dg-chip[data-status='running'] .dg-dot {
+    animation: dg-pulse 1.4s var(--op-ease, ease-in-out) infinite;
+  }
+}
+@keyframes dg-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}

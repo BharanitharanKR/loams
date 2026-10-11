@@ -7,10 +7,17 @@ import type { Context } from '@loams/cordis';
 // Brings in the `desktop` service type (a module augmentation of `Services`).
 import type {} from '@loams/platform-electron';
 import { createDurableApi, envelope } from './envelope.js';
+import { mockRunSource } from './graph/sample.js';
+import { promiseRunSource, withSamples } from './graph/source.js';
 import { DurablePage } from './pages.js';
 
 export { createDurableApi, decodeValue, EnvelopeError, envelope } from './envelope.js';
 export { DurablePage } from './pages.js';
+export { ExecutionGraph } from './graph/ExecutionGraph.js';
+export { GraphTab } from './graph/GraphTab.js';
+export { applyEvent, fromPromises, type RunEvent, type RunGraph, type Step } from './graph/model.js';
+export { mockMetricStream, mockRunSource } from './graph/sample.js';
+export { promiseRunSource, type RunGraphSource, withSamples } from './graph/source.js';
 export { buildRuns } from './runs.js';
 
 const plugin: PluginModule = {
@@ -21,9 +28,11 @@ const plugin: PluginModule = {
     const slots = service(ctx, 'slots');
     const platform = service(ctx, 'platform');
     const api = createDurableApi(envelope((...a) => platform.fetch(...a), platform.baseUrl));
+    // The engine's runs, plus fixture-backed sample runs for what it does not serve yet.
+    const graph = withSamples(promiseRunSource(api), mockRunSource());
     ctx.effect(() =>
       router.page({ id: 'durable', path: '/durable', title: 'Durable', plugin: 'durable' }, () => (
-        <DurablePage api={api} />
+        <DurablePage api={api} graph={graph} />
       )),
     );
     ctx.effect(() =>
