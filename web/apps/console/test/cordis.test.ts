@@ -62,7 +62,7 @@ describe('the cordis console', () => {
     window.location.hash = '#/namespaces';
     window.dispatchEvent(new HashChangeEvent('hashchange'));
     await waitFor(() => expect(root.textContent).toContain('search-prod'));
-  });
+  }, 20_000); // the whole oss catalog boots here; a cold macOS runner needs over 5 s
 
   it('disabling a plugin removes its page and nav entry without a reload', async () => {
     const { root, handle } = await start();

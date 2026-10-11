@@ -232,7 +232,7 @@ describe.skipIf(!hasGpg)("gpg-sign.sh dry run with a throwaway key", () => {
 			{ env: pubEnv },
 		);
 		expect(bad.status).not.toBe(0);
-	});
+	}, 60_000); // key generation and gpg-agent start-up are slow on macOS runners
 
 	it("fails clearly when the key cannot be imported", () => {
 		const d = fresh("gpg-badkey");

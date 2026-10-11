@@ -368,7 +368,7 @@ describe('DeploymentsPage', () => {
     const client = createMockDeployClient({ intervalMs: 60_000 });
     render(<DeploymentsPage client={client} />);
     await screen.findByRole('heading', { name: 'billing-worker v0.19.0' });
-    const buttons = screen.getAllByLabelText('Validate logs');
+    const buttons = await screen.findAllByLabelText('Validate logs');
     fireEvent.click(buttons[buttons.length - 1] as HTMLElement);
     expect(
       await screen.findByText(/Health check \/ready returned 503/, { selector: 'li' }),
