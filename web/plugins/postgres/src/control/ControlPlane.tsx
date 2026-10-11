@@ -48,17 +48,25 @@ export function ControlPlane({
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const openIds = useRef(new Set<string>());
+  // Bumped on a namespace (or client) change: a load that started under an older value
+  // drops its result and its error rather than writing another namespace's data.
+  const generation = useRef(0);
+  // Bumped when an operation finishes, so the branch effect reloads with the projectId
+  // that the project reload settled on, not the one in this render's closure.
+  const [branchesRev, setBranchesRev] = useState(0);
 
   const project = projects?.find((p) => p.id === projectId);
 
   const loadProjects = useCallback(async () => {
+    const gen = generation.current;
     try {
       const list = await client.listProjects(ns);
+      if (gen !== generation.current) return;
       setProjects(list);
       setProjectId((cur) => (cur && list.some((p) => p.id === cur) ? cur : list[0]?.id));
       setError(undefined);
     } catch (e) {
-      setError(failureText(e));
+      if (gen === generation.current) setError(failureText(e));
     }
   }, [client, ns]);
 
@@ -67,8 +75,10 @@ export function ControlPlane({
       setBranches([]);
       return;
     }
+    const gen = generation.current;
     try {
       const list = await client.listBranches(ns, projectId);
+      if (gen !== generation.current) return;
       setBranches(list);
       setBranchId((cur) =>
         cur && list.some((b) => b.id === cur)
@@ -76,14 +86,16 @@ export function ControlPlane({
           : (list.find((b) => b.isDefault) ?? list[0])?.id,
       );
     } catch (e) {
-      setError(failureText(e));
+      if (gen === generation.current) setError(failureText(e));
     }
   }, [client, ns, projectId]);
 
   // Reload the lists when an operation the page saw open has finished.
   const loadOperations = useCallback(async () => {
+    const gen = generation.current;
     try {
       const ops = await client.listOperations(ns);
+      if (gen !== generation.current) return;
       setOperations(ops);
       let finished = false;
       for (const op of ops) {
@@ -92,26 +104,32 @@ export function ControlPlane({
       }
       if (finished) {
         await loadProjects();
-        await loadBranches();
+        setBranchesRev((n) => n + 1);
       }
     } catch (e) {
-      setError(failureText(e));
+      if (gen === generation.current) setError(failureText(e));
     }
-  }, [client, ns, loadProjects, loadBranches]);
+  }, [client, ns, loadProjects]);
 
   // Only on a namespace (or client) change; loadOperations also changes with the project.
   // biome-ignore lint/correctness/useExhaustiveDependencies: reload per namespace
   useEffect(() => {
+    generation.current += 1;
     setProjects(undefined);
     setProjectId(undefined);
+    setBranches([]);
+    setOperations([]);
+    setError(undefined);
     openIds.current.clear();
     void loadProjects();
     void loadOperations();
   }, [ns, client]);
 
+  // branchesRev is not read here: a bump is the signal to reload.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reload when an operation finishes
   useEffect(() => {
     void loadBranches();
-  }, [loadBranches]);
+  }, [loadBranches, branchesRev]);
 
   const anyOpen = operations.some(isOpen);
   useEffect(() => {
@@ -192,8 +210,7 @@ export function ControlPlane({
         <>
           <section aria-labelledby="pg-project" className="flex flex-col gap-3">
             <h2 id="pg-project" className="text-lg font-semibold">
-              {project.name}{' '}
-              <Badge>Postgres {project.pgVersion}</Badge>{' '}
+              {project.name} <Badge>Postgres {project.pgVersion}</Badge>{' '}
               {project.state !== 'ready' && <Badge>{project.state}</Badge>}
             </h2>
             <p className="text-xs text-muted">
@@ -323,9 +340,7 @@ function CreateProjectDialog({
         }}
       >
         <Field label="Project name">
-          {(p) => (
-            <Input {...p} value={name} autoFocus onChange={(e) => setName(e.target.value)} />
-          )}
+          {(p) => <Input {...p} value={name} autoFocus onChange={(e) => setName(e.target.value)} />}
         </Field>
         <Field label="Postgres version">
           {(p) => (

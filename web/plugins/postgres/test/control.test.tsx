@@ -9,8 +9,8 @@ import {
   createMockPgControl,
   deleteBlocker,
   fixtureState,
-  PgControlError,
   type PgControlClient,
+  PgControlError,
 } from '../src/index.js';
 
 afterEach(cleanup);
@@ -35,8 +35,13 @@ function mount(client: PgControlClient = createMockPgControl({ password: () => T
   return { client, copy };
 }
 
-const branchRow = (id: string) =>
-  document.querySelector(`tr[data-branch="${id}"]`) as HTMLElement;
+/** Narrows `value`, failing the test with a clear message when it is missing. */
+function present<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('expected a value');
+  return value;
+}
+
+const branchRow = (id: string) => document.querySelector(`tr[data-branch="${id}"]`) as HTMLElement;
 
 describe('branch tree', () => {
   it('orders branches depth-first by parent, default first', () => {
@@ -52,7 +57,7 @@ describe('branch tree', () => {
 
   it('blocks deleting the default branch and a branch with children', () => {
     const rows = branchTree(fixtureState().branches);
-    const by = (name: string) => rows.find((r) => r.branch.name === name)!;
+    const by = (name: string) => present(rows.find((r) => r.branch.name === name));
     expect(deleteBlocker(by('main'))).toMatch(/default/);
     expect(deleteBlocker(by('dev'))).toMatch(/child/);
     expect(deleteBlocker(by('feature-checkout'))).toBeUndefined();
@@ -113,9 +118,9 @@ describe('control plane', () => {
     // The operation runs to completion under polling (the fixtures hold one finished op).
     await waitFor(
       () =>
-        expect(
-          document.querySelectorAll('tr[data-operation][data-state="succeeded"]').length,
-        ).toBe(2),
+        expect(document.querySelectorAll('tr[data-operation][data-state="succeeded"]').length).toBe(
+          2,
+        ),
       { timeout: 2000 },
     );
     const ops = await client.listOperations('default');
@@ -150,6 +155,21 @@ describe('control plane', () => {
     fireEvent.click(screen.getByRole('button', { name: 'I have saved it' }));
     await waitFor(() => expect(screen.queryByDisplayValue(TEST_PASSWORD)).toBeNull());
     expect(document.querySelector('tr[data-role="reporter"]')).toBeTruthy();
+  });
+
+  it('says when the clipboard refuses the password instead of claiming it copied', async () => {
+    const client = createMockPgControl({ password: () => TEST_PASSWORD });
+    const copy = vi.fn(async () => {
+      throw new Error('clipboard denied');
+    });
+    render(<ControlPlane client={client} pollMs={10} copy={copy} />);
+    await screen.findByText('Roles and databases on main');
+    fireEvent.change(screen.getByLabelText('New role'), { target: { value: 'reporter' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create role' }));
+    await screen.findByLabelText('Password');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(await screen.findByText(/Could not copy/)).toBeTruthy();
+    expect(screen.queryByText('Copied to the clipboard.')).toBeNull();
   });
 
   it('resets a password and says the old one stops working', async () => {
@@ -200,7 +220,7 @@ describe('mock control plane rules', () => {
   it('refuses deleting a branch with children', async () => {
     const c = createMockPgControl();
     const [dev] = (await c.listBranches('default', 'prj-shop')).filter((b) => b.id === 'br-dev');
-    await expect(c.deleteBranch('default', dev!)).rejects.toMatchObject({
+    await expect(c.deleteBranch('default', present(dev))).rejects.toMatchObject({
       reason: 'branch_has_children',
     });
   });
@@ -232,7 +252,7 @@ describe('mock control plane rules', () => {
     expect(operation.state).toBe('pending');
     let state = operation.state;
     for (let i = 0; i < 6 && state !== 'succeeded'; i++) {
-      state = (await c.listOperations('default')).find((o) => o.id === operation.id)!.state;
+      state = present((await c.listOperations('default')).find((o) => o.id === operation.id)).state;
     }
     expect(state).toBe('succeeded');
     const branches = await c.listBranches('default', project.id);

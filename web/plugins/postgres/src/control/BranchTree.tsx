@@ -211,7 +211,7 @@ function CreateBranchDialog({
       (mode === 'time' && time !== '' && !Number.isNaN(new Date(time).getTime())));
 
   async function submit() {
-    if (!from || !ready) return;
+    if (!from || !ready || busy) return;
     const point: BranchPoint | undefined =
       mode === 'lsn'
         ? { lsn: lsn.trim().toUpperCase() }
@@ -257,9 +257,7 @@ function CreateBranchDialog({
         }}
       >
         <Field label="Branch name">
-          {(p) => (
-            <Input {...p} value={name} autoFocus onChange={(e) => setName(e.target.value)} />
-          )}
+          {(p) => <Input {...p} value={name} autoFocus onChange={(e) => setName(e.target.value)} />}
         </Field>
         <fieldset className="flex flex-col gap-1">
           <legend className="text-sm">Branch point</legend>
@@ -347,7 +345,7 @@ function DeleteBranchDialog({
   };
   const confirmed = b !== undefined && (!b.protected || typed === b.name);
   async function submit() {
-    if (!b || !confirmed) return;
+    if (!b || !confirmed || busy) return;
     setBusy(true);
     setError(undefined);
     try {

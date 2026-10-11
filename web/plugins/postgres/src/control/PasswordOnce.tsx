@@ -17,10 +17,12 @@ export function PasswordOnce({
   copy?: (text: string) => Promise<void> | void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const [shown, setShown] = useState(false);
   const fieldId = useId();
   const close = () => {
     setCopied(false);
+    setCopyFailed(false);
     setShown(false);
     onClose();
   };
@@ -62,8 +64,14 @@ export function PasswordOnce({
               <Button
                 size="sm"
                 onClick={async () => {
-                  await copy(issued.password);
-                  setCopied(true);
+                  try {
+                    await copy(issued.password);
+                    setCopyFailed(false);
+                    setCopied(true);
+                  } catch {
+                    setCopied(false);
+                    setCopyFailed(true);
+                  }
                 }}
               >
                 Copy
@@ -71,7 +79,11 @@ export function PasswordOnce({
             )}
           </div>
           <p className="text-xs text-muted" aria-live="polite">
-            {copied ? 'Copied to the clipboard.' : ''}
+            {copyFailed
+              ? 'Could not copy. Show the password and copy it from the field.'
+              : copied
+                ? 'Copied to the clipboard.'
+                : ''}
           </p>
         </div>
       )}
