@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The core compiler is imported from its source file (see src/compile.ts),
+    // because the package root also loads Node-only Cordis services. That file
+    // is written to the plugins' looser settings, so these two are relaxed here
+    // for it; this package's own code is written as if both were on.
+    "allowImportingTsExtensions": true,
+    "noUncheckedIndexedAccess": false,
+    "noUnusedParameters": false
+  },
+  "include": ["src", "test"]
+}
