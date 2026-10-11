@@ -150,7 +150,13 @@ describe('metrics page', () => {
     const p = panel('function-invocations-total-1');
     expect(p.tabIndex).toBe(0);
     act(() => p.focus());
-    fireEvent.keyDown(p, { key: 'ArrowRight' });
+    // At the left edge the panel cannot move; the announcement says where it is.
+    fireEvent.keyDown(p, { key: 'ArrowLeft' });
+    await screen.findByText(/stays at column 1, row 1/);
+    // Backspace is not a delete shortcut: only Delete (named in aria-keyshortcuts) removes.
+    fireEvent.keyDown(panel('function-invocations-total-1'), { key: 'Backspace' });
+    expect(panel('function-invocations-total-1')).not.toBeNull();
+    fireEvent.keyDown(panel('function-invocations-total-1'), { key: 'ArrowRight' });
     await screen.findByText(/moved to column 2, row 1/);
     fireEvent.keyDown(panel('function-invocations-total-1'), { key: 'ArrowDown', shiftKey: true });
     await screen.findByText(/is 8 columns by 4 rows/);

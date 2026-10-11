@@ -83,7 +83,7 @@ export function Panel({
     if (nudge) {
       e.preventDefault();
       onNudge(nudge);
-    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+    } else if (e.key === 'Delete') {
       e.preventDefault();
       onRemove();
     } else if (e.key === 'Enter') {

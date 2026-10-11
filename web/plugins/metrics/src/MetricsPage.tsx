@@ -66,6 +66,9 @@ export function MetricsPage({ client }: { client: MetricsClient }) {
   const [announcement, setAnnouncement] = useState('');
   const [cols, setCols] = useState(GRID_COLUMNS);
   const tabRefs = useRef(new Map<string, HTMLButtonElement>());
+  // A draft whose save hit a version conflict: dropped once the saved version has loaded,
+  // and kept if that load fails, so a failed reload never loses the edits.
+  const staleDraft = useRef<string | undefined>(undefined);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `reload` re-reads on demand
   useEffect(() => {
@@ -76,6 +79,9 @@ export function MetricsPage({ client }: { client: MetricsClient }) {
       .then((saved) => {
         if (ctl.signal.aborted) return;
         setLoaded({ phase: 'ready', saved });
+        const stale = staleDraft.current;
+        staleDraft.current = undefined;
+        if (stale) setDrafts(({ [stale]: _stale, ...rest }) => rest);
         setSelected((s) => (saved.some((d) => d.id === s) ? s : (saved[0]?.id ?? '')));
       })
       .catch((e) => !ctl.signal.aborted && setLoaded({ phase: 'error', message: failureText(e) }));
@@ -112,14 +118,18 @@ export function MetricsPage({ client }: { client: MetricsClient }) {
   );
 
   const nudge = (id: string, title: string, d: Nudge) => {
-    edit((s) => nudgePanel(s, id, d));
-    const it = spec?.layout.find((l) => l.id === id);
-    if (!it) return;
-    const moved = d.dx || d.dy;
+    if (!spec) return;
+    // Announce where the panel ended up after clamping, not where the key asked for.
+    const was = spec.layout.find((l) => l.id === id);
+    const next = nudgePanel(spec, id, d);
+    const it = next.layout.find((l) => l.id === id);
+    if (!was || !it) return;
+    const moved = it.x !== was.x || it.y !== was.y;
+    edit(() => next);
     setAnnouncement(
-      moved
-        ? `${title} moved to column ${Math.max(1, it.x + (d.dx ?? 0) + 1)}, row ${Math.max(1, it.y + (d.dy ?? 0) + 1)}.`
-        : `${title} is ${Math.max(MIN_W, it.w + (d.dw ?? 0))} columns by ${Math.max(MIN_H, it.h + (d.dh ?? 0))} rows.`,
+      d.dx || d.dy
+        ? `${title} ${moved ? 'moved to' : 'stays at'} column ${it.x + 1}, row ${it.y + 1}.`
+        : `${title} is ${it.w} columns by ${it.h} rows.`,
     );
   };
 
@@ -340,7 +350,7 @@ export function MetricsPage({ client }: { client: MetricsClient }) {
               size="sm"
               onClick={() => {
                 setProblem(undefined);
-                if (base) setDrafts(({ [base.id]: _stale, ...rest }) => rest);
+                staleDraft.current = base?.id;
                 setReload((r) => r + 1);
               }}
             >
