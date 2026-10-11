@@ -789,6 +789,9 @@ importers:
       '@loams/plugin-live':
         specifier: workspace:*
         version: link:../../plugins/live
+      '@loams/plugin-metrics':
+        specifier: workspace:*
+        version: link:../../plugins/metrics
       '@loams/plugin-namespaces':
         specifier: workspace:*
         version: link:../../plugins/namespaces
@@ -1998,6 +2001,61 @@ importers:
       '@loams/platform-electron':
         specifier: workspace:*
         version: link:../../packages/platform-electron
+      '@testing-library/react':
+        specifier: 16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@types/react':
+        specifier: 19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: 19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      jsdom:
+        specifier: 30.1.1
+        version: 30.1.1(@noble/hashes@1.8.0)
+      react:
+        specifier: 19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 5.0.3
+        version: 5.0.3(@types/node@24.13.6)(happy-dom@20.14.5)(jsdom@30.1.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@24.13.6)(typescript@5.9.3))(vite@8.3.1(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
+  web/plugins/metrics:
+    dependencies:
+      '@loams-core/dashboards':
+        specifier: workspace:*
+        version: link:../../../plugins/core/dashboards
+      '@loams-core/types':
+        specifier: workspace:*
+        version: link:../../../plugins/core/types
+      '@loams/charts':
+        specifier: workspace:*
+        version: link:../../packages/charts
+      '@loams/console-host':
+        specifier: workspace:*
+        version: link:../../packages/console-host
+      '@loams/cordis':
+        specifier: workspace:*
+        version: link:../../packages/cordis
+      '@loams/slots':
+        specifier: workspace:*
+        version: link:../../packages/slots
+      '@loams/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      react-grid-layout:
+        specifier: 2.2.4
+        version: 2.2.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      react-resizable:
+        specifier: 3.2.0
+        version: 3.2.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+    devDependencies:
       '@testing-library/react':
         specifier: 16.3.3
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -6836,6 +6894,12 @@ packages:
 
   react-draggable@4.7.2:
     resolution: {integrity: sha512-pmqDx72EqhMGoJe/x42ZO2wJ9TIz7qJ5OPnFu6lVWWznEuJumlSjR+J0V4tNyDFhUo6dVvv56FeiTqN+arTgnw==}
+    peerDependencies:
+      react: '>= 16.3.0'
+      react-dom: '>= 16.3.0'
+
+  react-grid-layout@2.2.4:
+    resolution: {integrity: sha512-Eb57FsgOMYOfsUGrMI1ku/FFR+dPNPrE8qo+3hwZubpqVSy4GO9v52DeX50Tl3JDYAlCypP4rmw7Vrqk/zOIvA==}
     peerDependencies:
       react: '>= 16.3.0'
       react-dom: '>= 16.3.0'
@@ -11980,6 +12044,17 @@ snapshots:
       prop-types: 15.8.1
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
+
+  react-grid-layout@2.2.4(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
+    dependencies:
+      clsx: 2.1.1
+      fast-equals: 4.0.3
+      prop-types: 15.8.1
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+      react-draggable: 4.7.2(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      react-resizable: 3.2.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      resize-observer-polyfill: 1.5.1
 
   react-grid-layout@2.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
     dependencies:
