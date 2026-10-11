@@ -379,7 +379,7 @@ enum Served {
 }
 
 /// An activation of this node in flight: [`Serving::switching`] counts it
-/// until it drops (also when the deploy's future is dropped).
+/// until it drops (also if its task panics).
 struct Switching<'a>(&'a watch::Sender<Serving>);
 
 impl<'a> Switching<'a> {
@@ -750,6 +750,25 @@ enum Path {
 /// subscription manager holds its ticks until it knows which deployment
 /// serves past the swap's commit.
 async fn commit(
+    app: &AppEngine,
+    loaded: Arc<dyn LoadedBundle>,
+    id: Ulid,
+    expected: Option<Ulid>,
+    by: &str,
+    path: Path,
+) -> Result<DeployOutcome, LiveError> {
+    // Detached: once the swap starts it runs to the end (serve, or refresh)
+    // even if the caller's future is dropped (a client that disconnects),
+    // so a committed activation is always served here before the hold on
+    // the subscription manager's ticks ends.
+    let (app, by) = (app.clone(), by.to_string());
+    tokio::spawn(async move { commit_now(&app, loaded, id, expected, &by, path).await })
+        .await
+        .map_err(|e| LiveError::Internal(format!("the activation task failed: {e}")))?
+}
+
+/// [`commit`]'s body, in its own task.
+async fn commit_now(
     app: &AppEngine,
     loaded: Arc<dyn LoadedBundle>,
     id: Ulid,
