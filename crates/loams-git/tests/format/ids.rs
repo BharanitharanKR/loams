@@ -196,6 +196,8 @@ fn other_ids_have_one_spelling() {
         "00-00000000000000000000000000000000-00f067aa0ba902b7-01", // zero trace id
         "00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01", // zero parent id
         &tp[..54],
+        &format!("{}\u{e9}", "0".repeat(54)), // byte 55 inside a character
+        &format!("{}\u{e9}", &tp[..53]),
     ] {
         assert!(TraceParent::parse(bad).is_err(), "{bad:?}");
     }

@@ -450,7 +450,8 @@ fn valid_traceparent(s: &str) -> bool {
                 .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
     };
     let not_zero = |part: &str| part.bytes().any(|b| b != b'0');
-    if s.len() < 55 {
+    // ASCII only, so byte 55 is a character boundary.
+    if !s.is_ascii() || s.len() < 55 {
         return false;
     }
     let (head, rest) = s.split_at(55);
