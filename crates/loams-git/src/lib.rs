@@ -7,12 +7,15 @@
 //! `loams-store`, `loams-cloudevents`, `loams-fs` and gitoxide crates only,
 //! and opens no listener.
 
+pub mod blob;
 pub mod error;
 pub mod format;
 pub mod ids;
 pub mod limits;
 pub mod paths;
+mod retry;
 
+pub use blob::{BlobError, BlobId, BlobStore, LpkWriter, Put, StoreBlobStore};
 pub use error::IdError;
 pub use format::FormatError;
 pub use format::segment::{WalBatch, WalSegment};
