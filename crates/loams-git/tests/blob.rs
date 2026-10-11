@@ -4,7 +4,6 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
-use std::time::Instant;
 
 use bytes::{Bytes, BytesMut};
 use futures::StreamExt;
@@ -219,7 +218,10 @@ async fn range_past_end_is_out_of_range() {
         blobs.get_range(&id, 100..100).await.expect("empty"),
         Bytes::new()
     );
-    let started = Instant::now();
+    // With no retry, an out-of-range read is one GET, or a GET and a HEAD
+    // when the store refuses a range that starts past the end; an empty
+    // range is a HEAD.
+    let gets = faulty.calls(Op::Get);
     for range in [90..101, 100..110, 150..160, 101..101] {
         let err = blobs
             .get_range(&id, range.clone())
@@ -230,8 +232,9 @@ async fn range_past_end_is_out_of_range() {
             "{range:?}: {err:?}"
         );
     }
-    assert!(
-        started.elapsed().as_millis() < 40,
+    assert_eq!(
+        faulty.calls(Op::Get) - gets,
+        1 + 2 + 2 + 1,
         "a range error is not retried"
     );
     let gets = faulty.calls(Op::Get);
