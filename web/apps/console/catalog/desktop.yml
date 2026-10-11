@@ -17,6 +17,8 @@
       name: '@loams/plugin-connectors'
     - id: graph
       name: '@loams/plugin-graph'
+    - id: jobs
+      name: '@loams/plugin-jobs'
     - id: streams
       name: '@loams/plugin-streams'
     - id: overview
