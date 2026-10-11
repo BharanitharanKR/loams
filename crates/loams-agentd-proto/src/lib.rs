@@ -5,11 +5,13 @@
 
 pub mod agent;
 pub mod brand;
+pub mod daemon;
 pub mod entities;
 pub mod file_mentions;
 pub mod invocation;
 pub mod motion;
 pub mod preview;
+pub mod rpc;
 pub mod sidebar_pins;
 pub mod view;
 pub mod workspace;

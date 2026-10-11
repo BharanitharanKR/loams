@@ -1,25 +1,33 @@
-//! `loams-agentd status`: the data directory, whether a daemon holds it, and
-//! whether its IPC port answers. Adapted from the fork's `auth_cli::status`,
-//! without the WorkOS account lines (D781).
+//! `loams-agentd status`: the daemon directory and whether a daemon runs
+//! there, confirmed with `Hello` (design §50 §5.4).
 
-use loams_agentd_sessions::{EngineConfig, InstanceLock};
+use std::path::Path;
 
-pub fn status(config: &EngineConfig) -> anyhow::Result<()> {
-    println!("Data dir: {}", config.data_dir.display());
-    match InstanceLock::holder(&config.data_dir) {
-        Some(pid) => println!("Daemon:   running (pid {pid})"),
-        None => println!("Daemon:   not running"),
+use loams_agentd::paths::Paths;
+use loams_agentd::{discovery, hello, lock};
+
+pub fn status(config: &Path) -> anyhow::Result<()> {
+    let paths = Paths::of_config(config)?;
+    println!("Directory: {}", paths.dir().display());
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let Some(found) = discovery::read(&paths) else {
+        match lock::holder(&paths) {
+            Some(pid) => println!("Daemon:    starting or not answering (pid {pid})"),
+            None => println!("Daemon:    not running"),
+        }
+        return Ok(());
+    };
+    match runtime.block_on(hello::probe(found.port)) {
+        Ok(reply) => println!(
+            "Daemon:    running (pid {}, version {}, protocol {}, mode {:?}, port {})",
+            reply.pid, reply.version, reply.protocol, reply.mode, found.port
+        ),
+        Err(error) => println!(
+            "Daemon:    pid {} holds the lock but port {} did not answer Hello: {error}",
+            found.pid, found.port
+        ),
     }
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], config.ipc_port));
-    let ipc = std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(500));
-    println!(
-        "IPC:      {} 127.0.0.1:{}",
-        if ipc.is_ok() {
-            "listening on"
-        } else {
-            "not listening on"
-        },
-        config.ipc_port
-    );
     Ok(())
 }

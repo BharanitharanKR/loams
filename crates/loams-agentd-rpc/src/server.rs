@@ -15,14 +15,25 @@ use tokio_tungstenite::tungstenite::http::StatusCode;
 use crate::{ClientFrame, RpcError, RpcReply, RpcService, ServerFrame};
 
 /// Serve one connection: read client frames from `inbound`, write server frames to `out`.
-/// Returns when `inbound` closes; all in-flight request tasks are aborted on exit.
+/// Returns when `inbound` closes, or after a request failed with [`RpcError::Fatal`]
+/// (its `{err}` frame is queued on `out` first); all in-flight request tasks are
+/// aborted on exit.
 pub async fn serve_connection(
     service: Arc<dyn RpcService>,
     out: mpsc::Sender<String>,
     mut inbound: mpsc::Receiver<String>,
 ) {
     let mut running: HashMap<u64, tokio::task::AbortHandle> = HashMap::new();
-    while let Some(payload) = inbound.recv().await {
+    // `close_tx` lives as long as this loop, so `close_rx` only yields on a fatal error.
+    let (close_tx, mut close_rx) = mpsc::channel::<()>(1);
+    loop {
+        let payload = tokio::select! {
+            payload = inbound.recv() => match payload {
+                Some(payload) => payload,
+                None => break,
+            },
+            _ = close_rx.recv() => break,
+        };
         // ndjson: a transport may batch several frames per message.
         for line in payload.lines() {
             let line = line.trim();
@@ -50,6 +61,7 @@ pub async fn serve_connection(
             let task = tokio::spawn(handle_request(
                 service.clone(),
                 out.clone(),
+                close_tx.clone(),
                 frame.id,
                 method,
                 frame.params,
@@ -65,6 +77,7 @@ pub async fn serve_connection(
 async fn handle_request(
     service: Arc<dyn RpcService>,
     out: mpsc::Sender<String>,
+    close: mpsc::Sender<()>,
     id: u64,
     method: String,
     params: serde_json::Value,
@@ -125,12 +138,16 @@ async fn handle_request(
             .await;
         }
         Err(err) => {
+            let fatal = matches!(err, RpcError::Fatal(_));
             let _ = send(ServerFrame {
                 id,
                 err: Some(err.to_string()),
                 ..Default::default()
             })
             .await;
+            if fatal {
+                let _ = close.try_send(());
+            }
         }
     }
 }
@@ -214,5 +231,14 @@ async fn serve_ws_socket(stream: TcpStream, service: Arc<dyn RpcService>) {
     });
 
     serve_connection(service, out_tx, in_rx).await;
-    pump.abort();
+    // Let the pump flush what is queued (a fatal error's frame) and send Close:
+    // it ends once every sender is dropped. A peer that stopped reading cannot
+    // hold the task for longer than the grace period.
+    let mut pump = pump;
+    if tokio::time::timeout(CLOSE_GRACE, &mut pump).await.is_err() {
+        pump.abort();
+    }
 }
+
+/// How long a closing connection may take to flush its last frames.
+const CLOSE_GRACE: std::time::Duration = std::time::Duration::from_secs(5);

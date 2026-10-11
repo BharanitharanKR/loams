@@ -1,58 +1,26 @@
 //! loams-agentd: Loams Desktop's per-user agent daemon (design §50).
 //!
 //! Headless only (D782): `run` serves the sessions engine and its harnesses on
-//! the loopback IPC port, `mcp` is the stdio MCP shim injected into harness
+//! a loopback RPC port, `mcp` is the stdio MCP shim injected into harness
 //! runs, `status` reports a running daemon, and `version` prints the build.
 //! Two hidden entry points serve harnesses: `loams bot-acp` (Loams Bot over
 //! ACP) and `--noop-browser` (browser suppression for Antigravity sign-in).
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
-mod paths;
+mod cli;
 mod status;
 
-use clap::{Parser, Subcommand};
+use std::process::ExitCode;
 
-#[derive(Parser)]
-#[command(
-    name = "loams-agentd",
-    about = "Loams Desktop's per-user agent daemon",
-    disable_version_flag = true
-)]
-struct Cli {
-    #[command(subcommand)]
-    command: Command,
-}
-
-#[derive(Subcommand)]
-enum Command {
-    /// Run the daemon in the foreground: the sessions engine, its harnesses
-    /// and the IPC server (local-only).
-    Run,
-    /// Serve the MCP (Model Context Protocol) server on stdin/stdout,
-    /// proxying to the running daemon's IPC. Harness runs get it injected.
-    /// Logs go to stderr; stdout is the protocol.
-    Mcp,
-    /// Show the data directory and whether a daemon is running.
-    Status,
-    /// Print the daemon's version.
-    Version,
-    /// Loams integration used by the Loams Bot harness (`loams bot-acp`).
-    #[command(hide = true)]
-    Loams {
-        #[command(subcommand)]
-        command: LoamsCommand,
-    },
-}
-
-/// The link crate's CLI also has `login`, `logout`, `status`, `bot` and
-/// `mock`; the daemon exposes only the entry point the Loams Bot harness
-/// launches, so anything else is a usage error (plan DD1 ruling T1-2).
-#[derive(Subcommand)]
-enum LoamsCommand {
-    /// Speak ACP on stdin/stdout as the Loams Bot agent.
-    BotAcp,
-}
+use clap::Parser;
+use cli::{Cli, Command, LoamsCommand, RunArgs};
+use loams_agentd::config::Config;
+use loams_agentd::paths::Paths;
+use loams_agentd::server::{ServeOptions, serve};
+use loams_agentd::{
+    EXIT_ALREADY_RUNNING, EXIT_INTERNAL, EXIT_INVALID_CONFIG, discovery, hello, lock,
+};
 
 /// mimalloc, macOS only: libmalloc never returns the streaming churn's
 /// high-water pages, so transient allocation became permanent RSS
@@ -92,110 +60,228 @@ fn spawn_malloc_trimmer() {
     }
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> ExitCode {
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--noop-browser")) {
         // A harness's `BROWSER` points here so a sign-in page never opens
         // (the Antigravity driver, `loams-agentd-harness` `noop_browser`).
-        return Ok(());
+        return ExitCode::SUCCESS;
     }
     #[cfg(windows)]
     attach_parent_console();
     let cli = Cli::parse();
-    // Long-running modes log at info, one-shot CLI commands at warn (RUST_LOG
-    // overrides either).
-    // loro's internal block-encode diagnostics log at info and flood
-    // journald on every snapshot export — enough to fill a disk on a
-    // long-running headless host. Quiet them by default (RUST_LOG still
-    // overrides the whole filter).
-    let long_running = matches!(&cli.command, Command::Run);
-    // `loams-agentd loams bot-acp` speaks ACP on stdout, like `mcp`.
-    let stdout_is_protocol = matches!(&cli.command, Command::Mcp | Command::Loams { .. });
-    let default_filter = if long_running {
-        "info,loro_internal=warn,loro=warn"
-    } else {
-        "warn"
-    };
-    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| default_filter.into());
-    // `run` mirrors stdout logging to {data_dir}/logs: a daemon started by a
-    // service manager or by Electron has no visible stdout. One file per
-    // launch, the previous launch kept as `.old`.
-    let log_file = if long_running {
-        open_log_file("run")
-    } else {
-        None
-    };
-    {
-        use tracing_subscriber::layer::SubscriberExt;
-        use tracing_subscriber::util::SubscriberInitExt;
-        // `loams-agentd mcp` owns stdout for the protocol: a single log line on it
-        // would corrupt the JSON-RPC stream, so its diagnostics go to stderr.
-        if stdout_is_protocol {
-            tracing_subscriber::registry()
-                .with(filter)
-                .with(
-                    tracing_subscriber::fmt::layer()
-                        .with_ansi(false)
-                        .with_writer(std::io::stderr),
-                )
-                .init();
-        } else {
-            let registry = tracing_subscriber::registry()
-                .with(filter)
-                .with(tracing_subscriber::fmt::layer());
-            match log_file {
-                Some(file) => registry
-                    .with(
-                        tracing_subscriber::fmt::layer()
-                            .with_ansi(false)
-                            .with_writer(std::sync::Arc::new(file)),
-                    )
-                    .init(),
-                None => registry.init(),
-            }
-        }
-    }
-
-    if long_running {
-        // Finder launches have no visible stderr. Mirror the panic location
-        // and backtrace into the same rotating log as engine diagnostics.
-        let default_hook = std::panic::take_hook();
-        std::panic::set_hook(Box::new(move |info| {
-            tracing::error!(panic = %info,
-                backtrace = %std::backtrace::Backtrace::force_capture(),
-                "application panic");
-            default_hook(info);
-        }));
-        #[cfg(all(target_os = "linux", target_env = "gnu"))]
-        spawn_malloc_trimmer();
-    }
-
     match cli.command {
-        Command::Run => {
-            let runtime = tokio::runtime::Runtime::new()?;
-            runtime.block_on(async {
-                let engine = loams_agentd_sessions::Engine::new(engine_config_from_env());
-                engine.run().await
-            })
-        }
+        Command::Run(args) => run(&args),
         Command::Mcp => {
-            let runtime = tokio::runtime::Runtime::new()?;
-            runtime.block_on(loams_agentd_mcp::run(
-                loams_agentd_mcp::McpConfig::from_env(),
-            ))
+            // `mcp` owns stdout for the protocol: a single log line on it
+            // would corrupt the JSON-RPC stream, so diagnostics go to stderr.
+            init_stderr_tracing("warn");
+            report(
+                tokio::runtime::Runtime::new()
+                    .map_err(anyhow::Error::from)
+                    .and_then(|runtime| {
+                        runtime.block_on(loams_agentd_mcp::run(
+                            loams_agentd_mcp::McpConfig::from_env(),
+                        ))
+                    }),
+            )
         }
-        Command::Status => status::status(&engine_config_from_env()),
+        Command::Status(config) => {
+            init_stderr_tracing("warn");
+            let Some(config) = config.resolve() else {
+                eprintln!(
+                    "loams-agentd: status needs --config <path> (or {})",
+                    cli::CONFIG_ENV
+                );
+                return ExitCode::from(2);
+            };
+            report(status::status(&config))
+        }
         Command::Version => {
-            println!("loams-agentd {}", env!("CARGO_PKG_VERSION"));
-            Ok(())
+            println!("loams-agentd {}", hello::VERSION);
+            ExitCode::SUCCESS
         }
         Command::Loams {
             command: LoamsCommand::BotAcp,
         } => {
-            let runtime = tokio::runtime::Runtime::new()?;
-            let code = runtime.block_on(loams_agentd_link::cli::run(vec!["bot-acp".to_owned()]))?;
-            std::process::exit(code);
+            // `loams bot-acp` speaks ACP on stdout, like `mcp`.
+            init_stderr_tracing("warn");
+            let code = tokio::runtime::Runtime::new()
+                .map_err(anyhow::Error::from)
+                .and_then(|runtime| {
+                    runtime.block_on(loams_agentd_link::cli::run(vec!["bot-acp".to_owned()]))
+                });
+            match code {
+                Ok(code) => ExitCode::from(u8::try_from(code).unwrap_or(1)),
+                Err(error) => report(Err(error)),
+            }
         }
+    }
+}
+
+/// A one-shot command's result as an exit code.
+fn report(result: anyhow::Result<()>) -> ExitCode {
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("loams-agentd: {error:#}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// `run`: config (exit 4), directory, lock (exit 3), then the server; any
+/// other failure exits 70 (design §50 §5.1).
+fn run(args: &RunArgs) -> ExitCode {
+    let Some(config_path) = args.config.resolve() else {
+        eprintln!(
+            "loams-agentd: run needs --config <path> (or {})",
+            cli::CONFIG_ENV
+        );
+        return ExitCode::from(2);
+    };
+    let config = match Config::load(&config_path) {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("loams-agentd: {error}");
+            return ExitCode::from(EXIT_INVALID_CONFIG);
+        }
+    };
+    let mode = args.mode().unwrap_or(config.daemon.mode);
+    let paths = match Paths::for_config(&config_path) {
+        Ok(paths) => paths,
+        Err(error) => {
+            eprintln!(
+                "loams-agentd: cannot create the daemon directory beside {}: {error}",
+                config_path.display()
+            );
+            return ExitCode::from(EXIT_INTERNAL);
+        }
+    };
+    // The lock comes before the token, the listener, the log file and any
+    // store: a second instance changes nothing.
+    let lock = match lock::acquire(&paths) {
+        Ok(lock) => lock,
+        Err(lock::LockError::Held { holder }) => return already_running(&paths, &holder),
+        Err(lock::LockError::Io(error)) => {
+            eprintln!(
+                "loams-agentd: cannot take {}: {error}",
+                paths.lock().display()
+            );
+            return ExitCode::from(EXIT_INTERNAL);
+        }
+    };
+
+    init_run_tracing(&paths);
+    if std::env::var_os(cli::CONFIG_ENV).is_some_and(|value| !value.is_empty()) {
+        tracing::info!(config = %config_path.display(), "config from {}", cli::CONFIG_ENV);
+    }
+    // Service and child launches have no visible stderr. Mirror the panic
+    // location and backtrace into the daemon log.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        tracing::error!(panic = %info,
+            backtrace = %std::backtrace::Backtrace::force_capture(),
+            "application panic");
+        default_hook(info);
+    }));
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    spawn_malloc_trimmer();
+
+    let result = tokio::runtime::Runtime::new()
+        .map_err(anyhow::Error::from)
+        .and_then(|runtime| {
+            runtime.block_on(serve(ServeOptions {
+                paths,
+                config,
+                mode,
+                default_harness: harness_from_env(),
+            }))
+        });
+    drop(lock);
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            tracing::error!(error = format!("{error:#}"), "loams-agentd failed");
+            eprintln!("loams-agentd: {error:#}");
+            ExitCode::from(EXIT_INTERNAL)
+        }
+    }
+}
+
+/// Another daemon holds the lock: confirm it with `Hello` (it may still be
+/// starting, so discovery is retried briefly), report it and exit 3.
+fn already_running(paths: &Paths, holder: &str) -> ExitCode {
+    const WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+    let confirmed = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .ok()
+        .and_then(|runtime| {
+            runtime.block_on(async {
+                let deadline = tokio::time::Instant::now() + WAIT;
+                loop {
+                    if let Some(found) = discovery::read(paths)
+                        && let Ok(reply) = hello::probe(found.port).await
+                        && reply.pid == found.pid
+                    {
+                        return Some((reply, found.port));
+                    }
+                    if tokio::time::Instant::now() > deadline {
+                        return None;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+            })
+        });
+    match confirmed {
+        Some((reply, port)) => eprintln!(
+            "loams-agentd: already running (pid {}); version {}, port {port}",
+            reply.pid, reply.version
+        ),
+        None => {
+            eprintln!("loams-agentd: already running (pid {holder}); it has not answered Hello yet")
+        }
+    }
+    ExitCode::from(EXIT_ALREADY_RUNNING)
+}
+
+/// One-shot and stdio commands: stderr only, `RUST_LOG` overrides `default`.
+fn init_stderr_tracing(default: &str) {
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    let filter =
+        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| default.into());
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(std::io::stderr),
+        )
+        .init();
+}
+
+/// `run` logs at info to stdout and mirrors it to `<dir>/logs`: a daemon
+/// started by a service manager or by Electron has no visible stdout.
+/// loro's internal block-encode diagnostics log at info on every snapshot
+/// export, enough to fill a disk; they are quieted (RUST_LOG overrides).
+fn init_run_tracing(paths: &Paths) {
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| "info,loro_internal=warn,loro=warn".into());
+    let registry = tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_subscriber::fmt::layer());
+    match open_log_file_in(&paths.logs(), "run") {
+        Some(file) => registry
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_ansi(false)
+                    .with_writer(std::sync::Arc::new(file)),
+            )
+            .init(),
+        None => registry.init(),
     }
 }
 
@@ -227,20 +313,6 @@ fn attach_parent_console() {
     }
 }
 
-/// The env-resolved engine configuration shared by `run` and `status`.
-fn engine_config_from_env() -> loams_agentd_sessions::EngineConfig {
-    loams_agentd_sessions::EngineConfig {
-        data_dir: paths::data_dir(),
-        ipc_port: std::env::var("LOAMS_DESKTOP_IPC_PORT")
-            .ok()
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(27654),
-        default_harness: harness_from_env(),
-        terminal_shell: None,
-        tool_outputs: Default::default(),
-    }
-}
-
 /// `LOAMS_DESKTOP_HARNESS` (kebab-case id) picks the default harness for chats without a
 /// config row — `mock` powers the e2e smoke; default `claude-code`.
 fn harness_from_env() -> loams_agentd_sessions::HarnessId {
@@ -259,23 +331,16 @@ fn harness_from_env() -> loams_agentd_sessions::HarnessId {
     }
 }
 
-/// `{data_dir}/logs/loams-agentd-{mode}.log`, previous launch preserved as `.old`.
+/// `{dir}/loams-agentd-{mode}.log`, the previous launch preserved as `.old`.
 ///
 /// The returned file holds an exclusive `flock` for the process lifetime:
 /// rotate-on-launch is only safe when nothing is still WRITING the current
 /// file. On 2026-08-04 a dev build launched twice next to the running
 /// installed app — the first rename put the daemon's live log at `.old`, the
 /// second unlinked it entirely, and the daemon spent the rest of the incident
-/// logging to an orphaned inode (an entire day of sync diagnostics gone at
-/// the exact moment they were needed). A launch that finds the canonical file
+/// logging to an orphaned inode. A launch that finds the canonical file
 /// locked logs to `loams-agentd-{mode}.{pid}.log` instead; the next lock-holding
 /// launch sweeps pid-suffixed files older than a week.
-fn open_log_file(mode: &str) -> Option<std::fs::File> {
-    let dir = paths::data_dir().join("logs");
-    open_log_file_in(&dir, mode)
-}
-
-/// Dir-parameterized body of [`open_log_file`] (unit-testable without env).
 fn open_log_file_in(dir: &std::path::Path, mode: &str) -> Option<std::fs::File> {
     std::fs::create_dir_all(dir).ok()?;
     let path = dir.join(format!("loams-agentd-{mode}.log"));

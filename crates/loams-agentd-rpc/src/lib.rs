@@ -27,6 +27,11 @@ pub use server::{serve_connection, serve_ws_listener};
 /// RPC method names — single source of truth for both ends.
 /// Full surface: docs/research/feature-inventory.md §2.
 pub mod methods {
+    /// The handshake, the first call on a connection (design §50 §5.4).
+    /// `loams_agentd_proto::rpc::Hello` → `HelloReply`. Another protocol is
+    /// answered `protocol_mismatch: …` and the connection closes.
+    /// `loams-agentd` serves it; the engine's service does not.
+    pub const HELLO: &str = "Hello";
     pub const WATCH_PREVIEWS: &str = "WatchPreviews";
     pub const LIST_HARNESSES: &str = "ListHarnesses";
     pub const CANCEL_INSTALL: &str = "CancelInstall";
@@ -181,6 +186,10 @@ pub enum RpcError {
     Transport(String),
     #[error("connection closed")]
     Closed,
+    /// Sent as `{err}` like [`Self::Failed`], after which the server closes the
+    /// connection (a `Hello` with another protocol, design §50 §5.4).
+    #[error("{0}")]
+    Fatal(String),
 }
 
 /// A client-originated frame.
@@ -329,6 +338,7 @@ mod tests {
                 }
                 "Never" => Ok(RpcReply::Stream(futures::stream::pending().boxed())),
                 "Boom" => Err(RpcError::Failed("boom".into())),
+                "Fatal" => Err(RpcError::Fatal("fatal: goodbye".into())),
                 other => Err(RpcError::UnknownMethod(other.into())),
             }
         }
@@ -536,6 +546,52 @@ mod tests {
         let client = connect_ws(&format!("ws://127.0.0.1:{port}")).await.unwrap();
         let echoed = client.call("Echo", serde_json::json!("ok")).await.unwrap();
         assert_eq!(echoed, serde_json::json!("ok"));
+    }
+
+    #[tokio::test]
+    async fn fatal_error_is_sent_then_the_websocket_closes() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(serve_ws_listener(listener, Arc::new(TestService)));
+        let client = connect_ws(&format!("ws://127.0.0.1:{port}")).await.unwrap();
+        // A stream left open must not keep the connection alive.
+        let _never = client
+            .subscribe("Never", serde_json::Value::Null)
+            .await
+            .unwrap();
+
+        let err = client
+            .call("Fatal", serde_json::Value::Null)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&err, RpcError::Failed(text) if text == "fatal: goodbye"),
+            "{err:?}"
+        );
+        let next = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            client.call("Echo", serde_json::json!(1)),
+        )
+        .await
+        .expect("the closed connection answers at once");
+        assert!(next.is_err(), "the server kept the connection: {next:?}");
+    }
+
+    #[tokio::test]
+    async fn fatal_error_closes_a_memory_connection() {
+        let client = memory_client(Arc::new(TestService));
+        let err = client
+            .call("Fatal", serde_json::Value::Null)
+            .await
+            .unwrap_err();
+        assert!(matches!(&err, RpcError::Failed(text) if text == "fatal: goodbye"));
+        let next = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            client.call("Echo", serde_json::json!(1)),
+        )
+        .await
+        .expect("the closed connection answers at once");
+        assert!(next.is_err(), "the server kept the connection: {next:?}");
     }
 
     #[tokio::test]

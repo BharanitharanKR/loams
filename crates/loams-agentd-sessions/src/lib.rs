@@ -8,9 +8,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use async_trait::async_trait;
 pub use loams_agentd_proto::{EngineInfo, HarnessId, WorkspaceScope};
-use loams_agentd_rpc::{RpcError, RpcReply, RpcService, methods};
 
 use loams_agentd_store::DocsStore;
 
@@ -47,7 +45,7 @@ pub use diff_sync::{
     read_diff_file_text, snapshot_tree, working_diff_base,
 };
 pub use doc_host::{ChatDocHandle, DocHost, DocHostConfig};
-pub use instance_lock::InstanceLock;
+pub use instance_lock::{InstanceLock, LockError};
 pub use profile::EngineProfile;
 pub use project_actions::ProjectActionsStore;
 pub use registry::{HarnessDescriptor, HarnessRegistry, default_registry};
@@ -347,31 +345,6 @@ impl std::fmt::Debug for EngineRuntime {
     }
 }
 
-/// IPC-only lifecycle control owned by `loams-agentd run`. The regular
-/// [`EngineRpc`] deliberately does not expose this method.
-struct HeadlessRpc {
-    inner: Arc<dyn RpcService>,
-    stop_tx: tokio::sync::mpsc::UnboundedSender<()>,
-}
-
-#[async_trait]
-impl RpcService for HeadlessRpc {
-    async fn handle(&self, method: &str, params: serde_json::Value) -> Result<RpcReply, RpcError> {
-        if method != methods::STOP_ENGINE {
-            return self.inner.handle(method, params).await;
-        }
-
-        let stop_tx = self.stop_tx.clone();
-        // Let the unary success frame reach the client before `Engine::run`
-        // aborts the IPC server and drains the runtime.
-        tokio::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-            let _ = stop_tx.send(());
-        });
-        RpcReply::value(&serde_json::json!({ "ok": true }))
-    }
-}
-
 impl EngineRuntime {
     pub fn core(&self) -> &EngineCore {
         &self.core
@@ -461,72 +434,6 @@ impl Engine {
         loams_agentd_harness::acp::prewarm_managed_adapters();
         Ok(EngineRuntime { core })
     }
-
-    /// Run until ctrl-c, SIGTERM or `StopEngine`: the sessions engine, doc host,
-    /// command executor and IPC server on the local profile.
-    pub async fn run(self) -> anyhow::Result<()> {
-        let config = self.config;
-        tracing::info!(data_dir = %config.data_dir.display(), "engine starting");
-
-        std::fs::create_dir_all(&config.data_dir)?;
-        let profile = EngineProfile::local(&config.data_dir)?;
-        let runtime = Self::assemble_runtime(&config, profile).await?;
-
-        // A daemon exists to serve this port, so a bind failure is fatal.
-        let (stop_tx, mut stop_rx) = tokio::sync::mpsc::unbounded_channel();
-        let service: Arc<dyn RpcService> = Arc::new(HeadlessRpc {
-            inner: runtime.core().rpc_service(),
-            stop_tx,
-        });
-        let server = serve_ipc(config.ipc_port, service).await?;
-        // Only a port this process actually serves goes to agents: the
-        // injected MCP server must dial back into THIS engine.
-        runtime.core().sessions.set_ipc_port(config.ipc_port);
-
-        tokio::select! {
-            result = shutdown_signal() => result?,
-            requested = stop_rx.recv() => {
-                if requested.is_some() {
-                    tracing::info!("headless shutdown requested over IPC");
-                }
-            }
-        }
-        tracing::info!("shutting down");
-        server.abort();
-        runtime.shutdown().await;
-        Ok(())
-    }
-}
-
-/// Ctrl-C or SIGTERM. systemd/launchd stop deliver SIGTERM — without catching it
-/// the daemon dies mid-write and every stop takes the crash-recovery path instead
-/// of the graceful drain.
-async fn shutdown_signal() -> std::io::Result<()> {
-    #[cfg(unix)]
-    {
-        let mut sigterm =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
-        tokio::select! {
-            result = tokio::signal::ctrl_c() => result,
-            _ = sigterm.recv() => Ok(()),
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        tokio::signal::ctrl_c().await
-    }
-}
-
-/// Serve the typed RPC on the localhost IPC port. Localhost only.
-pub async fn serve_ipc(
-    port: u16,
-    service: std::sync::Arc<dyn loams_agentd_rpc::RpcService>,
-) -> std::io::Result<tokio::task::JoinHandle<()>> {
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
-    tracing::info!(port, "IPC server listening");
-    Ok(tokio::spawn(loams_agentd_rpc::serve_ws_listener(
-        listener, service,
-    )))
 }
 
 /// Best-effort human name for this device's registry row.

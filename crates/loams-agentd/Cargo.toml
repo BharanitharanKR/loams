@@ -7,20 +7,33 @@ rust-version.workspace = true
 license = "MIT"
 publish = false
 
+[lib]
+path = "src/lib.rs"
+
 [[bin]]
 name = "loams-agentd"
 path = "src/main.rs"
 
 [dependencies]
 loams-agentd-sessions.workspace = true
+loams-agentd-proto.workspace = true
 loams-agentd-rpc.workspace = true
 loams-agentd-mcp.workspace = true
 loams-agentd-link.workspace = true
 tokio.workspace = true
 clap.workspace = true
 anyhow.workspace = true
+async-trait.workspace = true
 libc.workspace = true
+serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+# Names the offending key of an invalid config.toml (already in the lock).
+serde_path_to_error = "0.1"
+# The RPC token: 32 bytes from the OS RNG, base64url.
+getrandom = "0.3"
+base64.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
@@ -30,11 +43,10 @@ tracing-subscriber.workspace = true
 mimalloc.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Console", "Win32_System_Threading"] }
 
 [dev-dependencies]
 tempfile.workspace = true
-toml.workspace = true
 
 # The workspace policy, except `unsafe_code` is `deny` rather than `forbid`: this crate
 # has audited FFI and process sites, each under `#[allow(unsafe_code)]` with a SAFETY

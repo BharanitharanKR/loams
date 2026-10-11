@@ -4,9 +4,9 @@
 //! individual statements, not whole-file ownership), so the second instance must
 //! fail fast with a clear error instead of corrupting state.
 //!
-//! The lock is taken in `EngineCore::assemble_with_identity` BEFORE any store is opened
-//! and before the IPC port binds, which also closes the race where a headed app's
-//! TCP probe sees no daemon during another instance's startup window.
+//! The lock is taken in `EngineCore::assemble_with_profile` BEFORE any store is opened
+//! and before the IPC port binds. `loams-agentd` takes the same kind of lock on its
+//! own `agentd.lock` ([`InstanceLock::acquire_file`]) before anything else.
 
 use std::fs::{File, OpenOptions};
 #[cfg(unix)]
@@ -20,6 +20,18 @@ use crate::EngineError;
 #[derive(Debug)]
 pub struct InstanceLock {
     _file: File,
+}
+
+/// Why [`InstanceLock::acquire_file`] failed.
+#[derive(Debug, thiserror::Error)]
+pub enum LockError {
+    /// Another process holds the lock. `holder` is the pid it stamped, or
+    /// `"unknown"` when it could not be read.
+    #[error("the lock is held by pid {holder}")]
+    Held { holder: String },
+    /// The lock file could not be opened or locked (not contention).
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 }
 
 #[cfg(unix)]
@@ -41,17 +53,30 @@ impl Drop for InstanceLock {
 }
 
 impl InstanceLock {
-    /// Acquire the exclusive lock, non-blocking. Errors with a descriptive
-    /// message (including the holder's pid when readable) if another engine
-    /// already owns this data dir.
+    /// Acquire the engine's exclusive lock on `{data_dir}/engine.lock`,
+    /// non-blocking. Errors with a descriptive message (including the holder's
+    /// pid when readable) if another engine already owns this data dir.
     pub fn acquire(data_dir: &Path) -> Result<Self, EngineError> {
-        let path = data_dir.join("engine.lock");
+        Self::acquire_file(&data_dir.join("engine.lock")).map_err(|error| match error {
+            LockError::Held { holder } => EngineError::Other(format!(
+                "another loams-desktop engine is already running on {} (pid {holder}); \
+                 stop it or use a different data dir",
+                data_dir.display(),
+            )),
+            LockError::Io(error) => EngineError::Io(error),
+        })
+    }
+
+    /// Acquire an exclusive lock on the file at `path` (created if missing),
+    /// non-blocking apart from a short retry budget, and stamp this process's
+    /// pid for [`Self::holder_file`].
+    pub fn acquire_file(path: &Path) -> Result<Self, LockError> {
         let file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
             .truncate(false)
-            .open(&path)?;
+            .open(path)?;
 
         #[cfg(unix)]
         {
@@ -78,18 +103,14 @@ impl InstanceLock {
                         std::thread::sleep(std::time::Duration::from_millis(25));
                     }
                     Some(libc::EWOULDBLOCK) => {
-                        let holder = std::fs::read_to_string(&path).unwrap_or_default();
-                        let holder = holder.trim();
-                        return Err(EngineError::Other(format!(
-                            "another loams-desktop engine is already running on {} (pid {}); \
-                             stop it or use a different data dir (LOAMS_DESKTOP_DATA_DIR)",
-                            data_dir.display(),
-                            if holder.is_empty() { "unknown" } else { holder },
-                        )));
+                        let holder = std::fs::read_to_string(path).unwrap_or_default();
+                        return Err(LockError::Held {
+                            holder: holder_or_unknown(&holder),
+                        });
                     }
                     // Anything else (ENOLCK, filesystem without flock, …) is an
                     // environment problem, not a second engine — surface it as-is.
-                    _ => return Err(EngineError::Io(errno)),
+                    _ => return Err(LockError::Io(errno)),
                 }
             }
         }
@@ -99,10 +120,11 @@ impl InstanceLock {
             match file.try_lock() {
                 Ok(()) => {}
                 Err(std::fs::TryLockError::WouldBlock) => {
-                    let holder = windows_holder_pid(data_dir);
-                    return Err(already_running_error(data_dir, &holder));
+                    return Err(LockError::Held {
+                        holder: holder_or_unknown(&windows_holder_pid(path)),
+                    });
                 }
-                Err(std::fs::TryLockError::Error(error)) => return Err(EngineError::Io(error)),
+                Err(std::fs::TryLockError::Error(error)) => return Err(LockError::Io(error)),
             }
         }
 
@@ -119,19 +141,24 @@ impl InstanceLock {
             // Windows locks the complete byte range, so another handle cannot read the
             // locked file. Keep diagnostics in an unlocked sidecar; its contents are
             // considered only after the OS lock probe reports contention.
-            let _ = std::fs::write(windows_pid_path(data_dir), std::process::id().to_string());
+            let _ = std::fs::write(windows_pid_path(path), std::process::id().to_string());
         }
         Ok(Self { _file: file })
     }
 
-    /// Best-effort liveness probe: the pid stamped by the engine currently holding
-    /// this data dir's lock, `None` when no engine is running (or the platform
-    /// cannot test a lock without taking it). Used by `loams-agentd status` and the
-    /// login/logout guards; a single non-blocking try — no retry budget — so a
-    /// starting engine's transient fork-window artifacts read as "running", which
-    /// is the safe direction for those callers.
+    /// Best-effort liveness probe of the engine's `{data_dir}/engine.lock`;
+    /// see [`Self::holder_file`].
     pub fn holder(data_dir: &Path) -> Option<String> {
-        let path = data_dir.join("engine.lock");
+        Self::holder_file(&data_dir.join("engine.lock"))
+    }
+
+    /// Best-effort liveness probe: the pid stamped by the process currently holding
+    /// the lock at `path`, `None` when nothing holds it (or the platform cannot
+    /// test a lock without taking it). A single non-blocking try — no retry
+    /// budget — so a starting holder's transient fork-window artifacts read as
+    /// "running", which is the safe direction for the callers (`status`, and
+    /// `loams-agentd`'s check of its discovery file).
+    pub fn holder_file(path: &Path) -> Option<String> {
         #[cfg(unix)]
         {
             use std::os::unix::io::AsRawFd;
@@ -140,7 +167,7 @@ impl InstanceLock {
                 .write(true)
                 .create(true)
                 .truncate(false)
-                .open(&path)
+                .open(path)
                 .ok()?;
             // SAFETY: flock on a descriptor this function owns; it touches no memory.
             #[allow(unsafe_code)]
@@ -155,13 +182,8 @@ impl InstanceLock {
                 };
                 return None;
             }
-            let pid = std::fs::read_to_string(&path).unwrap_or_default();
-            let pid = pid.trim();
-            Some(if pid.is_empty() {
-                "unknown".to_string()
-            } else {
-                pid.to_string()
-            })
+            let pid = std::fs::read_to_string(path).unwrap_or_default();
+            Some(holder_or_unknown(&pid))
         }
         #[cfg(windows)]
         {
@@ -170,14 +192,16 @@ impl InstanceLock {
                 .write(true)
                 .create(true)
                 .truncate(false)
-                .open(&path)
+                .open(path)
                 .ok()?;
             match file.try_lock() {
                 Ok(()) => {
                     let _ = file.unlock();
                     None
                 }
-                Err(std::fs::TryLockError::WouldBlock) => Some(windows_holder_pid(data_dir)),
+                Err(std::fs::TryLockError::WouldBlock) => {
+                    Some(holder_or_unknown(&windows_holder_pid(path)))
+                }
                 Err(std::fs::TryLockError::Error(_)) => None,
             }
         }
@@ -189,27 +213,25 @@ impl InstanceLock {
     }
 }
 
+/// The stamped pid, trimmed, or `"unknown"` when the stamp is empty.
+fn holder_or_unknown(stamp: &str) -> String {
+    match stamp.trim() {
+        "" => "unknown".to_string(),
+        pid => pid.to_string(),
+    }
+}
+
+/// `<lock file>.pid`, the unlocked sidecar the Windows holder writes.
 #[cfg(windows)]
-fn already_running_error(data_dir: &Path, holder: &str) -> EngineError {
-    EngineError::Other(format!(
-        "another loams-desktop engine is already running on {} (pid {}); \
-         stop it or use a different data dir (LOAMS_DESKTOP_DATA_DIR)",
-        data_dir.display(),
-        if holder.is_empty() { "unknown" } else { holder },
-    ))
+fn windows_pid_path(lock: &Path) -> std::path::PathBuf {
+    let mut name = lock.as_os_str().to_owned();
+    name.push(".pid");
+    std::path::PathBuf::from(name)
 }
 
 #[cfg(windows)]
-fn windows_pid_path(data_dir: &Path) -> std::path::PathBuf {
-    data_dir.join("engine.lock.pid")
-}
-
-#[cfg(windows)]
-fn windows_holder_pid(data_dir: &Path) -> String {
-    std::fs::read_to_string(windows_pid_path(data_dir))
-        .unwrap_or_default()
-        .trim()
-        .to_string()
+fn windows_holder_pid(lock: &Path) -> String {
+    std::fs::read_to_string(windows_pid_path(lock)).unwrap_or_default()
 }
 
 #[cfg(all(test, any(unix, windows)))]
@@ -246,6 +268,24 @@ mod tests {
         InstanceLock::acquire(dir.path()).expect_err("still held after probe");
         drop(lock);
         assert_eq!(InstanceLock::holder(dir.path()), None, "released");
+    }
+
+    #[test]
+    fn any_lock_file_reports_contention_as_held_with_the_pid() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("agentd.lock");
+        assert_eq!(InstanceLock::holder_file(&path), None);
+        let lock = InstanceLock::acquire_file(&path).expect("acquire");
+        let pid = std::process::id().to_string();
+        assert_eq!(InstanceLock::holder_file(&path), Some(pid.clone()));
+        match InstanceLock::acquire_file(&path) {
+            Err(LockError::Held { holder }) => assert_eq!(holder, pid),
+            other => panic!("expected Held, got {other:?}"),
+        }
+        // The engine's lock is a different file: it is free.
+        drop(InstanceLock::acquire(dir.path()).expect("engine lock is separate"));
+        drop(lock);
+        assert_eq!(InstanceLock::holder_file(&path), None);
     }
 
     #[test]

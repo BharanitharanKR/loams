@@ -15,19 +15,22 @@ The design is [§50, the Loams Desktop agent daemon](../../docs/design/50-loams-
 The command-line contract (§50, plan DD1 "Shared contracts") is:
 
 ```sh
-cargo run -p loams-agentd -- run --child --config <file>
+mkdir -p .agentd-dev && touch .agentd-dev/config.toml
+cargo run -p loams-agentd -- run --child --config .agentd-dev/config.toml
 ```
 
-Here `<file>` is a `config.toml` like the one in the plan's Shared contracts. `--child` ties the daemon's life to its parent; `--service` is for the per-user service.
+`config.toml` has the keys listed in the plan's Shared contracts; every key is optional, so an empty file works. The daemon keeps its other files in the config's directory, so give it a directory of its own:
+- `agentd.lock`, the single-instance lock;
+- `agentd.token`, the RPC token (0600, new at every start);
+- `agentd.json`, the discovery file (protocol, version, pid, port, start time and mode; removed on a clean exit);
+- `store/`, the sessions engine's data;
+- `logs/`, the daemon's log.
 
-`--child`, `--service` and `--config` arrive in DD1 Task 6. Until then `run` takes no flags and is configured through the environment:
+The RPC listens on `127.0.0.1` on an ephemeral port, which `agentd.json` names. `--child` (Loams Desktop starts and stops the daemon) or `--service` (the per-user service) sets the mode that `Hello` reports; without either flag, `[daemon] mode` in the config decides. `LOAMS_AGENTD_CONFIG` overrides `--config`.
 
-```sh
-LOAMS_DESKTOP_DATA_DIR="$PWD/.agentd-dev" LOAMS_DESKTOP_IPC_PORT=27654 \
-  cargo run -p loams-agentd -- run
-```
+Exit codes: 0 stopped, 3 already running (a second `run` on the same directory prints `already running (pid …)`), 4 invalid config (the message names the key), 70 internal error.
 
-The other subcommands are `cargo run -p loams-agentd -- status`, `-- version` and `-- mcp`. The `mcp` subcommand is the stdio shim; the engine starts it for harness runs, so you rarely need to run it yourself.
+The other subcommands are `-- status --config <file>`, `-- version` and `-- mcp`. The `mcp` subcommand is the stdio shim; the engine starts it for harness runs, so you rarely need to run it yourself.
 
 Build and test one crate at a time with `-p`, for example `cargo test -p loams-agentd`. Use the shared target directory (never set `CARGO_TARGET_DIR`). `cargo clippy -p 'loams-agentd*' --all-targets -- -D warnings` runs the lint gate, and `scripts/ci/agentd-deps.sh` runs the headless guard.
 
