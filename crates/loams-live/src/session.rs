@@ -26,6 +26,13 @@
 //!   Transition at most once per `ts_only_interval`.
 //! - **Chunks.** A Transition over `max_transition_bytes` goes out as several
 //!   messages with one `end`, all but the last with `more = true` ([`chunks`]).
+//! - **Deployments** (LV1 plan Task 7). With a subscription manager that
+//!   follows the app's engine, a query whose function does not resolve now
+//!   (nothing deployed, or not exported) is still subscribed, holding the
+//!   error; the next activation resolves it again. At an activation's tick
+//!   every query's result is replaced, so a Transition never mixes the
+//!   results of two deployments ([`Sessions::trace_deployments`] is the
+//!   test hook that shows it).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::fmt;
@@ -36,12 +43,13 @@ use buffa::Message;
 use loams_kv::Ts;
 use tokio::sync::{Notify, broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
+use ulid::Ulid;
 
 use crate::pb::__buffa::oneof::query_set_change::Change;
 use crate::pb::__buffa::oneof::query_update::Update;
 use crate::pb::__buffa::oneof::watch_request::Start as StartOneof;
 use crate::readset::SubId;
-use crate::subs::{SubKey, SubResult, Subscriptions, Tick};
+use crate::subs::{SubKey, SubResult, Subscriptions, Target, Tick};
 use crate::{Function, LiveError, LiveValue, pb};
 
 /// The request header that names the session a `Mutate` belongs to, so the
@@ -497,6 +505,17 @@ enum Cmd {
     Committed(u64),
 }
 
+/// Test hook (LV1 plan Task 7): the deployments behind a session's results
+/// after one of its Transitions, `deployments` holding every non-nil
+/// [`SubResult::deployment`] of the session's held results.
+#[doc(hidden)]
+#[derive(Debug, Clone)]
+pub struct TransitionDeployments {
+    pub session: String,
+    pub end: Version,
+    pub deployments: BTreeSet<Ulid>,
+}
+
 /// The sessions of one app on this node.
 #[derive(Clone)]
 pub struct Sessions {
@@ -510,6 +529,7 @@ struct Inner {
     node: String,
     shutdown: CancellationToken,
     map: Mutex<HashMap<String, mpsc::UnboundedSender<Cmd>>>,
+    trace: Mutex<Option<mpsc::UnboundedSender<TransitionDeployments>>>,
 }
 
 impl fmt::Debug for Sessions {
@@ -540,8 +560,22 @@ impl Sessions {
                 node,
                 shutdown,
                 map: Mutex::default(),
+                trace: Mutex::default(),
             }),
         }
+    }
+
+    /// Test hook: from now on, every Transition any session queues is
+    /// reported with the deployments behind its results.
+    #[doc(hidden)]
+    pub fn trace_deployments(&self) -> mpsc::UnboundedReceiver<TransitionDeployments> {
+        let (tx, rx) = mpsc::unbounded_channel();
+        *self
+            .inner
+            .trace
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(tx);
+        rx
     }
 
     fn map(&self) -> MutexGuard<'_, HashMap<String, mpsc::UnboundedSender<Cmd>>> {
@@ -651,7 +685,7 @@ fn check_set(config: &SessionConfig, set: &pb::QuerySet) -> Result<(), LiveError
 struct Query {
     /// The subscription and what it was made from; `None` for a query that
     /// failed before it could subscribe (its error is fixed).
-    sub: Option<(SubId, SubKey, Arc<dyn Function>, LiveValue)>,
+    sub: Option<(SubId, SubKey, Target, LiveValue)>,
     held: Held,
 }
 
@@ -884,16 +918,28 @@ impl SessionTask {
             let resolve = resolve.clone();
             async move {
                 let prepared = (|| {
-                    let f = resolve(&spec.function)?;
+                    let target = match resolve(&spec.function) {
+                        Ok(f) => Target::Function(f),
+                        // A manager following the engine holds the error
+                        // and resolves the name again at each activation.
+                        Err(error) if subs.follows() => Target::Missing {
+                            name: spec.function.clone(),
+                            error,
+                        },
+                        Err(e) => return Err(e),
+                    };
                     let args = args_of(spec.args.into_option())?;
-                    Ok::<_, LiveError>((f, args))
+                    Ok::<_, LiveError>((target, args))
                 })();
                 let subscribed = match prepared {
-                    Ok((f, args)) => {
-                        let key = SubKey::for_function(&*f, &args);
-                        subs.subscribe(key.clone(), f.clone(), args.clone())
+                    Ok((target, args)) => {
+                        let key = match &target {
+                            Target::Function(f) => SubKey::for_function(&**f, &args),
+                            Target::Missing { name, .. } => SubKey::new(name, &args),
+                        };
+                        subs.subscribe_target(key.clone(), target.clone(), args.clone())
                             .await
-                            .map(|(id, result)| (id, key, f, args, result))
+                            .map(|(id, result)| (id, key, target, args, result))
                     }
                     Err(e) => Err(e),
                 };
@@ -903,10 +949,10 @@ impl SessionTask {
         for (query_id, subscribed) in futures::future::join_all(jobs).await {
             self.remove(query_id);
             let query = match subscribed {
-                Ok((id, key, f, args, result)) => {
+                Ok((id, key, target, args, result)) => {
                     self.by_sub.entry(id).or_default().insert(query_id);
                     Query {
-                        sub: Some((id, key, f, args)),
+                        sub: Some((id, key, target, args)),
                         held: Held::Result(result),
                     }
                 }
@@ -944,12 +990,18 @@ impl SessionTask {
     async fn resubscribe(&mut self) {
         let mut jobs = Vec::new();
         for (q, query) in &self.queries {
-            if let Some((id, key, f, args)) = &query.sub {
-                jobs.push((*q, *id, key.clone(), f.clone(), args.clone()));
+            if let Some((id, key, target, args)) = &query.sub {
+                jobs.push((*q, *id, key.clone(), target.clone(), args.clone()));
             }
         }
-        for (q, old, key, f, args) in jobs {
-            match self.sessions.inner.subs.subscribe(key, f, args).await {
+        for (q, old, key, target, args) in jobs {
+            match self
+                .sessions
+                .inner
+                .subs
+                .subscribe_target(key, target, args)
+                .await
+            {
                 Ok((id, result)) => {
                     if id != old {
                         if let Some(qs) = self.by_sub.get_mut(&old) {
@@ -1100,6 +1152,34 @@ impl SessionTask {
         }
         self.last_push = Instant::now();
         self.outbox.push(t);
+        self.trace(end);
+    }
+
+    /// The test hook's report of the Transition just queued.
+    fn trace(&self, end: Version) {
+        let trace = self
+            .sessions
+            .inner
+            .trace
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let Some(trace) = trace else {
+            return;
+        };
+        let deployments = self
+            .queries
+            .values()
+            .filter_map(|q| match &q.held {
+                Held::Result(r) if !r.deployment.is_nil() => Some(r.deployment),
+                _ => None,
+            })
+            .collect();
+        let _ = trace.send(TransitionDeployments {
+            session: self.id.clone(),
+            end,
+            deployments,
+        });
     }
 }
 

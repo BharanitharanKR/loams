@@ -99,11 +99,9 @@ impl LiveServer {
                 .or_else(|| Some(config.node.clone())),
             ..config.subs.clone()
         };
-        let subs = Arc::new(Subscriptions::spawn(
-            runner.clone(),
-            subs_config,
-            stop.clone(),
-        ));
+        // The manager follows the engine: at an activation's tick every
+        // subscription reruns on the new deployment (LV1 plan Task 7).
+        let subs = Arc::new(Subscriptions::spawn_for(&engine, subs_config, stop.clone()));
         let resolver = engine.clone();
         let sessions = Sessions::new(
             subs.clone(),

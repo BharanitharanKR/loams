@@ -162,9 +162,35 @@ where
 /// `live_test!(name, |store| async move { … })`, or `live_test!(name)` for
 /// an `async fn name(store: TestStore)` in scope. The cases are
 /// `name::embedded` (always) and `name::tikv` (with `LOAMS_TEST_PD`). Doc
-/// comments and attributes before `name` go on the case module.
+/// comments and attributes before `name` go on the case module; an
+/// `#[ignore = "…"]` first goes on both cases instead.
 #[macro_export]
 macro_rules! live_test {
+    (#[ignore = $reason:literal] $name:ident) => {
+        mod $name {
+            #[allow(unused_imports)]
+            use super::*;
+
+            #[::tokio::test(flavor = "multi_thread", worker_threads = 4)]
+            #[ignore = $reason]
+            async fn embedded() {
+                let store = $crate::testing::TestStore::embedded(
+                    ::std::option_env!("CARGO_TARGET_TMPDIR"),
+                )
+                .await;
+                $crate::testing::run(store, $name).await;
+            }
+
+            #[::tokio::test(flavor = "multi_thread", worker_threads = 4)]
+            #[ignore = $reason]
+            async fn tikv() {
+                let Some(store) = $crate::testing::TestStore::tikv().await else {
+                    return;
+                };
+                $crate::testing::run(store, $name).await;
+            }
+        }
+    };
     ($(#[$meta:meta])* $name:ident) => {
         $crate::live_test!($(#[$meta])* $name, $name);
     };

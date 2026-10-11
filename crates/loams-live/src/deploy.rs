@@ -24,10 +24,29 @@
 //!    Task 11's. Until then a node picks up another node's deploy when it
 //!    [refreshes](AppEngine::refresh) (the server does each janitor round).
 //!
+//! **Rollback** (LV1 plan Task 7) is [`activate`]: an earlier deployment
+//! goes through the same path with its stored bundle and schema (its bundle
+//! is read and hash-checked, loaded in a scratch runtime, its schema
+//! re-applied and the pointer compared-and-swapped). Its record is not
+//! rewritten; only states move.
+//!
+//! **Subscriptions follow the engine.** What a node serves is a
+//! [`Serving`] in a `watch` channel ([`AppEngine::serving`]); the
+//! subscription manager of the app follows it
+//! ([`Subscriptions::spawn_for`](crate::Subscriptions::spawn_for)). At the
+//! first tick at or after an activation's commit timestamp, every
+//! subscription reruns once on the new deployment, and the tick publishes
+//! all of them, so a session sees one Transition with only new results.
+//! While an activation of this node is in flight ([`Serving::switching`]),
+//! the manager holds its ticks, so no tick past the activation's commit
+//! runs the old code.
+//!
 //! The `_system:*` functions resolve before any deployment ([`resolve`]),
 //! so no bundle can shadow them. [`retain`] is the janitor's part: it keeps
 //! the newest [`KEEP_DEPLOYMENTS`] deployments, the active one and its
-//! parent, and deletes the rest with their bundles.
+//! parent, and deletes the rest with their bundles; it also fails a
+//! `pending` record older than [`PENDING_GRACE`], left by a deploy that
+//! crashed before activating.
 //!
 //! The runtime lives in `loams-live-js`, which depends on this crate, so
 //! it is reached through [`BundleLoader`] and [`LoadedBundle`]. A bundle
@@ -37,13 +56,13 @@
 //! served.
 
 use std::fmt;
-use std::sync::{Arc, Mutex, PoisonError, RwLock};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use buffa::Message;
 use bytes::Bytes;
 use futures::future::BoxFuture;
-use loams_kv::{Txn, TxnError};
+use loams_kv::{Ts, Txn, TxnError};
 use sha2::{Digest, Sha256};
 use tokio::sync::watch;
 use ulid::Ulid;
@@ -51,7 +70,7 @@ use ulid::Ulid;
 use crate::docs::Reads;
 use crate::keys::{AppKeys, KeyRange};
 use crate::schema::{self, Schema, SchemaChanges};
-use crate::txn::{catalog_txn, latest_snapshot, lift};
+use crate::txn::{catalog_txn, latest_snapshot, lift, snapshot};
 use crate::{
     FnKind, Function, LiveError, LiveTxn, LiveValue, Runner, Visibility, catalog, pb, system,
 };
@@ -64,6 +83,16 @@ pub const KEEP_DEPLOYMENTS: usize = 50;
 /// deletes it: younger, it may belong to a deploy that has stored its
 /// bundle and not yet written its record.
 pub const ORPHAN_BUNDLE_AGE: Duration = Duration::from_secs(60 * 60);
+
+/// How old a `pending` record must be before the janitor fails it: a
+/// deploy that is still running reaches its activation within seconds (one
+/// transaction after the pending one), so a record this old was left by a
+/// deploy that crashed or lost its node.
+pub const PENDING_GRACE: Duration = Duration::from_secs(10 * 60);
+
+/// The reason the janitor gives a `pending` record it fails.
+const ABANDONED: &str = "the deploy did not finish (its record stayed pending past the grace \
+                         period; it was failed by the janitor)";
 
 /// The records a [`PageRequest`] returns by default.
 pub const DEFAULT_PAGE: usize = 100;
@@ -176,6 +205,9 @@ pub struct Retained {
     /// The bundle objects deleted: those of the deleted records, and old
     /// ones no record names.
     pub bundles_deleted: usize,
+    /// The `pending` records older than the grace period that were failed
+    /// (deploys that never activated).
+    pub abandoned: Vec<Ulid>,
 }
 
 /// Turns a bundle into functions: the function runtime (`loams-live-js`'s
@@ -260,7 +292,8 @@ struct Engine {
     name: String,
     runner: Runner,
     runtime: Runtime,
-    serving: RwLock<Serving>,
+    /// What this node serves; the subscription manager follows it.
+    serving: watch::Sender<Serving>,
     /// Serializes changing what this node serves (its deploys' activations
     /// and its refreshes), so an older deployment never replaces a newer
     /// one here.
@@ -269,9 +302,71 @@ struct Engine {
     ids: Mutex<ulid::Generator>,
 }
 
+/// What an app's engine serves on this node (LV1 plan Task 7), as the
+/// subscription manager follows it through [`AppEngine::serving`].
+#[derive(Clone, Default)]
+pub struct Serving {
+    /// Bumped whenever what is served changes.
+    pub generation: u64,
+    /// From when it is served: the commit timestamp of the activation that
+    /// made it active on this node, or the snapshot at which this node read
+    /// the pointer when it picked it up (open, refresh).
+    pub at: Ts,
+    /// Activations of this node in flight. While one is, the subscription
+    /// manager holds its ticks: a tick that reads past the activation's
+    /// commit must run the new deployment.
+    pub switching: usize,
+    served: Served,
+}
+
+impl Serving {
+    /// The deployment served, if one is loaded.
+    pub fn deployment(&self) -> Option<Ulid> {
+        match &self.served {
+            Served::Loaded(l) => Some(l.id),
+            Served::Nothing | Served::Failed { .. } => None,
+        }
+    }
+
+    /// The function `name` as served here: a `_system:*` function, else a
+    /// function of the deployment. A function the deployment does not
+    /// export is [`LiveError::NotFound`]; while the active deployment could
+    /// not be loaded, its load error.
+    pub fn resolve(&self, name: &str) -> Result<Arc<dyn Function>, LiveError> {
+        if let Some(f) = system::lookup(name) {
+            return Ok(f);
+        }
+        match &self.served {
+            Served::Nothing => Err(not_deployed(name)),
+            Served::Failed { error } => Err(error.clone()),
+            Served::Loaded(loaded) => {
+                let inner = loaded
+                    .bundle
+                    .function(name)
+                    .ok_or_else(|| not_deployed(name))?;
+                Ok(Arc::new(Deployed {
+                    id: loaded.id,
+                    inner,
+                }))
+            }
+        }
+    }
+}
+
+impl fmt::Debug for Serving {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Serving")
+            .field("generation", &self.generation)
+            .field("at", &self.at)
+            .field("switching", &self.switching)
+            .field("deployment", &self.deployment())
+            .finish_non_exhaustive()
+    }
+}
+
 /// What this node serves.
 #[derive(Clone, Default)]
-enum Serving {
+enum Served {
     /// No deployment is active.
     #[default]
     Nothing,
@@ -281,6 +376,24 @@ enum Serving {
     Failed {
         error: LiveError,
     },
+}
+
+/// An activation of this node in flight: [`Serving::switching`] counts it
+/// until it drops (also when the deploy's future is dropped).
+struct Switching<'a>(&'a watch::Sender<Serving>);
+
+impl<'a> Switching<'a> {
+    fn begin(serving: &'a watch::Sender<Serving>) -> Self {
+        serving.send_modify(|s| s.switching += 1);
+        Switching(serving)
+    }
+}
+
+impl Drop for Switching<'_> {
+    fn drop(&mut self) {
+        self.0
+            .send_modify(|s| s.switching = s.switching.saturating_sub(1));
+    }
 }
 
 /// A deployment loaded on this node, and the task that watches its
@@ -322,15 +435,16 @@ impl AppEngine {
                 name: app.to_string(),
                 runner,
                 runtime,
-                serving: RwLock::default(),
+                serving: watch::Sender::new(Serving::default()),
                 switch: tokio::sync::Mutex::default(),
                 ids: Mutex::new(ulid::Generator::new()),
             }),
         };
         // Nothing else holds the engine yet, so `switch` needs no lock.
-        if let Some(id) = engine.read_active().await? {
+        let (pointer, at) = engine.read_active_at().await?;
+        if let Some(id) = pointer {
             // A load failure is logged and kept as the deployment's error.
-            let _ = engine.serve_id(id).await;
+            let _ = engine.serve_id(id, at).await;
         }
         Ok(engine)
     }
@@ -347,16 +461,26 @@ impl AppEngine {
 
     /// The deployment this node serves, if one is loaded.
     pub fn active(&self) -> Option<Ulid> {
-        match self.serving() {
-            Serving::Loaded(l) => Some(l.id),
-            Serving::Nothing | Serving::Failed { .. } => None,
-        }
+        self.inner.serving.borrow().deployment()
+    }
+
+    /// What this node serves, and every change of it (the subscription
+    /// manager follows it, LV1 plan Task 7).
+    pub fn serving(&self) -> watch::Receiver<Serving> {
+        self.inner.serving.subscribe()
     }
 
     /// The active deployment as the catalog names it now.
     pub async fn read_active(&self) -> Result<Option<Ulid>, LiveError> {
+        Ok(self.read_active_at().await?.0)
+    }
+
+    /// The active deployment as the catalog names it now, and the
+    /// snapshot's timestamp.
+    async fn read_active_at(&self) -> Result<(Option<Ulid>, Ts), LiveError> {
         let mut snap = latest_snapshot(self.inner.runner.store()).await?;
-        read_pointer(&mut snap, self.app_keys()).await
+        let at = snap.ts();
+        Ok((read_pointer(&mut snap, self.app_keys()).await?, at))
     }
 
     /// Loads the deployment the pointer names, if this node does not serve
@@ -365,7 +489,7 @@ impl AppEngine {
     /// returned, and the deployment this node served before keeps serving.
     pub async fn refresh(&self) -> Result<Option<Ulid>, LiveError> {
         let _switch = self.inner.switch.lock().await;
-        let pointer = self.read_active().await.inspect_err(|error| {
+        let (pointer, at) = self.read_active_at().await.inspect_err(|error| {
             tracing::warn!(
                 app = %self.inner.name,
                 %error,
@@ -373,20 +497,20 @@ impl AppEngine {
             );
         })?;
         match pointer {
-            Some(id) => self.serve_id(id).await,
+            Some(id) => self.serve_id(id, at).await,
             None => Ok(None),
         }
     }
 
-    /// Serves deployment `id`, loading it unless it is served already. The
-    /// caller holds `switch`.
-    async fn serve_id(&self, id: Ulid) -> Result<Option<Ulid>, LiveError> {
+    /// Serves deployment `id`, active since `at` or earlier, loading it
+    /// unless it is served already. The caller holds `switch`.
+    async fn serve_id(&self, id: Ulid, at: Ts) -> Result<Option<Ulid>, LiveError> {
         if self.active() == Some(id) {
             return Ok(Some(id));
         }
         match self.load(id).await {
             Ok(loaded) => {
-                self.serve(Serving::Loaded(loaded));
+                self.serve(Served::Loaded(loaded), at);
                 tracing::info!(app = %self.inner.name, deployment = %id, "serving deployment");
                 Ok(Some(id))
             }
@@ -397,10 +521,17 @@ impl AppEngine {
                     %error,
                     "the active deployment could not be loaded; this node keeps serving what it served"
                 );
-                if self.active().is_none() {
-                    self.serve(Serving::Failed {
-                        error: error.clone(),
-                    });
+                let unchanged = matches!(
+                    &self.inner.serving.borrow().served,
+                    Served::Failed { error: held } if *held == error
+                );
+                if self.active().is_none() && !unchanged {
+                    self.serve(
+                        Served::Failed {
+                            error: error.clone(),
+                        },
+                        at,
+                    );
                 }
                 Err(error)
             }
@@ -411,20 +542,16 @@ impl AppEngine {
         self.inner.runner.app()
     }
 
-    fn serving(&self) -> Serving {
-        self.inner
-            .serving
-            .read()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
-    }
-
-    fn serve(&self, serving: Serving) {
-        *self
-            .inner
-            .serving
-            .write()
-            .unwrap_or_else(PoisonError::into_inner) = serving;
+    /// Serves `served` from `at` on: one change of the `watch`, so whoever
+    /// resolves the new functions finds the generation moved too.
+    fn serve(&self, served: Served, at: Ts) {
+        self.inner.serving.send_modify(|s| {
+            s.served = served;
+            s.generation += 1;
+            if at.0 > s.at.0 {
+                s.at = at;
+            }
+        });
     }
 
     fn next_id(&self) -> Ulid {
@@ -570,40 +697,127 @@ pub async fn deploy(
     record.created_at_ms = write_pending(&engine.runner, &record).await?;
 
     // 4. and 5. Apply the schema and swap the pointer, in one transaction.
+    commit(app, loaded, id, req.expected_active, by, Path::Deploy).await
+}
+
+/// Activates deployment `id` of `app` as principal `by`: rollback (design
+/// §45 §3.3; LV1 plan Task 7). It runs the deploy path with the stored
+/// bundle and schema: the bundle is read and checked against the record's
+/// SHA-256, loaded in a scratch runtime, the schema re-applied and the
+/// pointer compared-and-swapped against `expected_active`. The record keeps
+/// its contents (creator, message, parent); it becomes `active` and the
+/// deployment it replaces `superseded`. Activating the active deployment
+/// (with itself expected) loads it afresh.
+///
+/// Errors: [`LiveError::NotFound`] for an unknown id;
+/// [`LiveError::FailedPrecondition`] for a deployment still `pending` (its
+/// deploy has not finished) or a schema the catalog refuses;
+/// [`LiveError::Corrupt`] for a missing or altered bundle; the bundle's own
+/// load errors; [`LiveError::DeployConflict`] when the active deployment is
+/// not `expected_active`. None of them changes the pointer or a record.
+pub async fn activate(
+    app: &AppEngine,
+    id: Ulid,
+    expected_active: Option<Ulid>,
+    by: &str,
+) -> Result<DeployOutcome, LiveError> {
+    let engine = &app.inner;
+    let mut snap = latest_snapshot(engine.runner.store()).await?;
+    let record = read_record(&mut snap, app.app_keys(), id)
+        .await?
+        .ok_or_else(|| LiveError::NotFound(format!("deployment {id} does not exist")))?;
+    if record.state == DeploymentState::Pending {
+        return Err(still_pending(id));
+    }
+    record.schema.check(engine.runner.limits())?;
+    let bundle = app.fetch_bundle(id, &record.bundle_sha256).await?;
+    let loaded = engine.runtime.loader.load(&engine.name, &bundle).await?;
+    commit(app, loaded, id, expected_active, by, Path::Activate).await
+}
+
+/// Which path reaches [`commit`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Path {
+    /// A new deployment: its record must still be `pending`.
+    Deploy,
+    /// An existing deployment: its record must not be `pending`.
+    Activate,
+}
+
+/// Steps 4 and 5 for deployment `id`, loaded as `loaded`: apply its schema
+/// and swap the pointer against `expected`, then serve it. While the swap
+/// is in flight the engine reports [`Serving::switching`], so the
+/// subscription manager holds its ticks until it knows which deployment
+/// serves past the swap's commit.
+async fn commit(
+    app: &AppEngine,
+    loaded: Arc<dyn LoadedBundle>,
+    id: Ulid,
+    expected: Option<Ulid>,
+    by: &str,
+    path: Path,
+) -> Result<DeployOutcome, LiveError> {
+    let engine = &app.inner;
     let switch = engine.switch.lock().await;
-    match activate(&engine.runner, &record).await {
-        Ok(changes) => {
-            app.serve(Serving::Loaded(app.loaded(id, loaded)));
+    let switching = Switching::begin(&engine.serving);
+    match swap(&engine.runner, id, expected, path).await {
+        Ok(Swapped {
+            changes,
+            record,
+            at,
+        }) => {
+            app.serve(Served::Loaded(app.loaded(id, loaded)), at);
+            drop(switching);
             drop(switch);
-            tracing::info!(app = %engine.name, deployment = %id, by, "deployed");
-            record.state = DeploymentState::Active;
+            match path {
+                Path::Deploy => {
+                    tracing::info!(app = %engine.name, deployment = %id, by, "deployed")
+                }
+                Path::Activate => {
+                    tracing::info!(app = %engine.name, deployment = %id, by, "activated an earlier deployment")
+                }
+            }
             Ok(DeployOutcome {
                 record,
                 changes,
                 dry_run: false,
             })
         }
-        Err(Activation::Conflict(active)) => {
+        Err(SwapError::Conflict(active)) => {
             drop(switch);
-            let err = conflict(req.expected_active, active);
-            mark_failed(&engine.runner, id, &err.to_string()).await;
             // This node's view was stale: serve what is active.
             let _ = app.refresh().await;
+            drop(switching);
+            let err = conflict(expected, active);
+            if path == Path::Deploy {
+                mark_failed(&engine.runner, id, &err.to_string()).await;
+            }
             Err(err)
         }
-        Err(Activation::Failed(err)) => {
+        Err(SwapError::Refused(err)) => {
+            drop(switching);
             drop(switch);
-            mark_failed(&engine.runner, id, &err.to_string()).await;
+            if path == Path::Deploy {
+                mark_failed(&engine.runner, id, &err.to_string()).await;
+            }
             Err(err)
         }
-        // The outcome may be unknown: the record stays `pending` unless
-        // the activation committed. If it did, the refresh serves it now.
-        Err(Activation::Storage(err)) => {
+        // The outcome may be unknown: a new record stays `pending` unless
+        // the activation committed. If it did, the refresh serves it now,
+        // before the subscription manager may tick again.
+        Err(SwapError::Storage(err)) => {
             drop(switch);
             let _ = app.refresh().await;
+            drop(switching);
             Err(err)
         }
     }
+}
+
+fn still_pending(id: Ulid) -> LiveError {
+    LiveError::FailedPrecondition(format!(
+        "deployment {id} is pending: its deploy has not finished"
+    ))
 }
 
 /// The app's deployments, newest first, a page at a time.
@@ -641,21 +855,7 @@ pub async fn list_deployments(
 /// deployment does not export is [`LiveError::NotFound`]; while the active
 /// deployment could not be loaded, its load error.
 pub fn resolve(app: &AppEngine, name: &str) -> Result<Arc<dyn Function>, LiveError> {
-    if let Some(f) = system::lookup(name) {
-        return Ok(f);
-    }
-    let not_deployed = || not_deployed(name);
-    match app.serving() {
-        Serving::Nothing => Err(not_deployed()),
-        Serving::Failed { error, .. } => Err(error),
-        Serving::Loaded(loaded) => {
-            let inner = loaded.bundle.function(name).ok_or_else(not_deployed)?;
-            Ok(Arc::new(Deployed {
-                id: loaded.id,
-                inner,
-            }))
-        }
-    }
+    app.inner.serving.borrow().resolve(name)
 }
 
 /// The function `name` where no deployment serves: a `_system:*`
@@ -671,26 +871,46 @@ fn not_deployed(name: &str) -> LiveError {
 /// The janitor's part (design §45 §3.3): keeps the newest
 /// [`KEEP_DEPLOYMENTS`] records, the active deployment and its parent;
 /// deletes every other record, then the bundles of the deleted records and
-/// those no record names that are older than [`ORPHAN_BUNDLE_AGE`].
+/// those no record names that are older than [`ORPHAN_BUNDLE_AGE`]. A kept
+/// `pending` record older than [`PENDING_GRACE`] (by the store's clock) is
+/// failed: its deploy crashed before activating (LV1 plan Task 7). A
+/// deploy still running whose record is failed this way cannot activate it
+/// any more.
 pub async fn retain(app: &AppEngine) -> Result<Retained, LiveError> {
+    retain_with(app, PENDING_GRACE).await
+}
+
+/// [`retain`] with another grace period for `pending` records (tests).
+#[doc(hidden)]
+pub async fn retain_with(app: &AppEngine, pending_grace: Duration) -> Result<Retained, LiveError> {
     let engine = &app.inner;
     let keys = app.app_keys().clone();
-    let (deleted, kept) = engine
+    let grace_ms = u64::try_from(pending_grace.as_millis()).unwrap_or(u64::MAX);
+    let trimmed = engine
         .runner
         .store()
         .run(
             catalog_txn("live.deploy.retain", engine.runner.options()),
             move |txn| {
                 let keys = keys.clone();
-                Box::pin(async move { lift(trim_records(txn, &keys).await) })
+                Box::pin(async move { lift(trim_records(txn, &keys, grace_ms).await) })
             },
         )
         .await?
         .value?;
+    let kept = trimmed.kept;
     let mut report = Retained {
-        records_deleted: deleted,
+        records_deleted: trimmed.deleted,
         bundles_deleted: 0,
+        abandoned: trimmed.abandoned,
     };
+    for id in &report.abandoned {
+        tracing::warn!(
+            app = %engine.name,
+            deployment = %id,
+            "a deploy never activated; the janitor failed its pending record"
+        );
+    }
     let objects = engine
         .runtime
         .bundles
@@ -728,9 +948,18 @@ pub async fn retain(app: &AppEngine) -> Result<Retained, LiveError> {
     Ok(report)
 }
 
-/// Deletes the records retention does not keep; returns the deleted ids
-/// and the kept ones.
-async fn trim_records(txn: &mut Txn, keys: &AppKeys) -> Result<(Vec<Ulid>, Vec<Ulid>), LiveError> {
+/// What [`trim_records`] did.
+struct Trimmed {
+    deleted: Vec<Ulid>,
+    kept: Vec<Ulid>,
+    abandoned: Vec<Ulid>,
+}
+
+/// Deletes the records retention does not keep, and fails the kept
+/// `pending` ones at least `grace_ms` old (by the transaction's start
+/// timestamp).
+async fn trim_records(txn: &mut Txn, keys: &AppKeys, grace_ms: u64) -> Result<Trimmed, LiveError> {
+    let now_ms = txn.start_ts().physical_ms();
     let active = read_pointer(txn, keys).await?;
     let records = Reads::scan(txn, &keys.deployments(), usize::MAX, true).await?;
     let records = records
@@ -738,16 +967,33 @@ async fn trim_records(txn: &mut Txn, keys: &AppKeys) -> Result<(Vec<Ulid>, Vec<U
         .map(|(_, v)| DeploymentRecord::decode(v))
         .collect::<Result<Vec<_>, _>>()?;
     let parent = active.and_then(|a| records.iter().find(|r| r.id == a)?.parent);
-    let (mut deleted, mut kept) = (Vec::new(), Vec::new());
-    for (n, record) in records.iter().enumerate() {
+    let mut trimmed = Trimmed {
+        deleted: Vec::new(),
+        kept: Vec::new(),
+        abandoned: Vec::new(),
+    };
+    for (n, record) in records.into_iter().enumerate() {
+        let key = keys.deployment(&record.id.to_bytes());
         if n < KEEP_DEPLOYMENTS || Some(record.id) == active || Some(record.id) == parent {
-            kept.push(record.id);
+            trimmed.kept.push(record.id);
+            if record.state == DeploymentState::Pending
+                && now_ms.saturating_sub(record.created_at_ms) >= grace_ms
+            {
+                trimmed.abandoned.push(record.id);
+                let failed = DeploymentRecord {
+                    state: DeploymentState::Failed {
+                        reason: ABANDONED.to_string(),
+                    },
+                    ..record
+                };
+                txn.put(&key, failed.encode()).await?;
+            }
         } else {
-            txn.delete(&keys.deployment(&record.id.to_bytes())).await?;
-            deleted.push(record.id);
+            txn.delete(&key).await?;
+            trimmed.deleted.push(record.id);
         }
     }
-    Ok((deleted, kept))
+    Ok(trimmed)
 }
 
 /// The deployment id of a bundle object of `app`, if the path is one.
@@ -806,25 +1052,47 @@ fn conflict(expected: Option<Ulid>, active: Option<Ulid>) -> LiveError {
     ))
 }
 
-/// Why an activation did not commit.
-enum Activation {
+/// What a swap committed: the schema changes, the record as it now is,
+/// and the commit timestamp.
+struct Swapped {
+    changes: SchemaChanges,
+    record: DeploymentRecord,
+    at: Ts,
+}
+
+/// Why a swap did not commit.
+enum SwapError {
     /// The pointer names another deployment (or none).
     Conflict(Option<Ulid>),
-    /// The schema could not apply; nothing was written.
-    Failed(LiveError),
+    /// The record or the schema refused it; nothing was written.
+    Refused(LiveError),
     /// A storage error, after the runner's retries.
     Storage(LiveError),
 }
 
-/// Steps 4 and 5: compare-and-swap the pointer, apply the schema, and mark
-/// the deployment active and the one it replaces superseded, in one
-/// transaction. A schema error rolls the transaction back.
-async fn activate(runner: &Runner, record: &DeploymentRecord) -> Result<SchemaChanges, Activation> {
+/// What a swap's transaction body decided.
+enum Swap {
+    Done(SchemaChanges, DeploymentRecord),
+    Conflict(Option<Ulid>),
+    Refused(LiveError),
+}
+
+/// Steps 4 and 5: compare-and-swap the pointer against `expected`, apply
+/// deployment `id`'s schema, and mark it active and the one it replaces
+/// superseded, in one transaction. The record is read inside it: a new
+/// deployment's must still be `pending` (the janitor may have failed it),
+/// an existing one's must not be. A schema error rolls the transaction
+/// back.
+async fn swap(
+    runner: &Runner,
+    id: Ulid,
+    expected: Option<Ulid>,
+    path: Path,
+) -> Result<Swapped, SwapError> {
     let failure: Arc<Mutex<Option<LiveError>>> = Arc::default();
     let keys = runner.app().clone();
     let limits = runner.limits().clone();
     let body_failure = failure.clone();
-    let record = record.clone();
     let run = runner
         .store()
         .run(
@@ -832,29 +1100,46 @@ async fn activate(runner: &Runner, record: &DeploymentRecord) -> Result<SchemaCh
             move |txn| {
                 let keys = keys.clone();
                 let limits = limits.clone();
-                let record = record.clone();
                 let failure = body_failure.clone();
                 Box::pin(async move {
                     let attempt = async {
                         let active = read_pointer(txn, &keys).await?;
-                        if active != record.parent {
-                            return Ok::<_, LiveError>(Err(active));
+                        if active != expected {
+                            return Ok::<_, LiveError>(Swap::Conflict(active));
+                        }
+                        let Some(mut record) = read_record(txn, &keys, id).await? else {
+                            return Ok(Swap::Refused(LiveError::NotFound(format!(
+                                "deployment {id} does not exist"
+                            ))));
+                        };
+                        let pending = record.state == DeploymentState::Pending;
+                        match path {
+                            Path::Deploy if !pending => {
+                                return Ok(Swap::Refused(LiveError::FailedPrecondition(format!(
+                                    "deployment {id} is no longer pending ({}): its deploy took \
+                                     too long and the janitor failed it",
+                                    record.state.name()
+                                ))));
+                            }
+                            Path::Activate if pending => {
+                                return Ok(Swap::Refused(still_pending(id)));
+                            }
+                            _ => {}
                         }
                         let changes = schema::apply(txn, &keys, &record.schema, &limits).await?;
-                        if let Some(previous) = active {
+                        if let Some(previous) = active.filter(|p| *p != id) {
                             set_state(txn, &keys, previous, |s| {
                                 matches!(s, DeploymentState::Active | DeploymentState::Degraded)
                                     .then_some(DeploymentState::Superseded)
                             })
                             .await?;
                         }
-                        let mut activated = record.clone();
-                        activated.state = DeploymentState::Active;
-                        txn.put(&keys.deployment(&record.id.to_bytes()), activated.encode())
+                        record.state = DeploymentState::Active;
+                        txn.put(&keys.deployment(&id.to_bytes()), record.encode())
                             .await?;
-                        txn.put(&keys.deployment_pointer(), record.id.to_bytes().to_vec())
+                        txn.put(&keys.deployment_pointer(), id.to_bytes().to_vec())
                             .await?;
-                        Ok(Ok(changes))
+                        Ok(Swap::Done(changes, record))
                     };
                     match attempt.await {
                         Ok(done) => Ok(done),
@@ -871,18 +1156,30 @@ async fn activate(runner: &Runner, record: &DeploymentRecord) -> Result<SchemaCh
         )
         .await;
     match run {
-        Ok(committed) => committed.value.map_err(Activation::Conflict),
+        Ok(committed) => match committed.value {
+            Swap::Done(changes, record) => Ok(Swapped {
+                changes,
+                record,
+                at: committed.commit_ts,
+            }),
+            Swap::Conflict(active) => Err(SwapError::Conflict(active)),
+            Swap::Refused(err) => Err(SwapError::Refused(err)),
+        },
         Err(e) => {
             let own = failure
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .take();
-            Err(own.map_or_else(
-                || Activation::Storage(LiveError::Txn(e)),
-                Activation::Failed,
-            ))
+            Err(own.map_or_else(|| SwapError::Storage(LiveError::Txn(e)), SwapError::Refused))
         }
     }
+}
+
+/// The deployment the pointer names at `at` (the reactive checker's fresh
+/// evaluations).
+pub(crate) async fn active_at(runner: &Runner, at: Ts) -> Result<Option<Ulid>, LiveError> {
+    let mut snap = snapshot(runner.store(), at).await?;
+    read_pointer(&mut snap, runner.app()).await
 }
 
 /// Step 3: writes `record` (pending); returns its creation time, the
@@ -1015,6 +1312,19 @@ fn ulid_of(bytes: &[u8], what: &str) -> Result<Ulid, LiveError> {
 }
 
 impl DeploymentState {
+    /// The state's name, as the API spells it.
+    pub fn name(&self) -> &'static str {
+        match self {
+            DeploymentState::Pending => "pending",
+            DeploymentState::Validating => "validating",
+            DeploymentState::Backfilling => "backfilling",
+            DeploymentState::Active => "active",
+            DeploymentState::Superseded => "superseded",
+            DeploymentState::Failed { .. } => "failed",
+            DeploymentState::Degraded => "degraded",
+        }
+    }
+
     fn to_proto(&self) -> pb::DeploymentState {
         match self {
             DeploymentState::Pending => pb::DeploymentState::DEPLOYMENT_STATE_PENDING,

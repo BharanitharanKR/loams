@@ -1342,7 +1342,7 @@ pub(crate) fn lift<T>(r: Result<T, LiveError>) -> Result<Result<T, LiveError>, T
     }
 }
 
-async fn snapshot(store: &Store, at: Ts) -> Result<Snap, LiveError> {
+pub(crate) async fn snapshot(store: &Store, at: Ts) -> Result<Snap, LiveError> {
     store
         .snapshot(at)
         .await

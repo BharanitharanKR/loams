@@ -2,23 +2,30 @@
 //! deploy validates its bundle in a scratch runtime, stores it in the
 //! bundle store and checks its hash, writes a `pending` record, applies the
 //! schema (only additive table creation here) and compares-and-swaps the
-//! app's deployment pointer. Every case runs on the embedded store and, with
-//! `LOAMS_TEST_PD`, on TiKV; bundles run in process (isolated workers are
-//! tested in `loams-live-js`'s `worker` suite).
+//! app's deployment pointer. LV1 plan Task 7: rollback is activating an
+//! earlier deployment through the same path, and at the activation's tick
+//! every subscription of the app reruns once on the new deployment. Every
+//! case runs on the embedded store and, with `LOAMS_TEST_PD`, on TiKV;
+//! bundles run in process (isolated workers are tested in `loams-live-js`'s
+//! `worker` suite).
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use buffa::MessageField;
+use buffa::{Message, MessageField};
 use bytes::Bytes;
 use connectrpc::ErrorCode;
 use connectrpc::client::{ClientConfig, HttpClient};
 use futures::future::BoxFuture;
+use loams_kv::TxnOptions;
 use loams_live::deploy::{
     self, AppEngine, BundleLoader, DeployRequest, DeploymentRecord, DeploymentState,
-    KEEP_DEPLOYMENTS, LoadedBundle, PageRequest, Runtime,
+    KEEP_DEPLOYMENTS, LoadedBundle, PENDING_GRACE, PageRequest, Runtime,
 };
 use loams_live::schema::{Schema, TableSchema};
+use loams_live::session::{ClientState, QueryResult, Session, SessionConfig, Sessions, Start};
+use loams_live::subs::{SubsConfig, Subscriptions};
 use loams_live::system::{INSERT, TABLES};
 use loams_live::testing::TestStore;
 use loams_live::{
@@ -972,3 +979,597 @@ async fn live_service_deploys_and_serves_functions(store: TestStore) {
     bare.stop().await;
 }
 live_test!(live_service_deploys_and_serves_functions);
+
+// ---- LV1 plan Task 7: rollback and activation semantics ----
+
+/// Rollback activates an earlier deployment through the deploy path: its
+/// stored bundle is loaded (hash checked) and its schema re-applied, and
+/// the pointer is compared-and-swapped against `expected_active`. The
+/// records keep their contents; only their states move.
+async fn rollback_restores_previous_functions(store: TestStore) {
+    let bundles = loams_store::Store::in_memory();
+    let app = node(&store, &bundles, js()).await;
+    let v1 = deploy::deploy(&app, request(bundle(1), None), "alice")
+        .await
+        .expect("v1");
+    let v2 = deploy::deploy(&app, request(bundle(2), Some(v1.record.id)), "bob")
+        .await
+        .expect("v2");
+    assert_eq!(version(&app).await, LiveValue::I64(2));
+
+    let back = deploy::activate(&app, v1.record.id, Some(v2.record.id), "carol")
+        .await
+        .expect("the rollback");
+    assert!(!back.dry_run);
+    assert_eq!(back.record.id, v1.record.id);
+    assert_eq!(back.record.state, DeploymentState::Active);
+    assert_eq!(back.record.created_by, "alice", "the record is v1's own");
+    assert_eq!(back.record.parent, None);
+    assert!(back.changes.create.is_empty(), "notes exists already");
+    assert_eq!(app.active(), Some(v1.record.id));
+    assert_eq!(
+        app.read_active().await.expect("the pointer"),
+        Some(v1.record.id)
+    );
+    assert_eq!(version(&app).await, LiveValue::I64(1));
+    let all = records(&app).await;
+    assert_eq!(all.len(), 2, "a rollback writes no new record");
+    assert_eq!(record(&all, v1.record.id).state, DeploymentState::Active);
+    assert_eq!(
+        record(&all, v2.record.id).state,
+        DeploymentState::Superseded
+    );
+    // Another node opening the app serves the rolled-back deployment.
+    let other = node(&store, &bundles, js()).await;
+    assert_eq!(version(&other).await, LiveValue::I64(1));
+
+    // A stale `expected_active` conflicts and changes nothing.
+    conflict(
+        deploy::activate(&app, v2.record.id, Some(v2.record.id), "carol").await,
+        "an activation against a stale pointer",
+    );
+    assert_eq!(app.active(), Some(v1.record.id));
+    assert_eq!(
+        record(&records(&app).await, v2.record.id).state,
+        DeploymentState::Superseded
+    );
+    // An unknown deployment is not found.
+    let err = deploy::activate(&app, Ulid::generate(), Some(v1.record.id), "carol")
+        .await
+        .expect_err("no such deployment");
+    assert!(matches!(err, LiveError::NotFound(_)), "{err}");
+
+    // Roll forward again, then activate the active deployment again (a
+    // no-op for the pointer).
+    deploy::activate(&app, v2.record.id, Some(v1.record.id), "carol")
+        .await
+        .expect("roll forward");
+    assert_eq!(version(&app).await, LiveValue::I64(2));
+    let again = deploy::activate(&app, v2.record.id, Some(v2.record.id), "carol")
+        .await
+        .expect("the active deployment again");
+    assert_eq!(again.record.state, DeploymentState::Active);
+    assert_eq!(version(&app).await, LiveValue::I64(2));
+    let all = records(&app).await;
+    assert_eq!(
+        record(&all, v1.record.id).state,
+        DeploymentState::Superseded
+    );
+    assert_eq!(record(&all, v2.record.id).state, DeploymentState::Active);
+
+    // A deployment whose stored bundle no longer matches its record cannot
+    // be activated: the pointer stays.
+    bundles
+        .put(
+            &deploy::bundle_path(APP, v1.record.id),
+            Bytes::from(bundle(666)),
+        )
+        .await
+        .expect("the object is overwritten");
+    let err = deploy::activate(&app, v1.record.id, Some(v2.record.id), "carol")
+        .await
+        .expect_err("a corrupt bundle");
+    assert!(matches!(err, LiveError::Corrupt(_)), "{err}");
+    assert_eq!(app.active(), Some(v2.record.id));
+    assert_eq!(
+        app.read_active().await.expect("the pointer"),
+        Some(v2.record.id)
+    );
+    assert_eq!(version(&app).await, LiveValue::I64(2));
+}
+live_test!(rollback_restores_previous_functions);
+
+/// Rollback re-applies the earlier deployment's schema: an index the later
+/// deployment added is dropped.
+async fn rollback_reapplies_previous_schema(store: TestStore) {
+    let bundles = loams_store::Store::in_memory();
+    let app = node(&store, &bundles, js()).await;
+    let v1 = deploy::deploy(&app, request(bundle(1), None), "a")
+        .await
+        .expect("v1");
+    let mut wider = notes_schema();
+    wider.tables[0].indexes.push(IndexSpec {
+        name: "by_len".into(),
+        fields: vec!["len".into()],
+    });
+    let v2 = deploy::deploy(
+        &app,
+        DeployRequest {
+            schema: wider,
+            ..request(bundle(2), Some(v1.record.id))
+        },
+        "a",
+    )
+    .await
+    .expect("v2 adds an index to notes");
+    let tables = query(&app, TABLES).await.expect("_system:tables");
+    assert!(format!("{tables:?}").contains("by_len"), "{tables:?}");
+    deploy::activate(&app, v1.record.id, Some(v2.record.id), "a")
+        .await
+        .expect("the rollback");
+    let tables = query(&app, TABLES).await.expect("_system:tables");
+    assert!(!format!("{tables:?}").contains("by_len"), "{tables:?}");
+    assert!(format!("{tables:?}").contains("by_body"), "{tables:?}");
+}
+live_test!(
+    #[ignore = "an index change on an existing table needs LV1 plan Task 9 (online index changes), which removes this ignore"]
+    rollback_reapplies_previous_schema
+);
+
+/// Version `n` of the app for the subscription tests: every query's result
+/// names `n`.
+fn watched(n: u32) -> Vec<u8> {
+    format!(
+        r#"
+import {{ query, mutation }} from "loams:server";
+export const notes = {{
+  version: query(async () => {n}n),
+  add: mutation(async (ctx, {{ body }}) => await ctx.db.insert("notes", {{ body }})),
+  count: query(async (ctx) => ({{ v: {n}n, n: (await ctx.db.query("notes").collect()).length }})),
+  byBody: query(async (ctx, {{ body }}) => ({{
+    v: {n}n,
+    n: (await ctx.db.query("notes").withIndex("by_body", (q) => q.eq("body", body)).collect()).length,
+  }})),
+}};
+"#
+    )
+    .into_bytes()
+}
+
+/// The deployment version a result names: `notes:version`'s value, or the
+/// `v` of the other queries' objects.
+fn named_version(result: &QueryResult) -> Option<i64> {
+    match result {
+        QueryResult::Value(LiveValue::I64(n)) => Some(*n),
+        QueryResult::Value(LiveValue::Object(fields)) => match fields.get("v") {
+            Some(LiveValue::I64(n)) => Some(*n),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// An app's subscription manager, following the app's engine, and its
+/// sessions.
+struct Watching {
+    subs: Arc<Subscriptions>,
+    sessions: Sessions,
+    stop: CancellationToken,
+}
+
+impl Drop for Watching {
+    fn drop(&mut self) {
+        self.stop.cancel();
+    }
+}
+
+fn watching(app: &AppEngine) -> Watching {
+    let stop = CancellationToken::new();
+    let subs = Arc::new(Subscriptions::spawn_for(
+        app,
+        SubsConfig {
+            // Off: every rerun the tests count is a tick's own.
+            safety_rerun: Duration::from_secs(24 * 3600),
+            ..SubsConfig::default()
+        },
+        stop.clone(),
+    ));
+    let resolver = app.clone();
+    let sessions = Sessions::new(
+        subs.clone(),
+        Arc::new(move |name: &str| deploy::resolve(&resolver, name)),
+        SessionConfig::default(),
+        "node".into(),
+        stop.clone(),
+    );
+    Watching {
+        subs,
+        sessions,
+        stop,
+    }
+}
+
+fn spec(query_id: u32, function: &str, args: LiveValue) -> pb::QuerySpec {
+    pb::QuerySpec {
+        query_id,
+        function: function.into(),
+        args: MessageField::some(args.to_proto()),
+        ..Default::default()
+    }
+}
+
+/// What a test client saw: its state after every complete Transition, and
+/// the Transitions whose state mixed the results of two deployments.
+#[derive(Default)]
+struct Seen {
+    states: Vec<BTreeMap<u32, QueryResult>>,
+    mixed: Vec<String>,
+    error: Option<String>,
+}
+
+/// Applies `session`'s Transitions to a client until the session ends.
+fn client(session: Session) -> Arc<Mutex<Seen>> {
+    let seen = Arc::new(Mutex::new(Seen::default()));
+    let out = seen.clone();
+    tokio::spawn(async move {
+        let mut client = ClientState::new();
+        while let Some(item) = session.outbox.pop().await {
+            let applied = item
+                .map_err(|e| e.to_string())
+                .and_then(|t| client.apply(&t).map_err(|e| e.to_string()));
+            let mut seen = out.lock().expect("unpoisoned");
+            match applied {
+                Ok(true) => {
+                    let versions: BTreeSet<i64> =
+                        client.results.values().filter_map(named_version).collect();
+                    if versions.len() > 1 {
+                        seen.mixed
+                            .push(format!("{:?}: {:?}", client.version, client.results));
+                    }
+                    seen.states.push(client.results.clone());
+                }
+                Ok(false) => {}
+                Err(e) => {
+                    seen.error = Some(e);
+                    return;
+                }
+            }
+        }
+    });
+    seen
+}
+
+/// The latest state `seen` holds.
+fn latest(seen: &Mutex<Seen>) -> BTreeMap<u32, QueryResult> {
+    let seen = seen.lock().expect("unpoisoned");
+    assert_eq!(seen.error, None, "the client failed");
+    seen.states.last().cloned().unwrap_or_default()
+}
+
+/// Waits up to 30 s for `done`.
+async fn until(what: &str, done: impl Fn() -> bool) {
+    let give_up = Instant::now() + Duration::from_secs(30);
+    while !done() {
+        assert!(Instant::now() < give_up, "{what}: not within 30 s");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+/// Whether every deployed query of `state` (all but `_system:*` ones)
+/// names version `n`.
+fn all_at(state: &BTreeMap<u32, QueryResult>, queries: usize, n: i64) -> bool {
+    state.len() == queries
+        && state
+            .values()
+            .filter(|r| !matches!(r, QueryResult::Value(LiveValue::Array(_))))
+            .all(|r| named_version(r) == Some(n))
+}
+
+/// At the activation's tick every subscription of the app reruns once on
+/// the new deployment: the rerun counter rises by exactly the number of
+/// distinct `SubKey`s, however many sessions share them; a rollback is an
+/// activation too.
+async fn activation_reruns_every_subscription_once(store: TestStore) {
+    let bundles = loams_store::Store::in_memory();
+    let app = node(&store, &bundles, js()).await;
+    let v1 = deploy::deploy(&app, request(watched(1), None), "a")
+        .await
+        .expect("v1");
+    let w = watching(&app);
+    let body = |b: &str| args(&[("body", LiveValue::Str(b.into()))]);
+    // Five distinct keys over three sessions: notes:version, notes:count,
+    // notes:byBody {a}, notes:byBody {b} and _system:tables.
+    let sets = [
+        vec![
+            spec(1, "notes:version", args(&[])),
+            spec(2, "notes:count", args(&[])),
+            spec(3, "notes:byBody", body("a")),
+        ],
+        vec![
+            spec(1, "notes:version", args(&[])),
+            spec(2, "notes:byBody", body("b")),
+            spec(3, TABLES, args(&[])),
+        ],
+        vec![
+            spec(1, "notes:count", args(&[])),
+            spec(2, "notes:byBody", body("a")),
+        ],
+    ];
+    let distinct = 5;
+    let clients: Vec<(usize, Arc<Mutex<Seen>>)> = sets
+        .iter()
+        .map(|queries| {
+            let session = w
+                .sessions
+                .open(Start::Initial(pb::QuerySet {
+                    version: 1,
+                    queries: queries.clone(),
+                    ..Default::default()
+                }))
+                .expect("a session");
+            (queries.len(), client(session))
+        })
+        .collect();
+    let at = |n: i64| {
+        let clients = &clients;
+        move || clients.iter().all(|(q, c)| all_at(&latest(c), *q, n))
+    };
+    until("every client at v1", at(1)).await;
+    assert_eq!(w.subs.stats().subscriptions, distinct);
+    // Quiet: no tick reruns anything without writes or errors.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let before = w.subs.stats().reruns;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(
+        w.subs.stats().reruns,
+        before,
+        "reruns without an activation"
+    );
+
+    let v2 = deploy::deploy(&app, request(watched(2), Some(v1.record.id)), "a")
+        .await
+        .expect("v2");
+    until("every client at v2", at(2)).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(
+        w.subs.stats().reruns - before,
+        distinct,
+        "one rerun per distinct SubKey at the activation"
+    );
+    assert_eq!(w.subs.stats().subscriptions, distinct);
+
+    let before = w.subs.stats().reruns;
+    deploy::activate(&app, v1.record.id, Some(v2.record.id), "a")
+        .await
+        .expect("the rollback");
+    until("every client back at v1", at(1)).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(w.subs.stats().reruns - before, distinct);
+    for (_, c) in &clients {
+        assert!(c.lock().expect("unpoisoned").mixed.is_empty());
+    }
+}
+live_test!(activation_reruns_every_subscription_once);
+
+/// Sessions opened before any deploy, watching deployed queries while a
+/// writer runs and deployments are activated and rolled back: every
+/// Transition's results carry one deployment (the sessions' test hook, and
+/// the versions the results name), queries that did not resolve before the
+/// first deploy resolve after it, and every client ends on the last
+/// deployment.
+async fn no_session_sees_mixed_deployments(store: TestStore) {
+    let bundles = loams_store::Store::in_memory();
+    let app = node(&store, &bundles, js()).await;
+    let w = watching(&app);
+    let mut trace = w.sessions.trace_deployments();
+    let body = |b: &str| args(&[("body", LiveValue::Str(b.into()))]);
+    let queries = vec![
+        spec(1, "notes:version", args(&[])),
+        spec(2, "notes:count", args(&[])),
+        spec(3, "notes:byBody", body("a")),
+        spec(4, "notes:byBody", body("b")),
+    ];
+    let clients: Vec<Arc<Mutex<Seen>>> = (0..3)
+        .map(|_| {
+            let session = w
+                .sessions
+                .open(Start::Initial(pb::QuerySet {
+                    version: 1,
+                    queries: queries.clone(),
+                    ..Default::default()
+                }))
+                .expect("a session");
+            client(session)
+        })
+        .collect();
+    // Nothing is deployed yet: every query holds NOT_FOUND.
+    until("every client holds its errors", || {
+        clients.iter().all(|c| {
+            let state = latest(c);
+            state.len() == 4
+                && state.values().all(|r| {
+                    matches!(r, QueryResult::Error(e)
+                        if e.code == pb::ErrorCode::ERROR_CODE_NOT_FOUND)
+                })
+        })
+    })
+    .await;
+
+    let v1 = deploy::deploy(&app, request(watched(1), None), "a")
+        .await
+        .expect("v1");
+    // A writer runs through the activations.
+    let writing = CancellationToken::new();
+    let writer = {
+        let (app, writing) = (app.clone(), writing.clone());
+        tokio::spawn(async move {
+            let insert = deploy::resolve(&app, INSERT).expect("_system:insert");
+            let mut n = 0u32;
+            while !writing.is_cancelled() {
+                let b = if n.is_multiple_of(2) { "a" } else { "b" };
+                app.runner()
+                    .mutate(
+                        insert.clone(),
+                        args(&[
+                            ("table", LiveValue::Str("notes".into())),
+                            ("fields", args(&[("body", LiveValue::Str(b.into()))])),
+                        ]),
+                        None,
+                    )
+                    .await
+                    .expect("an insert");
+                n += 1;
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+            n
+        })
+    };
+    let pause = || tokio::time::sleep(Duration::from_millis(150));
+    pause().await;
+    let v2 = deploy::deploy(&app, request(watched(2), Some(v1.record.id)), "a")
+        .await
+        .expect("v2");
+    pause().await;
+    deploy::activate(&app, v1.record.id, Some(v2.record.id), "a")
+        .await
+        .expect("the rollback to v1");
+    pause().await;
+    let v3 = deploy::deploy(&app, request(watched(3), Some(v1.record.id)), "a")
+        .await
+        .expect("v3");
+    pause().await;
+    writing.cancel();
+    let inserted = writer.await.expect("the writer");
+    assert!(inserted > 0);
+
+    until("every client at v3 with every insert", || {
+        clients.iter().all(|c| {
+            let state = latest(c);
+            all_at(&state, 4, 3)
+                && matches!(&state[&2], QueryResult::Value(LiveValue::Object(f))
+                    if f.get("n") == Some(&LiveValue::F64(f64::from(inserted))))
+        })
+    })
+    .await;
+    for c in &clients {
+        let seen = c.lock().expect("unpoisoned");
+        assert!(seen.mixed.is_empty(), "mixed: {:?}", seen.mixed);
+        // Each client saw the deployments in order, never going back to one
+        // it left except through the rollback.
+        let mut order: Vec<i64> = Vec::new();
+        for state in &seen.states {
+            if let Some(n) = state.values().find_map(named_version)
+                && order.last() != Some(&n)
+            {
+                order.push(n);
+            }
+        }
+        assert_eq!(order, [1, 2, 1, 3], "the deployments a client saw");
+    }
+    // The test hook: the deployments behind each Transition's results.
+    let mut traced = 0;
+    let mut last = BTreeMap::new();
+    while let Ok(t) = trace.try_recv() {
+        traced += 1;
+        assert!(t.deployments.len() <= 1, "{t:?}");
+        last.insert(t.session.clone(), t.deployments.clone());
+    }
+    assert!(traced > 0, "the hook traced nothing");
+    assert_eq!(last.len(), 3);
+    for deployments in last.values() {
+        assert_eq!(*deployments, BTreeSet::from([v3.record.id]));
+    }
+}
+live_test!(no_session_sees_mixed_deployments);
+
+/// A deploy that crashed after writing its `pending` record leaves it
+/// behind; the janitor fails it once it is older than the grace period,
+/// and only then (idempotently). A pending deployment cannot be activated;
+/// once failed, it can.
+async fn janitor_fails_abandoned_pending_deploys(store: TestStore) {
+    let bundles = loams_store::Store::in_memory();
+    let app = node(&store, &bundles, js()).await;
+    let v1 = deploy::deploy(&app, request(bundle(1), None), "a")
+        .await
+        .expect("v1");
+    // The crashed deploy: steps 2 and 3 done (the bundle stored, the record
+    // pending), step 5 never.
+    let id = Ulid::generate();
+    bundles
+        .put(&deploy::bundle_path(APP, id), Bytes::from(bundle(2)))
+        .await
+        .expect("the bundle");
+    let keys = app.runner().app().clone();
+    let pending = DeploymentRecord {
+        id,
+        bundle_sha256: <sha2::Sha256 as sha2::Digest>::digest(bundle(2)).into(),
+        schema: notes_schema(),
+        created_at_ms: 0,
+        created_by: "crashed".into(),
+        message: String::new(),
+        parent: Some(v1.record.id),
+        state: DeploymentState::Pending,
+    };
+    app.runner()
+        .store()
+        .run(TxnOptions::new("test.pending"), move |txn| {
+            let (keys, mut pending) = (keys.clone(), pending.clone());
+            Box::pin(async move {
+                pending.created_at_ms = txn.start_ts().physical_ms();
+                txn.put(
+                    &keys.deployment(&id.to_bytes()),
+                    pending.to_proto().encode_to_vec(),
+                )
+                .await
+            })
+        })
+        .await
+        .expect("the pending record");
+
+    let err = deploy::activate(&app, id, Some(v1.record.id), "a")
+        .await
+        .expect_err("a pending deployment");
+    assert!(matches!(err, LiveError::FailedPrecondition(_)), "{err}");
+    assert!(err.to_string().contains("pending"), "{err}");
+
+    // Younger than the grace period: left alone.
+    assert!(PENDING_GRACE >= Duration::from_secs(60));
+    let report = deploy::retain(&app).await.expect("the janitor");
+    assert!(report.abandoned.is_empty(), "{report:?}");
+    assert_eq!(
+        record(&records(&app).await, id).state,
+        DeploymentState::Pending
+    );
+    // Past it: failed, with the reason.
+    let report = deploy::retain_with(&app, Duration::ZERO)
+        .await
+        .expect("the janitor");
+    assert_eq!(report.abandoned, [id]);
+    let failed = record(&records(&app).await, id).state.clone();
+    assert!(
+        matches!(&failed, DeploymentState::Failed { reason } if reason.contains("did not finish")),
+        "{failed:?}"
+    );
+    // Idempotent; and no other record moved.
+    let again = deploy::retain_with(&app, Duration::ZERO)
+        .await
+        .expect("again");
+    assert!(again.abandoned.is_empty(), "{again:?}");
+    assert_eq!(record(&records(&app).await, id).state, failed);
+    assert_eq!(
+        record(&records(&app).await, v1.record.id).state,
+        DeploymentState::Active
+    );
+    assert_eq!(version(&app).await, LiveValue::I64(1));
+
+    // A failed deployment can still be activated, through the same path.
+    deploy::activate(&app, id, Some(v1.record.id), "a")
+        .await
+        .expect("the failed deployment activates");
+    assert_eq!(version(&app).await, LiveValue::I64(2));
+    assert_eq!(
+        record(&records(&app).await, id).state,
+        DeploymentState::Active
+    );
+}
+live_test!(janitor_fails_abandoned_pending_deploys);

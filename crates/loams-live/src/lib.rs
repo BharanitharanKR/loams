@@ -65,7 +65,7 @@ pub use loams_kv::{Backend, EmbeddedConfig, StoreConfig};
 pub use readset::{ReadSetIndex, SubId};
 pub use service::{LiveHandle, LiveServer};
 pub use session::{ClientState, SessionConfig, Sessions, Version};
-pub use subs::{SubKey, SubResult, SubsConfig, SubsStats, Subscriptions, Tick};
+pub use subs::{SubKey, SubResult, SubsConfig, SubsStats, Subscriptions, Target, Tick};
 pub use txn::{
     CallCtx, CallOutput, FnKind, Function, Identity, LiveTxn, LogLevel, LogLine, Mutated, Page,
     Queried, ReadSet, Runner, RunnerOptions, Usage, Visibility,

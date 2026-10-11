@@ -2,7 +2,8 @@
 //! 3), on the embedded store and on TiKV (`live_test!`). A seeded workload
 //! of sessions and mutations is checked Transition by Transition against
 //! fresh snapshot evaluations; the checker must also catch a missed
-//! invalidation, and resumed sessions must converge.
+//! invalidation, and resumed sessions must converge. LV1 plan Task 7 adds
+//! deploys and rollbacks in the middle of the workload.
 
 use loams_kv::TxnOptions;
 use loams_live::testing::TestStore;
@@ -187,13 +188,13 @@ async fn reactive_checker_reports_unwired_disturbances(store: TestStore) {
         sessions: 1,
         tables: 1,
         ops: 20,
-        disturb: vec![Disturbance::Deploy { at_op: 5 }],
+        disturb: vec![Disturbance::AddIndex { at_op: 5 }],
     };
     let report = run_reactive_checker(store.fresh_root().await.store(), w).await;
     let kinds: Vec<ViolationKind> = report.violations.iter().map(|v| v.kind).collect();
     assert_eq!(kinds, [ViolationKind::Unwired], "{:?}", report.violations);
     assert!(
-        report.violations[0].detail.contains("Task 7"),
+        report.violations[0].detail.contains("Task 9"),
         "{:?}",
         report.violations
     );
@@ -315,3 +316,38 @@ async fn reactive_checker_writers_patch_seeded_documents(store: TestStore) {
     assert_eq!(seeded(OpKind::Delete), 0, "a seeded document was deleted");
 }
 live_test!(reactive_checker_writers_patch_seeded_documents);
+
+/// LV1 plan Task 7: the checker with deploys and rollbacks in the middle of
+/// the workload. The sessions watch deployed queries whose results name
+/// their deployment, and every recorded state must equal a fresh
+/// evaluation by the deployment active at the Transition's timestamp.
+async fn reactive_checker_with_deploys_and_rollbacks(store: TestStore) {
+    let w = Workload {
+        seed: 21,
+        sessions: 4,
+        tables: 2,
+        ops: 800,
+        disturb: vec![
+            Disturbance::Deploy { at_op: 100 },
+            Disturbance::Deploy { at_op: 250 },
+            Disturbance::Rollback { at_op: 400 },
+            Disturbance::Deploy { at_op: 550 },
+            Disturbance::Rollback { at_op: 700 },
+        ],
+    };
+    let report = run_reactive_checker(store.fresh_root().await.store(), w).await;
+    assert!(
+        report.violations.is_empty(),
+        "{} violations, the first:\n{}",
+        report.violations.len(),
+        first(&report)
+    );
+    assert_eq!(report.activations, 5, "every deploy and rollback activated");
+    assert!(
+        report.deployments_seen >= 4,
+        "the sessions' results named {} deployments",
+        report.deployments_seen
+    );
+    assert_live(&report, 4);
+}
+live_test!(reactive_checker_with_deploys_and_rollbacks);

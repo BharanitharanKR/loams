@@ -35,6 +35,16 @@
 //! on scheduling. A failing run's [`Report::dump`] holds what is needed to
 //! study it: every writer's op log and every session's records.
 //!
+//! **Deployments** (LV1 plan Task 7). The sessions watch deployed queries,
+//! `chk:query` and `chk:get`, served by the checker's own [`BundleLoader`]:
+//! deployment version `n` (bundle `checker-v<n>`) answers
+//! `{ v: n, r: <the system query's result> }`. A version is deployed before
+//! the sessions open; `Deploy` deploys the next version and `Rollback`
+//! activates the one before the current one. The subscription manager
+//! follows the app's engine, and every fresh evaluation runs the deployment
+//! the pointer names at the evaluation's timestamp, so a result of the
+//! wrong deployment is a stale result.
+//!
 //! The subscription manager runs with its safety rerun off, so a missed
 //! invalidation stays visible instead of being repaired. The report counts,
 //! per session, the update-carrying Transitions that arrived while the
@@ -47,19 +57,25 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use buffa::MessageField;
+use futures::future::BoxFuture;
 use loams_kv::{CommitMode, EmbeddedConfig, Store, StoreConfig, Ts, TxnError, TxnOptions};
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use ulid::Ulid;
 
 use super::workload::{Disturbance, Workload};
 use crate::catalog::{self, IndexSpec};
+use crate::deploy::{AppEngine, BundleLoader, DeployRequest, LoadedBundle, Runtime};
 use crate::session::{ClientState, QueryResult, Session, SessionConfig, Sessions, Start, Version};
 use crate::subs::{SubsConfig, SubsStats, Subscriptions};
 use crate::system::{DELETE, GET, INSERT, PATCH, QUERY};
-use crate::{AppKeys, Function, LiveConfig, LiveError, LiveValue, Runner, deploy, pb, system};
+use crate::{
+    AppKeys, FnKind, Function, LiveConfig, LiveError, LiveTxn, LiveValue, Runner, deploy, pb,
+    system,
+};
 
 /// What the checker saw.
 #[derive(Debug, Clone, Default)]
@@ -72,6 +88,11 @@ pub struct Report {
     pub checked: usize,
     /// Sessions disconnected and resumed.
     pub resumes: usize,
+    /// Deploys and rollbacks of the workload that activated (the first
+    /// deployment, before the sessions open, not counted).
+    pub activations: usize,
+    /// Deployment versions the sessions' recorded results named.
+    pub deployments_seen: usize,
     /// Ticks of the subscription manager recorded.
     pub ticks: usize,
     /// Per session, the Transitions carrying updates that arrived before
@@ -227,6 +248,12 @@ const N_VALUES: i64 = 20;
 pub const SEED_DOCS: usize = 8;
 /// Queries per session.
 const QUERIES: u32 = 4;
+/// The deployed range query (`_system:query`, wrapped).
+const CHK_QUERY: &str = "chk:query";
+/// The deployed point read (`_system:get`, wrapped).
+const CHK_GET: &str = "chk:get";
+/// The app the checker deploys to.
+const APP: &str = "checker";
 /// Concurrent writers.
 const WRITERS: usize = 8;
 /// Tries per mutation (a retryable storage error is tried again).
@@ -242,8 +269,130 @@ const CATCH_UP: Duration = Duration::from_secs(30);
 #[derive(Debug, Clone)]
 struct Query {
     id: u32,
+    /// The deployed function.
     function: &'static str,
     args: LiveValue,
+}
+
+/// Deployment version `n`'s function `name`: `{ v: n, r: inner's result }`.
+struct Versioned {
+    n: i64,
+    name: &'static str,
+    inner: Arc<dyn Function>,
+}
+
+impl Function for Versioned {
+    fn name(&self) -> &str {
+        self.name
+    }
+
+    fn kind(&self) -> FnKind {
+        FnKind::Query
+    }
+
+    fn call<'a>(
+        &'a self,
+        txn: &'a mut LiveTxn<'_>,
+        args: LiveValue,
+    ) -> BoxFuture<'a, Result<LiveValue, LiveError>> {
+        Box::pin(async move {
+            let r = self.inner.call(txn, args).await?;
+            Ok(obj(&[("v", n(self.n)), ("r", r)]))
+        })
+    }
+}
+
+/// Version `n`'s function `name`, if it has one.
+fn versioned(n: i64, name: &str) -> Option<Arc<dyn Function>> {
+    let (name, system) = match name {
+        CHK_QUERY => (CHK_QUERY, QUERY),
+        CHK_GET => (CHK_GET, GET),
+        _ => return None,
+    };
+    Some(Arc::new(Versioned {
+        n,
+        name,
+        inner: system::lookup(system)?,
+    }))
+}
+
+/// The checker's function runtime: bundle `checker-v<n>` is version `n`.
+struct Loader;
+
+struct Bundle(i64);
+
+impl LoadedBundle for Bundle {
+    fn function(&self, path: &str) -> Option<Arc<dyn Function>> {
+        versioned(self.0, path)
+    }
+}
+
+impl BundleLoader for Loader {
+    fn load<'a>(
+        &'a self,
+        _app: &'a str,
+        bundle: &'a [u8],
+    ) -> BoxFuture<'a, Result<Arc<dyn LoadedBundle>, LiveError>> {
+        Box::pin(async move {
+            let n = std::str::from_utf8(bundle)
+                .ok()
+                .and_then(|b| b.strip_prefix("checker-v"))
+                .and_then(|n| n.parse::<i64>().ok())
+                .ok_or_else(|| LiveError::invalid("not a checker bundle"))?;
+            Ok(Arc::new(Bundle(n)) as Arc<dyn LoadedBundle>)
+        })
+    }
+}
+
+/// Deploys version `n` against `expected`; returns its id.
+async fn deploy_version(
+    engine: &AppEngine,
+    n: i64,
+    expected: Option<Ulid>,
+) -> Result<Ulid, String> {
+    let outcome = deploy::deploy(
+        engine,
+        DeployRequest {
+            bundle: format!("checker-v{n}").into_bytes(),
+            schema: crate::schema::Schema::default(),
+            expected_active: expected,
+            message: String::new(),
+            dry_run: false,
+        },
+        "checker",
+    )
+    .await
+    .map_err(|e| format!("deploying version {n}: {e}"))?;
+    Ok(outcome.record.id)
+}
+
+/// The deployment versions active at each timestamp asked, by reading the
+/// pointer there.
+struct Versions {
+    by_id: HashMap<Ulid, i64>,
+    at: HashMap<u64, Option<i64>>,
+}
+
+impl Versions {
+    async fn at(&mut self, runner: &Runner, ts: u64) -> Result<Option<i64>, String> {
+        if let Some(n) = self.at.get(&ts) {
+            return Ok(*n);
+        }
+        let id = deploy::active_at(runner, Ts(ts))
+            .await
+            .map_err(|e| format!("the deployment pointer at {ts}: {e}"))?;
+        let n = match id {
+            None => None,
+            Some(id) => Some(
+                *self
+                    .by_id
+                    .get(&id)
+                    .ok_or_else(|| format!("deployment {id} at {ts} is none of the checker's"))?,
+            ),
+        };
+        self.at.insert(ts, n);
+        Ok(n)
+    }
 }
 
 /// A client's state at the end of one Transition.
@@ -305,9 +454,10 @@ fn late_ticks(records: &[Arrival], ticks: &[(u64, Instant)], bound: Duration) ->
 /// the same tick.
 type Fresh = HashMap<(&'static str, String, u64), Result<LiveValue, pb::LiveError>>;
 
-/// `q`'s fresh result at `ts`.
+/// `q`'s fresh result at `ts`, by the deployment active at `ts`.
 async fn fresh_at<'a>(
     fresh: &'a mut Fresh,
+    versions: &mut Versions,
     runner: &Runner,
     q: &Query,
     ts: u64,
@@ -316,16 +466,37 @@ async fn fresh_at<'a>(
         match fresh.entry((q.function, format!("{:?}", q.args), ts)) {
             Entry::Occupied(found) => found.into_mut(),
             Entry::Vacant(slot) => {
-                let f = sys(q.function)?;
-                let got = runner
-                    .query(&*f, q.args.clone(), Ts(ts))
-                    .await
-                    .map(|r| r.result)
-                    .map_err(|e| e.to_proto());
+                let got = match versions.at(runner, ts).await? {
+                    None => Err(LiveError::NotFound(format!(
+                        "function {:?} is not deployed",
+                        q.function
+                    ))
+                    .to_proto()),
+                    Some(n) => {
+                        let f = versioned(n, q.function)
+                            .ok_or_else(|| format!("no checker function {}", q.function))?;
+                        runner
+                            .query(&*f, q.args.clone(), Ts(ts))
+                            .await
+                            .map(|r| r.result)
+                            .map_err(|e| e.to_proto())
+                    }
+                };
                 slot.insert(got)
             }
         },
     )
+}
+
+/// The deployment version a held result names.
+fn version_of(result: &QueryResult) -> Option<i64> {
+    match result {
+        QueryResult::Value(LiveValue::Object(fields)) => match fields.get("v") {
+            Some(LiveValue::I64(n)) => Some(*n),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 /// Whether a held result is the fresh one: the same value, or an error
@@ -408,11 +579,13 @@ pub async fn run_reactive_checker(store: Store, w: Workload) -> Report {
 /// The task (of the LV1 plan) that wires `d`, when it is not wired yet.
 fn unwired(d: Disturbance) -> Option<&'static str> {
     match d {
-        Disturbance::Deploy { .. } | Disturbance::Rollback { .. } => Some("Task 7"),
         Disturbance::AddIndex { .. } | Disturbance::DropIndex { .. } => Some("Task 9"),
         Disturbance::IdentityChange { .. } => Some("Task 17"),
         Disturbance::NodeKill { .. } => Some("Task 24"),
-        Disturbance::Disconnect { .. } | Disturbance::DropInvalidation { .. } => None,
+        Disturbance::Deploy { .. }
+        | Disturbance::Rollback { .. }
+        | Disturbance::Disconnect { .. }
+        | Disturbance::DropInvalidation { .. } => None,
     }
 }
 
@@ -462,8 +635,8 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
     let config = LiveConfig {
         journal_shards: 16,
         ..LiveConfig::with_store(
-            "checker",
-            StoreConfig::Embedded(EmbeddedConfig::new("unused", "checker")),
+            APP,
+            StoreConfig::Embedded(EmbeddedConfig::new("unused", APP)),
         )
     };
     let runner = Runner::open(store.clone(), &config)
@@ -494,12 +667,34 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
         }
     }
 
+    // Version 1 serves before the sessions open.
+    let engine = AppEngine::open(
+        APP,
+        runner.clone(),
+        Runtime {
+            bundles: loams_store::Store::in_memory(),
+            loader: Arc::new(Loader),
+        },
+    )
+    .await
+    .map_err(|e| format!("opening the engine: {e}"))?;
+    let mut versions = Versions {
+        by_id: HashMap::new(),
+        at: HashMap::new(),
+    };
+    let first = deploy_version(&engine, 1, None).await?;
+    versions.by_id.insert(first, 1);
+    // The deployments activated, oldest first; a rollback pops the current
+    // one and activates the one before it.
+    let mut activated = vec![(first, 1)];
+    let mut next_version = 2;
+
     let shutdown = CancellationToken::new();
     // An early return (a `?` below) stops the manager, the sessions, the
     // tick recorder and the consumers (their tokens are children) too.
     let _stop_all = shutdown.clone().drop_guard();
-    let subs = Arc::new(Subscriptions::spawn(
-        runner.clone(),
+    let subs = Arc::new(Subscriptions::spawn_for(
+        &engine,
         SubsConfig {
             // Off: a missed invalidation must stay visible.
             safety_rerun: Duration::from_secs(24 * 3600),
@@ -507,11 +702,12 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
         },
         shutdown.clone(),
     ));
+    let resolver = engine.clone();
     let sessions = Sessions::new(
         subs.clone(),
-        Arc::new(deploy::resolve_system),
+        Arc::new(move |name: &str| deploy::resolve(&resolver, name)),
         SessionConfig::default(),
-        "checker".into(),
+        APP.into(),
         shutdown.clone(),
     );
 
@@ -632,6 +828,30 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
                     report.resumes += 1;
                 }
             }
+            Disturbance::Deploy { .. } => {
+                let current = activated.last().map(|(id, _)| *id);
+                let id = deploy_version(&engine, next_version, current).await?;
+                versions.by_id.insert(id, next_version);
+                activated.push((id, next_version));
+                next_version += 1;
+                report.activations += 1;
+            }
+            Disturbance::Rollback { .. } => {
+                if activated.len() < 2 {
+                    report.violations.push(Violation::new(
+                        ViolationKind::Workload,
+                        None,
+                        format!("{d:?}: no earlier deployment to roll back to; skipped"),
+                    ));
+                    continue;
+                }
+                let current = activated.pop().map(|(id, _)| id);
+                let (id, n) = activated[activated.len() - 1];
+                deploy::activate(&engine, id, current, "checker")
+                    .await
+                    .map_err(|e| format!("rolling back to version {n}: {e}"))?;
+                report.activations += 1;
+            }
             _ => {}
         }
     }
@@ -711,11 +931,13 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
     // Every recorded state against fresh evaluations, then the ticks
     // between Transitions.
     let mut fresh = Fresh::new();
+    let mut seen_versions = BTreeSet::new();
     for watcher in &watchers {
         let log = std::mem::take(&mut *lock(&watcher.log));
         report.violations.extend(log.violations);
         report.transitions += log.records.len();
         for record in &log.records {
+            seen_versions.extend(record.results.values().filter_map(version_of));
             if record.results.len() != watcher.queries.len() {
                 report.violations.push(Violation::new(
                     ViolationKind::Stale,
@@ -729,7 +951,7 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
                 ));
             }
             for q in &watcher.queries {
-                let want = fresh_at(&mut fresh, &runner, q, record.end.ts).await?;
+                let want = fresh_at(&mut fresh, &mut versions, &runner, q, record.end.ts).await?;
                 report.checked += 1;
                 let held = record.results.get(&q.id);
                 if !same(held, want) {
@@ -766,7 +988,7 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
             }
             let (record, next) = (&log.records[p], &log.records[p + 1]);
             for q in &watcher.queries {
-                let want = fresh_at(&mut fresh, &runner, q, tick).await?;
+                let want = fresh_at(&mut fresh, &mut versions, &runner, q, tick).await?;
                 report.checked += 1;
                 let held = record.results.get(&q.id);
                 if !same(held, want) {
@@ -813,6 +1035,7 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
             trace.records = log.records;
         }
     }
+    report.deployments_seen = seen_versions.len();
     Ok(())
 }
 
@@ -914,6 +1137,7 @@ fn queries(rng: &mut ChaCha8Rng, tables: usize, seeded: &[Vec<LiveValue>]) -> Ve
                     obj(&[("table", table), ("order", s("desc")), ("limit", n(10))]),
                 ),
             };
+            let function = if function == GET { CHK_GET } else { CHK_QUERY };
             Query { id, function, args }
         })
         .collect()

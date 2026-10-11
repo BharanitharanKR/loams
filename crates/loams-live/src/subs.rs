@@ -29,6 +29,18 @@
 //!   logged with both read sets, counted
 //!   ([`SubsStats::missed_invalidations`], the `live_missed_invalidation_total`
 //!   metric) and repaired.
+//! - **Activations** (LV1 plan Task 7). A manager started with
+//!   [`Subscriptions::spawn_for`] follows its app's [`AppEngine`]: the
+//!   deployment it has *adopted* runs every subscription of a deployed
+//!   function, whichever deployment the subscriber resolved against. When
+//!   the engine serves another deployment, the next tick reads at or after
+//!   the activation's commit, resolves every such subscription again by
+//!   name in the new deployment (a function it does not export holds
+//!   `NOT_FOUND` until one does), reruns **every** subscription once and
+//!   publishes them all, so a session's Transition at that tick carries no
+//!   result of the old deployment. While an activation of the engine is in
+//!   flight, ticks are held: the tick's timestamp is taken first, so a tick
+//!   that sees no activation in flight reads before any later one commits.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -43,6 +55,7 @@ use tokio::sync::{Notify, broadcast, mpsc, oneshot, watch};
 use tokio_util::sync::CancellationToken;
 use ulid::Ulid;
 
+use crate::deploy::{AppEngine, Serving};
 use crate::journal::Tailer;
 use crate::readset::{ReadSetIndex, SubId};
 use crate::txn::Queried;
@@ -139,12 +152,38 @@ impl SubKey {
     }
 }
 
-/// A subscription's current result and the tick it was computed at. It
-/// stays the result at every later tick until a [`Tick`] replaces it.
+/// A subscription's current result, the tick it was computed at, and the
+/// deployment whose code computed it (nil for system functions). It stays
+/// the result at every later tick until a [`Tick`] replaces it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SubResult {
     pub result: Result<LiveValue, LiveError>,
     pub ts: Ts,
+    pub deployment: Ulid,
+}
+
+/// What a subscription runs.
+#[derive(Clone)]
+pub enum Target {
+    /// A query function.
+    Function(Arc<dyn Function>),
+    /// A function name the app does not serve now, and the error resolving
+    /// it gave. A manager following an engine resolves it again at every
+    /// activation; otherwise it holds the error.
+    Missing { name: String, error: LiveError },
+}
+
+impl fmt::Debug for Target {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Target::Function(func) => f.debug_tuple("Function").field(&func.name()).finish(),
+            Target::Missing { name, error } => f
+                .debug_struct("Missing")
+                .field("name", name)
+                .field("error", error)
+                .finish(),
+        }
+    }
 }
 
 /// One completed tick: every subscription is valid at `at`, and `changed`
@@ -209,7 +248,7 @@ type Reply = oneshot::Sender<Result<(SubId, Arc<SubResult>), LiveError>>;
 enum Cmd {
     Subscribe {
         key: SubKey,
-        f: Arc<dyn Function>,
+        target: Target,
         args: LiveValue,
         reply: Reply,
     },
@@ -223,6 +262,7 @@ pub struct Subscriptions {
     updates: broadcast::Sender<Tick>,
     current: watch::Receiver<Option<Ts>>,
     shared: Arc<Shared>,
+    follows: bool,
 }
 
 impl fmt::Debug for Subscriptions {
@@ -237,12 +277,36 @@ impl Subscriptions {
     /// Starts the manager of `runner`'s app, until `shutdown` is cancelled
     /// or the returned handle drops. Must be called inside a Tokio runtime.
     pub fn spawn(runner: Runner, config: SubsConfig, shutdown: CancellationToken) -> Self {
+        Self::start(runner, config, None, shutdown)
+    }
+
+    /// Starts the manager of `app`'s subscriptions, following what its
+    /// engine serves (LV1 plan Task 7; the module documentation has the
+    /// rules), until `shutdown` is cancelled or the handle drops.
+    pub fn spawn_for(app: &AppEngine, config: SubsConfig, shutdown: CancellationToken) -> Self {
+        Self::start(app.runner().clone(), config, Some(app.serving()), shutdown)
+    }
+
+    fn start(
+        runner: Runner,
+        config: SubsConfig,
+        follow: Option<watch::Receiver<Serving>>,
+        shutdown: CancellationToken,
+    ) -> Self {
+        let follows = follow.is_some();
+        let serving = follow
+            .as_ref()
+            .map(|f| f.borrow().clone())
+            .unwrap_or_default();
         let (cmds, rx) = mpsc::unbounded_channel();
         let (updates, _) = broadcast::channel(TICK_CHANNEL);
         let (current_tx, current) = watch::channel(None);
         let shared = Arc::new(Shared::default());
         let manager = Manager {
             commits: runner.commits(),
+            follow,
+            follow_open: follows,
+            serving,
             index: ReadSetIndex::new(runner.app().clone()),
             runner,
             config,
@@ -269,7 +333,14 @@ impl Subscriptions {
             updates,
             current,
             shared,
+            follows,
         }
+    }
+
+    /// Whether the manager follows an engine ([`spawn_for`](Self::spawn_for)):
+    /// subscribing a [`Target::Missing`] is then worth it.
+    pub fn follows(&self) -> bool {
+        self.follows
     }
 
     /// Subscribes to query `f` with `args` under `key`: evaluates it at the
@@ -283,17 +354,28 @@ impl Subscriptions {
         f: Arc<dyn Function>,
         args: LiveValue,
     ) -> Result<(SubId, Arc<SubResult>), LiveError> {
-        if f.kind() != FnKind::Query {
-            return Err(LiveError::invalid(format!(
-                "{} is a mutation; only queries can be subscribed to",
-                f.name()
-            )));
+        self.subscribe_target(key, Target::Function(f), args).await
+    }
+
+    /// [`subscribe`](Self::subscribe) to `target`: a function, or a name
+    /// that does not resolve now, which holds its error as the result (a
+    /// manager following an engine resolves it again at every activation).
+    /// A manager following an engine runs a deployed function in the
+    /// deployment it has adopted, and keys the subscription by it.
+    pub async fn subscribe_target(
+        &self,
+        key: SubKey,
+        target: Target,
+        args: LiveValue,
+    ) -> Result<(SubId, Arc<SubResult>), LiveError> {
+        if let Target::Function(f) = &target {
+            check_query(&**f)?;
         }
         let (reply, answer) = oneshot::channel();
         self.cmds
             .send(Cmd::Subscribe {
                 key,
-                f,
+                target,
                 args,
                 reply,
             })
@@ -361,9 +443,38 @@ fn stopped() -> LiveError {
     LiveError::Internal("the subscription manager has stopped".into())
 }
 
+fn check_query(f: &dyn Function) -> Result<(), LiveError> {
+    if f.kind() == FnKind::Query {
+        Ok(())
+    } else {
+        Err(LiveError::invalid(format!(
+            "{} is a mutation; only queries can be subscribed to",
+            f.name()
+        )))
+    }
+}
+
+/// A subscription's function, or why its name does not resolve.
+type Resolved = Result<Arc<dyn Function>, LiveError>;
+
+/// What a subscription runs, once placed: its key, its function's name, the
+/// function (or why the name does not resolve), and whether an activation
+/// resolves it again (a deployment's function, or a missing one).
+struct Placed {
+    key: SubKey,
+    name: String,
+    f: Resolved,
+    deployed: bool,
+}
+
 struct Sub {
     key: SubKey,
-    f: Arc<dyn Function>,
+    name: String,
+    /// The function, or why its name does not resolve (the result then
+    /// holds that error; it is not rerun until the next activation).
+    f: Resolved,
+    /// Resolved again at every activation.
+    deployed: bool,
     args: LiveValue,
     refs: usize,
     result: Arc<SubResult>,
@@ -374,8 +485,7 @@ struct Sub {
 
 /// A new key waiting for its first evaluation, and everyone asking for it.
 struct NewSub {
-    key: SubKey,
-    f: Arc<dyn Function>,
+    placed: Placed,
     args: LiveValue,
     replies: Vec<Reply>,
 }
@@ -389,6 +499,12 @@ struct Manager {
     current: watch::Sender<Option<Ts>>,
     shared: Arc<Shared>,
     commits: watch::Receiver<u64>,
+    /// What the app's engine serves, when following one.
+    follow: Option<watch::Receiver<Serving>>,
+    /// The engine is still there to follow.
+    follow_open: bool,
+    /// The deployment adopted: it runs every deployed subscription.
+    serving: Serving,
     tailer: Option<Tailer>,
     /// The tick every subscription is valid at.
     at: Option<Ts>,
@@ -444,6 +560,15 @@ impl Manager {
                         continue;
                     }
                 }
+                // The engine serves something else, or an activation began
+                // or ended: tick now (a held tick is retried at the end).
+                changed = follow_changed(&mut self.follow), if self.follow_open => {
+                    if changed.is_err() {
+                        self.follow_open = false;
+                        continue;
+                    }
+                    poll = self.config.poll_min;
+                }
                 () = tokio::time::sleep_until(next_tick) => {}
             }
             let moved = match self.tick().await {
@@ -467,6 +592,114 @@ impl Manager {
         tracing::debug!("the subscription manager stopped");
     }
 
+    /// Whether a tick at `at` may run, and the deployment to adopt with it.
+    /// `at` moves up to the timestamp from which the deployment (adopted or
+    /// to adopt) is served: a tick never runs a deployment's code before
+    /// its activation. `None` holds the tick: an activation of the engine
+    /// is in flight. Called after `at` is taken, so a tick that sees none
+    /// in flight reads before any later activation commits.
+    fn follow(&mut self, at: Ts) -> Option<(Ts, Option<Serving>)> {
+        let Some(follow) = &mut self.follow else {
+            return Some((at, None));
+        };
+        let serving = follow.borrow_and_update();
+        if serving.switching > 0 {
+            return None;
+        }
+        let adopt = (serving.generation != self.serving.generation).then(|| serving.clone());
+        drop(serving);
+        let from = adopt.as_ref().map_or(self.serving.at, |s| s.at);
+        let at = if from.0 > at.0 { from } else { at };
+        Some((at, adopt))
+    }
+
+    /// Places a subscription: a deployed function (or a missing one) of a
+    /// manager following an engine runs in the adopted deployment.
+    fn place(&self, key: SubKey, target: Target, args: &LiveValue) -> Placed {
+        match target {
+            Target::Function(f) => {
+                let name = f.name().to_string();
+                let deployment = f.deployment();
+                if deployment.is_nil() {
+                    return Placed {
+                        key,
+                        name,
+                        f: Ok(f),
+                        deployed: false,
+                    };
+                }
+                if self.follow.is_none() || self.serving.deployment() == Some(deployment) {
+                    return Placed {
+                        key,
+                        name,
+                        f: Ok(f),
+                        deployed: true,
+                    };
+                }
+                self.resolve(name, args)
+            }
+            Target::Missing { name, error } => {
+                if self.follow.is_none() {
+                    Placed {
+                        key,
+                        name,
+                        f: Err(error),
+                        deployed: true,
+                    }
+                } else {
+                    self.resolve(name, args)
+                }
+            }
+        }
+    }
+
+    /// `name` resolved in the adopted deployment.
+    fn resolve(&self, name: String, args: &LiveValue) -> Placed {
+        resolve_in(&self.serving, name, args)
+    }
+
+    /// Adopts what the engine serves: every deployed subscription (and every
+    /// new one waiting) is resolved again by name in it.
+    fn adopt(&mut self, serving: Serving) {
+        self.serving = serving;
+        let ids: Vec<SubId> = self
+            .subs
+            .iter()
+            .filter(|(_, s)| s.deployed)
+            .map(|(id, _)| *id)
+            .collect();
+        for id in ids {
+            let Some((name, args, old)) = self
+                .subs
+                .get(&id)
+                .map(|s| (s.name.clone(), s.args.clone(), s.key.clone()))
+            else {
+                continue;
+            };
+            let placed = self.resolve(name, &args);
+            if self.by_key.get(&old) == Some(&id) {
+                self.by_key.remove(&old);
+            }
+            self.by_key.entry(placed.key.clone()).or_insert(id);
+            if placed.f.is_err() {
+                self.index.remove(id);
+            }
+            if let Some(sub) = self.subs.get_mut(&id) {
+                if placed.f.is_err() {
+                    sub.read_set = ReadSet::default();
+                    sub.errored = false;
+                }
+                sub.key = placed.key;
+                sub.f = placed.f;
+            }
+        }
+        for n in &mut self.waiting {
+            if n.placed.deployed {
+                n.placed = resolve_in(&self.serving, n.placed.name.clone(), &n.args);
+            }
+        }
+    }
+
     /// When to tick after a wake-up: `tick_read_lag` from now, since a tick
     /// reads that far back and would not see the commit sooner (however many
     /// commits follow, the tick is not pushed later); `None` (tick now)
@@ -485,11 +718,12 @@ impl Manager {
             match cmd {
                 Cmd::Subscribe {
                     key,
-                    f,
+                    target,
                     args,
                     reply,
                 } => {
-                    if let Some(id) = self.by_key.get(&key).copied()
+                    let placed = self.place(key, target, &args);
+                    if let Some(id) = self.by_key.get(&placed.key).copied()
                         && let Some(sub) = self.subs.get_mut(&id)
                     {
                         sub.refs += 1;
@@ -497,15 +731,14 @@ impl Manager {
                     } else if let Some(n) = fresh
                         .iter_mut()
                         .chain(self.waiting.iter_mut())
-                        .find(|n| n.key == key)
+                        .find(|n| n.placed.key == placed.key)
                     {
                         // A key already asked for (in this batch, or waiting
                         // for a valid tick) gets no second entry.
                         n.replies.push(reply);
                     } else {
                         fresh.push(NewSub {
-                            key,
-                            f,
+                            placed,
                             args,
                             replies: vec![reply],
                         });
@@ -555,24 +788,31 @@ impl Manager {
     async fn evaluate_new(&mut self, fresh: Vec<NewSub>, at: &Ts) {
         let jobs = fresh
             .iter()
-            .map(|n| (n.f.clone(), n.args.clone()))
+            .map(|n| (n.placed.f.clone(), n.args.clone()))
             .collect::<Vec<_>>();
-        let results = self.evaluate(jobs, at).await;
+        let results = self.run_all(jobs, at).await;
         let mut replies = Vec::new();
         for (n, result) in fresh.into_iter().zip(results) {
             let id = SubId(self.next_id);
             self.next_id += 1;
             let (result, read_set, errored) = split(result);
-            let result = Arc::new(SubResult { result, ts: *at });
-            if !errored {
+            let errored = errored && n.placed.f.is_ok();
+            let result = Arc::new(SubResult {
+                result,
+                ts: *at,
+                deployment: n.placed.key.deployment,
+            });
+            if !errored && n.placed.f.is_ok() {
                 self.index.insert(id, &read_set);
             }
-            self.by_key.insert(n.key.clone(), id);
+            self.by_key.insert(n.placed.key.clone(), id);
             self.subs.insert(
                 id,
                 Sub {
-                    key: n.key,
-                    f: n.f,
+                    key: n.placed.key,
+                    name: n.placed.name,
+                    f: n.placed.f,
+                    deployed: n.placed.deployed,
                     args: n.args,
                     refs: n.replies.len(),
                     result: result.clone(),
@@ -587,6 +827,29 @@ impl Manager {
         for (reply, id, result) in replies {
             let _ = reply.send(Ok((id, result)));
         }
+    }
+
+    /// Runs `jobs` at `at`: a function is evaluated (see
+    /// [`evaluate`](Self::evaluate), counted as a rerun), a name that does
+    /// not resolve answers its error.
+    async fn run_all(
+        &self,
+        jobs: Vec<(Resolved, LiveValue)>,
+        at: &Ts,
+    ) -> Vec<Result<Queried, LiveError>> {
+        let runnable = jobs
+            .iter()
+            .filter_map(|(f, args)| f.as_ref().ok().map(|f| (f.clone(), args.clone())))
+            .collect::<Vec<_>>();
+        let mut evaluated = self.evaluate(runnable, at).await.into_iter();
+        jobs.into_iter()
+            .map(|(f, _)| match f {
+                Ok(_) => evaluated.next().unwrap_or_else(|| {
+                    Err(LiveError::Internal("an evaluation went missing".into()))
+                }),
+                Err(e) => Err(e),
+            })
+            .collect()
     }
 
     /// Runs `jobs` at `at`, `rerun_concurrency` at once, in order. Boxed:
@@ -626,11 +889,11 @@ impl Manager {
         })
     }
 
-    /// One tick; returns whether the journal moved.
+    /// One tick; returns whether the journal moved (or the tick adopted a
+    /// deployment). A tick held for an activation in flight returns false.
     async fn tick(&mut self) -> Result<bool, LiveError> {
         if self.tailer.is_none() {
-            self.restart(false).await?;
-            return Ok(true);
+            return self.restart(false).await;
         }
         if let Some(last) = self.last_rerun {
             let wait = self
@@ -646,7 +909,10 @@ impl Manager {
         }
         self.commits.borrow_and_update();
         let at = self.now().await?;
-        let mut moved = false;
+        let Some((at, adopt)) = self.follow(at) else {
+            return Ok(false);
+        };
+        let mut moved = adopt.is_some();
         loop {
             let Some(tailer) = self.tailer.as_mut() else {
                 return Err(LiveError::Internal("the tailer is gone".into()));
@@ -664,8 +930,7 @@ impl Manager {
                         ?first,
                         "the journal was trimmed past the subscription tailer; rerunning every subscription"
                     );
-                    self.restart(true).await?;
-                    return Ok(true);
+                    return self.restart(true).await;
                 }
                 Err(e) => return Err(e),
             };
@@ -696,14 +961,23 @@ impl Manager {
                 break;
             }
         }
-        let mut ids: Vec<SubId> = self
-            .subs
-            .iter()
-            .filter(|(id, sub)| sub.errored || self.pending.contains(id))
-            .map(|(id, _)| *id)
-            .collect();
+        // An activation reruns every subscription once, on the new
+        // deployment, and publishes them all.
+        let force = adopt.is_some();
+        let mut ids: Vec<SubId> = match adopt {
+            Some(serving) => {
+                self.adopt(serving);
+                self.subs.keys().copied().collect()
+            }
+            None => self
+                .subs
+                .iter()
+                .filter(|(id, sub)| sub.errored || self.pending.contains(id))
+                .map(|(id, _)| *id)
+                .collect(),
+        };
         ids.sort_unstable();
-        let mut changed = self.rerun(&ids, &at).await;
+        let mut changed = self.rerun(&ids, &at, force).await;
         if !ids.is_empty() {
             self.last_rerun = Some(Instant::now());
         }
@@ -721,21 +995,29 @@ impl Manager {
     }
 
     /// Starts (or restarts, after a trimmed journal) the tailer at a fresh
-    /// timestamp and reruns every subscription there.
-    async fn restart(&mut self, resync: bool) -> Result<(), LiveError> {
+    /// timestamp and reruns every subscription there; returns false when
+    /// held for an activation in flight (the next tick tries again).
+    async fn restart(&mut self, resync: bool) -> Result<bool, LiveError> {
         let at = self.now().await?;
+        let Some((at, adopt)) = self.follow(at) else {
+            return Ok(false);
+        };
         let journal = self.runner.journal().await?;
         let tailer = Tailer::start(self.runner.store().clone(), journal, at).await?;
         self.tailer = Some(tailer);
         self.pending.clear();
+        let force = adopt.is_some();
+        if let Some(serving) = adopt {
+            self.adopt(serving);
+        }
         let mut ids: Vec<SubId> = self.subs.keys().copied().collect();
         ids.sort_unstable();
-        let changed = self.rerun(&ids, &at).await;
+        let changed = self.rerun(&ids, &at, force).await;
         if resync {
             self.shared.counters.resyncs.fetch_add(1, Ordering::Relaxed);
         }
         self.finish(at, changed, resync).await;
-        Ok(())
+        Ok(true)
     }
 
     /// Every subscription is valid at `at`: publish, evaluate waiting keys,
@@ -780,52 +1062,59 @@ impl Manager {
     }
 
     /// Reruns `ids` at `at`, replaces their read sets, and returns those
-    /// whose result changed.
-    async fn rerun(&mut self, ids: &[SubId], at: &Ts) -> Vec<(SubId, Arc<SubResult>)> {
-        let jobs: Vec<(SubId, Arc<dyn Function>, LiveValue)> = ids
+    /// whose result changed (every one, with `force`: an activation).
+    async fn rerun(&mut self, ids: &[SubId], at: &Ts, force: bool) -> Vec<(SubId, Arc<SubResult>)> {
+        let (ids, jobs): (Vec<SubId>, Vec<_>) = ids
             .iter()
             .filter_map(|id| {
                 self.subs
                     .get(id)
-                    .map(|s| (*id, s.f.clone(), s.args.clone()))
+                    .map(|s| (*id, (s.f.clone(), s.args.clone())))
             })
-            .collect();
-        let (ids, jobs): (Vec<SubId>, Vec<_>) =
-            jobs.into_iter().map(|(id, f, a)| (id, (f, a))).unzip();
-        let results = self.evaluate(jobs, at).await;
+            .unzip();
+        let evaluations = jobs.iter().filter(|(f, _)| f.is_ok()).count();
+        let results = self.run_all(jobs, at).await;
         self.shared
             .counters
             .reruns
-            .fetch_add(results.len() as u64, Ordering::Relaxed);
+            .fetch_add(evaluations as u64, Ordering::Relaxed);
         let mut changed = Vec::new();
         for (id, result) in ids.into_iter().zip(results) {
-            if let Some(result) = self.apply(id, result, at) {
+            if let Some(result) = self.apply(id, result, at, force) {
                 changed.push((id, result));
             }
         }
         changed
     }
 
-    /// Takes a fresh evaluation of `id`; returns its result if it changed.
+    /// Takes a fresh evaluation of `id`; returns its result if it changed
+    /// (or always, with `force`).
     fn apply(
         &mut self,
         id: SubId,
         evaluated: Result<Queried, LiveError>,
         at: &Ts,
+        force: bool,
     ) -> Option<Arc<SubResult>> {
         let sub = self.subs.get_mut(&id)?;
         let (result, read_set, errored) = split(evaluated);
-        if errored {
+        // A name that does not resolve is not rerun until an activation.
+        let errored = errored && sub.f.is_ok();
+        if errored || sub.f.is_err() {
             self.index.remove(id);
         } else {
             self.index.insert(id, &read_set);
         }
         sub.read_set = read_set;
         sub.errored = errored;
-        if sub.result.result == result {
+        if !force && sub.result.result == result {
             return None;
         }
-        sub.result = Arc::new(SubResult { result, ts: *at });
+        sub.result = Arc::new(SubResult {
+            result,
+            ts: *at,
+            deployment: sub.key.deployment,
+        });
         Some(sub.result.clone())
     }
 
@@ -839,13 +1128,16 @@ impl Manager {
         let mut ids: Vec<SubId> = self
             .subs
             .iter()
-            .filter(|(_, s)| !s.errored)
+            .filter(|(_, s)| !s.errored && s.f.is_ok())
             .map(|(id, _)| *id)
             .collect();
         ids.sort_unstable();
         let jobs = ids
             .iter()
-            .filter_map(|id| self.subs.get(id).map(|s| (s.f.clone(), s.args.clone())))
+            .filter_map(|id| {
+                let s = self.subs.get(id)?;
+                Some((s.f.as_ref().ok()?.clone(), s.args.clone()))
+            })
             .collect();
         let results = self.evaluate(jobs, at).await;
         self.shared
@@ -865,7 +1157,7 @@ impl Manager {
                 self.shared.counters.missed.fetch_add(1, Ordering::Relaxed);
                 tracing::error!(
                     subscription = %id,
-                    function = %sub.f.name(),
+                    function = %sub.name,
                     at = at.0,
                     held_since = sub.result.ts.0,
                     held_read_set = ?sub.read_set,
@@ -873,11 +1165,43 @@ impl Manager {
                     "live_missed_invalidation_total: a safety rerun found a different result"
                 );
             }
-            if let Some(result) = self.apply(id, Ok(fresh), at) {
+            if let Some(result) = self.apply(id, Ok(fresh), at, false) {
                 repaired.push((id, result));
             }
         }
         repaired
+    }
+}
+
+/// `name` resolved in `serving`, as a query subscription with `args`.
+fn resolve_in(serving: &Serving, name: String, args: &LiveValue) -> Placed {
+    let f = serving.resolve(&name).and_then(|f| {
+        check_query(&*f)?;
+        Ok(f)
+    });
+    let deployment = match &f {
+        Ok(f) => f.deployment(),
+        Err(_) => serving.deployment().unwrap_or_else(Ulid::nil),
+    };
+    Placed {
+        key: SubKey {
+            deployment,
+            function: name.clone(),
+            args_digest: args.digest(),
+        },
+        name,
+        f,
+        deployed: true,
+    }
+}
+
+/// The next change of what a followed engine serves (never, without one).
+async fn follow_changed(
+    follow: &mut Option<watch::Receiver<Serving>>,
+) -> Result<(), watch::error::RecvError> {
+    match follow {
+        Some(follow) => follow.changed().await,
+        None => std::future::pending().await,
     }
 }
 
