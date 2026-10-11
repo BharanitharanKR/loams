@@ -252,7 +252,9 @@ export function FunctionsCard({
             header: 'Arguments validator',
             cell: (f) =>
               f.args ? (
-                <code className="font-mono text-xs whitespace-pre-wrap">{validatorText(f.args)}</code>
+                <code className="font-mono text-xs whitespace-pre-wrap">
+                  {validatorText(f.args)}
+                </code>
               ) : (
                 <span className="text-muted">Not validated</span>
               ),
@@ -261,7 +263,12 @@ export function FunctionsCard({
             key: 'logs',
             header: <span className="sr-only">Logs</span>,
             cell: (f) => (
-              <Button size="sm" variant="quiet" onClick={() => onTail(f.path)} aria-label={`Tail logs of ${f.path}`}>
+              <Button
+                size="sm"
+                variant="quiet"
+                onClick={() => onTail(f.path)}
+                aria-label={`Tail logs of ${f.path}`}
+              >
                 Logs
               </Button>
             ),
@@ -282,6 +289,8 @@ const LEVEL_CLASS: Record<LogLine['level'], string> = {
   error: 'text-danger',
 };
 
+type KeyedLine = LogLine & { key: number };
+
 export function LogsCard({
   api,
   functions,
@@ -294,7 +303,7 @@ export function LogsCard({
   onFn: (fn: string) => void;
 }) {
   const [follow, setFollow] = useState(true);
-  const [lines, setLines] = useState<LogLine[]>([]);
+  const [lines, setLines] = useState<KeyedLine[]>([]);
   const [error, setError] = useState<string>();
   const [received, setReceived] = useState(0);
   const dropped = Math.max(0, received - lines.length);
@@ -304,12 +313,16 @@ export function LogsCard({
     setLines([]);
     setReceived(0);
     setError(undefined);
+    // A line's key is its arrival order in this tail: one request can log the
+    // same text twice in a millisecond, so no field of the line is unique.
+    let seq = 0;
     (async () => {
       try {
         for await (const l of api.tailLogs({ follow, function: fn || undefined }, ctl.signal)) {
           if (ctl.signal.aborted) return;
+          const row = { ...l, key: seq++ };
           setReceived((n) => n + 1);
-          setLines((prev) => (prev.length < LOG_CAP ? [...prev, l] : [...prev.slice(1), l]));
+          setLines((prev) => (prev.length < LOG_CAP ? [...prev, row] : [...prev.slice(1), row]));
         }
       } catch (e) {
         if (!ctl.signal.aborted) setError(errorText(e));
@@ -370,11 +383,13 @@ export function LogsCard({
           className="font-mono text-xs border border-rule rounded p-2 overflow-auto max-h-80"
         >
           {lines.length === 0 ? (
-            <p className="m-0 text-muted">{follow ? 'Waiting for log lines...' : 'No log lines.'}</p>
+            <p className="m-0 text-muted">
+              {follow ? 'Waiting for log lines...' : 'No log lines.'}
+            </p>
           ) : (
             <ol className="m-0 p-0 list-none flex flex-col gap-1">
-              {lines.map((l, i) => (
-                <li key={`${l.requestId}-${l.ts}-${i}`} className={LEVEL_CLASS[l.level]}>
+              {lines.map((l) => (
+                <li key={l.key} className={LEVEL_CLASS[l.level]}>
                   <span className="text-muted">{new Date(l.ts).toLocaleTimeString()}</span>{' '}
                   <span className="uppercase">{l.level}</span> <span>{l.function}</span>{' '}
                   <span className="text-muted">{l.requestId}</span> {l.line}
@@ -424,7 +439,9 @@ export function DeploymentsPage({
         if (ctl.signal.aborted) return;
         setLoaded({ state: 'ready', deployments, workers });
         setSelected((s) =>
-          s && deployments.some((d) => d.id === s) ? s : deployments.find(isLive)?.id ?? deployments[0]?.id,
+          s && deployments.some((d) => d.id === s)
+            ? s
+            : (deployments.find(isLive)?.id ?? deployments[0]?.id),
         );
       })
       .catch((e) => {
@@ -468,7 +485,9 @@ export function DeploymentsPage({
     }
   };
 
-  const functionPaths = detail?.functions.map((f) => f.path) ?? [];
+  // A detail fetched for an earlier selection is not shown while the new one loads.
+  const shown = detail && detail.deployment.id === selected ? detail : undefined;
+  const functionPaths = shown?.functions.map((f) => f.path) ?? [];
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-6xl">
@@ -543,7 +562,7 @@ export function DeploymentsPage({
               {detailError}
             </Notice>
           )}
-          {detail && <FunctionsCard detail={detail} onTail={setLogFn} />}
+          {shown && <FunctionsCard detail={shown} onTail={setLogFn} />}
           <LogsCard api={api} functions={functionPaths} fn={logFn} onFn={setLogFn} />
         </>
       )}

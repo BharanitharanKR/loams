@@ -248,6 +248,7 @@ export function createMockAdminApi(
           return;
         }
         const base = FOLLOW_LINES[i++ % FOLLOW_LINES.length];
+        if (!base) return;
         seq += 1;
         const l: LogLine = {
           ...base,

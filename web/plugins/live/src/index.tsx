@@ -35,7 +35,12 @@ const plugin: PluginModule = {
     // The router takes the first match: the longer path goes first.
     ctx.effect(() =>
       router.page(
-        { id: 'live-deployments', path: '/live/deployments', title: 'Live deployments', plugin: 'live' },
+        {
+          id: 'live-deployments',
+          path: '/live/deployments',
+          title: 'Live deployments',
+          plugin: 'live',
+        },
         () => <DeploymentsPage api={admin} navigate={navigate} />,
       ),
     );

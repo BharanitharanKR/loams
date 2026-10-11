@@ -112,6 +112,7 @@ const stacksFake = (phase: 'stopped' | 'running' = 'stopped') => {
         state: async () => ({ phase }) as never,
         start,
         stop: vi.fn(async () => ({ ok: true as const, value: undefined })),
+        reset: vi.fn(async () => ({ ok: true as const, value: undefined })),
         onState: () => () => {},
         openLogs: vi.fn(async () => ({ ok: true as const, value: undefined })),
       },

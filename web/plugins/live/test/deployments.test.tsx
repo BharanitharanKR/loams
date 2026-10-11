@@ -19,7 +19,12 @@ HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
 };
 
 const fx = defaultFixtures();
-const [D4, D3, D2, D1] = fx.deployments.map((d) => d.id);
+const idAt = (i: number): string => {
+  const d = fx.deployments[i];
+  if (!d) throw new Error(`no fixture deployment at ${i}`);
+  return d.id;
+};
+const [D4, D3, D2, D1] = [idAt(0), idAt(1), idAt(2), idAt(3)];
 const short = (id: string) => id.slice(-8);
 
 async function collect(it: AsyncIterable<LogLine>, n: number): Promise<LogLine[]> {
@@ -43,10 +48,7 @@ describe('validatorText', () => {
           b: { kind: 'optional', inner: { kind: 'array', items: { kind: 'int64' } } },
           c: {
             kind: 'union',
-            members: [
-              { kind: 'literal', value: 'x' },
-              { kind: 'null' },
-            ],
+            members: [{ kind: 'literal', value: 'x' }, { kind: 'null' }],
           },
         },
       }),
@@ -130,7 +132,9 @@ describe('DeploymentsPage', () => {
     render(<DeploymentsPage api={createMockAdminApi()} />);
     const fns = await screen.findByRole('table', { name: `Functions in deployment ${D3}` });
     expect(within(fns).getByText('messages:react')).toBeTruthy();
-    expect(within(fns).getByText(/v\.union\(v\.literal\("up"\), v\.literal\("down"\)\)/)).toBeTruthy();
+    expect(
+      within(fns).getByText(/v\.union\(v\.literal\("up"\), v\.literal\("down"\)\)/),
+    ).toBeTruthy();
     expect(within(fns).getByText('internal')).toBeTruthy();
     expect(within(fns).getByText('Not validated')).toBeTruthy();
   });
@@ -143,6 +147,31 @@ describe('DeploymentsPage', () => {
     const fns = await screen.findByRole('table', { name: `Functions in deployment ${D1}` });
     expect(within(fns).queryByText('messages:react')).toBeNull();
     expect(within(fns).getByText('messages:send')).toBeTruthy();
+  });
+
+  it('hides the previous functions while another deployment loads', async () => {
+    const api = createMockAdminApi();
+    let release = () => {};
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const slow = {
+      ...api,
+      getDeployment: async (id: string) => {
+        if (id === D1) await gate;
+        return api.getDeployment(id);
+      },
+    };
+    render(<DeploymentsPage api={slow} />);
+    await screen.findByRole('table', { name: `Functions in deployment ${D3}` });
+    fireEvent.click(screen.getByRole('button', { name: `Show functions of deployment ${D1}` }));
+    await waitFor(() =>
+      expect(screen.queryByRole('table', { name: `Functions in deployment ${D3}` })).toBeNull(),
+    );
+    release();
+    expect(
+      await screen.findByRole('table', { name: `Functions in deployment ${D1}` }),
+    ).toBeTruthy();
   });
 
   it('rolls back to an earlier deployment after confirmation', async () => {
@@ -168,7 +197,9 @@ describe('DeploymentsPage', () => {
   });
 
   it('tails logs for one function from its row', async () => {
-    render(<DeploymentsPage api={createMockAdminApi(defaultFixtures(), { followEveryMs: 60_000 })} />);
+    render(
+      <DeploymentsPage api={createMockAdminApi(defaultFixtures(), { followEveryMs: 60_000 })} />,
+    );
     const log = await screen.findByRole('log', { name: 'Function log lines' });
     await waitFor(() => expect(within(log).getByText(/body too long/)).toBeTruthy());
     fireEvent.click(await screen.findByRole('button', { name: 'Tail logs of messages:list' }));
