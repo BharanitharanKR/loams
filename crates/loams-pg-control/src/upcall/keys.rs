@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::ids::ComputeId;
-use crate::secrets::Secret;
+use crate::secrets::{Secret, SecretError, SecretRef, SecretStore};
 
 /// The `aud` of an upcall token: only `pg-control`'s upcall listener takes
 /// it.
@@ -49,6 +49,11 @@ pub const COMPUTE_TOKEN_TTL: Duration = Duration::from_secs(90 * 24 * 3600);
 /// How long a token for one `compute_ctl` call lives.
 pub const CTL_TOKEN_TTL: Duration = Duration::from_secs(10 * 60);
 
+/// Where every `pg-control` instance finds the signing key in its secret
+/// store (the file store in single-node mode, a Kubernetes Secret under
+/// `--runtime kubernetes`; R8.9).
+pub const SIGNING_KEY_REF: &str = "pg-control-signing-key";
+
 /// Clock skew allowed on `exp`.
 const LEEWAY_S: u64 = 60;
 
@@ -61,6 +66,50 @@ pub enum KeyError {
     InvalidKey,
     #[error("signing a token failed")]
     Sign,
+}
+
+/// Why the signing key could not be loaded. A start fails on it: a
+/// process never signs with a key the secret store does not hold.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum SigningKeyError {
+    #[error("the signing key's secret store: {0}")]
+    Store(#[from] SecretError),
+    #[error("the stored signing key: {0}")]
+    Key(#[from] KeyError),
+}
+
+/// The signing key `secrets` holds under `r`, created there first if it
+/// holds none (R8.9: one key, shared by every instance, across restarts).
+///
+/// The key is always the one read back from the store: a new key is stored
+/// with [`SecretStore::create`], so when two instances start at once only
+/// one key is stored and both read that one. A stored key that does not
+/// parse is an error, never replaced: computes started under it would be
+/// refused.
+///
+/// # Errors
+///
+/// [`SigningKeyError::Store`] when the store does not answer;
+/// [`SigningKeyError::Key`] for a stored key that is not an Ed25519 key
+/// (or when the random source fails).
+pub async fn load_or_create_signing_key(
+    secrets: &dyn SecretStore,
+    r: &SecretRef,
+) -> Result<ComputeKeys, SigningKeyError> {
+    match secrets.get(r).await {
+        Ok(der) => return Ok(ComputeKeys::from_pkcs8(der)?),
+        Err(SecretError::NotFound(_)) => {}
+        Err(e) => return Err(e.into()),
+    }
+    let fresh = ComputeKeys::generate()?;
+    let created = secrets
+        .create(r, Secret::new(fresh.pkcs8().expose().clone()))
+        .await?;
+    let keys = ComputeKeys::from_pkcs8(secrets.get(r).await?)?;
+    if created {
+        tracing::info!(secret_ref = %r, kid = keys.kid(), "stored a new pg-control signing key");
+    }
+    Ok(keys)
 }
 
 /// Why an upcall token was refused. The text names no part of the token.

@@ -4,8 +4,10 @@
 //! bytes under the data key `secret`, in the namespace the store was given.
 //!
 //! Writes are server-side apply with the field manager `loams-pg-control`,
-//! so a put creates or replaces in one call and a repeated put is a no-op.
-//! The ServiceAccount needs `get`, `list`, `patch` and `delete` on `secrets`
+//! so a put creates or replaces in one call and a repeated put is a no-op;
+//! `create` is a plain create, which the API server refuses (409) for a
+//! name that exists. The ServiceAccount needs `get`, `list`, `create`,
+//! `patch` and `delete` on `secrets`
 //! in that namespace (§46 §7.2), nothing cluster-wide; `list` is the sweep's
 //! (Task 7), which reads only metadata, selected by the component label. Encryption at rest is the
 //! cluster's: an `EncryptionConfiguration` with a KMS provider for
@@ -17,7 +19,7 @@ use std::fmt;
 use async_trait::async_trait;
 use k8s_openapi::ByteString;
 use k8s_openapi::api::core::v1::Secret as KubeSecret;
-use kube::api::{Api, DeleteParams, ListParams, ObjectMeta, Patch, PatchParams};
+use kube::api::{Api, DeleteParams, ListParams, ObjectMeta, Patch, PatchParams, PostParams};
 
 use super::{Secret, SecretError, SecretRef, SecretStore};
 
@@ -57,6 +59,19 @@ impl KubeSecretStore {
         }
     }
 
+    /// The store in `namespace`, through the client the environment
+    /// configures: the in-cluster ServiceAccount, or `KUBECONFIG`.
+    ///
+    /// # Errors
+    ///
+    /// [`SecretError::Config`] when no client can be configured.
+    pub async fn from_environment(namespace: &str) -> Result<Self, SecretError> {
+        let client = kube::Client::try_default()
+            .await
+            .map_err(|e| SecretError::Config(format!("no Kubernetes client: {e}")))?;
+        Ok(Self::new(client, namespace))
+    }
+
     /// What a failed call tells: the API's status and reason, or the
     /// client's error. Neither carries the Secret's data.
     fn error(&self, op: &str, r: &SecretRef, e: &kube::Error) -> SecretError {
@@ -75,10 +90,10 @@ fn not_found(e: &kube::Error) -> bool {
     matches!(e, kube::Error::Api(status) if status.code == 404)
 }
 
-#[async_trait]
-impl SecretStore for KubeSecretStore {
-    async fn put(&self, r: &SecretRef, s: Secret<Vec<u8>>) -> Result<(), SecretError> {
-        let object = KubeSecret {
+impl KubeSecretStore {
+    /// The Secret object holding `s` under `r`.
+    fn object(&self, r: &SecretRef, s: &Secret<Vec<u8>>) -> KubeSecret {
+        KubeSecret {
             metadata: ObjectMeta {
                 name: Some(r.as_str().to_string()),
                 namespace: Some(self.namespace.clone()),
@@ -100,7 +115,14 @@ impl SecretStore for KubeSecretStore {
                 ByteString(s.expose().clone()),
             )])),
             ..KubeSecret::default()
-        };
+        }
+    }
+}
+
+#[async_trait]
+impl SecretStore for KubeSecretStore {
+    async fn put(&self, r: &SecretRef, s: Secret<Vec<u8>>) -> Result<(), SecretError> {
+        let object = self.object(r, &s);
         self.api
             .patch(
                 r.as_str(),
@@ -110,6 +132,19 @@ impl SecretStore for KubeSecretStore {
             .await
             .map(|_| ())
             .map_err(|e| self.error("writing", r, &e))
+    }
+
+    async fn create(&self, r: &SecretRef, s: Secret<Vec<u8>>) -> Result<bool, SecretError> {
+        let object = self.object(r, &s);
+        let params = PostParams {
+            field_manager: Some(FIELD_MANAGER.to_string()),
+            ..PostParams::default()
+        };
+        match self.api.create(&params, &object).await {
+            Ok(_) => Ok(true),
+            Err(kube::Error::Api(status)) if status.code == 409 => Ok(false),
+            Err(e) => Err(self.error("creating", r, &e)),
+        }
     }
 
     async fn get(&self, r: &SecretRef) -> Result<Secret<Vec<u8>>, SecretError> {

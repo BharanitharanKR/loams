@@ -9,6 +9,8 @@ mod meta_backend;
 pub mod mysql_wire;
 #[cfg(feature = "pgwire")]
 pub mod pg;
+#[cfg(feature = "postgres")]
+pub mod pg_control;
 mod server;
 #[cfg(feature = "sqldb")]
 pub mod sqlgate;

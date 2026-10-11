@@ -2,6 +2,7 @@
 """Enforce D552 without printing file contents or scanning untracked secrets."""
 from fnmatch import fnmatchcase
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tomllib
@@ -15,6 +16,100 @@ ALLOWLIST = ("docs/design/13-decision-log.md", "docs/design/_pending/*.md",
              "docs/open-core.md", "docs/plans/2026-10-0*-rn1-*.md",
              "docs/plans/2026-10-02-mt4-*.md", "CHANGELOG.md")
 PREFIX = "loam-platform"
+
+# PG2 (D548, D550; PG2 Task 9): in Loams Postgres's control plane and its
+# chart, no field, metric, table or endpoint is named for billing. Names are
+# read from code and strings with the comments taken out, so prose may still
+# say "the plan".
+NAME_SCOPES = ("crates/loams-pg-control/", "deploy/helm/loams-postgres/")
+NAME_SUFFIXES = (".rs", ".toml", ".yaml", ".yml", ".json", ".tpl", ".sql", ".proto")
+BILLING_WORDS = frozenset(w + s for w in ("plan", "price", "invoice", "credit", "meter",
+                                           "billable", "usage") for s in ("", "s"))
+# Names of other crates that only look like billing words.
+ALLOWED_NAMES = frozenset({"FaultPlan"})  # loams-kv's fault injection
+TOKEN = re.compile(r"[A-Za-z0-9_]+")
+CAMEL = re.compile(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|[0-9]+")
+
+
+def strip_rust_comments(text):
+    """`text` with `//` and `/* */` comments blanked (newlines kept), strings kept."""
+    out, i, n = [], 0, len(text)
+    while i < n:
+        c = text[i]
+        if text.startswith("//", i):
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+        elif text.startswith("/*", i):
+            depth, i = 1, i + 2
+            while i < n and depth:
+                if text.startswith("/*", i):
+                    depth, i = depth + 1, i + 2
+                elif text.startswith("*/", i):
+                    depth, i = depth - 1, i + 2
+                else:
+                    if text[i] == "\n":
+                        out.append("\n")
+                    i += 1
+        elif c == "r" and re.match(r'r#*"', text[i:]):
+            hashes = len(re.match(r'r(#*)"', text[i:]).group(1))
+            end = text.find('"' + "#" * hashes, i + 2 + hashes)
+            end = n if end < 0 else end + 1 + hashes
+            out.append(text[i:end])
+            i = end
+        elif c == '"':
+            j = i + 1
+            while j < n and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            out.append(text[i:j + 1])
+            i = j + 1
+        elif c == "'" and (text.startswith("'\\", i) or (i + 2 < n and text[i + 2] == "'")):
+            # A char literal ('"', '\''); anything else is a lifetime.
+            j = text.find("'", i + 2 if text[i + 1] != "\\" else i + 3)
+            j = n if j < 0 else j
+            out.append(text[i:j + 1])
+            i = j + 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def strip_hash_comments(text):
+    """`text` with `#` comments (outside quotes) blanked, newlines kept."""
+    lines = []
+    for line in text.split("\n"):
+        quote = None
+        for k, c in enumerate(line):
+            if quote:
+                quote = None if c == quote else quote
+            elif c in "'\"":
+                quote = c
+            elif c == "#" and (k == 0 or line[k - 1] in " \t"):
+                line = line[:k]
+                break
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def billing_names(name, data):
+    """(line, word) for every name in `data` with a billing word in it."""
+    try:
+        text = data.decode()
+    except UnicodeError:
+        return [(1, "undecodable file")]
+    if name.endswith(".rs"):
+        text = strip_rust_comments(text)
+    elif not name.endswith(".json"):
+        text = strip_hash_comments(text)
+    found = []
+    for match in TOKEN.finditer(text):
+        if match.group() in ALLOWED_NAMES:
+            continue
+        for part in match.group().split("_"):
+            for word in CAMEL.findall(part):
+                if word.lower() in BILLING_WORDS:
+                    found.append((text.count("\n", 0, match.start()) + 1, word.lower()))
+    return found
 
 
 def private_package(value):
@@ -65,6 +160,10 @@ def main():
                        zip(name.split("/"), allowed.split("/")))
                for allowed in ALLOWLIST):
             continue
+        if name.startswith(NAME_SCOPES) and name.endswith(NAME_SUFFIXES):
+            for line, word in billing_names(name, data):
+                print(f"{name}:{line}: billing name {word!r} (D548, D550; PG2 Task 9)", file=sys.stderr)
+                failed = True
         for marker in MARKERS:
             start = data.find(marker)
             if start >= 0:

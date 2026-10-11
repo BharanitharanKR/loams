@@ -175,3 +175,31 @@ async fn concurrent_puts_lose_nothing() {
         );
     }
 }
+
+#[tokio::test]
+async fn file_store_create_keeps_the_first_secret() {
+    let d = dir();
+    let store = open(d.path());
+    let r = new_ref();
+    assert!(
+        store
+            .create(&r, Secret::new(b"first".to_vec()))
+            .await
+            .expect("created")
+    );
+    assert!(
+        !store
+            .create(&r, Secret::new(b"second".to_vec()))
+            .await
+            .expect("not replaced")
+    );
+    assert_eq!(store.get(&r).await.expect("get").expose(), b"first");
+    // And across a reopen.
+    assert!(
+        !open(d.path())
+            .create(&r, Secret::new(b"third".to_vec()))
+            .await
+            .expect("not replaced")
+    );
+    assert_eq!(store.get(&r).await.expect("get").expose(), b"first");
+}

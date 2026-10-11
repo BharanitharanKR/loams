@@ -9,6 +9,8 @@
 //! operations and moves it to `Running`, then `Succeeded` or `Failed`, with
 //! its progress, under its lease.
 
+use std::time::Duration;
+
 use ulid::Ulid;
 
 pub use crate::model::{
@@ -17,9 +19,15 @@ pub use crate::model::{
 
 use super::{NeonRead, PgService, ServiceError, check_namespace, list_error, page};
 use crate::model::{
-    NamespaceOperationRec, NamespaceOperations, OperationIdKey, OperationIdRec, OperationKey,
+    AllOperationIds, NamespaceOperationKey, NamespaceOperationRec, NamespaceOperations,
+    OperationIdKey, OperationIdRec, OperationKey, Record as _,
 };
-use crate::store::{Batch, PgControlStore, StoreError};
+use crate::store::{Batch, BatchError, MAX_PAGE_SIZE, Page, PgControlStore, StoreError};
+
+/// How long a finished operation stays readable before
+/// [`PgService::collect_operations`] removes it (R5.13; Task 46's runbook
+/// owns the operator's choice).
+pub const OPERATION_RETENTION: Duration = Duration::from_secs(7 * 24 * 3600);
 
 /// A new operation id: "op-" and 26 lower-case hex characters (D146), the
 /// first 104 bits of a fresh ULID (time first, so ids sort by creation).
@@ -139,6 +147,73 @@ impl<N: NeonRead> PgService<N> {
             }
         }
         Ok((out, next.unwrap_or_default()))
+    }
+}
+
+impl<N: NeonRead> PgService<N> {
+    /// Removes every operation that finished (`Succeeded` or `Failed`) more
+    /// than `retention` before `now_ms`, with its two indexes, one
+    /// compare-and-set batch each; answers how many it removed. An
+    /// operation that moved meanwhile is left for the next run. Task 9 runs
+    /// it on a timer.
+    ///
+    /// # Errors
+    ///
+    /// The store's, when it does not answer.
+    pub async fn collect_operations(
+        &self,
+        now_ms: u64,
+        retention: Duration,
+    ) -> Result<usize, ServiceError> {
+        let retention_ms = u64::try_from(retention.as_millis()).unwrap_or(u64::MAX);
+        let mut removed = 0;
+        let mut at = Page::first(MAX_PAGE_SIZE);
+        loop {
+            let (ids, next) = self
+                .store
+                .list::<OperationIdRec>(&AllOperationIds, at)
+                .await?;
+            for index in ids {
+                let key = OperationKey {
+                    project_id: index.record.project_id.clone(),
+                    id: index.record.id.clone(),
+                };
+                let ns_key = NamespaceOperationKey {
+                    namespace: index.record.namespace.clone(),
+                    id: index.record.id.clone(),
+                };
+                let op = self.store.get::<OperationRec>(&key).await?;
+                let finished = op.as_ref().is_none_or(|op| {
+                    matches!(
+                        op.record.state,
+                        OperationState::Succeeded | OperationState::Failed
+                    ) && now_ms.saturating_sub(op.record.updated_at_ms) > retention_ms
+                });
+                if !finished {
+                    continue;
+                }
+                let mut batch = Batch::default();
+                if let Some(op) = &op {
+                    batch.delete::<OperationRec>(&key, op.version)?;
+                }
+                batch.delete::<OperationIdRec>(&index.record.key(), index.version)?;
+                if let Some(entry) = self.store.get::<NamespaceOperationRec>(&ns_key).await? {
+                    batch.delete::<NamespaceOperationRec>(&ns_key, entry.version)?;
+                }
+                match self.writer.commit(batch).await {
+                    Ok(_) => removed += 1,
+                    Err(BatchError {
+                        error: StoreError::Conflict { .. } | StoreError::NotFound,
+                        ..
+                    }) => {}
+                    Err(e) => return Err(e.error.into()),
+                }
+            }
+            match next {
+                Some(token) => at = Page::after(MAX_PAGE_SIZE, token),
+                None => return Ok(removed),
+            }
+        }
     }
 }
 

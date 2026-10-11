@@ -845,3 +845,78 @@ async fn a_branch_protected_during_a_project_delete_conflicts() {
         .expect_err("protected meanwhile");
     assert_eq!(e.reason, Reason::BranchProtected, "{e}");
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn finished_operations_are_collected_after_their_retention() {
+    use loams_pg_control::Batch;
+    use loams_pg_control::model::OperationKey;
+    use loams_pg_control::service::operations::OPERATION_RETENTION;
+
+    let h = harness!();
+    let out = h
+        .service
+        .create_project(&user(), create("shop", "k1"))
+        .await
+        .expect("create");
+    let op_id = out.operation.id.clone();
+    let retention_ms = u64::try_from(OPERATION_RETENTION.as_millis()).expect("ms");
+
+    // A pending operation is never collected, however old.
+    h.clock.advance_ms(retention_ms + 1);
+    assert_eq!(
+        h.service
+            .collect_operations(h.clock.now_ms(), OPERATION_RETENTION)
+            .await
+            .expect("collect"),
+        0
+    );
+
+    // Finished now: kept for the retention, then collected with its indexes.
+    let key = OperationKey {
+        project_id: out.project.record.id.clone(),
+        id: op_id.clone(),
+    };
+    let stored = h
+        .store
+        .get::<OperationRec>(&key)
+        .await
+        .expect("get")
+        .expect("the operation");
+    let mut done = stored.record.clone();
+    done.state = OperationState::Succeeded;
+    done.updated_at_ms = h.clock.now_ms();
+    let mut batch = Batch::default();
+    batch.put(&done, Some(stored.version)).expect("put");
+    h.store.api_writer().commit(batch).await.expect("commit");
+
+    assert_eq!(
+        h.service
+            .collect_operations(h.clock.now_ms(), OPERATION_RETENTION)
+            .await
+            .expect("collect"),
+        0
+    );
+    h.clock.advance_ms(retention_ms + 1);
+    assert_eq!(
+        h.service
+            .collect_operations(h.clock.now_ms(), OPERATION_RETENTION)
+            .await
+            .expect("collect"),
+        1
+    );
+    let e = h.service.get_operation(&op_id).await.expect_err("gone");
+    assert_eq!(e.reason, Reason::NotFound);
+    let (listed, _) = h
+        .service
+        .list_operations("acme", 0, "")
+        .await
+        .expect("list");
+    assert!(listed.iter().all(|o| o.id != op_id), "{listed:?}");
+    assert!(
+        h.store
+            .get::<OperationRec>(&key)
+            .await
+            .expect("get")
+            .is_none()
+    );
+}

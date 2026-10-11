@@ -348,6 +348,18 @@ impl SecretStore for MemorySecrets {
         Ok(())
     }
 
+    async fn create(&self, r: &SecretRef, s: Secret<Vec<u8>>) -> Result<bool, SecretError> {
+        if self.fail_puts.load(Ordering::SeqCst) {
+            return Err(SecretError::Unavailable("injected".into()));
+        }
+        let mut map = self.map();
+        if map.contains_key(r.as_str()) {
+            return Ok(false);
+        }
+        map.insert(r.as_str().into(), s.expose().clone());
+        Ok(true)
+    }
+
     async fn get(&self, r: &SecretRef) -> Result<Secret<Vec<u8>>, SecretError> {
         self.value(r)
             .map(Secret::new)

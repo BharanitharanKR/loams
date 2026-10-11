@@ -64,6 +64,12 @@ loams-live-proto.workspace = true
 loams-log.workspace = true
 loams-meta.workspace = true
 loams-meta-tikv = { workspace = true, optional = true }
+# Loams Postgres's control plane: the `loams pg-control` role (feature
+# `postgres`, PG2 Task 9, design §46 §6.1), and the Neon clients it is
+# configured with. Never in the default build (`pg_control.rs`'s
+# `default_features_exclude_postgres`).
+loams-pg-control = { path = "../loams-pg-control", optional = true }
+loams-postgres = { workspace = true, optional = true }
 # The public `loams.*.v1` packages the main port serves and reflects on
 # (design §44 §7–§8, API1 Task 1).
 loams-proto.workspace = true
@@ -96,7 +102,7 @@ es = ["dep:loams-es"]
 # `standalone`), with the cluster MVCC GC loop it runs. Off by default (owner
 # ruling T7-3): it pulls in the git-pinned tikv-client (row R4), which the
 # default build must not. CI's TiKV jobs build with `--features tikv`.
-tikv = ["dep:loams-meta-tikv", "dep:loams-tikv"]
+tikv = ["dep:loams-meta-tikv", "dep:loams-tikv", "loams-pg-control?/tikv"]
 # Loams Live (R1 plan Task 12): the `loams.live.v1` sync API on its own
 # loopback listener (`--live-*` on `dev` and `standalone`), on the embedded
 # store under `<data_dir>/live/`. In the default set, with no tikv-client
@@ -106,6 +112,14 @@ live = ["dep:loams-live", "dep:loams-live-js"]
 # Live on TiKV too: `--live-store tikv://<pd>[,<pd>]/<keyspace>` (and the
 # deprecated `--live-pd`/`--live-keyspace`), with its cluster GC loop.
 live-tikv = ["live", "tikv", "loams-live/tikv"]
+# Loams Postgres's control plane (PG2 Task 9, design §46 §6.1): the
+# `loams pg-control` role, serving `loams.postgres.v1` and the upcalls Neon's
+# components call. Off by default: the default build links none of it. With
+# `tikv` too, `--store tikv` keeps its records on TiKV.
+postgres = ["dep:loams-pg-control", "dep:loams-postgres"]
+# `--runtime kubernetes`: role secrets and the signing key as Kubernetes
+# Secrets (the kube client).
+postgres-kubernetes = ["postgres", "loams-pg-control/kubernetes"]
 # Serve Arrow Flight SQL (Task 12; `--flight-sql-listen`).
 flight = []
 # Serve the Qdrant REST and gRPC APIs (plan M1.4; `--qdrant-listen`).

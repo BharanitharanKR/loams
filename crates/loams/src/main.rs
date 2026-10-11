@@ -8,6 +8,9 @@ use std::time::Duration;
 use std::collections::BTreeMap;
 
 use clap::{Parser, Subcommand};
+
+#[cfg(feature = "postgres")]
+mod pg_control_cli;
 use loams::{ClusterConfig, MetaBackend, Server, ServerConfig};
 use loams_hot::Roles;
 
@@ -1129,6 +1132,15 @@ enum Command {
     #[cfg(feature = "live")]
     #[command(hide = true)]
     LiveWorker,
+    /// Loams Postgres's control plane (design §46 §6.1, PG2): serves
+    /// `loams.postgres.v1` on --listen and the upcalls Neon's components call
+    /// on --pg-upcall-listen, and reconciles projects and branches.
+    #[cfg(feature = "postgres")]
+    PgControl(Box<pg_control_cli::PgControlArgs>),
+    /// Mint an API key for `loams pg-control --pg-authz api-key`: prints the
+    /// key (shown only this once) and the entry to add to the keys file.
+    #[cfg(feature = "postgres")]
+    PgApiKey(pg_control_cli::PgApiKeyArgs),
 }
 
 /// `loams durable …`: commands that start no server.
@@ -1216,6 +1228,10 @@ fn config(command: Command) -> ServerConfig {
         Command::Durable { .. } => unreachable!("loams durable starts no server"),
         #[cfg(feature = "live")]
         Command::LiveWorker => unreachable!("loams live-worker starts no server"),
+        #[cfg(feature = "postgres")]
+        Command::PgControl(_) | Command::PgApiKey(_) => {
+            unreachable!("loams pg-control starts no engine server")
+        }
         Command::Dev {
             data_dir,
             listen,
@@ -1428,6 +1444,12 @@ async fn serve(cli: Cli) -> ExitCode {
     if let Command::Durable { command } = &cli.command {
         return durable(command).await;
     }
+    #[cfg(feature = "postgres")]
+    let cli = match cli.command {
+        Command::PgControl(args) => return pg_control_cli::run(*args).await,
+        Command::PgApiKey(args) => return pg_control_cli::mint(&args),
+        command => Cli { command },
+    };
     if let Err(err) = arm_failpoints() {
         eprintln!("loams: {err}");
         return ExitCode::FAILURE;

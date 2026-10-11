@@ -17,6 +17,8 @@ mod connect_errors;
 mod connect_hot;
 mod connect_idempotency;
 mod connect_messages;
+#[cfg(feature = "postgres")]
+pub(crate) mod connect_postgres;
 mod connect_query;
 mod connect_query_filters;
 mod connect_query_ir;
@@ -26,6 +28,8 @@ mod graph;
 pub mod hot;
 pub mod house_proxy;
 pub mod internal;
+#[cfg(feature = "postgres")]
+mod postgres_messages;
 mod query;
 mod sql;
 pub mod streams;

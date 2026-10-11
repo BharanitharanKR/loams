@@ -16,6 +16,10 @@
 # pg-control (Task 3 onward): loams-pg-control's tests on the local store, and
 # clippy on the default and the tikv build. Its TiKV conformance runs in
 # ci.yml's TiKV suites job, against the playground.
+#
+# pg-control-role (Task 9): the `loams pg-control` role (feature `postgres`):
+# authorization, audit, the API and upcall listeners, served-only
+# reflection, and that the default build links none of it.
 name: PG2
 
 on:
@@ -32,6 +36,15 @@ on:
       - "crates/loams-wal-decoder/**"
       - "crates/loams-postgres/**"
       - "crates/loams-pg-control/**"
+      - "crates/loams/Cargo.toml"
+      - "crates/loams/src/main.rs"
+      - "crates/loams/src/pg_control.rs"
+      - "crates/loams/src/pg_control_cli.rs"
+      - "crates/loams/src/api/connect.rs"
+      - "crates/loams/src/api/connect_postgres.rs"
+      - "crates/loams/src/api/postgres_messages.rs"
+      - "crates/loams/tests/pg_control.rs"
+      - "scripts/ci/no-metering.py"
       - "crates/loams-kv/**"
       - "scripts/pg2/**"
       - "proto/**"
@@ -51,6 +64,15 @@ on:
       - "crates/loams-wal-decoder/**"
       - "crates/loams-postgres/**"
       - "crates/loams-pg-control/**"
+      - "crates/loams/Cargo.toml"
+      - "crates/loams/src/main.rs"
+      - "crates/loams/src/pg_control.rs"
+      - "crates/loams/src/pg_control_cli.rs"
+      - "crates/loams/src/api/connect.rs"
+      - "crates/loams/src/api/connect_postgres.rs"
+      - "crates/loams/src/api/postgres_messages.rs"
+      - "crates/loams/tests/pg_control.rs"
+      - "scripts/ci/no-metering.py"
       - "crates/loams-kv/**"
       - "scripts/pg2/**"
       - "proto/**"
@@ -196,3 +218,23 @@ jobs:
         run: cargo test -p loams-pg-control --features kubernetes --test secrets_kube --locked
       - name: clippy (kubernetes, keyring)
         run: cargo clippy -p loams-pg-control --all-targets --features kubernetes,keyring --locked -- -D warnings
+
+  pg-control-role:
+    name: loams pg-control (feature postgres, and the default build without it)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: pg2-loams-pg-control-role
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
+      - name: test (feature postgres)
+        run: cargo test -p loams --features postgres --locked --test pg_control
+      - name: test (default features)
+        run: cargo test -p loams --locked --test pg_control
+      - name: clippy (postgres, postgres-kubernetes)
+        run: cargo clippy -p loams --all-targets --features postgres-kubernetes --locked -- -D warnings
+      - name: the no-metering guard's own tests
+        run: python3 scripts/ci/test-no-metering.py

@@ -10,9 +10,13 @@
 //! RPCs and the [`secrets::SecretStore`] role passwords live in (Task 6);
 //! the project and branch reconcilers, under each project's fenced lease
 //! ([`reconcile`]) (Task 7); the upcall listener Neon's components call,
-//! with the compute tokens it checks ([`upcall`]) (Task 8). Reached only
-//! through `loams`'s feature `postgres` (Task 9).
+//! with the compute tokens it checks ([`upcall`]) (Task 8); who may call
+//! ([`authz`]) and the audit events every mutation emits ([`audit`])
+//! (Task 9). Reached only through `loams`'s feature `postgres` (Task 9),
+//! whose `pg-control` role serves this crate.
 
+pub mod audit;
+pub mod authz;
 pub mod ids;
 pub mod model;
 pub mod names;

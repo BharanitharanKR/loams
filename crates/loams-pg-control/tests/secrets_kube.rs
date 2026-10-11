@@ -98,6 +98,35 @@ async fn delete(
     }
 }
 
+/// Creates a Secret; 409 when one of that name exists.
+async fn create(
+    State(s): State<Shared>,
+    Path(ns): Path<String>,
+    RawQuery(q): RawQuery,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let mut api = s.lock().expect("lock");
+    if record(&mut api, "POST", q.as_deref(), &headers) {
+        return status(500, "InternalError", "etcd is down");
+    }
+    let mut object: Value = serde_json::from_slice(&body).expect("a JSON object");
+    let name = object["metadata"]["name"]
+        .as_str()
+        .expect("a name")
+        .to_string();
+    if api.objects.contains_key(&(ns.clone(), name.clone())) {
+        return status(
+            409,
+            "AlreadyExists",
+            &format!("secrets \"{name}\" already exists"),
+        );
+    }
+    object["metadata"]["resourceVersion"] = json!("1");
+    api.objects.insert((ns, name), object.clone());
+    (StatusCode::CREATED, axum::Json(object)).into_response()
+}
+
 /// The namespace's Secrets' metadata, two per page whatever the `limit`,
 /// so `list` has to follow `continue`.
 async fn list(
@@ -155,7 +184,7 @@ async fn stand_in() -> (Shared, KubeSecretStore) {
             "/api/v1/namespaces/{ns}/secrets/{name}",
             get(read).patch(patch).delete(delete),
         )
-        .route("/api/v1/namespaces/{ns}/secrets", get(list))
+        .route("/api/v1/namespaces/{ns}/secrets", get(list).post(create))
         .with_state(shared.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
@@ -269,4 +298,40 @@ async fn kube_store_lists_role_secrets_by_label_page_by_page() {
         );
     }
     assert!(lists[1].contains("continue=2"), "{}", lists[1]);
+}
+
+#[tokio::test]
+async fn kube_store_create_posts_and_keeps_the_first_secret() {
+    let (api, store) = stand_in().await;
+    let r = new_ref();
+    assert!(
+        store
+            .create(&r, Secret::new(b"first".to_vec()))
+            .await
+            .expect("created")
+    );
+    assert!(
+        !store
+            .create(&r, Secret::new(b"second".to_vec()))
+            .await
+            .expect("409: not replaced")
+    );
+    assert_eq!(store.get(&r).await.expect("get").expose(), b"first");
+    let api = api.lock().expect("lock");
+    let posts: Vec<&String> = api
+        .calls
+        .iter()
+        .filter(|c| c.starts_with("POST "))
+        .collect();
+    assert_eq!(posts.len(), 2, "{:?}", api.calls);
+    assert!(
+        posts[0].contains("fieldManager=loams-pg-control"),
+        "{}",
+        posts[0]
+    );
+    let object = &api.objects[&("loams-pg-acme".to_string(), r.to_string())];
+    assert_eq!(
+        object["metadata"]["labels"]["app.kubernetes.io/managed-by"],
+        "loams-pg-control"
+    );
 }

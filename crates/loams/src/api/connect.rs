@@ -403,21 +403,42 @@ pub(super) fn not_implemented(rpc: &str) -> ConnectError {
     )
 }
 
-/// The reflector for `grpc.reflection.v1`, or `None` when the descriptor set
-/// `loams-proto` emitted does not parse. Reflection is a convenience, so a
-/// broken descriptor set costs reflection and nothing else: it is logged and
-/// the port still serves.
-fn reflector(state: &AppState) -> Option<connectrpc_reflection::Reflector> {
-    if !state.reflection {
-        return None;
+/// The reflection services, which list themselves (as grpc-go's do).
+const REFLECTION_SERVICES: [&str; 2] = [
+    "grpc.reflection.v1.ServerReflection",
+    "grpc.reflection.v1alpha.ServerReflection",
+];
+
+/// Installs `grpc.reflection.v1` on `rpc`. `ListServices` lists only what
+/// this process answers (PG2 R1.4): every service with a route on `rpc`
+/// (served, or a stub that refuses with a typed reason; health among them),
+/// the services in `also` that a layer outside `rpc` answers, and
+/// reflection itself. A package that is only in `loams-proto`'s descriptor
+/// set, such as one a different role serves, is never listed, though its
+/// files stay resolvable.
+///
+/// Reflection is a convenience, so a descriptor set that does not parse
+/// costs reflection and nothing else: it is logged and the port still
+/// serves.
+pub(crate) fn install_reflection(rpc: Router, also: &[&str]) -> Router {
+    let mut services: Vec<String> = Vec::new();
+    let answered = rpc
+        .methods()
+        .filter_map(|path| path.split_once('/').map(|(service, _)| service))
+        .chain(also.iter().copied())
+        .chain(REFLECTION_SERVICES);
+    for service in answered {
+        if !services.iter().any(|s| s == service) {
+            services.push(service.to_owned());
+        }
     }
     match connectrpc_reflection::Reflector::from_descriptor_set_bytes(
         loams_proto::FILE_DESCRIPTOR_SET,
     ) {
-        Ok(reflector) => Some(reflector),
+        Ok(reflector) => connectrpc_reflection::install(rpc, reflector.with_services(services)),
         Err(err) => {
             tracing::warn!(%err, "gRPC reflection is off: the descriptor set does not parse");
-            None
+            rpc
         }
     }
 }
@@ -444,9 +465,17 @@ pub(crate) fn routes(state: &AppState, hot_default: bool) -> AxumRouter {
     rpc = super::connect_documents::register(rpc, state);
     rpc = super::connect_query::register(rpc, state);
     let (rpc, _health) = connectrpc_health::install_static(rpc, served_services(graph_served));
-    let rpc = match reflector(state) {
-        Some(reflector) => connectrpc_reflection::install(rpc, reflector),
-        None => rpc,
+    let rpc = if state.reflection {
+        // `loams.house.v1` is answered by the House layer around these
+        // routes (`super::house_proxy`), not by a route of `rpc`.
+        let layered: Vec<&str> = CATALOGUE
+            .iter()
+            .filter(|entry| entry.package == super::house_proxy::PACKAGE)
+            .flat_map(|entry| entry.services.iter().copied())
+            .collect();
+        install_reflection(rpc, &layered)
+    } else {
+        rpc
     };
     // Before it is consumed: the paths are what the axum router keys on.
     let paths: Vec<String> = rpc.methods().map(|path| format!("/{path}")).collect();

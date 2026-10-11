@@ -94,6 +94,36 @@ class BoundaryTests(unittest.TestCase):
         result = self.check(1)
         self.assertNotIn("secret-text", result.stderr)
 
+    def test_no_metering_guard_covers_pg(self):
+        # PG2 Task 9 (D548, D550): no field, metric, table or endpoint in
+        # pg-control or its chart is named for billing.
+        self.put("crates/loams-pg-control/src/fixture.rs",
+                 "pub struct Compute {\n    pub billable_seconds: u64,\n}\n")
+        result = self.check(1)
+        self.assertIn("crates/loams-pg-control/src/fixture.rs:2", result.stderr)
+        self.assertIn("billable", result.stderr)
+
+    def test_pg_guard_reads_names_not_prose(self):
+        path = "crates/loams-pg-control/src/names.rs"
+        self.put(path, "// the plan's usage notes, credit to Neon\n/* price */\n"
+                       "fn f() { let url = \"http://h/x\"; let c = '\"'; }\n")
+        self.check(0)
+        for name in ("plan_id", "PriceTable", "loams_pg_usage_total", "invoice",
+                     "meterBytes", "credits", "/v1/usage"):
+            with self.subTest(name=name):
+                self.put(path, f'fn f() {{ let x = "{name}"; }}\n')
+                self.check(1)
+        self.put(path, "fn f() { let planned = 1; }\nimpl loams_kv::FaultPlan for X {}\n")
+        self.check(0)
+        chart = "deploy/helm/loams-postgres/values.yaml"
+        self.put(chart, "# usage: see the README\nmeter: true\n")
+        self.check(1)
+        self.put(chart, "# usage: see the README\nreplicas: 2\n")
+        self.check(0)
+        # Outside the two paths the names are not this guard's business.
+        self.put("crates/other/src/lib.rs", "pub struct Plan { pub billable: bool }\n")
+        self.check(0)
+
     def test_guard_fails_closed_on_invalid_manifest(self):
         self.put("Cargo.toml", "[package\n")
         self.check(1)

@@ -147,6 +147,11 @@ pub enum SecretError {
 pub trait SecretStore: Send + Sync + 'static {
     /// Stores `s` under `r`, replacing what was there.
     async fn put(&self, r: &SecretRef, s: Secret<Vec<u8>>) -> Result<(), SecretError>;
+    /// Stores `s` under `r` only when nothing is there: `true` when it did,
+    /// `false` when `r` already held a secret, which is kept. Atomic, so of
+    /// two callers that race exactly one stores its secret (Task 9: the
+    /// signing key every `pg-control` instance shares).
+    async fn create(&self, r: &SecretRef, s: Secret<Vec<u8>>) -> Result<bool, SecretError>;
     /// The secret under `r`.
     async fn get(&self, r: &SecretRef) -> Result<Secret<Vec<u8>>, SecretError>;
     /// Deletes the secret under `r`; an absent one is not an error.

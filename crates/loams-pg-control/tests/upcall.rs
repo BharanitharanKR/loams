@@ -820,7 +820,7 @@ async fn faulty_rig(
 ) -> (Rig, Arc<tokio::sync::Notify>) {
     let kv = factory().kv().await.unwrap();
     let reached = Arc::new(tokio::sync::Notify::new());
-    let plan = FirstBatchOnce {
+    let faults = FirstBatchOnce {
         point,
         fault,
         fired: std::sync::atomic::AtomicBool::new(false),
@@ -830,7 +830,7 @@ async fn faulty_rig(
         commit_tokens,
         ..common::options()
     };
-    let store = KvControlStore::new(kv.with_faults(Arc::new(plan)), options);
+    let store = KvControlStore::new(kv.with_faults(Arc::new(faults)), options);
     (rig_on(store, |_| {}).await, reached)
 }
 

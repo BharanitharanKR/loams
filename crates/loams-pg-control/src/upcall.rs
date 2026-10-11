@@ -70,8 +70,8 @@ use tokio::sync::Semaphore;
 use tower::Service;
 
 pub use keys::{
-    COMPUTE_TOKEN_TTL, CTL_TOKEN_TTL, ComputeKeys, KeyError, TokenError, UPCALL_AUDIENCE,
-    UpcallClaims,
+    COMPUTE_TOKEN_TTL, CTL_TOKEN_TTL, ComputeKeys, KeyError, SIGNING_KEY_REF, SigningKeyError,
+    TokenError, UPCALL_AUDIENCE, UpcallClaims, load_or_create_signing_key,
 };
 pub use limit::Rate;
 

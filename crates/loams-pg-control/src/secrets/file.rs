@@ -131,6 +131,18 @@ impl SecretStore for FileSecretStore {
         .await
     }
 
+    async fn create(&self, r: &SecretRef, s: Secret<Vec<u8>>) -> Result<bool, SecretError> {
+        let key = r.as_str().to_string();
+        self.with_map(move |map| {
+            if map.0.contains_key(&key) {
+                return Ok((false, false));
+            }
+            map.0.insert(key, s.expose().clone());
+            Ok((true, true))
+        })
+        .await
+    }
+
     async fn get(&self, r: &SecretRef) -> Result<Secret<Vec<u8>>, SecretError> {
         let key = r.as_str().to_string();
         self.with_map(move |map| match map.0.get(&key) {
