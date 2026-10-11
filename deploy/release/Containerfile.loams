@@ -1,0 +1,52 @@
+# syntax=docker/dockerfile:1.7
+# The Loams engine image (ghcr.io/ostrium-labs/loams), built by build.sh from
+# the repository root. Multi-stage: the build stage compiles `loams` with the
+# preview feature set, the runtime stage is debian-slim with the binary, curl
+# for the healthcheck and tini as PID 1, run as an unprivileged user.
+ARG RUST_IMAGE=docker.io/library/rust:1.97.1-slim-trixie
+ARG RUNTIME_IMAGE=docker.io/library/debian:trixie-slim
+
+FROM ${RUST_IMAGE} AS build
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      protobuf-compiler libprotobuf-dev pkg-config libssl-dev clang g++ make cmake perl git \
+ && rm -rf /var/lib/apt/lists/*
+# The image's toolchain, not rust-toolchain.toml's (which also asks for
+# rustfmt and clippy, which a release build does not need).
+ENV RUSTUP_TOOLCHAIN=1.97.1 \
+    CARGO_TERM_COLOR=never
+WORKDIR /src
+COPY . .
+ARG FEATURES=live,live-tikv,durable,graph,tikv,pgwire,mysql-wire,stream-grpc
+ARG CARGO_BUILD_JOBS=
+RUN --mount=type=cache,id=loams-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=loams-target-engine,target=/src/target \
+    if [ -n "$CARGO_BUILD_JOBS" ]; then export CARGO_BUILD_JOBS; else unset CARGO_BUILD_JOBS; fi \
+ && cargo build --locked --release -p loams --bin loams --features "$FEATURES" \
+ && install -D -m 0755 target/release/loams /out/loams
+
+FROM ${RUNTIME_IMAGE}
+ARG VERSION=dev
+ARG REVISION=unknown
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl tini \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 10001 loams \
+ && useradd --system --uid 10001 --gid loams --home-dir /var/lib/loams --shell /usr/sbin/nologin loams \
+ && install -d -o loams -g loams -m 0750 /var/lib/loams /var/lib/loams/bucket /var/lib/loams/graph
+COPY --from=build /out/loams /usr/local/bin/loams
+LABEL org.opencontainers.image.title="loams" \
+      org.opencontainers.image.description="Loams engine (preview)" \
+      org.opencontainers.image.source="https://github.com/ostrium-labs/loams" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.licenses="Apache-2.0"
+USER 10001:10001
+WORKDIR /var/lib/loams
+VOLUME ["/var/lib/loams"]
+EXPOSE 8080
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:8080/health || exit 1
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/loams"]
+CMD ["standalone", "--bucket", "file:///var/lib/loams/bucket", "--data-dir", "/var/lib/loams", \
+     "--listen", "0.0.0.0:8080", "--graph-data-dir", "/var/lib/loams/graph"]

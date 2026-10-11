@@ -1,0 +1,49 @@
+# Headscale for `--profile headscale` (0.26). server_url and dns.base_domain
+# come from HEADSCALE_SERVER_URL and HEADSCALE_DNS_BASE_DOMAIN (compose.yaml),
+# which override the values below.
+server_url: http://127.0.0.1:8090
+listen_addr: 0.0.0.0:8080
+metrics_listen_addr: 127.0.0.1:9090
+grpc_listen_addr: 127.0.0.1:50443
+grpc_allow_insecure: false
+noise:
+  private_key_path: /var/lib/headscale/noise_private.key
+prefixes:
+  v4: 100.64.0.0/10
+  v6: fd7a:115c:a1e0::/48
+  allocation: sequential
+derp:
+  server:
+    enabled: false
+  urls:
+    - https://controlplane.tailscale.com/derpmap/default
+  paths: []
+  auto_update_enabled: true
+  update_frequency: 24h
+disable_check_updates: true
+ephemeral_node_inactivity_timeout: 30m
+database:
+  type: sqlite
+  sqlite:
+    path: /var/lib/headscale/db.sqlite
+    write_ahead_log: true
+log:
+  level: info
+  format: text
+policy:
+  mode: file
+  path: ""
+dns:
+  magic_dns: true
+  base_domain: loams.internal
+  override_local_dns: false
+  nameservers:
+    global: []
+    split: {}
+  search_domains: []
+  extra_records: []
+unix_socket: /var/lib/headscale/headscale.sock
+unix_socket_permission: "0770"
+logtail:
+  enabled: false
+randomize_client_port: false

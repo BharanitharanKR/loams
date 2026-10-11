@@ -1,0 +1,16 @@
+# tailscale/
+
+`tailscale serve` configurations for the sidecar, picked by `TS_SERVE_MODE`:
+
+- `serve-https.json` (default): `https://<TS_HOSTNAME>.<tailnet>.ts.net/` to the
+  engine's HTTP API on `127.0.0.1:8080`, with a certificate from Tailscale. Needs
+  MagicDNS and HTTPS certificates turned on for the tailnet. Funnel stays off:
+  the engine is never on the public internet.
+- `serve-http.json`: plain TCP from port 80 of the node to the engine, for
+  Headscale, which issues no certificates. A console served over HTTPS cannot
+  call an `http://` engine (mixed content), so use it with a console served over
+  HTTP from the tailnet or this machine (`--profile console`).
+
+Only the engine's HTTP API is forwarded. To reach TiDB or a Postgres compute
+over the tailnet, add a `TCPForward` entry (for example `"4000": {"TCPForward":
+"tidb:4000"}`) after setting their passwords.

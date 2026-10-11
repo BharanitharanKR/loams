@@ -1,0 +1,223 @@
+# The Loams preview stack: everything a user runs themselves, on one machine
+# or a VM of their own (BYOC, see byoc/install.sh). Configure it in .env (copy
+# .env.example). Start the engine and its storage with
+#
+#   docker compose up -d loams tailscale
+#
+# or the whole stack (adds house, tidb and the Postgres stack) with `up -d`.
+#
+# Network exposure: nothing binds a host port on 0.0.0.0. The engine, House and
+# the Tailscale sidecar share one network namespace (the `loams` service's);
+# the sidecar joins the user's tailnet (Tailscale, or Headscale through
+# TS_LOGIN_SERVER) and `tailscale serve` proxies https://loams.<tailnet>/ to
+# the engine's HTTP API on 127.0.0.1:8080. That tailnet URL is LOAMS_ENGINE_URL
+# for the console. Everything else talks over the compose network. The few
+# published ports (console, headscale, the Postgres stack's) are on 127.0.0.1
+# unless .env says otherwise.
+name: loams
+
+include:
+  # The Loams Postgres (Neon) storage stack and its compute. Point
+  # LOAMS_POSTGRES_COMPOSE at ./postgres-off.yaml to leave it out.
+  - path: ${LOAMS_POSTGRES_COMPOSE:-../loams-postgres-dev/compose.yaml}
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  pd:
+    <<: *restart
+    image: docker.io/pingcap/pd:${TIKV_TAG:-v8.5.8}
+    command:
+      - --name=pd
+      - --data-dir=/data/pd
+      - --config=/etc/pd.toml
+      - --client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://pd:2379
+      - --peer-urls=http://0.0.0.0:2380
+      - --advertise-peer-urls=http://pd:2380
+      - --initial-cluster=pd=http://pd:2380
+    volumes:
+      - pd-data:/data/pd
+      - ./config/pd.toml:/etc/pd.toml:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:2379/pd/api/v1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  tikv:
+    <<: *restart
+    image: docker.io/pingcap/tikv:${TIKV_TAG:-v8.5.8}
+    command:
+      - --pd-endpoints=pd:2379
+      - --addr=0.0.0.0:20160
+      - --advertise-addr=tikv:20160
+      - --status-addr=0.0.0.0:20180
+      - --advertise-status-addr=tikv:20180
+      - --data-dir=/data/tikv
+      - --config=/etc/tikv.toml
+    volumes:
+      - tikv-data:/data/tikv
+      - ./config/tikv.toml:/etc/tikv.toml:ro
+    depends_on:
+      pd:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:20180/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # Keyspace-mode TiDB (Loams SQL), MySQL protocol on tidb:4000 in the compose
+  # network. Its root user starts without a password: set one before forwarding
+  # 4000 over the tailnet.
+  tidb:
+    <<: *restart
+    image: ${TIDB_IMAGE:-ghcr.io/ostrium-labs/tidb:v8.5.8-loams.1}
+    command:
+      - --store=tikv
+      - --path=pd:2379
+      - --config=/etc/tidb.toml
+      - --advertise-address=tidb
+      - -P=4000
+      - --status=10080
+    volumes:
+      - ./config/tidb.toml:/etc/tidb.toml:ro
+    depends_on:
+      tikv:
+        condition: service_healthy
+
+  loams:
+    <<: *restart
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-preview}
+    command:
+      - standalone
+      - --bucket=${LOAMS_BUCKET:-file:///var/lib/loams/bucket}
+      - --data-dir=/var/lib/loams
+      - --listen=${LOAMS_LISTEN:-0.0.0.0:8080}
+      - --graph-data-dir=/var/lib/loams/graph
+      - --meta=tikv://pd:2379/loams_meta
+      - --live-store=tikv://pd:2379/loams_live_dev
+      - --house-endpoint=http://127.0.0.1:8123
+    environment:
+      RUST_LOG: ${RUST_LOG:-info}
+      # Engine auth (preview contract): oidc | apikey | off (loopback only).
+      LOAMS_AUTH_MODE: ${LOAMS_AUTH_MODE:-oidc}
+      LOAMS_OIDC_ISSUER: ${LOAMS_OIDC_ISSUER:-https://auth.loams.dev}
+      LOAMS_OIDC_AUDIENCE: ${LOAMS_OIDC_AUDIENCE:-loams-engine}
+      LOAMS_API_KEYS_FILE: /etc/loams/secrets/api-keys
+    # Further engine settings, such as AWS_* credentials for an s3://
+    # LOAMS_BUCKET, kept out of compose.yaml.
+    env_file:
+      - path: ./secrets/engine.env
+        required: false
+    volumes:
+      - loams-data:/var/lib/loams
+      - ./secrets:/etc/loams/secrets:ro
+    depends_on:
+      pd:
+        condition: service_healthy
+      tikv:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 3
+
+  # Loams House (the ClickHouse HTTP interface, loams-fabric with its chDB
+  # workers). It serves loopback only (D111), so it runs in the engine's
+  # network namespace, where the engine proxies loams.house.v1 to it.
+  house:
+    <<: *restart
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-fabric:${LOAMS_VERSION:-preview}
+    network_mode: service:loams
+    volumes:
+      - house-data:/var/lib/loams-house
+    depends_on:
+      loams:
+        condition: service_started
+
+  # The only way in from outside: a tailnet node named TS_HOSTNAME in the
+  # engine's network namespace. Userspace networking needs no extra
+  # capabilities or /dev/net/tun.
+  tailscale:
+    <<: *restart
+    image: docker.io/tailscale/tailscale:${TAILSCALE_TAG:-v1.90.6}
+    network_mode: service:loams
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_HOSTNAME: ${TS_HOSTNAME:-loams}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"
+      TS_AUTH_ONCE: "true"
+      # https (Tailscale: MagicDNS + HTTPS certificates) or http (Headscale,
+      # which issues no certificates); see tailscale/serve-*.json.
+      TS_SERVE_CONFIG: /config/serve-${TS_SERVE_MODE:-https}.json
+      TS_EXTRA_ARGS: --login-server=${TS_LOGIN_SERVER:-https://controlplane.tailscale.com} ${TS_EXTRA_ARGS:-}
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./tailscale:/config:ro
+    depends_on:
+      loams:
+        condition: service_started
+
+  # A self-hosted tailnet control server (`--profile headscale`). Clients,
+  # including the browser's device, must reach HEADSCALE_SERVER_URL, so on a VM
+  # set HEADSCALE_BIND=0.0.0.0 (and TLS in front of it) or reach it over SSH.
+  headscale:
+    <<: *restart
+    profiles: [headscale]
+    image: docker.io/headscale/headscale:${HEADSCALE_TAG:-0.26.1}
+    command: [serve]
+    environment:
+      HEADSCALE_SERVER_URL: ${HEADSCALE_SERVER_URL:-http://127.0.0.1:8090}
+      HEADSCALE_DNS_BASE_DOMAIN: ${HEADSCALE_BASE_DOMAIN:-loams.internal}
+    ports:
+      - ${HEADSCALE_BIND:-127.0.0.1}:${HEADSCALE_PORT:-8090}:8080
+    volumes:
+      - ./headscale/config.yaml:/etc/headscale/config.yaml:ro
+      - headscale-data:/var/lib/headscale
+
+  # The console served from this machine (`--profile console`) instead of the
+  # hosted one, Vercel or Cloudflare. LOAMS_CONSOLE_DIR is a built console
+  # (web/apps/console's `pnpm build` output); /config.json carries its runtime
+  # configuration.
+  console:
+    <<: *restart
+    profiles: [console]
+    image: docker.io/nginxinc/nginx-unprivileged:${NGINX_TAG:-1.29-alpine}
+    environment:
+      LOAMS_ENGINE_URL: ${LOAMS_ENGINE_URL:-}
+      LOAMS_AUTH_ISSUER: ${LOAMS_AUTH_ISSUER:-https://auth.loams.dev}
+      LOAMS_AUTH_CLIENT_ID: ${LOAMS_AUTH_CLIENT_ID:-loams-console}
+    ports:
+      - ${CONSOLE_BIND:-127.0.0.1}:${CONSOLE_PORT:-3000}:8080
+    volumes:
+      - ${LOAMS_CONSOLE_DIR:-./console/dist}:/usr/share/nginx/html:ro
+      - ./console/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+
+  # The optional agent daemon (`--profile agentd`); its config is
+  # agentd/config.toml.
+  agentd:
+    <<: *restart
+    profiles: [agentd]
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-agentd:${LOAMS_VERSION:-preview}
+    network_mode: service:loams
+    volumes:
+      - ./agentd:/etc/loams-agentd:ro
+      - agentd-data:/home/loams
+    depends_on:
+      loams:
+        condition: service_started
+
+volumes:
+  pd-data:
+  tikv-data:
+  loams-data:
+  house-data:
+  tailscale-state:
+  headscale-data:
+  agentd-data:

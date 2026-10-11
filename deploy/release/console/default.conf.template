@@ -1,0 +1,21 @@
+# nginx for `--profile console`: the built console as a single-page app, and
+# its runtime configuration at /config.json from the container's environment
+# (the nginx image renders this template with envsubst at start).
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy no-referrer always;
+
+    location = /config.json {
+        default_type application/json;
+        add_header Cache-Control "no-store" always;
+        return 200 '{"LOAMS_ENGINE_URL":"${LOAMS_ENGINE_URL}","LOAMS_AUTH_ISSUER":"${LOAMS_AUTH_ISSUER}","LOAMS_AUTH_CLIENT_ID":"${LOAMS_AUTH_CLIENT_ID}"}';
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

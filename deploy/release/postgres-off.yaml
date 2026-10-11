@@ -1,0 +1,3 @@
+# An empty include target: set LOAMS_POSTGRES_COMPOSE=./postgres-off.yaml in
+# .env to run the stack without the Loams Postgres (Neon) services.
+services: {}

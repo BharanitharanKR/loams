@@ -46,6 +46,7 @@ Thumbs.db
 # Env
 .env
 .env.*
+!.env.example
 
 # Node / Nx
 node_modules/
