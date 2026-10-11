@@ -457,24 +457,31 @@ impl ProcessLauncher {
 
     /// The command line of worker `id`, without the program name. Never a
     /// credential: the grammar is `loams_house_worker::WorkerArgs`.
+    ///
+    /// It has no side effect: an unsealed worker whose reads go to a
+    /// [`ForwardTarget`] gets its endpoint only when [`Launcher::launch`] opens
+    /// it, so `--s3-endpoint` is absent here.
     pub fn args(&self, id: &str) -> Vec<String> {
-        let endpoint = self.endpoint(id).ok().flatten();
-        self.args_with(id, endpoint)
+        self.args_with(id, self.fixed_endpoint())
     }
 
-    /// The bucket endpoint worker `id` is given (`--s3-endpoint`).
-    fn endpoint(&self, id: &str) -> Result<Option<String>, HouseError> {
-        Ok(match (&self.forwarder, self.sandbox) {
+    /// The bucket endpoint every worker is given, when it does not depend on
+    /// the worker (`--s3-endpoint`).
+    fn fixed_endpoint(&self) -> Option<String> {
+        match (&self.forwarder, self.sandbox) {
             (Some(_), SandboxMode::Netns) => Some(format!("http://127.0.0.1:{FORWARDER_PORT}/")),
             (Some(Forward::Relay(upstream)), _) => Some(format!("http://{upstream}/")),
-            (Some(Forward::Target(target)), _) => {
-                let addr = target
-                    .endpoint(id)
-                    .map_err(|err| spawn_error("its bucket endpoint", err))?;
-                Some(format!("http://{addr}/"))
-            }
+            (Some(Forward::Target(_)), _) => None,
             (None, _) => self.s3_endpoint.clone(),
-        })
+        }
+    }
+
+    /// The target an unsealed worker's private endpoint is opened on, if any.
+    fn endpoint_target(&self) -> Option<&Arc<dyn ForwardTarget>> {
+        match (&self.forwarder, self.sandbox) {
+            (Some(Forward::Target(target)), mode) if mode != SandboxMode::Netns => Some(target),
+            _ => None,
+        }
     }
 
     fn args_with(&self, id: &str, endpoint: Option<String>) -> Vec<String> {
@@ -587,7 +594,22 @@ impl Launcher for ProcessLauncher {
 
         let program = cstring(&self.binary.display().to_string())?;
         let mut argv = vec![program];
-        let endpoint = self.endpoint(id)?;
+        // An unsealed worker's private endpoint: released on every path out of
+        // here until its exit is watched.
+        let mut opened = None;
+        let endpoint = match self.endpoint_target() {
+            Some(target) => {
+                let addr = target
+                    .endpoint(id)
+                    .map_err(|err| spawn_error("its bucket endpoint", err))?;
+                opened = Some(EndpointGuard {
+                    target: Arc::clone(target),
+                    id: id.to_string(),
+                });
+                Some(format!("http://{addr}/"))
+            }
+            None => self.fixed_endpoint(),
+        };
         for arg in self.args_with(id, endpoint) {
             argv.push(cstring(&arg)?);
         }
@@ -620,12 +642,34 @@ impl Launcher for ProcessLauncher {
         } else if let Some(Forward::Target(target)) = &self.forwarder {
             // No forwarder channel whose end says the worker is gone: its exit does.
             forget_on_exit(Arc::clone(target), id, control.exit());
+            if let Some(guard) = opened.take() {
+                guard.disarm();
+            }
         }
 
         Ok(Launched {
             socket: front,
             control,
         })
+    }
+}
+
+/// Releases a worker's private endpoint unless disarmed: a launch that fails
+/// after opening it must not leave its listener behind.
+struct EndpointGuard {
+    target: Arc<dyn ForwardTarget>,
+    id: String,
+}
+
+impl EndpointGuard {
+    fn disarm(self) {
+        std::mem::forget(self);
+    }
+}
+
+impl Drop for EndpointGuard {
+    fn drop(&mut self) {
+        self.target.gone(&self.id);
     }
 }
 

@@ -243,11 +243,13 @@ impl HouseCache {
         lock(&self.inner.recorded).clone().unwrap_or_default()
     }
 
-    fn record(&self, seen: SeenRequest) {
+    /// Records the request `seen` builds, building it only when recording is on
+    /// and below its cap.
+    fn record_with(&self, seen: impl FnOnce() -> SeenRequest) {
         if let Some(recorded) = lock(&self.inner.recorded).as_mut()
             && recorded.len() < MAX_RECORDED_REQUESTS
         {
-            recorded.push(seen);
+            recorded.push(seen());
         }
     }
 
