@@ -31,6 +31,7 @@ pub async fn a_lost_ack_on_commit_wal_returns_the_first_offsets_and_flags_it(
             object: "faults-commit/wal-1".to_string(),
             created_at_ms: meta.now_ms(),
             chunks: vec![chunk(s, 0, 3, 0..30), chunk(s, 1, 2, 30..50)],
+            fences: Vec::new(),
         })
         .await;
     assert!(tracked.earlier_unknown, "the lost attempt is not flagged");

@@ -758,6 +758,7 @@ async fn commit(
             byte_range: 0..u64::from(records) * 10,
             max_timestamp_ms: 0,
         }],
+        fences: Vec::new(),
     };
     let invoke = rec.tick();
     let Tracked {

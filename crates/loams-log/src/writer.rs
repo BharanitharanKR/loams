@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use bytes::Bytes;
 use loams_common::StreamId;
 use loams_common::meta::{
-    ApplyError, Consistency, MetaError, MetaStore, WAL_COMMIT_WINDOW_MS, WalChunk, WalClass,
+    ApplyError, Consistency, Fence, MetaError, MetaStore, WAL_COMMIT_WINDOW_MS, WalChunk, WalClass,
     WalCommit,
 };
 use loams_store::{Store, StoreError};
@@ -118,6 +118,9 @@ struct Pending {
     batch: Bytes,
     records: u32,
     max_timestamp_ms: i64,
+    /// The lease the append is made under (GR1 Task 12): its WAL object is
+    /// committed only while the lease is at this epoch.
+    fence: Option<Fence>,
     reply: oneshot::Sender<Result<AppendAck, LogError>>,
 }
 
@@ -275,7 +278,30 @@ impl LogWriter {
         partition: u32,
         records: Vec<Record>,
     ) -> Result<AppendAck, LogError> {
-        let mut acks = self.append_many(stream, vec![(partition, records)]).await?;
+        let mut acks = self
+            .append_under(stream, vec![(partition, records)], None)
+            .await?;
+        acks.pop()
+            .ok_or_else(|| LogError::CommitUnknown("no acknowledgement for an append".to_string()))
+    }
+
+    /// [`append`](Self::append) under a lease (GR1 Task 12, D744): the WAL
+    /// object that carries the records is committed only while `fence`'s
+    /// lease is still at its epoch, checked by the metastore atomically with
+    /// the offset assignment. A broken fence fails the append with
+    /// [`ApplyError::Fenced`] (as [`LogError::Meta`]) and nothing of it is
+    /// committed. Appends under other fences, or none, that shared its flush
+    /// are not failed by it: they go out again in the next WAL object.
+    pub async fn append_fenced(
+        &self,
+        stream: StreamId,
+        partition: u32,
+        records: Vec<Record>,
+        fence: Fence,
+    ) -> Result<AppendAck, LogError> {
+        let mut acks = self
+            .append_under(stream, vec![(partition, records)], Some(fence))
+            .await?;
         acks.pop()
             .ok_or_else(|| LogError::CommitUnknown("no acknowledgement for an append".to_string()))
     }
@@ -297,7 +323,17 @@ impl LogWriter {
     pub async fn append_many(
         &self,
         stream: StreamId,
+        batches: Vec<(u32, Vec<Record>)>,
+    ) -> Result<Vec<AppendAck>, LogError> {
+        self.append_under(stream, batches, None).await
+    }
+
+    /// [`append_many`](Self::append_many), under `fence` when given.
+    async fn append_under(
+        &self,
+        stream: StreamId,
         mut batches: Vec<(u32, Vec<Record>)>,
+        fence: Option<Fence>,
     ) -> Result<Vec<AppendAck>, LogError> {
         let shared = self.shared();
         let invalid = |what: String| Err(LogError::InvalidArgument(what));
@@ -382,6 +418,7 @@ impl LogWriter {
                     batch,
                     records,
                     max_timestamp_ms,
+                    fence: fence.clone(),
                     reply,
                 });
                 replies.push(ack);
@@ -519,12 +556,27 @@ async fn run(shared: Arc<Shared>) {
             bytes,
             waiters,
         } = job;
-        let result = flush(&shared, pending).await;
+        let (result, requeued) = flush(&shared, pending).await;
         let late_waiters = {
             let mut state = shared.state();
             state.inflight_bytes -= bytes;
             state.flushing = false;
-            mem::take(&mut state.inflight_waiters)
+            let late = mem::take(&mut state.inflight_waiters);
+            if requeued.is_empty() {
+                late
+            } else {
+                // Appends a broken fence did not concern go out in the next
+                // WAL object, ahead of anything buffered since, and whoever
+                // waited for this flush waits for that one.
+                let requeued_bytes: usize = requeued.iter().map(|p| p.batch.len()).sum();
+                state.pending_bytes += requeued_bytes;
+                state.opened_at.get_or_insert_with(Instant::now);
+                state.pending.splice(0..0, requeued);
+                state.flush_waiters.extend(waiters.into_iter().chain(late));
+                drop(state);
+                shared.wake.notify_one();
+                continue;
+            }
         };
         for waiter in waiters.into_iter().chain(late_waiters) {
             let _ = waiter.send(result.clone().map_err(|f| f.to_error()));
@@ -533,13 +585,36 @@ async fn run(shared: Arc<Shared>) {
 }
 
 /// Writes `pending` as one WAL object, commits it, and answers every append.
-async fn flush(shared: &Shared, pending: Vec<Pending>) -> Result<(), FlushFailure> {
+///
+/// A commit refused because one fence broke (a definite refusal: nothing was
+/// committed) fails only the appends made under that fence's lease; the
+/// others are answered nothing and handed back, to go out in the next WAL
+/// object (GR1 Task 12). This object is then referenced by nothing, and
+/// garbage collection deletes it as an orphan.
+async fn flush(shared: &Shared, pending: Vec<Pending>) -> (Result<(), FlushFailure>, Vec<Pending>) {
     let outcome = write_and_commit(shared, &pending).await;
     match &outcome {
         Ok(acks) => {
             for (append, ack) in pending.into_iter().zip(acks) {
                 let _ = append.reply.send(Ok(*ack));
             }
+        }
+        Err(failure @ FlushFailure::Rejected(ApplyError::Fenced { lease })) => {
+            let (fenced, others): (Vec<Pending>, Vec<Pending>) = pending
+                .into_iter()
+                .partition(|p| p.fence.as_ref().is_some_and(|f| &f.lease == lease));
+            tracing::warn!(%lease, fenced = fenced.len(), others = others.len(), "a WAL flush was refused by a broken fence");
+            if fenced.is_empty() {
+                // Not a fence of this flush's: fail the flush as a whole.
+                for append in others {
+                    let _ = append.reply.send(Err(failure.to_error()));
+                }
+                return (outcome.map(|_| ()), Vec::new());
+            }
+            for append in fenced {
+                let _ = append.reply.send(Err(failure.to_error()));
+            }
+            return (Ok(()), others);
         }
         Err(failure) => {
             tracing::warn!(?failure, appends = pending.len(), "WAL flush failed");
@@ -548,7 +623,7 @@ async fn flush(shared: &Shared, pending: Vec<Pending>) -> Result<(), FlushFailur
             }
         }
     }
-    outcome.map(|_| ())
+    (outcome.map(|_| ()), Vec::new())
 }
 
 async fn write_and_commit(
@@ -586,7 +661,14 @@ async fn write_and_commit(
             max_timestamp_ms: m.max_timestamp_ms,
         })
         .collect();
-    let base_offsets = commit(shared, &path, ulid.timestamp_ms(), chunks).await?;
+    // Every distinct lease the flush's appends were made under.
+    let mut fences: Vec<Fence> = Vec::new();
+    for fence in pending.iter().filter_map(|p| p.fence.as_ref()) {
+        if !fences.contains(fence) {
+            fences.push(fence.clone());
+        }
+    }
+    let base_offsets = commit(shared, &path, ulid.timestamp_ms(), chunks, fences).await?;
     crate::failpoint!("wal.after_commit");
     if base_offsets.len() != metas.len() {
         return Err(FlushFailure::Unknown(format!(
@@ -631,6 +713,7 @@ async fn commit(
     path: &str,
     created_at_ms: u64,
     chunks: Vec<WalChunk>,
+    fences: Vec<Fence>,
 ) -> Result<Vec<u64>, FlushFailure> {
     let deadline = Instant::now() + shared.config.commit_retry_deadline;
     let mut backoff = COMMIT_BACKOFF;
@@ -642,6 +725,7 @@ async fn commit(
                 object: path.to_string(),
                 created_at_ms,
                 chunks: chunks.clone(),
+                fences: fences.clone(),
             })
             .await;
         outcome_unknown |= tracked.earlier_unknown;

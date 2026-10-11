@@ -242,7 +242,23 @@ impl MetaState {
             }
         }
         for s in self.streams.values() {
-            if s.name.starts_with('_') && !implicit_streams.contains(&s.id) {
+            // A graph's implicit stream (GR1 Task 12) belongs to the graph
+            // catalog, which lives in the bucket, not to a collection.
+            let graph_stream = s
+                .name
+                .strip_prefix(loams_common::meta::GRAPH_STREAM_PREFIX)
+                .is_some_and(loams_common::meta::is_graph_id);
+            if graph_stream
+                && (s.partitions != 1
+                    || s.class != WalClass::Standard
+                    || s.retention != Retention::default())
+            {
+                violations.push(format!(
+                    "graph stream {} ({}) does not match: {s:?}",
+                    s.id, s.name
+                ));
+            }
+            if s.name.starts_with('_') && !graph_stream && !implicit_streams.contains(&s.id) {
                 violations.push(format!(
                     "stream {} ({}) belongs to no collection",
                     s.id, s.name
