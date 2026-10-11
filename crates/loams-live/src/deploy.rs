@@ -597,8 +597,12 @@ pub async fn deploy(
             Err(err)
         }
         // The outcome may be unknown: the record stays `pending` unless
-        // the activation committed.
-        Err(Activation::Storage(err)) => Err(err),
+        // the activation committed. If it did, the refresh serves it now.
+        Err(Activation::Storage(err)) => {
+            drop(switch);
+            let _ = app.refresh().await;
+            Err(err)
+        }
     }
 }
 

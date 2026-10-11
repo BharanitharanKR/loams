@@ -60,15 +60,17 @@ impl BundleLoader for JsLoader {
                     .spawn(app, bundle, self.config.clone())
                     .await
                     .map(Bundle::from)?,
-                _ => {
+                // Never run an isolated deployment's code in this process.
+                (None, Isolation::Isolated) => {
+                    return Err(LiveError::Internal(
+                        "an isolated loader has no worker pool".into(),
+                    ));
+                }
+                (_, Isolation::InProcess) => {
                     let source = std::str::from_utf8(bundle).map_err(|_| {
                         LiveError::InvalidArgument("the bundle is not UTF-8".into())
                     })?;
-                    let config = JsConfig {
-                        isolation: Isolation::InProcess,
-                        ..self.config.clone()
-                    };
-                    Bundle::load(source, config).await?
+                    Bundle::load(source, self.config.clone()).await?
                 }
             };
             Ok(Arc::new(loaded) as Arc<dyn LoadedBundle>)
