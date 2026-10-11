@@ -96,6 +96,9 @@ grafeo-adapters = { version = "=0.5.43", default-features = false }
 # 2026-10-22. MIT OR Apache-2.0.
 gix-hash = { version = "=0.27.0", default-features = false, features = ["sha1"] }
 gix-validate = { version = "=0.12.0", default-features = false }
+gix-object = { version = "=0.65.0", default-features = false, features = ["sha1"] }
+gix-pack = { version = "=0.75.0", default-features = false, features = ["sha1"] }
+gix-zlib = { version = "=0.2.0", default-features = false }
 hex = "0.4"
 # Live pagination cursors are HMAC-SHA256 tagged with the app's key (LV1
 # Task 4); 0.13 is the line on sha2 0.11's digest.
