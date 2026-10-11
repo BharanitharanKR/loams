@@ -188,14 +188,36 @@ impl ComputeCa {
         }
         let key = KeyPair::from_pem(&stored.key_pem)
             .map_err(|e| CertError::Corrupt(format!("the key: {e}")))?;
-        if !stored.cert_pem.starts_with("-----BEGIN CERTIFICATE-----") {
-            return Err(CertError::Corrupt("the certificate is not PEM".into()));
-        }
+        check_pair(&stored.cert_pem, &key)?;
         Ok(ComputeCa {
             key,
             cert_pem: stored.cert_pem,
         })
     }
+}
+
+/// The stored certificate must be this CA's: its subject is the name an
+/// issuer is rebuilt with, and its public key is the stored key's. Else a
+/// certificate signed with the key would not chain to `cert_pem`.
+fn check_pair(cert_pem: &str, key: &KeyPair) -> Result<(), CertError> {
+    let corrupt = |why: &str| CertError::Corrupt(why.to_owned());
+    let (_, pem) = x509_parser::pem::parse_x509_pem(cert_pem.as_bytes())
+        .map_err(|_| corrupt("the certificate is not PEM"))?;
+    let cert = pem
+        .parse_x509()
+        .map_err(|_| corrupt("the certificate does not parse"))?;
+    let cn = cert
+        .subject()
+        .iter_common_name()
+        .next()
+        .and_then(|cn| cn.as_str().ok());
+    if cn != Some(CA_NAME) || !cert.is_ca() {
+        return Err(corrupt("the certificate is not the compute CA's"));
+    }
+    if cert.public_key().subject_public_key.data.as_ref() != key.public_key_raw() {
+        return Err(corrupt("the certificate and the key do not match"));
+    }
+    Ok(())
 }
 
 /// A compute's certificate and key.
@@ -250,7 +272,7 @@ mod tests {
     use std::sync::Mutex;
 
     use async_trait::async_trait;
-    use x509_parser::extensions::GeneralName;
+    use x509_parser::extensions::{GeneralName, ParsedExtension};
     use x509_parser::pem::parse_x509_pem;
 
     use super::*;
@@ -321,6 +343,26 @@ mod tests {
             .expect("signed by the CA");
         ca_x.verify_signature(None).expect("the CA is self-signed");
         assert_eq!(leaf.issuer(), ca_x.subject());
+        // The leaf names the CA's key: its AKI is the CA's SKI.
+        let ski = ca_x
+            .extensions()
+            .iter()
+            .find_map(|e| match e.parsed_extension() {
+                ParsedExtension::SubjectKeyIdentifier(k) => Some(k.0.to_vec()),
+                _ => None,
+            })
+            .expect("the CA has a subject key identifier");
+        let aki = leaf
+            .extensions()
+            .iter()
+            .find_map(|e| match e.parsed_extension() {
+                ParsedExtension::AuthorityKeyIdentifier(a) => {
+                    a.key_identifier.as_ref().map(|k| k.0.to_vec())
+                }
+                _ => None,
+            })
+            .expect("the leaf has an authority key identifier");
+        assert_eq!(aki, ski);
         assert!(ca_x.is_ca());
         assert!(!leaf.is_ca());
         // ECDSA with SHA-256 over P-256.
@@ -409,5 +451,24 @@ mod tests {
             Err(CertError::Corrupt(_))
         ));
         assert!(!format!("{a:?}").contains("PRIVATE"));
+
+        // Two valid but unrelated halves: another CA's certificate with
+        // this CA's key.
+        let other = ComputeCa::generate(now()).expect("CA");
+        let mixed = serde_json::to_vec(&StoredCa {
+            format: CA_FORMAT,
+            cert_pem: other.cert_pem().to_owned(),
+            key_pem: a.key.serialize_pem(),
+        })
+        .unwrap();
+        let mismatched = Mem::default();
+        mismatched
+            .put(&SecretRef::parse(CA_REF).unwrap(), Secret::new(mixed))
+            .await
+            .unwrap();
+        assert!(matches!(
+            load_or_create_ca(&mismatched, now()).await,
+            Err(CertError::Corrupt(_))
+        ));
     }
 }

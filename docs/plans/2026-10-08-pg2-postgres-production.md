@@ -1867,7 +1867,7 @@ Steps: each runbook step is executed once on kind and marked verified. Commit `d
 - **R10.9 The end-to-end test.** `it_compose_compute_answers_select_1` (`tests/it_compose.rs`, ignored; `pg2-e2e.yml`'s `pg-control-compose-runtime`).
   - What it does: it creates the tenant and timeline on `deploy/loams-postgres-dev`'s pageserver and writes ready records. It starts the upcall listener on the host. The runtime then starts the pin file's `compute-v17` on the stack's network. `compute_ctl` reads its spec through the upcall and reaches `running`. A role made inside the compute then runs `SELECT 1` through the endpoint's host port, and `stop` and `remove_address` clean up.
   - The compute's WAL goes to the stack's `safekeeper1`. A `loams-wal` on the host is not reachable from the compose network; moving the dev stack to `loams-wal` is Task 43's.
-  - It passed three times on 2026-10-11 (Podman 6.1.1 with `docker-compose` 5.2.0, compose project `loams-pg2-it`, torn down with `down -v`), in 4 to 17 s with the images cached. CI runs it under Docker with `host.docker.internal:host-gateway`.
+  - It passed three times on 2026-10-11 (Podman 6.1.1 with `docker-compose` 5.2.0; the storage stack as compose project `loams-pg2-it`, torn down with `down -v`; the computes in the test's own project, `loams-pg-it`), in 4 to 17 s with the images cached. CI runs it under Docker with `host.docker.internal:host-gateway`.
 - **R10.10 For later tasks.**
   - **Task 13:** the Kubernetes runtime implements the same trait, `remove_address` included (delete the Service).
   - **Task 14:** the warm pool on compose (R10.4).
