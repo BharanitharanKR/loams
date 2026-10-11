@@ -2,7 +2,7 @@
 // first-run "Connect your engine" screen.
 
 import { Button, Field, Input, Logo, Notice } from '@loams/ui';
-import { type FormEvent, type ReactNode, useState } from 'react';
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { checkHealth, type Health, isTailnetHost, parseEngineUrl } from './engine.js';
 
 export function PreviewBadge() {
@@ -80,11 +80,15 @@ export interface ConnectResult {
 
 export function ConnectScreen({
   initial,
+  fixed = false,
   askApiKey,
   check = checkHealth,
   onConnect,
 }: {
+  /** A remembered (or fixed) engine: prefilled and tested at once. */
   initial?: string;
+  /** The deploy fixes the engine (LOAMS_ENGINE_URL): the URL cannot be changed. */
+  fixed?: boolean;
   /** No OIDC issuer is configured: offer an API key field. */
   askApiKey: boolean;
   check?: (origin: string) => Promise<Health>;
@@ -111,6 +115,14 @@ export function ConnectScreen({
     setTesting(false);
     setHealth({ origin: parsed.origin, result });
   };
+
+  // Test a remembered engine straight away, once.
+  const autoTested = useRef(false);
+  useEffect(() => {
+    if (!initial || autoTested.current) return;
+    autoTested.current = true;
+    void test();
+  });
 
   const connect = () => {
     if (!parsed.ok) return;
@@ -140,6 +152,7 @@ export function ConnectScreen({
               spellCheck={false}
               placeholder="https://loams.your-tailnet.ts.net"
               value={url}
+              readOnly={fixed}
               onChange={(e) => setUrl(e.currentTarget.value)}
             />
           )}

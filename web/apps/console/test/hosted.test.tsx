@@ -134,6 +134,22 @@ describe('Connect your engine', () => {
     });
   });
 
+  it('tests a remembered engine at once; a fixed engine cannot be edited', async () => {
+    const check = vi.fn(async () => ({ ok: true as const, status: 200, ms: 3 }));
+    render(
+      <ConnectScreen
+        initial="https://loams.tail1.ts.net"
+        fixed
+        askApiKey
+        check={check}
+        onConnect={() => {}}
+      />,
+    );
+    await screen.findByText('The engine answered');
+    expect(check).toHaveBeenCalledTimes(1);
+    expect((screen.getByLabelText('Engine URL') as HTMLInputElement).readOnly).toBe(true);
+  });
+
   it('explains an unreachable tailnet engine and still lets the person connect', async () => {
     const check = vi.fn(async () => ({
       ok: false as const,

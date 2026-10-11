@@ -23,7 +23,7 @@ import {
 import { savedEngine, saveEngine } from './engine.js';
 import { BootError, type ConnectResult, ConnectScreen, SignInScreen } from './screens.js';
 
-/** `?connect` opens the connect screen even when an engine is remembered. */
+/** `?connect` opens the connect screen even when an engine is remembered (and not fixed). */
 const CONNECT_PARAM = 'connect';
 
 export type StartFn = (options: {
@@ -84,7 +84,10 @@ export async function startHosted(
   let apiKey: string | undefined;
   const engine = await new Promise<string>((resolve) => {
     const remembered = fixed ?? savedEngine();
-    if (remembered && !(here.searchParams.has(CONNECT_PARAM) && !fixed)) {
+    // Without OIDC the screen also takes the API key, which lives in memory only, so it
+    // is shown on every load (prefilled, and testing the remembered engine at once).
+    const reconnect = here.searchParams.has(CONNECT_PARAM) && !fixed;
+    if (remembered && auth && !reconnect) {
       resolve(remembered);
       return;
     }
@@ -92,6 +95,7 @@ export async function startHosted(
       root,
       <ConnectScreen
         initial={remembered}
+        fixed={Boolean(fixed)}
         askApiKey={!auth}
         onConnect={(r: ConnectResult) => {
           saveEngine(r.engine);
@@ -119,7 +123,8 @@ export async function startHosted(
     signOut: auth
       ? () => void auth.signOut()
       : apiKey
-        ? () => globalThis.location.assign(redirectUri())
+        ? // The key lives in memory: drop it and ask again on the connect screen.
+          () => globalThis.location.assign(`${redirectUri()}?${CONNECT_PARAM}`)
         : undefined,
   };
 
