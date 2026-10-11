@@ -114,10 +114,9 @@ enum ResultFormat {
   // reader can decode as batches arrive.
   RESULT_FORMAT_ARROW_IPC = 1;
   // ClickHouse's `JSONCompactEachRow`: one JSON array per row, one row per
-  // line, values as ClickHouse writes them (64-bit integers as strings
-  // only when the statement asks for it with
-  // `output_format_json_quote_64bit_integers`). Every batch holds whole
-  // lines.
+  // line, values as ClickHouse writes them (64-bit and larger integers as
+  // strings by default; `output_format_json_quote_64bit_integers = 0` writes
+  // them as numbers). Every batch holds whole lines.
   RESULT_FORMAT_JSON_ROWS = 2;
 }
 
