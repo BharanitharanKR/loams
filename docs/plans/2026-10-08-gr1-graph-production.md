@@ -1455,3 +1455,109 @@ A node or relationship is the map Grafeo holds. `uint64` and `decimal` cannot oc
 - `captured_change_sets_round_trip_and_replay` (a real `CdcCapture` through the codec and `apply_to_store`).
 
 `truncated_input_refused_not_panics` requires `Truncated` for every strict prefix of every golden vector. The golden vectors are `changeset_{empty,ops,values}.bin` and `schema_change.bin`, generated with `UPDATE_GOLDEN=1` and frozen. `decode` is the Task 31 fuzz target's entry point.
+
+### Task 11 (2026-10-11, on `backend/gr1`)
+
+Controller rulings for this task: R9.3 (the gate), R9.5 (order by log offset and `txn_seq`, never `commit_epoch`), R9.8 (refuse a dangling-edge commit and reload), `txn_seq` one per record of either kind, a keyed write that changed nothing is appended, and an encode failure is handled like a failed capture.
+
+**R11.1 The write lane (`src/durable/lane.rs`).**
+- Writers queue. The first becomes the leader and runs a group:
+  1. it takes the graph's gate exclusively;
+  2. it runs queued transactions back to back (`begin` with the isolation, statements, `commit`, capture, encode);
+  3. it appends one record per transaction in one log batch;
+  4. it publishes the durable position and records the keys;
+  5. it runs `gc`;
+  6. it releases the gate, answers the group and hands the lead to the next queued writer.
+- A group ends when the queue is empty (it does not wait for more), when 2 ms have passed since it began, when its records hold 256 KiB (`GroupCommit`, defaults), or at 1 024 records (`MAX_GROUP_RECORDS`, under the log writer's 10 000 per append).
+- One transaction's record may hold at most `GroupCommit.max_record_bytes` (32 MiB, half the log writer's default buffer). A larger one is answered `INVALID_ARGUMENT`, which a retry cannot fix, and the graph reloads, which undoes its commit. Otherwise it would fail as an append and be answered `graph_reloading` on every retry.
+- The graph log has its own `LogWriter` (`GraphLog::log_config`). It flushes every 2 ms or 256 KiB. The collection writer's 250 ms would otherwise be every graph write's latency.
+- A transaction that names `if_version` starts a group of its own, so the version it is checked against is durable.
+- Every explicit transaction goes through the lane (R0.5), including a read-only atomic batch. A single read runs as an autocommit statement under the shared gate.
+- A non-atomic batch runs each statement as its own lane transaction, so each statement that writes is its own append. This keeps R6.10 I3's per-statement byte-budget rules, which decide after each statement whether the batch goes on. The cost is one group per statement. Its statements are keyed `<key>#<index>`, so a retry of the batch skips the statements that committed. `if_version` guards the first statement.
+
+**R11.2 The implicit stream (deviation from "`_graph.`"-style reserved names).**
+- The stream is `graph.<gr_id>`: one partition, standard class, no retention. Task 13 trims it below snapshots.
+- It is created by `GraphCatalog::create` (`NewGraph.with_stream`) before the record commits, so nobody can know the name before the stream exists. It is recorded in `GraphMeta.stream` (`serde(default)`, not part of `version`).
+- A name starting with `_` is reserved to implicit objects inside `loams-meta`'s state machine. A `_graph.` stream needs a metastore command, as `create_collection` has, in `loams-meta` and `loams-meta-tikv` with a conformance case. Recommended for Task 12, which changes the metastore for fenced appends anyway.
+- Residual risks:
+  - An adopted graph (R11.5) gets its stream at its first durable open, after its id was public.
+  - `purge_expired` does not delete the stream, because `MetaStore` has no stream delete. That belongs with Task 12's cluster purge.
+
+**R11.3 Tokens and the version.**
+- `ConsistencyToken { stream, offset }`. `offset` is the offset *after* the write's record, as for `loams.collection.v1` (D76). The text form is the collection's, `v1:s<stream>/p0@<offset>`.
+- So the write's record is at `offset - 1`. `acked_write_is_in_log` reads it there, where the plan said "at the token's offset".
+- A write that appended nothing answers the token of the durable state.
+- The graph's version for `if_version` is the same number: the stream's next offset at the durable state, 0 for an empty graph. A client passes a token's offset back as `if_version`.
+- `durable_epoch` (R9.5) is that offset, published through a `watch` (`Graph::durable_epoch()`).
+
+**R11.4 Open and reload rebuild from the stream (until Task 14).**
+- A durable graph's local directory is cleared when it opens. A fresh engine (CDC on, `cdc_retention` 64 epochs, R9.9) replays the whole stream through `apply_to_store` and is then `wal_checkpoint`ed (R9.5).
+- A stream whose start is above 0 is refused, since there are no snapshots yet.
+- After a failed group the graph is marked `GraphState::Reloading` (wire `RELOADING`) under the exclusive gate. Its next statement reopens it through `Engine::reopen_if_poisoned`, which for a durable graph rebuilds it, in memory or on disk, and never fails it for being in memory.
+- The idempotency index and the next `txn_seq` are rebuilt from the records.
+- Opening costs O(stream) until Task 14 trusts checkpointed local files.
+- With `--graph-ephemeral`, a graph is kept in memory but is durable in the log, so it now survives a restart whenever the log does.
+
+**R11.5 Graphs from before the log are adopted.**
+- When a catalog record has no stream, the first durable open creates the stream.
+- If the stream is empty, it keeps the local files and appends the whole graph as one change set (`txn_seq` 1). Then it records the stream.
+- If the stream is not empty (a crash after the append, before the record), the stream wins.
+- A reload never adopts: the stored spec's `adopt` is cleared once the graph has opened.
+
+**R11.6 Answers.**
+- `ExecuteResponse` and the last `ResultChunk` carry `consistency_token`, `commit_epoch` and `counters`. An atomic batch answers its token and epoch. A non-atomic batch answers its last committed write's token.
+- `commit_epoch` is 0 for a transaction that wrote no record.
+- The counters come from the capture (`CdcCapture::capture`). They are exact for created and deleted elements, for properties set and for the labels of created nodes.
+- A label added to or removed from an existing node is not counted, so `labels_removed` is always 0. Grafeo's CDC gives both the same event (R0.6).
+- A key answered from the index has no rows, zero counters, the first run's token and epoch, and a `01000` notification. An atomic batch replay has one empty result per statement.
+
+**R11.7 Write conflicts (deviation in what the test shows).**
+- Under the lane, transactions on a graph run one at a time, so neither isolation level can conflict, and serial execution prevents write skew.
+- `write_conflict_aborted_and_retryable` runs two concurrent `SERIALIZABLE` write-skew batches. It asserts that exactly one doctor goes off call, and that a conflict, if one occurs, is `ABORTED`/`graph_write_conflict` and succeeds on retry.
+- Grafeo's `TransactionConflict` and `TransactionSerialization` map to `GraphError::WriteConflict`, pinned by the unit test `conflicts_are_write_conflicts`.
+
+**R11.8 Failures.** These answer every transaction of the group `UNAVAILABLE`/`graph_reloading` and mark the graph for reload:
+- an append error, any `LogError`, `CommitUnknown` included;
+- a refused capture (R9.8);
+- an encode failure (R10.2);
+- a mismatched acknowledgement;
+- a commit error other than a conflict.
+
+The group's refusals and index replays are answered `graph_reloading` too, because a refusal may have been caused by a write the log then refused. A panic in the lane poisons the graph.
+
+`CommitUnknown` means the records may have landed: the reload reads whatever the log has, and a keyed retry then answers from the rebuilt index. Residual risk: a commit attempt the log writer still has in flight could land after the reload's read. Task 12's fenced appends close that.
+
+**R11.9 Idempotency (`src/durable/idempotency.rs`).**
+- Keys are per graph and kept 24 h, counted from the record's timestamp. The lane stamps that timestamp with the metastore clock.
+- At most 100 000 keys are kept, oldest forgotten first.
+- `ExecuteRequest.idempotency_key` is documented as "required when the statement writes", but it is **not enforced**. Enforcing it would refuse every keyless write the desktop page, the fixtures and the tests send. That is for the owner or Task 24.
+- A key on a read is ignored.
+- A replay is not checked against the first request's statements, since the record does not carry them.
+
+**R11.10 Visibility (`src/durable/visibility.rs`).**
+- `Gate` is a `std::sync::RwLock`.
+- `Visibility::client_session` pins a read session at the durable state's engine epoch. Under the gate this is redundant (R9.3).
+- `GetGraph`'s stats are the durable state's counts, read without the gate, so they never wait on a group.
+- Explain, Profile, GetSchema and every read hold the gate shared. A graph with no log takes the gate shared for writes too, so its concurrency is unchanged.
+
+**R11.11 Fault injection.**
+- `GraphLog::set_append_fault` (feature `test-hooks`) is per instance, so `tests/durability.rs` runs in the default `cargo test -p loams-graph` and in parallel.
+- The named failpoint `loams_graph::durable::append` (feature `failpoints`) fails the append, for Task 16's kill matrix.
+
+**R11.12 Wiring.**
+- `GraphAdmin::with_log(GraphLog)`. Without it the admin is GR1a's engine-only mode, which the tests, the mock and the desktop contract use.
+- `loams`'s `GraphRuntime` always sets it. It starts a graph `LogWriter` on the log node's id with the server's `LogReader`, and shuts it down after the graphs.
+- The lane runs on the statement pool and blocks on the runtime's handle for the append. A caller inside a runtime gets a scoped thread.
+
+**R11.13 Tests** (`tests/durability.rs`, 16):
+- The nine planned ones:
+  - `group_commit_preserves_epoch_order` is a proptest of 8 cases of 2–6 concurrent writers. It checks that `txn_seq` is dense and `commit_epoch` increases in log order, that each writer's tokens increase, and that the replay equals the live graph.
+- Beyond them:
+  - `a_refused_capture_reloads_and_hides` (R9.8 through the service);
+  - `keyed_write_that_changed_nothing_is_appended`;
+  - `reopen_rebuilds_from_the_log` (a write the log refused is not resurrected from local files);
+  - `a_graph_from_before_the_log_is_adopted`;
+  - `writers_queued_behind_an_append_share_the_next_one`: 12 writers behind a held append take at most 3 appends;
+  - `a_group_ends_at_its_byte_limit`;
+  - `a_change_set_larger_than_a_record_is_refused_and_undone`.
+- Unit tests: idempotency (3), token text (1), conflict mapping (1).

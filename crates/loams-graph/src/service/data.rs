@@ -11,6 +11,7 @@ use loams_proto::loams::graph::v1 as pb;
 
 use super::errors::{code_of, engine_error_info, map_engine, refuse};
 use super::find_serving;
+use crate::durable::{Isolation, WriteOptions};
 use crate::engine::{BatchStatement, Engine, GraphError, GraphResult, PlanNode};
 use crate::limits::StatementLimits;
 use crate::value::{from_proto, to_proto};
@@ -109,8 +110,9 @@ fn to_pb_rows(result: &GraphResult, budget: &mut ByteBudget) -> Result<pb::RowSe
     })
 }
 
-/// Fills one `ExecuteResponse` from an engine result. `counters`, the token and the commit epoch
-/// come with the durable write path (Task 11).
+/// Fills one `ExecuteResponse` from an engine result, with the token, commit epoch and counters
+/// of a durable write (GR1 Task 11). An answer replayed from the idempotency index has no rows and
+/// says so in a `01000` notification.
 ///
 /// An answer past the byte budget is `graph_result_too_large`, unless `committed`: a statement
 /// that committed is never reported as a failure (review fix 1, I3), so its rows are dropped,
@@ -137,13 +139,60 @@ fn to_pb_response(
         ),
         Err(err) => return Err(err),
     };
-    Ok(pb::ExecuteResponse {
-        rows: rows.into(),
+    let mut notifications = notifications;
+    let mut response = pb::ExecuteResponse {
         truncated,
         elapsed_nanos: result.elapsed_nanos.unwrap_or_default(),
-        notifications,
         ..Default::default()
-    })
+    };
+    if let Some(commit) = &result.commit {
+        response.consistency_token = commit.token.to_string();
+        response.commit_epoch = commit.commit_epoch;
+        response.counters = to_pb_counters(&commit.counters).into();
+        if commit.replayed {
+            notifications.push(pb::Notification {
+                gqlstatus: "01000".to_string(),
+                message: "already applied under this idempotency_key: the statement did not run \
+                          again, and the first run's rows are not kept"
+                    .to_string(),
+                ..Default::default()
+            });
+        }
+    }
+    response.rows = rows.into();
+    response.notifications = notifications;
+    Ok(response)
+}
+
+/// A write's counters on the wire.
+pub(crate) fn to_pb_counters(counters: &crate::changeset::Counters) -> pb::Counters {
+    pb::Counters {
+        nodes_created: counters.nodes_created,
+        nodes_deleted: counters.nodes_deleted,
+        relationships_created: counters.relationships_created,
+        relationships_deleted: counters.relationships_deleted,
+        properties_set: counters.properties_set,
+        labels_added: counters.labels_added,
+        labels_removed: counters.labels_removed,
+        ..Default::default()
+    }
+}
+
+/// A request's idempotency key: empty is none, and at most
+/// [`super::admin::MAX_IDEMPOTENCY_KEY`] bytes.
+fn idempotency_key(key: &str) -> Result<Option<String>, ConnectError> {
+    if key.len() > super::admin::MAX_IDEMPOTENCY_KEY {
+        return Err(refuse(
+            ErrorCode::InvalidArgument,
+            "invalid_argument",
+            format!(
+                "idempotency_key must be at most {} bytes, got {}",
+                super::admin::MAX_IDEMPOTENCY_KEY,
+                key.len()
+            ),
+        ));
+    }
+    Ok((!key.is_empty()).then(|| key.to_string()))
 }
 
 /// Decodes a parameter map into the engine's values, refusing more than the limit allows before
@@ -210,8 +259,19 @@ pub(crate) fn run_statement(
     check_language(req.language.as_known(), req.language)?;
     limits.check_statement(&req.statement).map_err(map_engine)?;
     let parameters = to_parameters(&req.parameters, limits)?;
+    let options = WriteOptions {
+        idempotency_key: idempotency_key(&req.idempotency_key)?,
+        ..WriteOptions::default()
+    };
     graph
-        .execute_within(&req.statement, parameters, req.read_only, limits, max_rows)
+        .execute_with(
+            &req.statement,
+            parameters,
+            req.read_only,
+            limits,
+            max_rows,
+            &options,
+        )
         .map_err(map_engine)
 }
 
@@ -269,12 +329,23 @@ pub fn execute_batch_on(
         })
         .collect::<Result<Vec<_>, ConnectError>>()?;
     let max_rows = limits.max_rows as usize;
+    let key = idempotency_key(&req.idempotency_key)?;
+    let isolation = match req.isolation.as_known() {
+        Some(pb::Isolation::Serializable) => Isolation::Serializable,
+        _ => Isolation::Snapshot,
+    };
     if req.atomic {
-        // Grafeo's own transaction, not a Loams-side emulation. `commit_epoch` comes with the
-        // write lane (Task 11, R0.5).
+        // Grafeo's own transaction, not a Loams-side emulation, run in the write lane on a
+        // durable graph: one record, one token, one commit epoch (GR1 Task 11, R0.5).
+        let options = WriteOptions {
+            idempotency_key: key,
+            isolation,
+            if_version: req.if_version,
+        };
         let results = graph
-            .execute_batch_within(&statements, limits, Some(max_rows))
+            .execute_batch_with(&statements, limits, Some(max_rows), &options)
             .map_err(map_engine)?;
+        let commit = results.first().and_then(|result| result.commit);
         let mut budget = ByteBudget::new(limits.max_result_bytes);
         // A batch that wrote has committed: none of its answers may fail it now (I3).
         let committed = results.iter().any(|result| result.wrote);
@@ -286,27 +357,43 @@ pub fn execute_batch_on(
                 .map_err(map_engine)?,
             committed: true,
             committed_through: u32::try_from(results.len()).unwrap_or(u32::MAX),
+            consistency_token: commit.map(|c| c.token.to_string()).unwrap_or_default(),
+            commit_epoch: commit.map_or(0, |c| c.commit_epoch),
             ..Default::default()
         })
     } else {
         // Each statement is its own transaction, with its parameters bound; a failure stops the
-        // batch and leaves its predecessors committed.
+        // batch and leaves its predecessors committed. On a durable graph each one that writes
+        // is its own record, keyed `<key>#<index>` so a retry of the batch skips the statements
+        // that committed; `if_version` guards the first.
         let mut results = Vec::with_capacity(statements.len());
         let mut error = None;
+        let mut token = String::new();
         let mut budget = ByteBudget::new(limits.max_result_bytes);
         for (index, statement) in statements.iter().enumerate() {
-            match graph.execute_within(
+            let options = WriteOptions {
+                idempotency_key: key.as_ref().map(|key| format!("{key}#{index}")),
+                isolation,
+                if_version: if index == 0 { req.if_version } else { None },
+            };
+            match graph.execute_with(
                 &statement.text,
                 statement.parameters.clone(),
                 false,
                 limits,
                 Some(max_rows),
+                &options,
             ) {
                 // A statement that wrote committed: past the byte budget it is answered without
                 // rows (`truncated`) and the batch goes on. A read past it changed nothing: it
                 // fails and stops the batch, and `committed_through` does not count it (I3).
                 Ok(result) => match to_pb_response(&result, &mut budget, result.wrote) {
-                    Ok(response) => results.push(response),
+                    Ok(response) => {
+                        if !response.consistency_token.is_empty() {
+                            token.clone_from(&response.consistency_token);
+                        }
+                        results.push(response);
+                    }
                     Err(err) => {
                         error = Some(statement_error(index, &err));
                         break;
@@ -322,6 +409,7 @@ pub fn execute_batch_on(
             committed_through: u32::try_from(results.len()).unwrap_or(u32::MAX),
             results,
             committed: false,
+            consistency_token: token,
             error: error.into(),
             ..Default::default()
         })

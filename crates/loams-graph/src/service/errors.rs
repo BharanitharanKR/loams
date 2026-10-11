@@ -71,6 +71,9 @@ pub(crate) fn code_of(err: &GraphError) -> ErrorCode {
         GraphError::Reloading => ErrorCode::Unavailable,
         GraphError::StatementTimeout => ErrorCode::DeadlineExceeded,
         GraphError::Failed => ErrorCode::FailedPrecondition,
+        GraphError::WriteConflict => ErrorCode::Aborted,
+        GraphError::VersionMismatch { .. } => ErrorCode::FailedPrecondition,
+        GraphError::LogUnavailable(_) => ErrorCode::Unavailable,
     }
 }
 

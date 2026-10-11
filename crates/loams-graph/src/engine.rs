@@ -158,6 +158,20 @@ pub enum GraphError {
         "the graph was lost to an engine failure and cannot be reopened from storage; delete it and create it again"
     )]
     Failed,
+    /// The transaction conflicted with another one and was rolled back; retry it (§48 §7.3).
+    #[error("the transaction conflicted with another and was rolled back; retry it")]
+    WriteConflict,
+    /// `if_version` did not match the graph's version (§48 §7.3).
+    #[error("the graph is at version {current}, not {expected}; read it again and retry")]
+    VersionMismatch {
+        /// The version the request named.
+        expected: u64,
+        /// The graph's version: the offset of its consistency token.
+        current: u64,
+    },
+    /// The log the graph is durable in could not be read or written; retry (GR1 Task 11).
+    #[error("{0}")]
+    LogUnavailable(String),
 }
 
 /// What the engine said about a statement it refused, besides its text (§48 §8.3, GR1 Task 7).
@@ -211,6 +225,9 @@ impl GraphError {
             Self::EnginePanic | Self::Failed => "graph_engine_panic",
             Self::Reloading => "graph_reloading",
             Self::StatementTimeout => "graph_statement_timeout",
+            Self::WriteConflict => "graph_write_conflict",
+            Self::VersionMismatch { .. } => "graph_version_mismatch",
+            Self::LogUnavailable(_) => "unavailable",
         }
     }
 }
@@ -228,6 +245,10 @@ pub struct OpenSpec {
     dir: Option<PathBuf>,
     /// Open read-only: every writing statement is refused before it reaches the engine.
     pub read_only: bool,
+    /// Durable in a stream of Loams' log (GR1 Task 11): the graph is rebuilt from it when it
+    /// opens, and every write goes through the write lane. `None` is GR1a's engine-only mode
+    /// (Grafeo's own files), which the engine-level service functions and the mock use.
+    durable: Option<crate::durable::DurableSpec>,
 }
 
 impl OpenSpec {
@@ -246,6 +267,7 @@ impl OpenSpec {
             id: Some(id),
             dir: Some(data_dir.join("graphs").join(id.to_string())),
             read_only: false,
+            durable: None,
         })
     }
 
@@ -269,6 +291,13 @@ impl OpenSpec {
     #[must_use]
     pub fn read_only(mut self) -> Self {
         self.read_only = true;
+        self
+    }
+
+    /// The same spec, durable in `durable`'s stream (GR1 Task 11). Needs a catalog id.
+    #[must_use]
+    pub fn durable(mut self, durable: crate::durable::DurableSpec) -> Self {
+        self.durable = Some(durable);
         self
     }
 
@@ -297,6 +326,9 @@ pub enum GraphState {
     Ready,
     /// An engine call panicked; the graph reopens on its next call.
     Poisoned,
+    /// A write could not be made durable (a failed append, a refused capture); the graph is
+    /// rebuilt from its stream on its next call (GR1 Task 11).
+    Reloading,
     /// An engine call panicked and the graph cannot be reopened from storage.
     Failed,
 }
@@ -375,6 +407,9 @@ pub struct GraphResult {
     /// [`Verdict::writes`]), so its answer must not be reported as a failure afterwards
     /// (review fix 1, I3). For a batch, whether any of its statements can.
     pub wrote: bool,
+    /// Where a durable graph's write is durable, its commit epoch and counters (GR1 Task 11).
+    /// `None` for a read, and on a graph that is not durable.
+    pub commit: Option<crate::durable::Commit>,
 }
 
 /// One graph, open in this process.
@@ -395,6 +430,14 @@ pub struct Graph {
     /// A counter rather than a plain field because `execute` takes `&self`: several statements can
     /// be in flight against one graph, and a lost update here would be a wrong number on the wire.
     statements_executed: AtomicU64,
+    /// The reader-writer gate (R9.3): client statements hold it shared, a durable graph's write
+    /// lane exclusively until its writes are durable.
+    gate: crate::durable::visibility::Gate,
+    /// The durable write path, when the graph is durable (GR1 Task 11).
+    durable: Option<crate::durable::Durable>,
+    /// Set when a write could not be made durable: the engine holds commits the log does not,
+    /// so it is rebuilt from the log before it serves again.
+    reloading: AtomicBool,
 }
 
 impl fmt::Debug for Graph {
@@ -524,9 +567,37 @@ impl Graph {
     fn open_db(
         namespace: &str,
         name: &str,
-        spec: OpenSpec,
+        mut spec: OpenSpec,
         engine: &Engine,
     ) -> Result<Graph, GraphError> {
+        // A durable graph's stream is the graph (I4): its local files are a cache, and until
+        // Task 14 trusts them they are discarded and the engine is rebuilt from the stream. Only
+        // a graph from before the log, whose stream is still empty, keeps them (R11.5).
+        let mut plan = None;
+        if let Some(durable) = &spec.durable {
+            let id = spec
+                .id
+                .ok_or_else(|| GraphError::engine("a durable graph needs its catalog id"))?;
+            if spec.read_only {
+                return Err(GraphError::engine(
+                    "a durable graph is not opened read-only: it is rebuilt from its stream",
+                ));
+            }
+            let bounds = durable.log.bounds(durable.stream)?;
+            let adopt = durable.adopt && bounds.1 == 0;
+            if !adopt && let Some(dir) = &spec.dir {
+                match std::fs::remove_dir_all(dir) {
+                    Ok(()) => {}
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(err) => {
+                        return Err(GraphError::engine(format!(
+                            "clearing the graph's local cache: {err}"
+                        )));
+                    }
+                }
+            }
+            plan = Some((id, bounds, adopt));
+        }
         let config = match spec.database_file() {
             None => grafeo::Config::in_memory(),
             // `read_only` is the engine's own read-only mode: a shared lock and no WAL
@@ -547,7 +618,30 @@ impl Graph {
             None => config.without_query_timeout(),
         }
         .with_max_property_size(engine.max_property_bytes);
+        // A durable graph's change sets are captured from Grafeo's CDC (R9.1, R9.9).
+        let config = if spec.durable.is_some() {
+            let mut config = config.with_cdc();
+            config.cdc_retention = crate::durable::cdc_retention();
+            config
+        } else {
+            config
+        };
         let db = GrafeoDB::with_config(config).map_err(as_engine_error)?;
+        let durable = match (&spec.durable, plan) {
+            (Some(durable), Some((id, bounds, adopt))) => Some(crate::durable::Durable::open(
+                &db,
+                durable,
+                id,
+                bounds,
+                adopt,
+                spec.dir.is_some(),
+            )?),
+            _ => None,
+        };
+        // A reload never adopts: by then the local files may hold commits the log refused.
+        if let Some(durable) = &mut spec.durable {
+            durable.adopt = false;
+        }
         Ok(Graph {
             namespace: namespace.to_string(),
             name: name.to_string(),
@@ -558,6 +652,9 @@ impl Graph {
             poisoned: AtomicBool::new(false),
             failed: AtomicBool::new(false),
             statements_executed: AtomicU64::new(0),
+            gate: crate::durable::visibility::Gate::default(),
+            durable,
+            reloading: AtomicBool::new(false),
         })
     }
 
@@ -566,9 +663,81 @@ impl Graph {
         self.spec.id
     }
 
-    /// Node and edge counts.
+    /// Node and edge counts. A durable graph answers its durable state's, read without the gate
+    /// (so `GetGraph` never waits on a write group, and never counts a write that is not
+    /// durable).
     pub fn counts(&self) -> (u64, u64) {
-        (self.db.node_count() as u64, self.db.edge_count() as u64)
+        match &self.durable {
+            Some(durable) => durable.position.counts(),
+            None => (self.db.node_count() as u64, self.db.edge_count() as u64),
+        }
+    }
+
+    /// Whether writes to this graph are durable in Loams' log (GR1 Task 11).
+    pub fn is_durable(&self) -> bool {
+        self.durable.is_some()
+    }
+
+    /// The durable position (the stream's next offset, R9.5) as it moves, for a durable graph:
+    /// the shared contract's `durable_epoch` (Task 15 waits on it).
+    pub fn durable_epoch(&self) -> Option<tokio::sync::watch::Receiver<u64>> {
+        self.durable
+            .as_ref()
+            .map(|durable| durable.position.subscribe())
+    }
+
+    /// The token of the graph's durable state, for a durable graph.
+    pub fn consistency_token(&self) -> Option<crate::durable::ConsistencyToken> {
+        self.durable.as_ref().map(crate::durable::Durable::token)
+    }
+
+    /// The graph's stream, for a durable graph.
+    pub fn stream(&self) -> Option<loams_common::StreamId> {
+        self.durable.as_ref().map(|durable| durable.stream)
+    }
+
+    /// The engine's epoch at the durable state, for a durable graph.
+    pub(crate) fn durable_engine_epoch(&self) -> Option<u64> {
+        self.durable
+            .as_ref()
+            .map(|durable| durable.position.engine_epoch())
+    }
+
+    /// The graph's gate (R9.3).
+    pub(crate) fn gate(&self) -> &crate::durable::visibility::Gate {
+        &self.gate
+    }
+
+    /// The engine.
+    pub(crate) fn db(&self) -> &GrafeoDB {
+        &self.db
+    }
+
+    /// Counts one executed statement.
+    pub(crate) fn count_statement(&self) {
+        self.statements_executed.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Marks the graph for reload: the engine holds commits its stream does not. Called by the
+    /// lane under the exclusive gate, so no client statement runs on this engine again.
+    pub(crate) fn mark_reloading(&self) {
+        self.reloading.store(true, Ordering::Release);
+    }
+
+    /// Marks the graph poisoned by an engine panic (R0.13).
+    pub(crate) fn poison(&self, why: &str) {
+        self.poisoned.store(true, Ordering::Release);
+        tracing::error!(
+            namespace = %self.namespace,
+            name = %self.name,
+            "{why}; the graph is poisoned and reopens on its next call"
+        );
+    }
+
+    /// Whether the graph must be reopened before it serves: poisoned by a panic, or holding
+    /// commits its stream refused.
+    pub(crate) fn needs_reopen(&self) -> bool {
+        self.is_poisoned() || self.reloading.load(Ordering::Acquire)
     }
 
     /// Labels, edge types (each with its count), property keys and indexes, sorted (GetSchema).
@@ -577,7 +746,7 @@ impl Graph {
     ///
     /// What [`Graph::call`] answers for a poisoned or panicking engine.
     pub fn schema(&self) -> Result<SchemaSummary, GraphError> {
-        self.call(|| {
+        self.read_call(|| {
             let mut summary = SchemaSummary::default();
             if let grafeo_engine::admin::SchemaInfo::Lpg(info) = self.db.schema() {
                 summary.labels = info
@@ -617,6 +786,8 @@ impl Graph {
             GraphState::Failed
         } else if self.is_poisoned() {
             GraphState::Poisoned
+        } else if self.reloading.load(Ordering::Acquire) {
+            GraphState::Reloading
         } else {
             GraphState::Ready
         }
@@ -624,7 +795,7 @@ impl Graph {
 
     /// Whether the graph needs [`Engine::reopen_if_poisoned`] (or is failed) before it serves.
     pub fn is_poisoned_or_failed(&self) -> bool {
-        self.is_poisoned() || self.failed.load(Ordering::Acquire)
+        self.needs_reopen() || self.failed.load(Ordering::Acquire)
     }
 
     fn is_poisoned(&self) -> bool {
@@ -658,7 +829,7 @@ impl Graph {
         if self.failed.load(Ordering::Acquire) {
             return Err(GraphError::Failed);
         }
-        if self.is_poisoned() {
+        if self.needs_reopen() {
             return Err(GraphError::Reloading);
         }
         // On a large stack (the engine re-parses the statement; re-review 2c), with the panic
@@ -680,6 +851,17 @@ impl Graph {
                 Err(GraphError::EnginePanic)
             }
         }
+    }
+
+    /// [`Graph::call`] for a client statement: under the graph's gate, shared, so it never runs
+    /// while a write is not durable (R9.3). The poisoned check inside `call` runs after the gate
+    /// is taken, so a statement that waited on a group the log refused answers `graph_reloading`.
+    fn read_call<T: Send>(
+        &self,
+        f: impl FnOnce() -> Result<T, GraphError> + Send,
+    ) -> Result<T, GraphError> {
+        let _shared = self.gate.shared();
+        self.call(f)
     }
 
     /// The access a statement needs, refusing it on a read-only request or graph, and refusing
@@ -794,11 +976,55 @@ impl Graph {
         limits: &StatementLimits,
         max_rows: Option<usize>,
     ) -> Result<GraphResult, GraphError> {
+        self.execute_with(
+            statement,
+            parameters,
+            read_only,
+            limits,
+            max_rows,
+            &crate::durable::WriteOptions::default(),
+        )
+    }
+
+    /// [`Graph::execute_within`] with a write's options (GR1 Task 11). On a durable graph a
+    /// statement that writes runs in the write lane and answers once it is durable, with its
+    /// [`GraphResult::commit`]; `options` apply to such a statement only. A read runs under the
+    /// gate, shared.
+    ///
+    /// # Errors
+    ///
+    /// As [`Graph::execute_within`]; on a durable graph also [`GraphError::Reloading`] when the
+    /// write could not be made durable, and [`GraphError::WriteConflict`].
+    pub fn execute_with(
+        &self,
+        statement: &str,
+        parameters: HashMap<String, Value>,
+        read_only: bool,
+        limits: &StatementLimits,
+        max_rows: Option<usize>,
+        options: &crate::durable::WriteOptions,
+    ) -> Result<GraphResult, GraphError> {
         limits.check_parameters(parameters.len())?;
         // The gate and the row building run inside the same panic containment as the engine
         // call (security review M5).
-        self.call(|| {
-            let verdict = self.admit(statement, read_only, limits)?;
+        let verdict = self.call(|| self.admit(statement, read_only, limits))?;
+        if verdict.access != Access::Read
+            && let Some(durable) = &self.durable
+        {
+            let job = crate::durable::lane::LaneJob {
+                statements: vec![BatchStatement {
+                    text: statement.to_string(),
+                    parameters,
+                }],
+                access: verdict.access,
+                writes: verdict.writes(),
+                options: options.clone(),
+                max_rows,
+            };
+            let committed = self.call(|| durable.lane.submit(self, durable, job))?;
+            return Ok(batch_results(committed, 1).pop().unwrap_or_default());
+        }
+        self.read_call(|| {
             let mut result = self.run_engine(verdict.access, statement, parameters, max_rows)?;
             result.wrote = verdict.writes();
             Ok(result)
@@ -814,8 +1040,8 @@ impl Graph {
         parameters: HashMap<String, Value>,
         max_rows: Option<usize>,
     ) -> Result<GraphResult, GraphError> {
-        let result = run_on_session(&self.session_for(access), statement, parameters)
-            .map_err(as_engine_error)?;
+        let session = crate::durable::Visibility::session(self, access);
+        let result = run_on_session(&session, statement, parameters).map_err(as_engine_error)?;
         self.statements_executed.fetch_add(1, Ordering::Relaxed);
         Ok(self.resolved(GraphResult::from_engine(result, max_rows)))
     }
@@ -831,7 +1057,7 @@ impl Graph {
         statement: &str,
         parameters: HashMap<String, Value>,
     ) -> Result<GraphResult, GraphError> {
-        self.call(|| self.run_engine(access, statement, parameters, None))
+        self.read_call(|| self.run_engine(access, statement, parameters, None))
     }
 
     /// The plan of a statement, without running it (`Explain`, GR1 Task 6).
@@ -852,7 +1078,7 @@ impl Graph {
         use grafeo_engine::query::Optimizer;
         use grafeo_engine::query::binder::Binder;
         use grafeo_engine::query::translators::gql::{GqlTranslationResult, translate_full};
-        self.call(|| {
+        self.read_call(|| {
             gate_within(statement, QueryLanguage::Gql, limits)?;
             let plan = match translate_full(statement) {
                 Ok(GqlTranslationResult::Plan(plan)) => plan,
@@ -952,14 +1178,38 @@ impl Graph {
         limits: &StatementLimits,
         max_rows: Option<usize>,
     ) -> Result<Vec<GraphResult>, GraphError> {
+        self.execute_batch_with(
+            statements,
+            limits,
+            max_rows,
+            &crate::durable::WriteOptions::default(),
+        )
+    }
+
+    /// [`Graph::execute_batch_within`] with the batch's options (GR1 Task 11). On a durable graph
+    /// the transaction runs in the write lane, read-only or not (an explicit transaction commits
+    /// through the lane, R0.5), and is one record in the graph's stream; every result carries the
+    /// batch's [`GraphResult::commit`]. A batch answered from the idempotency index has one empty
+    /// result per statement. `options` apply to a durable graph only.
+    ///
+    /// # Errors
+    ///
+    /// As [`Graph::execute_batch_within`], and on a durable graph as [`Graph::execute_with`]
+    /// and [`GraphError::VersionMismatch`].
+    pub fn execute_batch_with(
+        &self,
+        statements: &[BatchStatement],
+        limits: &StatementLimits,
+        max_rows: Option<usize>,
+        options: &crate::durable::WriteOptions,
+    ) -> Result<Vec<GraphResult>, GraphError> {
         limits.check_batch(statements.len())?;
         for statement in statements {
             limits.check_parameters(statement.parameters.len())?;
         }
-        // Gate, engine and row building all inside the panic containment (M5).
-        self.call(|| {
-            // Every statement is gated before any runs, so a refused one leaves nothing
-            // half-applied.
+        // Every statement is gated before any runs, so a refused one leaves nothing
+        // half-applied; the gate runs inside the panic containment (M5).
+        let (access, writes) = self.call(|| {
             let mut access = Access::Read;
             let mut writes = false;
             for statement in statements {
@@ -967,6 +1217,20 @@ impl Graph {
                 access = access.max(verdict.access);
                 writes |= verdict.writes();
             }
+            Ok((access, writes))
+        })?;
+        if let Some(durable) = &self.durable {
+            let job = crate::durable::lane::LaneJob {
+                statements: statements.to_vec(),
+                access,
+                writes,
+                options: options.clone(),
+                max_rows,
+            };
+            let committed = self.call(|| durable.lane.submit(self, durable, job))?;
+            return Ok(batch_results(committed, statements.len()));
+        }
+        self.read_call(|| {
             let mut session = self.session_for(access);
             session.begin_transaction().map_err(as_engine_error)?;
             let mut out = Vec::with_capacity(statements.len());
@@ -1022,10 +1286,12 @@ impl Graph {
     /// and relationships. Each id is looked up here and replaced by the same map the engine's own
     /// projection builds for a node (`_id`, `_labels`, properties) or a relationship (`_id`,
     /// `_type`, `_source`, `_target`, properties), which [`crate::value::to_proto`] then answers
-    /// as a `Node` or `Relationship`. The lookup reads the current state: until Task 11 pins a
-    /// read's epoch, a write committed between the statement and this lookup is visible here, and
-    /// an element deleted in that window stays an id.
-    fn resolved(&self, mut result: GraphResult) -> GraphResult {
+    /// as a `Node` or `Relationship`. The lookup reads the current state. On a durable graph that
+    /// is the statement's own state, since the statement holds the gate (R9.3: a read's gate is
+    /// shared, so no write commits meanwhile; a write resolves inside the lane). On a graph that
+    /// is not durable, a write committed between the statement and this lookup is visible here,
+    /// and an element deleted in that window stays an id (R2.4).
+    pub(crate) fn resolved(&self, mut result: GraphResult) -> GraphResult {
         #[cfg(feature = "failpoints")]
         fail::fail_point!("loams_graph::resolve");
         for row in &mut result.rows {
@@ -1477,24 +1743,27 @@ impl Engine {
         self.data_dir.as_deref()
     }
 
-    /// Reopens a graph an engine panic poisoned (R0.13), from its own spec: a persistent graph
-    /// comes back with everything it committed, an in-memory one comes back empty. A graph that
-    /// is not poisoned is answered as it is.
+    /// Reopens a graph an engine panic poisoned (R0.13), or whose write could not be made durable
+    /// (GR1 Task 11), from its own spec: a durable graph is rebuilt from its stream; otherwise a
+    /// persistent graph comes back with everything it committed, and an in-memory one fails. A
+    /// graph that needs neither is answered as it is.
     ///
     /// # Errors
     ///
-    /// [`GraphError::Reloading`] while another caller still holds the poisoned handle (its file
-    /// lock is not released yet), or the engine's error opening the storage.
+    /// [`GraphError::Reloading`] while another caller still holds the old handle (its file
+    /// lock is not released yet), or the engine's (or the log's) error opening the storage.
     pub fn reopen_if_poisoned(&self, graph: Arc<Graph>) -> Result<Arc<Graph>, GraphError> {
-        if !graph.is_poisoned() {
+        if !graph.needs_reopen() {
             return Ok(graph);
         }
         if graph.failed.load(Ordering::Acquire) {
             return Err(GraphError::Failed);
         }
+        let durable = graph.durable.is_some();
         // An in-memory graph has nothing to reopen from: reopening it would serve an empty graph
         // in its place and lose every acknowledged write without a word (I2). It fails instead.
-        if !graph.persistent {
+        // A durable one is rebuilt from its stream.
+        if !graph.persistent && !durable {
             graph.failed.store(true, Ordering::Release);
             tracing::error!(
                 namespace = %graph.namespace,
@@ -1510,7 +1779,7 @@ impl Engine {
             .map_err(|_| poisoned("the graph registry is poisoned"))?;
         // Someone may have reopened it already.
         if let Some(current) = graphs.get(&key)
-            && !current.is_poisoned()
+            && !current.needs_reopen()
         {
             return Ok(Arc::clone(current));
         }
@@ -1525,8 +1794,11 @@ impl Engine {
         let spec = old.spec.clone();
         let (namespace, name) = (old.namespace.clone(), old.name.clone());
         // The close flushes the WAL. If it fails, buffered commits may not be on disk, and a reopen
-        // could serve a graph missing acknowledged writes, so the graph fails instead (I2).
-        if let Err(err) = old.db.close() {
+        // could serve a graph missing acknowledged writes, so the graph fails instead (I2). A
+        // durable graph's files are not what it reopens from.
+        if let Err(err) = old.db.close()
+            && !durable
+        {
             tracing::error!(%namespace, %name, error = %err, "closing a poisoned graph failed; it is failed, not reopened");
             old.failed.store(true, Ordering::Release);
             graphs.insert(key, old);
@@ -1535,7 +1807,7 @@ impl Engine {
         drop(old);
         let fresh = Arc::new(Graph::open_db(&namespace, &name, spec, self)?);
         graphs.insert(key, Arc::clone(&fresh));
-        tracing::info!(%namespace, %name, "reopened a poisoned graph");
+        tracing::info!(%namespace, %name, durable, "reopened a graph");
         Ok(fresh)
     }
 
@@ -1640,7 +1912,7 @@ fn poisoned(what: &str) -> GraphError {
 /// `execute` honours it. A statement with parameters therefore has no engine backstop until
 /// Grafeo threads the deadline through (upstream ask, R0.8; Task 6's Loams-side deadline still
 /// answers the client). Both paths enforce the session's role.
-fn run_on_session(
+pub(crate) fn run_on_session(
     session: &grafeo::Session,
     statement: &str,
     parameters: HashMap<String, Value>,
@@ -1660,9 +1932,16 @@ fn run_on_session(
 /// (`InvalidArgument`). The engine's message is what carries the parameter's name, so this matches
 /// on it. If Grafeo ever rewords the message the case degrades to `Internal`, which loses the
 /// classification but never the diagnostic.
-fn as_engine_error(err: GrafeoError) -> GraphError {
-    if err.error_code() == grafeo_common::utils::error::ErrorCode::QueryTimeout {
-        return GraphError::StatementTimeout;
+pub(crate) fn as_engine_error(err: GrafeoError) -> GraphError {
+    use grafeo_common::utils::error::ErrorCode;
+    match err.error_code() {
+        ErrorCode::QueryTimeout => return GraphError::StatementTimeout,
+        // A commit that lost to another transaction, under snapshot or serializable isolation
+        // (§48 §7.3): rolled back, and safe to retry.
+        ErrorCode::TransactionConflict | ErrorCode::TransactionSerialization => {
+            return GraphError::WriteConflict;
+        }
+        _ => {}
     }
     const MISSING: &str = "Missing parameter: $";
     let text = err.to_string();
@@ -1730,6 +2009,33 @@ fn position_in(source: &str, start: usize, end: usize) -> Option<Position> {
     })
 }
 
+/// The results of a transaction the lane committed, each carrying its commit. A transaction
+/// answered from the idempotency index kept no rows: it answers `statements` empty results, each
+/// marked as having written (it committed, on its first run).
+fn batch_results(
+    committed: crate::durable::lane::Committed,
+    statements: usize,
+) -> Vec<GraphResult> {
+    let commit = committed.commit;
+    if commit.replayed {
+        return (0..statements)
+            .map(|_| GraphResult {
+                wrote: true,
+                commit: Some(commit),
+                ..GraphResult::default()
+            })
+            .collect();
+    }
+    committed
+        .results
+        .into_iter()
+        .map(|mut result| {
+            result.commit = Some(commit);
+            result
+        })
+        .collect()
+}
+
 /// Converts one engine result into Loams's shape.
 impl From<QueryResult> for GraphResult {
     fn from(result: QueryResult) -> Self {
@@ -1741,7 +2047,7 @@ impl GraphResult {
     /// Converts one engine result, keeping at most `max_rows` rows (GR1 Task 6). The rows are
     /// moved, not copied, and the ones past the cap are dropped here, before any path in them is
     /// resolved.
-    fn from_engine(result: QueryResult, max_rows: Option<usize>) -> Self {
+    pub(crate) fn from_engine(result: QueryResult, max_rows: Option<usize>) -> Self {
         // Read the engine's own counters before taking the rows: `rows_scanned` is set to the
         // number of rows *returned* (`session/mod.rs`), so it is a real measurement but not of rows
         // read from storage, and it is named here rather than at the call site.
@@ -1770,6 +2076,28 @@ impl GraphResult {
             rows_affected: None,
             truncated,
             wrote: false,
+            commit: None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use grafeo_common::utils::error::TransactionError;
+
+    #[test]
+    fn conflicts_are_write_conflicts() {
+        // Under the write lane transactions run one at a time, so a conflict cannot be provoked
+        // through it (R11.7); the mapping is pinned here.
+        for err in [
+            TransactionError::Conflict,
+            TransactionError::WriteConflict("node 1".to_string()),
+            TransactionError::SerializationFailure("read-write".to_string()),
+        ] {
+            let mapped = as_engine_error(GrafeoError::Transaction(err));
+            assert_eq!(mapped, GraphError::WriteConflict);
+            assert_eq!(mapped.reason(), "graph_write_conflict");
         }
     }
 }

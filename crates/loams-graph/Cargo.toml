@@ -54,6 +54,9 @@ ulid.workspace = true
 # `ExecuteStream`'s chunks, as the `connectrpc::ServiceStream` the handler answers (GR1 Task 6).
 # Already in the tree through `connectrpc`.
 futures.workspace = true
+# The durable write path (GR1 Task 11, D742): every committed write transaction is appended to
+# the graph's implicit stream through Loams' log, and a graph is rebuilt from that stream.
+loams-log.workspace = true
 
 [features]
 # `engine_panic_poisons_one_graph`: `cargo test -p loams-graph --features failpoints`.
@@ -83,6 +86,8 @@ loams-apps-mock = { path = "../loams-apps-mock" }
 reqwest.workspace = true
 # The change-capture spike's model-based test (GR1 Task 9).
 proptest.workspace = true
+# The durable write path's tests read the graph's stream back (GR1 Task 11).
+loams-cache.workspace = true
 
 [lints]
 workspace = true

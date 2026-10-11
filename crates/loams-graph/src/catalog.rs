@@ -128,6 +128,12 @@ pub struct GraphMeta {
     /// on, finds its own token here and does not apply itself twice.
     #[serde(default)]
     pub recent_writes: Vec<String>,
+    /// The graph's implicit stream in Loams' log, where its writes are durable (GR1 Task 11).
+    /// Created and recorded when the graph first opens durably; `None` before that, and for a
+    /// graph written before the log (adopted on that open, R11.5). Not part of `version`: no
+    /// client sets it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stream: Option<loams_common::StreamId>,
 }
 
 /// How many write tokens a record remembers.
@@ -175,6 +181,9 @@ pub struct NewGraph {
     pub replicas: u32,
     /// `CreateGraph`'s idempotency key.
     pub idempotency_key: Option<String>,
+    /// Create the graph's implicit stream with it, before its record (and so its id) is visible
+    /// to anyone (GR1 Task 11, R11.2). Set when the graph's writes are durable in the log.
+    pub with_stream: bool,
 }
 
 /// A catalog failure.
@@ -364,6 +373,24 @@ impl GraphCatalog {
         let ns = self.ensure_namespace(namespace).await?;
         let now = self.now_ms();
         let id = GraphId::new().to_string();
+        // The stream first, under an id nobody else knows yet, so nobody can have created a
+        // stream of that name or appended to it (R11.2). Not when the name is taken: that create
+        // answers the existing graph or `ALREADY_EXISTS`, and would leave the stream unused.
+        let taken = self
+            .load_ns(ns)
+            .await?
+            .doc
+            .graphs
+            .get(name)
+            .is_some_and(|g| !g.is_deleting());
+        let stream = match new.with_stream && !taken {
+            true => Some(
+                crate::durable::GraphLog::ensure_stream(&self.meta, ns, &id)
+                    .await
+                    .map_err(unavailable)?,
+            ),
+            false => None,
+        };
         self.write(ns, |doc| {
             // This call's own graph, from an attempt whose acknowledgement was lost (I2), under
             // any key: another writer may already have deleted it (re-review 1). Never a second
@@ -417,6 +444,7 @@ impl GraphCatalog {
                 idempotency_key: new.idempotency_key.clone(),
                 delete_key: None,
                 recent_writes: Vec::new(),
+                stream,
             };
             // A graph being deleted under this name keeps its record (under its id) until it
             // is purged, so the name is free for the new one.
@@ -425,6 +453,60 @@ impl GraphCatalog {
             }
             doc.graphs.insert(name.to_string(), meta.clone());
             Ok((Some(()), meta))
+        })
+        .await
+    }
+
+    /// Graph `meta`'s implicit stream, `graph.<gr_id>`, created when absent (GR1 Task 11).
+    /// Creating it again answers the same stream, so a retry is safe.
+    ///
+    /// # Errors
+    ///
+    /// [`CatalogError::Unavailable`].
+    pub async fn ensure_stream(
+        &self,
+        meta: &GraphMeta,
+    ) -> Result<loams_common::StreamId, CatalogError> {
+        let namespace = self.ensure_namespace(&meta.namespace).await?;
+        crate::durable::GraphLog::ensure_stream(&self.meta, namespace, &meta.id)
+            .await
+            .map_err(unavailable)
+    }
+
+    /// Records graph `id`'s stream in its record. Recording the stream it already has changes
+    /// nothing; another stream is refused, since the record's stream is the graph.
+    ///
+    /// # Errors
+    ///
+    /// [`CatalogError::NotFound`] for a graph the namespace no longer holds,
+    /// [`CatalogError::Corrupt`] when the record names another stream, or
+    /// [`CatalogError::Unavailable`].
+    pub async fn set_stream(
+        &self,
+        namespace: &str,
+        id: &str,
+        stream: loams_common::StreamId,
+    ) -> Result<GraphMeta, CatalogError> {
+        let ns = self
+            .namespace_id(namespace)
+            .await?
+            .ok_or_else(|| not_found(namespace, id))?;
+        self.write(ns, |doc| {
+            let graph = doc
+                .graphs
+                .values_mut()
+                .find(|g| g.id == id)
+                .ok_or_else(|| not_found(namespace, id))?;
+            match graph.stream {
+                Some(current) if current == stream => Ok((None, graph.clone())),
+                Some(current) => Err(CatalogError::Corrupt(format!(
+                    "graph {id} records stream {current}, not {stream}"
+                ))),
+                None => {
+                    graph.stream = Some(stream);
+                    Ok((Some(()), graph.clone()))
+                }
+            }
         })
         .await
     }

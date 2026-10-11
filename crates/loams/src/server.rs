@@ -1018,6 +1018,9 @@ struct Assembled {
 #[derive(Debug)]
 struct GraphRuntime {
     admin: Arc<loams_graph::service::admin::GraphAdmin>,
+    /// The graphs' own log writer (GR1 Task 11): it flushes every 2 ms or 256 KiB, the write
+    /// lane's group commit, where the collection writer waits 250 ms.
+    log: LogWriter,
     data_dir: Option<PathBuf>,
     stop: CancellationToken,
     maintenance: JoinHandle<()>,
@@ -1028,18 +1031,35 @@ struct GraphRuntime {
 
 #[cfg(feature = "graph")]
 impl GraphRuntime {
-    fn start(config: &GraphConfig, meta: Arc<dyn MetaStore>, store: Store) -> Self {
+    /// Starts the graph service: every graph is durable in Loams' log (GR1 Task 11), through a
+    /// writer of its own on log node `log_node` and the server's `reader`.
+    fn start(
+        config: &GraphConfig,
+        meta: Arc<dyn MetaStore>,
+        store: Store,
+        reader: LogReader,
+        log_node: u64,
+    ) -> Result<Self, ServerError> {
         use loams_graph::Engine;
         use loams_graph::catalog::GraphCatalog;
+        use loams_graph::durable::GraphLog;
         use loams_graph::service::admin::GraphAdmin;
+        let log = LogWriter::start(meta.clone(), store.clone(), GraphLog::log_config(log_node))?;
         let engine = match (&config.data_dir, config.ephemeral) {
             (Some(dir), _) => Engine::with_data_dir(dir),
             (None, _) => Engine::new(),
         }
         .with_query_timeout(Some(config.query_timeout))
         .with_max_property_bytes(config.limits.max_property_bytes);
+        let graph_log = GraphLog::new(
+            meta.clone(),
+            log.clone(),
+            reader,
+            tokio::runtime::Handle::current(),
+        );
         let admin = Arc::new(
             GraphAdmin::new(Arc::new(engine), GraphCatalog::new(meta, store))
+                .with_log(graph_log)
                 .with_retention_hold(config.retention_hold)
                 .with_statement_slots(config.statement_slots)
                 .with_namespace_statements(config.namespace_statements)
@@ -1076,14 +1096,15 @@ impl GraphRuntime {
                 }
             })
         };
-        Self {
+        Ok(Self {
             admin,
+            log,
             data_dir: config.data_dir.clone(),
             stop,
             maintenance,
             shutdown_wait: config.shutdown_wait,
             sweeps,
-        }
+        })
     }
 
     /// Stops the maintenance task, then the admin (review fix 1, I3): new requests answer
@@ -1101,6 +1122,10 @@ impl GraphRuntime {
             maintenance.abort();
         }
         self.admin.shutdown(self.shutdown_wait).await;
+        // After the graphs: a write still in its lane is answered before its log goes.
+        if let Err(err) = self.log.shutdown().await {
+            tracing::warn!(%err, "stopping the graph log writer");
+        }
     }
 }
 
@@ -2131,9 +2156,16 @@ impl Server {
             .unwrap_or_default();
         // Loams Graph on dev and standalone (a cluster node gets the `graph` role in GR1 Task 12).
         #[cfg(feature = "graph")]
-        let graph = config
-            .serves_graph()
-            .then(|| GraphRuntime::start(&config.graph, meta_store.clone(), store.clone()));
+        let graph = match config.serves_graph() {
+            true => Some(GraphRuntime::start(
+                &config.graph,
+                meta_store.clone(),
+                store.clone(),
+                reader.clone(),
+                config.log.node_id,
+            )?),
+            false => None,
+        };
         let house = match roles.gateway {
             true => crate::api::house_proxy::HouseProxy::start(&config.house).map_err(|err| {
                 ServerError::Config(format!("the House proxy's HTTP client: {err}"))

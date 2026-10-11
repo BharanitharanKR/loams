@@ -84,6 +84,12 @@ impl Chunks {
         chunk.last = true;
         chunk.truncated = truncated;
         chunk.elapsed_nanos = self.result.elapsed_nanos.unwrap_or_default();
+        // A durable write's token, epoch and counters (GR1 Task 11).
+        if let Some(commit) = &self.result.commit {
+            chunk.consistency_token = commit.token.to_string();
+            chunk.commit_epoch = commit.commit_epoch;
+            chunk.counters = super::data::to_pb_counters(&commit.counters).into();
+        }
     }
 }
 

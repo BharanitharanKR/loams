@@ -113,6 +113,10 @@ pub struct GraphAdmin {
     /// Set when [`GraphAdmin::shutdown`] starts: from then on no graph opens and no statement
     /// starts; each answers `UNAVAILABLE` (review fix 1, I3).
     closed: Arc<AtomicBool>,
+    /// Loams' log, where every graph's writes are durable (GR1 Task 11). `None` is GR1a's
+    /// engine-only mode: graphs persist through Grafeo's own files, which is not durable (a
+    /// write can be acknowledged and lost). The server always sets it; tests and the mock may not.
+    log: Option<crate::durable::GraphLog>,
     #[cfg(feature = "test-hooks")]
     after_open_hook: Arc<std::sync::Mutex<Option<crate::catalog::AckHook>>>,
 }
@@ -257,9 +261,18 @@ impl GraphAdmin {
             detached: Arc::default(),
             client_deadline: None,
             closed: Arc::default(),
+            log: None,
             #[cfg(feature = "test-hooks")]
             after_open_hook: Arc::default(),
         }
+    }
+
+    /// The same admin with every graph durable in `log` (GR1 Task 11): a graph opens from its
+    /// stream, and a write is acknowledged once its change set is appended there.
+    #[must_use]
+    pub fn with_log(mut self, log: crate::durable::GraphLog) -> Self {
+        self.log = Some(log);
+        self
     }
 
     /// The same admin with another retention hold.
@@ -584,7 +597,7 @@ impl GraphAdmin {
             .filter(|g| g.id().is_some_and(|id| id.to_string() == meta.id));
         let state = match (meta.state, open.as_ref().map(|g| g.state())) {
             (CatalogState::Deleting { .. }, _) => pb::GraphState::Deleting,
-            (_, Some(GraphState::Poisoned)) => pb::GraphState::Reloading,
+            (_, Some(GraphState::Poisoned | GraphState::Reloading)) => pb::GraphState::Reloading,
             (_, Some(GraphState::Failed)) => pb::GraphState::Failed,
             (_, Some(GraphState::Ready)) => pb::GraphState::Ready,
             // Listed and not open: it is served, and opens on its next statement. (EVICTED is
@@ -694,6 +707,13 @@ impl GraphAdmin {
             .open_graph(namespace, name)
             .filter(|g| g.id() == Some(id))
         {
+            // An adopted graph whose stream did not reach its record (R11.5): try again.
+            if meta.stream.is_none()
+                && let Some(stream) = graph.stream()
+                && let Err(err) = self.catalog.set_stream(namespace, &meta.id, stream).await
+            {
+                tracing::warn!(%namespace, %name, error = %err, "recording the graph's stream failed; retried on its next statement");
+            }
             if !graph.is_poisoned_or_failed() {
                 return Ok(graph);
             }
@@ -702,22 +722,60 @@ impl GraphAdmin {
                 .on_pool(move || engine.reopen_if_poisoned(graph).map_err(map_engine))
                 .await;
         }
+        // A durable graph opens from its stream, created on its first open (R11.2). A graph from
+        // before the log has none yet: its local files are adopted into the new stream (R11.5).
+        let durable = match &self.log {
+            None => None,
+            Some(log) => {
+                let (stream, adopt) = match meta.stream {
+                    Some(stream) => (stream, false),
+                    None => (
+                        self.catalog
+                            .ensure_stream(meta)
+                            .await
+                            .map_err(map_catalog)?,
+                        true,
+                    ),
+                };
+                Some(crate::durable::DurableSpec {
+                    log: log.clone(),
+                    stream,
+                    adopt,
+                })
+            }
+        };
         for _ in 0..2 {
             let graph = {
-                let (engine, ns, nm) = (
+                let (engine, ns, nm, durable) = (
                     Arc::clone(&self.engine),
                     namespace.to_string(),
                     name.to_string(),
+                    durable.clone(),
                 );
                 self.on_pool(move || {
                     Graph::open_or_existing(&engine, &ns, &nm, || {
-                        OpenSpec::for_catalog(&engine, id)
+                        let spec = OpenSpec::for_catalog(&engine, id);
+                        match durable {
+                            Some(durable) => spec.durable(durable),
+                            None => spec,
+                        }
                     })
                     .map_err(map_engine)
                 })
                 .await?
             };
             if graph.id() == Some(id) {
+                // Recorded only once the graph has opened (and an adopted one is in its
+                // stream), so a crash in between adopts again rather than losing local files.
+                if let Some(durable) = &durable
+                    && durable.adopt
+                    && let Err(err) = self
+                        .catalog
+                        .set_stream(namespace, &meta.id, durable.stream)
+                        .await
+                {
+                    tracing::warn!(%namespace, %name, error = %err, "recording the graph's stream failed; retried on its next statement");
+                }
                 #[cfg(feature = "test-hooks")]
                 self.after_open().await;
                 // Re-check after the (possibly slow) open: a delete that landed meanwhile must
@@ -822,6 +880,7 @@ impl GraphAdmin {
             limits: limits_from(req.limits.as_option(), self.timeout_ceiling()),
             replicas: req.replicas,
             idempotency_key: check_key("idempotency_key", &req.idempotency_key)?,
+            with_stream: self.log.is_some(),
         };
         let meta = self
             .catalog

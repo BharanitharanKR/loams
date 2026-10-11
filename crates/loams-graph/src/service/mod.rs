@@ -78,7 +78,7 @@ fn graph_message(graph: &Graph) -> pb::Graph {
         languages: vec![pb::QueryLanguage::Gql.into()],
         state: match graph.state() {
             GraphState::Ready => pb::GraphState::Ready,
-            GraphState::Poisoned => pb::GraphState::Reloading,
+            GraphState::Poisoned | GraphState::Reloading => pb::GraphState::Reloading,
             GraphState::Failed => pb::GraphState::Failed,
         }
         .into(),

@@ -25,6 +25,7 @@
 pub mod catalog;
 pub mod changeset;
 pub mod classify;
+pub mod durable;
 pub mod engine;
 pub mod limits;
 pub mod redact;

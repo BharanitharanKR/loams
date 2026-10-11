@@ -32,6 +32,30 @@ use crate::engine::GraphError;
 /// A property map with a stable order, so two equal maps encode to equal bytes (Task 10).
 pub type PropMap = BTreeMap<String, Value>;
 
+/// What a write changed, for `ExecuteResponse.counters` (§48 §8.2), counted from its capture.
+///
+/// Exact for elements created and deleted, for the properties a transaction set, and for the
+/// labels of a node it created. A label added to or removed from a node that already existed is
+/// not counted: Grafeo's CDC records both as the same event (R0.6), so the capture knows that a
+/// label changed but not which way (R11.6).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Counters {
+    /// Nodes created.
+    pub nodes_created: u64,
+    /// Nodes deleted.
+    pub nodes_deleted: u64,
+    /// Relationships created.
+    pub relationships_created: u64,
+    /// Relationships deleted.
+    pub relationships_deleted: u64,
+    /// Properties set (on created elements, every property).
+    pub properties_set: u64,
+    /// Labels of the nodes created.
+    pub labels_added: u64,
+    /// Always 0 (see above).
+    pub labels_removed: u64,
+}
+
 /// Which kind of element a [`ChangeOp::SetProps`] names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ElementKind {

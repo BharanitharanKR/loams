@@ -17,7 +17,7 @@ use grafeo::cdc::{ChangeEvent, ChangeKind, EntityId};
 use grafeo::{GrafeoDB, Session};
 use grafeo_common::types::EpochId;
 
-use super::{ChangeOp, ElementKind, PropMap};
+use super::{ChangeOp, Counters, ElementKind, PropMap};
 use crate::engine::GraphError;
 
 /// Turns one committed transaction into its change operations (shared contract, GR1 Task 9).
@@ -100,6 +100,27 @@ impl ChangeCapture for CdcCapture<'_> {
     fn begin(&self, _session: &mut Session) {}
 
     fn take(&self, commit_epoch: u64) -> Result<Vec<ChangeOp>, GraphError> {
+        self.capture(commit_epoch).map(|captured| captured.ops)
+    }
+}
+
+/// A captured commit: its operations and what they count as (GR1 Task 11).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Captured {
+    /// The commit's net effect, in canonical order (R9.2).
+    pub ops: Vec<ChangeOp>,
+    /// What the commit changed, for the answer's counters.
+    pub counters: Counters,
+}
+
+impl CdcCapture<'_> {
+    /// [`ChangeCapture::take`], with the commit's [`Counters`].
+    ///
+    /// # Errors
+    ///
+    /// As [`ChangeCapture::take`].
+    pub fn capture(&self, commit_epoch: u64) -> Result<Captured, GraphError> {
+        let mut counters = Counters::default();
         let mut nodes: BTreeMap<u64, Touch> = BTreeMap::new();
         let mut edges: BTreeMap<u64, Touch> = BTreeMap::new();
         for event in self.events(EpochId::new(commit_epoch))? {
@@ -152,15 +173,31 @@ impl ChangeCapture for CdcCapture<'_> {
                         let mut labels: Vec<String> =
                             node.labels.iter().map(ToString::to_string).collect();
                         labels.sort();
+                        if touch.created {
+                            counters.nodes_created += 1;
+                            counters.labels_added += labels.len() as u64;
+                            counters.properties_set += props.len() as u64;
+                        } else {
+                            counters.properties_set += touch
+                                .keys
+                                .iter()
+                                .filter(|key| props.contains_key(key.as_str()))
+                                .count()
+                                as u64;
+                        }
                         upsert_nodes.push(ChangeOp::UpsertNode { id, labels, props });
                     } else if let Some(op) =
                         set_props_op(id, ElementKind::Node, &touch.keys, &props)
                     {
+                        count_set(&mut counters, &op);
                         set_props.push(op);
                     }
                 }
                 None if touch.created => {}
-                None => delete_nodes.push(ChangeOp::DeleteNode { id }),
+                None => {
+                    counters.nodes_deleted += 1;
+                    delete_nodes.push(ChangeOp::DeleteNode { id });
+                }
             }
         }
         for (&id, touch) in &edges {
@@ -185,6 +222,8 @@ impl ChangeCapture for CdcCapture<'_> {
                         .map(|(k, v)| (k.as_str().to_string(), v.clone()))
                         .collect();
                     if touch.created {
+                        counters.relationships_created += 1;
+                        counters.properties_set += props.len() as u64;
                         upsert_edges.push(ChangeOp::UpsertEdge {
                             id,
                             ty: edge.edge_type.to_string(),
@@ -195,11 +234,15 @@ impl ChangeCapture for CdcCapture<'_> {
                     } else if let Some(op) =
                         set_props_op(id, ElementKind::Edge, &touch.keys, &props)
                     {
+                        count_set(&mut counters, &op);
                         set_props.push(op);
                     }
                 }
                 None if touch.created => {}
-                None => delete_edges.push(ChangeOp::DeleteEdge { id }),
+                None => {
+                    counters.relationships_deleted += 1;
+                    delete_edges.push(ChangeOp::DeleteEdge { id });
+                }
             }
         }
 
@@ -208,7 +251,14 @@ impl ChangeCapture for CdcCapture<'_> {
         ops.extend(set_props);
         ops.extend(delete_edges);
         ops.extend(delete_nodes);
-        Ok(ops)
+        Ok(Captured { ops, counters })
+    }
+}
+
+/// Counts the properties a [`ChangeOp::SetProps`] sets.
+fn count_set(counters: &mut Counters, op: &ChangeOp) {
+    if let ChangeOp::SetProps { set, .. } = op {
+        counters.properties_set += set.len() as u64;
     }
 }
 
