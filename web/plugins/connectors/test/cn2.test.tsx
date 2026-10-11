@@ -29,13 +29,19 @@ describe('catalog filters (CN2)', () => {
   });
 
   it('filters by runtime class', () => {
-    expect(filterCatalog(all, { ...base, runtime: 'native' }).map((c) => c.id)).not.toContain('adyen');
-    expect(filterCatalog(all, { ...base, runtime: 'fallback' }).map((c) => c.id)).toEqual(['adyen']);
+    expect(filterCatalog(all, { ...base, runtime: 'native' }).map((c) => c.id)).not.toContain(
+      'adyen',
+    );
+    expect(filterCatalog(all, { ...base, runtime: 'fallback' }).map((c) => c.id)).toEqual([
+      'adyen',
+    ]);
   });
 
   it('filters by direction', () => {
-    for (const c of filterCatalog(all, { ...base, direction: 'source' })) expect(c.source).not.toBeNull();
-    for (const c of filterCatalog(all, { ...base, direction: 'sink' })) expect(c.sink).not.toBeNull();
+    for (const c of filterCatalog(all, { ...base, direction: 'source' }))
+      expect(c.source).not.toBeNull();
+    for (const c of filterCatalog(all, { ...base, direction: 'sink' }))
+      expect(c.sink).not.toBeNull();
   });
 
   it('filters by family', () => {
@@ -194,7 +200,12 @@ describe('create-connector wizard', () => {
   it('refuses a planned (stub) connector', async () => {
     const { api } = fakeDesktop(['adyen']);
     render(
-      <WizardPage desktop={api} flow={createMockFlowClient([])} id="adyen" navigate={() => undefined} />,
+      <WizardPage
+        desktop={api}
+        flow={createMockFlowClient([])}
+        id="adyen"
+        navigate={() => undefined}
+      />,
     );
     expect(await screen.findByText('Not available yet')).toBeTruthy();
   });
@@ -225,13 +236,35 @@ describe('running instances', () => {
 
   it('shows the re-snapshot hint for a lost position', async () => {
     render(
-      <InstanceDetailPage flow={createMockFlowClient()} name="erp-oracle-cdc" navigate={() => undefined} />,
+      <InstanceDetailPage
+        flow={createMockFlowClient()}
+        name="erp-oracle-cdc"
+        navigate={() => undefined}
+      />,
     );
     expect((await screen.findAllByText(/Re-snapshot the instance/)).length).toBeGreaterThan(0);
   });
 
   it('reports a missing instance', async () => {
-    render(<InstanceDetailPage flow={createMockFlowClient()} name="nope" navigate={() => undefined} />);
+    render(
+      <InstanceDetailPage flow={createMockFlowClient()} name="nope" navigate={() => undefined} />,
+    );
     expect(await screen.findByText('No instance "nope".')).toBeTruthy();
+  });
+
+  it('drops the previous instance at once when the name changes', async () => {
+    const flow = createMockFlowClient();
+    const { rerender } = render(
+      <InstanceDetailPage flow={flow} name="orders-cdc" navigate={() => undefined} />,
+    );
+    await screen.findByRole('heading', { name: 'orders-cdc' });
+    rerender(<InstanceDetailPage flow={flow} name="clicks-to-house" navigate={() => undefined} />);
+    expect(screen.queryByRole('heading', { name: 'orders-cdc' })).toBeNull();
+    expect(await screen.findByRole('heading', { name: 'clicks-to-house' })).toBeTruthy();
+  });
+
+  it('labels fixture data as demo data', async () => {
+    render(<InstancesPage flow={createMockFlowClient()} navigate={() => undefined} />);
+    expect(screen.getByText('Demo data')).toBeTruthy();
   });
 });

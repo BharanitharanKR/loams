@@ -67,7 +67,12 @@ const plugin: PluginModule = {
     );
     ctx.effect(() =>
       router.page(
-        { id: 'connector-new', path: '/connectors/:id/new', title: 'New instance', plugin: 'connectors' },
+        {
+          id: 'connector-new',
+          path: '/connectors/:id/new',
+          title: 'New instance',
+          plugin: 'connectors',
+        },
         ({ params }) => (
           <WizardPage desktop={desktop} flow={flow} id={params.id as string} navigate={navigate} />
         ),

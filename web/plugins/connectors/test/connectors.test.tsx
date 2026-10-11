@@ -59,8 +59,10 @@ describe('connector detail and configure form', () => {
     expect(screen.getByLabelText(/^enable_idempotence/).tagName).toBe('SELECT');
     expect(screen.getByText('sasl')).toBeTruthy();
     // Detail facts.
-    expect(screen.getByText(/Connector runtime not yet available \(CN1\)/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Run' }).hasAttribute('disabled')).toBe(true);
+    // CN2: a schema'd connector offers the create-instance wizard.
+    expect(screen.getByRole('button', { name: 'Create instance' }).hasAttribute('disabled')).toBe(
+      false,
+    );
     expect(screen.getByText('rdkafka 0.39 / librdkafka 2.x (verify)')).toBeTruthy();
   });
 

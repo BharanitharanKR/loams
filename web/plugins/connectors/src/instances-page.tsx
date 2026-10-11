@@ -2,7 +2,7 @@
 // with pause and resume, per-split checkpoints, lag, throughput and errors.
 
 import { Badge, Button, Card, Empty, Notice, type Status, StatusTag } from '@loams/ui';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   type FlowClient,
   formatLag,
@@ -24,6 +24,17 @@ export const canPause = (s: InstanceState) => s === 'running' || s === 'starting
 export const canResume = (s: InstanceState) => s === 'paused' || s === 'stopped' || s === 'failed';
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** Says so when the pages run on fixture data rather than a FlowService. */
+export function FixtureNotice({ flow }: { flow: FlowClient }) {
+  if (!flow.fixture) return null;
+  return (
+    <Notice title="Demo data">
+      No FlowService is served yet: these instances are fixtures, and anything created, paused or
+      resumed here lasts only until the app reloads.
+    </Notice>
+  );
+}
 
 /** Pause or resume, with a busy flag and an error; `done` refreshes the caller. */
 function usePauseResume(flow: FlowClient, done: () => void) {
@@ -56,14 +67,25 @@ function PauseResume({
 }) {
   if (canPause(i.state)) {
     return (
-      <Button size="sm" disabled={busy === i.name} aria-label={`Pause ${i.name}`} onClick={() => void act(i.name, 'pause')}>
+      <Button
+        size="sm"
+        disabled={busy === i.name}
+        aria-label={`Pause ${i.name}`}
+        onClick={() => void act(i.name, 'pause')}
+      >
         Pause
       </Button>
     );
   }
   if (canResume(i.state)) {
     return (
-      <Button size="sm" variant="primary" disabled={busy === i.name} aria-label={`Resume ${i.name}`} onClick={() => void act(i.name, 'resume')}>
+      <Button
+        size="sm"
+        variant="primary"
+        disabled={busy === i.name}
+        aria-label={`Resume ${i.name}`}
+        onClick={() => void act(i.name, 'resume')}
+      >
         Resume
       </Button>
     );
@@ -71,7 +93,13 @@ function PauseResume({
   return null;
 }
 
-export function InstancesPage({ flow, navigate }: { flow: FlowClient; navigate: (to: string) => void }) {
+export function InstancesPage({
+  flow,
+  navigate,
+}: {
+  flow: FlowClient;
+  navigate: (to: string) => void;
+}) {
   const [list, setList] = useState<InstanceSummary[]>();
   const [loadError, setLoadError] = useState<string>();
   const refresh = useCallback(() => {
@@ -97,10 +125,15 @@ export function InstancesPage({ flow, navigate }: { flow: FlowClient; navigate: 
           </Button>
         }
       />
-      {loadError && <Notice tone="danger" title="Could not load instances">{loadError}</Notice>}
+      <FixtureNotice flow={flow} />
+      {loadError && (
+        <Notice tone="danger" title="Could not load instances">
+          {loadError}
+        </Notice>
+      )}
       {error && (
         <Notice tone="danger" title="Action failed">
-          <span role="alert">{error}</span>
+          {error}
         </Notice>
       )}
       {!list && !loadError && <p className="text-sm text-muted">Loading…</p>}
@@ -112,14 +145,22 @@ export function InstancesPage({ flow, navigate }: { flow: FlowClient; navigate: 
           <caption className="sr-only">Connector instances</caption>
           <thead>
             <tr className="text-left text-muted">
-              <th scope="col" className="py-2">Name</th>
+              <th scope="col" className="py-2">
+                Name
+              </th>
               <th scope="col">Connector</th>
               <th scope="col">Direction</th>
               <th scope="col">Runtime</th>
               <th scope="col">State</th>
-              <th scope="col" className="text-right">Events/s</th>
-              <th scope="col" className="text-right">Lag</th>
-              <th scope="col"><span className="sr-only">Actions</span></th>
+              <th scope="col" className="text-right">
+                Events/s
+              </th>
+              <th scope="col" className="text-right">
+                Lag
+              </th>
+              <th scope="col">
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -139,11 +180,17 @@ export function InstancesPage({ flow, navigate }: { flow: FlowClient; navigate: 
                 </th>
                 <td className="font-mono text-xs">{i.connector}</td>
                 <td>{i.direction}</td>
-                <td><Badge>{i.runtime}</Badge></td>
-                <td><StatusTag status={STATE_TONE[i.state]}>{i.state}</StatusTag></td>
+                <td>
+                  <Badge>{i.runtime}</Badge>
+                </td>
+                <td>
+                  <StatusTag status={STATE_TONE[i.state]}>{i.state}</StatusTag>
+                </td>
                 <td className="text-right tabular-nums">{i.eventsPerSec.toLocaleString('en')}</td>
                 <td className="text-right tabular-nums">{formatLag(i.lagSeconds)}</td>
-                <td className="text-right"><PauseResume i={i} busy={busy} act={act} /></td>
+                <td className="text-right">
+                  <PauseResume i={i} busy={busy} act={act} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -170,11 +217,22 @@ function Throughput({ d }: { d: InstanceDetail }) {
       >
         {pts.map((p, i) => {
           const h = (p.eventsPerSec / max) * 38;
-          return <rect key={p.at} x={i * 10 + 1} y={40 - h} width={8} height={h} fill="currentColor" opacity={0.6} />;
+          return (
+            <rect
+              key={p.at}
+              x={i * 10 + 1}
+              y={40 - h}
+              width={8}
+              height={h}
+              fill="currentColor"
+              opacity={0.6}
+            />
+          );
         })}
       </svg>
       <p className="m-0 text-xs text-muted">
-        Latest {latest?.eventsPerSec.toLocaleString('en')} events/s, peak {max.toLocaleString('en')} events/s.
+        Latest {latest?.eventsPerSec.toLocaleString('en')} events/s, peak {max.toLocaleString('en')}{' '}
+        events/s.
       </p>
     </div>
   );
@@ -189,19 +247,23 @@ export function InstanceDetailPage({
   name: string;
   navigate: (to: string) => void;
 }) {
-  const [d, setD] = useState<InstanceDetail>();
-  const [loadError, setLoadError] = useState<string>();
+  // Results are tagged with the name they were loaded for: a page reused for another instance shows
+  // nothing of the previous one, and a late answer for a superseded name is dropped.
+  const [loaded, setLoaded] = useState<{ name: string; d?: InstanceDetail; error?: string }>();
+  const current = useRef(name);
+  current.current = name;
   const refresh = useCallback(() => {
+    const keep = (patch: { d?: InstanceDetail; error?: string }) => {
+      if (current.current !== name) return;
+      setLoaded((cur) => ({ name, d: cur?.name === name ? cur.d : undefined, ...patch }));
+    };
     flow
       .getInstance(name)
-      .then((r) => {
-        if (r.ok) {
-          setD(r.value);
-          setLoadError(undefined);
-        } else setLoadError(r.message);
-      })
-      .catch((e) => setLoadError(message(e)));
+      .then((r) => keep(r.ok ? { d: r.value, error: undefined } : { error: r.message }))
+      .catch((e) => keep({ error: message(e) }));
   }, [flow, name]);
+  const d = loaded?.name === name ? loaded.d : undefined;
+  const loadError = loaded?.name === name ? loaded.error : undefined;
   useEffect(refresh, [refresh]);
   const { busy, error, act } = usePauseResume(flow, refresh);
 
@@ -243,10 +305,11 @@ export function InstanceDetailPage({
           </>
         }
       />
+      <FixtureNotice flow={flow} />
       <div className="flex flex-col gap-4">
         {error && (
           <Notice tone="danger" title="Action failed">
-            <span role="alert">{error}</span>
+            {error}
           </Notice>
         )}
         {d.lastError && (
@@ -279,20 +342,32 @@ export function InstanceDetailPage({
               <caption className="sr-only">Committed position per split</caption>
               <thead>
                 <tr className="text-left text-muted">
-                  <th scope="col" className="py-1">Split</th>
+                  <th scope="col" className="py-1">
+                    Split
+                  </th>
                   <th scope="col">Position</th>
-                  <th scope="col" className="text-right">Epoch</th>
+                  <th scope="col" className="text-right">
+                    Epoch
+                  </th>
                   <th scope="col">Committed</th>
-                  <th scope="col" className="text-right">Lag</th>
+                  <th scope="col" className="text-right">
+                    Lag
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {d.checkpoints.map((c) => (
                   <tr key={c.split} className="border-t border-rule-soft">
-                    <th scope="row" className="py-1 text-left font-mono font-normal">{c.split}</th>
+                    <th scope="row" className="py-1 text-left font-mono font-normal">
+                      {c.split}
+                    </th>
                     <td className="font-mono text-xs">{c.position}</td>
                     <td className="text-right tabular-nums">{c.epoch}</td>
-                    <td><time dateTime={c.committedAt}>{c.committedAt.replace('T', ' ').slice(0, 19)}</time></td>
+                    <td>
+                      <time dateTime={c.committedAt}>
+                        {c.committedAt.replace('T', ' ').slice(0, 19)}
+                      </time>
+                    </td>
                     <td className="text-right tabular-nums">{formatLag(c.lagSeconds)}</td>
                   </tr>
                 ))}
@@ -306,9 +381,14 @@ export function InstanceDetailPage({
           ) : (
             <ul className="m-0 flex list-none flex-col gap-2 p-0 text-sm">
               {d.errors.map((e) => (
-                <li key={`${e.at}-${e.class}`} className="border-b border-rule-soft pb-2 last:border-b-0">
+                <li
+                  key={`${e.at}-${e.class}`}
+                  className="border-b border-rule-soft pb-2 last:border-b-0"
+                >
                   <Badge>{e.class}</Badge>{' '}
-                  <time dateTime={e.at} className="text-xs text-muted">{e.at.replace('T', ' ').slice(0, 19)}</time>
+                  <time dateTime={e.at} className="text-xs text-muted">
+                    {e.at.replace('T', ' ').slice(0, 19)}
+                  </time>
                   {e.split && <span className="ml-2 font-mono text-xs">{e.split}</span>}
                   <p className="m-0 mt-1">{e.message}</p>
                   {e.hint && <p className="m-0 text-xs text-muted">{e.hint}</p>}
@@ -322,7 +402,11 @@ export function InstanceDetailPage({
             <dt className="text-muted">Fabric</dt>
             <dd className="m-0 font-mono">
               {d.fabric.kind}{' '}
-              {d.fabric.kind === 'topic' ? d.fabric.topic : d.fabric.kind === 'table' ? d.fabric.table : d.fabric.collection}
+              {d.fabric.kind === 'topic'
+                ? d.fabric.topic
+                : d.fabric.kind === 'table'
+                  ? d.fabric.table
+                  : d.fabric.collection}
             </dd>
             <dt className="text-muted">Secrets</dt>
             <dd className="m-0">

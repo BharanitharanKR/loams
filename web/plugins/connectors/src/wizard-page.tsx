@@ -6,12 +6,20 @@
 
 import type { ConnectorDetail, LoamsDesktopApi } from '@loams/desktop/contracts';
 import { Button, Card, Checkbox, Field, Input, Notice, Select } from '@loams/ui';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { runtimeClass, useCatalog } from './catalog-page.js';
 import { Fields } from './configure-form.js';
 import type { Direction, FabricBinding, FlowClient, RuntimeClass } from './flow-client.js';
 import { NAME_RE } from './flow-client.js';
-import { buildConfig, buildFields, fieldForPointer, leaves, secretValues, type Values } from './form.js';
+import {
+  buildConfig,
+  buildFields,
+  fieldForPointer,
+  leaves,
+  secretValues,
+  type Values,
+} from './form.js';
+import { FixtureNotice } from './instances-page.js';
 import { PageHead } from './page-head.js';
 
 export const STEPS = ['Basics', 'Configure', 'Fabric binding', 'Review'] as const;
@@ -58,7 +66,10 @@ export function WizardPage({
   }, [desktop, id]);
 
   const directions = useMemo<Direction[]>(
-    () => (summary ? ([summary.source && 'source', summary.sink && 'sink'].filter(Boolean) as Direction[]) : []),
+    () =>
+      summary
+        ? ([summary.source && 'source', summary.sink && 'sink'].filter(Boolean) as Direction[])
+        : [],
     [summary],
   );
 
@@ -71,10 +82,11 @@ export function WizardPage({
   const [target, setTarget] = useState('');
   const [partitions, setPartitions] = useState('');
   const [enabled, setEnabled] = useState(true);
-  const [validation, setValidation] = useState<Validation>();
+  // Each result is bound to the config object it validated, so a stale result never stands in
+  // for the current values while a newer validation is pending.
+  const [checked, setChecked] = useState<{ config: unknown; result: Validation }>();
   const [stepError, setStepError] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const heading = useRef<HTMLHeadingElement>(null);
 
   const dir: Direction | '' = direction || directions[0] || '';
   const rt: RuntimeClass = runtime || (summary ? runtimeClass(summary) : 'native');
@@ -83,7 +95,10 @@ export function WizardPage({
     const s = detail?.manifest.secrets;
     return Array.isArray(s) ? (s as string[]) : [];
   }, [detail]);
-  const fields = useMemo(() => (detail ? buildFields(detail.schema, secrets) : []), [detail, secrets]);
+  const fields = useMemo(
+    () => (detail ? buildFields(detail.schema, secrets) : []),
+    [detail, secrets],
+  );
   const config = useMemo(() => buildConfig(fields, values), [fields, values]);
   const set = (fid: string, v: string) => setValues((cur) => ({ ...cur, [fid]: v }));
 
@@ -93,17 +108,29 @@ export function WizardPage({
     desktop.connectors
       .validate(id, config)
       .then((r) => {
-        if (live) setValidation(r.ok ? r.value : { valid: false, errors: [{ path: '', message: r.message }] });
+        if (live)
+          setChecked({
+            config,
+            result: r.ok ? r.value : { valid: false, errors: [{ path: '', message: r.message }] },
+          });
       })
       .catch((e) => {
         if (live) {
-          setValidation({ valid: false, errors: [{ path: '', message: e instanceof Error ? e.message : String(e) }] });
+          setChecked({
+            config,
+            result: {
+              valid: false,
+              errors: [{ path: '', message: e instanceof Error ? e.message : String(e) }],
+            },
+          });
         }
       });
     return () => {
       live = false;
     };
   }, [desktop, id, config, detail]);
+
+  const validation = checked?.config === config ? checked.result : undefined;
 
   const fieldErrors = useMemo(() => {
     const out: Record<string, string> = {};
@@ -114,11 +141,12 @@ export function WizardPage({
     return out;
   }, [validation, fields]);
 
-  // Move focus to the step heading on each step change, so keyboard and screen-reader users land
-  // on the new content.
-  useEffect(() => {
-    heading.current?.focus();
-  }, [step]);
+  // Move focus to the step heading whenever one mounts: the heading is keyed by step, so this runs
+  // once when the form first renders and again on each step change, landing keyboard and
+  // screen-reader users on the new content.
+  const focusHeading = useCallback((el: HTMLHeadingElement | null) => {
+    el?.focus();
+  }, []);
 
   const back = (
     <Button size="sm" variant="quiet" onClick={() => navigate(`/connectors/${id}`)}>
@@ -138,7 +166,9 @@ export function WizardPage({
     return (
       <div className="lc-page">
         <PageHead title="New instance" actions={back} />
-        <p className="text-sm text-muted">{catalog.state === 'error' ? catalog.message : 'Loading…'}</p>
+        <p className="text-sm text-muted">
+          {catalog.state === 'error' ? catalog.message : 'Loading…'}
+        </p>
       </div>
     );
   }
@@ -155,11 +185,14 @@ export function WizardPage({
 
   const check = (s: number): string | undefined => {
     if (s === 0) {
-      if (!NAME_RE.test(name)) return 'Use lowercase letters, digits and dashes, starting with a letter.';
+      if (!NAME_RE.test(name))
+        return 'Use lowercase letters, digits and dashes, starting with a letter.';
       if (!dir) return 'This connector declares neither a source nor a sink side.';
     }
     if (s === 1 && !validation?.valid) {
-      return validation === undefined ? 'Still validating; try again.' : 'Fix the highlighted fields first.';
+      return validation === undefined
+        ? 'Still validating; try again.'
+        : 'Fix the highlighted fields first.';
     }
     if (s === 2 && target.trim() === '') return `Enter the ${kind} to bind.`;
     return undefined;
@@ -177,6 +210,11 @@ export function WizardPage({
 
   const create = async () => {
     if (!dir) return;
+    const err = check(0) ?? check(1) ?? check(2);
+    if (err) {
+      setStepError(err);
+      return;
+    }
     setBusy(true);
     setStepError(undefined);
     try {
@@ -208,20 +246,32 @@ export function WizardPage({
 
   return (
     <div className="lc-page">
-      <PageHead title={`New ${summary.name} instance`} subtitle={<span className="font-mono">{summary.id}</span>} actions={back} />
+      <PageHead
+        title={`New ${summary.name} instance`}
+        subtitle={<span className="font-mono">{summary.id}</span>}
+        actions={back}
+      />
+      <FixtureNotice flow={flow} />
       <nav aria-label="Wizard steps" className="mb-4">
         <ol className="m-0 flex list-none flex-wrap gap-2 p-0 text-sm">
           {STEPS.map((s, i) => (
-            <li key={s} aria-current={i === step ? 'step' : undefined} className={i === step ? 'font-semibold' : 'text-muted'}>
+            <li
+              key={s}
+              aria-current={i === step ? 'step' : undefined}
+              className={i === step ? 'font-semibold' : 'text-muted'}
+            >
               {i + 1}. {s}
             </li>
           ))}
         </ol>
       </nav>
       <Card>
+        {/* noValidate: the schema validator owns validation; native checks would block on a
+            required field inside an optional object the user left empty. */}
         <form
           aria-label={`New instance: ${STEPS[step]}`}
           autoComplete="off"
+          noValidate
           className="flex flex-col gap-4"
           onSubmit={(e) => {
             e.preventDefault();
@@ -229,21 +279,31 @@ export function WizardPage({
             else void create();
           }}
         >
-          <h2 ref={heading} tabIndex={-1} className="m-0 text-base outline-none">
+          <h2 key={step} ref={focusHeading} tabIndex={-1} className="m-0 text-base outline-none">
             {STEPS[step]}
           </h2>
 
           {step === 0 && (
             <>
               <Field label="Instance name" hint="Lowercase letters, digits and dashes.">
-                {(a) => <Input {...a} required value={name} onChange={(e) => setName(e.target.value)} />}
+                {(a) => (
+                  <Input {...a} required value={name} onChange={(e) => setName(e.target.value)} />
+                )}
               </Field>
               <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
                 <legend className="mb-1 text-sm">Direction</legend>
                 {directions.map((d) => (
                   <label key={d} className="loams-check">
-                    <input type="radio" name="direction" value={d} checked={dir === d} onChange={() => setDirection(d)} />
-                    {d === 'source' ? 'Source: read the system into the Fabric' : 'Sink: write the Fabric to the system'}
+                    <input
+                      type="radio"
+                      name="direction"
+                      value={d}
+                      checked={dir === d}
+                      onChange={() => setDirection(d)}
+                    />
+                    {d === 'source'
+                      ? 'Source: read the system into the Fabric'
+                      : 'Sink: write the Fabric to the system'}
                   </label>
                 ))}
               </fieldset>
@@ -256,7 +316,11 @@ export function WizardPage({
                 }
               >
                 {(a) => (
-                  <Select {...a} value={rt} onChange={(e) => setRuntime(e.target.value as RuntimeClass)}>
+                  <Select
+                    {...a}
+                    value={rt}
+                    onChange={(e) => setRuntime(e.target.value as RuntimeClass)}
+                  >
                     {runtimeClass(summary) === 'native' && <option value="native">native</option>}
                     <option value="fallback">fallback</option>
                   </Select>
@@ -269,10 +333,16 @@ export function WizardPage({
             <>
               {secretLeaves.length > 0 && (
                 <p className="m-0 text-xs text-muted">
-                  Secret fields are write-only: sent once to the namespace secret store, never shown again.
+                  Secret fields are write-only: sent once to the namespace secret store, never shown
+                  again.
                 </p>
               )}
-              <Fields fields={fields} values={values} set={set} errors={stepError ? fieldErrors : {}} />
+              <Fields
+                fields={fields}
+                values={values}
+                set={set}
+                errors={stepError ? fieldErrors : {}}
+              />
             </>
           )}
 
@@ -280,7 +350,11 @@ export function WizardPage({
             <>
               <Field label="Bind to">
                 {(a) => (
-                  <Select {...a} value={kind} onChange={(e) => setKind(e.target.value as BindingKind)}>
+                  <Select
+                    {...a}
+                    value={kind}
+                    onChange={(e) => setKind(e.target.value as BindingKind)}
+                  >
                     <option value="topic">Fabric topic</option>
                     <option value="table">Fluss table</option>
                     <option value="collection">Loams collection</option>
@@ -288,12 +362,25 @@ export function WizardPage({
                 )}
               </Field>
               <Field label={kind === 'topic' ? 'Topic' : kind === 'table' ? 'Table' : 'Collection'}>
-                {(a) => <Input {...a} required value={target} onChange={(e) => setTarget(e.target.value)} />}
+                {(a) => (
+                  <Input
+                    {...a}
+                    required
+                    value={target}
+                    onChange={(e) => setTarget(e.target.value)}
+                  />
+                )}
               </Field>
               {kind !== 'collection' && (
                 <Field label="Partitions" hint="0 or empty keeps the target's default.">
                   {(a) => (
-                    <Input {...a} type="number" min={0} value={partitions} onChange={(e) => setPartitions(e.target.value)} />
+                    <Input
+                      {...a}
+                      type="number"
+                      min={0}
+                      value={partitions}
+                      onChange={(e) => setPartitions(e.target.value)}
+                    />
                   )}
                 </Field>
               )}
@@ -326,13 +413,17 @@ export function WizardPage({
                   {JSON.stringify(config, null, 2)}
                 </pre>
               </section>
-              <Checkbox label="Start the instance after creating it" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+              <Checkbox
+                label="Start the instance after creating it"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+              />
             </>
           )}
 
           {stepError && (
             <Notice tone="danger" title="Cannot continue">
-              <span role="alert">{stepError}</span>
+              {stepError}
             </Notice>
           )}
 

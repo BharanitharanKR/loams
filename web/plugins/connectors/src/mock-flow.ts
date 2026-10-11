@@ -36,7 +36,13 @@ export function fixtureInstances(): InstanceDetail[] {
       config: { host: 'orders-db', database: 'shop', password: '${secret:password}' },
       secrets: ['password'],
       checkpoints: [
-        { split: 'slot:loams_orders', position: 'lsn 0/3A2F1C8', epoch: 7, committedAt: iso(0), lagSeconds: 2 },
+        {
+          split: 'slot:loams_orders',
+          position: 'lsn 0/3A2F1C8',
+          epoch: 7,
+          committedAt: iso(0),
+          lagSeconds: 2,
+        },
       ],
       throughput: series(1240),
       errors: [],
@@ -57,10 +63,24 @@ export function fixtureInstances(): InstanceDetail[] {
       config: { url: 'house', table: 'clicks' },
       secrets: [],
       checkpoints: [
-        { split: 'partition-0', position: 'offset 918223', epoch: 2, committedAt: iso(14), lagSeconds: 840 },
-        { split: 'partition-1', position: 'offset 917004', epoch: 2, committedAt: iso(14), lagSeconds: 820 },
+        {
+          split: 'partition-0',
+          position: 'offset 918223',
+          epoch: 2,
+          committedAt: iso(14),
+          lagSeconds: 840,
+        },
+        {
+          split: 'partition-1',
+          position: 'offset 917004',
+          epoch: 2,
+          committedAt: iso(14),
+          lagSeconds: 820,
+        },
       ],
-      throughput: series(300).map((p, i) => (i > 8 ? { ...p, eventsPerSec: 0, bytesPerSec: 0 } : p)),
+      throughput: series(300).map((p, i) =>
+        i > 8 ? { ...p, eventsPerSec: 0, bytesPerSec: 0 } : p,
+      ),
       errors: [
         {
           at: iso(15),
@@ -92,7 +112,13 @@ export function fixtureInstances(): InstanceDetail[] {
       config: { host: 'erp-db', user: 'loams', password: '${secret:password}' },
       secrets: ['password'],
       checkpoints: [
-        { split: 'logminer', position: 'scn 88123001', epoch: 1, committedAt: iso(120), lagSeconds: 7200 },
+        {
+          split: 'logminer',
+          position: 'scn 88123001',
+          epoch: 1,
+          committedAt: iso(120),
+          lagSeconds: 7200,
+        },
       ],
       throughput: series(80).map((p) => ({ ...p, eventsPerSec: 0, bytesPerSec: 0 })),
       errors: [
@@ -151,6 +177,7 @@ export function createMockFlowClient(seed: InstanceDetail[] = fixtureInstances()
     return { ok: true, value: summarize(d) };
   };
   return {
+    fixture: true,
     store,
     listInstances: async () => [...store.values()].map(summarize),
     getInstance: async (name) => {

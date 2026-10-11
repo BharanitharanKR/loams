@@ -102,6 +102,8 @@ export interface CreateInstanceRequest {
 export type FlowResult<T> = { ok: true; value: T } | { ok: false; code: string; message: string };
 
 export interface FlowClient {
+  /** True for a fixture-backed client: the pages then say the instances are demo data. */
+  readonly fixture?: boolean;
   listInstances(): Promise<InstanceSummary[]>;
   getInstance(name: string): Promise<FlowResult<InstanceDetail>>;
   createInstance(req: CreateInstanceRequest): Promise<FlowResult<InstanceSummary>>;
@@ -113,4 +115,10 @@ export interface FlowClient {
 export const NAME_RE = /^[a-z][a-z0-9-]{0,62}$/;
 
 export const formatLag = (s: number): string =>
-  s < 1 ? '<1 s' : s < 60 ? `${Math.round(s)} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`;
+  s < 1
+    ? '<1 s'
+    : s < 60
+      ? `${Math.round(s)} s`
+      : s < 3600
+        ? `${Math.round(s / 60)} min`
+        : `${(s / 3600).toFixed(1)} h`;
