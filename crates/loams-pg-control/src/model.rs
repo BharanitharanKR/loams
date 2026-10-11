@@ -525,16 +525,34 @@ pub enum ComputeStatus {
     Failed,
 }
 
+/// The endpoint a compute serves. `namespace` is the project key's
+/// (`x/<ns>/<project_id>`), so the spec upcall can read the project.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ComputeBinding {
+    pub namespace: String,
+    pub project_id: String,
+    pub endpoint_id: String,
+}
+
 /// One compute process (§46 §3; §28 §5.3).
+///
+/// Task 8 replaced `project_id` and `endpoint_id` with `binding` (a
+/// warm-pool compute serves no project until it is bound, Task 14) and
+/// added `ctl_url`. `FORMAT` stays 1: no compute record exists outside
+/// tests (R5.11's precedent).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputeRec {
     pub id: String,
-    pub project_id: String,
-    pub endpoint_id: String,
+    /// `None`: unbound (the spec upcall answers `empty`).
+    pub binding: Option<ComputeBinding>,
     pub spec_version: u64,
     pub status: ComputeStatus,
-    /// The id of the key its JWT was signed with (never the key).
+    /// The id of the key its upcall JWT was signed with (never the key):
+    /// the spec upcall refuses a token signed with any other.
     pub jwt_key_id: Option<String>,
+    /// `compute_ctl`'s external HTTP API (`http://host:3080`), which the
+    /// runtime reports (Task 10); `pg-control` pushes `/configure` there.
+    pub ctl_url: Option<String>,
     pub cu: Cu,
     pub created_at_ms: u64,
     pub last_active_ms: Option<u64>,
@@ -554,8 +572,10 @@ impl Record for ComputeRec {
     type Key = ComputeKey;
     type Prefix = AllComputes;
     const KIND: &'static str = "compute";
+    /// An unbound compute names no project: any fence may write it, and
+    /// binding it is a write under the project's lease.
     fn project(&self) -> Option<&str> {
-        Some(&self.project_id)
+        self.binding.as_ref().map(|b| b.project_id.as_str())
     }
     fn key(&self) -> ComputeKey {
         ComputeKey {

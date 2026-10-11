@@ -69,6 +69,35 @@ impl Default for ComputeCtlConfig {
     }
 }
 
+/// `COMPUTE_AUDIENCE` (`compute_api/src/requests.rs`): the `aud` of a token
+/// for `compute_ctl`'s own API. `compute_ctl` checks only the token's
+/// `compute_id` for a token without the admin scope, as `pg-control` signs
+/// them.
+pub const COMPUTE_AUDIENCE: &str = "compute";
+
+/// `ControlPlaneComputeStatus` (`compute_api/src/responses.rs`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ControlPlaneComputeStatus {
+    /// Known, but bound to no endpoint yet: `compute_ctl` waits for
+    /// `/configure` (a warm-pool compute, §46 §7.3).
+    Empty,
+    /// Bound: `spec` is what it runs.
+    Attached,
+}
+
+/// `ControlPlaneConfigResponse` (`compute_api/src/responses.rs`): the answer
+/// to `compute_ctl`'s `GET {control-plane-uri}/compute/api/v2/computes/{id}/spec`
+/// (`compute_tools/src/spec.rs` `get_config_from_control_plane`), which
+/// `pg-control`'s upcall listener serves (§28 §5.2). `spec` is `null` when
+/// `status` is `empty`.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ControlPlaneConfigResponse {
+    pub spec: Option<ComputeSpec>,
+    pub status: ControlPlaneComputeStatus,
+    pub compute_ctl_config: ComputeCtlConfig,
+}
+
 /// `TerminateMode`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]

@@ -16,7 +16,9 @@ The fork `ostrium-labs/loams-postgres` publishes no images yet (PG2 ruling R2.1)
   - `src_create_in_progress`: `tenant.rs` `CreateTimelineError::AlreadyCreating`, answered as 429;
   - `src_promote_not_prewarmed`: `compute_tools/src/compute_promote.rs` (`bail!("compute {status}")` with `LfcPrewarmState::NotPrewarmed`'s `Display`), answered as a 500 `PromoteState::Failed` by `routes/promote.rs`;
   - `src_storcon_delete_timeout`: `storage_controller/src/http.rs` `deletion_wrapper`'s 409 with a `null` body;
-  - `src_storcon_create_timeline`: `create_timeline.response.json` plus `safekeepers` (`models.rs` `TimelineCreateResponseStorcon`, `SafekeepersInfo`).
+  - `src_storcon_create_timeline`: `create_timeline.response.json` plus `safekeepers` (`models.rs` `TimelineCreateResponseStorcon`, `SafekeepersInfo`);
+  - `src_notify_attach`, `src_notify_attach_sharded` (PG2 Task 8): the storage controller's `PUT /notify-attach` body, `storage_controller/src/compute_hook.rs` `NotifyAttachRequest` and `NotifyAttachRequestShard` as `ComputeHookTenant::maybe_send` fills them (unsharded: shard 0, no `stripe_size`; `NodeId`, `ShardNumber` and `ShardStripeSize` are plain numbers on the wire). No storage controller runs in `deploy/loams-postgres-dev`.
+- **`spec_upcall_empty.response.json`** (PG2 Task 8) is `pg-control`'s answer to the spec upcall for an unbound compute (`compute_api/src/responses.rs` `ControlPlaneConfigResponse`, status `empty`, with a JWKS). The pinned `compute-node-v17`'s `compute_ctl` took this shape from `pg-control`'s upcall listener and then waited at `/status` = `empty`, verifying `pg-control`'s token against that JWKS (`loams-pg-control`'s ignored `it_compute_ctl_reads_the_spec_upcall`, run 2026-10-11).
 - **`spec_main.json`** is `ComputeSpecBuilder`'s golden output (`spec_builder_golden`).
 
   Its shape was checked by running the pinned `compute-node-v17` with it. Only the runtime's port, listen address and safekeeper were changed, a `cloud_admin` role was added, and the config file was wrapped as `{spec, compute_ctl_config}`. `compute_ctl` took the basebackup from the pageserver, created role `app` and database `app`, and set `neon.max_cluster_size` to 10 GB.
@@ -33,6 +35,8 @@ The fork `ostrium-labs/loams-postgres` publishes no images yet (PG2 ruling R2.1)
 | `branch_below_ancestor.*`, `delete_with_children`, `delete_tenant_missing` | `routes.rs` `timeline_create_handler` (406), `From<DeleteTimelineError>` and `timeline_delete_handler` (412) |
 | `compute_status`, `compute_unauthorized`, `prewarm_state`, `promote_primary` | `compute_api/src/responses.rs` (`ComputeStatusResponse`, `GenericAPIError`, `LfcPrewarmState`, `PromoteState`); recorded from `deploy/loams-postgres-dev`'s `compute1` |
 | `spec_main.json` | `libs/compute_api/src/spec.rs` `ComputeSpec` |
+| `spec_upcall_empty.response.json` | `libs/compute_api/src/responses.rs` `ControlPlaneConfigResponse`, `ComputeCtlConfig`; read by `compute_tools/src/spec.rs` `get_config_from_control_plane` |
+| `src_notify_attach*.request.json` | `storage_controller/src/compute_hook.rs` `NotifyAttachRequest` |
 | (no fixture: no controller in `deploy/loams-postgres-dev`) `NeonClient` through the storage controller | `controller_api.rs` `TenantCreateRequest`; `storage_controller/src/http.rs` routes |
 | (no fixture) `ComputeCtlClient` | `compute_api/src/{requests,responses}.rs` (`ConfigurationRequest`, `PromoteConfig`, `PromoteState`, `ComputeStatusResponse`, `GenericAPIError`); `compute_tools/src/http/server.rs` routes |
 

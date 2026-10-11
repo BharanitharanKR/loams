@@ -29,8 +29,8 @@ use super::{
     Versioned,
 };
 use crate::model::{
-    BranchKey, BranchPrefix, BranchRec, BranchState, ComputeKey, ComputeRec, ComputeStatus, Cu,
-    EndpointRec, ProjectRec, ProjectState, Record, WalService, project_lease,
+    BranchKey, BranchPrefix, BranchRec, BranchState, ComputeBinding, ComputeKey, ComputeRec,
+    ComputeStatus, Cu, EndpointRec, ProjectRec, ProjectState, Record, WalService, project_lease,
 };
 
 /// Expands to one `#[tokio::test]` per conformance case, each calling
@@ -454,11 +454,15 @@ fn endpoint(project: &str, id: &str) -> EndpointRec {
 fn compute(project: &str, id: &str) -> ComputeRec {
     ComputeRec {
         id: id.into(),
-        project_id: project.into(),
-        endpoint_id: "ep-1".into(),
+        binding: Some(ComputeBinding {
+            namespace: "acme".into(),
+            project_id: project.into(),
+            endpoint_id: "ep-1".into(),
+        }),
         spec_version: 1,
         status: ComputeStatus::Pending,
         jwt_key_id: None,
+        ctl_url: None,
         cu: Cu(4),
         created_at_ms: 1,
         last_active_ms: None,
@@ -543,7 +547,7 @@ pub async fn fence_covers_only_its_project(factory: Factory) {
             .get::<ComputeRec>(&key)
             .await
             .expect("get")
-            .map(|c| c.record.project_id),
+            .and_then(|c| c.record.binding.map(|b| b.project_id)),
         Some("prj-b".to_string())
     );
     assert!(get(&store, &bkey("prj-b", "br-2")).await.is_some());

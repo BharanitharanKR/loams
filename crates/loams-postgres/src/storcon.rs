@@ -3,8 +3,12 @@
 //! pageserver's routes, which the controller serves too
 //! (`storage_controller/src/http.rs`): timeline create and delete, tenant
 //! config, and a proxy for the `GET /v1/tenant/{t}/...` reads.
+//!
+//! The controller also calls `pg-control`: [`NotifyAttachRequest`] is the
+//! body of its `PUT {control_plane_url}/notify-attach` (the compute hook,
+//! `storage_controller/src/compute_hook.rs`).
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::TenantId;
 use crate::pageserver::TenantConfig;
@@ -16,4 +20,24 @@ pub(crate) struct TenantCreateRequest<'a> {
     pub(crate) new_tenant_id: &'a TenantId,
     #[serde(flatten)]
     pub(crate) config: &'a TenantConfig,
+}
+
+/// `NotifyAttachRequestShard`: one shard and the pageserver it is attached
+/// to (`NodeId` and `ShardNumber` are transparent numbers on the wire).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct NotifyAttachShard {
+    pub node_id: u64,
+    pub shard_number: u8,
+}
+
+/// `NotifyAttachRequest`: where each shard of a tenant is attached now. An
+/// unsharded tenant sends one shard, number 0, and no `stripe_size`; a
+/// sharded one is sent only once every shard is known
+/// (`ComputeHookTenant::maybe_send`).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct NotifyAttachRequest {
+    pub tenant_id: TenantId,
+    pub preferred_az: Option<String>,
+    pub stripe_size: Option<u32>,
+    pub shards: Vec<NotifyAttachShard>,
 }

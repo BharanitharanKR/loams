@@ -15,10 +15,12 @@ use axum::extract::{Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use loams_postgres::compute_ctl::{
-    ComputeCtlClient, ComputeCtlConfig, ComputeStatus, TerminateMode,
+    ComputeCtlClient, ComputeCtlConfig, ComputeStatus, ControlPlaneComputeStatus,
+    ControlPlaneConfigResponse, TerminateMode,
 };
 use loams_postgres::pageserver::{NeonClient, NeonEndpoints, TenantConfig, TimelineCreate};
 use loams_postgres::spec::{ComputeMode, ComputeSpecBuilder, DatabaseRec, RoleRec, Setting};
+use loams_postgres::storcon::{NotifyAttachRequest, NotifyAttachShard};
 use loams_postgres::wal::{WalClient, WalTimelineCreate};
 use loams_postgres::{Component, Lsn, Op, Secret, TenantId, TimelineId};
 use serde_json::Value;
@@ -857,4 +859,72 @@ fn ids_and_lsns_round_trip() {
     assert_eq!(lsn.0, 0x1_06B5_9C00);
     assert_eq!(lsn.to_string(), "1/6B59C00");
     assert!("16B59C00".parse::<Lsn>().is_err());
+}
+
+/// The storage controller's `PUT /notify-attach` body
+/// (`storage_controller/src/compute_hook.rs` `NotifyAttachRequest`), as its
+/// unsharded and sharded tenants send it.
+#[test]
+fn notify_attach_parses_fixture() {
+    let one: NotifyAttachRequest =
+        serde_json::from_str(&fixture("src_notify_attach.request.json")).unwrap();
+    assert_eq!(one.tenant_id, t());
+    assert_eq!(one.stripe_size, None);
+    assert_eq!(one.preferred_az, None);
+    assert_eq!(
+        one.shards,
+        vec![NotifyAttachShard {
+            node_id: 1,
+            shard_number: 0
+        }]
+    );
+    let two: NotifyAttachRequest =
+        serde_json::from_str(&fixture("src_notify_attach_sharded.request.json")).unwrap();
+    assert_eq!(two.stripe_size, Some(2048));
+    assert_eq!(two.preferred_az.as_deref(), Some("eu-west-1a"));
+    assert_eq!(two.shards.len(), 2);
+    assert_eq!(
+        two.shards[1],
+        NotifyAttachShard {
+            node_id: 2,
+            shard_number: 1
+        }
+    );
+    // Serializing gives the controller's own form back.
+    assert_eq!(
+        canonical(&serde_json::to_string(&one).unwrap()),
+        canonical(&fixture("src_notify_attach.request.json"))
+    );
+}
+
+/// The spec upcall's answer for a compute with no endpoint yet
+/// (`compute_api/src/responses.rs` `ControlPlaneConfigResponse`, status
+/// `empty`): `compute_ctl` keeps waiting for `/configure`.
+#[test]
+fn control_plane_config_response_matches_fixture() {
+    let jwks = serde_json::json!({"keys": [{
+        "kty": "OKP", "use": "sig", "key_ops": ["verify"], "alg": "EdDSA",
+        "kid": "pgc-0011223344556677", "crv": "Ed25519",
+        "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"
+    }]});
+    let empty = ControlPlaneConfigResponse {
+        spec: None,
+        status: ControlPlaneComputeStatus::Empty,
+        compute_ctl_config: ComputeCtlConfig { jwks, tls: None },
+    };
+    assert_eq!(
+        canonical(&serde_json::to_string(&empty).unwrap()),
+        canonical(&fixture("spec_upcall_empty.response.json"))
+    );
+    let attached = ControlPlaneConfigResponse {
+        spec: Some(golden_builder().build()),
+        status: ControlPlaneComputeStatus::Attached,
+        compute_ctl_config: ComputeCtlConfig::default(),
+    };
+    let v = serde_json::to_value(&attached).unwrap();
+    assert_eq!(v["status"], "attached");
+    assert_eq!(
+        canonical(&v["spec"].to_string()),
+        canonical(&fixture("spec_main.json"))
+    );
 }

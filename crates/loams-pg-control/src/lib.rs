@@ -9,8 +9,9 @@
 //! they read through ([`neon::NeonRead`]) (Task 5); the role and database
 //! RPCs and the [`secrets::SecretStore`] role passwords live in (Task 6);
 //! the project and branch reconcilers, under each project's fenced lease
-//! ([`reconcile`]) (Task 7). Reached only through `loams`'s feature
-//! `postgres` (Task 9).
+//! ([`reconcile`]) (Task 7); the upcall listener Neon's components call,
+//! with the compute tokens it checks ([`upcall`]) (Task 8). Reached only
+//! through `loams`'s feature `postgres` (Task 9).
 
 pub mod ids;
 pub mod model;
@@ -20,6 +21,7 @@ pub mod reconcile;
 pub mod secrets;
 pub mod service;
 pub mod store;
+pub mod upcall;
 
 pub use store::{
     ApiWriter, Batch, BatchError, Fence, KvControlStore, Page, PgControlStore, StoreError,

@@ -25,9 +25,15 @@ keyring = ["dep:keyring"]
 # The single-node secret file (secrets::FileSecretStore).
 age.workspace = true
 async-trait.workspace = true
+# The upcall listener (src/upcall.rs, Task 8): routes on axum, connections
+# served by hyper with a header read timeout.
+axum.workspace = true
 base64.workspace = true
 futures.workspace = true
 hex.workspace = true
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio", "service"] }
+jsonwebtoken.workspace = true
 k8s-openapi = { workspace = true, optional = true }
 keyring = { workspace = true, optional = true }
 kube = { workspace = true, optional = true }
@@ -38,23 +44,28 @@ loams-postgres.workspace = true
 postcard.workspace = true
 # Role passwords: 32 bytes from the OS (secrets::generate_password).
 rand.workspace = true
+ring.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+# The storage controller's token, compared in constant time.
+subtle = "2.6"
 thiserror.workspace = true
 time.workspace = true
 tokio.workspace = true
+# Calling the upcall router per connection (tower::Service).
+tower.workspace = true
 tracing.workspace = true
 ulid.workspace = true
+url.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
 # The conformance suite injects faults (feature `faults`).
 loams-pg-control = { path = ".", features = ["faults"] }
 proptest.workspace = true
-# The stand-in Neon components of tests/neon_clients.rs.
-axum.workspace = true
-url.workspace = true
+# The upcall tests' HTTP client.
+reqwest.workspace = true
 tempfile.workspace = true
 # role_secret_never_logged captures every log line.
 tracing-subscriber.workspace = true
