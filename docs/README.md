@@ -14,6 +14,7 @@ Build, understand, and contribute to Loams: hybrid retrieval on object storage, 
 | Work across engine, apps, and plugins | [Monorepo guide](monorepo.md) |
 | Integrate an API or SDK | [Route map](api/route-map.md), [error reasons](api/reasons.md), and [SDK runtime contract](sdk/runtime-contract.md) |
 | Contribute a change | [Contributing](../CONTRIBUTING.md), [implementation plans](plans/README.md), and [wiki](wiki/Home.md) |
+| Run the preview | [Running the preview](release/preview.md): Docker Compose, a tailnet, the hosted or self-deployed console |
 | Package or release Loams | [Packaging](release/packaging.md), [publishing](release/publishing.md), and [signing](release/signing.md) |
 | Build a plugin | [Plugin documentation](../plugins/docs/README.md) and [marketplace publishing](marketplace/publishing.md) |
 

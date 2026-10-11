@@ -4,6 +4,49 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [Preview 1] - 2026-10-12
+
+The first release of Loams, published as a **preview**: usable, tested in CI, not production
+ready. Everything marked **Preview** in the [README's feature table](README.md#features) ships in
+it, and formats, APIs and flags can still change before the next preview. The entries after
+the known limitations, recorded before the preview was cut, are part of it too. Start with
+[`docs/release/preview.md`](docs/release/preview.md).
+
+### Added
+- **Self-hosted preview stack.** `deploy/release/compose.yaml` (with `.env.example`) runs the
+  whole stack with Docker Compose, locally or on your own VMs (BYOC) over SSH: `pd`, `tikv`,
+  `tidb` (`ghcr.io/ostrium-labs/tidb:v8.5.8-loams.1`), `loams`, `house` (`loams-fabric`), the
+  Postgres stack included from `deploy/loams-postgres-dev`, an optional local `console`, and a
+  `tailscale` sidecar (`TS_AUTHKEY`, `TS_LOGIN_SERVER` for Headscale, `TS_HOSTNAME=loams`).
+  The profile `headscale` adds a Headscale server. Only the `tailscale` service is reachable
+  from outside; nothing binds `0.0.0.0` on the host by default.
+- **Container images** on `ghcr.io/ostrium-labs`, built by `deploy/release/build.sh` from
+  `deploy/release/Containerfile.<name>` and published by CI on tags as `:<version>` and
+  `:preview`: `loams` (the engine, with `live,live-tikv,durable,graph,tikv,pgwire,mysql-wire,stream-grpc`),
+  `loams-fabric` (the House front, with `loams-house-worker` inside) and the optional
+  `loams-agentd`.
+- **Engine auth for the preview.** `LOAMS_AUTH_MODE` is `oidc` (JWTs verified against
+  `LOAMS_OIDC_ISSUER`'s JWKS, cached, RS256 or EdDSA, audience `LOAMS_OIDC_AUDIENCE`), `apikey`
+  (hashed keys in `LOAMS_API_KEYS_FILE`) or `off` (loopback clients only). The compose default is
+  `oidc` with the issuer `https://auth.loams.dev`, plus API keys for the CLI and SDKs.
+- **Hosted console and auth.** Ostrium hosts only the React console and the auth service. The
+  console signs in with OIDC Authorization Code + PKCE, keeps tokens in memory (never in
+  `localStorage`) and calls your engine at `LOAMS_ENGINE_URL` over your tailnet. It can also be
+  deployed on your own Vercel or Cloudflare with `LOAMS_ENGINE_URL`, `LOAMS_AUTH_ISSUER` and
+  `LOAMS_AUTH_CLIENT_ID`.
+
+### Known limitations
+- Loams Postgres: the control plane library is merged but not wired into the engine (PG2 Task 9).
+- Loams Graph: writes are not crash-durable until GR1 Task 11.
+- Loams Live: the versioned deploy flow is in progress.
+- Loams House: multi-block results in JSON, CSVWithNames, Parquet or Arrow are malformed over
+  the ClickHouse HTTP interface until a pending fix (HS1 ruling R8.4); `loams.house.v1` is not
+  affected.
+- Several console pages still run on mocked clients.
+- See [`docs/release/preview.md`](docs/release/preview.md#known-limitations) for the full list
+  and the security model.
+
+
 ### Changed
 - **Loams Live runs on the embedded store by default** (LV1 plan Task 23, design §45 §8). The `live` feature is in `loams`'s default set and has no `tikv-client`. `loams dev` and `loams standalone` serve Live on 127.0.0.1:7710, with data in an embedded MVCC store at `<data-dir>/live/store.redb` (redb), and need no PD.
   - **TiKV is the new `live-tikv` feature:** `--live-store tikv://<pd>[,<pd>]/<keyspace>` selects it. A build without `live-tikv` refuses that flag.
