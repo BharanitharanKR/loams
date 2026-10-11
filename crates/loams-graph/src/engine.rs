@@ -172,6 +172,10 @@ pub enum GraphError {
     /// The log the graph is durable in could not be read or written; retry (GR1 Task 11).
     #[error("{0}")]
     LogUnavailable(String),
+    /// This node does not own the graph, or lost it while serving, and cannot pass the call on
+    /// (a forwarded call is never forwarded again); retry, and it reaches the owner (GR1 Task 12).
+    #[error("{0}")]
+    OwnerMoved(String),
 }
 
 /// What the engine said about a statement it refused, besides its text (§48 §8.3, GR1 Task 7).
@@ -223,7 +227,7 @@ impl GraphError {
             Self::UnboundedPath { .. } | Self::AllShortestPaths => "graph_unbounded_path",
             Self::ResultTooLarge { .. } | Self::RowTooLarge { .. } => "graph_result_too_large",
             Self::EnginePanic | Self::Failed => "graph_engine_panic",
-            Self::Reloading => "graph_reloading",
+            Self::Reloading | Self::OwnerMoved(_) => "graph_reloading",
             Self::StatementTimeout => "graph_statement_timeout",
             Self::WriteConflict => "graph_write_conflict",
             Self::VersionMismatch { .. } => "graph_version_mismatch",
@@ -438,6 +442,9 @@ pub struct Graph {
     /// Set when a write could not be made durable: the engine holds commits the log does not,
     /// so it is rebuilt from the log before it serves again.
     reloading: AtomicBool,
+    /// Set when the graph's owner lease moved on while this engine served it (an append refused
+    /// by its fence, or a lease this node lost): it never serves again here (GR1 Task 12).
+    fenced: AtomicBool,
 }
 
 impl fmt::Debug for Graph {
@@ -655,6 +662,7 @@ impl Graph {
             gate: crate::durable::visibility::Gate::default(),
             durable,
             reloading: AtomicBool::new(false),
+            fenced: AtomicBool::new(false),
         })
     }
 
@@ -722,6 +730,28 @@ impl Graph {
     /// lane under the exclusive gate, so no client statement runs on this engine again.
     pub(crate) fn mark_reloading(&self) {
         self.reloading.store(true, Ordering::Release);
+    }
+
+    /// Marks the graph fenced: its owner lease moved on, so this engine never serves again; the
+    /// caller places the graph anew (GR1 Task 12). Also marks it for reload, so the lane and every
+    /// call refuse it at once.
+    pub fn mark_fenced(&self) {
+        self.fenced.store(true, Ordering::Release);
+        self.reloading.store(true, Ordering::Release);
+    }
+
+    /// Whether the graph's owner lease moved on while this engine served it.
+    pub fn is_fenced(&self) -> bool {
+        self.fenced.load(Ordering::Acquire)
+    }
+
+    /// The owner lease epoch this engine serves under, for a durable graph whose appends are
+    /// fenced (GR1 Task 12).
+    pub fn lease_epoch(&self) -> Option<u64> {
+        self.durable
+            .as_ref()
+            .and_then(|durable| durable.fence.as_ref())
+            .map(|fence| fence.epoch)
     }
 
     /// Marks the graph poisoned by an engine panic (R0.13).
@@ -1832,6 +1862,33 @@ impl Engine {
             .filter(|g| namespace.is_none_or(|ns| g.namespace == ns))
             .map(Arc::clone)
             .collect())
+    }
+
+    /// Drops a durable graph's engine that must not serve again: one whose owner lease moved on
+    /// (fenced), or one opened under an older lease epoch than the one this node now holds (GR1
+    /// Task 12). Its local files are a cache, so a close that fails is only logged. Answers whether
+    /// a graph was dropped.
+    ///
+    /// # Errors
+    ///
+    /// [`GraphError::Reloading`] while a caller still holds the handle; it is dropped by the next
+    /// call once that caller lets go.
+    pub fn discard(&self, namespace: &str, name: &str) -> Result<bool, GraphError> {
+        let key = (namespace.to_string(), name.to_string());
+        let mut graphs = self
+            .graphs
+            .lock()
+            .map_err(|_| poisoned("the graph registry is poisoned"))?;
+        let Some(graph) = graphs.get(&key) else {
+            return Ok(false);
+        };
+        if Arc::strong_count(graph) > 1 {
+            return Err(GraphError::Reloading);
+        }
+        if let Err(err) = graph.db.close() {
+            tracing::warn!(%namespace, %name, error = %err, "closing a discarded graph failed; dropping it");
+        }
+        Ok(graphs.remove(&key).is_some())
     }
 
     /// Closes a graph and releases its storage.

@@ -538,13 +538,18 @@ impl ServerConfig {
             .map_err(ServerError::Config)
     }
 
-    /// Whether this server serves Loams Graph (GR1 Task 5): unless `--no-graph`, and not on a
-    /// cluster node, which gets the `graph` role in Task 12 (R5.2). Otherwise every graph RPC
-    /// answers `feature_not_in_variant`.
+    /// Whether this server serves Loams Graph (GR1 Task 5): unless `--no-graph`; on a cluster
+    /// node only with the `graph` role, which owns graphs and forwards calls for graphs another
+    /// graph node owns (GR1 Task 12, R5.2). Otherwise every graph RPC answers
+    /// `feature_not_in_variant`.
     #[cfg(feature = "graph")]
     #[must_use]
     pub fn serves_graph(&self) -> bool {
-        self.graph.enabled && self.cluster.is_none()
+        self.graph.enabled
+            && self
+                .cluster
+                .as_ref()
+                .is_none_or(|cluster| cluster.effective_roles().graph)
     }
 
     /// Loams Graph (GR1 Task 5): graphs need a data directory unless they are explicitly
@@ -1140,6 +1145,7 @@ impl GraphRuntime {
         store: Store,
         reader: LogReader,
         log_node: u64,
+        registry: Option<Arc<NodeRegistry>>,
     ) -> Result<Self, ServerError> {
         use loams_graph::Engine;
         use loams_graph::catalog::GraphCatalog;
@@ -1158,14 +1164,26 @@ impl GraphRuntime {
             reader,
             tokio::runtime::Handle::current(),
         );
-        let admin = Arc::new(
-            GraphAdmin::new(Arc::new(engine), GraphCatalog::new(meta, store))
-                .with_log(graph_log)
-                .with_retention_hold(config.retention_hold)
-                .with_statement_slots(config.statement_slots)
-                .with_namespace_statements(config.namespace_statements)
-                .with_limits(config.limits),
-        );
+        let mut admin = GraphAdmin::new(Arc::new(engine), GraphCatalog::new(meta.clone(), store))
+            .with_log(graph_log)
+            .with_retention_hold(config.retention_hold)
+            .with_statement_slots(config.statement_slots)
+            .with_namespace_statements(config.namespace_statements)
+            .with_limits(config.limits);
+        // A cluster's graph nodes own graphs by lease and forward to each other (GR1 Task 12);
+        // a single node owns every graph and still fences its appends.
+        if let Some(registry) = registry {
+            let forwarder = crate::api::graph::HttpForwarder::new().map_err(|err| {
+                ServerError::Config(format!("the graph forwarder's HTTP client: {err}"))
+            })?;
+            admin = admin.with_ownership(loams_graph::owner::Ownership::new(
+                meta,
+                Arc::new(crate::api::graph::RegistryMembership::new(registry)),
+                Some(Arc::new(forwarder)),
+                loams_graph::owner::OwnerConfig::default(),
+            ));
+        }
+        let admin = Arc::new(admin);
         let stop = CancellationToken::new();
         let sweeps = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let maintenance = {
@@ -1183,16 +1201,16 @@ impl GraphRuntime {
                         () = stop.cancelled() => return,
                         _ = tick.tick() => {}
                     }
-                    match admin.purge_expired(hold).await {
-                        Ok(0) => {}
-                        Ok(n) => tracing::info!(purged = n, "purged deleted graphs"),
-                        Err(err) => tracing::warn!(%err, "purging deleted graphs failed"),
-                    }
-                    match admin.sweep_documents(grace).await {
-                        Ok(_) => {
+                    // This node's caches, then (on one node of the cluster at a time, under the
+                    // maintenance lease) the purge and the catalog sweep (GR1 Task 12).
+                    match admin.maintain(hold, grace).await {
+                        Ok(purged) => {
+                            if purged > 0 {
+                                tracing::info!(purged, "purged deleted graphs");
+                            }
                             sweeps.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         }
-                        Err(err) => tracing::warn!(%err, "sweeping graph catalog documents failed"),
+                        Err(err) => tracing::warn!(%err, "graph maintenance failed"),
                     }
                 }
             })
@@ -2246,6 +2264,11 @@ impl Server {
         if let Some(tier) = &hot {
             collections.set_hot_tier(Arc::new(tier.clone()));
         }
+        // The node registry, for Loams Graph's ownership on a cluster node (GR1 Task 12).
+        #[cfg(feature = "graph")]
+        let node_registry = routing
+            .as_ref()
+            .map(|(placement, _)| placement.registry().clone());
         if let Some((placement, remote)) = routing {
             collections.set_placement(placement, remote);
         }
@@ -2321,6 +2344,7 @@ impl Server {
                 store.clone(),
                 reader.clone(),
                 config.log.node_id,
+                node_registry,
             )?),
             false => None,
         };

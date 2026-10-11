@@ -637,25 +637,78 @@ async fn no_graph_answers_graph_absent() {
     running.server.shutdown().await.expect("shutdown");
 }
 
-/// In a `graph` build, a cluster node does not serve Loams Graph before it has the `graph` role
-/// (R5.2, Task 12), so it answers `GraphAbsent` (the node's start path takes `serves_graph`; a
-/// cluster node cannot start in process here).
+/// A cluster node serves Loams Graph only with the `graph` role, which `Roles::all` leaves out
+/// (GR1 Task 12, R5.2, R12.5).
 #[cfg(feature = "graph")]
 #[test]
-fn a_cluster_node_does_not_serve_graph() {
+fn a_cluster_node_serves_graph_only_with_the_graph_role() {
     let dir = TempDir::new().expect("temp dir");
     let mut config = ServerConfig::new(dir.path());
     assert!(config.serves_graph());
-    config.cluster = Some(loams::ClusterConfig::new(
-        1,
-        loams_hot::Roles::all(),
-        "127.0.0.1:1",
-        std::collections::BTreeMap::from([(1, "127.0.0.1:1".to_string())]),
-    ));
+    let cluster = |roles| {
+        Some(loams::ClusterConfig::new(
+            1,
+            roles,
+            "127.0.0.1:1",
+            std::collections::BTreeMap::from([(1, "127.0.0.1:1".to_string())]),
+        ))
+    };
+    config.cluster = cluster(loams_hot::Roles::all());
     assert!(!config.serves_graph());
-    config.cluster = None;
+    config.cluster = cluster(loams_hot::Roles {
+        graph: true,
+        ..loams_hot::Roles::all()
+    });
+    assert!(config.serves_graph());
     config.graph.enabled = false;
     assert!(!config.serves_graph());
+}
+
+/// `GraphForward` (GR1 Task 12, R12.4): another graph node's call arrives on
+/// `/internal/v1/graph/<method>` as protobuf bytes and is answered as protobuf bytes, or as the
+/// Connect error in JSON.
+#[cfg(feature = "graph")]
+#[tokio::test]
+async fn forwarded_graph_calls_are_served_on_the_internal_route() {
+    use loams_proto::loams::graph::v1 as pb;
+    let running = Running::start().await;
+    let (status, graph) = running
+        .connect(
+            "/loams.graph.v1.GraphAdminService/CreateGraph",
+            &json!({"namespace": "acme", "name": "kg"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{graph}");
+    let forward = async |method: &str, body: Vec<u8>| {
+        let response = reqwest::Client::new()
+            .post(format!("{}/internal/v1/graph/{method}", running.base))
+            .header("content-type", "application/proto")
+            .body(body)
+            .send()
+            .await
+            .expect("forwarded call");
+        (response.status(), response.bytes().await.expect("a body"))
+    };
+    let request = pb::ExecuteRequest {
+        namespace: "acme".to_string(),
+        graph: "kg".to_string(),
+        statement: "INSERT (:N {k: 1}) RETURN 1".to_string(),
+        ..Default::default()
+    };
+    let (status, body) = forward("execute", request.encode_to_vec()).await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let answer = pb::ExecuteResponse::decode_from_slice(&body).expect("an ExecuteResponse");
+    assert!(answer.consistency_token.ends_with("@1"), "{answer:?}");
+    let missing = pb::ExecuteRequest {
+        graph: "nope".to_string(),
+        ..request
+    };
+    let (status, body) = forward("execute", missing.encode_to_vec()).await;
+    assert_eq!(status, reqwest::StatusCode::UNPROCESSABLE_ENTITY);
+    let error: Value = serde_json::from_slice(&body).expect("a Connect error");
+    assert_eq!(error["code"], "not_found", "{error}");
+    let (status, _) = forward("drop-everything", Vec::new()).await;
+    assert_eq!(status, reqwest::StatusCode::NOT_FOUND);
 }
 
 /// The scheduled catalog sweep (R4.9) runs on its interval, without anyone calling
