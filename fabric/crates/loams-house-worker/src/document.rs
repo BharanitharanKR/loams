@@ -395,10 +395,12 @@ pub fn header_len(kind: HeaderKind, fetch: &[u8]) -> Option<usize> {
 }
 
 /// Whether bytes look like a ClickHouse type name (`UInt64`,
-/// `Nullable(DateTime64(6, 'UTC'))`, `Tuple(a String)`, …).
+/// `Nullable(DateTime64(6, 'UTC'))`, `Enum8('café' = 1)`, …): UTF-8 opening with
+/// an upper-case letter, with no control character. A binary-encoded type opens
+/// with its code byte, which is never a letter.
 fn is_type_name(bytes: &[u8]) -> bool {
     bytes.first().is_some_and(u8::is_ascii_uppercase)
-        && bytes.iter().all(|b| (0x20..0x7f).contains(b))
+        && std::str::from_utf8(bytes).is_ok_and(|text| !text.chars().any(char::is_control))
 }
 
 /// ClickHouse's unsigned LEB128.
@@ -676,6 +678,12 @@ mod tests {
         assert_eq!(
             header_len(HeaderKind::RowBinary { types: false }, rb),
             Some(5)
+        );
+        // Type names may hold UTF-8 (enum values).
+        let enum_type = "\x01\x01e\x12Enum8('café' = 1)\x01".as_bytes();
+        assert_eq!(
+            header_len(HeaderKind::RowBinary { types: true }, enum_type),
+            Some(enum_type.len() - 1)
         );
         // Types encoded in binary are not names.
         let binary = b"\x01\x01n\x04\x00\x00\x00\x00\x00\x00\x00\x00";
