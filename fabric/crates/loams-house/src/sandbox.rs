@@ -9,8 +9,9 @@
 //! A `netns` worker's only way out is the socket it inherits on fd 4. Its
 //! forwarder thread sends one byte per connection chDB makes; [`serve_forwarder`]
 //! answers each with one end of a fresh socket pair (`SCM_RIGHTS`) and serves the
-//! other: today it relays to the configured upstream; from HS1 Task 9 it is
-//! `house-cache`, which knows the worker by this socket. At most
+//! other: a relay to a configured upstream ([`Forward::Relay`]), or, from HS1
+//! Task 9, `house-cache` ([`Forward::Target`]), which knows the worker by this
+//! channel. At most
 //! [`MAX_FORWARDED_CONNECTIONS`] are open per worker; past that a request is
 //! answered with a stream that is already closed. Nothing on this path carries a
 //! credential to the worker.
@@ -64,19 +65,70 @@ pub fn unsandboxed_warning(why: &str) -> String {
     )
 }
 
-/// Serves one worker's forwarder channel on a thread until the worker's end
-/// closes. `worker` names it in thread names.
-pub fn serve_forwarder(
-    channel: UnixStream,
-    upstream: SocketAddr,
-    worker: &str,
-) -> io::Result<std::thread::JoinHandle<()>> {
-    std::thread::Builder::new()
-        .name(format!("house-forwarder-{worker}"))
-        .spawn(move || forwarder_loop(&channel, upstream))
+/// Where a worker's forwarded connections go.
+#[derive(Clone, Debug)]
+pub enum Forward {
+    /// A TCP relay to this upstream (HS1 Task 6; tests and development).
+    Relay(SocketAddr),
+    /// A server in the front's own process that knows each worker by its channel:
+    /// `house-cache` (HS1 Task 9, R6.8).
+    Target(Arc<dyn ForwardTarget>),
 }
 
-fn forwarder_loop(channel: &UnixStream, upstream: SocketAddr) {
+/// A server inside the front that workers' connections are handed to, each
+/// attributed to the worker whose forwarder channel (or private endpoint) it came
+/// from (HS1 Task 9). Its methods are called from plain threads.
+pub trait ForwardTarget: Send + Sync + fmt::Debug {
+    /// Serves one connection of worker `worker`. `slot` counts against
+    /// [`MAX_FORWARDED_CONNECTIONS`] and is held until the connection ends.
+    fn accept(&self, worker: &str, stream: UnixStream, slot: ForwardSlot);
+    /// A loopback endpoint whose connections are attributed to `worker`, for a
+    /// worker with no forwarder (`--sandbox=none`): it reaches the target
+    /// directly. Released by [`ForwardTarget::gone`].
+    fn endpoint(&self, worker: &str) -> io::Result<SocketAddr>;
+    /// `worker` was bound to `namespace` (its `Bind` was answered `Done`).
+    fn bound(&self, worker: &str, namespace: &str);
+    /// `worker` is gone: nothing more is served for it.
+    fn gone(&self, worker: &str);
+}
+
+/// One open forwarded connection; dropping it frees its place.
+#[derive(Debug)]
+pub struct ForwardSlot(Arc<AtomicUsize>);
+
+impl ForwardSlot {
+    /// A slot not counted against any worker (tests, private endpoints).
+    pub fn unbounded() -> Self {
+        let count = Arc::new(AtomicUsize::new(1));
+        Self(count)
+    }
+}
+
+impl Drop for ForwardSlot {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+/// Serves one worker's forwarder channel on a thread until the worker's end
+/// closes. `worker` names it in thread names and to a [`Forward::Target`].
+pub fn serve_forwarder(
+    channel: UnixStream,
+    forward: Forward,
+    worker: &str,
+) -> io::Result<std::thread::JoinHandle<()>> {
+    let worker = worker.to_string();
+    std::thread::Builder::new()
+        .name(format!("house-forwarder-{worker}"))
+        .spawn(move || {
+            forwarder_loop(&channel, &forward, &worker);
+            if let Forward::Target(target) = &forward {
+                target.gone(&worker);
+            }
+        })
+}
+
+fn forwarder_loop(channel: &UnixStream, forward: &Forward, worker: &str) {
     let open = Arc::new(AtomicUsize::new(0));
     let mut reader = channel;
     let mut request = [0u8; 1];
@@ -99,17 +151,25 @@ fn forwarder_loop(channel: &UnixStream, upstream: SocketAddr) {
             open.fetch_sub(1, Ordering::SeqCst);
             continue;
         }
-        let open = Arc::clone(&open);
-        let spawned = std::thread::Builder::new()
-            .name("house-forwarded".to_string())
-            .spawn(move || {
-                if let Ok(conn) = TcpStream::connect_timeout(&upstream, UPSTREAM_CONNECT_TIMEOUT) {
-                    relay(ours, conn);
+        let slot = ForwardSlot(Arc::clone(&open));
+        match forward {
+            Forward::Target(target) => target.accept(worker, ours, slot),
+            Forward::Relay(upstream) => {
+                let upstream = *upstream;
+                let spawned = std::thread::Builder::new()
+                    .name("house-forwarded".to_string())
+                    .spawn(move || {
+                        let _slot = slot;
+                        if let Ok(conn) =
+                            TcpStream::connect_timeout(&upstream, UPSTREAM_CONNECT_TIMEOUT)
+                        {
+                            relay(ours, conn);
+                        }
+                    });
+                if spawned.is_err() {
+                    return;
                 }
-                open.fetch_sub(1, Ordering::SeqCst);
-            });
-        if spawned.is_err() {
-            return;
+            }
         }
     }
 }
@@ -320,7 +380,7 @@ mod tests {
         let upstream = std::net::TcpListener::bind("127.0.0.1:0").expect("listener");
         let address = upstream.local_addr().expect("address");
         let (front, worker) = UnixStream::pair().expect("pair");
-        let _serving = serve_forwarder(front, address, "test").expect("serves");
+        let _serving = serve_forwarder(front, Forward::Relay(address), "test").expect("serves");
         let mut ask = &worker;
         ask.write_all(b"c").expect("ask");
         // Adopting the received descriptor needs `unsafe` (the worker does it in

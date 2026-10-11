@@ -388,8 +388,11 @@ impl RangeCache {
         Ok(blocks)
     }
 
-    #[cfg(test)]
-    fn insert_raw_for_test(&self, path: &str, index: u64, value: Bytes) {
+    /// Overwrites the cached entry of block `index` of `path` with `value` as
+    /// stored (payload and checksum), so a test can corrupt a cached block. Only
+    /// in this crate's tests and with the `test-hooks` feature.
+    #[cfg(any(test, feature = "test-hooks"))]
+    pub fn insert_raw_for_test(&self, path: &str, index: u64, value: Bytes) {
         self.blocks.insert(block_key(path, index), value);
     }
 }

@@ -76,6 +76,9 @@ connectrpc = { workspace = true, features = ["client"] }
 buffa = "0.9.2"
 base64.workspace = true
 http.workspace = true
+# `cache.rs` (HS1 Task 9): sealed workers reading through `house-cache`.
+loams-house-cache = { path = "../loams-house-cache" }
+loams-cache = { path = "../../../crates/loams-cache" }
 
 [lints]
 workspace = true
