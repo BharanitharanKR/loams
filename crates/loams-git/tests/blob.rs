@@ -9,7 +9,7 @@ use bytes::{Bytes, BytesMut};
 use futures::StreamExt;
 use futures::stream::{self, BoxStream};
 use loams_fs::{Fs, FsPath, MemFs};
-use loams_git::blob::{read_idx, read_pack};
+use loams_git::blob::{DEFAULT_MEMORY_SPILL_BYTES, read_idx, read_pack};
 use loams_git::limits::MULTIPART_THRESHOLD;
 use loams_git::{
     BlobError, BlobId, BlobStore, LpkWriter, NamespaceId, ObjectId, Put, RepoId, RepoPaths,
@@ -468,6 +468,24 @@ async fn rustfs_large_blob_refused_until_q385() {
     assert_eq!(faulty.calls(Op::PutMultipart), 0);
     assert_eq!(blobs.head(&id(2)).await.expect("head"), None);
     assert_eq!(blobs.head(&id(3)).await.expect("head"), None);
+}
+
+/// The default spill is memory with a bound: a streamed body larger than it
+/// is refused before it is read, instead of filling the process's memory.
+#[tokio::test]
+async fn default_spill_is_bounded() {
+    let (faulty, blobs) = faulty();
+    let unread: BoxStream<'static, io::Result<Bytes>> =
+        stream::once(async { panic!("the body must not be read") }).boxed();
+    let err = blobs
+        .put_stream(&id(1), unread, DEFAULT_MEMORY_SPILL_BYTES + 1)
+        .await
+        .expect_err("over the default spill");
+    assert!(
+        matches!(err, BlobError::Spill(loams_fs::FsError::TooLarge(_))),
+        "{err:?}"
+    );
+    assert_eq!(faulty.calls(Op::PutMultipart), 0);
 }
 
 /// Q385, run by hand against RustFS: a multipart upload of a blob over

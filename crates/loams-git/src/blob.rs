@@ -178,6 +178,10 @@ const PART_SIZE: usize = 8 * 1024 * 1024;
 /// The spill file's name inside its [`SpillDir`].
 const SPILL_BODY: &str = "body";
 
+/// The largest body the default in-memory spill holds. A store that takes
+/// larger streamed blobs names a disk with [`StoreBlobStore::with_spill`].
+pub const DEFAULT_MEMORY_SPILL_BYTES: u64 = 256 * 1024 * 1024;
+
 /// [`BlobStore`] over a `loams_store::Store`: blobs are a repository's pack
 /// objects, `ns/<ns>/repos/<repo_id>/packs/<id>.lpk`.
 #[derive(Clone, Debug)]
@@ -190,7 +194,8 @@ pub struct StoreBlobStore {
 }
 
 impl StoreBlobStore {
-    /// Blobs of the repository at `paths`. Large bodies spill to memory until
+    /// Blobs of the repository at `paths`. Large streamed bodies spill to
+    /// memory, at most [`DEFAULT_MEMORY_SPILL_BYTES`] each, until
     /// [`StoreBlobStore::with_spill`] names a disk; multipart completion is
     /// assumed atomic until [`StoreBlobStore::with_atomic_multipart`] says
     /// otherwise.
@@ -198,7 +203,7 @@ impl StoreBlobStore {
         Self {
             store,
             paths,
-            spill: Arc::new(MemFs::new(u64::MAX)),
+            spill: Arc::new(MemFs::new(DEFAULT_MEMORY_SPILL_BYTES)),
             spill_parent: FsPath::root(),
             atomic_multipart: true,
         }
@@ -397,6 +402,10 @@ impl BlobStore for StoreBlobStore {
         }
         // Refused before any byte is read or spilled.
         self.check_large(id, len)?;
+        let max_file = self.spill.caps().max_file;
+        if len > max_file {
+            return Err(BlobError::Spill(FsError::TooLarge(len)));
+        }
         if let Some(put) = self.existing(id, len).await? {
             return Ok(put);
         }
@@ -521,7 +530,13 @@ impl LpkWriter {
             )));
         }
         // The fixed part, then 8 bytes per large offset.
-        let fixed = IDX_HEADER_LEN + count as usize * IDX_ENTRY_LEN + IDX_TRAILER_LEN;
+        // Checked: `count` comes from the pushed pack, and `usize` may be
+        // 32 bits.
+        let fixed = usize::try_from(count)
+            .ok()
+            .and_then(|count| count.checked_mul(IDX_ENTRY_LEN))
+            .and_then(|entries| entries.checked_add(IDX_HEADER_LEN + IDX_TRAILER_LEN))
+            .ok_or_else(|| invalid(format!("{count} objects overflow the idx size")))?;
         if idx.len() < fixed || !(idx.len() - fixed).is_multiple_of(8) {
             return Err(invalid(format!(
                 "idx of {} bytes does not fit {count} objects",
