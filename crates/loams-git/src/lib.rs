@@ -14,7 +14,9 @@ pub mod format;
 pub mod ids;
 pub mod limits;
 pub mod paths;
+pub mod reflog;
 mod retry;
+pub mod state;
 pub mod wal;
 
 pub use blob::{BlobError, BlobId, BlobStore, LpkWriter, Put, StoreBlobStore};
@@ -27,4 +29,6 @@ pub use ids::{
     SecretId, Seq, SnapN, TraceParent, WsId, WsName,
 };
 pub use paths::RepoPaths;
+pub use reflog::{Expect, Receipt, RefSnapshot, RefTxn, RefUpdate, RejectReason, Scope};
+pub use state::{Check, IdemIndex, RepoState, StateError};
 pub use wal::{Appended, Hint, StoreWalStore, WalError, WalStore};

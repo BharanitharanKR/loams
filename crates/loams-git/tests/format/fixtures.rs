@@ -34,6 +34,9 @@ pub fn ref_txn() -> pb::RefTransaction {
         principal: "alice@example.com".into(),
         push_options: vec!["ci.skip".into()],
         object_format: pb::ObjectFormat::Sha1 as i32,
+        // Empty, so the golden segment written before the field existed
+        // (Task 8, T8.1) keeps its bytes.
+        request_digest: Vec::new(),
     }
 }
 

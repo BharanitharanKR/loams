@@ -32,6 +32,7 @@ message RefTransaction {
   string principal = 3;                  // who pushed (credential subject)
   repeated string push_options = 4;
   ObjectFormat object_format = 5;
+  bytes request_digest = 6;              // the idempotency key's request digest (§4.5; added by GT1 Task 8, T8.1)
 }
 
 message PackSetChange { repeated PackRef added = 1; repeated string removed = 2; string midx = 3; string commit_graph = 4; }
