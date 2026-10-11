@@ -180,6 +180,17 @@ fn build(
     for (name, value) in &endpoint.pg_settings {
         builder = builder.setting(Setting::new(name, value, "string"));
     }
+    // Where Postgres listens, after the endpoint's settings so that they
+    // win (Task 10): every address of the compute, so the runtime's address
+    // (a published port, a Service) reaches it, on the port `compute_ctl`'s
+    // connection string names.
+    builder = builder
+        .setting(Setting::new("listen_addresses", "*", "string"))
+        .setting(Setting::new(
+            "port",
+            &crate::runtime::COMPUTE_PG_PORT.to_string(),
+            "integer",
+        ));
     for r in roles {
         builder = builder.role(SpecRole {
             name: r.record.name.clone(),

@@ -8290,6 +8290,7 @@ dependencies = [
  "postcard",
  "proptest",
  "rand 0.9.5",
+ "rcgen",
  "reqwest 0.13.5",
  "ring",
  "serde",
@@ -8300,11 +8301,14 @@ dependencies = [
  "thiserror 2.0.21",
  "time",
  "tokio",
+ "tokio-postgres",
+ "toml 0.8.23",
  "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
  "ulid 3.0.0",
  "url",
+ "x509-parser",
  "zeroize",
 ]
 

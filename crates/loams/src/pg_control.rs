@@ -90,8 +90,9 @@ impl fmt::Debug for PgStore {
     }
 }
 
-/// Where computes run (`--runtime`). Until Task 10 it decides only the
-/// secret store.
+/// Where computes run (`--runtime`). Until Task 11's endpoint reconciler
+/// drives `loams_pg_control::runtime` (R10.8), it decides only the secret
+/// store.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PgRuntime {
     /// compose: secrets in the age-encrypted file under the data directory.

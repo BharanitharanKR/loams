@@ -17,6 +17,11 @@
 # pageserver and a loams-wal (the stack's stock safekeeper refuses
 # loams-wal's timeline create, R2.11).
 #
+# pg-control-compose-runtime (Task 10): it_compose_compute_answers_select_1,
+# a compute the compose runtime starts on deploy/loams-postgres-dev's network
+# reads its spec from the upcall listener and answers SELECT 1 on its
+# endpoint's host port.
+#
 # The images are pinned by digest in the compose files; nothing here uses a tag.
 name: PG2 e2e
 
@@ -232,3 +237,54 @@ jobs:
         if: always()
         working-directory: deploy/loams-postgres-dev
         run: docker compose down -v
+
+  pg-control-compose-runtime:
+    name: pg-control's compose runtime against deploy/loams-postgres-dev (it_compose)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      # The cache pg2.yml's pg-control job saves (on dev); this job only reads it.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: pg2-loams-pg-control
+          save-if: false
+      - name: build the test
+        run: cargo test -p loams-pg-control --locked --test it_compose --no-run
+      - name: pull the pinned images
+        working-directory: deploy/loams-postgres-dev
+        run: |
+          for i in 1 2 3; do
+            docker compose pull rustfs create-bucket storage_broker pageserver safekeeper1 compute1 && exit 0
+            sleep $((i * 15))
+          done
+          exit 1
+      - name: deploy/loams-postgres-dev storage
+        working-directory: deploy/loams-postgres-dev
+        run: |
+          docker compose up -d --pull never rustfs create-bucket storage_broker pageserver safekeeper1
+          for _ in $(seq 1 120); do
+            curl -sf localhost:9898/v1/status && break
+            sleep 1
+          done
+          curl -sf localhost:9898/v1/status
+      - name: it_compose_compute_answers_select_1
+        env:
+          # The upcall listener is on the runner; Docker names it through
+          # host-gateway.
+          IT_UPCALL_HOST: host.docker.internal
+          IT_EXTRA_HOSTS: host.docker.internal:host-gateway
+        run: cargo test -p loams-pg-control --locked --test it_compose -- --ignored
+      - name: logs
+        if: failure()
+        run: |
+          (cd deploy/loams-postgres-dev && docker compose logs --tail 200) || true
+          docker compose -p loams-pg-it logs --tail 200 || true
+      - name: teardown
+        if: always()
+        working-directory: deploy/loams-postgres-dev
+        run: |
+          docker compose -p loams-pg-it down || true
+          docker compose down -v
