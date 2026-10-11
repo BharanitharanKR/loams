@@ -116,7 +116,11 @@ services:
       LOAMS_AUTH_MODE: ${LOAMS_AUTH_MODE:-tailscale}
       LOAMS_TAILSCALE_LISTEN: ${LOAMS_TAILSCALE_LISTEN:-127.0.0.1:7781}
       LOAMS_OIDC_ISSUER: ${LOAMS_OIDC_ISSUER:-https://auth.loams.dev}
-      LOAMS_OIDC_AUDIENCE: ${LOAMS_OIDC_AUDIENCE:-loams-engine}
+      LOAMS_OIDC_AUDIENCE: ${LOAMS_OIDC_AUDIENCE:-loams-console}
+      LOAMS_OIDC_ALLOWED_EMAILS: ${LOAMS_OIDC_ALLOWED_EMAILS:-}
+      LOAMS_OIDC_ALLOWED_SUBJECTS: ${LOAMS_OIDC_ALLOWED_SUBJECTS:-}
+      LOAMS_OIDC_ALLOWED_GROUPS: ${LOAMS_OIDC_ALLOWED_GROUPS:-}
+      LOAMS_TAILSCALE_ALLOWED_USERS: ${LOAMS_TAILSCALE_ALLOWED_USERS:-}
       LOAMS_API_KEYS_FILE: /etc/loams/secrets/api-keys
     # Further engine settings, such as AWS_* credentials for an s3://
     # LOAMS_BUCKET, kept out of compose.yaml.
