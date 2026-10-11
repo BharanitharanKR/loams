@@ -191,3 +191,13 @@ export function fieldForPointer(fields: FieldDef[], pointer: string): string | u
   }
   return undefined;
 }
+
+/** The secret values entered in the form, by dotted path, for a write-only `createInstance`.
+ * Never stored, logged or rendered: the caller sends them once and drops its form state. */
+export function secretValues(fields: FieldDef[], values: Values): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of flat(fields)) {
+    if (f.secret && (values[f.id] ?? '') !== '') out[f.id] = values[f.id] as string;
+  }
+  return out;
+}

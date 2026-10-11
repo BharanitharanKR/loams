@@ -2,7 +2,7 @@
   "name": "@loams/plugin-connectors",
   "version": "0.1.0",
   "private": true,
-  "description": "Loams Desktop: the connector catalog, with a schema-driven configure form and YAML export.",
+  "description": "Loams Desktop: the connector catalog (family, direction, native or fallback), a schema-driven configure form and YAML export, the create-instance wizard and running instances with pause and resume.",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,

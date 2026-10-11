@@ -104,7 +104,7 @@ function FieldInput({
   );
 }
 
-function Fields({
+export function Fields({
   fields,
   values,
   set,

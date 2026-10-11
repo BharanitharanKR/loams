@@ -173,14 +173,18 @@ export function DetailPage({
         actions={
           <>
             {back}
-            <Button variant="primary" disabled title="Connector runtime not yet available (CN1)">
-              Run
+            <Button
+              variant="primary"
+              disabled={summary.stub}
+              title={summary.stub ? 'Planned connector: no config schema yet' : undefined}
+              onClick={() => navigate(`/connectors/${summary.id}/new`)}
+            >
+              Create instance
             </Button>
           </>
         }
       />
       <div className="flex flex-col gap-4">
-        <p className="m-0 text-sm text-muted">Connector runtime not yet available (CN1).</p>
         {summary.stub && (
           <Notice title="Planned connector">
             This connector is a generated placeholder: no capability detail or config fields yet.
