@@ -382,6 +382,14 @@ fn token_never_logged() {
             .unwrap_err();
         format!("{hello} {info} {err}")
     });
+    // The CLI's own client (the `status` probe) at TRACE: tungstenite logs
+    // the upgrade request it sends, which carries the token.
+    let status = home
+        .command(&["status"])
+        .env("RUST_LOG", "trace")
+        .status()
+        .unwrap();
+    assert!(status.success());
     assert_eq!(daemon.stop().code(), Some(0));
 
     let output = home.output();

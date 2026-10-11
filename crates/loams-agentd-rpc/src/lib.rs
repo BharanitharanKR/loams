@@ -32,6 +32,12 @@ pub use limits::Limits;
 pub use roles::Policy;
 pub use server::{Connections, WsServer, serve_connection};
 
+/// `tracing` directives every process using this crate must add to its
+/// filter, whatever `RUST_LOG` says: tungstenite's client handshake logs the
+/// whole upgrade request at TRACE, `Authorization: Bearer <token>` included
+/// (DD1 Task 7). A more specific directive wins over a global level.
+pub const SECRET_SAFE_LOG_DIRECTIVES: &[&str] = &["tungstenite::handshake=off"];
+
 /// RPC method names — single source of truth for both ends.
 /// Full surface: docs/research/feature-inventory.md §2.
 pub mod methods {

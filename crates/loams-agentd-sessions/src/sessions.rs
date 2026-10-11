@@ -42,9 +42,17 @@ use loams_agentd_rpc::ScopedTokens;
 
 /// The daemon's port and token issuer, for the injected MCP shim.
 #[derive(Clone)]
-struct McpEndpoint {
-    port: u16,
-    tokens: Arc<ScopedTokens>,
+pub struct McpEndpoint {
+    pub port: u16,
+    pub tokens: Arc<ScopedTokens>,
+}
+
+impl std::fmt::Debug for McpEndpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("McpEndpoint")
+            .field("port", &self.port)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Revokes a run's scoped token when the run task ends (design §50 §7: a
@@ -1794,8 +1802,15 @@ async fn drive_run(
     // Kept whole for the startup-crash retry (same user entry; dispatch
     // re-injects the stored resume id). Option so the retry branch (inside
     // the event loop) can take ownership.
+    // The injected server's token dies with this run task, so a retry gets
+    // its own (PR #434 review).
     let mut retry_request = Some(RunRequest {
         resume: None,
+        mcp: if _run_token.is_some() {
+            None
+        } else {
+            request.mcp.clone()
+        },
         ..request.clone()
     });
     // A side chat owns a fresh provider session. Bootstrap it from the frozen

@@ -19,8 +19,12 @@ pub struct Limits {
     pub auth_failure_delay: Duration,
     /// The largest upgrade request head, in bytes.
     pub max_request_head: usize,
-    /// How long a client may take to send its upgrade request.
+    /// How long a client may take to send its upgrade request, and how long
+    /// it may then wait for its token check.
     pub handshake_timeout: Duration,
+    /// Connections that have not finished authenticating, at once; more are
+    /// closed without an answer, so queued failures cannot pile up.
+    pub max_pending_upgrades: usize,
 }
 
 impl Default for Limits {
@@ -32,6 +36,7 @@ impl Default for Limits {
             auth_failure_delay: Duration::from_millis(250),
             max_request_head: 16 * 1024,
             handshake_timeout: Duration::from_secs(10),
+            max_pending_upgrades: 32,
         }
     }
 }

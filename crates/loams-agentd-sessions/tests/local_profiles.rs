@@ -13,6 +13,7 @@ fn config(data_dir: &Path) -> EngineConfig {
         default_harness: HarnessId::Mock,
         terminal_shell: None,
         tool_outputs: Default::default(),
+        mcp_endpoint: None,
     }
 }
 

@@ -7517,6 +7517,7 @@ dependencies = [
  "clap",
  "futures",
  "libc",
+ "loams-agentd-doc",
  "loams-agentd-harness",
  "loams-agentd-link",
  "loams-agentd-mcp",

@@ -7,12 +7,23 @@
 //! what a run may touch. Everything else answers `forbidden_role`, including
 //! `ResolveApproval` (Ruling 8) and the daemon's lifecycle methods.
 //!
+//! The payloads are checked too, so a run cannot start a more privileged one
+//! (PR #434 review): a queued run carries no MCP server, no auto-approval, no
+//! attachments, worktree or resume, and a sandbox no wider than the session's;
+//! a new side chat's sandbox is no wider either, and its working directory
+//! lies under the session's or a project's; a run cannot answer its own
+//! session's questions.
+//!
 //! The method set is written out here until Task 9 generates the method
 //! table (`METHODS`) with a role per method.
 
 use std::sync::Arc;
 
+use std::path::{Component, Path};
+
 use async_trait::async_trait;
+use loams_agentd_doc::SessionCommandPayload;
+use loams_agentd_proto::SandboxLevel;
 use loams_agentd_proto::rpc::{FORBIDDEN_ROLE, Role};
 use loams_agentd_rpc::{Identity, Policy, RpcError, RunScope, methods};
 use loams_agentd_sessions::WorkspaceHost;
@@ -45,22 +56,66 @@ const MCP_MUTATIONS: &[&str] = &["createChat", "renameChat", "setChatArchived"];
 /// How far up a chat's parents the session check walks.
 const MAX_DEPTH: usize = 8;
 
+/// What the policy needs to know about one chat.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ChatFacts {
+    /// `None`: a top-level chat.
+    pub parent: Option<String>,
+    /// The chat's configured sandbox, if it has a config.
+    pub sandbox: Option<SandboxLevel>,
+    /// Its working directory: its own `cwd`, else its project's folder.
+    pub cwd: Option<String>,
+}
+
 /// The chat tree, as far as the policy needs it.
 pub trait ChatTree: Send + Sync + 'static {
-    /// `None`: no such chat. `Some(None)`: a top-level chat.
-    fn parent_of(&self, chat_id: &str) -> Option<Option<String>>;
+    /// `None`: no such chat.
+    fn chat(&self, chat_id: &str) -> Option<ChatFacts>;
+    /// The folders of the user's projects (spaces).
+    fn project_folders(&self) -> Vec<String>;
 }
 
 impl ChatTree for WorkspaceHost {
-    fn parent_of(&self, chat_id: &str) -> Option<Option<String>> {
-        match self.chat(chat_id) {
-            Ok(chat) => chat.map(|chat| chat.parent_chat_id),
+    fn chat(&self, chat_id: &str) -> Option<ChatFacts> {
+        let chat = match WorkspaceHost::chat(self, chat_id) {
+            Ok(chat) => chat?,
             Err(error) => {
                 tracing::warn!(%error, "role check could not read the chat tree");
-                None
+                return None;
             }
-        }
+        };
+        let cwd = chat.cwd.clone().or_else(|| {
+            let space = chat.space_id.as_deref()?;
+            self.space(space).ok().flatten().map(|space| space.path)
+        });
+        Some(ChatFacts {
+            parent: chat.parent_chat_id,
+            sandbox: chat.config.map(|config| config.sandbox),
+            cwd,
+        })
     }
+
+    fn project_folders(&self) -> Vec<String> {
+        self.read_spaces()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|space| space.path)
+            .collect()
+    }
+}
+
+fn rank(sandbox: SandboxLevel) -> u8 {
+    match sandbox {
+        SandboxLevel::ReadOnly => 0,
+        SandboxLevel::WorkspaceWrite => 1,
+        SandboxLevel::DangerFullAccess => 2,
+    }
+}
+
+/// `path` is `root` or under it, with no `..` to climb back out.
+fn within(path: &str, root: &str) -> bool {
+    let path = Path::new(path);
+    !path.components().any(|c| matches!(c, Component::ParentDir)) && path.starts_with(root)
 }
 
 /// The daemon's [`Policy`].
@@ -86,12 +141,109 @@ impl DaemonPolicy {
             if chat == run.session_id {
                 return true;
             }
-            match self.chats.parent_of(&chat) {
-                Some(Some(parent)) => chat = parent,
-                _ => return false,
+            match self.chats.chat(&chat).and_then(|facts| facts.parent) {
+                Some(parent) => chat = parent,
+                None => return false,
             }
         }
         false
+    }
+
+    /// The widest sandbox the run's session may hand on: its own (the
+    /// workspace-write default without a config).
+    fn ceiling(&self, run: &RunScope) -> SandboxLevel {
+        self.chats
+            .chat(&run.session_id)
+            .and_then(|facts| facts.sandbox)
+            .unwrap_or(SandboxLevel::WorkspaceWrite)
+    }
+
+    /// A new chat's directory: under the session's, or under a project's.
+    fn cwd_allowed(&self, run: &RunScope, cwd: &str) -> bool {
+        let session = self.chats.chat(&run.session_id).and_then(|facts| facts.cwd);
+        session.iter().any(|root| within(cwd, root))
+            || self
+                .chats
+                .project_folders()
+                .iter()
+                .any(|root| within(cwd, root))
+    }
+
+    /// The payload of a `QueueCommand` to `target` (already in the tree).
+    fn check_command(
+        &self,
+        run: &RunScope,
+        target: &str,
+        params: &serde_json::Value,
+    ) -> Result<(), RpcError> {
+        let command = params
+            .get("command")
+            .cloned()
+            .and_then(|command| serde_json::from_value::<SessionCommandPayload>(command).ok())
+            .ok_or_else(|| forbidden("QueueCommand without a readable command".into()))?;
+        match command {
+            SessionCommandPayload::Run { request, .. } => {
+                if request.mcp.is_some()
+                    || request.auto_approve
+                    || !request.attachments.is_empty()
+                    || request.worktree.is_some()
+                    || request.resume.is_some()
+                {
+                    return Err(forbidden(
+                        "a run may not set mcp, autoApprove, attachments, worktree or resume"
+                            .into(),
+                    ));
+                }
+                if rank(request.sandbox) > rank(self.ceiling(run)) {
+                    return Err(forbidden(
+                        "a run's sandbox is wider than the session's".into(),
+                    ));
+                }
+                let target_cwd = self.chats.chat(target).and_then(|facts| facts.cwd);
+                let cwd_ok = match &target_cwd {
+                    Some(cwd) => request.cwd == *cwd,
+                    None => request.cwd == "~",
+                };
+                if !cwd_ok {
+                    return Err(forbidden("a run's cwd is not its chat's".into()));
+                }
+                Ok(())
+            }
+            SessionCommandPayload::RespondInput { .. } if target == run.session_id => Err(
+                forbidden("a run may not answer its own session's questions".into()),
+            ),
+            SessionCommandPayload::Steer { .. }
+            | SessionCommandPayload::Interrupt {}
+            | SessionCommandPayload::RespondInput { .. } => Ok(()),
+        }
+    }
+
+    /// `createChat`'s config and directory.
+    fn check_new_chat(&self, run: &RunScope, params: &serde_json::Value) -> Result<(), RpcError> {
+        if let Some(config) = params.get("config").filter(|config| !config.is_null()) {
+            let sandbox = config
+                .get("sandbox")
+                .cloned()
+                .and_then(|sandbox| serde_json::from_value::<SandboxLevel>(sandbox).ok())
+                .ok_or_else(|| forbidden("a new chat's config needs a sandbox".into()))?;
+            if rank(sandbox) > rank(self.ceiling(run)) {
+                return Err(forbidden(
+                    "a new chat's sandbox is wider than the session's".into(),
+                ));
+            }
+        }
+        if let Some(cwd) = params.get("cwd").filter(|cwd| !cwd.is_null()) {
+            match cwd.as_str() {
+                Some(cwd) if self.cwd_allowed(run, cwd) => {}
+                _ => {
+                    return Err(forbidden(
+                        "a new chat's cwd is outside the session's and the projects' folders"
+                            .into(),
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 
     fn authorize_mcp(
@@ -114,11 +266,11 @@ impl DaemonPolicy {
                 // A new side chat under the run's session tree; an existing
                 // id must already be in it.
                 let parent = text(params, "parentChatId").ok_or_else(outside)?;
-                let exists = self.chats.parent_of(chat_id).is_some();
+                let exists = self.chats.chat(chat_id).is_some();
                 if !self.in_session(run, parent) || (exists && !self.in_session(run, chat_id)) {
                     return Err(outside());
                 }
-                return Ok(());
+                return self.check_new_chat(run, params);
             }
             return if self.in_session(run, chat_id) {
                 Ok(())
@@ -126,20 +278,36 @@ impl DaemonPolicy {
                 Err(outside())
             };
         }
-        let mut named = false;
+        let mut named = None;
         for key in ["sessionId", "chatId"] {
             if let Some(target) = params.get(key) {
-                named = true;
                 match target.as_str() {
-                    Some(target) if self.in_session(run, target) => {}
+                    Some(target) if self.in_session(run, target) => named = Some(target),
                     _ => return Err(outside()),
                 }
             }
         }
-        if SESSION_METHODS.contains(&method) && !named {
-            return Err(outside());
+        let Some(target) = named else {
+            return if SESSION_METHODS.contains(&method) {
+                Err(outside())
+            } else {
+                Ok(())
+            };
+        };
+        match method {
+            methods::QUEUE_COMMAND => self.check_command(run, target, params),
+            methods::QUEUE_MESSAGE
+                if params
+                    .get("attachments")
+                    .and_then(serde_json::Value::as_array)
+                    .is_some_and(|attachments| !attachments.is_empty()) =>
+            {
+                Err(forbidden(
+                    "a queued message may not carry attachments".into(),
+                ))
+            }
+            _ => Ok(()),
         }
-        Ok(())
     }
 }
 
@@ -174,20 +342,41 @@ mod tests {
     use std::collections::HashMap;
 
     /// `main` and `other` are top-level; `side` is under `main`.
-    struct Tree(HashMap<&'static str, Option<&'static str>>);
+    struct Tree(HashMap<&'static str, ChatFacts>);
 
     impl ChatTree for Tree {
-        fn parent_of(&self, chat_id: &str) -> Option<Option<String>> {
-            self.0.get(chat_id).map(|parent| parent.map(str::to_owned))
+        fn chat(&self, chat_id: &str) -> Option<ChatFacts> {
+            self.0.get(chat_id).cloned()
+        }
+        fn project_folders(&self) -> Vec<String> {
+            vec!["/projects/app".into()]
+        }
+    }
+
+    fn facts(parent: Option<&str>, sandbox: Option<SandboxLevel>, cwd: Option<&str>) -> ChatFacts {
+        ChatFacts {
+            parent: parent.map(str::to_owned),
+            sandbox,
+            cwd: cwd.map(str::to_owned),
         }
     }
 
     fn policy() -> DaemonPolicy {
         DaemonPolicy::new(Arc::new(Tree(HashMap::from([
-            ("main", None),
-            ("other", None),
-            ("side", Some("main")),
-            ("other-side", Some("other")),
+            (
+                "main",
+                facts(None, Some(SandboxLevel::WorkspaceWrite), Some("/work/main")),
+            ),
+            ("other", facts(None, None, None)),
+            (
+                "side",
+                facts(
+                    Some("main"),
+                    Some(SandboxLevel::ReadOnly),
+                    Some("/work/main/side"),
+                ),
+            ),
+            ("other-side", facts(Some("other"), None, None)),
         ]))))
     }
 
@@ -247,28 +436,91 @@ mod tests {
     async fn mcp_is_bound_to_its_session_tree() {
         let run = mcp("main");
         for method in SESSION_METHODS {
-            assert!(allowed(&run, method, json!({"chatId": "main"})).await);
-            assert!(allowed(&run, method, json!({"chatId": "side"})).await);
-            assert!(allowed(&run, method, json!({"sessionId": "side"})).await);
-            assert!(!allowed(&run, method, json!({"chatId": "other"})).await);
-            assert!(!allowed(&run, method, json!({"chatId": "other-side"})).await);
-            assert!(!allowed(&run, method, json!({"chatId": "missing"})).await);
-            assert!(!allowed(&run, method, json!({"chatId": 7})).await);
-            assert!(!allowed(&run, method, json!({})).await);
+            assert!(
+                allowed(
+                    &run,
+                    method,
+                    json!({"chatId": "main", "command": {"kind": "interrupt"}})
+                )
+                .await
+            );
+            assert!(
+                allowed(
+                    &run,
+                    method,
+                    json!({"chatId": "side", "command": {"kind": "interrupt"}})
+                )
+                .await
+            );
+            assert!(
+                allowed(
+                    &run,
+                    method,
+                    json!({"sessionId": "side", "command": {"kind": "interrupt"}})
+                )
+                .await
+            );
+            assert!(
+                !allowed(
+                    &run,
+                    method,
+                    json!({"chatId": "other", "command": {"kind": "interrupt"}})
+                )
+                .await
+            );
+            assert!(
+                !allowed(
+                    &run,
+                    method,
+                    json!({"chatId": "other-side", "command": {"kind": "interrupt"}})
+                )
+                .await
+            );
+            assert!(
+                !allowed(
+                    &run,
+                    method,
+                    json!({"chatId": "missing", "command": {"kind": "interrupt"}})
+                )
+                .await
+            );
+            assert!(
+                !allowed(
+                    &run,
+                    method,
+                    json!({"chatId": 7, "command": {"kind": "interrupt"}})
+                )
+                .await
+            );
+            assert!(!allowed(&run, method, json!({"command": {"kind": "interrupt"}})).await);
             // Both names must agree with the session.
             assert!(
                 !allowed(
                     &run,
                     method,
-                    json!({"sessionId": "main", "chatId": "other"})
+                    json!({"sessionId": "main", "chatId": "other", "command": {"kind": "interrupt"}})
                 )
                 .await
             );
         }
         // A side chat's run reaches only itself.
         let side = mcp("side");
-        assert!(allowed(&side, methods::QUEUE_MESSAGE, json!({"chatId": "side"})).await);
-        assert!(!allowed(&side, methods::QUEUE_MESSAGE, json!({"chatId": "main"})).await);
+        assert!(
+            allowed(
+                &side,
+                methods::QUEUE_MESSAGE,
+                json!({"chatId": "side", "command": {"kind": "interrupt"}})
+            )
+            .await
+        );
+        assert!(
+            !allowed(
+                &side,
+                methods::QUEUE_MESSAGE,
+                json!({"chatId": "main", "command": {"kind": "interrupt"}})
+            )
+            .await
+        );
     }
 
     #[tokio::test]
@@ -298,6 +550,87 @@ mod tests {
             "renameDevice",
         ] {
             assert!(!allowed(&run, methods::MUTATE, json!({"op": op, "chatId": "side"})).await);
+        }
+    }
+
+    fn run_command(cwd: &str, extra: serde_json::Value) -> serde_json::Value {
+        let mut request = json!({
+            "prompt": "go", "cwd": cwd, "sandbox": "workspace-write",
+            "autoApprove": false, "attachments": [],
+        });
+        for (key, value) in extra.as_object().unwrap() {
+            request[key] = value.clone();
+        }
+        json!({ "chatId": "side", "command": { "kind": "run", "request": request, "messageId": "m" } })
+    }
+
+    #[tokio::test]
+    async fn mcp_cannot_queue_a_more_privileged_run() {
+        let run = mcp("main");
+        let queue = |params| async { allowed(&run, methods::QUEUE_COMMAND, params).await };
+        // What the shim sends: the chat's own cwd, its sandbox, nothing else.
+        let plain = run_command("/work/main/side", json!({ "sandbox": "read-only" }));
+        assert!(queue(plain).await);
+        for extra in [
+            json!({ "autoApprove": true }),
+            json!({ "mcp": { "name": "x", "command": "/bin/sh" } }),
+            json!({ "attachments": ["/etc/passwd"] }),
+            json!({ "worktree": { "name": "w" } }),
+            json!({ "resume": "abc" }),
+            json!({ "sandbox": "danger-full-access" }),
+        ] {
+            assert!(
+                !queue(run_command("/work/main/side", extra.clone())).await,
+                "{extra}"
+            );
+        }
+        assert!(!queue(run_command("/", json!({}))).await, "another cwd");
+        // Answering a side chat's question is the shim's job; its own, not.
+        let answer = |chat: &str| json!({ "chatId": chat, "command": { "kind": "respondInput", "requestId": "q", "answers": [] } });
+        assert!(queue(answer("side")).await);
+        assert!(!queue(answer("main")).await);
+        assert!(queue(json!({ "chatId": "side", "command": { "kind": "interrupt" } })).await);
+        assert!(!queue(json!({ "chatId": "side", "command": "nonsense" })).await);
+        assert!(
+            !allowed(
+                &run,
+                methods::QUEUE_MESSAGE,
+                json!({ "chatId": "side", "text": "hi", "attachments": ["pending://x"] })
+            )
+            .await
+        );
+    }
+
+    #[tokio::test]
+    async fn mcp_new_chats_stay_within_the_sessions_reach() {
+        let run = mcp("main");
+        let create = |extra: serde_json::Value| {
+            let mut params = json!({ "op": "createChat", "chatId": "new", "parentChatId": "main" });
+            for (key, value) in extra.as_object().unwrap() {
+                params[key] = value.clone();
+            }
+            params
+        };
+        let config = |sandbox: &str| json!({ "config": { "harness": "mock", "sandbox": sandbox } });
+        assert!(allowed(&run, methods::MUTATE, create(config("workspace-write"))).await);
+        assert!(allowed(&run, methods::MUTATE, create(config("read-only"))).await);
+        assert!(!allowed(&run, methods::MUTATE, create(config("danger-full-access"))).await);
+        for cwd in ["/work/main", "/work/main/sub", "/projects/app/x"] {
+            assert!(
+                allowed(&run, methods::MUTATE, create(json!({ "cwd": cwd }))).await,
+                "{cwd}"
+            );
+        }
+        for cwd in [
+            "/",
+            "/work",
+            "/work/main/../../etc",
+            "/projects/application",
+        ] {
+            assert!(
+                !allowed(&run, methods::MUTATE, create(json!({ "cwd": cwd }))).await,
+                "{cwd}"
+            );
         }
     }
 }

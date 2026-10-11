@@ -251,12 +251,25 @@ fn already_running(paths: &Paths, holder: &str) -> ExitCode {
     ExitCode::from(EXIT_ALREADY_RUNNING)
 }
 
+/// `filter` with the directives that keep tokens out of the log, which no
+/// `RUST_LOG` can turn back on (`loams_agentd_rpc::SECRET_SAFE_LOG_DIRECTIVES`).
+fn secret_safe(mut filter: tracing_subscriber::EnvFilter) -> tracing_subscriber::EnvFilter {
+    for directive in loams_agentd_rpc::SECRET_SAFE_LOG_DIRECTIVES {
+        match directive.parse() {
+            Ok(directive) => filter = filter.add_directive(directive),
+            Err(error) => eprintln!("loams-agentd: bad log directive {directive}: {error}"),
+        }
+    }
+    filter
+}
+
 /// One-shot and stdio commands: stderr only, `RUST_LOG` overrides `default`.
 fn init_stderr_tracing(default: &str) {
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
-    let filter =
-        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| default.into());
+    let filter = secret_safe(
+        tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| default.into()),
+    );
     tracing_subscriber::registry()
         .with(filter)
         .with(
@@ -276,8 +289,10 @@ fn init_stderr_tracing(default: &str) {
 fn init_run_tracing(paths: &Paths) {
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
-    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| "info,loro_internal=warn,loro=warn".into());
+    let filter = secret_safe(
+        tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| "info,loro_internal=warn,loro=warn".into()),
+    );
     let registry = tracing_subscriber::registry()
         .with(filter)
         .with(tracing_subscriber::fmt::layer());

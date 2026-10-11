@@ -28,6 +28,7 @@ base64.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true
+loams-agentd-proto.workspace = true
 
 # Deterministic stalled-transport deadlines.
 tokio = { workspace = true, features = ["test-util"] }

@@ -1,10 +1,11 @@
 //! The server's security rules at the transport level (plan DD1 Task 7):
-//! peers, `Hello` first, roles, scoped tokens, limits and log canaries. The
+//! peers, `Hello` first, roles, scoped tokens and limits (the log canary is
+//! `tests/token_canary.rs`, with a process-wide subscriber). The
 //! daemon's own tests (`crates/loams-agentd/tests/security.rs`) cover the
 //! upgrade checks over raw HTTP against the real binary.
 #![allow(clippy::unwrap_used)]
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -13,7 +14,7 @@ use loams_agentd_proto::rpc::{FORBIDDEN_ROLE, LIMIT_EXCEEDED, UNAUTHENTICATED};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::test_support::{self, OWNER_TOKEN, dial, hello_params};
-use crate::{Limits, RpcError, RpcReply, RpcService, connect_ws, connect_ws_with_token, methods};
+use crate::{Limits, RpcError, RpcReply, RpcService, connect_ws_with_token, methods};
 
 /// `Echo` answers its params; `Open` is a stream that never ends.
 struct Service;
@@ -325,70 +326,29 @@ async fn owner_connections_are_limited() {
     .expect("a closed connection frees its slot");
 }
 
-/// A `tracing` writer into a shared buffer.
-#[derive(Clone, Default)]
-struct Capture(Arc<Mutex<Vec<u8>>>);
-
-impl std::io::Write for Capture {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        self.0.lock().unwrap().extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
-impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for Capture {
-    type Writer = Capture;
-    fn make_writer(&'a self) -> Self::Writer {
-        self.clone()
-    }
-}
-
 #[tokio::test]
-async fn token_never_logged() {
-    let capture = Capture::default();
-    let subscriber = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
-        .with_ansi(false)
-        .with_writer(capture.clone())
-        .finish();
-    let _default = tracing::subscriber::set_default(subscriber);
-
-    let served = test_support::serve(Arc::new(Service)).await;
-    let run = served.scoped.issue("chat-1").unwrap();
-    let near_miss = format!("{}x", &OWNER_TOKEN[..OWNER_TOKEN.len() - 1]);
-    // Refusals: no token, a near miss, and a revoked run token.
-    assert!(connect_ws(&served.url()).await.is_err());
-    assert!(
-        connect_ws_with_token(&served.url(), &near_miss)
+async fn unauthenticated_connections_are_bounded() {
+    let limits = Limits {
+        max_pending_upgrades: 1,
+        ..Limits::default()
+    };
+    let served = test_support::serve_with(Arc::new(Service), limits).await;
+    // A peer that connects and never finishes its upgrade holds the one slot.
+    let stalled = tokio::net::TcpStream::connect(("127.0.0.1", served.port))
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let refused = connect_ws_with_token(&served.url(), OWNER_TOKEN).await;
+    assert!(refused.is_err(), "a second pending upgrade was served");
+    drop(stalled);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while connect_ws_with_token(&served.url(), OWNER_TOKEN)
             .await
             .is_err()
-    );
-    let revoked = served.scoped.issue("chat-2").unwrap();
-    served.scoped.revoke(&revoked.scope.run_id);
-    assert!(
-        connect_ws_with_token(&served.url(), revoked.token.expose())
-            .await
-            .is_err()
-    );
-    // Successes, a refused call and an error reply.
-    let owner = dial(&served.url(), OWNER_TOKEN).await;
-    let mcp = dial(&served.url(), run.token.expose()).await;
-    assert!(mcp.call("Secret", serde_json::json!(1)).await.is_err());
-    assert!(owner.call("Missing", serde_json::json!(1)).await.is_err());
-    drop((owner, mcp));
-    served.stop().await;
-
-    let logs = String::from_utf8(capture.0.lock().unwrap().clone()).unwrap();
-    assert!(logs.contains("401"), "the refusals were logged: {logs}");
-    for secret in [
-        OWNER_TOKEN,
-        near_miss.as_str(),
-        run.token.expose(),
-        revoked.token.expose(),
-    ] {
-        assert!(!logs.contains(secret), "a token reached the log:\n{logs}");
-    }
+        {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the slot frees when the stalled peer leaves");
 }

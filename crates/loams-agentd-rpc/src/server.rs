@@ -322,6 +322,7 @@ impl WsServer {
         let shared = Arc::new(Shared {
             port: local.port(),
             owner_slots: Arc::new(Semaphore::new(self.limits.max_owner_connections)),
+            pending_upgrades: Arc::new(Semaphore::new(self.limits.max_pending_upgrades)),
             auth_gate: tokio::sync::Mutex::new(()),
             server: self,
         });
@@ -355,6 +356,8 @@ pub(crate) struct Shared {
     server: WsServer,
     port: u16,
     owner_slots: Arc<Semaphore>,
+    /// Connections still before their token check.
+    pending_upgrades: Arc<Semaphore>,
     /// Serializes token checks, so a failure's delay holds back the next attempt.
     auth_gate: tokio::sync::Mutex<()>,
 }
@@ -374,6 +377,15 @@ async fn serve_socket<S>(
         return;
     }
     let limits = shared.server.limits;
+    // Held until the token is checked: unauthenticated connections are
+    // bounded, and so is the queue behind a failure's delay.
+    let Ok(pending) = shared.pending_upgrades.clone().try_acquire_owned() else {
+        tracing::warn!(
+            peer_port = peer.port(),
+            "rpc: too many unauthenticated connections; closing"
+        );
+        return;
+    };
     let checked = tokio::select! {
         checked = read_upgrade(&mut stream, shared.port, &limits) => checked,
         _ = stop.wait_for(|stopped| *stopped) => return,
@@ -389,7 +401,11 @@ async fn serve_socket<S>(
         Err(None) => return,
     };
     let identity = {
-        let _gate = shared.auth_gate.lock().await;
+        let Ok(_gate) =
+            tokio::time::timeout(limits.handshake_timeout, shared.auth_gate.lock()).await
+        else {
+            return;
+        };
         let identity = upgrade.as_ref().and_then(|upgrade| {
             shared
                 .server
@@ -409,6 +425,7 @@ async fn serve_socket<S>(
         refuse(&mut stream, handshake::UNAUTHORIZED).await;
         return;
     };
+    drop(pending);
     let _owner_slot = match identity.role {
         Role::Owner => match shared.owner_slots.clone().try_acquire_owned() {
             Ok(slot) => Some(slot),
@@ -575,6 +592,7 @@ pub(crate) mod testing {
         Arc::new(Shared {
             port,
             owner_slots: Arc::new(Semaphore::new(server.limits.max_owner_connections)),
+            pending_upgrades: Arc::new(Semaphore::new(server.limits.max_pending_upgrades)),
             auth_gate: tokio::sync::Mutex::new(()),
             server,
         })

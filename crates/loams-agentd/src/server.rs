@@ -20,6 +20,7 @@ use loams_agentd_rpc::{
     Connections, Credentials, Identity, RpcError, RpcReply, RpcService, ScopedTokens, Secret,
     WsServer, methods,
 };
+use loams_agentd_sessions::sessions::McpEndpoint;
 use loams_agentd_sessions::{Engine, EngineConfig, EngineProfile, HarnessId};
 
 use crate::config::Config;
@@ -55,20 +56,21 @@ pub async fn serve(options: ServeOptions) -> anyhow::Result<()> {
 
     let store = paths.store();
     std::fs::create_dir_all(&store)?;
+    // The MCP shim injected into each harness run dials this port with a
+    // token scoped to that run. Installed during assembly, before stale runs
+    // are resumed, so a resumed run gets the shim too.
+    let scoped = Arc::new(ScopedTokens::new());
     let engine_config = EngineConfig {
         data_dir: store.clone(),
         default_harness,
         terminal_shell: None,
         tool_outputs: config.tool_outputs.limits(),
+        mcp_endpoint: Some(McpEndpoint {
+            port,
+            tokens: scoped.clone(),
+        }),
     };
     let runtime = Engine::assemble_runtime(&engine_config, EngineProfile::local(&store)?).await?;
-    // The MCP shim injected into each harness run dials this port with a
-    // token scoped to that run.
-    let scoped = Arc::new(ScopedTokens::new());
-    runtime
-        .core()
-        .sessions
-        .set_mcp_endpoint(port, scoped.clone());
 
     let info = DaemonInfo {
         mode,

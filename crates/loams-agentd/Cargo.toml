@@ -17,6 +17,7 @@ path = "src/main.rs"
 [dependencies]
 loams-agentd-sessions.workspace = true
 loams-agentd-harness.workspace = true
+loams-agentd-doc.workspace = true
 loams-agentd-proto.workspace = true
 loams-agentd-rpc.workspace = true
 loams-agentd-mcp.workspace = true

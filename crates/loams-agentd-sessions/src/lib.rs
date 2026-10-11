@@ -110,6 +110,9 @@ pub struct EngineConfig {
     pub terminal_shell: Option<TerminalShell>,
     /// Bounds of the full tool-output store (plan DD1 ruling T2-13).
     pub tool_outputs: tool_outputs::ToolOutputLimits,
+    /// The daemon's port and run-token issuer for the injected MCP shim, set
+    /// before stale runs are recovered so a resumed run gets the shim too.
+    pub mcp_endpoint: Option<sessions::McpEndpoint>,
 }
 
 /// The assembled engine core — also constructible without the IPC server for tests.
@@ -176,6 +179,18 @@ impl EngineCore {
         default_harness: HarnessId,
         lock: InstanceLock,
     ) -> Result<Self, EngineError> {
+        Self::assemble_with_endpoint(profile, registry, default_harness, lock, None)
+    }
+
+    /// [`Self::assemble_with_profile_locked`] with the MCP shim's endpoint
+    /// installed before stale runs are recovered.
+    pub fn assemble_with_endpoint(
+        profile: EngineProfile,
+        registry: Arc<HarnessRegistry>,
+        default_harness: HarnessId,
+        lock: InstanceLock,
+        mcp_endpoint: Option<sessions::McpEndpoint>,
+    ) -> Result<Self, EngineError> {
         let data_dir = profile.device_root();
         std::fs::create_dir_all(data_dir)?;
         let device_id = load_or_create_device_id(data_dir)?;
@@ -206,6 +221,9 @@ impl EngineCore {
         doc_host.set_workspace(workspace.clone());
         doc_host.set_sessions(sessions.clone());
         sessions.set_doc_host(doc_host.clone());
+        if let Some(endpoint) = mcp_endpoint {
+            sessions.set_mcp_endpoint(endpoint.port, endpoint.tokens);
+        }
         match sessions.recover_stale() {
             Ok(0) => {}
             Ok(recovered) => tracing::info!(recovered, "stale sessions recovered on boot"),
@@ -398,19 +416,20 @@ impl Engine {
         profile: EngineProfile,
         lock: Option<InstanceLock>,
     ) -> anyhow::Result<EngineRuntime> {
-        let core = match lock {
-            Some(lock) => EngineCore::assemble_with_profile_locked(
-                profile,
-                Arc::new(default_registry()),
-                config.default_harness,
-                lock,
-            )?,
-            None => EngineCore::assemble_with_profile(
-                profile,
-                Arc::new(default_registry()),
-                config.default_harness,
-            )?,
+        let lock = match lock {
+            Some(lock) => lock,
+            None => {
+                std::fs::create_dir_all(profile.device_root())?;
+                InstanceLock::acquire(profile.device_root())?
+            }
         };
+        let core = EngineCore::assemble_with_endpoint(
+            profile,
+            Arc::new(default_registry()),
+            config.default_harness,
+            lock,
+            config.mcp_endpoint.clone(),
+        )?;
         core.terminals.set_shell(config.terminal_shell.clone());
         core.doc_host.set_tool_output_limits(config.tool_outputs);
         let preview_workspace = core.workspace.clone();
