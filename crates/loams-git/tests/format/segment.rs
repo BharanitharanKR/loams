@@ -146,12 +146,20 @@ fn truncated_segment_is_error() {
             "length {len}"
         );
     }
-    let mut longer = bytes;
+    let mut longer = bytes.clone();
     longer.push(0);
     assert!(matches!(
         decode_segment(seq, &longer),
         Err(FormatError::Corrupt { .. })
     ));
+    // A header claiming a body over 1 MiB is refused before any length
+    // arithmetic, whatever the real length.
+    let mut huge = bytes;
+    huge[SEGMENT_HEADER_LEN - 4..SEGMENT_HEADER_LEN].copy_from_slice(&u32::MAX.to_le_bytes());
+    match decode_segment(seq, &huge) {
+        Err(FormatError::Corrupt { reason }) => assert!(reason.contains("1 MiB"), "{reason}"),
+        other => panic!("expected Corrupt, got {other:?}"),
+    }
 }
 
 #[test]

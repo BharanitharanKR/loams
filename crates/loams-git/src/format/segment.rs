@@ -122,16 +122,19 @@ pub fn decode_segment(expected_seq: Seq, bytes: &[u8]) -> Result<WalSegment, For
     let seq = Seq(reader.u64()?);
     let batch_id = reader.array::<16>()?;
     let created_unix_ms = reader.i64()?;
-    let body_len = reader.u32()? as usize;
+    let body_len = reader.u32()?;
+    // Checked first, so the length arithmetic below stays small on every
+    // target.
+    if u64::from(body_len) > MAX_SEGMENT_BYTES {
+        return Err(FormatError::corrupt("segment body over 1 MiB"));
+    }
+    let body_len = body_len as usize;
     let expected_len = SEGMENT_HEADER_LEN + body_len + SEGMENT_TRAILER_LEN;
     if bytes.len() != expected_len {
         return Err(FormatError::corrupt(format!(
             "segment is {} bytes, its header says {expected_len}",
             bytes.len()
         )));
-    }
-    if body_len as u64 > MAX_SEGMENT_BYTES {
-        return Err(FormatError::corrupt("segment body over 1 MiB"));
     }
     let body = reader.take(body_len)?;
     let crc = reader.u32()?;
