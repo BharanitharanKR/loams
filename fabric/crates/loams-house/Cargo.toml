@@ -1,6 +1,6 @@
 [package]
 name = "loams-house"
-description = "The Loams House front's library: ClickHouse errors rendered code for code (FL2 Task 3) and the supervisor of the chDB worker processes (HS1 Task 2). Links no libchdb."
+description = "The Loams House front's library: ClickHouse errors rendered code for code (FL2 Task 3), the supervisor of the chDB worker processes (HS1 Task 2), the ClickHouse HTTP interface (HS1 Task 3) and loams.house.v1 (HS1 Task 8). Links no libchdb."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -56,6 +56,21 @@ zstd.workspace = true
 # the reaper and the warm-up are tasks.
 tokio = { workspace = true, features = ["io-util", "net", "rt", "sync", "time"] }
 bytes.workspace = true
+# `loams.house.v1` (HS1 Task 8): the generated `HouseService` trait the front
+# implements, the connect-rust runtime its HTTP listener hands Connect paths to,
+# `buffa`'s message field and enum types, and `futures`' `Stream` for the
+# server-streaming RPCs.
+loams-house-proto = { path = "../loams-house-proto" }
+connectrpc.workspace = true
+tower.workspace = true
+buffa = "0.9.2"
+futures.workspace = true
+# `ARROW_IPC` batches: chDB's `ArrowStream` read message by message, a record
+# batch that crosses `max_rows` decoded, sliced and encoded again (`api/frames.rs`).
+arrow-array.workspace = true
+arrow-ipc.workspace = true
+# The `JSON_ROWS` header lines and `DESCRIBE`'s answer.
+serde_json.workspace = true
 
 # Only with `inproc-worker`: the worker's serve loop, and the `links = "chdb"`
 # package whose `DEP_CHDB_LIB_DIR` this package's `build.rs` turns into an rpath.
@@ -63,6 +78,8 @@ loams-house-worker = { path = "../loams-house-worker", optional = true, features
 loams-chdb-sys = { path = "../loams-chdb-sys", optional = true }
 
 [dev-dependencies]
+# `api/frames.rs`'s tests build Arrow streams to frame.
+arrow-schema.workspace = true
 # `tests/request_fuzz.rs`: the `request_parse` fuzz target's body on stable.
 proptest.workspace = true
 tokio = { workspace = true, features = ["io-util", "net", "rt", "rt-multi-thread", "sync", "time", "macros"] }

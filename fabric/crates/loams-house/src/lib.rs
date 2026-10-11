@@ -9,6 +9,13 @@
 //! development users, [`compress`] for request and response bodies, [`config`]
 //! for the knobs.
 //!
+//! # `loams.house.v1` (HS1 Task 8)
+//!
+//! The same listener serves the House's Connect API ([`api`], design §49 §18):
+//! queries streamed as Arrow IPC or JSON rows, the table browser, query history
+//! and pipes. Its statements pass the checks the HTTP interface's do, from the
+//! same functions ([`gate`]).
+//!
 //! # The front links no libchdb (HS1 Task 2, D761)
 //!
 //! chDB runs in `loams-house-worker` processes. This crate supervises them —
@@ -63,6 +70,7 @@
 //! Names: Loams, `loams-*` (owner rulings, 2026-10-01).
 
 pub mod admission;
+pub mod api;
 pub mod auth;
 pub mod classify;
 pub mod compress;
@@ -71,6 +79,7 @@ pub mod deny;
 pub mod errors;
 #[cfg(feature = "test-hooks")]
 pub mod fuzz;
+pub mod gate;
 pub mod http;
 pub mod request;
 pub mod sandbox;
@@ -81,7 +90,7 @@ pub mod watchdog;
 pub use admission::{Collected, Event, Outcome, PoolConfig, PoolStats, WorkerLease, WorkerPool};
 pub use config::{CatalogSpec, HouseConfig, HouseFile, UserMap, WorkersMode};
 pub use errors::{CODES, ChError, HouseError, MidStreamBody};
-pub use http::{HouseHandle, serve};
+pub use http::{HouseHandle, serve, serve_with_catalog};
 pub use sandbox::{CgroupLimits, SandboxMode, WorkerCgroups};
 #[cfg(feature = "inproc-worker")]
 pub use watchdog::InprocWorker;

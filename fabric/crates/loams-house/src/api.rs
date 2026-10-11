@@ -1,0 +1,745 @@
+// The generated service trait returns `impl Encodable<_>`; these impls name the
+// concrete message type, which is the intended refinement (as the engine's
+// `crates/loams/src/api/graph.rs` does).
+#![allow(refining_impl_trait)]
+
+//! `loams.house.v1` (design §49 §18, D778; HS1 Task 8): the House's Connect API,
+//! served by the front on its HTTP listener beside the ClickHouse HTTP interface
+//! ([`crate::http`] hands it every `/loams.house.v1.*` path).
+//!
+//! # One surface, one set of checks
+//!
+//! `ExecuteQuery`, `ExplainQuery` and `PreviewTable` run a statement the way the
+//! HTTP interface does: the same credentials ([`crate::auth`]: Basic or the
+//! `X-ClickHouse-*` headers, which the engine's proxy forwards), the same settings
+//! checks, the classifier, the front's own answers and the deny list
+//! ([`crate::gate`]), the same pool, and the same worker frames. What differs is
+//! the wire: a stream of `header`, `batch`, `progress` and `summary` frames
+//! ([`frames`]) instead of a ClickHouse format on an HTTP body, and errors as
+//! Connect errors carrying `loams.errors.v1.ErrorInfo` with the ClickHouse code
+//! and name in `metadata` ([`to_connect`]).
+//!
+//! # A result's header
+//!
+//! The header comes first, with ClickHouse's type names. `JSON_ROWS` reads run as
+//! `JSONCompactEachRowWithNamesAndTypes`, whose first two lines are the header.
+//! chDB's `ArrowStream` carries no ClickHouse types, so an `ARROW_IPC` query is
+//! described first on the same worker (`DESCRIBE TABLE (<query>)`, which analyses
+//! it without reading its rows, though the analyser does evaluate constant scalar
+//! subqueries), and any other read (`SHOW`, `EXISTS`, `DESCRIBE`, `EXPLAIN`) is
+//! run once for its names and types lines (`max_result_rows = 1`). Both steps are
+//! cancellable and under the statement's deadline.
+//!
+//! # Caps
+//!
+//! `max_rows` is held exactly ([`frames`]): the front cuts the result and says
+//! `truncated`, and chDB is asked to stop past it (`max_result_rows` with
+//! `result_overflow_mode = 'break'`, which stops the outermost result only:
+//! measured, subqueries are unaffected). What chDB still sends after the cut is
+//! drained, up to [`DRAIN_BUDGET`], and the worker is stopped past that.
+
+pub mod catalog;
+pub mod frames;
+mod run;
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use base64::Engine as _;
+use connectrpc::{
+    ConnectError, ErrorCode, ErrorDetail, RequestContext, Response, Router, ServiceRequest,
+    ServiceResult, ServiceStream,
+};
+use loams_house_proto::loams::errors::v1::ErrorInfo;
+use loams_house_proto::loams::house::v1 as pb;
+use loams_house_proto::loams::house::v1::{HouseService, HouseServiceExt};
+use loams_house_proto::loams::operations::v1::Operation;
+
+pub use catalog::{ApiCatalog, FixtureCatalog};
+use frames::Caps;
+use run::{Output, Running, Statement, sorted};
+
+use crate::admission::WorkerPool;
+use crate::auth;
+use crate::config::{HouseConfig, UserMap};
+use crate::errors::{ChError, HouseError, status_for};
+
+/// `max_rows` when the request leaves it 0.
+pub const DEFAULT_MAX_ROWS: u32 = 1_000;
+/// The most `max_rows` may be.
+pub const MAX_ROWS: u32 = 100_000;
+/// `max_bytes` when the request leaves it 0.
+pub const DEFAULT_MAX_BYTES: u64 = 64 * 1024 * 1024;
+/// The most `max_bytes` may be.
+pub const MAX_BYTES: u64 = 1024 * 1024 * 1024;
+/// The most `timeout_ms` may be, and the limit when it is 0: §49 §12's
+/// `max_execution_time` cap.
+pub const MAX_TIMEOUT_MS: u32 = 300_000;
+/// How long past its limit a statement's worker is killed (§49 §12).
+pub const KILL_GRACE: Duration = Duration::from_secs(2);
+/// `PreviewTable`'s `limit` when the request leaves it 0.
+pub const DEFAULT_PREVIEW_ROWS: u32 = 100;
+/// The most rows `PreviewTable` returns.
+pub const MAX_PREVIEW_ROWS: u32 = 1_000;
+/// AIP-158: a page when the request leaves `page_size` 0, and the most.
+pub const DEFAULT_PAGE_SIZE: usize = 100;
+/// The most items a page holds.
+pub const MAX_PAGE_SIZE: usize = 1_000;
+/// What a truncated statement may still send before its worker is stopped.
+pub const DRAIN_BUDGET: u64 = 16 * 1024 * 1024;
+/// The most an `ExplainQuery` answer, or a header pre-step, may hold.
+pub const EXPLAIN_MAX_BYTES: usize = 8 * 1024 * 1024;
+/// The longest `query_id` the API accepts.
+pub const MAX_QUERY_ID_BYTES: usize = 256;
+
+/// `loams.house.v1.HouseService` over the front's pool.
+#[derive(Debug)]
+pub struct HouseApi {
+    config: HouseConfig,
+    pool: WorkerPool,
+    catalog: Arc<dyn ApiCatalog>,
+    running: Arc<Running>,
+}
+
+impl HouseApi {
+    /// The service over `pool`, with `config`'s users and limits, reading metadata
+    /// from `catalog`.
+    pub fn new(config: HouseConfig, pool: WorkerPool, catalog: Arc<dyn ApiCatalog>) -> Arc<Self> {
+        Arc::new(Self {
+            config,
+            pool,
+            catalog,
+            running: Arc::new(Running::default()),
+        })
+    }
+
+    /// A Connect router serving this service.
+    pub fn router(self: Arc<Self>) -> Router {
+        HouseServiceExt::register(self, Router::new())
+    }
+
+    /// The caller, from the request's credentials.
+    fn caller(&self, ctx: &RequestContext) -> Result<UserMap, ConnectError> {
+        let headers: Vec<(String, String)> = ctx
+            .headers()
+            .iter()
+            .filter_map(|(name, value)| {
+                value
+                    .to_str()
+                    .ok()
+                    .map(|v| (name.as_str().to_string(), v.to_string()))
+            })
+            .collect();
+        let credentials = auth::credentials(&headers, &[]).map_err(|err| to_connect(&err))?;
+        auth::authenticate(&self.config.users, &credentials)
+            .cloned()
+            .map_err(|err| to_connect(&err))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+/// The Connect code and `reason` a ClickHouse code answers as (§49 §18.2; the
+/// registry is `docs/api/reasons.md`).
+pub fn reason_for(code: i32) -> (ErrorCode, &'static str) {
+    match code {
+        62 => (ErrorCode::InvalidArgument, "house_syntax_error"),
+        60 => (ErrorCode::NotFound, "house_unknown_table"),
+        81 => (ErrorCode::NotFound, "house_unknown_database"),
+        497 => (ErrorCode::PermissionDenied, "house_access_denied"),
+        516 => (ErrorCode::Unauthenticated, "unauthenticated"),
+        159 => (ErrorCode::DeadlineExceeded, "house_timeout"),
+        241 => (ErrorCode::ResourceExhausted, "house_memory_limit"),
+        202 => (ErrorCode::ResourceExhausted, "house_too_many_queries"),
+        344 => (ErrorCode::PermissionDenied, "house_disabled_function"),
+        394 => (ErrorCode::Canceled, "house_cancelled"),
+        48 => (ErrorCode::Unimplemented, "not_implemented"),
+        210 => (ErrorCode::Unavailable, "unavailable"),
+        // The front's own refusals of a request's arguments and settings.
+        36 | 115 | 164 | 452 => (ErrorCode::InvalidArgument, "invalid_argument"),
+        // Any other error the engine raised for the statement: ClickHouse's HTTP
+        // status says whether it is the statement's fault (4xx); otherwise the
+        // engine gave no more than its code, which is what `unknown` is for.
+        _ => match status_for(code) {
+            400..=499 => (ErrorCode::InvalidArgument, "invalid_argument"),
+            _ => (ErrorCode::Unknown, "house_query_failed"),
+        },
+    }
+}
+
+/// A Connect error with one `ErrorInfo`.
+fn refuse(
+    code: ErrorCode,
+    reason: &str,
+    message: impl Into<String>,
+    metadata: &[(&str, String)],
+) -> ConnectError {
+    let info = ErrorInfo {
+        reason: reason.to_string(),
+        metadata: metadata
+            .iter()
+            .map(|(key, value)| ((*key).to_string(), value.clone()))
+            .collect(),
+        ..Default::default()
+    };
+    ConnectError::new(code, message).with_detail(ErrorDetail::from_message(
+        "loams.errors.v1.ErrorInfo",
+        &info,
+    ))
+}
+
+fn clickhouse_metadata(err: &HouseError) -> [(&'static str, String); 2] {
+    [
+        ("clickhouse_code", err.code().to_string()),
+        ("clickhouse_name", err.name().to_string()),
+    ]
+}
+
+/// A House error as a Connect error: [`reason_for`] its code, the message, and
+/// `clickhouse_code` and `clickhouse_name` in `metadata`.
+pub fn to_connect(err: &HouseError) -> ConnectError {
+    let (code, reason) = reason_for(err.code());
+    refuse(code, reason, err.message(), &clickhouse_metadata(err))
+}
+
+/// The refusal of a statement that would write when the request is read-only:
+/// `failed_precondition`, `house_read_only`, ClickHouse's `164 READONLY`.
+fn read_only_refusal() -> ConnectError {
+    let err = HouseError::from(ChError::readonly(
+        "Cannot execute this statement with read_only set: it writes or changes \
+         state. Run it again with read_only = false",
+    ));
+    refuse(
+        ErrorCode::FailedPrecondition,
+        "house_read_only",
+        err.message(),
+        &clickhouse_metadata(&err),
+    )
+}
+
+/// A read-only user's refusal: `permission_denied`, `house_access_denied`, `164`.
+fn read_only_user_refusal(user: &str) -> ConnectError {
+    let err = HouseError::from(ChError::readonly(format!(
+        "{user}: Cannot execute query in readonly mode: the user may only read"
+    )));
+    refuse(
+        ErrorCode::PermissionDenied,
+        "house_access_denied",
+        err.message(),
+        &clickhouse_metadata(&err),
+    )
+}
+
+fn invalid(field: &str, message: impl Into<String>) -> ConnectError {
+    refuse(
+        ErrorCode::InvalidArgument,
+        "invalid_argument",
+        message,
+        &[("field", field.to_string())],
+    )
+}
+
+fn not_yet(what: &str, task: &str) -> ConnectError {
+    refuse(
+        ErrorCode::Unimplemented,
+        "not_implemented",
+        format!("{what} is served from {task}; this House does not serve it yet"),
+        &[("task", task.to_string())],
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Requests
+// ---------------------------------------------------------------------------
+
+fn output_of(format: buffa::EnumValue<pb::ResultFormat>) -> Result<Output, ConnectError> {
+    match format.as_known() {
+        Some(
+            pb::ResultFormat::RESULT_FORMAT_UNSPECIFIED | pb::ResultFormat::RESULT_FORMAT_ARROW_IPC,
+        ) => Ok(Output::Arrow),
+        Some(pb::ResultFormat::RESULT_FORMAT_JSON_ROWS) => Ok(Output::Json),
+        None => Err(invalid("format", "unknown result format")),
+    }
+}
+
+fn query_id_of(given: &str) -> Result<String, ConnectError> {
+    if given.is_empty() {
+        return Ok(uuid::Uuid::new_v4().to_string());
+    }
+    if given.len() > MAX_QUERY_ID_BYTES || given.chars().any(char::is_control) {
+        return Err(invalid(
+            "query_id",
+            format!(
+                "query_id must be at most {MAX_QUERY_ID_BYTES} bytes, without control characters"
+            ),
+        ));
+    }
+    Ok(given.to_string())
+}
+
+impl HouseApi {
+    fn execute_statement(
+        &self,
+        request: &pb::ExecuteQueryRequest,
+    ) -> Result<Statement, ConnectError> {
+        let max_rows = match request.max_rows {
+            0 => DEFAULT_MAX_ROWS,
+            n if n > MAX_ROWS => {
+                return Err(invalid(
+                    "max_rows",
+                    format!("max_rows is at most {MAX_ROWS}"),
+                ));
+            }
+            n => n,
+        };
+        let max_bytes = match request.max_bytes {
+            0 => DEFAULT_MAX_BYTES,
+            n if n > MAX_BYTES => {
+                return Err(invalid(
+                    "max_bytes",
+                    format!("max_bytes is at most {MAX_BYTES}"),
+                ));
+            }
+            n => n,
+        };
+        if request.timeout_ms > MAX_TIMEOUT_MS {
+            return Err(invalid(
+                "timeout_ms",
+                format!("timeout_ms is at most {MAX_TIMEOUT_MS}"),
+            ));
+        }
+        Ok(Statement {
+            sql: request.sql.clone(),
+            database: request.database.clone(),
+            settings: sorted(&request.settings),
+            params: sorted(&request.params),
+            output: output_of(request.format)?,
+            caps: Caps {
+                max_rows: u64::from(max_rows),
+                max_bytes,
+            },
+            timeout_ms: request.timeout_ms,
+            query_id: query_id_of(&request.query_id)?,
+            read_only: request.read_only.unwrap_or(true),
+            explain: None,
+        })
+    }
+}
+
+/// A ClickHouse identifier in backquotes, escaped.
+fn quote_identifier(field: &str, name: &str) -> Result<String, ConnectError> {
+    if name.is_empty() || name.chars().any(char::is_control) {
+        return Err(invalid(
+            field,
+            format!("{field} must be a name, without control characters"),
+        ));
+    }
+    Ok(format!(
+        "`{}`",
+        name.replace('\\', "\\\\").replace('`', "\\`")
+    ))
+}
+
+fn database_or_default(database: &str) -> &str {
+    if database.is_empty() {
+        "default"
+    } else {
+        database
+    }
+}
+
+/// AIP-158 paging over a whole list: an opaque token for the next offset.
+fn page<T>(items: Vec<T>, page_size: i32, token: &str) -> Result<(Vec<T>, String), ConnectError> {
+    let size = match usize::try_from(page_size) {
+        Err(_) => return Err(invalid("page_size", "page_size must not be negative")),
+        Ok(0) => DEFAULT_PAGE_SIZE,
+        Ok(n) => n.min(MAX_PAGE_SIZE),
+    };
+    let engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    let offset = if token.is_empty() {
+        0
+    } else {
+        engine
+            .decode(token)
+            .ok()
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .and_then(|text| {
+                text.strip_prefix("o:")
+                    .and_then(|n| n.parse::<usize>().ok())
+            })
+            .ok_or_else(|| invalid("page_token", "page_token is not one this server issued"))?
+    };
+    let total = items.len();
+    let items: Vec<T> = items.into_iter().skip(offset).take(size).collect();
+    let next = offset.saturating_add(size);
+    let token = if next < total {
+        engine.encode(format!("o:{next}"))
+    } else {
+        String::new()
+    };
+    Ok((items, token))
+}
+
+impl HouseService for HouseApi {
+    async fn execute_query(
+        &self,
+        ctx: RequestContext,
+        request: ServiceRequest<'_, pb::ExecuteQueryRequest>,
+    ) -> ServiceResult<ServiceStream<pb::ExecuteQueryResponse>> {
+        let user = self.caller(&ctx)?;
+        let st = self.execute_statement(&request.to_owned_message())?;
+        let frames = self.frames(&user, st).await?;
+        Response::stream_ok(futures::StreamExt::map(frames, |f| f.map(Into::into)))
+    }
+
+    async fn cancel_query(
+        &self,
+        ctx: RequestContext,
+        request: ServiceRequest<'_, pb::CancelQueryRequest>,
+    ) -> ServiceResult<pb::CancelQueryResponse> {
+        let user = self.caller(&ctx)?;
+        let request = request.to_owned_message();
+        if request.query_id.is_empty() {
+            return Err(invalid("query_id", "query_id is empty"));
+        }
+        self.running.cancel(&request.query_id, &user)?;
+        Response::ok(pb::CancelQueryResponse::default())
+    }
+
+    async fn explain_query(
+        &self,
+        ctx: RequestContext,
+        request: ServiceRequest<'_, pb::ExplainQueryRequest>,
+    ) -> ServiceResult<pb::ExplainQueryResponse> {
+        let user = self.caller(&ctx)?;
+        let request = request.to_owned_message();
+        let kind = match request.kind.as_known() {
+            Some(
+                pb::ExplainKind::EXPLAIN_KIND_UNSPECIFIED | pb::ExplainKind::EXPLAIN_KIND_PLAN,
+            ) => "PLAN",
+            Some(pb::ExplainKind::EXPLAIN_KIND_PIPELINE) => "PIPELINE",
+            Some(pb::ExplainKind::EXPLAIN_KIND_SYNTAX) => "SYNTAX",
+            Some(pb::ExplainKind::EXPLAIN_KIND_ESTIMATE) => "ESTIMATE",
+            None => return Err(invalid("kind", "unknown explain kind")),
+        };
+        let st = Statement {
+            sql: request.sql,
+            database: request.database,
+            settings: sorted(&request.settings),
+            params: sorted(&request.params),
+            output: Output::Collect,
+            caps: Caps {
+                max_rows: u64::MAX,
+                max_bytes: EXPLAIN_MAX_BYTES as u64,
+            },
+            timeout_ms: 0,
+            query_id: uuid::Uuid::new_v4().to_string(),
+            read_only: true,
+            explain: Some(kind),
+        };
+        let out = self.collect(&user, st).await?;
+        let text = String::from_utf8_lossy(&out);
+        Response::ok(pb::ExplainQueryResponse {
+            text: text.trim_end_matches('\n').to_string(),
+            ..Default::default()
+        })
+    }
+
+    async fn list_databases(
+        &self,
+        ctx: RequestContext,
+        request: ServiceRequest<'_, pb::ListDatabasesRequest>,
+    ) -> ServiceResult<pb::ListDatabasesResponse> {
+        let user = self.caller(&ctx)?;
+        let request = request.to_owned_message();
+        let databases = self
+            .catalog
+            .databases(user.namespace)
+            .map_err(|err| to_connect(&err))?;
+        let (databases, next_page_token) = page(databases, request.page_size, &request.page_token)?;
+        Response::ok(pb::ListDatabasesResponse {
+            databases,
+            next_page_token,
+            ..Default::default()
+        })
+    }
+
+    async fn list_tables(
+        &self,
+        ctx: RequestContext,
+        request: ServiceRequest<'_, pb::ListTablesRequest>,
+    ) -> ServiceResult<pb::ListTablesResponse> {
+        let user = self.caller(&ctx)?;
+        let request = request.to_owned_message();
+        let filter = request.filter.to_lowercase();
+        let tables: Vec<pb::Table> = self
+            .catalog
+            .tables(user.namespace, database_or_default(&request.database))
+            .map_err(|err| to_connect(&err))?
+            .into_iter()
+            .filter(|t| filter.is_empty() || t.name.to_lowercase().contains(&filter))
+            .collect();
+        let (tables, next_page_token) = page(tables, request.page_size, &request.page_token)?;
+        Response::ok(pb::ListTablesResponse {
+            tables,
+            next_page_token,
+            ..Default::default()
+        })
+    }
+
+    async fn describe_table(
+        &self,
+        ctx: RequestContext,
+        request: ServiceRequest<'_, pb::DescribeTableRequest>,
+    ) -> ServiceResult<pb::DescribeTableResponse> {
+        let user = self.caller(&ctx)?;
+        let request = request.to_owned_message();
+        if request.table.is_empty() {
+            return Err(invalid("table", "table is empty"));
+        }
+        let described = self
+            .catalog
+            .describe(
+                user.namespace,
+                database_or_default(&request.database),
+                &request.table,
+            )
+            .map_err(|err| to_connect(&err))?;
+        Response::ok(described)
+    }
+
+    async fn preview_table(
+        &self,
+        ctx: RequestContext,
+        request: ServiceRequest<'_, pb::PreviewTableRequest>,
+    ) -> ServiceResult<ServiceStream<pb::PreviewTableResponse>> {
+        let user = self.caller(&ctx)?;
+        let request = request.to_owned_message();
+        let limit = match request.limit {
+            0 => DEFAULT_PREVIEW_ROWS,
+            n if n > MAX_PREVIEW_ROWS => {
+                return Err(invalid(
+                    "limit",
+                    format!("limit is at most {MAX_PREVIEW_ROWS}"),
+                ));
+            }
+            n => n,
+        };
+        let database = quote_identifier("database", database_or_default(&request.database))?;
+        let table = quote_identifier("table", &request.table)?;
+        let st = Statement {
+            sql: format!("SELECT * FROM {database}.{table} LIMIT {limit}"),
+            database: String::new(),
+            settings: Vec::new(),
+            params: Vec::new(),
+            output: output_of(request.format)?,
+            caps: Caps {
+                max_rows: u64::from(limit),
+                max_bytes: DEFAULT_MAX_BYTES,
+            },
+            timeout_ms: 0,
+            query_id: uuid::Uuid::new_v4().to_string(),
+            read_only: true,
+            explain: None,
+        };
+        let frames = self.frames(&user, st).await?;
+        Response::stream_ok(futures::StreamExt::map(frames, |f| f.map(Into::into)))
+    }
+
+    async fn list_query_history(
+        &self,
+        ctx: RequestContext,
+        request: ServiceRequest<'_, pb::ListQueryHistoryRequest>,
+    ) -> ServiceResult<pb::ListQueryHistoryResponse> {
+        let user = self.caller(&ctx)?;
+        let request = request.to_owned_message();
+        let namespace_wide =
+            request.scope.as_known() == Some(pb::HistoryScope::HISTORY_SCOPE_NAMESPACE);
+        if namespace_wide {
+            // `house:admin` arrives with HS1 Task 20; until then nobody has it.
+            return Err(refuse(
+                ErrorCode::PermissionDenied,
+                "house_access_denied",
+                "scope NAMESPACE needs the house:admin scope",
+                &[],
+            ));
+        }
+        let Some(log) = self.catalog.query_log(user.namespace) else {
+            return Err(not_yet("The query log", catalog::QUERY_LOG_TASK));
+        };
+        let status = request.status.as_known();
+        let since = request.since.as_option().cloned();
+        let text = request.text_contains.to_lowercase();
+        let rows: Vec<pb::QueryRecord> = log
+            .into_iter()
+            .filter(|q| q.principal == user.user)
+            .filter(|q| match status {
+                None | Some(pb::QueryStatus::QUERY_STATUS_UNSPECIFIED) => true,
+                Some(wanted) => q.status.as_known() == Some(wanted),
+            })
+            .filter(|q| match (&since, q.started_at.as_option()) {
+                (Some(since), Some(at)) => (at.seconds, at.nanos) >= (since.seconds, since.nanos),
+                (Some(_), None) => false,
+                (None, _) => true,
+            })
+            .filter(|q| text.is_empty() || q.query.to_lowercase().contains(&text))
+            .map(|mut q| {
+                if q.query.len() > 4096 {
+                    let mut end = 4096;
+                    while !q.query.is_char_boundary(end) {
+                        end -= 1;
+                    }
+                    q.query.truncate(end);
+                    q.query_truncated = true;
+                }
+                q
+            })
+            .collect();
+        let (queries, next_page_token) = page(rows, request.page_size, &request.page_token)?;
+        Response::ok(pb::ListQueryHistoryResponse {
+            queries,
+            next_page_token,
+            ..Default::default()
+        })
+    }
+
+    async fn get_query(
+        &self,
+        ctx: RequestContext,
+        request: ServiceRequest<'_, pb::GetQueryRequest>,
+    ) -> ServiceResult<pb::GetQueryResponse> {
+        let user = self.caller(&ctx)?;
+        let request = request.to_owned_message();
+        let Some(log) = self.catalog.query_log(user.namespace) else {
+            return Err(not_yet("The query log", catalog::QUERY_LOG_TASK));
+        };
+        let found = log
+            .into_iter()
+            .find(|q| q.query_id == request.query_id && q.principal == user.user)
+            .ok_or_else(|| {
+                refuse(
+                    ErrorCode::NotFound,
+                    "house_query_not_found",
+                    format!("No query of yours has the id {}", request.query_id),
+                    &[("query_id", request.query_id.clone())],
+                )
+            })?;
+        Response::ok(pb::GetQueryResponse {
+            query: buffa::MessageField::some(found),
+            ..Default::default()
+        })
+    }
+
+    async fn list_pipes(
+        &self,
+        ctx: RequestContext,
+        request: ServiceRequest<'_, pb::ListPipesRequest>,
+    ) -> ServiceResult<pb::ListPipesResponse> {
+        let user = self.caller(&ctx)?;
+        let request = request.to_owned_message();
+        let Some(pipes) = self.catalog.pipes(user.namespace) else {
+            return Err(not_yet("Pipes", catalog::PIPES_TASK));
+        };
+        let (pipes, next_page_token) = page(pipes, request.page_size, &request.page_token)?;
+        Response::ok(pb::ListPipesResponse {
+            pipes,
+            next_page_token,
+            ..Default::default()
+        })
+    }
+
+    async fn restore_table(
+        &self,
+        ctx: RequestContext,
+        _request: ServiceRequest<'_, pb::RestoreTableRequest>,
+    ) -> ServiceResult<Operation> {
+        let _user = self.caller(&ctx)?;
+        Err(not_yet("RestoreTable", catalog::RESTORE_TASK))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    #[test]
+    fn every_house_reason_maps_from_its_code() {
+        for (code, reason) in [
+            (62, "house_syntax_error"),
+            (60, "house_unknown_table"),
+            (81, "house_unknown_database"),
+            (497, "house_access_denied"),
+            (159, "house_timeout"),
+            (241, "house_memory_limit"),
+            (202, "house_too_many_queries"),
+            (344, "house_disabled_function"),
+            (394, "house_cancelled"),
+        ] {
+            assert_eq!(reason_for(code).1, reason, "{code}");
+        }
+        assert_eq!(reason_for(115).1, "invalid_argument");
+        assert_eq!(reason_for(395), (ErrorCode::Unknown, "house_query_failed"));
+    }
+
+    /// Every reason this API raises is a row of `docs/api/reasons.md`, under the
+    /// Connect code it is raised with (the registry's rule: a reason is added there
+    /// before an RPC returns it).
+    #[test]
+    fn every_reason_raised_is_registered() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../docs/api/reasons.md");
+        let text = std::fs::read_to_string(path).expect("docs/api/reasons.md");
+        let registered: HashMap<String, String> = text
+            .lines()
+            .filter_map(|line| {
+                let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+                let reason = cells.get(1)?.strip_prefix('`')?.strip_suffix('`')?;
+                Some((reason.to_string(), cells.get(2)?.to_string()))
+            })
+            .collect();
+        let mut raised: Vec<(ErrorCode, &str)> = (0..1000).map(reason_for).collect();
+        raised.extend([
+            (ErrorCode::FailedPrecondition, "house_read_only"),
+            (ErrorCode::PermissionDenied, "house_access_denied"),
+            (ErrorCode::NotFound, "house_query_not_found"),
+            (ErrorCode::InvalidArgument, "invalid_argument"),
+            (ErrorCode::Unimplemented, "not_implemented"),
+            (ErrorCode::ResourceExhausted, "house_quota_exceeded"),
+        ]);
+        for (code, reason) in raised {
+            assert_eq!(
+                registered.get(reason).map(String::as_str),
+                Some(code.as_str()),
+                "{reason} is registered under {}",
+                code.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn pages_are_opaque_offsets() {
+        let items: Vec<u32> = (0..250).collect();
+        let (first, token) = page(items.clone(), 0, "").expect("first");
+        assert_eq!(first.len(), DEFAULT_PAGE_SIZE);
+        let (second, token) = page(items.clone(), 0, &token).expect("second");
+        assert_eq!(second[0], 100);
+        let (third, token) = page(items.clone(), 0, &token).expect("third");
+        assert_eq!(third.len(), 50);
+        assert!(token.is_empty());
+        assert!(page(items.clone(), -1, "").is_err());
+        assert!(page(items, 10, "not-a-token!").is_err());
+    }
+
+    #[test]
+    fn identifiers_are_quoted() {
+        assert_eq!(
+            quote_identifier("t", "a`b\\c").expect("quoted"),
+            "`a\\`b\\\\c`"
+        );
+        assert!(quote_identifier("t", "").is_err());
+        assert!(quote_identifier("t", "a\nb").is_err());
+    }
+}

@@ -23,6 +23,14 @@ anyhow = "1"
 # `loams-chdb-sys`'s `chdb_query_arrow`/`chdb_arrow_scan` speak (FL2 Ruling 1,
 # Task 1). Apache-2.0.
 arrow = { version = "59", features = ["ffi"] }
+# The House front reads chDB's `ArrowStream` output message by message, so
+# `loams.house.v1`'s `ARROW_IPC` batches hold whole messages and `max_rows`
+# cuts a record batch exactly (HS1 Task 8). Only the IPC, array and schema
+# crates of the same 59 line, not the `arrow` umbrella: the front needs no CSV,
+# JSON or FFI. Apache-2.0.
+arrow-array = "59"
+arrow-ipc = "59"
+arrow-schema = "59"
 # `bindgen` over the pinned `chdb.h` (FL2 Ruling 1). Task 0 measured that a
 # hand-written prototype segfaults, so the bindings are generated from the
 # header rather than written. 0.72 is the line the plan's Tech Stack names;
@@ -43,10 +51,23 @@ clap = { version = "4.6.7", features = ["derive"] }
 # for `loams.live.v1` (R1 plan Task 7). CN1 Task 0 measured 0.9.1 as the version
 # that builds alongside `prost` 0.14.
 connectrpc-build = "0.9"
+# The connect-rust runtime the House front serves `loams.house.v1` with (HS1
+# Task 8): the `ConnectRpcService` its HTTP listener hands `/loams.house.v1.*`
+# to, and with `client` the generated client the tests call it with. 0.9.1 is
+# the version the engine workspace locks; its default features (gzip, zstd,
+# json) are the Connect codecs a browser client may ask for. Apache-2.0.
+connectrpc = "0.9.1"
+# `tower::Service`, through which the House's HTTP listener calls connect-rust's
+# `ConnectRpcService` (HS1 Task 8). 0.5.3 is already in the graph through
+# connectrpc and is the engine's version. MIT.
+tower = { version = "0.5", default-features = false }
 # gzip: `build.rs` unpacks the libchdb tarball (FL2 Ruling 2), and Task 2's
 # HTTP interface reads and writes gzip request bodies and responses. MIT OR
 # Apache-2.0.
 flate2 = "1"
+# `Stream` for the House's server-streaming RPCs (HS1 Task 8); already in the
+# graph through connectrpc. MIT OR Apache-2.0.
+futures = "0.3"
 indexmap = "2"
 # The manifest schema validator (CN1 plan Task 1). The plan's Tech Stack says
 # `jsonschema` 0.30+; Task 0 moved it to the current 0.58 line (MIT), whose API

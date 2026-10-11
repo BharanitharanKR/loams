@@ -42,6 +42,19 @@ The rules, in the order they bite:
 | `not_implemented` | unimplemented | a stub handler whose service has not landed yet | |
 | `feature_not_in_variant` | unimplemented | any RPC of a catalogue package whose engine is not in this build variant (§44 §4, §30 §9) | `variant` |
 | `house_not_configured` | unimplemented | any `loams.house.v1` RPC on a server with no `[house] endpoint` (`--house-endpoint`): the main port has no Loams House front to proxy to (HS1 Task 7, §49 §18.1). A front that is configured but unreachable answers `unavailable` | |
+| `house_syntax_error` | invalid_argument | `loams.house.v1` ExecuteQuery, ExplainQuery, PreviewTable: ClickHouse's `62 SYNTAX_ERROR` — a statement that does not parse, more than one statement, or a form outside the House's surface (HS1 Task 8, §49 §18.2) | `clickhouse_code`, `clickhouse_name` |
+| `house_unknown_table` | not_found | `loams.house.v1` statements, DescribeTable, PreviewTable: ClickHouse's `60 UNKNOWN_TABLE` | `clickhouse_code`, `clickhouse_name` |
+| `house_unknown_database` | not_found | `loams.house.v1` statements and the browsing RPCs: ClickHouse's `81 UNKNOWN_DATABASE` (HS1 Task 8; §49 §18.2 lists no reason for it) | `clickhouse_code`, `clickhouse_name` |
+| `house_access_denied` | permission_denied | `loams.house.v1`: ClickHouse's `497 ACCESS_DENIED`; a read-only user's write (`164`); CancelQuery of another caller's query; `ListQueryHistory` with scope `NAMESPACE` without `house:admin` | `clickhouse_code`, `clickhouse_name` when ClickHouse raised it |
+| `house_read_only` | failed_precondition | `loams.house.v1` ExecuteQuery with `read_only` absent or true and a statement that writes or changes state: refused before it runs (ClickHouse's `164 READONLY`); the desktop asks to confirm and runs it again with `read_only = false` (§49 §18.3) | `clickhouse_code`, `clickhouse_name` |
+| `house_timeout` | deadline_exceeded | `loams.house.v1` statements: ClickHouse's `159 TIMEOUT_EXCEEDED` — past `timeout_ms` (or 300 s), or the worker killed 2 s after it | `clickhouse_code`, `clickhouse_name` |
+| `house_memory_limit` | resource_exhausted | `loams.house.v1` statements: ClickHouse's `241 MEMORY_LIMIT_EXCEEDED`, or the worker killed over its memory | `clickhouse_code`, `clickhouse_name` |
+| `house_too_many_queries` | resource_exhausted | `loams.house.v1` statements: ClickHouse's `202 TOO_MANY_SIMULTANEOUS_QUERIES` — no worker free within the acquire timeout | `clickhouse_code`, `clickhouse_name` |
+| `house_quota_exceeded` | resource_exhausted | `loams.house.v1` statements past a namespace quota (raised from HS1 Task 22, §49 §14) | `quota`, `limit` |
+| `house_disabled_function` | permission_denied | `loams.house.v1` statements: ClickHouse's `344 SUPPORT_IS_DISABLED` — a table function, function, engine, statement or `system` table the House's deny list refuses (§49 §13) | `clickhouse_code`, `clickhouse_name` |
+| `house_cancelled` | canceled | `loams.house.v1` ExecuteQuery and PreviewTable: ClickHouse's `394 QUERY_WAS_CANCELLED` — CancelQuery, or the statement's worker stopped for it | `clickhouse_code`, `clickhouse_name` |
+| `house_query_not_found` | not_found | `loams.house.v1` CancelQuery (no running query of that id) and GetQuery (no logged query of the caller's with that id) (HS1 Task 8) | `query_id` |
+| `house_query_failed` | unknown | `loams.house.v1` statements: any other error the engine raised whose ClickHouse HTTP status is not 4xx (one whose status is 4xx answers `invalid_argument`), with its ClickHouse code and name (HS1 Task 8) | `clickhouse_code`, `clickhouse_name` |
 | `project_not_found` | not_found | every `loams.postgres.v1` RPC that names a project | `project` |
 | `branch_has_children` | failed_precondition | DeleteBranch | `children` (count) |
 | `branch_protected` | failed_precondition | DeleteBranch, RestoreBranch (an agent's goes through `loams.approvals.v1` instead) | `branch` |

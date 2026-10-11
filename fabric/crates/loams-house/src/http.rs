@@ -42,6 +42,14 @@
 //! such lines all through a query, keeping its header block open; hyper writes a
 //! head in one piece, so this is a recorded surface deviation (R3.8).
 //!
+//! # `loams.house.v1`
+//!
+//! Every path under `/loams.house.v1.` is the House's Connect API (HS1 Task 8,
+//! [`crate::api`]): it goes to connect-rust's service, on the same connections,
+//! with the same connection cap and timers (a request body silent for
+//! `receive_timeout` between frames fails). Connect and gRPC-Web are served;
+//! gRPC proper needs HTTP/2, which this listener does not speak (R3.8).
+//!
 //! `wait_end_of_query = 1` spools the whole result (in memory up to
 //! [`SPOOL_IN_MEMORY`], then an unlinked temporary file in `tmp_dir`, at most
 //! `wait_end_of_query_max_bytes`, within the front's `spool_budget_bytes`) and
@@ -58,6 +66,7 @@ use std::task::{Context, Poll, ready};
 use std::time::Duration;
 
 use bytes::Bytes;
+use connectrpc::{ConnectRpcBody, ConnectRpcService};
 use http::{HeaderValue, Method, Request, Response, StatusCode};
 use http_body::{Body as HttpBody, Frame as BodyFrame, SizeHint};
 use http_body_util::BodyExt;
@@ -65,7 +74,7 @@ use hyper::body::Incoming;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::{TokioIo, TokioTimer};
-use loams_house_ipc::{Execute, Limits, Progress, QueryClass};
+use loams_house_ipc::{Execute, Limits, Progress};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Semaphore, mpsc};
@@ -73,12 +82,14 @@ use tokio::task::JoinHandle;
 use tokio::time::Sleep;
 
 use crate::admission::{Event, Outcome, WorkerLease, WorkerPool};
+use crate::api::{ApiCatalog, FixtureCatalog, HouseApi};
 use crate::auth;
-use crate::classify::{Classified, Expect, Stmt, check_text, classify, decide, readonly_error};
+use crate::classify::{Classified, Expect, Stmt, check_text, classify, readonly_error};
 use crate::compress::{self, Decoder, Encoder, Encoding};
 use crate::config::{self, BUFFER_SIZE_RANGE, DISPLAY_NAME, HouseConfig, SPOOL_IN_MEMORY, UserMap};
 use crate::deny;
 use crate::errors::{ChError, HouseError};
+use crate::gate;
 use crate::request::{self, InsertHead, NON_SETTINGS, Scanner};
 use crate::session::{SessionGuard, SessionParams, SessionTable};
 use crate::watchdog::ExitReason;
@@ -130,11 +141,33 @@ struct Shared {
     pool: WorkerPool,
     spool: Arc<SpoolBudget>,
     sessions: Arc<SessionTable>,
+    api: ApiService,
 }
 
-/// Serves the ClickHouse HTTP interface on `config.listen`, running statements on
-/// `pool`. A non-loopback address is refused (D111).
+/// connect-rust's service for `loams.house.v1`, which has no `Debug` of its own.
+#[derive(Clone)]
+struct ApiService(ConnectRpcService<connectrpc::Router>);
+
+impl std::fmt::Debug for ApiService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ApiService(loams.house.v1)")
+    }
+}
+
+/// Serves the ClickHouse HTTP interface and `loams.house.v1` on `config.listen`,
+/// running statements on `pool`. A non-loopback address is refused (D111). The
+/// API's browsing RPCs read what this House has before HS1 Task 10's catalog
+/// ([`FixtureCatalog::empty`]).
 pub async fn serve(config: HouseConfig, pool: WorkerPool) -> Result<HouseHandle, HouseError> {
+    serve_with_catalog(config, pool, Arc::new(FixtureCatalog::empty())).await
+}
+
+/// [`serve`], with the API's metadata read from `catalog`.
+pub async fn serve_with_catalog(
+    config: HouseConfig,
+    pool: WorkerPool,
+    catalog: Arc<dyn ApiCatalog>,
+) -> Result<HouseHandle, HouseError> {
     config::check_listen(config.listen)?;
     let listen = config.listen;
     let network = |what: &str, err: io::Error| {
@@ -168,11 +201,15 @@ pub async fn serve(config: HouseConfig, pool: WorkerPool) -> Result<HouseHandle,
             sessions.sweep();
         }
     });
+    let api = ApiService(ConnectRpcService::new(
+        HouseApi::new(config.clone(), pool.clone(), catalog).router(),
+    ));
     let shared = Arc::new(Shared {
         spool: Arc::new(SpoolBudget::new(config.spool_budget_bytes)),
         config,
         pool,
         sessions,
+        api,
     });
     let accept = tokio::spawn(async move {
         loop {
@@ -349,6 +386,17 @@ enum BodyKind {
         len: Option<u64>,
         abort: Option<Pin<Box<Sleep>>>,
     },
+    /// A `loams.house.v1` response, as connect-rust writes it.
+    Connect(ConnectBody),
+}
+
+/// connect-rust's response body, which has no `Debug` of its own.
+struct ConnectBody(ConnectRpcBody);
+
+impl std::fmt::Debug for ConnectBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ConnectBody")
+    }
 }
 
 /// A piece of a streamed body.
@@ -364,6 +412,12 @@ impl HouseBody {
     fn full(bytes: impl Into<Bytes>) -> Self {
         Self {
             kind: BodyKind::Full(Some(bytes.into())),
+        }
+    }
+
+    fn connect(body: ConnectRpcBody) -> Self {
+        Self {
+            kind: BodyKind::Connect(ConnectBody(body)),
         }
     }
 
@@ -407,11 +461,18 @@ impl HttpBody for HouseBody {
                     None => Poll::Ready(None),
                 }
             }
+            BodyKind::Connect(body) => Pin::new(&mut body.0)
+                .poll_frame(cx)
+                .map(|frame| frame.map(|frame| frame.map_err(|never| match never {}))),
         }
     }
 
     fn is_end_stream(&self) -> bool {
-        matches!(self.kind, BodyKind::Full(None))
+        match &self.kind {
+            BodyKind::Full(None) => true,
+            BodyKind::Connect(body) => body.0.is_end_stream(),
+            _ => false,
+        }
     }
 
     fn size_hint(&self) -> SizeHint {
@@ -420,7 +481,69 @@ impl HttpBody for HouseBody {
             BodyKind::Full(None) => SizeHint::with_exact(0),
             BodyKind::Stream { len: Some(len), .. } => SizeHint::with_exact(*len),
             BodyKind::Stream { .. } => SizeHint::default(),
+            BodyKind::Connect(body) => body.0.size_hint(),
         }
+    }
+}
+
+/// A Connect request's body: hyper's, failing when the client sends nothing for
+/// `receive_timeout` between frames (as [`RequestBody::next`] does for statements).
+#[derive(Debug)]
+struct TimedBody {
+    body: Incoming,
+    idle: Duration,
+    timer: Option<Pin<Box<Sleep>>>,
+}
+
+impl HttpBody for TimedBody {
+    type Data = Bytes;
+    type Error = io::Error;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<BodyFrame<Bytes>, io::Error>>> {
+        let this = self.get_mut();
+        match Pin::new(&mut this.body).poll_frame(cx) {
+            Poll::Ready(frame) => {
+                this.timer = None;
+                Poll::Ready(frame.map(|frame| frame.map_err(io::Error::other)))
+            }
+            Poll::Pending => {
+                let idle = this.idle;
+                let timer = this
+                    .timer
+                    .get_or_insert_with(|| Box::pin(tokio::time::sleep(idle)));
+                ready!(timer.as_mut().poll(cx));
+                Poll::Ready(Some(Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("the client sent nothing for {idle:?}"),
+                ))))
+            }
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.body.is_end_stream()
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        self.body.size_hint()
+    }
+}
+
+/// A `loams.house.v1` request, answered by connect-rust over [`crate::api`].
+async fn connect(shared: &Arc<Shared>, request: Request<Incoming>) -> Response<HouseBody> {
+    let idle = shared.config.receive_timeout;
+    let request = request.map(|body| TimedBody {
+        body,
+        idle,
+        timer: None,
+    });
+    let mut service = shared.api.0.clone();
+    match tower::Service::call(&mut service, request).await {
+        Ok(response) => response.map(HouseBody::connect),
+        Err(never) => match never {},
     }
 }
 
@@ -610,6 +733,9 @@ async fn handle(shared: Arc<Shared>, request: Request<Incoming>) -> Response<Hou
     let keep = shared.config.keep_alive;
     let method = request.method().clone();
     let path = request.uri().path().to_string();
+    if path.starts_with("/loams.house.v1.") {
+        return connect(&shared, request).await;
+    }
     let query = request.uri().query().unwrap_or("").to_string();
     let params = match request::parse_query(&query) {
         Ok(params) => params,
@@ -732,20 +858,11 @@ async fn run(
     } = prepared;
     let namespace = user.namespace.to_string();
 
-    // The host functions answer the House's values (HS1 Task 5): rewritten in the
-    // text chDB gets, and refused by the deny list in any form the rewrite did not
-    // take.
-    let host = deny::HostValues {
-        display_name: DISPLAY_NAME,
-        timezone: "UTC",
-        user: &user.user,
-    };
-    let sql = deny::rewrite_host_functions(&sql, &host);
-    // What runs is what the worker explains, which it ends with its own
-    // `FORMAT`: no trailing `;` or comment (fix round 1).
-    let sql = crate::classify::without_trailer(&sql).to_string();
+    // The host functions answer the House's values, and what runs is what the
+    // worker explains ([`gate::statement_text`]).
+    let sql = gate::statement_text(&sql, &user.user);
     if let Some(spec) = input.as_mut() {
-        spec.insert = deny::rewrite_host_functions(&spec.insert, &host);
+        spec.insert = deny::rewrite_host_functions(&spec.insert, &gate::host_values(&user.user));
     }
 
     // The session, for this statement only: 372, 373, 202 or 36 when it cannot be.
@@ -775,7 +892,7 @@ async fn run(
     // form it could not parse).
     let (expect, unparsed, pins) = match classified {
         Classified::Known { stmt, .. } => {
-            match front_answer(&stmt, session.as_ref(), &config.session_limits, &known) {
+            match gate::front_answer(&stmt, session.as_ref(), &config.session_limits, &known) {
                 Some(Ok(())) => {
                     drop(session);
                     return meta
@@ -822,7 +939,7 @@ async fn run(
     // The worker: the session's pinned one, a newly pinned one for its first
     // temporary table, or any (HS1 Task 4).
     let pool = shared.pool.clone();
-    let acquired = acquire_for(&pool, &namespace, session.as_mut(), pins).await;
+    let acquired = gate::acquire_for(&pool, &namespace, session.as_mut(), pins).await;
     let mut lease = match acquired {
         Ok(lease) => lease,
         Err(err) => {
@@ -841,7 +958,7 @@ async fn run(
         None => sql.clone(),
     };
     let decided = match lease.analyze(&parsed_text, &query_params).await {
-        Ok(analysis) => admit(
+        Ok(analysis) => gate::admit(
             &analysis,
             &parsed_text,
             expect,
@@ -900,125 +1017,6 @@ async fn run(
     }
 
     respond(shared, meta, lease, wait_end, buffer_size, session).await
-}
-
-/// Whether a statement a worker analysed may run: the deny list over its trees
-/// (HS1 Task 5: `344`, or `164` for a denied setting), then ClickHouse's class
-/// ([`decide`]). A statement refused on its class alone (more than one, or one
-/// ClickHouse cannot parse) has no trees, and `decide` refuses it.
-fn admit(
-    analysis: &loams_house_ipc::Analysis,
-    sql: &str,
-    expect: Expect,
-    readonly: bool,
-    unparsed: Option<&str>,
-) -> Result<(), HouseError> {
-    let classification = analysis.classification;
-    if classification.statements == 1 && classification.class != QueryClass::Unknown {
-        // A `CREATE` of a lake table or a view never runs in chDB (the front owns
-        // it, or `decide` refuses the form): its engine is held to the denied
-        // engines, not to a temporary table's Memory or Null.
-        let tree = deny::QueryTree::from_explain(&analysis.ast, analysis.query_tree.as_deref())
-            .shared_create(crate::classify::creates_shared_object(sql))
-            .statement(sql);
-        deny::check(&tree).map_err(HouseError::from)?;
-    }
-    decide(classification, expect, readonly, unparsed)
-}
-
-/// The task that will serve an owned statement this front does not yet (`48`).
-fn later(stmt: &Stmt) -> Option<String> {
-    let (what, task) = match stmt {
-        Stmt::CreateDatabase { .. } => ("CREATE DATABASE", "HS1 Task 10"),
-        Stmt::CreateTable { .. } => ("CREATE TABLE (a lake table)", "HS1 Task 10"),
-        Stmt::CreateTableAs { .. } => ("CREATE TABLE … AS SELECT", "HS1 Task 12"),
-        Stmt::CreatePipe { .. } => (
-            "A pipe (LoamsStream, IggyTopic, S3Queue)",
-            "HS1 Tasks 16 and 18",
-        ),
-        Stmt::CreateMaterializedView { .. } => ("CREATE MATERIALIZED VIEW", "HS1 Task 17"),
-        Stmt::Drop(drop) if !drop.temporary => ("DROP (a lake object)", "HS1 Task 10"),
-        Stmt::Truncate { .. } => ("TRUNCATE", "HS1 Task 12"),
-        Stmt::AlterAddColumns { .. } => ("ALTER TABLE … ADD COLUMN", "HS1 Task 10"),
-        Stmt::Rename { .. } => ("RENAME TABLE", "HS1 Task 10"),
-        Stmt::Undrop { .. } => ("UNDROP TABLE", "HS1 Task 15"),
-        Stmt::Optimize { .. } => ("OPTIMIZE TABLE", "HS1 Task 13"),
-        Stmt::KillQuery(_) => ("KILL QUERY", "HS1 Task 21"),
-        Stmt::Unsupported { kind } => {
-            return Some(format!("{kind} is not on the House's ClickHouse surface"));
-        }
-        _ => return None,
-    };
-    Some(format!(
-        "{what} is served from {task}; this House does not serve it yet"
-    ))
-}
-
-/// What the front answers itself: `Some(Ok)` for an empty success (`SET`, `USE`),
-/// `Some(Err)` for an error, `None` for a statement a worker runs.
-fn front_answer(
-    stmt: &Stmt,
-    session: Option<&SessionGuard>,
-    limits: &crate::settings::SessionLimits,
-    known: &std::collections::HashSet<String>,
-) -> Option<Result<(), HouseError>> {
-    if let Some(message) = later(stmt) {
-        return Some(Err(HouseError::from(ChError::not_implemented(message))));
-    }
-    match stmt {
-        Stmt::Set(pairs) => Some((|| {
-            for (name, value) in pairs {
-                crate::settings::check(name, value, limits, known)?;
-            }
-            // Without a session a SET has nothing to keep it, as in ClickHouse.
-            if let Some(guard) = session {
-                let mut state = guard.state();
-                for (name, value) in pairs {
-                    state.settings.apply(name, value, limits, known)?;
-                }
-            }
-            Ok(())
-        })()),
-        Stmt::Use(database) => Some(if database != "default" {
-            Err(HouseError::from(ChError::unknown_database(format!(
-                "Database {database} does not exist"
-            ))))
-        } else {
-            if let Some(guard) = session {
-                guard.state().database = database.clone();
-            }
-            Ok(())
-        }),
-        _ => None,
-    }
-}
-
-/// The worker for a statement: the session's pinned worker (a lost pin falls back
-/// to any worker: its temporary tables are gone), a newly pinned one for the
-/// session's first temporary table, or any worker of the namespace.
-async fn acquire_for(
-    pool: &WorkerPool,
-    namespace: &str,
-    session: Option<&mut SessionGuard>,
-    pins: bool,
-) -> Result<WorkerLease, HouseError> {
-    let Some(guard) = session else {
-        return pool.acquire(namespace).await;
-    };
-    let pinned = guard.state().pinned.clone();
-    if let Some(worker) = pinned {
-        if let Some(lease) = pool.acquire_pinned(namespace, &worker).await? {
-            return Ok(lease);
-        }
-        guard.state().pinned = None;
-    }
-    if pins {
-        let lease = pool.acquire_and_pin(namespace).await?;
-        // Kept only if the statement succeeds (fix round 1, M1).
-        guard.pin_provisionally(lease.worker_id().to_string());
-        return Ok(lease);
-    }
-    pool.acquire(namespace).await
 }
 
 /// Everything a statement needs before a worker is asked.

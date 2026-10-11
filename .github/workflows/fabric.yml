@@ -66,6 +66,13 @@ jobs:
               - "fabric/**"
               - "connectors/**"
               - "scripts/connectors/**"
+              # `loams-house-proto` generates from the root proto tree (HS1
+              # Task 8), and `loams-house`'s registry test reads the reasons page.
+              - "proto/loams/house/**"
+              - "proto/loams/operations/**"
+              - "proto/loams/options/**"
+              - "proto/loams/errors/**"
+              - "docs/api/reasons.md"
             # The generated appendix and the two scripts that check the Camel
             # and Kestra columns against their catalogs (design §33 CN-R1).
             drift:
