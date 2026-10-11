@@ -211,6 +211,8 @@ impl HouseCache {
     pub async fn serve(&self, listener: TcpListener, worker: &str) {
         loop {
             let Ok((stream, _)) = listener.accept().await else {
+                // Out of descriptors, most likely: back off rather than spin.
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                 continue;
             };
             let proxy = self.clone();
