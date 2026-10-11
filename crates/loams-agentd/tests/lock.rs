@@ -63,6 +63,15 @@ fn invalid_config_exits_4() {
     let status = home.run_to_exit(&["run", "--child"]);
     assert_eq!(status.code(), Some(4), "{}", home.output());
     assert!(home.stderr().contains("config.toml"), "{}", home.stderr());
+
+    // No config at all is invalid too.
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_loams-agentd"))
+        .args(["run", "--child"])
+        .env_remove("LOAMS_AGENTD_CONFIG")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(4), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("--config"));
 }
 
 #[test]

@@ -137,7 +137,7 @@ fn run(args: &RunArgs) -> ExitCode {
             "loams-agentd: run needs --config <path> (or {})",
             cli::CONFIG_ENV
         );
-        return ExitCode::from(2);
+        return ExitCode::from(EXIT_INVALID_CONFIG);
     };
     let config = match Config::load(&config_path) {
         Ok(config) => config,

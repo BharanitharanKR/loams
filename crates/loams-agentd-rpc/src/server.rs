@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use futures::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
+use tokio::task::JoinSet;
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tokio_tungstenite::tungstenite::handshake::server::{
     ErrorResponse, Request as HandshakeRequest, Response as HandshakeResponse,
@@ -16,23 +17,36 @@ use crate::{ClientFrame, RpcError, RpcReply, RpcService, ServerFrame};
 
 /// Serve one connection: read client frames from `inbound`, write server frames to `out`.
 /// Returns when `inbound` closes, or after a request failed with [`RpcError::Fatal`]
-/// (its `{err}` frame is queued on `out` first); all in-flight request tasks are
-/// aborted on exit.
+/// (its `{err}` frame is queued on `out` first); in-flight requests are aborted and
+/// awaited before it returns.
 pub async fn serve_connection(
     service: Arc<dyn RpcService>,
     out: mpsc::Sender<String>,
-    mut inbound: mpsc::Receiver<String>,
+    inbound: mpsc::Receiver<String>,
 ) {
+    serve_connection_until(service, out, inbound, None).await;
+}
+
+/// [`serve_connection`], which also ends when `stop` turns `true`.
+async fn serve_connection_until(
+    service: Arc<dyn RpcService>,
+    out: mpsc::Sender<String>,
+    mut inbound: mpsc::Receiver<String>,
+    mut stop: Option<watch::Receiver<bool>>,
+) {
+    let mut tasks = JoinSet::new();
     let mut running: HashMap<u64, tokio::task::AbortHandle> = HashMap::new();
     // `close_tx` lives as long as this loop, so `close_rx` only yields on a fatal error.
     let (close_tx, mut close_rx) = mpsc::channel::<()>(1);
-    loop {
+    'connection: loop {
         let payload = tokio::select! {
+            biased;
+            _ = close_rx.recv() => break,
+            () = stopped(&mut stop) => break,
             payload = inbound.recv() => match payload {
                 Some(payload) => payload,
                 None => break,
             },
-            _ = close_rx.recv() => break,
         };
         // ndjson: a transport may batch several frames per message.
         for line in payload.lines() {
@@ -47,6 +61,7 @@ pub async fn serve_connection(
                     continue;
                 }
             };
+            while tasks.try_join_next().is_some() {}
             running.retain(|_, task| !task.is_finished());
             if frame.cancel {
                 if let Some(task) = running.remove(&frame.id) {
@@ -58,19 +73,37 @@ pub async fn serve_connection(
                 tracing::warn!(id = frame.id, "rpc: frame has neither method nor cancel");
                 continue;
             };
-            let task = tokio::spawn(handle_request(
+            let request = handle_request(
                 service.clone(),
                 out.clone(),
                 close_tx.clone(),
                 frame.id,
-                method,
+                method.clone(),
                 frame.params,
-            ));
-            running.insert(frame.id, task.abort_handle());
+            );
+            if method == crate::methods::HELLO {
+                // The one method that can end the connection: nothing after a
+                // fatal `Hello` may be dispatched, even in the same payload.
+                request.await;
+                if close_rx.try_recv().is_ok() {
+                    break 'connection;
+                }
+                continue;
+            }
+            let task = tasks.spawn(request);
+            running.insert(frame.id, task);
         }
     }
-    for (_, task) in running {
-        task.abort();
+    tasks.shutdown().await;
+}
+
+/// Resolves once `stop` is `true` (or its sender is gone); never without one.
+async fn stopped(stop: &mut Option<watch::Receiver<bool>>) {
+    match stop {
+        Some(stop) => {
+            let _ = stop.wait_for(|stopped| *stopped).await;
+        }
+        None => std::future::pending().await,
     }
 }
 
@@ -154,21 +187,47 @@ async fn handle_request(
 
 /// Accept WebSocket connections forever, serving each with `service`.
 pub async fn serve_ws_listener(listener: TcpListener, service: Arc<dyn RpcService>) {
-    loop {
-        match listener.accept().await {
-            Ok((stream, peer)) => {
-                tracing::debug!(%peer, "rpc: connection accepted");
-                tokio::spawn(serve_ws_socket(stream, service.clone()));
-            }
-            Err(err) => {
-                tracing::warn!(error = %err, "rpc: accept failed");
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            }
-        }
-    }
+    serve_ws_until(listener, service, std::future::pending()).await;
 }
 
-async fn serve_ws_socket(stream: TcpStream, service: Arc<dyn RpcService>) {
+/// Accept WebSocket connections until `stop` resolves. Then stop accepting, end
+/// every open connection (its in-flight requests are aborted and awaited) and
+/// return, so the caller can tear down what the service uses.
+pub async fn serve_ws_until(
+    listener: TcpListener,
+    service: Arc<dyn RpcService>,
+    stop: impl std::future::Future<Output = ()>,
+) {
+    let (stop_tx, stop_rx) = watch::channel(false);
+    let mut connections = JoinSet::new();
+    tokio::pin!(stop);
+    loop {
+        tokio::select! {
+            biased;
+            () = &mut stop => break,
+            Some(_) = connections.join_next(), if !connections.is_empty() => {}
+            accepted = listener.accept() => match accepted {
+                Ok((stream, peer)) => {
+                    tracing::debug!(%peer, "rpc: connection accepted");
+                    connections.spawn(serve_ws_socket(stream, service.clone(), stop_rx.clone()));
+                }
+                Err(err) => {
+                    tracing::warn!(error = %err, "rpc: accept failed");
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+            },
+        }
+    }
+    drop(listener);
+    let _ = stop_tx.send(true);
+    while connections.join_next().await.is_some() {}
+}
+
+async fn serve_ws_socket(
+    stream: TcpStream,
+    service: Arc<dyn RpcService>,
+    mut stop: watch::Receiver<bool>,
+) {
     // Native viewports dial this socket with a bare `connect_async` and send
     // no `Origin` header. A browser always attaches `Origin` to a WebSocket
     // handshake and cannot forge or suppress it from script, and WebSockets
@@ -191,12 +250,16 @@ async fn serve_ws_socket(stream: TcpStream, service: Arc<dyn RpcService>) {
         }
         Ok(resp)
     };
-    let ws = match tokio_tungstenite::accept_hdr_async(stream, reject_cross_origin).await {
-        Ok(ws) => ws,
-        Err(err) => {
-            tracing::warn!(error = %err, "rpc: websocket handshake failed");
-            return;
-        }
+    let handshake = tokio_tungstenite::accept_hdr_async(stream, reject_cross_origin);
+    let ws = tokio::select! {
+        result = handshake => match result {
+            Ok(ws) => ws,
+            Err(err) => {
+                tracing::warn!(error = %err, "rpc: websocket handshake failed");
+                return;
+            }
+        },
+        _ = stop.wait_for(|stopped| *stopped) => return,
     };
     let (mut sink, mut ws_stream) = ws.split();
     let (out_tx, mut out_rx) = mpsc::channel::<String>(256);
@@ -230,7 +293,7 @@ async fn serve_ws_socket(stream: TcpStream, service: Arc<dyn RpcService>) {
         }
     });
 
-    serve_connection(service, out_tx, in_rx).await;
+    serve_connection_until(service, out_tx, in_rx, Some(stop)).await;
     // Let the pump flush what is queued (a fatal error's frame) and send Close:
     // it ends once every sender is dropped. A peer that stopped reading cannot
     // hold the task for longer than the grace period.

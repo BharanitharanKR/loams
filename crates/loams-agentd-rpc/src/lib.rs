@@ -22,7 +22,7 @@ mod client;
 mod server;
 
 pub use client::{RpcClient, RpcSubscription, connect_ws};
-pub use server::{serve_connection, serve_ws_listener};
+pub use server::{serve_connection, serve_ws_listener, serve_ws_until};
 
 /// RPC method names — single source of truth for both ends.
 /// Full surface: docs/research/feature-inventory.md §2.
@@ -575,6 +575,108 @@ mod tests {
         .await
         .expect("the closed connection answers at once");
         assert!(next.is_err(), "the server kept the connection: {next:?}");
+    }
+
+    /// `Hello` is fatal; `Record` counts its calls.
+    struct HelloGate {
+        recorded: std::sync::atomic::AtomicU32,
+    }
+
+    #[async_trait]
+    impl RpcService for HelloGate {
+        async fn handle(
+            &self,
+            method: &str,
+            _params: serde_json::Value,
+        ) -> Result<RpcReply, RpcError> {
+            if method == methods::HELLO {
+                return Err(RpcError::Fatal("protocol_mismatch".into()));
+            }
+            self.recorded
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(RpcReply::Value(serde_json::json!({})))
+        }
+    }
+
+    #[tokio::test]
+    async fn nothing_after_a_fatal_hello_is_dispatched() {
+        let service = Arc::new(HelloGate {
+            recorded: std::sync::atomic::AtomicU32::new(0),
+        });
+        let (in_tx, in_rx) = tokio::sync::mpsc::channel(8);
+        let (out_tx, mut out_rx) = tokio::sync::mpsc::channel(8);
+        // The fatal Hello and a request batched behind it, then another payload.
+        in_tx
+            .send(format!(
+                "{{\"id\":1,\"method\":\"{}\"}}\n{{\"id\":2,\"method\":\"Record\"}}",
+                methods::HELLO
+            ))
+            .await
+            .unwrap();
+        in_tx
+            .send(r#"{"id":3,"method":"Record"}"#.to_string())
+            .await
+            .unwrap();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            serve_connection(service.clone(), out_tx, in_rx),
+        )
+        .await
+        .expect("the fatal Hello ends the connection");
+        let mut frames = Vec::new();
+        while let Some(frame) = out_rx.recv().await {
+            frames.push(serde_json::from_str::<ServerFrame>(&frame).unwrap());
+        }
+        assert_eq!(frames.len(), 1, "{frames:?}");
+        assert_eq!(frames[0].id, 1);
+        assert_eq!(frames[0].err.as_deref(), Some("protocol_mismatch"));
+        assert_eq!(
+            service.recorded.load(std::sync::atomic::Ordering::SeqCst),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn serve_ws_until_ends_open_connections_and_their_requests() {
+        let (dropped_tx, dropped_rx) = tokio::sync::oneshot::channel();
+        let service = Arc::new(CancelAwareService {
+            dropped: Mutex::new(Some(dropped_tx)),
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
+        let server = tokio::spawn(serve_ws_until(listener, service.clone(), async {
+            let _ = stop_rx.await;
+        }));
+        let client = connect_ws(&format!("ws://127.0.0.1:{port}")).await.unwrap();
+        let _silent = client
+            .subscribe_scoped("Silent", serde_json::Value::Null)
+            .await
+            .unwrap();
+        while service.dropped.lock().unwrap().is_some() {
+            tokio::task::yield_now().await;
+        }
+
+        stop_tx.send(()).unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(10), server)
+            .await
+            .expect("the server returns once its connections end")
+            .unwrap();
+        // The in-flight request was dropped before the server returned.
+        dropped_rx.await.expect("the open request was ended");
+        let next = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            client.call("Echo", serde_json::json!(1)),
+        )
+        .await
+        .expect("a closed connection fails at once");
+        assert!(next.is_err());
+        assert!(
+            tokio::net::TcpStream::connect(("127.0.0.1", port))
+                .await
+                .is_err(),
+            "the listener still accepts"
+        );
     }
 
     #[tokio::test]

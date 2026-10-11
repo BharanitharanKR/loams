@@ -6,8 +6,9 @@
 //! 3. assembles the sessions engine on `store/`;
 //! 4. serves `Hello` and the engine's methods on the listener;
 //! 5. publishes `agentd.json`;
-//! 6. runs until SIGTERM, Ctrl-C or `StopEngine`, then stops the engine and
-//!    removes `agentd.json`.
+//! 6. runs until SIGTERM, Ctrl-C or `StopEngine`, then closes the listener and
+//!    every connection (awaiting their requests), stops the engine and removes
+//!    `agentd.json`.
 
 use std::sync::Arc;
 
@@ -70,7 +71,18 @@ pub async fn serve(options: ServeOptions) -> anyhow::Result<()> {
         stop_tx,
     };
     let service = Arc::new(HelloService::new(Arc::new(lifecycle), info));
-    let server = tokio::spawn(loams_agentd_rpc::serve_ws_listener(listener, service));
+    let (server_stop, server_stopped) = tokio::sync::oneshot::channel::<()>();
+    let server = tokio::spawn(loams_agentd_rpc::serve_ws_until(listener, service, async {
+        let _ = server_stopped.await;
+    }));
+    // Stops accepting, ends every connection and awaits their requests, so
+    // nothing calls into the engine while it shuts down.
+    let stop_server = || async {
+        let _ = server_stop.send(());
+        if let Err(error) = server.await {
+            tracing::warn!(%error, "the RPC server task failed");
+        }
+    };
 
     let published = discovery::publish(
         &paths,
@@ -84,7 +96,7 @@ pub async fn serve(options: ServeOptions) -> anyhow::Result<()> {
         },
     );
     if let Err(error) = published {
-        server.abort();
+        stop_server().await;
         runtime.shutdown().await;
         return Err(anyhow::Error::new(error).context("publish agentd.json"));
     }
@@ -98,7 +110,7 @@ pub async fn serve(options: ServeOptions) -> anyhow::Result<()> {
         Some(()) = stop_rx.recv() => tracing::info!("stop requested over the RPC"),
     }
     tracing::info!("shutting down");
-    server.abort();
+    stop_server().await;
     runtime.shutdown().await;
     if let Err(error) = discovery::remove(&paths) {
         tracing::warn!(%error, "agentd.json was not removed");
