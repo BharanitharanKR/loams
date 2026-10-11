@@ -466,6 +466,42 @@ async fn spec_is_stable_until_record_changes() {
     assert!(changed.contains("16MB"), "{changed}");
 }
 
+/// Postgres listens on every address of the compute, on the port its
+/// runtime publishes (Task 10), whatever the endpoint's settings say.
+#[tokio::test]
+async fn spec_listens_on_the_compute_port() {
+    let r = rig().await;
+    let key = EndpointKey {
+        project_id: r.ids.project.to_string(),
+        id: r.ids.endpoint.to_string(),
+    };
+    let ep = r.store.get::<EndpointRec>(&key).await.unwrap().unwrap();
+    let mut rec = ep.record.clone();
+    rec.pg_settings.insert("port".into(), "5432".into());
+    rec.pg_settings
+        .insert("listen_addresses".into(), "localhost".into());
+    r.store
+        .api_writer()
+        .put(&rec, Some(ep.version))
+        .await
+        .unwrap();
+    let id = r.ids.compute;
+    let (code, body) = r.spec(id, Some(&r.token(id))).await;
+    assert_eq!(code, 200, "{body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    let settings = v["spec"]["cluster"]["settings"].as_array().unwrap();
+    let get = |name: &str| {
+        let found: Vec<_> = settings.iter().filter(|s| s["name"] == name).collect();
+        assert_eq!(found.len(), 1, "{name}: {found:?}");
+        found[0]["value"].as_str().unwrap().to_owned()
+    };
+    assert_eq!(get("listen_addresses"), "*");
+    assert_eq!(
+        get("port"),
+        loams_pg_control::runtime::COMPUTE_PG_PORT.to_string()
+    );
+}
+
 /// A compute that is not its endpoint's current one, or has stopped, gets
 /// no spec (it would be a second primary on the timeline).
 #[tokio::test]

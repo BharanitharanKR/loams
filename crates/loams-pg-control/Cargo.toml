@@ -44,6 +44,10 @@ loams-postgres.workspace = true
 postcard.workspace = true
 # Role passwords: 32 bytes from the OS (secrets::generate_password).
 rand.workspace = true
+# The computes' local CA and their certificates (src/runtime/certs.rs, Task
+# 10): ECDSA P-256 on ring, as loams-sqlgate uses it (0.14.10, already in the
+# lockfile).
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem", "ring"] }
 ring.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -67,8 +71,15 @@ proptest.workspace = true
 # The upcall tests' HTTP client.
 reqwest.workspace = true
 tempfile.workspace = true
+# The compose runtime's end-to-end test reads the image pins and runs
+# SELECT 1 through an endpoint's address (tests/it_compose.rs).
+tokio-postgres = "0.7"
+toml.workspace = true
 # role_secret_never_logged captures every log line.
 tracing-subscriber.workspace = true
+# The compute certificates' checks (runtime::certs): the chain and the
+# fields. 0.18.1 is already in the lockfile (through rcgen).
+x509-parser = { version = "0.18", features = ["verify"] }
 
 [[test]]
 name = "store_tikv"
