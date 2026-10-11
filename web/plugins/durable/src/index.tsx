@@ -12,12 +12,18 @@ import { promiseRunSource, withSamples } from './graph/source.js';
 import { DurablePage } from './pages.js';
 
 export { createDurableApi, decodeValue, EnvelopeError, envelope } from './envelope.js';
-export { DurablePage } from './pages.js';
 export { ExecutionGraph } from './graph/ExecutionGraph.js';
 export { GraphTab } from './graph/GraphTab.js';
-export { applyEvent, fromPromises, type RunEvent, type RunGraph, type Step } from './graph/model.js';
+export {
+  applyEvent,
+  fromPromises,
+  type RunEvent,
+  type RunGraph,
+  type Step,
+} from './graph/model.js';
 export { mockMetricStream, mockRunSource } from './graph/sample.js';
 export { promiseRunSource, type RunGraphSource, withSamples } from './graph/source.js';
+export { DurablePage } from './pages.js';
 export { buildRuns } from './runs.js';
 
 const plugin: PluginModule = {

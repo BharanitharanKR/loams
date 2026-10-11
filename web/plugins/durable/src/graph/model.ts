@@ -84,8 +84,7 @@ export function applyEvent(run: RunGraph | undefined, e: RunEvent): RunGraph | u
     };
   }
   const i = run.steps.findIndex((s) => s.id === e.step.id);
-  const steps =
-    i < 0 ? [...run.steps, e.step] : run.steps.map((s, j) => (j === i ? e.step : s));
+  const steps = i < 0 ? [...run.steps, e.step] : run.steps.map((s, j) => (j === i ? e.step : s));
   return { ...run, steps };
 }
 

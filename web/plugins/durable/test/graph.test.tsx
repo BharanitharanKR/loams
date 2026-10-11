@@ -1,9 +1,19 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { SeriesPoint } from '@loams/charts';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { PromiseRecord } from '../src/envelope.js';
 import { toBase64 } from '../src/envelope.js';
 import { describeStep, StepList } from '../src/graph/ExecutionGraph.js';
-import { GraphTab } from '../src/graph/GraphTab.js';
+import { GraphTab, useNow } from '../src/graph/GraphTab.js';
 import { layoutRun, neighbour } from '../src/graph/layout.js';
 import {
   applyEvent,
@@ -20,14 +30,20 @@ import {
   SAMPLE_PLANS,
   simulate,
 } from '../src/graph/sample.js';
-import { merge, promiseRunSource, quiet, withSamples } from '../src/graph/source.js';
+import {
+  MAX_POLL_FAILURES,
+  merge,
+  promiseRunSource,
+  quiet,
+  withSamples,
+} from '../src/graph/source.js';
 
 // @loams/charts renders ECharts; here only what the tab hands it matters.
 vi.mock('@loams/charts', () => ({
   LiveChart: (p: { ariaLabel: string; data: readonly unknown[] }) => (
     <figure aria-label={p.ariaLabel} data-rows={p.data.length} />
   ),
-  Sparkline: (p: { ariaLabel: string }) => <span aria-label={p.ariaLabel} />,
+  Sparkline: (p: { ariaLabel: string }) => <svg role="img" aria-label={p.ariaLabel} />,
   useMetricStream: () => [],
 }));
 
@@ -40,12 +56,17 @@ beforeAll(() => {
   } as unknown as typeof ResizeObserver;
   (globalThis as { DOMMatrixReadOnly?: unknown }).DOMMatrixReadOnly ??= class {
     m22 = 1;
-    constructor(_t?: string) {}
   };
   globalThis.CSS ??= { escape: (s: string) => s } as unknown as typeof CSS;
 });
 
 afterEach(cleanup);
+
+/** `v`, failing the test when it is missing. */
+function must<T>(v: T | undefined): T {
+  if (v === undefined) throw new Error('expected a value');
+  return v;
+}
 
 const json = (v: unknown) => ({ headers: {}, data: toBase64(JSON.stringify(v)) });
 
@@ -60,8 +81,8 @@ const p = (id: string, over: Partial<PromiseRecord> = {}): PromiseRecord => ({
   ...over,
 });
 
-const ORDER = SAMPLE_PLANS[0]!;
-const REPORT = SAMPLE_PLANS[1]!;
+const ORDER = must(SAMPLE_PLANS[0]);
+const REPORT = must(SAMPLE_PLANS[1]);
 
 function play(events: RunEvent[]): RunGraph | undefined {
   return events.reduce<RunGraph | undefined>(applyEvent, undefined);
@@ -98,8 +119,8 @@ describe('fromPromises', () => {
     }),
     p('other', { tags: { 'resonate:origin': 'other' } }),
   ];
-  const run = fromPromises('wf', promises)!;
-  const by = (id: string) => run.steps.find((s) => s.id === id)!;
+  const run = must(fromPromises('wf', promises));
+  const by = (id: string) => must(run.steps.find((s) => s.id === id));
 
   it('maps kinds, statuses and names', () => {
     expect(run.name).toBe('fulfil');
@@ -122,13 +143,15 @@ describe('fromPromises', () => {
   });
 
   it('treats a timer that timed out as woken, not failed', () => {
-    const r = fromPromises('wf', [
-      p('wf', { tags: { 'resonate:origin': 'wf', 'resonate:parent': 'wf' } }),
-      p('wf.t', {
-        state: 'rejected_timedout',
-        tags: { 'resonate:origin': 'wf', 'resonate:parent': 'wf', 'resonate:timer': 'true' },
-      }),
-    ])!;
+    const r = must(
+      fromPromises('wf', [
+        p('wf', { tags: { 'resonate:origin': 'wf', 'resonate:parent': 'wf' } }),
+        p('wf.t', {
+          state: 'rejected_timedout',
+          tags: { 'resonate:origin': 'wf', 'resonate:parent': 'wf', 'resonate:timer': 'true' },
+        }),
+      ]),
+    );
     expect(r.steps.find((s) => s.id === 'wf.t')?.status).toBe('succeeded');
   });
 
@@ -160,7 +183,7 @@ describe('layout', () => {
 });
 
 describe('sample runs', () => {
-  const step = (r: RunGraph, id: string) => r.steps.find((s) => s.id === id)!;
+  const step = (r: RunGraph, id: string) => must(r.steps.find((s) => s.id === id));
 
   it('retries a step as stacked attempts', () => {
     // validate takes ticks 0-2; charge-card attempt 1 runs 2-4, backs off, 2 runs 5-7, ...
@@ -225,11 +248,18 @@ describe('sample runs', () => {
     const it = mockMetricStream({ intervalMs: 1, signal: ac.signal, backfill: 5, now: () => 100 })[
       Symbol.asyncIterator
     ]();
-    const first = (await it.next()).value!;
+    const batch = async (): Promise<SeriesPoint[]> => {
+      const r = await it.next();
+      if (r.done) throw new Error('metric stream ended early');
+      return r.value;
+    };
+    const first = await batch();
     expect(first).toHaveLength(10);
-    expect(new Set(first.map((x) => x.series))).toEqual(new Set(['fulfil-order', 'nightly-report']));
+    expect(new Set(first.map((x) => x.series))).toEqual(
+      new Set(['fulfil-order', 'nightly-report']),
+    );
     expect(first.every((x) => x.t < 100 && x.v >= 200)).toBe(true);
-    const second = (await it.next()).value!;
+    const second = await batch();
     expect(second.map((x) => x.t)).toEqual([100, 100]);
     ac.abort();
     await it.return?.(undefined);
@@ -268,6 +298,68 @@ describe('sources', () => {
     expect(play(events)?.status).toBe('succeeded');
   });
 
+  it('the promise source follows the search cursor to the end of a run', async () => {
+    const pages: Record<string, { items: PromiseRecord[]; cursor?: string }> = {
+      '': { items: [p('wf.0')], cursor: 'c1' },
+      c1: { items: [p('wf.1')], cursor: 'c2' },
+      c2: { items: [p('wf.2')] },
+    };
+    const api = {
+      getPromise: vi.fn(async () => p('wf', { state: 'resolved' })),
+      searchPromises: vi.fn(async (q: { cursor?: string }) => must(pages[q.cursor ?? ''])),
+    };
+    const src = promiseRunSource(api as never, 1);
+    const events: RunEvent[] = [];
+    for await (const e of src.watchRun('wf', new AbortController().signal)) events.push(e);
+    expect(api.searchPromises).toHaveBeenCalledTimes(3);
+    expect(api.searchPromises).toHaveBeenLastCalledWith({
+      tags: { 'resonate:origin': 'wf' },
+      limit: 500,
+      cursor: 'c2',
+    });
+    expect(
+      play(events)
+        ?.steps.map((s) => s.id)
+        .sort(),
+    ).toEqual(['wf', 'wf.0', 'wf.1', 'wf.2']);
+  });
+
+  it('the promise source rides out a failed poll, and gives up after several in a row', async () => {
+    let calls = 0;
+    const flaky = {
+      getPromise: vi.fn(async () => {
+        calls++;
+        if (calls === 2) throw new Error('blip');
+        return p('wf', { state: calls < 3 ? 'pending' : 'resolved' });
+      }),
+      searchPromises: vi.fn(async () => ({ items: [p('wf.0')] })),
+    };
+    const events: RunEvent[] = [];
+    for await (const e of promiseRunSource(flaky as never, 1).watchRun(
+      'wf',
+      new AbortController().signal,
+    ))
+      events.push(e);
+    expect(play(events)?.status).toBe('succeeded');
+
+    const down = {
+      getPromise: vi.fn(async () => {
+        throw new Error('engine down');
+      }),
+      searchPromises: vi.fn(async () => ({ items: [] })),
+    };
+    const watch = async () => {
+      for await (const _ of promiseRunSource(down as never, 1).watchRun(
+        'wf',
+        new AbortController().signal,
+      )) {
+        // no snapshot ever arrives
+      }
+    };
+    await expect(watch()).rejects.toThrow('engine down');
+    expect(down.getPromise).toHaveBeenCalledTimes(MAX_POLL_FAILURES);
+  });
+
   it('withSamples lists samples after the engine runs, and survives a down engine', async () => {
     const down = {
       listRuns: async () => {
@@ -293,7 +385,7 @@ describe('sources', () => {
 describe('graph ui', () => {
   it('describes a retried step for screen readers', () => {
     const done = simulate(ORDER, finalTick(ORDER), 0, 1000);
-    const charge = done.steps.find((s) => s.id === 'order-7f3a.2')!;
+    const charge = must(done.steps.find((s) => s.id === 'order-7f3a.2'));
     expect(describeStep(charge)).toMatch(/^charge-card, step, succeeded, attempt 3, took/);
   });
 
@@ -305,7 +397,7 @@ describe('graph ui', () => {
     const buttons = within(list).getAllByRole('button');
     expect(buttons).toHaveLength(run.steps.length);
     expect(buttons[1]?.getAttribute('aria-current')).toBe('true');
-    fireEvent.click(buttons[2]!);
+    fireEvent.click(must(buttons[2]));
     expect(onSelect).toHaveBeenCalledWith('order-7f3a.1');
   });
 
@@ -315,14 +407,18 @@ describe('graph ui', () => {
     const source = withSamples(engine, mockRunSource({ tickMs: 60_000 }));
     render(<GraphTab source={source} />);
     const run = await screen.findByRole('combobox', { name: 'Run' });
-    expect(within(run).getAllByRole('option').map((o) => o.textContent)).toEqual([
+    expect(
+      within(run)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual([
       'fulfil-order · sample:order-7f3a (sample)',
       'nightly-report · sample:report-2210 (sample)',
     ]);
     const list = await screen.findByRole('list', { name: 'Steps of fulfil-order' });
     expect(screen.getByText('Sample run')).toBeTruthy();
     expect(
-      screen.getByRole('group', { name: /Execution graph of fulfil-order: 9 steps/ }),
+      screen.getByRole('region', { name: /Execution graph of fulfil-order: 9 steps/ }),
     ).toBeTruthy();
     fireEvent.click(within(list).getByRole('button', { name: /^validate-order/ }));
     expect(await screen.findByLabelText('Detail of step validate-order')).toBeTruthy();
@@ -336,5 +432,25 @@ describe('graph ui', () => {
     await waitFor(() =>
       expect(screen.queryByLabelText('Detail of step validate-order')).toBeNull(),
     );
+  });
+});
+
+describe('useNow', () => {
+  it('ticks while given an interval and freezes without one', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_000);
+      const { result, rerender } = renderHook(({ ms }: { ms?: number }) => useNow(ms), {
+        initialProps: { ms: 1_000 } as { ms?: number },
+      });
+      expect(result.current).toBe(1_000);
+      act(() => vi.advanceTimersByTime(2_000));
+      expect(result.current).toBe(3_000);
+      rerender({ ms: undefined });
+      act(() => vi.advanceTimersByTime(5_000));
+      expect(result.current).toBe(3_000);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -51,7 +51,7 @@ function timings(plan: Plan): Map<string, Timing | undefined> {
   for (const s of plan.steps) {
     const deps = s.after.map((a) => out.get(a));
     // Downstream of a failure (or of something that never ran) never starts.
-    if (deps.some((d) => !d || !d.ok)) {
+    if (deps.some((d) => !d?.ok)) {
       out.set(s.id, undefined);
       continue;
     }

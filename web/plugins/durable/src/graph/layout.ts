@@ -44,7 +44,9 @@ export function layoutRun(run: RunGraph): Layout {
   const columns: string[][] = [];
   for (const s of order) {
     const c = col.get(s.id) ?? 0;
-    (columns[c] ??= []).push(s.id);
+    const column = columns[c] ?? [];
+    column.push(s.id);
+    columns[c] = column;
   }
   const tallest = Math.max(1, ...columns.map((c) => c?.length ?? 0));
   const placed = new Map<string, Placed>();

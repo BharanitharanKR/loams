@@ -56,7 +56,7 @@ export function StepPanel({ step, onClose }: { step: Step; onClose: () => void }
         </Button>
       }
     >
-      <div className="flex flex-col gap-4" aria-label={`Detail of step ${step.name}`}>
+      <section className="flex flex-col gap-4" aria-label={`Detail of step ${step.name}`}>
         <dl className="grid grid-cols-2 gap-2 m-0 text-sm">
           <div>
             <dt className="text-muted text-xs">Status</dt>
@@ -78,9 +78,7 @@ export function StepPanel({ step, onClose }: { step: Step; onClose: () => void }
           </div>
           {step.wakeAt !== undefined && (
             <div className="col-span-2">
-              <dt className="text-muted text-xs">
-                {step.kind === 'timer' ? 'Wakes' : 'Deadline'}
-              </dt>
+              <dt className="text-muted text-xs">{step.kind === 'timer' ? 'Wakes' : 'Deadline'}</dt>
               <dd className="m-0">{new Date(step.wakeAt).toLocaleString()}</dd>
             </div>
           )}
@@ -112,7 +110,8 @@ export function StepPanel({ step, onClose }: { step: Step; onClose: () => void }
                 key: 'took',
                 header: 'Took',
                 numeric: true,
-                cell: (a) => formatMs(a.endedAt === undefined ? undefined : a.endedAt - a.startedAt),
+                cell: (a) =>
+                  formatMs(a.endedAt === undefined ? undefined : a.endedAt - a.startedAt),
               },
               {
                 key: 'error',
@@ -124,7 +123,7 @@ export function StepPanel({ step, onClose }: { step: Step; onClose: () => void }
         )}
         <Payload label="Input" value={step.input} />
         <Payload label="Output" value={step.output} />
-      </div>
+      </section>
     </Card>
   );
 }

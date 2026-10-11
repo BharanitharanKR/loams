@@ -113,9 +113,7 @@ function StepNode({ data }: NodeProps<StepNodeT>) {
       <div className="dg-node-foot">
         <span className="dg-dot" aria-hidden="true" />
         <span>{STATUS_LABEL[step.status]}</span>
-        {step.attempts.length > 1 && (
-          <span className="dg-attempts">×{step.attempts.length}</span>
-        )}
+        {step.attempts.length > 1 && <span className="dg-attempts">×{step.attempts.length}</span>}
         {step.kind === 'timer' && step.status === 'sleeping' && step.wakeAt ? (
           <span className="dg-meta">wakes {time(step.wakeAt)}</span>
         ) : step.endedAt !== undefined && step.startedAt !== undefined ? (
@@ -138,7 +136,7 @@ export interface ExecutionGraphProps {
 
 function Canvas({ run, selectedId, onSelect, height = 420 }: ExecutionGraphProps) {
   const reduced = usePrefersReducedMotion();
-  const wrap = useRef<HTMLDivElement>(null);
+  const wrap = useRef<HTMLElement>(null);
   const rf = useReactFlow();
   const layout = useMemo(() => layoutRun(run), [run]);
   const byId = useMemo(() => new Map(run.steps.map((s) => [s.id, s])), [run]);
@@ -221,12 +219,10 @@ function Canvas({ run, selectedId, onSelect, height = 420 }: ExecutionGraphProps
   };
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: forwards arrow keys from the focusable nodes inside
-    <div
+    <section
       ref={wrap}
       className="dg-canvas"
       style={{ height }}
-      role="group"
       aria-roledescription="execution graph"
       aria-label={`Execution graph of ${run.name}: ${run.steps.length} steps. Arrow keys move between steps, Enter opens one.`}
       onKeyDown={onKeyDown}
@@ -249,7 +245,7 @@ function Canvas({ run, selectedId, onSelect, height = 420 }: ExecutionGraphProps
       >
         <Background variant={BackgroundVariant.Dots} gap={18} size={1} />
       </ReactFlow>
-    </div>
+    </section>
   );
 }
 

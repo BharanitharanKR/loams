@@ -1,17 +1,15 @@
 // The Run graph tab: pick a run, watch it as a live DAG, open a step, and
 // chart its step latencies and the run durations around it.
 
-import { LiveChart, Sparkline, useMetricStream } from '@loams/charts';
+import { type ChartSpec, LiveChart, Sparkline, useMetricStream } from '@loams/charts';
 import { useLoad } from '@loams/desktop-ui';
 import { Button, Card, Empty, Field, Notice, Select, StatusTag } from '@loams/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EnvelopeError } from '../envelope.js';
 import { ExecutionGraph, formatMs, STATUS_LABEL } from './ExecutionGraph.js';
-import { applyEvent, type RunGraph, runProgress, stepLatency } from './model.js';
-import type { RunGraphSource } from './source.js';
+import { applyEvent, isSettled, type RunGraph, runProgress, stepLatency } from './model.js';
 import { StepPanel, statusTone } from './StepPanel.js';
-
-type ChartSpec = Parameters<typeof LiveChart>[0]['spec'];
+import type { RunGraphSource } from './source.js';
 
 export const LATENCY_SPEC: ChartSpec = {
   chartType: 'bar',
@@ -81,6 +79,21 @@ export function useRunStream(
   return { run, state, ...(error ? { error } : {}) };
 }
 
+/** How often a running step's latency bar is redrawn. */
+export const LATENCY_TICK_MS = 1_000;
+
+/** `Date.now()`, refreshed every `intervalMs` while it is set; frozen otherwise. */
+export function useNow(intervalMs: number | undefined): number {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (intervalMs === undefined) return;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(t);
+  }, [intervalMs]);
+  return now;
+}
+
 export function GraphTab({ source }: { source: RunGraphSource }) {
   const [runs, reload] = useLoad(() => source.listRuns(), [source], { errorText });
   const [runId, setRunId] = useState<string>();
@@ -102,13 +115,16 @@ export function GraphTab({ source }: { source: RunGraphSource }) {
     [durations, run],
   );
 
+  // A running step's bar grows with the clock, not only when the run changes.
+  const ticking =
+    run?.steps.some((s) => s.startedAt !== undefined && !isSettled(s.status)) ?? false;
+  const now = useNow(ticking ? LATENCY_TICK_MS : undefined);
   const latencies = useMemo(() => {
     if (!run) return [];
-    const now = Date.now();
     return run.steps
       .filter((s) => s.kind !== 'workflow' && s.startedAt !== undefined)
       .map((s) => ({ step: s.name, ms: stepLatency(s, now) ?? 0, status: s.status }));
-  }, [run]);
+  }, [run, now]);
 
   const progress = run ? runProgress(run) : undefined;
   const summary = runs.state === 'ready' ? runs.data.find((r) => r.runId === runId) : undefined;

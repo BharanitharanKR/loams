@@ -44,13 +44,31 @@ const fingerprint = (ps: PromiseRecord[]) =>
     .sort()
     .join('|');
 
+/** Consecutive failed polls `watchRun` rides out before it gives up on the engine. */
+export const MAX_POLL_FAILURES = 3;
+
 export function promiseRunSource(api: DurableApi, pollMs = 2_000): RunGraphSource {
+  /** Every promise of a run, following the search cursor to its end. */
+  const childrenOf = async (runId: string) => {
+    const out: PromiseRecord[] = [];
+    const seen = new Set<string>();
+    let cursor: string | undefined;
+    do {
+      const page = await api.searchPromises({
+        tags: { [TAG_ORIGIN]: runId },
+        limit: 500,
+        ...(cursor ? { cursor } : {}),
+      });
+      out.push(...page.items);
+      // A cursor seen before would loop forever; stop on it.
+      cursor = page.cursor && !seen.has(page.cursor) ? page.cursor : undefined;
+      if (cursor) seen.add(cursor);
+    } while (cursor);
+    return out;
+  };
   const promisesOf = async (runId: string) => {
-    const [root, rest] = await Promise.all([
-      api.getPromise(runId),
-      api.searchPromises({ tags: { [TAG_ORIGIN]: runId }, limit: 500 }),
-    ]);
-    return [root, ...rest.items.filter((p) => p.id !== runId)];
+    const [root, rest] = await Promise.all([api.getPromise(runId), childrenOf(runId)]);
+    return [root, ...rest.filter((p) => p.id !== runId)];
   };
   return {
     async listRuns() {
@@ -67,8 +85,19 @@ export function promiseRunSource(api: DurableApi, pollMs = 2_000): RunGraphSourc
     },
     async *watchRun(runId, signal) {
       let last = '';
+      let failures = 0;
       while (!signal.aborted) {
-        const ps = await promisesOf(runId);
+        let ps: PromiseRecord[];
+        try {
+          ps = await promisesOf(runId);
+          failures = 0;
+        } catch (e) {
+          // A blip keeps the last snapshot on screen; only a run of failures ends the watch.
+          if (signal.aborted) return;
+          if (++failures >= MAX_POLL_FAILURES) throw e;
+          await delay(pollMs, signal);
+          continue;
+        }
         const fp = fingerprint(ps);
         const run = fromPromises(runId, ps);
         if (run && fp !== last) {
@@ -101,7 +130,11 @@ export function promiseRunSource(api: DurableApi, pollMs = 2_000): RunGraphSourc
 /** Values from several async iterables, as they arrive. */
 export async function* merge<T>(...its: AsyncIterable<T>[]): AsyncGenerator<T> {
   const iters = its.map((i) => i[Symbol.asyncIterator]());
-  const next = (k: number) => iters[k]!.next().then((r) => ({ k, r }));
+  const next = (k: number) => {
+    const it = iters[k];
+    if (!it) throw new RangeError(`no source ${k}`);
+    return it.next().then((r) => ({ k, r }));
+  };
   const pending = new Map(iters.map((_, k) => [k, next(k)]));
   try {
     while (pending.size) {
@@ -136,19 +169,14 @@ export function withSamples(primary: RunGraphSource, samples: RunGraphSource): R
         primary.listRuns().catch(() => [] as RunSummary[]),
         samples.listRuns(),
       ]);
-      return [
-        ...mine,
-        ...theirs.map((r) => ({ ...r, runId: SAMPLE + r.runId, sample: true })),
-      ];
+      return [...mine, ...theirs.map((r) => ({ ...r, runId: SAMPLE + r.runId, sample: true }))];
     },
     watchRun(runId, signal) {
       if (!runId.startsWith(SAMPLE)) return primary.watchRun(runId, signal);
       const inner = samples.watchRun(runId.slice(SAMPLE.length), signal);
       return (async function* () {
         for await (const e of inner) {
-          yield e.type === 'snapshot'
-            ? { ...e, run: { ...e.run, runId, sample: true } }
-            : e;
+          yield e.type === 'snapshot' ? { ...e, run: { ...e.run, runId, sample: true } } : e;
         }
       })();
     },
