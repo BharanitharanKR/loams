@@ -78,7 +78,8 @@ export const Inspector: React.FC<InspectorProps> = ({
 
   if (!widget) return null;
 
-  const currentDataset = datasets.find((d) => d.id === widget.data.datasetId);
+  const datasetId = widget.data.source === "bi" ? widget.data.datasetId : undefined;
+  const currentDataset = datasets.find((d) => d.id === datasetId);
   const columns = currentDataset?.columns || [];
 
   const handleSave = () => {
@@ -161,7 +162,7 @@ export const Inspector: React.FC<InspectorProps> = ({
           id="inspector-dataset"
           type="text"
           className={cn(CONTROL, CONTROL_DISABLED)}
-          value={currentDataset?.table_name || `Dataset #${widget.data.datasetId}`}
+          value={currentDataset?.table_name || `Dataset #${datasetId}`}
           disabled
         />
       </div>

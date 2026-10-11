@@ -109,7 +109,7 @@ export const WidgetCard: React.FC<WidgetCardProps> = ({
     instanceRef.current.off("click");
     instanceRef.current.on("click", (clicked: echarts.ECElementEvent) => {
       if (!onParamChange) return;
-      const filter = paramFilterFor(widget, params);
+      const filter = paramFilterFor(widget, clicked);
       for (const [paramName, value] of Object.entries(filter)) {
         onParamChange(paramName, value);
       }
@@ -142,7 +142,9 @@ export const WidgetCard: React.FC<WidgetCardProps> = ({
   const subtitle =
     overrides?.title?.subtext ||
     widget.chartSpec?.subtitle ||
-    (widget.data?.datasetId ? `Dataset #${widget.data.datasetId}` : "");
+    (widget.data?.source === "bi" && widget.data.datasetId
+      ? `Dataset #${widget.data.datasetId}`
+      : "");
 
   const renderChartIcon = () => {
     if (widget.chartSpec) return <SparklesIcon />;
