@@ -4,8 +4,8 @@
 use bytes::Bytes;
 use loams_house_ipc::{
     Analysis, Analyze, Bind, Chunk, Classification, CodecError, EngineError, Execute, Frame,
-    FrameCodec, InputSpec, Limits, MAX_FRAME_BYTES, PROTOCOL_VERSION, Progress, QueryClass, Ready,
-    SessionRef,
+    FrameCodec, InputSpec, Limits, MAX_FRAME_BYTES, Output, PROTOCOL_VERSION, Progress, QueryClass,
+    Ready, SessionRef,
 };
 use proptest::collection::vec;
 use proptest::option;
@@ -107,18 +107,25 @@ fn execute() -> impl Strategy<Value = Execute> {
         pairs(),
         limits(),
         option::of((text(), text()).prop_map(|(insert, format)| InputSpec { insert, format })),
+        option::of(any::<u64>()).prop_map(|cap| match cap {
+            None => Output::Blocks,
+            Some(max_buffered_bytes) => Output::Document { max_buffered_bytes },
+        }),
     )
         .prop_map(
-            |(query_id, session, settings, views, sql, format, params, limits, input)| Execute {
-                query_id,
-                session,
-                settings,
-                views,
-                sql,
-                format,
-                params,
-                limits,
-                input,
+            |(query_id, session, settings, views, sql, format, params, limits, input, output)| {
+                Execute {
+                    query_id,
+                    session,
+                    settings,
+                    views,
+                    sql,
+                    format,
+                    params,
+                    limits,
+                    input,
+                    output,
+                }
             },
         )
 }

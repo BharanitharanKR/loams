@@ -368,6 +368,31 @@ pub struct Execute {
     /// When present, `Input` frames follow this one and are streamed into this
     /// `INSERT` before `sql` runs (HS1 R1.7).
     pub input: Option<InputSpec>,
+    /// How the result's blocks reach the front (HS1 R8.12).
+    pub output: Output,
+}
+
+/// How a result's blocks are written into `Chunk` frames.
+///
+/// chDB's streaming ABI formats every engine block as a complete output of its own
+/// (HS1 R8.4): a multi-block `JSON` result is several documents, `Parquet` several
+/// files, `ArrowStream` several streams, and `…WithNames` formats repeat their
+/// header at every block.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Output {
+    /// Each block as chDB wrote it, block starts marked by `Chunk.continued`. The
+    /// `loams.house.v1` framers read these (Task 8).
+    #[default]
+    Blocks,
+    /// One document for the whole result, in any format, as ClickHouse's HTTP
+    /// interface answers: row formats stream as they are, header and stream
+    /// formats are stitched as blocks arrive, and a format that needs the whole
+    /// result at once is formatted by chDB in one piece, refused past
+    /// `max_buffered_bytes` (the House's result cap).
+    Document {
+        /// The most bytes a result formatted in one piece may have.
+        max_buffered_bytes: u64,
+    },
 }
 
 /// A House session on a worker (Task 3 review, decision 4; Task 4 adds pinning).

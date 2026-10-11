@@ -30,7 +30,7 @@ use loams_chdb_sys::ffi;
 use crate::arrow::{ArrowHandle, ArrowStream, RecordBatchReader};
 use crate::engine::{SessionId, Settings, engine_error};
 use crate::error::ChdbError;
-use crate::query::{self, QueryStream, Registry};
+use crate::query::{self, QueryStats, QueryStream, Registry};
 
 /// A session: one chDB connection, its own settings, its own statements.
 #[derive(Debug)]
@@ -154,6 +154,28 @@ impl Session {
         let connection = self.connection()?;
         Self::apply_settings_of(&connection, &self.settings)?;
         connection.query(sql, format, params).map_err(engine_error)
+    }
+
+    /// [`Session::query`] with the result's counters.
+    ///
+    /// The House's HTTP interface uses it for the formats a result must be
+    /// formatted whole for (HS1 R8.12): one output format sees every block, so a
+    /// `JSON` result is one document, where the streaming ABI formats each block on
+    /// its own (R8.4).
+    pub fn query_with_stats(
+        &self,
+        sql: &str,
+        format: &str,
+        params: &[(String, String)],
+    ) -> Result<(Vec<u8>, QueryStats), ChdbError> {
+        let connection = self.connection()?;
+        Self::apply_settings_of(&connection, &self.settings)?;
+        let block = connection
+            .query_block(sql, format, params)
+            .map_err(engine_error)?;
+        let mut stats = QueryStats::default();
+        stats.absorb(&block);
+        Ok((block.bytes, stats))
     }
 
     /// Classifies `sql` with ClickHouse's own parser, without running it (HS1

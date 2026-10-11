@@ -225,22 +225,33 @@ pub mod ffi {
             unsafe { c_str_to_string(chdb_result_error(result)) }
         }
 
-        /// A result's bytes, or its error.
+        /// A result's bytes and counters, or its error.
         ///
         /// # Safety
         ///
         /// `result` must be a live `chdb_result` this function may destroy.
-        unsafe fn finish(result: *mut chdb_result) -> Result<Vec<u8>, Error> {
+        unsafe fn finish(result: *mut chdb_result) -> Result<Block, Error> {
             // SAFETY: the caller promises a live result; it is not touched after
             // this point.
             let error = unsafe { Self::result_error(result) };
             // SAFETY: as above.
             let bytes = unsafe { Self::result_bytes(result) };
+            // SAFETY: as above.
+            let block = unsafe {
+                Block {
+                    bytes,
+                    rows_read: chdb_result_rows_read(result),
+                    bytes_read: chdb_result_bytes_read(result),
+                    storage_rows_read: chdb_result_storage_rows_read(result),
+                    storage_bytes_read: chdb_result_storage_bytes_read(result),
+                    elapsed: chdb_result_elapsed(result),
+                }
+            };
             // SAFETY: as above, and the bytes above are a copy.
             unsafe { chdb_destroy_query_result(result) };
             match error {
                 Some(message) => Err(Error::new(message)),
-                None => Ok(bytes),
+                None => Ok(block),
             }
         }
 
@@ -273,6 +284,18 @@ pub mod ffi {
             format: &str,
             params: &[(String, String)],
         ) -> Result<Vec<u8>, Error> {
+            self.query_block(sql, format, params)
+                .map(|block| block.bytes)
+        }
+
+        /// [`Connection::query`] with the result's counters: the whole result as
+        /// one [`Block`], formatted by one output format (HS1 R8.12).
+        pub fn query_block(
+            &self,
+            sql: &str,
+            format: &str,
+            params: &[(String, String)],
+        ) -> Result<Block, Error> {
             let query = c_string("the statement", sql)?;
             let format = c_string("the format", format)?;
             let params = Params::of(params)?;

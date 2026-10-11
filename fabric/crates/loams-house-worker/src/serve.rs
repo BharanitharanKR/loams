@@ -35,6 +35,7 @@ use loams_house_ipc::{
 };
 
 use crate::config::{self, WorkerArgs};
+use crate::document::{Plan, Shaper};
 
 /// How often a running statement reports `Progress`, at most.
 pub const PROGRESS_EVERY: Duration = Duration::from_millis(100);
@@ -560,6 +561,27 @@ fn statement<W: Write>(
         return Ok(stats);
     }
 
+    let mut shaper = match Shaper::plan(&execute.output, &execute.format) {
+        Plan::Stream(shaper) => shaper,
+        Plan::Whole { max_bytes } => {
+            // One output format for the whole result (R8.12): chDB formats it in
+            // one piece, held to the House's result cap.
+            let (bytes, counters) = session
+                .query_with_stats(&execute.sql, &execute.format, &execute.params)
+                .map_err(|err| Failure::Engine(engine_error(&err)))?;
+            if bytes.len() as u64 > max_bytes {
+                return Err(Failure::Engine(over_the_cap(
+                    &execute.format,
+                    bytes.len(),
+                    max_bytes,
+                )));
+            }
+            send_bytes(writer, Bytes::from(bytes))?;
+            absorb(&mut stats, &counters);
+            fill_memory(&mut stats);
+            return Ok(stats);
+        }
+    };
     let started = session.execute_with_id(
         &execute.query_id,
         &execute.sql,
@@ -574,9 +596,7 @@ fn statement<W: Write>(
             let bytes = session
                 .query(&execute.sql, &execute.format, &execute.params)
                 .map_err(|err| Failure::Engine(engine_error(&err)))?;
-            for chunk in Chunk::split(Bytes::from(bytes), CHUNK_BYTES) {
-                send(writer, &Frame::Chunk(chunk)).map_err(Failure::Wire)?;
-            }
+            send_bytes(writer, Bytes::from(bytes))?;
             fill_memory(&mut stats);
             return Ok(stats);
         }
@@ -586,9 +606,8 @@ fn statement<W: Write>(
     loop {
         match stream.next_chunk() {
             Ok(Some(block)) => {
-                for chunk in Chunk::split(block, CHUNK_BYTES) {
-                    send(writer, &Frame::Chunk(chunk)).map_err(Failure::Wire)?;
-                }
+                let shaped = shaper.push(block).map_err(Failure::Engine)?;
+                send_bytes(writer, shaped)?;
                 if last_progress.elapsed() >= PROGRESS_EVERY {
                     last_progress = Instant::now();
                     let mut progress = stats;
@@ -601,6 +620,8 @@ fn statement<W: Write>(
             Err(err) => return Err(Failure::Engine(engine_error(&err))),
         }
     }
+    let tail = shaper.finish().map_err(Failure::Engine)?;
+    send_bytes(writer, tail)?;
     absorb(&mut stats, &stream.stats());
     fill_memory(&mut stats);
     Ok(stats)
@@ -793,6 +814,28 @@ fn drain_input(frames: &mpsc::Receiver<Result<Frame, End>>) -> Result<(), End> {
 fn send<W: Write>(writer: &mut W, frame: &Frame) -> Result<(), End> {
     FrameCodec::write(writer, frame).map_err(|err| End::Io(err.to_string()))?;
     writer.flush().map_err(|err| End::Io(err.to_string()))
+}
+
+/// One piece of output as `Chunk` frames (none when it is empty).
+fn send_bytes<W: Write>(writer: &mut W, bytes: Bytes) -> Result<(), Failure> {
+    for chunk in Chunk::split(bytes, CHUNK_BYTES) {
+        send(writer, &Frame::Chunk(chunk)).map_err(Failure::Wire)?;
+    }
+    Ok(())
+}
+
+/// A result formatted whole that is over the House's result cap: `36`, naming the
+/// cap, as the front's own size caps answer (R3.4).
+fn over_the_cap(format: &str, len: usize, max_bytes: u64) -> EngineError {
+    EngineError {
+        code: 36,
+        name: "BAD_ARGUMENTS".to_string(),
+        message: format!(
+            "the result in FORMAT {format}, which the House formats whole, is {len} bytes, \
+             over the {max_bytes} bytes of wait_end_of_query_max_bytes; use a row format \
+             (TSV, JSONEachRow, Parquet, ArrowStream) for larger results"
+        ),
+    }
 }
 
 fn error_frame(error: EngineError, poisoned: bool) -> Frame {

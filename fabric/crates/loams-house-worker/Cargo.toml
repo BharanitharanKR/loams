@@ -39,6 +39,11 @@ seccompiler.workspace = true
 nix = { workspace = true, features = ["sched", "socket", "resource", "user", "signal"] }
 # The system call numbers and constants the seccomp filter names.
 libc.workspace = true
+# One document per HTTP result (HS1 R8.12, `document.rs`): `ArrowStream`
+# messages walked by their headers, and per-block Parquet files spliced into one
+# by copying column chunks (no codec is needed, nothing is decoded).
+arrow-ipc.workspace = true
+parquet = { version = "59", default-features = false }
 
 [dev-dependencies]
 # Reading the Arrow, ArrowStream and Parquet bytes back with real readers in

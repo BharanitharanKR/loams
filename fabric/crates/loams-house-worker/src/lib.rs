@@ -15,6 +15,7 @@
 //! (feature `inproc-worker`) can run it on a thread of the front for development.
 
 pub mod config;
+pub mod document;
 pub mod forwarder;
 pub mod sandbox;
 pub mod serve;

@@ -74,7 +74,7 @@ use hyper::body::Incoming;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::{TokioIo, TokioTimer};
-use loams_house_ipc::{Execute, Limits, Progress};
+use loams_house_ipc::{Execute, Limits, Output, Progress};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Semaphore, mpsc};
@@ -1000,6 +1000,11 @@ async fn run(
         params: query_params,
         limits: Limits::default(),
         input,
+        // One document per response, whatever the format and the blocks (R8.12);
+        // a format that needs the whole result is held to the result cap.
+        output: Output::Document {
+            max_buffered_bytes: config.wait_end_of_query_max_bytes,
+        },
     };
     let has_input = execute.input.is_some();
     if let Err(err) = lease.start(execute).await {

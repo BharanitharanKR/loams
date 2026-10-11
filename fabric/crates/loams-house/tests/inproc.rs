@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use loams_house::{ExitReason, InprocWorker, Outcome, PoolConfig, WorkerPool};
-use loams_house_ipc::{Execute, Limits};
+use loams_house_ipc::{Execute, Limits, Output};
 
 fn statement(sql: &str) -> Execute {
     Execute {
@@ -21,6 +21,7 @@ fn statement(sql: &str) -> Execute {
         params: Vec::new(),
         limits: Limits::default(),
         input: None,
+        output: Output::Blocks,
     }
 }
 

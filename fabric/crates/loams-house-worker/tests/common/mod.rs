@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use loams_house::{PoolConfig, ProcessLauncher, WorkerPool};
-use loams_house_ipc::{Execute, Limits};
+use loams_house_ipc::{Execute, Limits, Output};
 
 /// The worker binary this package builds.
 pub const WORKER: &str = env!("CARGO_BIN_EXE_loams-house-worker");
@@ -59,6 +59,7 @@ pub fn statement(sql: &str, format: &str) -> Execute {
         params: Vec::new(),
         limits: Limits::default(),
         input: None,
+        output: Output::Blocks,
     }
 }
 

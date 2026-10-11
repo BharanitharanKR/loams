@@ -220,6 +220,7 @@ fn execute(
         params: st.params.clone(),
         limits,
         input: None,
+        output: loams_house_ipc::Output::Blocks,
     }
 }
 

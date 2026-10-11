@@ -1685,6 +1685,7 @@ name = "loams-house-worker"
 version = "0.0.1"
 dependencies = [
  "arrow",
+ "arrow-ipc",
  "base64 0.22.1",
  "buffa",
  "bytes",
