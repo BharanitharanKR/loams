@@ -484,7 +484,8 @@ impl Tools {
         };
         Ok(json!({
             "chat": chat,
-            "originDeviceId": origin.device_id,
+            // The daemon runs on this device; an injected shim's chat is local.
+            "originDeviceId": origin.chat_id.as_ref().map(|_| local_device.clone()),
             "localDeviceId": local_device,
             "workspaceScope": engine.get("workspaceScope").cloned().unwrap_or(Value::Null),
             "note": if origin.chat_id.is_some() {
@@ -1223,7 +1224,6 @@ mod tests {
             world.clone(),
             Origin {
                 chat_id: Some("chat-beta-2".into()),
-                device_id: Some("dev-local".into()),
             },
         );
         let err = tools
@@ -1332,7 +1332,6 @@ mod tests {
             world.clone(),
             Origin {
                 chat_id: Some("chat-beta-2".into()),
-                device_id: None,
             },
         );
         let created = tools
@@ -1479,7 +1478,6 @@ mod tests {
             world.clone(),
             Origin {
                 chat_id: Some("chat-beta-2".into()),
-                device_id: None,
             },
         );
         for args in [json!({}), json!({"parent":"Alpha"})] {

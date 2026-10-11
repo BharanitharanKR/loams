@@ -258,7 +258,9 @@ pub struct RunRequest {
 /// of whatever the user configured. Each driver spells it in its own dialect
 /// (Claude `--mcp-config`, ACP `session/new` `mcpServers`, Codex
 /// `mcp_servers.*` config overrides).
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+///
+/// `env` can hold a scoped run token, so `Debug` lists its keys only.
+#[derive(Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpServer {
     pub name: String,
@@ -267,6 +269,17 @@ pub struct McpServer {
     pub args: Vec<String>,
     #[serde(default)]
     pub env: std::collections::BTreeMap<String, String>,
+}
+
+impl std::fmt::Debug for McpServer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("McpServer")
+            .field("name", &self.name)
+            .field("command", &self.command)
+            .field("args", &self.args)
+            .field("env", &self.env.keys().collect::<Vec<_>>())
+            .finish()
+    }
 }
 
 /// Isolated-worktree directive riding [`RunRequest`]. The worktree is created

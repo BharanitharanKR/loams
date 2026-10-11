@@ -26,9 +26,12 @@ pub enum Command {
     /// and the loopback RPC server.
     Run(RunArgs),
     /// Serve the MCP (Model Context Protocol) server on stdin/stdout,
-    /// proxying to the running daemon's RPC. Harness runs get it injected.
-    /// Logs go to stderr; stdout is the protocol.
-    Mcp,
+    /// proxying to the running daemon's RPC. Harness runs get it injected,
+    /// with LOAMS_AGENTD_RUN_TOKEN, LOAMS_AGENTD_PORT and
+    /// LOAMS_AGENTD_SESSION_ID set; without LOAMS_AGENTD_PORT the port is read
+    /// from the discovery file beside --config. Logs go to stderr; stdout is
+    /// the protocol.
+    Mcp(ConfigArg),
     /// Show the daemon directory and whether a daemon is running there.
     Status(ConfigArg),
     /// Print the daemon's version.

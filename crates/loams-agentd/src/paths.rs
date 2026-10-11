@@ -5,7 +5,8 @@
 //! ```text
 //! config.toml   agentd.json   agentd.token   agentd.lock
 //! store/        the sessions engine's data (DocsStore, journals)
-//! logs/         the daemon's own log
+//! adapters/     managed installs of the harnesses' ACP adapters
+//! logs/         the daemon's own log (agentd.log)
 //! ```
 //!
 //! The directory is owner-only (0700, or an owner-and-SYSTEM DACL on Windows).
@@ -74,6 +75,12 @@ impl Paths {
     /// `store/`, the sessions engine's data directory.
     pub fn store(&self) -> PathBuf {
         self.dir.join("store")
+    }
+
+    /// `adapters/`, where harness ACP adapters are installed (DD1 Task 7;
+    /// the fork used `~/.loams-desktop/adapters`).
+    pub fn adapters(&self) -> PathBuf {
+        self.dir.join("adapters")
     }
 
     pub fn logs(&self) -> PathBuf {

@@ -1,9 +1,11 @@
 //! `Hello`, the handshake (design §50 §5.4).
 //!
-//! [`HelloService`] answers `Hello` in front of the engine's methods. A client
-//! with another protocol gets `protocol_mismatch: …` and its connection is
-//! closed ([`RpcError::Fatal`]). [`probe`] is the client side, used by a
-//! second `run` and by `status` to confirm a daemon found through discovery.
+//! [`HelloService`] answers `Hello` in front of the engine's methods, with the
+//! role the connection's token gave it. A client with another protocol gets
+//! `protocol_mismatch: …` and its connection is closed ([`RpcError::Fatal`]).
+//! That `Hello` comes first on every connection is the RPC server's rule
+//! (DD1 Task 7). [`probe`] is the client side, used by a second `run` and by
+//! `status` to confirm a daemon found through discovery.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -40,9 +42,8 @@ pub struct DaemonInfo {
 }
 
 impl DaemonInfo {
-    /// `Hello`'s reply. Every connection is `owner` until the RPC checks
-    /// tokens (DD1 Task 7).
-    pub fn reply(&self) -> HelloReply {
+    /// `Hello`'s reply to a connection with `role`.
+    pub fn reply(&self, role: Role) -> HelloReply {
         HelloReply {
             protocol: AGENTD_PROTOCOL,
             version: VERSION.to_string(),
@@ -50,21 +51,22 @@ impl DaemonInfo {
             mode: self.mode,
             pid: self.pid,
             started_at_ms: self.started_at_ms,
-            role: Role::Owner,
+            role,
             features: Vec::new(),
         }
     }
 }
 
-/// Serves `Hello`; every other method goes to `inner`.
+/// Serves `Hello` for one connection; every other method goes to `inner`.
 pub struct HelloService {
     inner: Arc<dyn RpcService>,
     info: DaemonInfo,
+    role: Role,
 }
 
 impl HelloService {
-    pub fn new(inner: Arc<dyn RpcService>, info: DaemonInfo) -> Self {
-        Self { inner, info }
+    pub fn new(inner: Arc<dyn RpcService>, info: DaemonInfo, role: Role) -> Self {
+        Self { inner, info, role }
     }
 }
 
@@ -72,6 +74,7 @@ impl std::fmt::Debug for HelloService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("HelloService")
             .field("info", &self.info)
+            .field("role", &self.role)
             .finish_non_exhaustive()
     }
 }
@@ -90,12 +93,13 @@ impl RpcService for HelloService {
                 hello.protocol
             )));
         }
-        RpcReply::value(&self.info.reply())
+        RpcReply::value(&self.info.reply(self.role))
     }
 }
 
-/// Say `Hello` to the daemon on loopback `port` as the CLI.
-pub async fn probe(port: u16) -> Result<HelloReply, RpcError> {
+/// Say `Hello` to the daemon on loopback `port` as the CLI, with the main
+/// `token` (the contents of `agentd.token`).
+pub async fn probe(port: u16, token: &str) -> Result<HelloReply, RpcError> {
     let hello = Hello {
         client: ClientKind::Cli,
         client_version: VERSION.to_string(),
@@ -103,7 +107,9 @@ pub async fn probe(port: u16) -> Result<HelloReply, RpcError> {
     };
     let params = serde_json::to_value(&hello).map_err(|e| RpcError::BadParams(e.to_string()))?;
     tokio::time::timeout(PROBE_TIMEOUT, async {
-        let client = loams_agentd_rpc::connect_ws(&format!("ws://127.0.0.1:{port}")).await?;
+        let client =
+            loams_agentd_rpc::connect_ws_with_token(&format!("ws://127.0.0.1:{port}"), token)
+                .await?;
         client.call_as(methods::HELLO, params).await
     })
     .await
@@ -128,6 +134,10 @@ mod tests {
     }
 
     fn service() -> Arc<HelloService> {
+        service_for(Role::Owner)
+    }
+
+    fn service_for(role: Role) -> Arc<HelloService> {
         Arc::new(HelloService::new(
             Arc::new(Engine),
             DaemonInfo {
@@ -135,7 +145,21 @@ mod tests {
                 pid: 42,
                 started_at_ms: 7,
             },
+            role,
         ))
+    }
+
+    #[tokio::test]
+    async fn hello_reports_the_connections_role() {
+        let client = loams_agentd_rpc::memory_client(service_for(Role::Mcp));
+        let reply: HelloReply = client
+            .call_as(
+                methods::HELLO,
+                serde_json::json!({"client": "mcp", "clientVersion": "1", "protocol": 1}),
+            )
+            .await
+            .expect("hello");
+        assert_eq!(reply.role, Role::Mcp);
     }
 
     #[tokio::test]

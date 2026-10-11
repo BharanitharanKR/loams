@@ -7,7 +7,7 @@ use loams_agentd::discovery;
 use loams_agentd::paths::Paths;
 use loams_agentd_proto::daemon::{DaemonMode, Discovery};
 use loams_agentd_proto::rpc::{AGENTD_PROTOCOL, PROTOCOL_MISMATCH, Role};
-use loams_agentd_rpc::{RpcError, connect_ws, methods};
+use loams_agentd_rpc::{RpcError, connect_ws_with_token, methods};
 use support::{Daemon, Home, block_on, hello_params};
 
 const CHILD: &str = "[daemon]\nmode = \"child\"\n";
@@ -149,8 +149,9 @@ fn protocol_mismatch_closes() {
     let home = Home::new(CHILD);
     let daemon = Daemon::start(&home, &["--child"]);
     let url = daemon.url();
+    let token = daemon.token.clone();
     block_on(async move {
-        let client = connect_ws(&url).await.unwrap();
+        let client = connect_ws_with_token(&url, &token).await.unwrap();
         let err = client
             .call(methods::HELLO, hello_params(AGENTD_PROTOCOL + 1))
             .await

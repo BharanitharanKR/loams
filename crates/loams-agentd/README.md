@@ -24,13 +24,16 @@ cargo run -p loams-agentd -- run --child --config .agentd-dev/config.toml
 - `agentd.token`, the RPC token (0600, new at every start);
 - `agentd.json`, the discovery file (protocol, version, pid, port, start time and mode; removed on a clean exit);
 - `store/`, the sessions engine's data;
-- `logs/`, the daemon's log.
+- `adapters/`, the harnesses' managed ACP adapter installs;
+- `logs/agentd.log`, the daemon's own log (a supervisor's capture of stdout and stderr goes to `logs/agentd.stdout.log`).
 
 The RPC listens on `127.0.0.1` on an ephemeral port, which `agentd.json` names. `--child` (Loams Desktop starts and stops the daemon) or `--service` (the per-user service) sets the mode that `Hello` reports; without either flag, `[daemon] mode` in the config decides. `LOAMS_AGENTD_CONFIG` overrides `--config`.
 
+Every WebSocket upgrade must carry `Authorization: Bearer <agentd.token>` and no `Origin`, with `Host: 127.0.0.1:<port>`; anything else is refused (401 or 403) before the RPC is served, and `Hello` must be the first call on a connection (design §50 §7).
+
 Exit codes: 0 stopped, 3 already running (a second `run` on the same directory prints `already running (pid …)`), 4 invalid config (the message names the key), 70 internal error.
 
-The other subcommands are `-- status --config <file>`, `-- version` and `-- mcp`. The `mcp` subcommand is the stdio shim; the engine starts it for harness runs, so you rarely need to run it yourself.
+The other subcommands are `-- status --config <file>`, `-- version` and `-- mcp`. The `mcp` subcommand is the stdio shim; the daemon injects it into each harness run with a token scoped to that run (`LOAMS_AGENTD_RUN_TOKEN`, `LOAMS_AGENTD_PORT`, `LOAMS_AGENTD_SESSION_ID`), so it is not useful on its own.
 
 Build and test one crate at a time with `-p`, for example `cargo test -p loams-agentd`. Use the shared target directory (never set `CARGO_TARGET_DIR`). `cargo clippy -p 'loams-agentd*' --all-targets -- -D warnings` runs the lint gate, and `scripts/ci/agentd-deps.sh` runs the headless guard.
 

@@ -16,6 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 loams-agentd-sessions.workspace = true
+loams-agentd-harness.workspace = true
 loams-agentd-proto.workspace = true
 loams-agentd-rpc.workspace = true
 loams-agentd-mcp.workspace = true
@@ -31,9 +32,6 @@ thiserror.workspace = true
 toml.workspace = true
 # Names the offending key of an invalid config.toml (already in the lock).
 serde_path_to_error = "0.1"
-# The RPC token: 32 bytes from the OS RNG, base64url.
-getrandom = "0.3"
-base64.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
@@ -47,6 +45,7 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Securit
 
 [dev-dependencies]
 tempfile.workspace = true
+futures.workspace = true
 
 # The workspace policy, except `unsafe_code` is `deny` rather than `forbid`: this crate
 # has audited FFI and process sites, each under `#[allow(unsafe_code)]` with a SAFETY

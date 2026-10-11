@@ -38,6 +38,27 @@ use crate::doc_host::{ChatDocHandle, DocHost};
 use crate::registry::{HarnessDescriptor, HarnessRegistry};
 use crate::run_journal::RunJournal;
 use crate::{EngineError, new_id, now_ms};
+use loams_agentd_rpc::ScopedTokens;
+
+/// The daemon's port and token issuer, for the injected MCP shim.
+#[derive(Clone)]
+struct McpEndpoint {
+    port: u16,
+    tokens: Arc<ScopedTokens>,
+}
+
+/// Revokes a run's scoped token when the run task ends (design §50 §7: a
+/// scoped token is valid for its run only).
+struct RunTokenLease {
+    tokens: Arc<ScopedTokens>,
+    run_id: String,
+}
+
+impl Drop for RunTokenLease {
+    fn drop(&mut self) {
+        self.tokens.revoke(&self.run_id);
+    }
+}
 
 /// One journaled event: the durable seq plus the event, as broadcast to subscribers.
 #[derive(Debug, Clone)]
@@ -141,9 +162,9 @@ struct RoutedSteer {
 
 struct Inner {
     device_id: String,
-    /// Loopback IPC port this engine serves, once known (0 = not serving):
-    /// what the injected `loams-agentd mcp` server dials back into.
-    ipc_port: std::sync::atomic::AtomicU16,
+    /// Where the injected `loams-agentd mcp` shim dials back in, and who
+    /// issues its scoped run tokens; `None` until the daemon serves.
+    mcp_endpoint: Mutex<Option<McpEndpoint>>,
     journal: Arc<RunJournal>,
     registry: Arc<HarnessRegistry>,
     /// Set-once (first wins), cleared on runtime retirement: sessions and
@@ -201,7 +222,7 @@ impl SessionsEngine {
         Self {
             inner: Arc::new(Inner {
                 device_id,
-                ipc_port: std::sync::atomic::AtomicU16::new(0),
+                mcp_endpoint: Mutex::new(None),
                 journal,
                 registry,
                 doc_host: Mutex::new(None),
@@ -218,13 +239,12 @@ impl SessionsEngine {
         }
     }
 
-    /// Record the loopback IPC port this engine serves. Runs started after
-    /// this carry Loams Desktop's MCP server (see [`Inner::loams_agentd_mcp`]); until then —
-    /// or with 0 — agents get no Loams Desktop tools rather than a dead server.
-    pub fn set_ipc_port(&self, port: u16) {
-        self.inner
-            .ipc_port
-            .store(port, std::sync::atomic::Ordering::Relaxed);
+    /// Record the daemon's loopback RPC port and its scoped run tokens. Runs
+    /// started after this carry Loams Desktop's MCP server with a token for
+    /// that run only (see [`Inner::loams_agentd_mcp`]); until then, or with
+    /// port 0, agents get no Loams Desktop tools rather than a dead server.
+    pub fn set_mcp_endpoint(&self, port: u16, tokens: Arc<ScopedTokens>) {
+        *lock(&self.inner.mcp_endpoint) = (port != 0).then_some(McpEndpoint { port, tokens });
     }
 
     /// Wire the doc host (called once at engine assembly; the two services are mutually
@@ -1196,28 +1216,43 @@ impl Inner {
         lock(&self.doc_host).clone()
     }
 
-    /// Loams Desktop's own MCP server for a run of `chat_id`: this binary's `loams-desktop
-    /// mcp` subcommand, dialing the engine's IPC port and stamped with the
-    /// originating chat + device so the agent's side chats link back here.
-    /// None when the engine serves no port or its executable is unknown.
-    fn loams_agentd_mcp(&self, chat_id: &str) -> Option<loams_agentd_proto::McpServer> {
-        let port = self.ipc_port.load(std::sync::atomic::Ordering::Relaxed);
-        if port == 0 {
-            return None;
-        }
+    /// Loams Desktop's own MCP server for one run of `chat_id`: this binary's
+    /// `loams-agentd mcp` subcommand, dialing the daemon's port with a scoped
+    /// run token bound to `chat_id` (design §50 §7). Its environment holds the
+    /// three scoped keys and nothing else, never the main token. The token
+    /// lives as long as the returned lease. None when the daemon serves no
+    /// port, its executable is unknown, or no token could be issued.
+    fn loams_agentd_mcp(
+        &self,
+        chat_id: &str,
+    ) -> Option<(loams_agentd_proto::McpServer, RunTokenLease)> {
+        use loams_agentd_proto::rpc::{ENV_PORT, ENV_RUN_TOKEN, ENV_SESSION_ID};
+        let endpoint = lock(&self.mcp_endpoint).clone()?;
         let command = std::env::current_exe().ok()?.to_str()?.to_owned();
-        Some(loams_agentd_proto::McpServer {
+        let token = match endpoint.tokens.issue(chat_id) {
+            Ok(token) => token,
+            Err(error) => {
+                tracing::warn!(chat = %chat_id, %error, "no run token; the run gets no MCP server");
+                return None;
+            }
+        };
+        let server = loams_agentd_proto::McpServer {
             name: "loams-desktop".into(),
             command,
             args: vec!["mcp".into()],
             env: [
-                ("LOAMS_DESKTOP_IPC_PORT".to_owned(), port.to_string()),
-                ("LOAMS_DESKTOP_CHAT_ID".to_owned(), chat_id.to_owned()),
-                ("LOAMS_DESKTOP_DEVICE_ID".to_owned(), self.device_id.clone()),
+                (ENV_RUN_TOKEN.to_owned(), token.token.expose().to_owned()),
+                (ENV_PORT.to_owned(), endpoint.port.to_string()),
+                (ENV_SESSION_ID.to_owned(), chat_id.to_owned()),
             ]
             .into_iter()
             .collect(),
-        })
+        };
+        let lease = RunTokenLease {
+            tokens: endpoint.tokens,
+            run_id: token.scope.run_id,
+        };
+        Some((server, lease))
     }
 
     fn workspace(&self) -> Option<crate::workspace_host::WorkspaceHost> {
@@ -1748,8 +1783,13 @@ async fn drive_run(
     }
     // The host stamps its own MCP server onto every run it drives, so the
     // agent can spawn and talk to side chats through the engine it runs in.
-    if request.mcp.is_none() {
-        request.mcp = inner.loams_agentd_mcp(&chat_id);
+    // Its scoped token is revoked when this run task ends (`_run_token`).
+    let mut _run_token = None;
+    if request.mcp.is_none()
+        && let Some((server, lease)) = inner.loams_agentd_mcp(&chat_id)
+    {
+        request.mcp = Some(server);
+        _run_token = Some(lease);
     }
     // Kept whole for the startup-crash retry (same user entry; dispatch
     // re-injects the stored resume id). Option so the retry branch (inside

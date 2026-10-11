@@ -76,8 +76,7 @@ fn resolve_claude_executable() -> Option<PathBuf> {
     crate::executable::find_on_paths("claude", extra)
 }
 
-/// The inline `--mcp-config` JSON for an injected server (the CLI accepts a
-/// JSON string as well as a file path).
+/// The `--mcp-config` JSON for an injected server.
 fn mcp_config_arg(mcp: &loams_agentd_proto::McpServer) -> String {
     serde_json::json!({
         "mcpServers": {
@@ -534,6 +533,8 @@ impl ClaudeHarness {
     ) -> Result<BoxStream<'static, Result<AgentEvent, HarnessError>>, HarnessError> {
         let exe = self.resolve_executable()?;
         let mut cmd = self.build_command(&exe, &request);
+        // Removed when the session ends.
+        let mut mcp_config = None;
         if title_only {
             cmd.args([
                 "--system-prompt",
@@ -548,9 +549,16 @@ impl ClaudeHarness {
             ]);
         } else if let Some(mcp) = &request.mcp {
             // Loams Desktop's own server rides beside the user's configured servers
-            // (no `--strict-mcp-config`): the CLI merges an inline JSON
-            // config with settings-sourced ones.
-            cmd.args(["--mcp-config", &mcp_config_arg(mcp)]);
+            // (no `--strict-mcp-config`): the CLI merges this config with
+            // settings-sourced ones. Its environment holds the run's scoped
+            // token, so it goes in a file in an owner-only directory, not on
+            // the command line, which other local users can read
+            // (`/proc/<pid>/cmdline`, design §50 §7).
+            let scratch = crate::scratch::ScratchDir::new("claude-mcp")?;
+            let path = scratch.path().join("mcp.json");
+            std::fs::write(&path, mcp_config_arg(mcp))?;
+            cmd.arg("--mcp-config").arg(&path);
+            mcp_config = Some(scratch);
         }
         let normalizer = if let Some(session_id) = &request.resume {
             let config = crate::model_context::root(
@@ -618,6 +626,7 @@ impl ClaudeHarness {
             interrupt_grace: self.interrupt_grace,
             kill_grace: self.kill_grace,
             stderr_tail,
+            mcp_config,
         }));
 
         Ok(futures::stream::unfold(event_rx, |mut rx| async move {
@@ -744,6 +753,8 @@ struct Session {
     kill_grace: Duration,
     /// Rolling stderr tail for the crash message on an unexpected exit.
     stderr_tail: crate::StderrTail,
+    /// The injected MCP server's config file, kept for the CLI's lifetime.
+    mcp_config: Option<crate::scratch::ScratchDir>,
 }
 
 /// The per-run event loop: one task multiplexing stdout frames, the steering
@@ -761,6 +772,7 @@ async fn run_session(session: Session) {
         interrupt_grace,
         kill_grace,
         stderr_tail,
+        mcp_config: _mcp_config,
     } = session;
     let RunControls {
         execution_lease: _execution_lease,

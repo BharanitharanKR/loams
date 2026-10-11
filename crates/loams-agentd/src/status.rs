@@ -19,7 +19,8 @@ pub fn status(config: &Path) -> anyhow::Result<()> {
         }
         return Ok(());
     };
-    match runtime.block_on(hello::probe(found.port)) {
+    let token = loams_agentd::token::read(&paths)?;
+    match runtime.block_on(hello::probe(found.port, token.expose())) {
         Ok(reply) => println!(
             "Daemon:    running (pid {}, version {}, protocol {}, mode {:?}, port {})",
             reply.pid, reply.version, reply.protocol, reply.mode, found.port

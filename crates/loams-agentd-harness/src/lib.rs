@@ -395,6 +395,7 @@ pub(crate) fn crash_message(
 }
 
 pub use acp::AcpHarness;
+pub use adapter_install::set_adapters_root;
 pub use claude::ClaudeHarness;
 pub use codex::CodexHarness;
 pub use opencode::OpencodeHarness;

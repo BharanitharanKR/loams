@@ -18,11 +18,19 @@ use async_trait::async_trait;
 use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 
+pub mod auth;
 mod client;
+pub mod fuzz;
+mod handshake;
+pub mod limits;
+pub mod roles;
 mod server;
 
-pub use client::{RpcClient, RpcSubscription, connect_ws};
-pub use server::{serve_connection, serve_ws_listener, serve_ws_until};
+pub use auth::{Credentials, Identity, RunScope, RunToken, ScopedTokens, Secret};
+pub use client::{RpcClient, RpcSubscription, connect_ws, connect_ws_with_token};
+pub use limits::Limits;
+pub use roles::Policy;
+pub use server::{Connections, WsServer, serve_connection};
 
 /// RPC method names — single source of truth for both ends.
 /// Full surface: docs/research/feature-inventory.md §2.
@@ -268,6 +276,12 @@ pub fn memory_client(service: Arc<dyn RpcService>) -> RpcClient {
 }
 
 #[cfg(test)]
+mod test_support;
+
+#[cfg(test)]
+mod security_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use futures::StreamExt;
@@ -500,11 +514,8 @@ mod tests {
 
     #[tokio::test]
     async fn websocket_round_trip() {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        tokio::spawn(serve_ws_listener(listener, Arc::new(TestService)));
-
-        let client = connect_ws(&format!("ws://127.0.0.1:{port}")).await.unwrap();
+        let served = test_support::serve(Arc::new(TestService)).await;
+        let client = test_support::dial(&served.url(), test_support::OWNER_TOKEN).await;
         let echoed = client
             .call("Echo", serde_json::json!("hello"))
             .await
@@ -524,36 +535,38 @@ mod tests {
     async fn handshake_with_origin_header_is_rejected() {
         use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        tokio::spawn(serve_ws_listener(listener, Arc::new(TestService)));
+        let served = test_support::serve(Arc::new(TestService)).await;
 
         // A browser page opening ws://127.0.0.1:{port} always sends Origin;
-        // the server must refuse the handshake before serving any RPC.
-        let mut req = format!("ws://127.0.0.1:{port}")
-            .into_client_request()
-            .unwrap();
+        // the server must refuse the handshake before serving any RPC, even
+        // with the right token.
+        let mut req = served.url().into_client_request().unwrap();
         req.headers_mut()
             .insert("origin", "https://evil.example".parse().unwrap());
-        let result = tokio_tungstenite::connect_async(req).await;
+        req.headers_mut().insert(
+            "authorization",
+            format!("Bearer {}", test_support::OWNER_TOKEN)
+                .parse()
+                .unwrap(),
+        );
+        let loopback = req;
+        let result = tokio_tungstenite::connect_async(loopback).await;
         assert!(
             result.is_err(),
             "handshake carrying an Origin header must be rejected"
         );
 
-        // A native viewport (no Origin) still connects and can call RPC — the
+        // A native client (no Origin) still connects and can call RPC — the
         // reject must not be a blanket denial.
-        let client = connect_ws(&format!("ws://127.0.0.1:{port}")).await.unwrap();
+        let client = test_support::dial(&served.url(), test_support::OWNER_TOKEN).await;
         let echoed = client.call("Echo", serde_json::json!("ok")).await.unwrap();
         assert_eq!(echoed, serde_json::json!("ok"));
     }
 
     #[tokio::test]
     async fn fatal_error_is_sent_then_the_websocket_closes() {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        tokio::spawn(serve_ws_listener(listener, Arc::new(TestService)));
-        let client = connect_ws(&format!("ws://127.0.0.1:{port}")).await.unwrap();
+        let served = test_support::serve(Arc::new(TestService)).await;
+        let client = test_support::dial(&served.url(), test_support::OWNER_TOKEN).await;
         // A stream left open must not keep the connection alive.
         let _never = client
             .subscribe("Never", serde_json::Value::Null)
@@ -637,18 +650,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn serve_ws_until_ends_open_connections_and_their_requests() {
+    async fn serve_until_ends_open_connections_and_their_requests() {
         let (dropped_tx, dropped_rx) = tokio::sync::oneshot::channel();
         let service = Arc::new(CancelAwareService {
             dropped: Mutex::new(Some(dropped_tx)),
         });
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
-        let server = tokio::spawn(serve_ws_until(listener, service.clone(), async {
-            let _ = stop_rx.await;
-        }));
-        let client = connect_ws(&format!("ws://127.0.0.1:{port}")).await.unwrap();
+        let served = test_support::serve(service.clone()).await;
+        let port = served.port;
+        let client = test_support::dial(&served.url(), test_support::OWNER_TOKEN).await;
         let _silent = client
             .subscribe_scoped("Silent", serde_json::Value::Null)
             .await
@@ -657,11 +666,9 @@ mod tests {
             tokio::task::yield_now().await;
         }
 
-        stop_tx.send(()).unwrap();
-        tokio::time::timeout(std::time::Duration::from_secs(10), server)
+        tokio::time::timeout(std::time::Duration::from_secs(10), served.stop())
             .await
-            .expect("the server returns once its connections end")
-            .unwrap();
+            .expect("the server returns once its connections end");
         // The in-flight request was dropped before the server returned.
         dropped_rx.await.expect("the open request was ended");
         let next = tokio::time::timeout(

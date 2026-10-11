@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use loams_agentd_proto::daemon::Discovery;
 use loams_agentd_proto::rpc::{AGENTD_PROTOCOL, HelloReply};
-use loams_agentd_rpc::{RpcError, connect_ws, methods};
+use loams_agentd_rpc::{RpcClient, RpcError, connect_ws_with_token, methods};
 
 /// How long a daemon may take to assemble its engine and publish discovery.
 const START_TIMEOUT: Duration = Duration::from_secs(90);
@@ -46,6 +46,11 @@ impl Home {
 
     pub fn file(&self, name: &str) -> PathBuf {
         self.dir.join(name)
+    }
+
+    /// The main token the running daemon wrote.
+    pub fn token(&self) -> String {
+        std::fs::read_to_string(self.file("agentd.token")).expect("read agentd.token")
     }
 
     /// `loams-agentd <args> --config <config>`, isolated from the developer's
@@ -135,6 +140,8 @@ pub struct Daemon {
     child: Option<Child>,
     pub pid: u32,
     pub discovery: Discovery,
+    /// The main token this daemon wrote at start.
+    pub token: String,
 }
 
 impl Daemon {
@@ -151,6 +158,7 @@ impl Daemon {
                     child: Some(child),
                     pid,
                     discovery,
+                    token: home.token(),
                 };
             }
             if let Some(status) = child.try_wait().expect("poll loams-agentd") {
@@ -171,21 +179,30 @@ impl Daemon {
         format!("ws://127.0.0.1:{}", self.discovery.port)
     }
 
-    /// `Hello` on a fresh connection.
+    /// `Hello` on a fresh connection with the main token.
     pub fn hello(&self, protocol: u32) -> Result<HelloReply, RpcError> {
         let url = self.url();
+        let token = self.token.clone();
         block_on(async move {
-            let client = connect_ws(&url).await?;
+            let client = connect_ws_with_token(&url, &token).await?;
             client.call_as(methods::HELLO, hello_params(protocol)).await
         })
     }
 
+    /// A connection with the main token that has said `Hello`.
+    pub async fn owner(&self) -> Result<RpcClient, RpcError> {
+        let client = connect_ws_with_token(&self.url(), &self.token).await?;
+        client
+            .call(methods::HELLO, hello_params(AGENTD_PROTOCOL))
+            .await?;
+        Ok(client)
+    }
+
     /// Stop it over the RPC (`StopEngine`) and wait for it to exit.
     pub fn stop(mut self) -> ExitStatus {
-        let url = self.url();
-        let reply = block_on(async move {
-            let client = connect_ws(&url).await?;
-            client
+        let reply = block_on(async {
+            self.owner()
+                .await?
                 .call(methods::STOP_ENGINE, serde_json::json!({}))
                 .await
         });

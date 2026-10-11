@@ -13,10 +13,13 @@ use anyhow::{Context, anyhow, bail};
 use loams_agentd_doc::{
     SessionCommandPayload, SessionMessageEntry, TranscriptFrame, apply_transcript_frame,
 };
+use loams_agentd_proto::rpc::{AGENTD_PROTOCOL, ClientKind, Hello};
 use loams_agentd_proto::{
     Chat, HarnessId, Model, ReasoningLevel, Session, SessionStatus, Space, SteeringMode,
 };
-use loams_agentd_rpc::{RpcClient, RpcError, RpcSubscription, connect_ws, methods};
+use loams_agentd_rpc::{
+    RpcClient, RpcError, RpcSubscription, Secret, connect_ws_with_token, methods,
+};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
@@ -28,27 +31,31 @@ const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(15);
 /// boundary (chat2 cutover etc.) — the same contract the UI follows.
 const RESUBSCRIBE_DELAY: Duration = Duration::from_millis(300);
 
-/// Which chat this server speaks for, when the engine injected it into a
-/// harness. Unset when a human runs `loams-agentd mcp` from a terminal.
+/// Which chat this server speaks for: the session its run token is bound to
+/// (`LOAMS_AGENTD_SESSION_ID`), when the daemon injected it into a harness run.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Origin {
     pub chat_id: Option<String>,
-    pub device_id: Option<String>,
 }
 
 impl Origin {
     pub fn from_env() -> Self {
-        let read = |key: &str| {
-            std::env::var(key)
+        Self {
+            chat_id: std::env::var(loams_agentd_proto::rpc::ENV_SESSION_ID)
                 .ok()
                 .map(|v| v.trim().to_owned())
-                .filter(|v| !v.is_empty())
-        };
-        Self {
-            chat_id: read("LOAMS_DESKTOP_CHAT_ID"),
-            device_id: read("LOAMS_DESKTOP_DEVICE_ID"),
+                .filter(|v| !v.is_empty()),
         }
     }
+}
+
+/// Where the daemon is and the run token to show it (design §50 §7).
+#[derive(Debug, Clone, Default)]
+pub struct Endpoint {
+    /// The daemon's loopback port; `None` when it could not be found.
+    pub port: Option<u16>,
+    /// The run's scoped token (`LOAMS_AGENTD_RUN_TOKEN`).
+    pub token: Option<Secret>,
 }
 
 /// `ListHarnesses` row — the engine's `HarnessDescriptor`, re-declared here
@@ -105,7 +112,8 @@ pub enum TurnOutcome {
 }
 
 pub struct LoamsDesktop {
-    url: String,
+    /// `None` for an in-process client ([`Self::with_client`]).
+    endpoint: Option<Endpoint>,
     origin: Origin,
     rpc: Mutex<Option<Arc<RpcClient>>>,
 }
@@ -113,17 +121,17 @@ pub struct LoamsDesktop {
 impl std::fmt::Debug for LoamsDesktop {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LoamsDesktop")
-            .field("url", &self.url)
+            .field("port", &self.endpoint.as_ref().and_then(|e| e.port))
             .finish_non_exhaustive()
     }
 }
 
 impl LoamsDesktop {
-    /// Lazy dialer: nothing connects until the first tool call, so `loams-desktop
-    /// mcp` starts (and answers `initialize`) even before the engine is up.
-    pub fn new(url: String, origin: Origin) -> Self {
+    /// Lazy dialer: nothing connects until the first tool call, so `loams-agentd
+    /// mcp` starts (and answers `initialize`) even before the daemon is up.
+    pub fn new(endpoint: Endpoint, origin: Origin) -> Self {
         Self {
-            url,
+            endpoint: Some(endpoint),
             origin,
             rpc: Mutex::new(None),
         }
@@ -132,7 +140,7 @@ impl LoamsDesktop {
     /// Wrap an already-connected client (tests, in-process embedding).
     pub fn with_client(client: RpcClient, origin: Origin) -> Self {
         Self {
-            url: String::new(),
+            endpoint: None,
             origin,
             rpc: Mutex::new(Some(Arc::new(client))),
         }
@@ -147,15 +155,37 @@ impl LoamsDesktop {
         if let Some(client) = slot.as_ref() {
             return Ok(client.clone());
         }
-        if self.url.is_empty() {
+        let Some(endpoint) = &self.endpoint else {
             bail!("engine connection closed");
-        }
-        let client = connect_ws(&self.url).await.map_err(|e| {
-            anyhow!(
-                "no Loams Desktop engine listening at {} ({e}) — is Loams Desktop running?",
-                self.url
-            )
-        })?;
+        };
+        let Some(port) = endpoint.port else {
+            bail!(
+                "the daemon's port is unknown: {} is not set and no --config names a running daemon",
+                loams_agentd_proto::rpc::ENV_PORT
+            );
+        };
+        let Some(token) = &endpoint.token else {
+            bail!(
+                "{} is not set: `loams-agentd mcp` works only inside a harness run the daemon started",
+                loams_agentd_proto::rpc::ENV_RUN_TOKEN
+            );
+        };
+        let url = format!("ws://127.0.0.1:{port}");
+        let client = connect_ws_with_token(&url, token.expose())
+            .await
+            .map_err(|e| {
+                anyhow!("no Loams Desktop daemon at {url} ({e}) — is Loams Desktop running?")
+            })?;
+        // Hello comes first on every connection (design §50 §5.4).
+        let hello = Hello {
+            client: ClientKind::Mcp,
+            client_version: env!("CARGO_PKG_VERSION").to_owned(),
+            protocol: AGENTD_PROTOCOL,
+        };
+        client
+            .call(methods::HELLO, serde_json::to_value(&hello)?)
+            .await
+            .map_err(|e| anyhow!("Hello: {e}"))?;
         let client = Arc::new(client);
         *slot = Some(client.clone());
         Ok(client)

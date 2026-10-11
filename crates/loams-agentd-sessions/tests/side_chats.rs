@@ -153,7 +153,8 @@ async fn fork_is_frozen_durable_idempotent_and_has_an_independent_provider_sessi
     );
     client.call(methods::FORK_SIDE_CHAT, params).await.unwrap();
     assert_eq!(target.doc().read_entries().unwrap().len(), 3);
-    core.sessions.set_ipc_port(27699);
+    let tokens = Arc::new(loams_agentd_rpc::ScopedTokens::new());
+    core.sessions.set_mcp_endpoint(27699, tokens.clone());
     core.sessions
         .dispatch(
             "side",
@@ -185,17 +186,17 @@ async fn fork_is_frozen_durable_idempotent_and_has_an_independent_provider_sessi
     .unwrap();
     let request = requests.lock().unwrap()[0].clone();
     assert_eq!(request.resume, None);
-    // The host stamps its MCP server onto the run: this binary's `loams-desktop
-    // mcp`, dialing the served port, identified as the side chat.
+    // The host stamps its MCP server onto the run: this binary's `loams-agentd
+    // mcp`, dialing the served port with a run token bound to the side chat.
     let mcp = request
         .mcp
         .clone()
         .expect("run carries the loams-desktop MCP server");
     assert_eq!(mcp.name, "loams-desktop");
     assert_eq!(mcp.args, ["mcp"]);
-    assert_eq!(mcp.env["LOAMS_DESKTOP_IPC_PORT"], "27699");
-    assert_eq!(mcp.env["LOAMS_DESKTOP_CHAT_ID"], "side");
-    assert_eq!(mcp.env["LOAMS_DESKTOP_DEVICE_ID"], core.device_id);
+    assert_eq!(mcp.env["LOAMS_AGENTD_PORT"], "27699");
+    assert_eq!(mcp.env["LOAMS_AGENTD_SESSION_ID"], "side");
+    assert_eq!(mcp.env["LOAMS_AGENTD_RUN_TOKEN"].len(), 43);
     assert!(request.prompt.contains("PINEAPPLE"));
     assert!(!request.prompt.contains("unfinished turn"));
     assert_eq!(source.doc().read_entries().unwrap().len(), 4);

@@ -19,7 +19,7 @@ use loams_agentd::config::Config;
 use loams_agentd::paths::Paths;
 use loams_agentd::server::{ServeOptions, serve};
 use loams_agentd::{
-    EXIT_ALREADY_RUNNING, EXIT_INTERNAL, EXIT_INVALID_CONFIG, discovery, hello, lock,
+    EXIT_ALREADY_RUNNING, EXIT_INTERNAL, EXIT_INVALID_CONFIG, discovery, hello, lock, token,
 };
 
 /// mimalloc, macOS only: libmalloc never returns the streaming churn's
@@ -71,18 +71,23 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     match cli.command {
         Command::Run(args) => run(&args),
-        Command::Mcp => {
+        Command::Mcp(config) => {
             // `mcp` owns stdout for the protocol: a single log line on it
             // would corrupt the JSON-RPC stream, so diagnostics go to stderr.
             init_stderr_tracing("warn");
+            let mut mcp = loams_agentd_mcp::McpConfig::from_env();
+            if mcp.endpoint.port.is_none() {
+                // Outside a harness run: find the daemon through discovery.
+                mcp.endpoint.port = config
+                    .resolve()
+                    .and_then(|path| Paths::of_config(&path).ok())
+                    .and_then(|paths| discovery::read(&paths))
+                    .map(|found| found.port);
+            }
             report(
                 tokio::runtime::Runtime::new()
                     .map_err(anyhow::Error::from)
-                    .and_then(|runtime| {
-                        runtime.block_on(loams_agentd_mcp::run(
-                            loams_agentd_mcp::McpConfig::from_env(),
-                        ))
-                    }),
+                    .and_then(|runtime| runtime.block_on(loams_agentd_mcp::run(mcp))),
             )
         }
         Command::Status(config) => {
@@ -221,7 +226,8 @@ fn already_running(paths: &Paths, holder: &str) -> ExitCode {
                 let deadline = tokio::time::Instant::now() + WAIT;
                 loop {
                     if let Some(found) = discovery::read(paths)
-                        && let Ok(reply) = hello::probe(found.port).await
+                        && let Ok(token) = token::read(paths)
+                        && let Ok(reply) = hello::probe(found.port, token.expose()).await
                         && reply.pid == found.pid
                     {
                         return Some((reply, found.port));
@@ -261,8 +267,10 @@ fn init_stderr_tracing(default: &str) {
         .init();
 }
 
-/// `run` logs at info to stdout and mirrors it to `<dir>/logs`: a daemon
-/// started by a service manager or by Electron has no visible stdout.
+/// `run` logs at info to stdout and mirrors it to `<dir>/logs/agentd.log`: a
+/// daemon started by a service manager or by Electron has no visible stdout.
+/// (What a supervisor captures from stdout and stderr goes to its own
+/// `agentd.stdout.log`, ruling T6-8, so the two never write one file.)
 /// loro's internal block-encode diagnostics log at info on every snapshot
 /// export, enough to fill a disk; they are quieted (RUST_LOG overrides).
 fn init_run_tracing(paths: &Paths) {
@@ -273,7 +281,7 @@ fn init_run_tracing(paths: &Paths) {
     let registry = tracing_subscriber::registry()
         .with(filter)
         .with(tracing_subscriber::fmt::layer());
-    match open_log_file_in(&paths.logs(), "run") {
+    match open_log_file_in(&paths.logs(), "agentd") {
         Some(file) => registry
             .with(
                 tracing_subscriber::fmt::layer()
@@ -331,7 +339,7 @@ fn harness_from_env() -> loams_agentd_sessions::HarnessId {
     }
 }
 
-/// `{dir}/loams-agentd-{mode}.log`, the previous launch preserved as `.old`.
+/// `{dir}/{name}.log`, the previous launch preserved as `.old`.
 ///
 /// The returned file holds an exclusive `flock` for the process lifetime:
 /// rotate-on-launch is only safe when nothing is still WRITING the current
@@ -339,11 +347,11 @@ fn harness_from_env() -> loams_agentd_sessions::HarnessId {
 /// installed app — the first rename put the daemon's live log at `.old`, the
 /// second unlinked it entirely, and the daemon spent the rest of the incident
 /// logging to an orphaned inode. A launch that finds the canonical file
-/// locked logs to `loams-agentd-{mode}.{pid}.log` instead; the next lock-holding
+/// locked logs to `{name}.{pid}.log` instead; the next lock-holding
 /// launch sweeps pid-suffixed files older than a week.
-fn open_log_file_in(dir: &std::path::Path, mode: &str) -> Option<std::fs::File> {
+fn open_log_file_in(dir: &std::path::Path, name: &str) -> Option<std::fs::File> {
     std::fs::create_dir_all(dir).ok()?;
-    let path = dir.join(format!("loams-agentd-{mode}.log"));
+    let path = dir.join(format!("{name}.log"));
     #[cfg(unix)]
     {
         use std::os::unix::io::AsRawFd;
@@ -361,17 +369,15 @@ fn open_log_file_in(dir: &std::path::Path, mode: &str) -> Option<std::fs::File> 
         let rc = unsafe { libc::flock(existing.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
         if rc != 0 {
             // A live process owns the canonical log — leave it alone.
-            return std::fs::File::create(
-                dir.join(format!("loams-agentd-{mode}.{}.log", std::process::id())),
-            )
-            .ok();
+            return std::fs::File::create(dir.join(format!("{name}.{}.log", std::process::id())))
+                .ok();
         }
         // No live writer: rotate, create fresh, and lock it as ours. (The
         // probe's flock dies with `existing`; a first-ever launch has nothing
         // to rotate — the probe itself created the empty file.)
         drop(existing);
         if preexisting {
-            let _ = std::fs::rename(&path, dir.join(format!("loams-agentd-{mode}.log.old")));
+            let _ = std::fs::rename(&path, dir.join(format!("{name}.log.old")));
         }
         let file = std::fs::File::create(&path).ok()?;
         // SAFETY: flock on a descriptor this function owns for the call; it touches no memory.
@@ -379,12 +385,12 @@ fn open_log_file_in(dir: &std::path::Path, mode: &str) -> Option<std::fs::File> 
         unsafe {
             libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB)
         };
-        sweep_stale_pid_logs(dir, mode);
+        sweep_stale_pid_logs(dir, name);
         Some(file)
     }
     #[cfg(not(unix))]
     {
-        let _ = std::fs::rename(&path, dir.join(format!("loams-agentd-{mode}.log.old")));
+        let _ = std::fs::rename(&path, dir.join(format!("{name}.log.old")));
         std::fs::File::create(&path).ok()
     }
 }
@@ -398,37 +404,34 @@ mod log_file_tests {
         let dir = tempfile::tempdir().unwrap();
         let dir = dir.path();
         // First launch owns the canonical file and keeps writing.
-        let first = open_log_file_in(dir, "run").expect("first log");
-        assert!(dir.join("loams-agentd-run.log").is_file());
+        let first = open_log_file_in(dir, "agentd").expect("first log");
+        assert!(dir.join("agentd.log").is_file());
         // Second launch while the first is alive: canonical file untouched,
         // pid-suffixed overflow file instead (the 2026-08-04 clobber).
-        let second = open_log_file_in(dir, "run").expect("second log");
-        let pid_path = dir.join(format!("loams-agentd-run.{}.log", std::process::id()));
+        let second = open_log_file_in(dir, "agentd").expect("second log");
+        let pid_path = dir.join(format!("agentd.{}.log", std::process::id()));
         assert!(pid_path.is_file(), "expected pid-suffixed overflow log");
         assert!(
-            !dir.join("loams-agentd-run.log.old").exists(),
+            !dir.join("agentd.log.old").exists(),
             "live canonical log must not be rotated away"
         );
         drop(second);
         // After the owner exits, a fresh launch rotates normally.
         drop(first);
-        let third = open_log_file_in(dir, "run").expect("third log");
-        assert!(
-            dir.join("loams-agentd-run.log.old").is_file(),
-            "rotation resumes"
-        );
+        let third = open_log_file_in(dir, "agentd").expect("third log");
+        assert!(dir.join("agentd.log.old").is_file(), "rotation resumes");
         drop(third);
     }
 }
 
-/// Delete `loams-agentd-{mode}.{pid}.log` overflow files older than a week — they
-/// only exist when a second instance raced a live one for the canonical log.
+/// Delete `{name}.{pid}.log` overflow files older than a week — they only
+/// exist when a second instance raced a live one for the canonical log.
 #[cfg(unix)]
-fn sweep_stale_pid_logs(dir: &std::path::Path, mode: &str) {
+fn sweep_stale_pid_logs(dir: &std::path::Path, name: &str) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
-    let prefix = format!("loams-agentd-{mode}.");
+    let prefix = format!("{name}.");
     let week = std::time::Duration::from_secs(7 * 24 * 60 * 60);
     for entry in entries.flatten() {
         let name = entry.file_name();

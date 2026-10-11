@@ -381,9 +381,42 @@ const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Dial a WebSocket RPC server (`ws://127.0.0.1:{ipc_port}`). The RPC socket
 /// is loopback only, so any other host is refused before dialing.
+/// It sends no credentials: `loams-agentd` refuses such an upgrade (401), so
+/// this is for tests and other servers; use [`connect_ws_with_token`].
 pub async fn connect_ws(url: &str) -> Result<RpcClient, RpcError> {
+    connect(url, None).await
+}
+
+/// [`connect_ws`] with `Authorization: Bearer <token>` on the upgrade, as
+/// `loams-agentd` requires (design §50 §7). The caller then says `Hello`.
+pub async fn connect_ws_with_token(url: &str, token: &str) -> Result<RpcClient, RpcError> {
+    connect(url, Some(token)).await
+}
+
+/// The upgrade request for a loopback `url`, with the bearer `token` if any.
+fn loopback_request(
+    url: &str,
+    token: Option<&str>,
+) -> Result<tokio_tungstenite::tungstenite::handshake::client::Request, RpcError> {
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    use tokio_tungstenite::tungstenite::http::HeaderValue;
+
     ensure_loopback(url)?;
-    let (ws, _) = tokio::time::timeout(CONNECT_TIMEOUT, tokio_tungstenite::connect_async(url))
+    let mut request = url
+        .into_client_request()
+        .map_err(|e| RpcError::Transport(e.to_string()))?;
+    if let Some(token) = token {
+        let mut value = HeaderValue::from_str(&format!("Bearer {token}"))
+            .map_err(|_| RpcError::Transport("the token is not a valid header value".into()))?;
+        value.set_sensitive(true);
+        request.headers_mut().insert("authorization", value);
+    }
+    Ok(request)
+}
+
+async fn connect(url: &str, token: Option<&str>) -> Result<RpcClient, RpcError> {
+    let request = loopback_request(url, token)?;
+    let (ws, _) = tokio::time::timeout(CONNECT_TIMEOUT, tokio_tungstenite::connect_async(request))
         .await
         .map_err(|_| RpcError::Transport(format!("timed out dialing {url}")))?
         .map_err(|e| RpcError::Transport(e.to_string()))?;

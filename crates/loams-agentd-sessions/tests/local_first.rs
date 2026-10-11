@@ -11,7 +11,6 @@ use loams_agentd_sessions::{
 fn config(data_dir: &std::path::Path) -> EngineConfig {
     EngineConfig {
         data_dir: data_dir.to_path_buf(),
-        ipc_port: 0,
         default_harness: HarnessId::Mock,
         terminal_shell: None,
         tool_outputs: Default::default(),

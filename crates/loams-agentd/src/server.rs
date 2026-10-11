@@ -4,7 +4,8 @@
 //! 1. rotates the token;
 //! 2. binds the RPC listener on `127.0.0.1:0` (loopback only, an ephemeral port);
 //! 3. assembles the sessions engine on `store/`;
-//! 4. serves `Hello` and the engine's methods on the listener;
+//! 4. serves `Hello` and the engine's methods on the listener, behind the
+//!    token, `Origin`, `Host` and role checks (design §50 §7, [`rpc_server`]);
 //! 5. publishes `agentd.json`;
 //! 6. runs until SIGTERM, Ctrl-C or `StopEngine`, then closes the listener and
 //!    every connection (awaiting their requests), stops the engine and removes
@@ -15,13 +16,17 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use loams_agentd_proto::daemon::{DaemonMode, Discovery};
 use loams_agentd_proto::rpc::AGENTD_PROTOCOL;
-use loams_agentd_rpc::{RpcError, RpcReply, RpcService, methods};
+use loams_agentd_rpc::{
+    Connections, Credentials, Identity, RpcError, RpcReply, RpcService, ScopedTokens, Secret,
+    WsServer, methods,
+};
 use loams_agentd_sessions::{Engine, EngineConfig, EngineProfile, HarnessId};
 
 use crate::config::Config;
 use crate::discovery;
 use crate::hello::{DaemonInfo, HelloService, VERSION};
 use crate::paths::Paths;
+use crate::roles::{ChatTree, DaemonPolicy};
 
 /// What [`serve`] runs with.
 #[derive(Debug, Clone)]
@@ -41,8 +46,9 @@ pub async fn serve(options: ServeOptions) -> anyhow::Result<()> {
         mode,
         default_harness,
     } = options;
-    // Held for the daemon's life; the RPC checks it from DD1 Task 7.
-    let _token = crate::token::rotate(&paths)?;
+    let token = crate::token::rotate(&paths)?;
+    // Harness adapters live in the daemon directory, not `~/.loams-desktop`.
+    loams_agentd_harness::set_adapters_root(paths.adapters());
 
     let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await?;
     let port = listener.local_addr()?.port();
@@ -51,14 +57,18 @@ pub async fn serve(options: ServeOptions) -> anyhow::Result<()> {
     std::fs::create_dir_all(&store)?;
     let engine_config = EngineConfig {
         data_dir: store.clone(),
-        ipc_port: port,
         default_harness,
         terminal_shell: None,
         tool_outputs: config.tool_outputs.limits(),
     };
     let runtime = Engine::assemble_runtime(&engine_config, EngineProfile::local(&store)?).await?;
-    // The MCP shim injected into harness runs dials this port.
-    runtime.core().sessions.set_ipc_port(port);
+    // The MCP shim injected into each harness run dials this port with a
+    // token scoped to that run.
+    let scoped = Arc::new(ScopedTokens::new());
+    runtime
+        .core()
+        .sessions
+        .set_mcp_endpoint(port, scoped.clone());
 
     let info = DaemonInfo {
         mode,
@@ -70,17 +80,25 @@ pub async fn serve(options: ServeOptions) -> anyhow::Result<()> {
         inner: runtime.core().rpc_service(),
         stop_tx,
     };
-    let service = Arc::new(HelloService::new(Arc::new(lifecycle), info));
+    let rpc = rpc_server(
+        Arc::new(lifecycle),
+        Arc::new(runtime.core().workspace.clone()),
+        info,
+        token,
+        scoped,
+    );
     let (server_stop, server_stopped) = tokio::sync::oneshot::channel::<()>();
-    let server = tokio::spawn(loams_agentd_rpc::serve_ws_until(listener, service, async {
+    let server = tokio::spawn(rpc.serve_until(listener, async {
         let _ = server_stopped.await;
     }));
     // Stops accepting, ends every connection and awaits their requests, so
     // nothing calls into the engine while it shuts down.
     let stop_server = || async {
         let _ = server_stop.send(());
-        if let Err(error) = server.await {
-            tracing::warn!(%error, "the RPC server task failed");
+        match server.await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => tracing::warn!(%error, "the RPC server failed"),
+            Err(error) => tracing::warn!(%error, "the RPC server task failed"),
         }
     };
 
@@ -116,6 +134,39 @@ pub async fn serve(options: ServeOptions) -> anyhow::Result<()> {
         tracing::warn!(%error, "agentd.json was not removed");
     }
     Ok(())
+}
+
+/// The daemon's RPC server (design §50 §7): the main `token` (role `owner`)
+/// and the `scoped` run tokens (role `mcp`), the role policy over `chats`,
+/// and `Hello` in front of `engine`.
+pub fn rpc_server(
+    engine: Arc<dyn RpcService>,
+    chats: Arc<dyn ChatTree>,
+    info: DaemonInfo,
+    token: Secret,
+    scoped: Arc<ScopedTokens>,
+) -> WsServer {
+    WsServer::new(
+        Arc::new(Credentials::new(token, scoped)),
+        Arc::new(DaemonConnections { engine, info }),
+        Arc::new(DaemonPolicy::new(chats)),
+    )
+}
+
+/// Each connection gets its own `Hello`, which reports the connection's role.
+struct DaemonConnections {
+    engine: Arc<dyn RpcService>,
+    info: DaemonInfo,
+}
+
+impl Connections for DaemonConnections {
+    fn open(&self, identity: &Identity) -> Arc<dyn RpcService> {
+        Arc::new(HelloService::new(
+            self.engine.clone(),
+            self.info,
+            identity.role,
+        ))
+    }
 }
 
 fn now_ms() -> i64 {

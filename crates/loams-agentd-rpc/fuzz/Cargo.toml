@@ -1,0 +1,36 @@
+# cargo-fuzz targets for the RPC server's untrusted input (DD1 Task 7).
+# Outside the workspace (it needs nightly and libFuzzer):
+#   cargo +nightly-2026-09-24 fuzz run frame -- -max_total_time=60
+#   cargo +nightly-2026-09-24 fuzz run handshake -- -max_total_time=60
+# The invariants live in loams_agentd_rpc::fuzz; its unit tests run them on
+# the seeds under stable.
+[package]
+name = "loams-agentd-rpc-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+loams-agentd-rpc = { path = ".." }
+
+[[bin]]
+name = "frame"
+path = "fuzz_targets/frame.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "handshake"
+path = "fuzz_targets/handshake.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

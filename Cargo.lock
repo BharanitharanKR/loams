@@ -7514,10 +7514,10 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64 0.23.1",
  "clap",
- "getrandom 0.3.4",
+ "futures",
  "libc",
+ "loams-agentd-harness",
  "loams-agentd-link",
  "loams-agentd-mcp",
  "loams-agentd-proto",
@@ -7665,13 +7665,19 @@ name = "loams-agentd-rpc"
 version = "0.0.1"
 dependencies = [
  "async-trait",
+ "base64 0.23.1",
  "futures",
+ "getrandom 0.3.4",
+ "httparse",
+ "loams-agentd-proto",
  "serde",
  "serde_json",
+ "subtle",
  "thiserror 2.0.21",
  "tokio",
  "tokio-tungstenite 0.24.0",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

@@ -166,7 +166,7 @@ fn cli_and_dir(id: HarnessId) -> (&'static str, &'static str) {
         Grok => ("grok", "~/.grok/bin or the npm global bin"),
         Hermes => ("hermes", "~/.local/bin or ~/.hermes/bin"),
         Devin => ("devin", "~/.local/bin"),
-        Antigravity => ("agy_acp_server", "~/.loams-desktop/adapters"),
+        Antigravity => ("agy_acp_server", "the daemon's adapters directory"),
         Mock => ("mock", "PATH"),
         Unsupported => ("an unsupported agent", "PATH"),
         LoamsBot => ("loams-desktop", "the Loams Desktop install"), // loams

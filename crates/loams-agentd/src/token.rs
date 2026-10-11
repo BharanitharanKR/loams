@@ -4,33 +4,22 @@
 
 use std::io;
 
-use base64::Engine as _;
-
 use crate::paths::Paths;
 
-/// The main RPC token (role `owner`).
-#[derive(Clone, PartialEq, Eq)]
-pub struct Token(String);
-
-impl Token {
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Debug for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Token(<redacted>)")
-    }
-}
+/// The main RPC token (role `owner`). `Debug` never shows it.
+pub type Token = loams_agentd_rpc::Secret;
 
 /// Generate a new token and replace `agentd.token` with it, atomically.
 pub fn rotate(paths: &Paths) -> io::Result<Token> {
-    let mut bytes = [0u8; 32];
-    getrandom::fill(&mut bytes).map_err(|error| io::Error::other(error.to_string()))?;
-    let token = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes);
-    crate::owner_only::write(&paths.token(), token.as_bytes())?;
-    Ok(Token(token))
+    let token = Token::generate()?;
+    crate::owner_only::write(&paths.token(), token.expose().as_bytes())?;
+    Ok(token)
+}
+
+/// The token a running daemon wrote, for the CLI's own calls (`status`, a
+/// second `run`).
+pub fn read(paths: &Paths) -> io::Result<Token> {
+    Ok(Token::new(std::fs::read_to_string(paths.token())?.trim()))
 }
 
 #[cfg(test)]
@@ -44,19 +33,17 @@ mod tests {
         let first = rotate(&paths).expect("rotate");
         assert_eq!(
             std::fs::read_to_string(paths.token()).expect("read"),
-            first.as_str()
+            first.expose()
         );
+        assert_eq!(first.expose().len(), 43);
         let second = rotate(&paths).expect("rotate");
-        assert_ne!(first, second);
-        assert_eq!(
-            std::fs::read_to_string(paths.token()).expect("read"),
-            second.as_str()
-        );
+        assert_ne!(first.expose(), second.expose());
+        assert_eq!(read(&paths).expect("read").expose(), second.expose());
     }
 
     #[test]
     fn debug_hides_the_token() {
-        let token = Token("secret-value".into());
-        assert_eq!(format!("{token:?}"), "Token(<redacted>)");
+        let token = Token::new("secret-value");
+        assert!(!format!("{token:?}").contains("secret-value"));
     }
 }

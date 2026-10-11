@@ -6,8 +6,9 @@
 //! before the adapter ever ran — silently, with an errno-encoded exit code
 //! (254 = ENOENT, the zeronsh/comet#95 crash) that surfaced as an opaque
 //! "harness protocol error". Instead, pinned adapter packages are installed
-//! ONCE into a loams-desktop-owned prefix (`~/.loams-desktop/adapters/<pkg>/<version>` on
-//! Unix, the local app-data directory on Windows), with its own npm cache
+//! ONCE into a Loams-owned prefix (`<adapters>/<pkg>/<version>`, where
+//! `<adapters>` is the daemon directory's `adapters/`, see [`adapters_root`]),
+//! with its own npm cache
 //! beside it, so a root-owned or read-only user cache cannot break us. Every
 //! subsequent launch spawns `node <entry>` directly — no npm anywhere near a
 //! chat turn.
@@ -62,19 +63,33 @@ impl NpmPin {
 pub(crate) const OK_MARKER: &str = ".loams-desktop-install-ok";
 const INSTALL_TIMEOUT: Duration = Duration::from_secs(600);
 
-/// Managed adapter storage. `$LOAMS_DESKTOP_ADAPTERS_DIR` wins, followed by
-/// `$LOAMS_DESKTOP_DATA_DIR/adapters`. Windows defaults to
-/// `%LOCALAPPDATA%/Loams Desktop/adapters` (or `%USERPROFILE%/AppData/Local/...`);
-/// Unix keeps `~/.loams-desktop/adapters`.
+/// The adapters directory the embedding process chose ([`set_adapters_root`]).
+static CONFIGURED_ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Install managed adapters under `root`. `loams-agentd` sets its own
+/// directory's `adapters/` at start (DD1 Task 7). The first call wins.
+pub fn set_adapters_root(root: PathBuf) {
+    if CONFIGURED_ROOT.set(root).is_err() {
+        tracing::debug!("the adapters directory was already set");
+    }
+}
+
+/// Managed adapter storage. `$LOAMS_DESKTOP_ADAPTERS_DIR` wins (a development
+/// override), then the directory set with [`set_adapters_root`] (the daemon's),
+/// then `$LOAMS_DESKTOP_DATA_DIR/adapters`. Without any of those, Windows uses
+/// `%LOCALAPPDATA%/Loams Desktop/adapters` (or `%USERPROFILE%/AppData/Local/...`)
+/// and Unix `~/.loams-desktop/adapters`.
 pub(crate) fn adapters_root() -> Option<PathBuf> {
     adapters_root_with(
         &|key| std::env::var_os(key),
+        CONFIGURED_ROOT.get().map(PathBuf::as_path),
         crate::executable::Platform::current(),
     )
 }
 
 fn adapters_root_with(
     env: &impl Fn(&str) -> Option<OsString>,
+    configured: Option<&Path>,
     platform: crate::executable::Platform,
 ) -> Option<PathBuf> {
     let value = |key| {
@@ -84,6 +99,9 @@ fn adapters_root_with(
     };
     if let Some(dir) = value("LOAMS_DESKTOP_ADAPTERS_DIR") {
         return Some(dir);
+    }
+    if let Some(dir) = configured {
+        return Some(dir.to_path_buf());
     }
     if let Some(dir) = value("LOAMS_DESKTOP_DATA_DIR") {
         return Some(dir.join("adapters"));
@@ -592,6 +610,8 @@ mod tests {
         let data = PathBuf::from(r"E:\Loams Desktop data");
         let local = PathBuf::from(r"C:\Users\Ada\AppData\Local");
         let profile = PathBuf::from(r"C:\Users\Ada");
+        let configured =
+            PathBuf::from(r"C:\Users\Ada\AppData\Roaming\Loams Desktop\agentd\adapters");
         assert_eq!(
             adapters_root_with(
                 &env(&[
@@ -602,13 +622,32 @@ mod tests {
                     ("LOAMS_DESKTOP_DATA_DIR", data.clone().into_os_string()),
                     ("LOCALAPPDATA", local.clone().into_os_string()),
                 ]),
+                Some(&configured),
                 crate::executable::Platform::Windows,
             ),
             Some(explicit)
         );
+        // The daemon's directory wins over the fork's data directory.
         assert_eq!(
             adapters_root_with(
                 &env(&[("LOAMS_DESKTOP_DATA_DIR", data.clone().into_os_string())]),
+                Some(&configured),
+                crate::executable::Platform::Windows,
+            ),
+            Some(configured.clone())
+        );
+        assert_eq!(
+            adapters_root_with(
+                &env(&[("HOME", profile.clone().into_os_string())]),
+                Some(&configured),
+                crate::executable::Platform::Unix,
+            ),
+            Some(configured.clone())
+        );
+        assert_eq!(
+            adapters_root_with(
+                &env(&[("LOAMS_DESKTOP_DATA_DIR", data.clone().into_os_string())]),
+                None,
                 crate::executable::Platform::Windows,
             ),
             Some(data.join("adapters"))
@@ -616,6 +655,7 @@ mod tests {
         assert_eq!(
             adapters_root_with(
                 &env(&[("LOCALAPPDATA", local.clone().into_os_string())]),
+                None,
                 crate::executable::Platform::Windows,
             ),
             Some(local.join("Loams Desktop").join("adapters"))
@@ -623,6 +663,7 @@ mod tests {
         assert_eq!(
             adapters_root_with(
                 &env(&[("USERPROFILE", profile.clone().into_os_string())]),
+                None,
                 crate::executable::Platform::Windows,
             ),
             Some(

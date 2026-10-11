@@ -11,10 +11,13 @@
 //! `tools/call`, and the `initialized` notification), and the repo already
 //! owns JSON-RPC framing for the Codex and ACP drivers. Zero new crates.
 //!
-//! When the engine launches a harness it can inject this server into the
-//! agent's MCP config with `LOAMS_DESKTOP_CHAT_ID` / `LOAMS_DESKTOP_DEVICE_ID` in the
-//! environment. Every send from such an agent is then attributed to its
-//! originating chat, and a chat can never message itself.
+//! When the daemon launches a harness it injects this server into the agent's
+//! MCP config with three keys in its environment: `LOAMS_AGENTD_RUN_TOKEN` (a
+//! token scoped to that run, role `mcp`), `LOAMS_AGENTD_PORT` and
+//! `LOAMS_AGENTD_SESSION_ID` (design §50 §7). The token reaches only the
+//! shim's methods on the run's own session and its side chats. Every send
+//! from such an agent is attributed to its originating chat, and a chat can
+//! never message itself.
 
 mod jsonrpc;
 mod loams_desktop;
@@ -22,29 +25,36 @@ mod tools;
 mod transcript;
 
 pub use jsonrpc::serve_stdio;
-pub use loams_desktop::{LoamsDesktop, Origin};
+pub use loams_desktop::{Endpoint, LoamsDesktop, Origin};
 pub use tools::{ToolDef, Tools};
 pub use transcript::{RenderOptions, RenderedMessage, render_entries};
 
-/// How `loams-agentd mcp` finds the engine and who it speaks for.
+/// How `loams-agentd mcp` finds the daemon and who it speaks for.
 #[derive(Debug, Clone)]
 pub struct McpConfig {
-    /// Loopback IPC port of the engine to proxy (`LOAMS_DESKTOP_IPC_PORT`, default 27654).
-    pub ipc_port: u16,
-    /// The chat whose agent spawned this server, when injected by the engine.
+    pub endpoint: Endpoint,
+    /// The chat whose agent spawned this server, when injected by the daemon.
     pub origin: Origin,
 }
 
 impl McpConfig {
-    /// Resolve from the process environment: `LOAMS_DESKTOP_IPC_PORT` for the engine,
-    /// `LOAMS_DESKTOP_CHAT_ID` / `LOAMS_DESKTOP_DEVICE_ID` for the originating chat.
+    /// Resolve from the process environment: `LOAMS_AGENTD_PORT` and
+    /// `LOAMS_AGENTD_RUN_TOKEN` for the daemon, `LOAMS_AGENTD_SESSION_ID` for
+    /// the originating chat. The caller may fill a missing port from the
+    /// daemon's discovery file.
     pub fn from_env() -> Self {
-        let ipc_port = std::env::var("LOAMS_DESKTOP_IPC_PORT")
-            .ok()
-            .and_then(|p| p.parse().ok())
-            .unwrap_or(27654);
+        let read = |key: &str| {
+            std::env::var(key)
+                .ok()
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty())
+        };
         Self {
-            ipc_port,
+            endpoint: Endpoint {
+                port: read(loams_agentd_proto::rpc::ENV_PORT).and_then(|p| p.parse().ok()),
+                token: read(loams_agentd_proto::rpc::ENV_RUN_TOKEN)
+                    .map(loams_agentd_rpc::Secret::new),
+            },
             origin: Origin::from_env(),
         }
     }
@@ -52,8 +62,7 @@ impl McpConfig {
 
 /// Run the MCP server on this process's stdin/stdout until stdin closes.
 pub async fn run(config: McpConfig) -> anyhow::Result<()> {
-    let loams_desktop =
-        LoamsDesktop::new(format!("ws://127.0.0.1:{}", config.ipc_port), config.origin);
+    let loams_desktop = LoamsDesktop::new(config.endpoint, config.origin);
     let tools = Tools::new(std::sync::Arc::new(loams_desktop));
     serve_stdio(std::sync::Arc::new(tools)).await
 }

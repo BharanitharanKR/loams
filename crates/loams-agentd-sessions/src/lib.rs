@@ -104,8 +104,6 @@ pub(crate) fn new_id() -> String {
 pub struct EngineConfig {
     /// Data directory (default `~/.loams-desktop`, dev `~/.loams-desktop-dev`).
     pub data_dir: PathBuf,
-    /// Localhost IPC port for the UI.
-    pub ipc_port: u16,
     /// Harness for doc-command runs on chats without a workspace `config` row.
     pub default_harness: HarnessId,
     /// A fixed shell for terminals and project actions; `None` = the user's `$SHELL`.
