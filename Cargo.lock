@@ -7966,18 +7966,26 @@ dependencies = [
 name = "loams-git"
 version = "0.1.0-preview.1"
 dependencies = [
+ "async-trait",
  "bytes",
  "crc32c",
+ "futures",
  "gix-hash",
  "gix-validate",
  "loams-cloudevents",
  "loams-common",
+ "loams-fs",
+ "loams-store",
+ "object_store 0.14.2",
  "proptest",
  "prost 0.14.4",
  "prost-build",
+ "rand 0.9.5",
  "sha2 0.11.0",
  "tempfile",
  "thiserror 2.0.21",
+ "tokio",
+ "tracing",
  "ulid 3.0.0",
 ]
 
