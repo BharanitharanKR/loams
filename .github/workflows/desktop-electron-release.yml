@@ -213,8 +213,12 @@ jobs:
       - name: protoc and NASM
         shell: pwsh
         run: |
-          choco install --no-progress -y protobuf
+          # Chocolatey's package is `protoc` (there is no `protobuf`), and pwsh
+          # does not stop on a native command's failure, so check each one.
+          choco install --no-progress -y protoc
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           choco install --no-progress -y nasm
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           "$env:ChocolateyInstall\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:

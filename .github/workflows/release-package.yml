@@ -325,8 +325,12 @@ jobs:
       - name: protoc and NASM
         shell: pwsh
         run: |
-          choco install --no-progress -y protobuf
+          # Chocolatey's package is `protoc` (there is no `protobuf`), and pwsh
+          # does not stop on a native command's failure, so check each one.
+          choco install --no-progress -y protoc
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           choco install --no-progress -y nasm
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $env:Path += ";$env:ChocolateyInstall\bin"
           protoc --version
           nasm -v
