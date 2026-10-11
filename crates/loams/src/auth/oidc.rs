@@ -1,14 +1,19 @@
-//! OIDC access tokens (preview contract): a JWT signed by the issuer
-//! (`LOAMS_OIDC_ISSUER`, by default the hosted `https://auth.loams.dev`
-//! Authentik) for the audience `LOAMS_OIDC_AUDIENCE` (the console's client
-//! id), verified against the issuer's JWKS.
+//! OIDC access tokens (preview contract): a JWT signed by one of the
+//! issuers in `LOAMS_OIDC_ISSUER` (a comma list: by default the hosted
+//! `https://auth.loams.dev`, or the user's own Authentik, Keycloak, Auth0,
+//! Google or Cloudflare Access) for one of the audiences in
+//! `LOAMS_OIDC_AUDIENCE` (the console's client id), verified against that
+//! issuer's JWKS. The token's (unverified) `iss` only picks which issuer's
+//! keys to check it with; the signature and every claim are then verified.
+//! An issuer matches with or without its trailing `/`.
 //!
 //! - Only RS256 and EdDSA are accepted; the token's `alg` must match the
 //!   key's family, so `none`, HMAC and algorithm confusion are refused.
 //! - `iss`, `aud`, `exp` and `sub` are required; `nbf` is checked; the
 //!   clock leeway is [`LEEWAY_SECS`].
-//! - The JWKS comes from the issuer's discovery document (or
-//!   `LOAMS_OIDC_JWKS_URL`), is cached for [`JWKS_TTL`], and is fetched again
+//! - The JWKS comes from the issuer's discovery document (or the matching
+//!   entry of `LOAMS_OIDC_JWKS_URL`; a Cloudflare Access team domain uses
+//!   `/cdn-cgi/access/certs`), is cached for [`JWKS_TTL`], and is fetched again
 //!   early for an unknown `kid` at most every [`JWKS_MIN_REFETCH`]. A failed
 //!   refresh keeps the cached keys.
 //! - A valid token is admitted only if its `sub` is in
@@ -39,15 +44,61 @@ pub const JWKS_MIN_REFETCH: Duration = Duration::from_secs(30);
 pub const LEEWAY_SECS: u64 = 30;
 const FETCH_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// One trusted issuer.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Issuer {
+    /// The `iss` its tokens carry (compared without a trailing `/`).
+    pub issuer: String,
+    /// The JWKS URL; `None`: the discovery document's `jwks_uri`.
+    pub jwks_url: Option<String>,
+}
+
+impl Issuer {
+    pub fn new(issuer: impl Into<String>) -> Self {
+        Self {
+            issuer: issuer.into(),
+            jwks_url: None,
+        }
+    }
+
+    fn discovery_url(&self) -> String {
+        format!(
+            "{}/.well-known/openid-configuration",
+            self.issuer.trim_end_matches('/')
+        )
+    }
+
+    /// The JWKS URL known without discovery: the configured one, or a
+    /// Cloudflare Access team domain's certificate endpoint.
+    fn known_jwks_url(&self) -> Option<String> {
+        if let Some(url) = &self.jwks_url {
+            return Some(url.clone());
+        }
+        let url = url::Url::parse(&self.issuer).ok()?;
+        url.host_str()?
+            .ends_with(".cloudflareaccess.com")
+            .then(|| format!("{}/cdn-cgi/access/certs", self.issuer.trim_end_matches('/')))
+    }
+
+    fn matches(&self, iss: &str) -> bool {
+        same_issuer(&self.issuer, iss)
+    }
+}
+
+/// Issuers compare without a trailing `/` (`https://auth.loams.dev` and
+/// Authentik's `https://auth.loams.dev/` are the same).
+fn same_issuer(a: &str, b: &str) -> bool {
+    a.trim_end_matches('/') == b.trim_end_matches('/')
+}
+
 /// `LOAMS_OIDC_*`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct OidcConfig {
-    /// The `iss` every token must carry, exactly (Authentik's ends in `/`).
-    pub issuer: String,
-    /// The `aud` every token must include.
-    pub audience: String,
-    /// The JWKS URL; `None`: the discovery document's `jwks_uri`.
-    pub jwks_url: Option<String>,
+    /// The trusted issuers (`LOAMS_OIDC_ISSUER`, a comma list).
+    pub issuers: Vec<Issuer>,
+    /// A token's `aud` must include one of these (`LOAMS_OIDC_AUDIENCE`, a
+    /// comma list: the console's client id, and a self-registered one).
+    pub audiences: Vec<String>,
     pub allowed_subjects: BTreeSet<String>,
     /// Lowercased; matched only with `email_verified: true`.
     pub allowed_emails: BTreeSet<String>,
@@ -57,11 +108,16 @@ pub struct OidcConfig {
 impl OidcConfig {
     /// Refuses a configuration the authenticator cannot run safely.
     pub fn validate(&self) -> Result<(), String> {
-        check_url("LOAMS_OIDC_ISSUER", &self.issuer)?;
-        if let Some(jwks) = &self.jwks_url {
-            check_url("LOAMS_OIDC_JWKS_URL", jwks)?;
+        if self.issuers.is_empty() {
+            return Err("LOAMS_OIDC_ISSUER is empty".to_owned());
         }
-        if self.audience.is_empty() {
+        for issuer in &self.issuers {
+            check_url("LOAMS_OIDC_ISSUER", &issuer.issuer)?;
+            if let Some(jwks) = &issuer.jwks_url {
+                check_url("LOAMS_OIDC_JWKS_URL", jwks)?;
+            }
+        }
+        if self.audiences.iter().all(|a| a.trim().is_empty()) {
             return Err("LOAMS_OIDC_AUDIENCE is empty".to_owned());
         }
         if self.allowed_subjects.is_empty()
@@ -76,13 +132,6 @@ impl OidcConfig {
             );
         }
         Ok(())
-    }
-
-    fn discovery_url(&self) -> String {
-        format!(
-            "{}/.well-known/openid-configuration",
-            self.issuer.trim_end_matches('/')
-        )
     }
 }
 
@@ -110,14 +159,37 @@ struct Cached {
     fetched: Instant,
 }
 
-/// Verifies OIDC JWTs against the issuer's JWKS.
+/// One issuer's signing keys.
+#[derive(Debug)]
+struct IssuerKeys {
+    issuer: Issuer,
+    cache: RwLock<Option<Cached>>,
+    /// Serializes fetches; holds when the last one started.
+    fetching: Mutex<Option<Instant>>,
+}
+
+/// Verifies OIDC JWTs against their issuer's JWKS.
 #[derive(Debug)]
 pub struct OidcAuthenticator {
     config: OidcConfig,
     http: reqwest::Client,
-    cache: RwLock<Option<Cached>>,
-    /// Serializes fetches; holds when the last one started.
-    fetching: Mutex<Option<Instant>>,
+    issuers: Vec<IssuerKeys>,
+}
+
+/// The only claim read before the signature is checked.
+#[derive(Debug, Deserialize)]
+struct Unverified {
+    iss: Option<String>,
+}
+
+/// The token's `iss`, unverified: it only picks the issuer's keys.
+fn unverified_issuer(token: &str) -> Option<String> {
+    use base64::Engine as _;
+    let payload = token.split('.').nth(1)?;
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload.trim_end_matches('='))
+        .ok()?;
+    serde_json::from_slice::<Unverified>(&bytes).ok()?.iss
 }
 
 #[derive(Debug, Deserialize)]
@@ -149,21 +221,29 @@ impl OidcAuthenticator {
             .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|e| format!("the OIDC HTTP client: {e}"))?;
+        let issuers = config
+            .issuers
+            .iter()
+            .map(|issuer| IssuerKeys {
+                issuer: issuer.clone(),
+                cache: RwLock::new(None),
+                fetching: Mutex::new(None),
+            })
+            .collect();
         Ok(Self {
             config,
             http,
-            cache: RwLock::new(None),
-            fetching: Mutex::new(None),
+            issuers,
         })
     }
 
-    async fn fetch(&self) -> Result<JwkSet, String> {
-        let jwks_url = match &self.config.jwks_url {
-            Some(url) => url.clone(),
+    async fn fetch(&self, issuer: &Issuer) -> Result<JwkSet, String> {
+        let jwks_url = match issuer.known_jwks_url() {
+            Some(url) => url,
             None => {
                 let discovery: Discovery = self
                     .http
-                    .get(self.config.discovery_url())
+                    .get(issuer.discovery_url())
                     .send()
                     .await
                     .and_then(reqwest::Response::error_for_status)
@@ -171,10 +251,10 @@ impl OidcAuthenticator {
                     .json()
                     .await
                     .map_err(|e| format!("OIDC discovery: {e}"))?;
-                if discovery.issuer != self.config.issuer {
+                if !same_issuer(&discovery.issuer, &issuer.issuer) {
                     return Err(format!(
                         "OIDC discovery names the issuer {:?}, not LOAMS_OIDC_ISSUER {:?}",
-                        discovery.issuer, self.config.issuer
+                        discovery.issuer, issuer.issuer
                     ));
                 }
                 check_url("jwks_uri", &discovery.jwks_uri)?;
@@ -194,16 +274,16 @@ impl OidcAuthenticator {
 
     /// The cached keys, fetched when absent, stale, or (`force`) when a
     /// `kid` is unknown and the last fetch is old enough.
-    async fn keys(&self, force: bool) -> Result<JwkSet, AuthError> {
+    async fn keys(&self, at: &IssuerKeys, force: bool) -> Result<JwkSet, AuthError> {
         if !force
-            && let Some(cached) = self.cache.read().await.as_ref()
+            && let Some(cached) = at.cache.read().await.as_ref()
             && cached.fetched.elapsed() < JWKS_TTL
         {
             return Ok(cached.keys.clone());
         }
-        let mut last = self.fetching.lock().await;
+        let mut last = at.fetching.lock().await;
         // Another request may have refreshed while this one waited.
-        if let Some(cached) = self.cache.read().await.as_ref() {
+        if let Some(cached) = at.cache.read().await.as_ref() {
             let fresh = cached.fetched.elapsed() < JWKS_TTL;
             let recent = last.is_some_and(|t| t.elapsed() < JWKS_MIN_REFETCH);
             if (fresh && !force) || recent {
@@ -211,17 +291,17 @@ impl OidcAuthenticator {
             }
         }
         *last = Some(Instant::now());
-        match self.fetch().await {
+        match self.fetch(&at.issuer).await {
             Ok(keys) => {
-                *self.cache.write().await = Some(Cached {
+                *at.cache.write().await = Some(Cached {
                     keys: keys.clone(),
                     fetched: Instant::now(),
                 });
                 Ok(keys)
             }
             Err(err) => {
-                tracing::warn!(%err, "fetching the OIDC signing keys failed");
-                match self.cache.read().await.as_ref() {
+                tracing::warn!(%err, issuer = at.issuer.issuer, "fetching the OIDC signing keys failed");
+                match at.cache.read().await.as_ref() {
                     Some(cached) => Ok(cached.keys.clone()),
                     None => Err(AuthError::unavailable(
                         reason::AUTH_UNAVAILABLE,
@@ -261,10 +341,23 @@ impl OidcAuthenticator {
                 ),
             ));
         }
-        let mut keys = self.keys(false).await?;
+        let iss = unverified_issuer(token).ok_or_else(|| {
+            AuthError::unauthenticated(reason::TOKEN_MALFORMED, "the token has no iss claim")
+        })?;
+        let at = self
+            .issuers
+            .iter()
+            .find(|keys| keys.issuer.matches(&iss))
+            .ok_or_else(|| {
+                AuthError::unauthenticated(
+                    reason::TOKEN_WRONG_ISSUER,
+                    "the token is from an issuer this engine does not trust (LOAMS_OIDC_ISSUER)",
+                )
+            })?;
+        let mut keys = self.keys(at, false).await?;
         let mut jwk = Self::find(&keys, header.kid.as_deref(), header.alg).cloned();
         if jwk.is_none() {
-            keys = self.keys(true).await?;
+            keys = self.keys(at, true).await?;
             jwk = Self::find(&keys, header.kid.as_deref(), header.alg).cloned();
         }
         let jwk = jwk.ok_or_else(|| {
@@ -286,8 +379,9 @@ impl OidcAuthenticator {
             )
         })?;
         let mut validation = Validation::new(header.alg);
-        validation.set_issuer(&[&self.config.issuer]);
-        validation.set_audience(&[&self.config.audience]);
+        // The exact `iss` of the token, which matched a trusted issuer.
+        validation.set_issuer(&[&iss]);
+        validation.set_audience(&self.config.audiences);
         validation.set_required_spec_claims(&["exp", "iss", "aud", "sub"]);
         validation.validate_nbf = true;
         validation.leeway = LEEWAY_SECS;
@@ -390,8 +484,8 @@ mod tests {
 
     fn config() -> OidcConfig {
         OidcConfig {
-            issuer: "https://auth.loams.dev/application/o/loams-console/".to_owned(),
-            audience: "loams-console".to_owned(),
+            issuers: vec![Issuer::new("https://auth.loams.dev")],
+            audiences: vec!["loams-console".to_owned()],
             allowed_emails: ["me@example.com".to_owned()].into(),
             ..OidcConfig::default()
         }
@@ -401,20 +495,45 @@ mod tests {
     fn config_needs_https_and_an_allowlist() {
         assert!(config().validate().is_ok());
         let mut c = config();
-        c.issuer = "http://auth.example.com/".to_owned();
+        c.issuers.push(Issuer::new("http://auth.example.com/"));
         assert!(c.validate().unwrap_err().contains("https"));
-        c.issuer = "http://127.0.0.1:9000/".to_owned();
+        c.issuers[1] = Issuer::new("http://127.0.0.1:9000/");
         assert!(c.validate().is_ok());
+        c.issuers.clear();
+        assert!(c.validate().unwrap_err().contains("LOAMS_OIDC_ISSUER"));
         let mut c = config();
         c.allowed_emails.clear();
         assert!(c.validate().unwrap_err().contains("allowlist"));
     }
 
     #[test]
-    fn discovery_url_handles_the_trailing_slash() {
+    fn issuers_match_with_or_without_the_trailing_slash() {
+        let issuer = Issuer::new("https://auth.loams.dev/");
         assert_eq!(
-            config().discovery_url(),
-            "https://auth.loams.dev/application/o/loams-console/.well-known/openid-configuration"
+            issuer.discovery_url(),
+            "https://auth.loams.dev/.well-known/openid-configuration"
         );
+        assert!(issuer.matches("https://auth.loams.dev"));
+        assert!(issuer.matches("https://auth.loams.dev/"));
+        assert!(!issuer.matches("https://auth.loams.dev.evil.example/"));
+        assert!(!issuer.matches("https://auth.loams.dev/application/o/x/"));
+        assert_eq!(issuer.known_jwks_url(), None);
+        assert_eq!(
+            Issuer::new("https://acme.cloudflareaccess.com").known_jwks_url(),
+            Some("https://acme.cloudflareaccess.com/cdn-cgi/access/certs".to_owned())
+        );
+    }
+
+    #[test]
+    fn the_unverified_issuer_is_read_from_the_payload() {
+        use base64::Engine as _;
+        let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .encode(br#"{"iss":"https://auth.loams.dev/","sub":"x"}"#);
+        assert_eq!(
+            unverified_issuer(&format!("e30.{payload}.sig")).as_deref(),
+            Some("https://auth.loams.dev/")
+        );
+        assert_eq!(unverified_issuer("e30.e30.sig"), None);
+        assert_eq!(unverified_issuer("garbage"), None);
     }
 }

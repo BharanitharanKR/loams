@@ -531,6 +531,9 @@ impl ServerConfig {
             return Ok(());
         }
         self.auth
+            .tailscale_listener()
+            .map_err(ServerError::Config)?;
+        self.auth
             .check_listeners(&self.guarded_listeners())
             .map_err(ServerError::Config)
     }
@@ -857,6 +860,8 @@ pub struct Server {
     hot: Option<HotTierImpl>,
     http: JoinHandle<()>,
     stop_http: oneshot::Sender<()>,
+    /// The `tailscale serve` target (`LOAMS_AUTH_MODE=tailscale`).
+    tailscale: Option<TailscaleTarget>,
     flight: Option<Flight>,
     #[cfg(feature = "mysql-wire")]
     mysql_wire: Option<crate::mysql_wire::MysqlHandle>,
@@ -874,6 +879,38 @@ pub struct Server {
     es: Option<Es>,
     /// Cluster mode only.
     cluster: Option<ClusterRuntime>,
+}
+
+/// The `tailscale serve` target: the main API on `LOAMS_TAILSCALE_LISTEN`,
+/// the one listener where Tailscale identity headers name the caller.
+#[derive(Debug)]
+struct TailscaleTarget {
+    addr: SocketAddr,
+    stop: CancellationToken,
+    task: JoinHandle<()>,
+}
+
+impl TailscaleTarget {
+    fn start(listener: tokio::net::TcpListener, addr: SocketAddr, app: axum::Router) -> Self {
+        let stop = CancellationToken::new();
+        let stopped = stop.clone();
+        let task = tokio::spawn(async move {
+            let serve =
+                axum::serve(listener, app).with_graceful_shutdown(stopped.cancelled_owned());
+            if let Err(err) = serve.await {
+                tracing::error!(%err, "the tailscale serve target failed");
+            }
+        });
+        Self { addr, stop, task }
+    }
+
+    async fn stop(self) {
+        self.stop.cancel();
+        let mut task = self.task;
+        if tokio::time::timeout(HTTP_GRACE, &mut task).await.is_err() {
+            task.abort();
+        }
+    }
 }
 
 /// The running cluster MVCC GC loop of a server on the TiKV metastore (R1
@@ -1055,6 +1092,7 @@ struct Assembled {
     worker: Option<WorkerHandle>,
     hot: Option<HotTierImpl>,
     app: axum::Router,
+    tailscale: Option<TailscaleTarget>,
     flight: Option<Flight>,
     #[cfg(feature = "mysql-wire")]
     mysql_wire: Option<crate::mysql_wire::MysqlHandle>,
@@ -1581,6 +1619,7 @@ impl Server {
             hot: parts.hot,
             http,
             stop_http,
+            tailscale: parts.tailscale,
             flight: parts.flight,
             #[cfg(feature = "mysql-wire")]
             mysql_wire: parts.mysql_wire,
@@ -1683,6 +1722,7 @@ impl Server {
                     hot: parts.hot,
                     http,
                     stop_http,
+                    tailscale: parts.tailscale,
                     flight: parts.flight,
                     #[cfg(feature = "mysql-wire")]
                     mysql_wire: parts.mysql_wire,
@@ -1914,12 +1954,35 @@ impl Server {
         };
         let guard = crate::auth::AuthLayerState::new(auth.clone(), &[]);
         let main_guard =
-            crate::auth::AuthLayerState::new(auth, crate::auth::layer::MAIN_PUBLIC_PATHS);
+            crate::auth::AuthLayerState::new(auth.clone(), crate::auth::layer::MAIN_PUBLIC_PATHS);
+        let tailscale_guard = crate::auth::AuthLayerState::tailscale_target(
+            auth,
+            crate::auth::layer::MAIN_PUBLIC_PATHS,
+        );
         // Scan plans name the Lance datasets under the bucket (Task 14 rule 8).
         config.query.lance_base_url = Some(bucket_url(config)?);
         let cache = RangeCache::new(store.clone(), config.cache.clone()).await?;
         // Flight SQL listens after the HTTP API (rule 5.3), on gateways only.
         let flight_listener = match flight_addr(config).filter(|_| roles.gateway) {
+            Some(addr) => match bind(addr).await {
+                Ok(bound) => Some(bound),
+                Err(err) => {
+                    if let Err(err) = cache.close().await {
+                        tracing::warn!(%err, "closing the cache after a failed start");
+                    }
+                    return Err(err);
+                }
+            },
+            None => None,
+        };
+        // The `tailscale serve` target, on a standalone gateway in tailscale
+        // mode only (validate_auth checked it is loopback).
+        let tailscale_addr = config
+            .auth
+            .tailscale_listener()
+            .map_err(ServerError::Config)?
+            .filter(|_| roles.gateway && config.cluster.is_none());
+        let tailscale_listener = match tailscale_addr {
             Some(addr) => match bind(addr).await {
                 Ok(bound) => Some(bound),
                 Err(err) => {
@@ -2293,10 +2356,18 @@ impl Server {
             graph: graph.as_ref().map(|g| g.admin.clone()),
             house,
         };
-        let app = match (roles.gateway, config.cluster.is_some()) {
-            (true, false) => main_guard.wrap(api::router(state)),
-            (true, true) => api::router(state),
-            (false, _) => api::internal_router(state),
+        let (app, tailscale) = match (roles.gateway, config.cluster.is_some()) {
+            (true, false) => {
+                let router = api::router(state);
+                // The same API behind the layer that honours Tailscale
+                // identity headers; the main port strips them.
+                let tailscale = tailscale_listener.map(|(listener, addr)| {
+                    TailscaleTarget::start(listener, addr, tailscale_guard.wrap(router.clone()))
+                });
+                (main_guard.wrap(router), tailscale)
+            }
+            (true, true) => (api::router(state), None),
+            (false, _) => (api::internal_router(state), None),
         };
         let flight = flight_listener.map(|(listener, addr)| {
             let streams: Arc<dyn StreamProducer> = Arc::new(NativeStreamProducer {
@@ -2336,6 +2407,7 @@ impl Server {
             worker,
             hot,
             app,
+            tailscale,
             flight,
             #[cfg(feature = "mysql-wire")]
             mysql_wire,
@@ -2430,6 +2502,11 @@ impl Server {
             .map(|live| live.gc.is_none() && live.handle.store().as_tikv().is_some());
         #[cfg(not(feature = "live-tikv"))]
         self.live.as_ref().map(|_| false)
+    }
+
+    /// The `tailscale serve` target's address, in tailscale mode.
+    pub fn tailscale_addr(&self) -> Option<SocketAddr> {
+        self.tailscale.as_ref().map(|t| t.addr)
     }
 
     /// The address Flight SQL listens on, when it does.
@@ -2560,6 +2637,9 @@ impl Server {
             }
         }
         shutdown_phase("flight");
+        if let Some(tailscale) = self.tailscale {
+            tailscale.stop().await;
+        }
         if let Some(flight) = self.flight {
             flight.stop().await;
         }

@@ -11,7 +11,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
-use loams::auth::oidc::OidcConfig;
+use loams::auth::oidc::{Issuer as TrustedIssuer, OidcConfig};
+use loams::auth::tailscale::TailscaleConfig;
 use loams::auth::{AuthConfig, AuthMode};
 use loams::{Server, ServerConfig};
 use ring::signature::{Ed25519KeyPair, KeyPair as _};
@@ -339,21 +340,29 @@ impl Issuer {
 #[tokio::test]
 async fn oidc_tokens_are_verified_against_the_issuer() {
     let issuer = Issuer::start().await;
+    // A second trusted issuer (the user's own), configured without the
+    // trailing slash its tokens carry.
+    let own = Issuer::start().await;
     let keys = TempDir::new().unwrap();
     let (key, path) = keys_file(&keys);
     let auth = AuthConfig {
         mode: AuthMode::On {
             api_keys: true,
             oidc: true,
+            tailscale: false,
         },
         api_keys_file: Some(path),
         oidc: Some(OidcConfig {
-            issuer: issuer.url.clone(),
-            audience: AUDIENCE.into(),
+            issuers: vec![
+                TrustedIssuer::new(issuer.url.clone()),
+                TrustedIssuer::new(own.url.trim_end_matches('/')),
+            ],
+            audiences: vec![AUDIENCE.into(), "my-console".into()],
             allowed_emails: ["me@example.com".to_owned()].into(),
             ..OidcConfig::default()
         }),
         cors_origins: vec![CONSOLE.into()],
+        ..AuthConfig::off()
     };
     let running = Running::start(auth, |_| {}).await;
     let call = |token: String| {
@@ -367,6 +376,23 @@ async fn oidc_tokens_are_verified_against_the_issuer() {
     assert_eq!(body["principal"]["email"], "me@example.com", "{body}");
     // The API key still works beside OIDC.
     assert_eq!(call(key).await.0, 200);
+    // The second issuer, for the second audience; its key does not verify
+    // the first issuer's tokens.
+    let (status, _, body) = call(own.token(|c, _| {
+        c["aud"] = json!("my-console");
+        false
+    }))
+    .await;
+    assert_eq!(status, 200, "{body}");
+    let (status, reason, _) = call(own.token(|c, _| {
+        c["iss"] = json!(issuer.url);
+        false
+    }))
+    .await;
+    assert_eq!(
+        (status, reason.as_deref()),
+        (401, Some("token_bad_signature"))
+    );
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -507,6 +533,7 @@ async fn oidc_tokens_are_verified_against_the_issuer() {
 
     running.server.shutdown().await.unwrap();
     issuer.task.abort();
+    own.task.abort();
 }
 
 /// An OIDC allowlist is required: a shared issuer signs tokens for everyone.
@@ -519,18 +546,105 @@ async fn oidc_without_an_allowlist_refuses_to_start() {
         mode: AuthMode::On {
             api_keys: false,
             oidc: true,
+            tailscale: false,
         },
-        api_keys_file: None,
         oidc: Some(OidcConfig {
-            issuer: "https://auth.loams.dev/application/o/loams/".into(),
-            audience: AUDIENCE.into(),
+            issuers: vec![TrustedIssuer::new("https://auth.loams.dev")],
+            audiences: vec![AUDIENCE.into()],
             ..OidcConfig::default()
         }),
-        cors_origins: Vec::new(),
+        ..AuthConfig::off()
     };
     let err = Server::start(config)
         .await
         .expect_err("refused")
         .to_string();
     assert!(err.contains("allowlist"), "{err}");
+}
+
+/// Tailscale mode (owner ruling 2026-10-12): `Tailscale-User-Login` names
+/// the caller on the `tailscale serve` target only; on the main port it is
+/// stripped, so a forged login is no credential at all.
+#[tokio::test]
+async fn tailscale_identities_count_only_on_the_serve_target() {
+    let auth = AuthConfig {
+        mode: AuthMode::On {
+            api_keys: false,
+            oidc: false,
+            tailscale: true,
+        },
+        tailscale: Some(TailscaleConfig {
+            listen: LOOPBACK0,
+            allowed_users: ["me@example.com".to_owned()].into(),
+        }),
+        ..AuthConfig::off()
+    };
+    let running = Running::start(auth, |_| {}).await;
+    let target = running.server.tailscale_addr().expect("tailscale target");
+    assert_ne!(target, running.server.local_addr());
+    let who_am_i = |addr: SocketAddr, login: Option<&'static str>| async move {
+        let mut request = reqwest::Client::new()
+            .post(format!(
+                "http://{addr}/loams.instance.v1.InstanceService/WhoAmI"
+            ))
+            .header("content-type", "application/json")
+            .header("connect-protocol-version", "1")
+            .body("{}");
+        if let Some(login) = login {
+            request = request
+                .header("tailscale-user-login", login)
+                .header("tailscale-user-name", "Me");
+        }
+        let response = request.send().await.expect("call");
+        let status = response.status().as_u16();
+        let reason = response
+            .headers()
+            .get("loams-auth-reason")
+            .map(|v| v.to_str().unwrap().to_owned())
+            .unwrap_or_default();
+        let body: Value = response.json().await.unwrap_or(Value::Null);
+        (status, reason, body)
+    };
+    let main = running.server.local_addr();
+
+    // The main port ignores the headers: 401, as if none were sent.
+    let (status, reason, _) = who_am_i(main, Some("me@example.com")).await;
+    assert_eq!((status, reason.as_str()), (401, "token_missing"));
+    // The serve target maps the login to a principal.
+    let (status, _, body) = who_am_i(target, Some("Me@Example.com")).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(
+        body["principal"]["id"], "tailscale:me@example.com",
+        "{body}"
+    );
+    assert_eq!(body["principal"]["kind"], "PRINCIPAL_KIND_USER", "{body}");
+    assert_eq!(body["principal"]["displayName"], "Me", "{body}");
+    // The allowlist holds there; no login (a tagged node) is no credential.
+    let (status, reason, _) = who_am_i(target, Some("you@example.com")).await;
+    assert_eq!((status, reason.as_str()), (403, "principal_not_allowed"));
+    let (status, reason, _) = who_am_i(target, None).await;
+    assert_eq!((status, reason.as_str()), (401, "token_missing"));
+    running.server.shutdown().await.unwrap();
+
+    // The serve target must be loopback.
+    let dir = TempDir::new().unwrap();
+    let mut config = ServerConfig::new(dir.path());
+    config.listen = LOOPBACK0;
+    config.auth = AuthConfig {
+        mode: AuthMode::On {
+            api_keys: false,
+            oidc: false,
+            tailscale: true,
+        },
+        tailscale: Some(TailscaleConfig {
+            listen: "0.0.0.0:0".parse().unwrap(),
+            ..TailscaleConfig::default()
+        }),
+        ..AuthConfig::off()
+    };
+    let err = Server::start(config)
+        .await
+        .expect_err("refused")
+        .to_string();
+    assert!(err.contains("LOAMS_TAILSCALE_LISTEN"), "{err}");
 }

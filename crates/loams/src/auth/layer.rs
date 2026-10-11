@@ -8,9 +8,14 @@
 //! status and `WWW-Authenticate: Bearer`. Every refusal carries the reason in
 //! `loams-auth-reason`.
 //!
-//! Browsers on the console's origins (`LOAMS_CORS_ORIGINS`) get CORS: the
-//! preflight is answered here (it carries no credential), and every answer to
-//! an allowed origin, refusals included, carries `Access-Control-Allow-Origin`.
+//! Browsers on the console's origins (`LOAMS_CORS_ORIGINS`; any origin when
+//! it is empty and authentication is on, since credentials are bearer
+//! headers and never cookies) get CORS: the preflight is answered here (it
+//! carries no credential), and every answer to an allowed origin, refusals
+//! included, carries `Access-Control-Allow-Origin`.
+//!
+//! Tailscale identity headers are stripped on every listener but the
+//! `tailscale serve` target ([`AuthLayerState::tailscale_target`]).
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -23,7 +28,7 @@ use axum::response::Response;
 use base64::Engine as _;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, header};
 
-use super::{Auth, AuthError, AuthErrorKind, Credential, api_key, reason};
+use super::{Auth, AuthError, AuthErrorKind, Credential, api_key, reason, tailscale};
 
 /// The response header naming why a request was refused.
 pub const REASON_HEADER: &str = "loams-auth-reason";
@@ -53,17 +58,28 @@ const EXPOSE_HEADERS: &str = "grpc-status, grpc-message, grpc-status-details-bin
 #[derive(Clone, Debug, Default)]
 pub struct Cors {
     origins: Arc<BTreeSet<String>>,
+    any: bool,
 }
 
 impl Cors {
     pub fn new(origins: BTreeSet<String>) -> Self {
         Self {
             origins: Arc::new(origins),
+            any: false,
+        }
+    }
+
+    /// Every origin (an authenticated engine with no `LOAMS_CORS_ORIGINS`:
+    /// a self-hosted console may live on any domain).
+    pub fn any() -> Self {
+        Self {
+            origins: Arc::default(),
+            any: true,
         }
     }
 
     fn allows(&self, origin: &str) -> bool {
-        self.origins.contains(origin.trim_end_matches('/'))
+        self.any || self.origins.contains(origin.trim_end_matches('/'))
     }
 }
 
@@ -72,11 +88,27 @@ impl Cors {
 pub struct AuthLayerState {
     auth: Arc<Auth>,
     public_paths: &'static [&'static str],
+    /// The `tailscale serve` target: Tailscale identity headers count.
+    trust_tailscale: bool,
 }
 
 impl AuthLayerState {
     pub fn new(auth: Arc<Auth>, public_paths: &'static [&'static str]) -> Self {
-        Self { auth, public_paths }
+        Self {
+            auth,
+            public_paths,
+            trust_tailscale: false,
+        }
+    }
+
+    /// The layer of the `LOAMS_TAILSCALE_LISTEN` listener: the only one on
+    /// which `Tailscale-User-Login` names the caller.
+    pub fn tailscale_target(auth: Arc<Auth>, public_paths: &'static [&'static str]) -> Self {
+        Self {
+            auth,
+            public_paths,
+            trust_tailscale: true,
+        }
     }
 
     /// `router` behind the layer (every route and the fallback).
@@ -91,6 +123,13 @@ impl AuthLayerState {
 }
 
 async fn guard(State(state): State<AuthLayerState>, mut request: Request, next: Next) -> Response {
+    // Read (on the tailscale serve target only), then strip everywhere: no
+    // handler or proxy behind this layer ever sees them.
+    let tailnet_user = state
+        .trust_tailscale
+        .then(|| tailscale::identity(request.headers()))
+        .flatten();
+    tailscale::strip(request.headers_mut());
     let cors = state.auth.cors();
     let origin = request
         .headers()
@@ -138,9 +177,17 @@ async fn guard(State(state): State<AuthLayerState>, mut request: Request, next: 
     if state.public_paths.contains(&request.uri().path()) {
         return with_cors(next.run(request).await);
     }
-    let result = match credential(request.headers()) {
-        Ok(credential) => state.auth.authenticate(&credential).await,
-        Err(err) => Err(err),
+    let result = match (
+        credential(request.headers()),
+        &tailnet_user,
+        state.auth.tailscale(),
+    ) {
+        // An explicit credential wins; otherwise the tailnet identity.
+        (Err(err), Some((login, name)), Some(ts)) if err.reason == reason::TOKEN_MISSING => {
+            ts.admit(login, name.as_deref())
+        }
+        (Ok(credential), _, _) => state.auth.authenticate(&credential).await,
+        (Err(err), _, _) => Err(err),
     };
     match result {
         Ok(principal) => {
@@ -240,6 +287,16 @@ pub(crate) fn credential(headers: &HeaderMap) -> Result<Credential, AuthError> {
             .to_str()
             .map_err(|_| malformed("the api-key header is not text"))?;
         return classify(value);
+    }
+    // Cloudflare Access in front of the engine sends its JWT here.
+    if let Some(value) = headers.get("cf-access-jwt-assertion") {
+        let value = value
+            .to_str()
+            .map_err(|_| malformed("the Cf-Access-Jwt-Assertion header is not text"))?;
+        return match classify(value)? {
+            jwt @ Credential::Jwt(_) => Ok(jwt),
+            Credential::ApiKey(_) => Err(malformed("Cf-Access-Jwt-Assertion is not a JWT")),
+        };
     }
     Err(AuthError::unauthenticated(
         reason::TOKEN_MISSING,
@@ -442,6 +499,10 @@ mod tests {
         );
         assert_eq!(
             credential(&headers(&[("authorization", "Bearer a.b.c")])).unwrap(),
+            Credential::Jwt("a.b.c".to_owned())
+        );
+        assert_eq!(
+            credential(&headers(&[("cf-access-jwt-assertion", "a.b.c")])).unwrap(),
             Credential::Jwt("a.b.c".to_owned())
         );
     }

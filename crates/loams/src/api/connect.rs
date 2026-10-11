@@ -298,7 +298,7 @@ impl InstanceService for Instance {
             return Err(not_implemented("loams.instance.v1.InstanceService/WhoAmI"));
         };
         let kind = match principal.kind {
-            Kind::User => PrincipalKindMsg::PRINCIPAL_KIND_USER,
+            Kind::User | Kind::Tailscale => PrincipalKindMsg::PRINCIPAL_KIND_USER,
             Kind::ApiKey => PrincipalKindMsg::PRINCIPAL_KIND_SERVICE_ACCOUNT,
             Kind::DevLoopback => PrincipalKindMsg::PRINCIPAL_KIND_UNSPECIFIED,
         };
