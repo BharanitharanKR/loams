@@ -37,7 +37,8 @@ the known limitations, recorded before the preview was cut, are part of it too. 
 
 ### Known limitations
 - Loams Postgres: the control plane library is merged but not wired into the engine (PG2 Task 9).
-- Loams Graph: writes are not crash-durable until GR1 Task 11.
+- Loams Graph: writes reach the Loams log before they are acknowledged (GR1 Task 11), but
+  recovery after a crash (GR1 Task 14) and the durability fault gate (Task 16) are not done.
 - Loams Live: the versioned deploy flow is in progress.
 - Loams House: multi-block results in JSON, CSVWithNames, Parquet or Arrow are malformed over
   the ClickHouse HTTP interface until a pending fix (HS1 ruling R8.4); `loams.house.v1` is not

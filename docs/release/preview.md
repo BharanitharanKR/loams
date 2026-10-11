@@ -304,9 +304,11 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
   storage and computes from `deploy/loams-postgres-dev`, and tenants, timelines and computes are
   created by hand as its README shows. Its images are pinned to Neon's last public build until
   the fork's own builds (NF1 Task 14).
-- **Loams Graph:** writes are not crash-durable yet. An acknowledged graph write can be lost if
-  the engine crashes before its change set is recorded; the durable write path is GR1 Task 11
-  ([#424](https://github.com/ostrium-labs/loams/pull/424)), not in this release.
+- **Loams Graph:** not crash-safe yet. Writes are acknowledged only after their change set
+  reaches the Loams log (GR1 Task 11,
+  [#424](https://github.com/ostrium-labs/loams/pull/424)), but rebuilding a graph from the log
+  after a crash (GR1 Task 14) and the kill-matrix fault gate (Task 16) are not done. Keep a
+  copy of graph data you cannot recreate.
 - **Loams Live:** the deploy flow (versioned deployments with compare-and-swap activation) is in
   progress ([#419](https://github.com/ostrium-labs/loams/pull/419)). Documents, transactions,
   indexes and live queries work.

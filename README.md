@@ -70,7 +70,7 @@ Loams' first release is a **preview** (2026-10-12): you run the whole stack your
 | Loams Durable | An embedded Resonate server: durable promises and tasks on SQLite (cargo feature `durable`) | Preview |
 | Durable store on TiKV | Durable execution state on TiKV for clusters | In progress |
 | Loams Live | A reactive document database: transactions, indexes, live queries and a TypeScript SDK, on an embedded store or on TiKV (`live-tikv`) | Preview. The deploy flow (versioned deployments) is in progress |
-| Loams Graph | `loams.graph.v1` on the main port, GQL on Grafeo (cargo feature `graph`) | Preview. Writes are not crash-durable until GR1 Task 11 |
+| Loams Graph | `loams.graph.v1` on the main port, GQL on Grafeo (cargo feature `graph`) | Preview. Writes are acknowledged after they reach the Loams log (GR1 Task 11), but recovery after a crash (Task 14) is not done: treat graph data as not crash-safe yet |
 | Loams House | ClickHouse-compatible analytics on chDB in `loams-fabric`, with `loams.house.v1` proxied by the engine | Preview. Results over one block in JSON, CSVWithNames, Parquet or Arrow are malformed over the ClickHouse HTTP interface until a pending fix; `loams.house.v1` is not affected |
 | Loams SQL | MySQL-compatible SQL on a patched TiDB (`v8.5.8-loams.1`) over TiKV | Preview |
 | Loams Postgres | A fork of Neon whose storage lives on the bucket; the compose stack runs its storage and computes | Preview. The control plane is partial: its library is merged, the engine wiring is not |
