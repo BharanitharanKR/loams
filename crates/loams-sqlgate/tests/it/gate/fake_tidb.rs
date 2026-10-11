@@ -35,6 +35,8 @@ pub struct Seen {
     pub restored: Vec<String>,
     /// `SHOW SESSION_STATES` statements received.
     pub shows: usize,
+    /// Every `COM_QUERY` text received, in order.
+    pub queries: Vec<String>,
 }
 
 pub struct FakeTidb {
@@ -218,6 +220,9 @@ async fn serve(
         let sql = cmd
             .strip_prefix(b"\x03")
             .map(|q| String::from_utf8_lossy(q).into_owned());
+        if let Some(q) = &sql {
+            seen.lock().expect("seen").queries.push(q.clone());
+        }
         match sql.as_deref() {
             Some("BEGIN") => {
                 in_txn = true;

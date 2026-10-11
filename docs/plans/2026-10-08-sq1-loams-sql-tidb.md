@@ -939,8 +939,8 @@ Task 1 numbers are in [`docs/sqldb/performance.md`](../sqldb/performance.md) (on
   - **How** (`migrate::migrate`).
     - The relay holds the upstream writer (client commands wait in their socket) and runs `SHOW SESSION_STATES` on the old member.
     - It logs in to the new member as the same `ri_<role>`, with no database.
-    - It runs `SET SESSION sql_mode = ''` and then `SET SESSION_STATES '<json>'`. The JSON is escaped with backslashes, the escaping TiDB's own `DecodeSessionStates` uses, which is why `sql_mode` is cleared first; the states restore the client's `sql_mode`.
-    - If the session had turned multi-statements off, it sends `COM_SET_OPTION` again.
+    - It runs `SET NAMES utf8mb4` (the states are UTF-8 whatever the login's collation), `SET SESSION sql_mode = ''` and then `SET SESSION_STATES '<json>'`. The JSON is escaped with backslashes, the escaping TiDB's own `DecodeSessionStates` uses, which is why `sql_mode` is cleared first; the states restore the client's character sets and `sql_mode`. States that are not UTF-8 (a non-UTF-8 `character_set_results`) leave the session where it is.
+    - If the session switched multi-statements away from what its login gives (either way), it sends `COM_SET_OPTION` again.
     - It switches the relay and sends `COM_QUIT` to the old member.
     - Each step has the gate's `upstream_timeout`. A failure after the old member was asked closes the session with ERR 1053 (sequence 0, between commands).
   - **What the client can notice.** `CONNECTION_ID()`, `@@port`, `@@hostname` and the process list change; the IT tells the members apart by `@@port`.

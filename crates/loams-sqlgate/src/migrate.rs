@@ -11,12 +11,14 @@
 //!    writer) and runs `SHOW SESSION_STATES` on the old member itself;
 //! 2. it logs in to a new member as the same `ri_<role>` (with its own
 //!    password: no TiDB session token is needed), with no database;
-//! 3. it runs `SET SESSION sql_mode = ''` (so the backslash escapes below
-//!    hold whatever the global `sql_mode` is) and `SET SESSION_STATES
-//!    '<json>'`, which restores the session's variables (its `sql_mode`
-//!    included), current database, prepared statements (same ids) and
-//!    bindings; a session that turned multi-statements off gets
-//!    `COM_SET_OPTION` again;
+//! 3. it runs `SET NAMES utf8mb4` (the states are UTF-8 whatever the
+//!    login's collation), `SET SESSION sql_mode = ''` (so the backslash
+//!    escapes below hold whatever the global `sql_mode` is) and `SET
+//!    SESSION_STATES '<json>'`, which restores the session's variables (its
+//!    character sets and `sql_mode` included), current database, prepared
+//!    statements (same ids) and bindings; a session that switched
+//!    multi-statements away from what its login gives gets `COM_SET_OPTION`
+//!    again;
 //! 4. it switches the relay to the new connection and closes the old one.
 //!
 //! A session TiDB will not move (ERR 8146: an open transaction, unfetched
@@ -256,7 +258,18 @@ pub async fn migrate(
             .next()
             .and_then(|row| row.into_iter().next())
         {
-            Some(Some(json)) => String::from_utf8(json).map_err(protocol)?,
+            Some(Some(json)) => match String::from_utf8(json) {
+                Ok(json) => json,
+                // A `character_set_results` that is not UTF-8 turned
+                // non-ASCII state into other bytes: nothing changed on the
+                // old member, so the session stays (and is drained).
+                Err(_) => {
+                    return Ok(Outcome::Stayed(
+                        io.into_inner().map_err(protocol)?,
+                        "session states are not UTF-8 (character_set_results)".into(),
+                    ));
+                }
+            },
             _ => return Err(protocol("SHOW SESSION_STATES returned no states")),
         },
         Err(e) if e.code == ER_CANNOT_MIGRATE_SESSION => {
@@ -305,13 +318,17 @@ pub async fn migrate(
     let new = new.ok_or(MigrateError::NoMember(last))?;
     let mut nio = PacketIo::new(new, MAX_RESPONSE);
     timed("SET SESSION_STATES", r.timeout, async {
+        // The states are UTF-8 text; the login's collation may not be.
+        execute(&mut nio, "SET NAMES", "SET NAMES utf8mb4", caps).await?;
         execute(&mut nio, "SET sql_mode", "SET SESSION sql_mode = ''", caps).await?;
         let set = format!("SET SESSION_STATES {}", quote(&states));
         execute(&mut nio, "SET SESSION_STATES", &set, caps).await?;
-        if !multi_statements && caps.contains(Capabilities::MULTI_STATEMENTS) {
-            // COM_SET_OPTION MYSQL_OPTION_MULTI_STATEMENTS_OFF: EOF or ERR.
+        if multi_statements != caps.contains(Capabilities::MULTI_STATEMENTS) {
+            // The session switched multi-statements away from what the
+            // login gives. COM_SET_OPTION (0 on, 1 off): EOF or ERR.
+            let option = if multi_statements { 0x00 } else { 0x01 };
             nio.set_next_seq(0);
-            nio.write(&[0x1b, 0x01, 0x00]).await.map_err(protocol)?;
+            nio.write(&[0x1b, option, 0x00]).await.map_err(protocol)?;
             let p = nio.read().await.map_err(protocol)?;
             if p.first() == Some(&0xff) {
                 let e = ErrPacket::decode(&p).map_err(protocol)?;
