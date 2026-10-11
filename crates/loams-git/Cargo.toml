@@ -1,6 +1,6 @@
 [package]
 name = "loams-git"
-description = "Loams Git's portable core (design §36, §19): identifiers, object paths, limits, and the bucket WAL formats."
+description = "Loams Git's portable core (design §36, §19): identifiers, paths, limits, the bucket WAL formats, the blob store, the WAL and the repository state machine."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

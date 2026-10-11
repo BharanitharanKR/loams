@@ -158,6 +158,7 @@ message RefTransaction {
   string principal = 3;                  // who pushed (credential subject)
   repeated string push_options = 4;
   ObjectFormat object_format = 5;
+  bytes request_digest = 6;              // the idempotency key's request digest (§4.5; added by GT1 Task 8, T8.1)
 }
 
 message PackSetChange { repeated PackRef added = 1; repeated string removed = 2; string midx = 3; string commit_graph = 4; }
@@ -222,6 +223,8 @@ loop:
 - **Keys.** A client may send `Idempotency-Key` (API pushes). For a git push, the receive path derives `sha256(principal ‖ pack checksum ‖ sorted (name, expect, new) triples)`, so git's own retry of the same push over a flaky connection is answered with the first push's result.
 - **Window.** Keys are kept for `idempotency_window` (1 h, the same default as D270's CloudEvents dedup window) in the sequencer's index and in each checkpoint (`IdemEntry`). A retry inside the window returns the original receipt (`replayed: true`). A key reused with a different request digest is refused with `IdempotencyMismatch`, as Live's idempotency records are bound to their arguments (R1 review of #76).
 - **After the window** a retry is a new transaction, and its old-oid expectations decide it: a duplicate push of an already-applied fast-forward finds `old_oid` changed and is rejected, never applied twice.
+
+**As built (GT1a, Task 8; `crates/loams-git/src/state.rs`, `reflog.rs`).** `RefTransaction` carries its `request_digest` (field 6, added by this task), so a sequencer that rebuilds its state from segments written after the last checkpoint restores each key with its digest, and a retry after a restart or a fence is still answered `Replay` or `IdempotencyMismatch`, not a fresh decision. An entry expires at the transaction event's `time` plus the window, both when it is applied live and when its segment is replayed. `RepoState::check` decides in this order: the idempotency index, a ref named twice in one transaction (`InvalidName`), each update's expectation (`Stale { current }`, `Exists`), then protections (`deny_delete` refuses a delete; `deny_force` refuses any update that expects `Any`). A protection `pattern` is a ref name in which each `*` matches any run of characters, `/` included. Symbolic refs are keyed by `HEAD` or a ref name. The writer's scope is not checked until GT1 Task 16 (branch prefixes) and GT4 (cones).
 
 ### 4.6 Reads
 
