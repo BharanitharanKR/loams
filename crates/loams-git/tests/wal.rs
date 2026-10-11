@@ -394,9 +394,25 @@ async fn large_checkpoint_uses_multipart() {
         deny_delete: true,
         deny_force: false,
     });
+    let gets = faulty.calls(Op::Get) - faulty.heads();
     wal.put_checkpoint(&c).await.expect("put");
     assert_eq!(faulty.calls(Op::PutMultipart), 1);
     assert_eq!(faulty.calls(Op::PutCreate), 0);
+    assert_eq!(
+        faulty.calls(Op::Get) - faulty.heads() - gets,
+        1,
+        "read back after the upload"
+    );
+
+    // Another state at the seq is refused, before any upload.
+    let mut other = c.clone();
+    other.refs.insert("refs/heads/x".into(), vec![9; 20]);
+    let err = wal.put_checkpoint(&other).await.expect_err("another state");
+    assert!(
+        matches!(err, WalError::Corrupt { seq: Seq(1024), .. }),
+        "{err:?}"
+    );
+    assert_eq!(faulty.calls(Op::PutMultipart), 1);
     wal.put_checkpoint(&c).await.expect("again");
     assert_eq!(faulty.calls(Op::PutMultipart), 1, "not uploaded twice");
     let latest = wal.latest_checkpoint(Seq(u64::MAX)).await.expect("latest");

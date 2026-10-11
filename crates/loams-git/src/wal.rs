@@ -131,8 +131,22 @@ pub trait WalStore: Send + Sync + std::fmt::Debug {
     async fn publish_hint(&self, hint: &Hint) -> Result<(), WalError>;
 
     /// Create-only; an existing checkpoint at the same seq is `Ok` if its bytes are equal.
+    ///
+    /// As built (rulings T7.2, T7.4): equal but for the idempotency entries
+    /// is `Ok` too. Above 64 MiB the write is a HEAD and then an
+    /// unconditional multipart upload (no store offers a create-only
+    /// multipart completion through `loams-store`), read back afterwards:
+    /// two writers of one seq can both upload and the last one wins, and a
+    /// different state is detected only by a read-back that sees the other
+    /// writer's checkpoint. The WAL fixes the state at a seq, so a correct
+    /// writer never offers a different one.
     async fn put_checkpoint(&self, checkpoint: &pb::Checkpoint) -> Result<(), WalError>;
     /// The checkpoint with the greatest seq ≤ `at_or_below`, using the hint, else a LIST of `checkpoints/`.
+    ///
+    /// As built (ruling T7.3): a non-empty hint whose checkpoint is at or
+    /// below the bound is trusted, so a stale hint returns an older
+    /// checkpoint than the greatest; the caller replays more segments. Only
+    /// the LIST path promises the greatest.
     async fn latest_checkpoint(&self, at_or_below: Seq)
     -> Result<Option<pb::Checkpoint>, WalError>;
 }
@@ -384,9 +398,9 @@ impl WalStore for StoreWalStore {
         let bytes = encode_checkpoint(checkpoint);
         let path = self.paths.checkpoint(Seq(checkpoint.seq));
         if bytes.len() as u64 > MULTIPART_THRESHOLD {
-            // A multipart upload cannot be create-only: look first, then
-            // upload. Two writers of one seq write the same repository state
-            // (T7.2), so either upload is correct.
+            // A multipart upload cannot be create-only: look first, upload,
+            // then read back, so a racing writer's different state is at
+            // least detected (T7.4). Writers of one seq offer the same state.
             match retry::retry(|| self.store.head(&path)).await {
                 Ok(_) => return self.check_existing_checkpoint(checkpoint, &bytes).await,
                 Err(StoreError::NotFound { .. }) => {}
@@ -401,7 +415,7 @@ impl WalStore for StoreWalStore {
                 )
             })
             .await?;
-            return Ok(());
+            return self.check_existing_checkpoint(checkpoint, &bytes).await;
         }
         match retry::retry(|| self.store.put_if_absent(&path, bytes.clone())).await {
             Ok(_) => Ok(()),
