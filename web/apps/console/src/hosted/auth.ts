@@ -144,7 +144,12 @@ export class OidcAuth {
     const raw = this.#read(PENDING);
     this.#storage.removeItem(PENDING);
     if (!raw) return { kind: 'error', message: 'The sign-in response has no matching request.' };
-    const pending = JSON.parse(raw) as Pending;
+    let pending: Pending;
+    try {
+      pending = JSON.parse(raw) as Pending;
+    } catch {
+      return { kind: 'error', message: 'The stored sign-in request is unreadable; sign in again.' };
+    }
     try {
       const as = await this.server();
       let callback: URLSearchParams;

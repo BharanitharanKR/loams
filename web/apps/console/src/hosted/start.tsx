@@ -8,7 +8,7 @@ import { createWebPlatform } from '@loams/platform-web';
 import { type ReactNode, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { RuntimeConfig } from '../runtime-config.js';
-import { OidcAuth } from './auth.js';
+import { type Callback, OidcAuth } from './auth.js';
 import { demoEnabled, setDemoEnabled } from './demo.js';
 import {
   HOSTED_PACKAGE,
@@ -40,6 +40,8 @@ export function redirectUri(loc: Pick<Location, 'origin' | 'pathname'> = globalT
   return `${loc.origin}${path}`;
 }
 
+const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
 function show(root: HTMLElement, node: ReactNode): Root {
   const r = createRoot(root);
   r.render(<StrictMode>{node}</StrictMode>);
@@ -55,7 +57,9 @@ export async function startHosted(
   const auth = config.auth ? new OidcAuth(config.auth, redirectUri()) : undefined;
 
   if (auth && config.auth) {
-    const result = await auth.completeSignIn(here);
+    const result = await auth
+      .completeSignIn(here)
+      .catch((e: unknown): Callback => ({ kind: 'error', message: errorText(e) }));
     if (result.kind !== 'none') {
       // Drop `code` and `state` from the address bar and history; keep the route.
       globalThis.history.replaceState(
@@ -65,13 +69,18 @@ export async function startHosted(
       );
     }
     if (!auth.signedIn()) {
+      let error = result.kind === 'error' ? result.message : undefined;
       if (result.kind === 'none' && auth.wasSignedIn()) {
         // A reload: the tokens were in memory only. Renew against the issuer's session.
-        await auth.signIn(here.hash, true);
-        return undefined;
+        try {
+          await auth.signIn(here.hash, true);
+          return undefined;
+        } catch (e) {
+          // The issuer is unreachable: say so on the sign-in screen.
+          error = errorText(e);
+        }
       }
       const issuer = config.auth.issuer;
-      const error = result.kind === 'error' ? result.message : undefined;
       show(
         root,
         <SignInScreen issuer={issuer} error={error} onSignIn={() => auth.signIn(here.hash)} />,
@@ -140,7 +149,7 @@ export async function startHosted(
       extraManifests: [...webManifests, hostedManifest],
     });
   } catch (e) {
-    show(root, <BootError message={e instanceof Error ? e.message : String(e)} />);
+    show(root, <BootError message={errorText(e)} />);
     return undefined;
   }
 }

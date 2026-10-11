@@ -229,7 +229,8 @@ export function paramFilterFor(
     if (inter.on !== "click") continue;
     for (const [paramName, fieldName] of Object.entries(inter.set)) {
       const value = data?.[fieldName] ?? params?.name;
-      if (value) out[paramName] = value;
+      // A clicked 0 or false is a value; only a missing field is not.
+      if (value !== undefined && value !== null && value !== "") out[paramName] = value;
     }
   }
   return out;

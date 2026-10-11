@@ -156,6 +156,16 @@ describe('OidcAuth', () => {
     expect(auth.signedIn()).toBe(false);
   });
 
+  it('turns an unreadable stored request into a sign-in error', async () => {
+    const { auth, storage } = setup();
+    storage.setItem('loams.auth.pending', '{not json');
+    const back = new URL(REDIRECT);
+    back.searchParams.set('code', 'c');
+    back.searchParams.set('state', 's');
+    expect((await auth.completeSignIn(back)).kind).toBe('error');
+    expect(storage.getItem('loams.auth.pending')).toBeNull();
+  });
+
   it('ignores a page load that is not a callback', async () => {
     const { auth } = setup();
     expect(await auth.completeSignIn(new URL(`${REDIRECT}#/live`))).toEqual({ kind: 'none' });

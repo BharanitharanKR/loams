@@ -162,7 +162,7 @@ export const Inspector: React.FC<InspectorProps> = ({
           id="inspector-dataset"
           type="text"
           className={cn(CONTROL, CONTROL_DISABLED)}
-          value={currentDataset?.table_name || `Dataset #${datasetId}`}
+          value={currentDataset?.table_name || (datasetId === undefined ? "" : `Dataset #${datasetId}`)}
           disabled
         />
       </div>

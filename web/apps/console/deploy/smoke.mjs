@@ -78,9 +78,20 @@ export async function smoke(origin, fetcher = fetch, expectedServer, expectedIss
       `/config.json server origin is ${actualOrigin ?? '<missing or invalid>'}, expected ${expectedOrigin ?? '<invalid>'}`,
     );
   }
+  // The issuer is origin plus path (a realm), without a trailing slash.
+  const issuerOf = (value) => {
+    try {
+      if (typeof value !== 'string') return undefined;
+      const url = new URL(value);
+      return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+    } catch {
+      return undefined;
+    }
+  };
   if (expectedIssuer) {
+    const want = issuerOf(expectedIssuer);
     expect(
-      originOf(body?.authIssuer) === originOf(expectedIssuer),
+      want !== undefined && issuerOf(body?.authIssuer) === want,
       `/config.json authIssuer is ${body?.authIssuer ?? '<missing>'}, expected ${expectedIssuer}`,
     );
   }

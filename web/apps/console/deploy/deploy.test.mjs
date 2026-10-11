@@ -462,6 +462,26 @@ describe('smoke', () => {
       issuer.some((f) => f.includes('authIssuer')),
       issuer.join('\n'),
     );
+    // Another realm on the same host is another issuer; a trailing slash is not.
+    const realm = (authIssuer) => async (url) =>
+      new URL(url).pathname === '/config.json'
+        ? Response.json({ hosted: true, authIssuer })
+        : site(false)(url);
+    const want = 'https://id.example/realms/loams';
+    const other = await smoke(
+      'https://console.loams.dev',
+      realm('https://id.example/realms/x'),
+      undefined,
+      want,
+    );
+    assert.ok(
+      other.some((f) => f.includes('authIssuer')),
+      other.join('\n'),
+    );
+    assert.deepEqual(
+      await smoke('https://console.loams.dev', realm(`${want}/`), undefined, want),
+      [],
+    );
   });
 
   test('fails when scripts come back as the HTML fallback', async () => {

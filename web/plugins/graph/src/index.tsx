@@ -20,7 +20,11 @@ const plugin: PluginModule = {
     const router = service(ctx, 'router');
     const slots = service(ctx, 'slots');
     const transport = service(ctx, 'transport');
-    const openExternal = (url: string) => void platform.openExternal(url);
+    const openExternal = (url: string) => {
+      platform
+        .openExternal(url)
+        .catch((e: unknown) => console.warn('graph: could not open', url, e));
+    };
     ctx.effect(() =>
       router.page({ id: 'graph', path: '/graph', title: 'Graph', plugin: 'graph' }, () => (
         <GraphPage transport={transport} openExternal={openExternal} />
