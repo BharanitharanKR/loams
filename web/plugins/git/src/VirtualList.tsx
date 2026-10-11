@@ -112,7 +112,9 @@ export function VirtualList<T>(p: VirtualListProps<T>) {
     const key = p.getKey(item);
     const selected = key === p.selectedKey;
     rows.push(
-      // biome-ignore lint/a11y/useFocusableInteractive: focus stays on the listbox (activedescendant)
+      // Keyboard and focus live on the listbox (aria-activedescendant), not on each option.
+      // biome-ignore lint/a11y/useFocusableInteractive: focus stays on the listbox
+      // biome-ignore lint/a11y/useKeyWithClickEvents: the listbox handles the keys
       <div
         key={key}
         id={rowId(i)}

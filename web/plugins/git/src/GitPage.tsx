@@ -7,7 +7,7 @@
 
 import { NamespacePicker, PageHead } from '@loams/desktop-ui';
 import { Badge, Notice } from '@loams/ui';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { GitClient, Repo, WorkspaceSummary } from './client.js';
 import { EnvView } from './EnvView.js';
 import { RepoList } from './RepoList.js';
@@ -36,10 +36,12 @@ export function GitPage(p: GitPageProps) {
   const [tab, setTab] = useState<RepoTab>('workspaces');
   const [ws, setWs] = useState<WorkspaceSummary>();
 
-  useEffect(() => {
+  // A different namespace drops the repository and workspace chosen in the last one.
+  const selectNs = useCallback((next: string) => {
+    setNs(next);
     setRepo(undefined);
     setWs(undefined);
-  }, [ns]);
+  }, []);
 
   const selectRepo = useCallback((r: Repo) => {
     setRepo(r);
@@ -52,14 +54,16 @@ export function GitPage(p: GitPageProps) {
       <PageHead
         title="Git"
         subtitle="Repositories, virtual workspaces and env secrets on the bucket."
-        badge={p.preview ? <Badge title="Answers from built-in fixtures">preview</Badge> : undefined}
+        badge={
+          p.preview ? <Badge title="Answers from built-in fixtures">preview</Badge> : undefined
+        }
       />
       {p.preview && (
         <Notice title="Preview data">
           This server does not serve loams.repos.v1 yet. The page shows built-in example data.
         </Notice>
       )}
-      <NamespacePicker ns={ns} onOpen={setNs} storageKey={NAMESPACES_KEY} idPrefix="git" />
+      <NamespacePicker ns={ns} onOpen={selectNs} storageKey={NAMESPACES_KEY} idPrefix="git" />
       <div className="grid items-start gap-6 xl:grid-cols-[220px_minmax(0,1fr)]">
         <RepoList client={p.client} namespace={ns} selected={repo?.repoId} onSelect={selectRepo} />
         {repo ? (

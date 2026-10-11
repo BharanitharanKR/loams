@@ -4,8 +4,17 @@
 // versions only: this view has no way to show a value, and the client has no call that
 // returns one.
 
-import { Badge, Button, Field, formatRelative, Notice, Select, type Status, StatusTag } from '@loams/ui';
-import { useCallback, useEffect, useState } from 'react';
+import {
+  Badge,
+  Button,
+  Field,
+  formatRelative,
+  Notice,
+  Select,
+  type Status,
+  StatusTag,
+} from '@loams/ui';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   type AuditEvent,
   type Environment,
@@ -179,7 +188,9 @@ export function EnvView(p: { client: GitClient; namespace: string; repoId: strin
                   </th>
                   <td className="py-1.5 pr-3 font-mono text-xs text-muted">
                     {k.plain ? (
-                      <Badge title="Non-secret configuration kept in git (# loams:plain)">plain</Badge>
+                      <Badge title="Non-secret configuration kept in git (# loams:plain)">
+                        plain
+                      </Badge>
                     ) : (
                       <span title="Redacted; the fingerprint identifies the value without revealing it">
                         &lt;redacted fp={k.fingerprint}&gt;
@@ -238,15 +249,21 @@ function AuditLog(p: {
   const [next, setNext] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<GitFailure>();
+  // One request at a time: a new page or a different filter aborts the one in flight, so
+  // an older page for the previous filter never lands in the new list.
+  const inflight = useRef<AbortController | null>(null);
 
   const load = useCallback(
-    async (token: string, signal?: AbortSignal) => {
+    async (token: string) => {
+      inflight.current?.abort();
+      const ac = new AbortController();
+      inflight.current = ac;
       setLoading(true);
       setError(undefined);
       try {
         const res = await client.listEnvAudit(
           { namespace, repoId, environment: environment || undefined, pageToken: token },
-          signal,
+          ac.signal,
         );
         setEvents((prev) => (token ? [...prev, ...res.items] : res.items));
         setNext(res.nextPageToken);
@@ -254,17 +271,20 @@ function AuditLog(p: {
         if (isAbort(e)) return;
         setError(toFailure(e));
       } finally {
-        if (!signal?.aborted) setLoading(false);
+        if (inflight.current === ac) {
+          inflight.current = null;
+          setLoading(false);
+        }
       }
     },
     [client, namespace, repoId, environment],
   );
 
   useEffect(() => {
-    const ac = new AbortController();
     setEvents([]);
-    void load('', ac.signal);
-    return () => ac.abort();
+    setNext('');
+    void load('');
+    return () => inflight.current?.abort();
   }, [load]);
 
   return (

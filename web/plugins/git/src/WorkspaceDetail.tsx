@@ -5,7 +5,7 @@
 // when one is chosen from the timeline.
 
 import { Badge, Button, formatRelative, Notice, StatusTag } from '@loams/ui';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CHANGE_TEXT, CodeBrowser } from './CodeBrowser.js';
 import {
   type ChangedPath,
@@ -13,8 +13,8 @@ import {
   type GitFailure,
   isAbort,
   MAX_CHANGED_HINT,
-  shortOid,
   type Snapshot,
+  shortOid,
   toFailure,
   type Workspace,
 } from './client.js';
@@ -202,29 +202,42 @@ function SnapshotTimeline(p: {
   const [next, setNext] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<GitFailure>();
+  // One request at a time: a new page or another workspace aborts the one in flight, so
+  // an older page of the previous workspace never lands in this timeline.
+  const inflight = useRef<AbortController | null>(null);
 
   const load = useCallback(
-    async (token: string, signal?: AbortSignal) => {
+    async (token: string) => {
+      inflight.current?.abort();
+      const ac = new AbortController();
+      inflight.current = ac;
       setLoading(true);
       setError(undefined);
       try {
-        const res = await client.listSnapshots({ ...wsRef, pageToken: token, pageSize: 50 }, signal);
+        const res = await client.listSnapshots(
+          { ...wsRef, pageToken: token, pageSize: 50 },
+          ac.signal,
+        );
         setSnaps((prev) => (token ? [...prev, ...res.items] : res.items));
         setNext(res.nextPageToken);
       } catch (e) {
         if (isAbort(e)) return;
         setError(toFailure(e));
       } finally {
-        if (!signal?.aborted) setLoading(false);
+        if (inflight.current === ac) {
+          inflight.current = null;
+          setLoading(false);
+        }
       }
     },
     [client, wsRef],
   );
 
   useEffect(() => {
-    const ac = new AbortController();
-    void load('', ac.signal);
-    return () => ac.abort();
+    setSnaps([]);
+    setNext('');
+    void load('');
+    return () => inflight.current?.abort();
   }, [load]);
 
   return (

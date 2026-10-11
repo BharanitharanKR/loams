@@ -16,6 +16,7 @@ import {
   wsIdAt,
 } from '../src/mock.js';
 import { visibleRange } from '../src/VirtualList.js';
+import { AUTO_SCAN_PAGES } from '../src/WorkspaceList.js';
 
 afterEach(cleanup);
 
@@ -152,6 +153,24 @@ describe('GitPage', () => {
     });
   });
 
+  it('sparse_search_stops_scanning_until_asked', async () => {
+    const client = createMockGitClient({ latencyMs: 0 });
+    const spy = vi.spyOn(client, 'listWorkspaces');
+    mount(client);
+    await listbox();
+    fireEvent.change(screen.getByLabelText('Search workspaces'), {
+      target: { value: 'no-such-owner' },
+    });
+    const searches = () => spy.mock.calls.filter(([r]) => r.query === 'no-such-owner');
+    // The first page plus AUTO_SCAN_PAGES continuations, then it waits for the person.
+    const more = await screen.findByRole('button', { name: 'Keep searching' });
+    expect(searches()).toHaveLength(1 + AUTO_SCAN_PAGES);
+    expect(searches().at(-1)?.[0].pageToken).toBe(`o:${AUTO_SCAN_PAGES * SEARCH_SCAN_WINDOW}`);
+    fireEvent.click(more);
+    await waitFor(() => expect(searches()).toHaveLength(1 + 2 * AUTO_SCAN_PAGES));
+    expect(await screen.findByRole('button', { name: 'Keep searching' })).toBeTruthy();
+  });
+
   it('workspace_detail_shows_changes_snapshots_and_lazy_files', async () => {
     const client = createMockGitClient({ latencyMs: 0 });
     const tree = vi.spyOn(client, 'getTree');
@@ -163,7 +182,9 @@ describe('GitPage', () => {
     await screen.findByText('Base commit');
 
     // Changes: workspace 3 has 21 changed paths.
-    expect(screen.getByRole('tab', { name: /Changes \(21\)/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /Changes \(21\)/ }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
     expect(screen.getByRole('table')).toBeTruthy();
 
     // Snapshots: latest first, with a takeover marked.
@@ -193,9 +214,15 @@ describe('GitPage', () => {
       expect.anything(),
     );
 
-    // Opening an env file reads it, redacted.
-    fireEvent.click(await within(t).findByRole('treeitem', { name: /main\.env/ }));
+    // Workspace 3 deletes env/main.env: opening it says so instead of showing contents.
+    fireEvent.click(await within(t).findByRole('treeitem', { name: /main\.env.*deleted/ }));
     await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+    expect((await screen.findByRole('alert')).textContent).toContain('deleted in this workspace');
+    expect(screen.queryByLabelText('File contents')).toBeNull();
+
+    // Opening an env file it keeps (dev.env, added) reads it, redacted.
+    fireEvent.click(within(t).getByRole('treeitem', { name: /dev\.env/ }));
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
     const pre = await screen.findByLabelText('File contents');
     expect(pre.textContent).toMatch(/DATABASE_URL=<redacted fp=[0-9a-f]{8}>/);
   });
@@ -243,7 +270,9 @@ describe('GitPage', () => {
     const tab = await screen.findByRole('tab', { name: 'Workspaces' });
     tab.focus();
     fireEvent.keyDown(tab, { key: 'ArrowRight' });
-    expect(screen.getByRole('tab', { name: 'Env secrets' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: 'Env secrets' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
   });
 });
 

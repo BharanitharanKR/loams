@@ -530,7 +530,11 @@ export function createMockGitClient(opts: MockOptions = {}): GitClient {
           throw new GitError('not_found', `${req.path} not found`, 'path_not_found');
         }
         if (changes.get(req.path) === 'deleted') {
-          throw new GitError('not_found', `${req.path} is deleted in this workspace`, 'path_deleted');
+          throw new GitError(
+            'not_found',
+            `${req.path} is deleted in this workspace`,
+            'path_deleted',
+          );
         }
         const size = meta?.size ?? 64;
         if (meta?.binary) return { path: req.path, size, binary: true, text: '', truncated: false };

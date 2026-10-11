@@ -193,10 +193,10 @@ export function CodeBrowser(p: { client: GitClient; ws: WsRef; n?: number }) {
           </Notice>
         )}
         {rows.length > 0 && (
-          <ul
+          <div
             role="tree"
             aria-label={`Files${n !== undefined ? ` at snapshot ${n}` : ''}`}
-            className="m-0 max-h-[560px] list-none overflow-y-auto p-0 font-mono text-sm"
+            className="m-0 max-h-[560px] overflow-y-auto p-0 font-mono text-sm"
           >
             {rows.map((row, i) => {
               const { entry, depth } = row;
@@ -204,7 +204,7 @@ export function CodeBrowser(p: { client: GitClient; ws: WsRef; n?: number }) {
               const expanded = isDir ? open.has(entry.path) : undefined;
               const d = dirs[entry.path];
               return (
-                <li
+                <div
                   key={entry.path}
                   ref={(el) => {
                     if (el) refs.current.set(entry.path, el);
@@ -238,10 +238,7 @@ export function CodeBrowser(p: { client: GitClient; ws: WsRef; n?: number }) {
                   </span>
                   {entry.env && <Badge title="Env file: values are redacted">env</Badge>}
                   {entry.change && (
-                    <span
-                      className="ml-auto text-xs text-accent"
-                      title={CHANGE_TEXT[entry.change]}
-                    >
+                    <span className="ml-auto text-xs text-accent" title={CHANGE_TEXT[entry.change]}>
                       <span aria-hidden="true">{CHANGE_LABEL[entry.change]}</span>
                       <span className="sr-only">, {CHANGE_TEXT[entry.change]}</span>
                     </span>
@@ -249,10 +246,10 @@ export function CodeBrowser(p: { client: GitClient; ws: WsRef; n?: number }) {
                   {isDir && d?.state === 'error' && (
                     <span className="ml-auto text-xs text-danger">could not load</span>
                   )}
-                </li>
+                </div>
               );
             })}
-          </ul>
+          </div>
         )}
       </div>
       <FileView file={file} content={content} error={fileError} />
@@ -304,24 +301,29 @@ function FileView(p: {
 function Source({ text }: { text: string }) {
   const lines = text.replace(/\n$/, '').split('\n');
   return (
-    <pre
-      className="m-0 max-h-[560px] overflow-auto rounded-md border border-solid border-line p-2 text-xs"
-      // Scrollable regions must be reachable by keyboard.
+    // A named, focusable region, so the scrollable contents are reachable by keyboard.
+    <section
+      className="max-h-[560px] overflow-auto rounded-md border border-solid border-line p-2"
       // biome-ignore lint/a11y/noNoninteractiveTabindex: a scroll container
       tabIndex={0}
       aria-label="File contents"
     >
-      <code>
-        {lines.map((line, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: lines are positional
-          <span key={i} className="block">
-            <span aria-hidden="true" className="inline-block w-10 select-none pr-3 text-right text-muted">
-              {i + 1}
+      <pre className="m-0 text-xs">
+        <code>
+          {lines.map((line, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: lines are positional
+            <span key={i} className="block">
+              <span
+                aria-hidden="true"
+                className="inline-block w-10 select-none pr-3 text-right text-muted"
+              >
+                {i + 1}
+              </span>
+              {line}
             </span>
-            {line}
-          </span>
-        ))}
-      </code>
-    </pre>
+          ))}
+        </code>
+      </pre>
+    </section>
   );
 }

@@ -5,7 +5,7 @@
 // token: the server scanned its window and found fewer matches. The list keeps paging
 // until the token runs out.
 
-import { Badge, Field, formatNumber, formatRelative, Input, Notice } from '@loams/ui';
+import { Badge, Button, Field, formatNumber, formatRelative, Input, Notice } from '@loams/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   type GitClient,
@@ -19,6 +19,8 @@ import { VirtualList } from './VirtualList.js';
 
 export const SEARCH_DEBOUNCE_MS = 250;
 export const ROW_HEIGHT = 44;
+/** Search pages fetched without a person asking, per query, before "Keep searching". */
+export const AUTO_SCAN_PAGES = 3;
 
 export function WorkspaceList(p: {
   client: GitClient;
@@ -40,6 +42,8 @@ export function WorkspaceList(p: {
   const [error, setError] = useState<GitFailure>();
   // The in-flight request; a new query or repository aborts it.
   const inflight = useRef<AbortController | null>(null);
+  // Continuations fetched on their own for the current query (each one is a server scan).
+  const [autoPages, setAutoPages] = useState(0);
 
   useEffect(() => {
     const t = setTimeout(() => setQuery(draft.trim()), debounce);
@@ -78,6 +82,7 @@ export function WorkspaceList(p: {
     setItems([]);
     setNext('');
     setTotal(undefined);
+    setAutoPages(0);
     void fetchPage('');
     return () => inflight.current?.abort();
   }, [fetchPage]);
@@ -85,9 +90,14 @@ export function WorkspaceList(p: {
   // A sparse search can return a short page; keep scanning while it shows too few rows.
   const height = p.height ?? 480;
   const shown = Math.ceil(height / ROW_HEIGHT);
+  // Bounded: after AUTO_SCAN_PAGES the person decides whether to keep scanning.
+  const scanMore = Boolean(query && next && !error && items.length < shown);
+  const scanPaused = scanMore && autoPages >= AUTO_SCAN_PAGES;
   useEffect(() => {
-    if (query && next && !loading && !error && items.length < shown) void fetchPage(next);
-  }, [query, next, loading, error, items.length, shown, fetchPage]);
+    if (!scanMore || loading || inflight.current || autoPages >= AUTO_SCAN_PAGES) return;
+    setAutoPages((n) => n + 1);
+    void fetchPage(next);
+  }, [scanMore, loading, autoPages, next, fetchPage]);
 
   const onEndReached = useCallback(() => {
     if (next && !inflight.current) void fetchPage(next);
@@ -103,23 +113,25 @@ export function WorkspaceList(p: {
 
   return (
     <section className="flex flex-col gap-2" aria-label="Workspaces">
-      <form role="search" onSubmit={(e) => e.preventDefault()}>
-        <Field
-          label="Search workspaces"
-          hint="Name, owner or workspace id. Searched on the server."
-        >
-          {(f) => (
-            <Input
-              {...f}
-              type="search"
-              value={draft}
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(e) => setDraft(e.target.value)}
-            />
-          )}
-        </Field>
-      </form>
+      <search>
+        <form onSubmit={(e) => e.preventDefault()}>
+          <Field
+            label="Search workspaces"
+            hint="Name, owner or workspace id. Searched on the server."
+          >
+            {(f) => (
+              <Input
+                {...f}
+                type="search"
+                value={draft}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => setDraft(e.target.value)}
+              />
+            )}
+          </Field>
+        </form>
+      </search>
       <p className="m-0 text-xs text-muted" role="status" aria-live="polite">
         {status}
       </p>
@@ -127,6 +139,11 @@ export function WorkspaceList(p: {
         <Notice tone="danger" title="Could not list workspaces">
           {error.message}
         </Notice>
+      )}
+      {scanPaused && !loading && (
+        <Button size="sm" variant="quiet" onClick={() => setAutoPages(0)}>
+          Keep searching
+        </Button>
       )}
       {!loading && !error && items.length === 0 && !next ? (
         <p className="m-0 text-sm text-muted">
