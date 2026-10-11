@@ -117,13 +117,15 @@ impl Store {
         V: Into<String>,
     {
         let parsed = url::Url::parse(url).map_err(|e| StoreError::InvalidUrl(e.to_string()))?;
-        // S3, GCS and Azure list keys in lexicographic order, and so does the
-        // in-memory store; a local directory and WebDAV do not.
+        // GCS and Azure list keys in lexicographic order, and so does the
+        // in-memory store. A local directory and WebDAV do not, and neither
+        // does every S3 target (S3 Express One Zone directory buckets list
+        // unordered; S3-compatible stores vary), so an S3 URL is unsorted
+        // unless the caller opts in with `with_sorted_listing(true)`.
         let sorted = matches!(
             ObjectStoreScheme::parse(&parsed),
             Ok((
                 ObjectStoreScheme::Memory
-                    | ObjectStoreScheme::AmazonS3
                     | ObjectStoreScheme::GoogleCloudStorage
                     | ObjectStoreScheme::MicrosoftAzure,
                 _
@@ -284,6 +286,8 @@ impl Store {
     /// last one shorter. The next body chunk is read only once fewer than
     /// [`Store::PARTS_IN_FLIGHT`] parts are uploading, so memory stays near
     /// that many parts plus one chunk.
+    /// If the call is cancelled (its future dropped) before it finishes,
+    /// the upload is aborted in a task spawned on the current runtime.
     /// The object appears only when the upload completes. A failed body
     /// ([`StoreError::Body`]) or a failed part aborts the upload, so the call
     /// leaves no object and no parts behind. A failed completion is aborted
@@ -301,18 +305,31 @@ impl Store {
             .put_multipart(&location)
             .await
             .map_err(|e| map_err(path, e))?;
-        let mut upload =
-            WriteMultipart::new_with_chunk_size(upload, part_size.max(Self::MIN_PART_SIZE));
+        let mut upload = AbortOnDrop(Some(WriteMultipart::new_with_chunk_size(
+            upload,
+            part_size.max(Self::MIN_PART_SIZE),
+        )));
         let failure = loop {
             let chunk = match body.next().await {
                 None => break None,
                 Some(Ok(chunk)) => chunk,
                 Some(Err(e)) => break Some(StoreError::Body(e)),
             };
-            if let Err(e) = upload.wait_for_capacity(Self::PARTS_IN_FLIGHT).await {
+            let Some(writer) = upload.0.as_mut() else {
+                break None;
+            };
+            if let Err(e) = writer.wait_for_capacity(Self::PARTS_IN_FLIGHT).await {
                 break Some(map_err(path, e));
             }
-            upload.put(chunk);
+            writer.put(chunk);
+        };
+        // From here the upload is finished or aborted explicitly, so the
+        // drop guard has nothing left to do.
+        let Some(upload) = upload.0.take() else {
+            return Err(StoreError::Backend(object_store::Error::Generic {
+                store: "loams-store",
+                source: "multipart upload state lost".into(),
+            }));
         };
         match failure {
             None => {
@@ -414,6 +431,33 @@ impl Store {
             .map_err(|e| map_err(prefix, e))?;
         infos.sort_by(|a, b| a.path.cmp(&b.path));
         Ok(infos)
+    }
+}
+
+/// Aborts a multipart upload that is dropped before it finished, for
+/// example when the [`Store::put_multipart`] future is cancelled, so no
+/// parts are left behind for the store's lifecycle rules.
+struct AbortOnDrop(Option<WriteMultipart>);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        let Some(upload) = self.0.take() else {
+            return;
+        };
+        match tokio::runtime::Handle::try_current() {
+            Ok(runtime) => {
+                runtime.spawn(async move {
+                    if let Err(e) = upload.abort().await {
+                        tracing::warn!(error = %e, "aborting a cancelled multipart upload failed");
+                    }
+                });
+            }
+            Err(_) => {
+                tracing::warn!(
+                    "a multipart upload was cancelled outside a tokio runtime; its parts stay"
+                );
+            }
+        }
     }
 }
 

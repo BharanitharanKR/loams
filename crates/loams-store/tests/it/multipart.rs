@@ -101,3 +101,42 @@ async fn multipart_overwrites_an_existing_object() {
     store.put_multipart("a", stream, 5 * MIB).await.unwrap();
     assert!(store.get("a").await.unwrap().0 == data);
 }
+
+#[tokio::test]
+async fn cancelled_multipart_leaves_no_object() {
+    for backend in backends::all() {
+        let first: std::io::Result<Bytes> = Ok(Bytes::from(vec![7u8; 6 * MIB]));
+        // One part's worth of body, then a body that never ends.
+        let stream = stream::iter([first]).chain(stream::pending()).boxed();
+        let put = backend
+            .store
+            .put_multipart("packs/cancelled.lpk", stream, 5 * MIB);
+        let cancelled = tokio::time::timeout(std::time::Duration::from_millis(200), put).await;
+        assert!(
+            cancelled.is_err(),
+            "{}: the upload cannot finish",
+            backend.name
+        );
+
+        assert!(
+            matches!(
+                backend.store.head("packs/cancelled.lpk").await.unwrap_err(),
+                StoreError::NotFound { .. }
+            ),
+            "{}",
+            backend.name
+        );
+        if let Some(dir) = &backend.dir {
+            // The abort runs in a spawned task: wait for its staging file to go.
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+            while !backends::files_on_disk(dir.path()).is_empty() {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "left behind: {:?}",
+                    backends::files_on_disk(dir.path())
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        }
+    }
+}
