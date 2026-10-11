@@ -24,6 +24,12 @@ import {
   GraphService,
   ValueSchema as GraphValueSchema,
 } from '../src/gen/loams/graph/v1/graph_pb.js';
+import {
+  ExecuteQueryRequestSchema,
+  ExecuteQueryResponseSchema,
+  HouseService,
+  ResultFormat,
+} from '../src/gen/loams/house/v1/house_pb.js';
 import { Edition, InstanceService } from '../src/gen/loams/instance/v1/instance_pb.js';
 import { NotificationService } from '../src/gen/loams/notifications/v1/notifications_pb.js';
 import { OperationsService } from '../src/gen/loams/operations/v1/operations_pb.js';
@@ -156,5 +162,57 @@ describe('@loams/proto', () => {
         c.value,
       );
     }
+  });
+
+  it('generates loams.house.v1 with streaming results and an absent read_only', async () => {
+    expect(HouseService.typeName).toBe('loams.house.v1.HouseService');
+    expect(HouseService.method.executeQuery.methodKind).toBe('server_streaming');
+    expect(HouseService.method.previewTable.methodKind).toBe('server_streaming');
+    expect(HouseService.method.listTables.idempotency).toBe(1);
+    expect(HouseService.method.executeQuery.idempotency).toBe(0);
+    // `read_only` is `optional`: absent means true on the server (§49 §18.2), so a
+    // client that never sets it can only read.
+    const request = create(ExecuteQueryRequestSchema, { sql: 'SELECT 1' });
+    expect(request.readOnly).toBeUndefined();
+    expect(request.format).toBe(ResultFormat.UNSPECIFIED);
+
+    const transport = createRouterTransport(({ service }) => {
+      service(HouseService, {
+        async *executeQuery(req) {
+          yield create(ExecuteQueryResponseSchema, {
+            frame: {
+              case: 'header',
+              value: { queryId: 'q1', columns: [{ name: 'x', clickhouseType: 'UInt8' }] },
+            },
+          });
+          yield create(ExecuteQueryResponseSchema, {
+            frame: {
+              case: 'batch',
+              value: {
+                data: { case: 'rowsJson', value: new TextEncoder().encode('[1]\n') },
+                rows: 1n,
+              },
+            },
+          });
+          yield create(ExecuteQueryResponseSchema, {
+            frame: {
+              case: 'summary',
+              value: { queryId: 'q1', resultRows: 1n, truncated: req.maxRows === 1 },
+            },
+          });
+        },
+      });
+    });
+    const client = createClient(HouseService, transport);
+    const cases: string[] = [];
+    for await (const frame of client.executeQuery({
+      sql: 'SELECT 1',
+      maxRows: 1,
+      readOnly: true,
+    })) {
+      cases.push(frame.frame.case ?? '');
+      if (frame.frame.case === 'summary') expect(frame.frame.value.truncated).toBe(true);
+    }
+    expect(cases).toEqual(['header', 'batch', 'summary']);
   });
 });

@@ -1,0 +1,515 @@
+syntax = "proto3";
+
+// Loams House (design §49 §18, D778; HS1 Task 8): ClickHouse SQL over Iceberg
+// tables in the customer's bucket, over Connect. The House front
+// (`loams-fabric house`) serves this package on its HTTP listener beside the
+// ClickHouse HTTP interface, and the engine's main port proxies
+// `/loams.house.v1.*` to it (§49 §18.1).
+//
+// Rules this package keeps (AP0, design §44, §49 §18.2):
+//
+// - **Unstable until HS1's GA (Task 38).** The service carries
+//   `ModuleOptions.unstable`, so `buf breaking` skips the package (buf.yaml)
+//   and the SDKs mark the module experimental. Fields are only ever added
+//   while it is unstable, so a client written against it keeps working.
+// - **The namespace is the caller's.** No request names a namespace: the
+//   credential does (a House user maps to one namespace; MT1 tokens from HS1
+//   Task 20). A database or table name is resolved inside it.
+// - **One surface, one set of checks.** `ExecuteQuery`, `ExplainQuery` and
+//   `PreviewTable` run through the same classifier, deny list, settings
+//   checks, admission and worker pool as the ClickHouse HTTP interface; a
+//   statement refused there is refused here with the same ClickHouse code.
+// - **Reads are `NO_SIDE_EFFECTS`.** `ExecuteQuery` is not marked: a statement
+//   may write (only with `read_only = false`).
+// - **Every mutation takes an `idempotency_key`** (`RestoreTable`).
+// - **Pages are AIP-158**: `page_size` (0 takes the server's default, at most
+//   1 000) and the previous page's `next_page_token`.
+// - **Errors** carry one `loams.errors.v1.ErrorInfo` whose `reason` is one of
+//   §49 §18.2's — `house_syntax_error`, `house_unknown_table`,
+//   `house_unknown_database`, `house_access_denied`, `house_read_only`,
+//   `house_timeout`, `house_memory_limit`, `house_too_many_queries`,
+//   `house_quota_exceeded`, `house_disabled_function`, `house_cancelled`,
+//   `house_not_configured`, `house_query_not_found`, `house_query_failed`
+//   (any other engine error) — or a shared one (`invalid_argument`,
+//   `unauthenticated`, `not_implemented`, `unavailable`). An error the engine
+//   or the front raised as a ClickHouse error carries its `clickhouse_code`
+//   and `clickhouse_name` in `metadata`.
+//
+// buf lint: RPC_RESPONSE_STANDARD_NAME is excepted for this file in buf.yaml,
+// because `RestoreTable` answers a `loams.operations.v1.Operation` (§49
+// §18.2), as `loams.graph.v1`'s slow RPCs do.
+package loams.house.v1;
+
+import "google/protobuf/timestamp.proto";
+import "loams/operations/v1/operations.proto";
+import "loams/options/v1/options.proto";
+
+// Queries, the table browser, query history and pipes of Loams House.
+service HouseService {
+  option (loams.options.v1.module) = {
+    name: "house"
+    summary: "Loams House: ClickHouse SQL over Iceberg tables in your bucket."
+    unstable: true
+  };
+
+  // Runs one statement and streams its result: a `header`, then `batch`es
+  // and `progress`, then one `summary`. A failure ends the stream with the
+  // error; the frames already sent stay valid.
+  rpc ExecuteQuery(ExecuteQueryRequest) returns (stream ExecuteQueryResponse) {}
+  // Cancels a running query by id: the worker running it is killed and the
+  // query's stream ends with `canceled` (reason `house_cancelled`). The
+  // caller's own queries only, until HS1 Task 20's `house:admin` scope.
+  rpc CancelQuery(CancelQueryRequest) returns (CancelQueryResponse) {}
+  // The plan, pipeline, rewritten syntax or estimate of a query. Nothing
+  // runs.
+  rpc ExplainQuery(ExplainQueryRequest) returns (ExplainQueryResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // The namespace's databases, by name.
+  rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // A database's tables, by name, from catalog metadata (never a scan).
+  rpc ListTables(ListTablesRequest) returns (ListTablesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // One table's columns, DDL, latest 20 snapshots and latest 100
+  // partitions.
+  rpc DescribeTable(DescribeTableRequest) returns (DescribeTableResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // The first rows of a table, as `ExecuteQuery` streams them. The server
+  // writes the `SELECT`, so a client never builds SQL text to browse.
+  rpc PreviewTable(PreviewTableRequest) returns (stream PreviewTableResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Past queries, newest first, from the query log (`_house.query_log`).
+  rpc ListQueryHistory(ListQueryHistoryRequest) returns (ListQueryHistoryResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // One past or running query, with its full text.
+  rpc GetQuery(GetQueryRequest) returns (GetQueryResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // The namespace's pipes, by name.
+  rpc ListPipes(ListPipesRequest) returns (ListPipesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Restores a lake table to a snapshot or a point in time, as a new
+  // snapshot (history is kept). Idempotent by `idempotency_key`.
+  rpc RestoreTable(RestoreTableRequest) returns (loams.operations.v1.Operation) {}
+}
+
+// ---------------------------------------------------------------------------
+// Queries
+// ---------------------------------------------------------------------------
+
+// How a result's rows are encoded in `ResultBatch`.
+enum ResultFormat {
+  // Read as ARROW_IPC.
+  RESULT_FORMAT_UNSPECIFIED = 0;
+  // Arrow IPC streaming format, uncompressed: the batches of one result,
+  // concatenated in order, are one Arrow IPC stream (schema message first,
+  // end-of-stream marker last), and every batch holds whole messages, so a
+  // reader can decode as batches arrive.
+  RESULT_FORMAT_ARROW_IPC = 1;
+  // ClickHouse's `JSONCompactEachRow`: one JSON array per row, one row per
+  // line, values as ClickHouse writes them (64-bit integers as strings
+  // only when the statement asks for it with
+  // `output_format_json_quote_64bit_integers`). Every batch holds whole
+  // lines.
+  RESULT_FORMAT_JSON_ROWS = 2;
+}
+
+message ExecuteQueryRequest {
+  // One statement, without a trailing `FORMAT` clause (the result format is
+  // `format`). A second statement is `house_syntax_error`.
+  string sql = 1;
+  // The current database; empty means `default`.
+  string database = 2;
+  // ClickHouse settings for this statement, checked as the HTTP interface
+  // checks URL settings: an unknown name (code 115), a disallowed one or one
+  // over its cap (code 164) is `invalid_argument`. Loams's own `loams_*`
+  // settings are read by the front and never reach the engine.
+  map<string, string> settings = 3;
+  // Query parameters: `{name:Type}` in `sql` takes `params["name"]`.
+  map<string, string> params = 4;
+  ResultFormat format = 5;
+  // Rows to return: 0 means 1 000, at most 100 000. A result with more rows
+  // is cut here and the summary says `truncated`.
+  uint32 max_rows = 6;
+  // Result bytes to return (as encoded in `batch`): 0 means 64 MiB, at most
+  // 1 GiB. A larger result is cut at a row boundary and the summary says
+  // `truncated`.
+  uint64 max_bytes = 7;
+  // The statement's time limit: 0 means the server's limit (300 s), at most
+  // 300 000. Past it the statement's worker is killed and the stream ends
+  // with `deadline_exceeded` (reason `house_timeout`).
+  uint32 timeout_ms = 8;
+  // The query's id, for `CancelQuery` and the query log; empty lets the
+  // server choose one (the header and the summary carry it). An id already
+  // running is `invalid_argument`.
+  string query_id = 9;
+  // Absent or true: only reads run, and anything else is `failed_precondition`
+  // with the reason `house_read_only` before it runs. False lets the
+  // statement write, if the caller may. A read-only user is always read-only.
+  optional bool read_only = 10;
+}
+
+// One frame of a result.
+message ExecuteQueryResponse {
+  oneof frame {
+    // First, before any batch.
+    ResultHeader header = 1;
+    ResultBatch batch = 2;
+    QueryProgress progress = 3;
+    // Last: the stream ends after it.
+    QuerySummary summary = 4;
+  }
+}
+
+// The result's columns.
+message ResultHeader {
+  // In result order. Empty for a statement with no result (a write, `SET`).
+  repeated ResultColumn columns = 1;
+  string query_id = 2;
+  // The format every batch of this result is in.
+  ResultFormat format = 3;
+}
+
+// One column of a result.
+message ResultColumn {
+  string name = 1;
+  // ClickHouse's type name, for example "Nullable(DateTime64(6, 'UTC'))".
+  string clickhouse_type = 2;
+}
+
+// Some of the result's rows.
+message ResultBatch {
+  oneof data {
+    // Whole Arrow IPC messages (`ResultFormat.RESULT_FORMAT_ARROW_IPC`).
+    bytes arrow_ipc = 1;
+    // Whole `JSONCompactEachRow` lines (`ResultFormat.RESULT_FORMAT_JSON_ROWS`).
+    bytes rows_json = 2;
+  }
+  // The rows in this batch.
+  uint64 rows = 3;
+}
+
+// How far the statement has got. Sent between batches, at most every
+// 100 ms; a statement that produces no rows until its end may send none.
+message QueryProgress {
+  uint64 read_rows = 1;
+  uint64 read_bytes = 2;
+  // 0 when not known.
+  uint64 total_rows_to_read = 3;
+  uint64 elapsed_ms = 4;
+}
+
+// What the statement did, sent once, last.
+message QuerySummary {
+  // Rows and bytes returned in `batch`es (after any truncation).
+  uint64 result_rows = 1;
+  uint64 result_bytes = 2;
+  uint64 read_rows = 3;
+  uint64 read_bytes = 4;
+  uint64 written_rows = 5;
+  uint64 elapsed_ms = 6;
+  // True when `max_rows` or `max_bytes` cut the result: the statement had
+  // more rows than were returned. Never silent.
+  bool truncated = 7;
+  string query_id = 8;
+  // After a write to lake tables: the snapshot each committed, keyed by
+  // "<database>.<table>" (the `X-Loams-Snapshot-Id` header's pairs).
+  map<string, int64> snapshot_ids = 9;
+}
+
+message CancelQueryRequest {
+  string query_id = 1;
+}
+
+message CancelQueryResponse {}
+
+// What `ExplainQuery` shows.
+enum ExplainKind {
+  // Read as PLAN.
+  EXPLAIN_KIND_UNSPECIFIED = 0;
+  // `EXPLAIN PLAN`: the query plan's steps.
+  EXPLAIN_KIND_PLAN = 1;
+  // `EXPLAIN PIPELINE`: the processors that would run.
+  EXPLAIN_KIND_PIPELINE = 2;
+  // `EXPLAIN SYNTAX`: the query as ClickHouse rewrites it.
+  EXPLAIN_KIND_SYNTAX = 3;
+  // `EXPLAIN ESTIMATE`: the parts, rows and marks a read would touch.
+  EXPLAIN_KIND_ESTIMATE = 4;
+}
+
+message ExplainQueryRequest {
+  // One query (a `SELECT`, `WITH` or parenthesised query).
+  string sql = 1;
+  // Empty means `default`.
+  string database = 2;
+  ExplainKind kind = 3;
+  // Query parameters, as in `ExecuteQueryRequest.params`.
+  map<string, string> params = 4;
+  // ClickHouse settings, as in `ExecuteQueryRequest.settings`.
+  map<string, string> settings = 5;
+}
+
+message ExplainQueryResponse {
+  // The explain's lines, as ClickHouse writes them, joined with "\n".
+  string text = 1;
+}
+
+// ---------------------------------------------------------------------------
+// The table browser
+// ---------------------------------------------------------------------------
+
+// How a table's data is stored (§49 §5).
+enum TableClass {
+  // Never sent.
+  TABLE_CLASS_UNSPECIFIED = 0;
+  // An Iceberg table in the bucket, committed by the House.
+  TABLE_CLASS_LAKE = 1;
+  // A Fluss-backed table with a lake tier (§49 §6.2).
+  TABLE_CLASS_REALTIME = 2;
+  // An Iceberg table another writer owns, registered read-only.
+  TABLE_CLASS_EXTERNAL = 3;
+}
+
+message ListDatabasesRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListDatabasesResponse {
+  // By name.
+  repeated Database databases = 1;
+  // Empty on the last page.
+  string next_page_token = 2;
+}
+
+// One database of the namespace.
+message Database {
+  string name = 1;
+  uint64 table_count = 2;
+  string comment = 3;
+}
+
+message ListTablesRequest {
+  // Empty means `default`.
+  string database = 1;
+  // Keeps only tables whose name contains this text, compared without
+  // case. Empty keeps every table.
+  string filter = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message ListTablesResponse {
+  // By name.
+  repeated Table tables = 1;
+  // Empty on the last page.
+  string next_page_token = 2;
+}
+
+// One table, from its catalog metadata.
+message Table {
+  string database = 1;
+  string name = 2;
+  // `class` in §49 §18.2; named `table_class` because `class` is a keyword
+  // in several of the SDKs' languages.
+  TableClass table_class = 3;
+  // The ClickHouse engine it was created with, for example
+  // "ReplacingMergeTree(version)".
+  string engine = 4;
+  uint64 total_rows = 5;
+  uint64 total_bytes = 6;
+  string partition_by = 7;
+  string order_by = 8;
+  // When its latest snapshot was committed.
+  google.protobuf.Timestamp last_modified = 9;
+  string comment = 10;
+}
+
+message DescribeTableRequest {
+  // Empty means `default`.
+  string database = 1;
+  string table = 2;
+}
+
+message DescribeTableResponse {
+  // The table's `ListTables` entry.
+  Table table = 1;
+  repeated ColumnDescription columns = 2;
+  // `SHOW CREATE TABLE`'s answer.
+  string create_table_query = 3;
+  // The latest 20, newest first.
+  repeated TableSnapshot snapshots = 4;
+  // The latest 100 partitions, by value.
+  repeated TablePartition partitions = 5;
+}
+
+// One column of a table.
+message ColumnDescription {
+  string name = 1;
+  string clickhouse_type = 2;
+  // "DEFAULT", "MATERIALIZED", "ALIAS" or empty.
+  string default_kind = 3;
+  string default_expression = 4;
+  string comment = 5;
+}
+
+// One Iceberg snapshot of a table.
+message TableSnapshot {
+  // Iceberg's snapshot id (a string in proto3 JSON).
+  int64 id = 1;
+  google.protobuf.Timestamp committed_at = 2;
+  // Iceberg's operation: "append", "overwrite", "delete" or "replace".
+  string operation = 3;
+  uint64 added_rows = 4;
+}
+
+// One partition of a table.
+message TablePartition {
+  // The partition's value, as ClickHouse prints the partition key.
+  string value = 1;
+  uint64 rows = 2;
+  uint64 bytes = 3;
+  uint64 files = 4;
+}
+
+message PreviewTableRequest {
+  // Empty means `default`.
+  string database = 1;
+  string table = 2;
+  // Rows: 0 means 100, at most 1 000.
+  uint32 limit = 3;
+  ResultFormat format = 4;
+}
+
+// One frame of a preview: the same frames, in the same order, as
+// `ExecuteQueryResponse`.
+message PreviewTableResponse {
+  oneof frame {
+    ResultHeader header = 1;
+    ResultBatch batch = 2;
+    QueryProgress progress = 3;
+    QuerySummary summary = 4;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Query history
+// ---------------------------------------------------------------------------
+
+// Whose queries `ListQueryHistory` lists.
+enum HistoryScope {
+  // Read as MINE.
+  HISTORY_SCOPE_UNSPECIFIED = 0;
+  // The caller's.
+  HISTORY_SCOPE_MINE = 1;
+  // Everyone's in the namespace (`house:admin`).
+  HISTORY_SCOPE_NAMESPACE = 2;
+}
+
+// Where a query is.
+enum QueryStatus {
+  // In a request: any status. Never sent.
+  QUERY_STATUS_UNSPECIFIED = 0;
+  QUERY_STATUS_RUNNING = 1;
+  QUERY_STATUS_FINISHED = 2;
+  QUERY_STATUS_FAILED = 3;
+  QUERY_STATUS_CANCELLED = 4;
+}
+
+message ListQueryHistoryRequest {
+  HistoryScope scope = 1;
+  // Only queries in this status; unspecified keeps every status.
+  QueryStatus status = 2;
+  // Only queries started at or after this time.
+  google.protobuf.Timestamp since = 3;
+  // Only queries whose text contains this, compared without case.
+  string text_contains = 4;
+  int32 page_size = 5;
+  string page_token = 6;
+}
+
+message ListQueryHistoryResponse {
+  // Newest first.
+  repeated QueryRecord queries = 1;
+  // Empty on the last page.
+  string next_page_token = 2;
+}
+
+// One query of the query log.
+message QueryRecord {
+  string query_id = 1;
+  // Who ran it: the House user, or the token's subject.
+  string principal = 2;
+  google.protobuf.Timestamp started_at = 3;
+  uint64 duration_ms = 4;
+  QueryStatus status = 5;
+  // The ClickHouse code it failed with, 0 when it did not.
+  int32 error_code = 6;
+  // The statement's text: at most 4 KiB in `ListQueryHistory`
+  // (`query_truncated` says when it was cut), whole in `GetQuery`.
+  string query = 7;
+  bool query_truncated = 8;
+  uint64 read_rows = 9;
+  uint64 read_bytes = 10;
+  uint64 result_rows = 11;
+  // The error's message, when it failed.
+  string error_message = 12;
+}
+
+message GetQueryRequest {
+  string query_id = 1;
+}
+
+message GetQueryResponse {
+  QueryRecord query = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Pipes and restore
+// ---------------------------------------------------------------------------
+
+message ListPipesRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListPipesResponse {
+  // By name.
+  repeated Pipe pipes = 1;
+  // Empty on the last page.
+  string next_page_token = 2;
+}
+
+// One pipe: a continuous ingest from a source into a table (§49 §9).
+message Pipe {
+  string name = 1;
+  // The source, for example "LoamsStream('orders')".
+  string source = 2;
+  // The target table, "<database>.<table>".
+  string target = 3;
+  // Records the source holds that the pipe has not committed yet.
+  uint64 lag_records = 4;
+  google.protobuf.Timestamp last_commit_at = 5;
+  // Empty when its last attempt succeeded.
+  string last_error = 6;
+}
+
+message RestoreTableRequest {
+  // Empty means `default`.
+  string database = 1;
+  string table = 2;
+  // The point to restore to.
+  oneof point {
+    int64 snapshot_id = 3;
+    google.protobuf.Timestamp timestamp = 4;
+  }
+  // A client ULID: a repeat within 24 h answers the first call's operation.
+  string idempotency_key = 5;
+}

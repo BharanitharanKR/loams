@@ -29,6 +29,9 @@ lint:
       # slow RPCs answer `loams.operations.v1.Operation` and ExecuteStream
       # streams `ResultChunk`.
       - proto/loams/graph/v1/graph.proto
+      # `loams.house.v1` (HS1 Task 8, design §49 §18.2): RestoreTable answers
+      # `loams.operations.v1.Operation`, as the graph's slow RPCs do.
+      - proto/loams/house/v1/house.proto
     # For the same reason: `CreateCollection` and `GetCollection` both answer
     # `CollectionInfo`, the collection's own document, and `ListCollections`
     # embeds it. A per-RPC response message would make every caller unwrap
@@ -48,6 +51,9 @@ lint:
       # `loams.graph.v1`: `Graph` and `loams.operations.v1.Operation` each
       # answer several RPCs (see above, §48 §8.2).
       - proto/loams/graph/v1/graph.proto
+      # `loams.house.v1`: `loams.operations.v1.Operation` answers RestoreTable
+      # here and other packages' slow RPCs.
+      - proto/loams/house/v1/house.proto
 breaking:
   use:
     - FILE
@@ -60,3 +66,6 @@ breaking:
     # `loams.postgres.v1` is `unstable: true` until Loams Postgres GA (PG2
     # Task 1 ruling R1.6); PG2 Task 60 removes this line and the option.
     - proto/loams/postgres
+    # `loams.house.v1` is `unstable: true` until HS1's GA (Task 38), which
+    # removes this line; until then its fields are only added, never changed.
+    - proto/loams/house
