@@ -535,6 +535,12 @@ public sealed class ConformanceTests
             }
             var reason = cells[1].Trim('`', ' ');
             var code = cells[2].Replace("`", string.Empty, StringComparison.Ordinal).Trim();
+            // The page spells the code as Connect does (`canceled`); the enum is
+            // `Code.Cancelled`, so a plain PascalCase lookup would skip the row.
+            if (code == "canceled")
+            {
+                code = "cancelled";
+            }
             if (!Enum.TryParse<Code>(ToPascal(code), out var parsed))
             {
                 continue;
