@@ -7,7 +7,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolvePaths } from "../src/main/paths";
 import {
@@ -116,7 +116,7 @@ describe("stacks", () => {
 			"-p",
 			"loams-desktop-tikv",
 			"-f",
-			"/res/stacks/tikv/compose.yaml",
+			join("/res/stacks", "tikv", "compose.yaml"),
 			"up",
 			"-d",
 		]);
@@ -128,12 +128,12 @@ describe("stacks", () => {
 			"-p",
 			"loams-desktop-postgres",
 			"-f",
-			"/r/neon/compose.yaml",
+			join("/r", "neon", "compose.yaml"),
 			"down",
 		]);
 		expect(
 			composeArgs(rt, "wesql", "/r", ["ps", "--format", "json"]).slice(4),
-		).toEqual(["/r/wesql/compose.yaml", "ps", "--format", "json"]);
+		).toEqual([join("/r", "wesql", "compose.yaml"), "ps", "--format", "json"]);
 	});
 
 	it("parses_ps_json", () => {
@@ -188,7 +188,7 @@ describe("stacks", () => {
 			"-p",
 			"loams-desktop-tikv",
 			"-f",
-			"/res/stacks/tikv/compose.yaml",
+			join("/res/stacks", "tikv", "compose.yaml"),
 			"up",
 			"-d",
 		]);
@@ -222,7 +222,7 @@ describe("stacks", () => {
 			{ bin: "docker", args: ["compose"] },
 			async (_b, args) =>
 				args.includes("-f") &&
-				args.some((a) => a.includes("/neon/")) &&
+				args.some((a) => a.includes(`${sep}neon${sep}`)) &&
 				args.includes("ps")
 					? { code: 0, stdout: running }
 					: { code: 0, stdout: "" },
@@ -527,12 +527,13 @@ describe("stack directory copy (I7)", () => {
 			platform: "linux" as NodeJS.Platform,
 		};
 		const dev = resolvePaths({ ...env, isPackaged: false });
+		// Built with node:path: backslashes on Windows, and the dev path is resolved (a drive letter).
 		expect(stackSource(dev.stacksDir, "postgres")).toBe(
-			"/repo/deploy/loams-postgres-dev",
+			resolve("/repo/deploy/loams-postgres-dev"),
 		);
 		const packaged = resolvePaths({ ...env, isPackaged: true });
 		expect(stackSource(packaged.stacksDir, "postgres")).toBe(
-			"/opt/Loams/resources/stacks/loams-postgres-dev",
+			join("/opt/Loams/resources/stacks", "loams-postgres-dev"),
 		);
 
 		const resources = mkdtempSync(join(tmpdir(), "stack-src-"));
@@ -741,7 +742,7 @@ describe("postgres readiness and reset (PG2 R2.2)", () => {
 			"-p",
 			"loams-desktop-postgres",
 			"-f",
-			"/res/stacks/neon/compose.yaml",
+			join("/res/stacks", "neon", "compose.yaml"),
 			"down",
 			"-v",
 		]);

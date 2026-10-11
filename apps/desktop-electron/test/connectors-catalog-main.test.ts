@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ConnectorCatalog, catalogPath } from "../src/main/connectors/catalog";
 import { saveYaml } from "../src/main/connectors/save";
@@ -63,10 +64,10 @@ describe("ConnectorCatalog", () => {
 	it("resolves the path for packaged and dev", () => {
 		expect(
 			catalogPath({ isPackaged: true, resourcesPath: "/r", appRoot: "/a" }),
-		).toBe("/r/connectors.json");
+		).toBe(join("/r", "connectors.json"));
 		expect(
 			catalogPath({ isPackaged: false, resourcesPath: "/r", appRoot: "/a" }),
-		).toBe("/a/resources/connectors.json");
+		).toBe(join("/a", "resources", "connectors.json"));
 	});
 });
 

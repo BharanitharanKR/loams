@@ -1,0 +1,3 @@
+# Check out LF everywhere, also on Windows (core.autocrlf): vitest cannot load an ES module whose
+# "#!" line ends in CRLF (scripts/*.mjs), and bash rejects CRLF scripts (scripts/*.sh).
+* text=auto eol=lf

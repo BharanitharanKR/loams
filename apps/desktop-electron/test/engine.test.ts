@@ -452,6 +452,7 @@ describe("engine", () => {
 				spawn: asSpawn(() => child),
 				fetch: (async () => ({ ok: true })) as unknown as typeof fetch,
 				sleep: (ms: number) => (ms === 5000 ? graceGate : Promise.resolve()),
+				platform: "linux", // SIGKILL; Windows uses taskkill (next test)
 			}),
 		);
 		sup.start();
@@ -462,6 +463,37 @@ describe("engine", () => {
 		release();
 		await p;
 		expect(child.signals).toEqual(["SIGTERM", "SIGKILL"]);
+		expect(sup.state().phase).toBe("stopped");
+	});
+
+	it("stop_taskkills_the_tree_after_grace_on_windows", async () => {
+		const child = new FakeChild([]);
+		const spawned: string[][] = [];
+		let release: () => void = () => {};
+		const graceGate = new Promise<void>((r) => {
+			release = r;
+		});
+		const sup = new EngineSupervisor(
+			deps({
+				spawn: asSpawn((c: string, a: string[]) => {
+					spawned.push([c, ...a]);
+					if (c !== "taskkill") return child;
+					child.die(1);
+					return new FakeChild();
+				}),
+				fetch: (async () => ({ ok: true })) as unknown as typeof fetch,
+				sleep: (ms: number) => (ms === 5000 ? graceGate : Promise.resolve()),
+				platform: "win32",
+			}),
+		);
+		sup.start();
+		await until(() => sup.state().phase === "ready");
+		const p = sup.stop();
+		await until(() => child.signals.length > 0);
+		release();
+		await p;
+		expect(child.signals).toEqual(["SIGTERM"]);
+		expect(spawned.at(-1)).toEqual(["taskkill", "/pid", "4242", "/T", "/F"]);
 		expect(sup.state().phase).toBe("stopped");
 	});
 

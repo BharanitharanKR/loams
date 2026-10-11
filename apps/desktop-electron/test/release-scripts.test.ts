@@ -124,7 +124,11 @@ describe("windows-sign.cjs", () => {
 	});
 });
 
-const hasGpg = spawnSync("gpg", ["--version"]).status === 0;
+// gpg-sign.sh runs on the Linux release runner (desktop-electron-release.yml); on Windows, bash and
+// gpg (when present at all) are Git for Windows' MSYS builds, which this bash script does not target.
+const hasGpg =
+	process.platform !== "win32" &&
+	spawnSync("gpg", ["--version"]).status === 0;
 describe.skipIf(!hasGpg)("gpg-sign.sh dry run with a throwaway key", () => {
 	const run = (dir: string, env: Record<string, string>) =>
 		spawnSync("bash", [join(scripts, "gpg-sign.sh"), dir], {

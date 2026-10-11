@@ -110,7 +110,7 @@ describe("ensureCspMeta", () => {
 			join(__dirname, "../../../web/apps/console/vite.config.ts"),
 			"utf8",
 		);
-		const decl = /const CSP =([\s\S]*?);\n/.exec(vite)?.[1] ?? "";
+		const decl = /const CSP =([\s\S]*?);\r?\n/.exec(vite)?.[1] ?? "";
 		const parts = [...decl.matchAll(/"([^"]*)"/g)].map((m) => m[1]).join("");
 		expect(parts).toBe(CONSOLE_CSP);
 	});

@@ -153,7 +153,9 @@ export class EngineSupervisor extends EventEmitter {
 		child.kill("SIGTERM");
 		const grace = this.deps.sleep(this.deps.graceMs ?? 5000).then(() => false);
 		const done = await Promise.race([exited.then(() => true), grace]);
-		if (done) return;
+		// The grace can win a tie with an exit that already happened; never force-kill a reaped pid
+		// (on Windows `taskkill /T /F` would then hit whatever process reused it).
+		if (done || child.exitCode !== null || child.signalCode !== null) return;
 		if (win && child.pid !== undefined) {
 			this.deps.spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
 				stdio: "ignore",

@@ -19,7 +19,14 @@ if [[ -z "${LOAMS_GPG_PRIVATE_KEY:-}" ]]; then
 fi
 [[ -f "$dir/SHA256SUMS" ]] || { echo "gpg-sign.sh: $dir/SHA256SUMS missing; run checksums.mjs first" >&2; exit 1; }
 
-home="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/loams-gnupg.XXXXXX")"
+base="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
+base="${base%/}"
+# Without /run/user (macOS, some containers) gpg-agent puts its sockets in GNUPGHOME itself, and a
+# Unix socket path is capped at 103 bytes on macOS (107 on Linux). "<base>/loams-gnupg.XXXXXX/
+# S.gpg-agent.browser" adds 39, so a deeper base makes the agent fail to start and the secret key
+# import fail. Fall back to /tmp then.
+(( ${#base} <= 60 )) || base=/tmp
+home="$(mktemp -d "$base/loams-gnupg.XXXXXX")"
 chmod 700 "$home"
 trap 'gpgconf --homedir "$home" --kill all >/dev/null 2>&1 || true; rm -rf "$home"' EXIT
 export GNUPGHOME="$home"
@@ -42,7 +49,8 @@ key_args=()
 [[ -n "${LOAMS_GPG_KEY_ID:-}" ]] && key_args=(--local-user "$LOAMS_GPG_KEY_ID")
 
 sign() { # <file> <signature>
-	gpg "${pass_args[@]}" "${key_args[@]}" --armor --detach-sign --output "$2" "$1"
+	# ${a[@]+...}: bash 3.2 (macOS /bin/bash) treats an empty array as unset under set -u.
+	gpg "${pass_args[@]}" ${key_args[@]+"${key_args[@]}"} --armor --detach-sign --output "$2" "$1"
 	echo "signed $(basename "$1")"
 }
 
