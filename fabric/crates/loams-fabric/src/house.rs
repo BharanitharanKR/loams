@@ -17,9 +17,10 @@
 //! * `--sandbox=none` needs `--unsafe-no-sandbox` (HS1 R1.10, R6.8), except on a
 //!   system with no L3 (macOS) in `--single-node` mode, and is logged either way.
 //! * `--workers=inproc` needs `--single-node` and a build with `inproc-worker`.
-//! * The native listener (Task 31), admin (Task 23), the catalog (Task 10) and
-//!   the store (Tasks 9 and 12) are resolved and validated now, and [`start`]
-//!   says on stderr that they are not served yet.
+//! * The native listener (Task 31), admin (Task 23) and the catalog (Task 10)
+//!   are resolved and validated now, and [`start`] says on stderr that they are
+//!   not served yet. The store is read through `house-cache` by process workers
+//!   (Task 9) and written from Task 12.
 
 use std::io::{self, Write as _};
 use std::net::SocketAddr;
@@ -27,12 +28,14 @@ use std::os::unix::fs::OpenOptionsExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use loams_cache::RangeCacheConfig;
 use loams_house::config::{DEFAULT_ADMIN_LISTEN, DEFAULT_LISTEN, DEFAULT_NATIVE_LISTEN};
 use loams_house::{
     CatalogSpec, CgroupLimits, ChError, HouseConfig, HouseError, HouseFile, HouseHandle, Launcher,
     PoolConfig, ProcessLauncher, SandboxMode, UserMap, WorkerCgroups, WorkerPool, WorkersMode,
     config, sandbox,
 };
+use loams_house_cache::{HouseCache, OneStore, StoreOptions, Upstream};
 
 use crate::cli::HouseArgs;
 
@@ -263,7 +266,8 @@ pub async fn start(mut settings: HouseSettings) -> Result<Running, HouseError> {
             .users
             .push(UserMap::dev(LOCAL_USER, &password, LOCAL_NAMESPACE, false));
     }
-    let launcher = launcher(&settings)?;
+    let cache = house_cache(&settings).await?;
+    let launcher = launcher(&settings, cache)?;
     let pool = WorkerPool::start(settings.pool.clone(), launcher).await?;
     let handle = loams_house::serve(settings.http, pool.clone()).await?;
     Ok(Running { handle, pool })
@@ -285,12 +289,41 @@ pub fn not_served_yet(settings: &HouseSettings) -> Vec<String> {
         out.push(format!("catalog {catalog}: not used until HS1 Task 10"));
     }
     if let Some(store) = &settings.store {
-        out.push(format!("store {store}: not used until HS1 Tasks 9 and 12"));
+        out.push(match settings.workers {
+            WorkersMode::Process => {
+                format!("store {store}: read through house-cache; written from HS1 Task 12")
+            }
+            WorkersMode::Inproc => format!(
+                "store {store}: not read by in-process workers (they have no forwarder); \
+                 written from HS1 Task 12"
+            ),
+        });
     }
     out
 }
 
-fn launcher(settings: &HouseSettings) -> Result<Arc<dyn Launcher>, HouseError> {
+/// `house-cache` over `--store` (HS1 Task 9): the only way process workers
+/// reach the bucket. RAM only for now; its size and NVMe tier are Task 21's and
+/// Task 26's.
+async fn house_cache(settings: &HouseSettings) -> Result<Option<HouseCache>, HouseError> {
+    let Some(url) = &settings.store else {
+        return Ok(None);
+    };
+    if settings.workers != WorkersMode::Process {
+        return Ok(None);
+    }
+    let upstream = Upstream::open(url, StoreOptions::default(), RangeCacheConfig::default())
+        .await
+        .map_err(|err| bad(format!("--store {url:?}: {err}")))?;
+    Ok(Some(HouseCache::new(Arc::new(OneStore(Arc::new(
+        upstream,
+    ))))))
+}
+
+fn launcher(
+    settings: &HouseSettings,
+    cache: Option<HouseCache>,
+) -> Result<Arc<dyn Launcher>, HouseError> {
     let workers_dir = settings.data_dir.join("workers");
     if settings.workers == WorkersMode::Inproc {
         return inproc(&workers_dir);
@@ -323,6 +356,9 @@ fn launcher(settings: &HouseSettings) -> Result<Arc<dyn Launcher>, HouseError> {
             root,
             CgroupLimits::for_worker(bytes),
         )?);
+    }
+    if let Some(cache) = cache {
+        launcher = launcher.with_forward_target(Arc::new(cache));
     }
     Ok(Arc::new(launcher))
 }

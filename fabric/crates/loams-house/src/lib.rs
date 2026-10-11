@@ -91,7 +91,7 @@ pub use admission::{Collected, Event, Outcome, PoolConfig, PoolStats, WorkerLeas
 pub use config::{CatalogSpec, HouseConfig, HouseFile, UserMap, WorkersMode};
 pub use errors::{CODES, ChError, HouseError, MidStreamBody};
 pub use http::{HouseHandle, serve, serve_with_catalog};
-pub use sandbox::{CgroupLimits, SandboxMode, WorkerCgroups};
+pub use sandbox::{CgroupLimits, Forward, ForwardSlot, ForwardTarget, SandboxMode, WorkerCgroups};
 #[cfg(feature = "inproc-worker")]
 pub use watchdog::InprocWorker;
 pub use watchdog::{ExitReason, KillHandle, Launcher, ProcessLauncher};

@@ -50,7 +50,9 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
 use crate::errors::{ChError, HouseError};
-use crate::sandbox::{self, FORWARDER_PORT, FORWARDER_SOCKET_FD, SandboxMode, WorkerCgroups};
+use crate::sandbox::{
+    self, FORWARDER_PORT, FORWARDER_SOCKET_FD, Forward, ForwardTarget, SandboxMode, WorkerCgroups,
+};
 
 /// Why a worker stopped: the `reason` label of
 /// `loams_house_worker_kills_total{reason}` (HS1 Shared contracts).
@@ -157,6 +159,11 @@ pub trait Launcher: Send + Sync + fmt::Debug {
     /// Starts worker `id` and returns the front's end of its socket. The worker is
     /// not ready until it sends `Ready`; the pool waits for that.
     fn launch(&self, id: &str) -> Result<Launched, HouseError>;
+
+    /// Worker `id` was bound to `namespace`. A launcher whose workers read the
+    /// bucket through `house-cache` passes it on, so the worker's reads are
+    /// scoped to that namespace (HS1 Task 9).
+    fn bound(&self, _id: &str, _namespace: &str) {}
 }
 
 /// A started worker.
@@ -356,7 +363,7 @@ pub struct ProcessLauncher {
     memory_limit: Option<u64>,
     s3_endpoint: Option<String>,
     sandbox: SandboxMode,
-    forwarder: Option<std::net::SocketAddr>,
+    forwarder: Option<Forward>,
     cgroups: Option<WorkerCgroups>,
 }
 
@@ -414,7 +421,18 @@ impl ProcessLauncher {
     /// (`http://127.0.0.1:FORWARDER_PORT/`); in `pods` and `none`, to `upstream`
     /// directly. Replaces any [`ProcessLauncher::with_s3_endpoint`].
     pub fn with_forwarder(mut self, upstream: std::net::SocketAddr) -> Self {
-        self.forwarder = Some(upstream);
+        self.forwarder = Some(Forward::Relay(upstream));
+        self
+    }
+
+    /// Where a worker's bucket reads go: `target`, a server in the front's own
+    /// process (`house-cache`, HS1 Task 9) that knows each connection's worker.
+    /// In `netns`, through the worker's forwarder channel; otherwise through a
+    /// loopback endpoint `target` opens for that worker. The pool tells it which
+    /// namespace each worker is bound to ([`Launcher::bound`]). Replaces any
+    /// [`ProcessLauncher::with_s3_endpoint`].
+    pub fn with_forward_target(mut self, target: Arc<dyn ForwardTarget>) -> Self {
+        self.forwarder = Some(Forward::Target(target));
         self
     }
 
@@ -440,6 +458,26 @@ impl ProcessLauncher {
     /// The command line of worker `id`, without the program name. Never a
     /// credential: the grammar is `loams_house_worker::WorkerArgs`.
     pub fn args(&self, id: &str) -> Vec<String> {
+        let endpoint = self.endpoint(id).ok().flatten();
+        self.args_with(id, endpoint)
+    }
+
+    /// The bucket endpoint worker `id` is given (`--s3-endpoint`).
+    fn endpoint(&self, id: &str) -> Result<Option<String>, HouseError> {
+        Ok(match (&self.forwarder, self.sandbox) {
+            (Some(_), SandboxMode::Netns) => Some(format!("http://127.0.0.1:{FORWARDER_PORT}/")),
+            (Some(Forward::Relay(upstream)), _) => Some(format!("http://{upstream}/")),
+            (Some(Forward::Target(target)), _) => {
+                let addr = target
+                    .endpoint(id)
+                    .map_err(|err| spawn_error("its bucket endpoint", err))?;
+                Some(format!("http://{addr}/"))
+            }
+            (None, _) => self.s3_endpoint.clone(),
+        })
+    }
+
+    fn args_with(&self, id: &str, endpoint: Option<String>) -> Vec<String> {
         let mut args = vec![
             "--tmp-dir".to_string(),
             self.tmp_root.join(id).display().to_string(),
@@ -450,11 +488,6 @@ impl ProcessLauncher {
             args.push("--memory-limit".to_string());
             args.push(bytes.to_string());
         }
-        let endpoint = match (self.forwarder, self.sandbox) {
-            (Some(_), SandboxMode::Netns) => Some(format!("http://127.0.0.1:{FORWARDER_PORT}/")),
-            (Some(upstream), _) => Some(format!("http://{upstream}/")),
-            (None, _) => self.s3_endpoint.clone(),
-        };
         if let Some(endpoint) = endpoint {
             args.push("--s3-endpoint".to_string());
             args.push(endpoint);
@@ -501,6 +534,12 @@ fn spawn_error(what: &str, err: impl fmt::Display) -> HouseError {
 }
 
 impl Launcher for ProcessLauncher {
+    fn bound(&self, id: &str, namespace: &str) {
+        if let Some(Forward::Target(target)) = &self.forwarder {
+            target.bound(id, namespace);
+        }
+    }
+
     fn launch(&self, id: &str) -> Result<Launched, HouseError> {
         let dir = self.tmp_root.join(id);
         std::fs::create_dir_all(&dir).map_err(|err| spawn_error("its directory", err))?;
@@ -548,7 +587,8 @@ impl Launcher for ProcessLauncher {
 
         let program = cstring(&self.binary.display().to_string())?;
         let mut argv = vec![program];
-        for arg in self.args(id) {
+        let endpoint = self.endpoint(id)?;
+        for arg in self.args_with(id, endpoint) {
             argv.push(cstring(&arg)?);
         }
         // §49 §13.1: workers hold no credentials. Nothing from the front's
@@ -569,19 +609,53 @@ impl Launcher for ProcessLauncher {
         let control = ProcessControl::start(pid, dir, cgroup);
         if let Some((front_end, worker_end)) = forwarder {
             drop(worker_end);
-            let upstream = self
+            let forward = self
                 .forwarder
+                .clone()
                 .ok_or_else(|| spawn_error("the forwarder", "no upstream"))?;
-            if let Err(err) = sandbox::serve_forwarder(front_end, upstream, id) {
+            if let Err(err) = sandbox::serve_forwarder(front_end, forward, id) {
                 control.terminate();
                 return Err(spawn_error("the forwarder thread", err));
             }
+        } else if let Some(Forward::Target(target)) = &self.forwarder {
+            // No forwarder channel whose end says the worker is gone: its exit does.
+            forget_on_exit(Arc::clone(target), id, control.exit());
         }
 
         Ok(Launched {
             socket: front,
             control,
         })
+    }
+}
+
+/// Tells `target` that worker `id` is gone once its exit is seen.
+fn forget_on_exit(
+    target: Arc<dyn ForwardTarget>,
+    id: &str,
+    mut exit: watch::Receiver<Option<String>>,
+) {
+    let id = id.to_string();
+    let wait = async move {
+        let _ = exit.wait_for(Option::is_some).await;
+        target.gone(&id);
+    };
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => {
+            handle.spawn(wait);
+        }
+        Err(_) => {
+            let _ = std::thread::Builder::new()
+                .name("house-forget".to_string())
+                .spawn(move || {
+                    if let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                        .enable_time()
+                        .build()
+                    {
+                        runtime.block_on(wait);
+                    }
+                });
+        }
     }
 }
 

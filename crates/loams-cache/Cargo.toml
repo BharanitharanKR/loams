@@ -7,6 +7,11 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[features]
+# `RangeCache::insert_raw_for_test`, for consumers' checksum tests (the House's
+# `house-cache`, HS1 Task 9). Never in a release build.
+test-hooks = []
+
 [dependencies]
 bytes.workspace = true
 crc32c.workspace = true
