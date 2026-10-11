@@ -231,7 +231,7 @@ jobs:
           set +o pipefail
           yes | "$sdkmanager" --licenses > /dev/null
           set -o pipefail
-          "$sdkmanager" 'platforms;android-37'
+          "$sdkmanager" 'platforms;android-37.0'
       - uses: gradle/actions/setup-gradle@v6
       - run: pnpm nx run mobile-android:build --outputStyle=static
       - run: pnpm nx run mobile-android:test --outputStyle=static
@@ -273,7 +273,7 @@ jobs:
           set +o pipefail
           yes | "$sdkmanager" --licenses > /dev/null
           set -o pipefail
-          "$sdkmanager" 'platforms;android-37'
+          "$sdkmanager" 'platforms;android-37.0'
       - uses: gradle/actions/setup-gradle@v6
       # This target executes apps/mobile/scripts/conformance.py, which owns the
       # mock process, readiness checks and cleanup. Do not depend on another job's mock.

@@ -7,7 +7,7 @@ Everything runs against the local mock server in [`mock/`](../mock/README.md): t
 | | Linux | Windows |
 |---|---|---|
 | Android Studio (bundles a JDK and the SDK manager) | [developer.android.com/studio](https://developer.android.com/studio) | same |
-| Android SDK Platform 37 and an emulator image (API 35 or 36, Google APIs, x86_64) | Android Studio's SDK Manager, or `sdkmanager "platforms;android-37" "system-images;android-36;google_apis;x86_64" emulator platform-tools` | same |
+| Android SDK Platform 37 and an emulator image (API 35 or 36, Google APIs, x86_64) | Android Studio's SDK Manager, or `sdkmanager "platforms;android-37.0" "system-images;android-36;google_apis;x86_64" emulator platform-tools` | same |
 | Go 1.25 or later, for the mock (optional: CI publishes prebuilt binaries) | `sudo pacman -S go` / `sudo apt install golang-go` / [go.dev/dl](https://go.dev/dl/) | `winget install GoLang.Go` |
 
 The project pins Gradle 9.8 through the wrapper, so no Gradle install is needed. Command-line builds need `ANDROID_HOME` set (or a `android/local.properties` with `sdk.dir=…`); Android Studio writes that file for you.
