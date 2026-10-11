@@ -254,6 +254,9 @@ describe('overview page', () => {
     expect(within(card('factory')).getByText('1 of 2 connected')).toBeTruthy();
     expect(within(card('postgres')).getByText('Running')).toBeTruthy();
     expect(within(card('wesql')).getByText('Not running')).toBeTruthy();
+    // The live dashboard sits above the cards, on sample data until a server API exists.
+    expect(screen.getByRole('heading', { name: 'Live' })).toBeTruthy();
+    expect(screen.getByText('Sample data')).toBeTruthy();
   });
 
   it('refresh_re_reads_everything_and_keeps_data_on_screen', async () => {
@@ -266,7 +269,9 @@ describe('overview page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     // No flash to Loading: the numbers stay while the reads run.
     expect(within(card('data')).getByText('2')).toBeTruthy();
-    expect(screen.queryByText('Loading')).toBeNull();
+    // Scoped to the status cards: the live section above loads on its own.
+    const cards = document.querySelector('.lc-cards') as HTMLElement;
+    expect(within(cards).queryByText('Loading')).toBeNull();
     await waitFor(() => expect(fetched.length).toBeGreaterThan(before.fetched));
     await waitFor(() => expect(calls.length).toBeGreaterThan(before.calls));
     expect(calls.filter((c) => c === 'factory.list')).toHaveLength(2);

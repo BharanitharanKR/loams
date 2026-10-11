@@ -2,7 +2,7 @@ import type { Transport } from '@connectrpc/connect';
 import type { LoamsDesktopApi, ServerEntry, StackId, StackState } from '@loams/desktop/contracts';
 import { Slot } from '@loams/slots';
 import { Button } from '@loams/ui';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ConnectorsCard,
   DataCard,
@@ -14,6 +14,9 @@ import {
   StreamsCard,
   type Where,
 } from './cards.js';
+import { LiveDashboard } from './live/live-dashboard.js';
+import { mockOverviewMetrics } from './live/mock.js';
+import type { OverviewMetricsClient } from './live/types.js';
 import { loadConnectors, loadData, loadDurable, loadStreams, type Net, useLoad } from './load.js';
 
 function useEngine(desktop: LoamsDesktopApi) {
@@ -76,12 +79,16 @@ export function OverviewPage({
   desktop,
   transport,
   net,
+  metrics,
 }: {
   desktop: LoamsDesktopApi;
   transport: Transport;
   net: Net;
+  /** Live metrics, deployments, alerts and topology. Fixtures until a server API exists. */
+  metrics?: OverviewMetricsClient;
 }) {
   const [tick, setTick] = useState(0);
+  const liveClient = useMemo(() => metrics ?? mockOverviewMetrics(), [metrics]);
   const engine = useEngine(desktop);
   const { active, known: serverKnown } = useActiveServer(desktop);
   const where: Where = {
@@ -112,6 +119,8 @@ export function OverviewPage({
           Refresh
         </Button>
       </header>
+      <LiveDashboard client={liveClient} />
+      <h2 className="mb-3">Status</h2>
       <div className="lc-cards">
         <EngineCard engine={engine} active={active} />
         <DataCard where={where} load={data} />

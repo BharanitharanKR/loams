@@ -1,6 +1,7 @@
 // @loams/plugin-overview: Loams Desktop's home page (`/`). A grid of honest
-// status cards, each linking to its page, plus whatever other plugins put in
-// the `environment.overview.card` slot. Read-only.
+// status cards, each linking to its page, under a live dashboard (KPIs,
+// request and usage charts, a service map, deployments and alerts), plus
+// whatever other plugins put in the `environment.overview.card` slot. Read-only.
 
 import { type PluginModule, service } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
@@ -10,6 +11,9 @@ import { OverviewPage } from './overview-page.js';
 
 export * from './cards.js';
 export * from './load.js';
+export { LiveDashboard } from './live/live-dashboard.js';
+export { mockOverviewMetrics } from './live/mock.js';
+export type * from './live/types.js';
 export { OverviewPage } from './overview-page.js';
 
 const plugin: PluginModule = {
