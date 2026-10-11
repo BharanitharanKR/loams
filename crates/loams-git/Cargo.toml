@@ -1,6 +1,6 @@
 [package]
 name = "loams-git"
-description = "Loams Git's portable core (design §36, §19): identifiers, paths, limits, the bucket WAL formats, the blob store, the WAL and the repository state machine."
+description = "Loams Git's portable core (design §36, §19): identifiers, paths, limits, the bucket WAL formats, the blob store, the WAL, the repository state machine and the pack-cache object database."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,6 +15,10 @@ crc32c.workspace = true
 futures.workspace = true
 # The gitoxide 0.88 train, pinned exactly in the workspace (plan GT1 R0.8).
 gix-hash.workspace = true
+# Object parsing and pack reading for the pack-cache object database (Task 9).
+gix-object.workspace = true
+gix-pack.workspace = true
+gix-zlib.workspace = true
 gix-validate.workspace = true
 # The protobuf format only: `record` would pull in loams-log (R0.4, T0-7).
 loams-cloudevents = { path = "../loams-cloudevents", version = "0.0.1", default-features = false, features = ["protobuf"] }
@@ -32,7 +36,7 @@ serde_json.workspace = true
 # `derived_blame` names hash the path.
 sha2.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["time"] }
+tokio = { workspace = true, features = ["sync", "time"] }
 tracing.workspace = true
 # Generated ids (`r`, `w`, `m`, `s` + a lowercase ULID).
 ulid.workspace = true

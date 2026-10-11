@@ -13,6 +13,7 @@ pub mod error;
 pub mod format;
 pub mod ids;
 pub mod limits;
+pub mod odb;
 pub mod paths;
 pub mod reflog;
 mod retry;
@@ -28,6 +29,7 @@ pub use ids::{
     IdemKey, MountId, NamespaceId, ObjectId, Principal, RefName, RepoId, RepoName, RepoPath,
     SecretId, Seq, SnapN, TraceParent, WsId, WsName,
 };
+pub use odb::{ObjectDb, OdbError, PackCache, PackCacheOdb};
 pub use paths::RepoPaths;
 pub use reflog::{Expect, Receipt, RefSnapshot, RefTxn, RefUpdate, RejectReason, Scope};
 pub use state::{Check, IdemIndex, RepoState, StateError};
