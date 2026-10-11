@@ -6,9 +6,10 @@ name: Release (GitHub release, SBOM, provenance)
 # linux/arm64. When it succeeds, this workflow:
 #
 #   1. resolves each published :<version> manifest list to its digest,
-#   2. attests build provenance for it (actions/attest-build-provenance) and an
-#      SPDX SBOM (anchore/sbom-action + actions/attest-sbom), both pushed to
-#      the registry next to the image,
+#   2. attests an SPDX SBOM for it (anchore/sbom-action + actions/attest-sbom),
+#      pushed to the registry next to the image. Build provenance is attested
+#      by release-images.yml itself, in the tag's run, so it names the tag's
+#      commit; a workflow_run's token would name the default branch's,
 #   3. creates the GitHub release as a pre-release (never "Latest") and attaches
 #      the compose bundle (deploy/release plus the Postgres stack it includes),
 #      the SBOMs and SHA256SUMS.
@@ -120,12 +121,6 @@ jobs:
           preview=$(docker buildx imagetools inspect "$IMAGE:preview" --format '{{json .Manifest}}' | jq -r .digest)
           [ "$preview" = "$digest" ] || echo "::warning::$IMAGE:preview is $preview, not $VERSION ($digest): a newer tag moved it"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-      - name: build provenance (attested to the registry)
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-name: ${{ env.REGISTRY }}/${{ matrix.image }}
-          subject-digest: ${{ steps.manifest.outputs.digest }}
-          push-to-registry: true
       - name: SBOM (SPDX)
         uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
