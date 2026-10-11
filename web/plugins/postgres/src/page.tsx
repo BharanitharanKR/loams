@@ -2,11 +2,27 @@ import type { LoamsDesktopApi } from '@loams/desktop/contracts';
 import { ConnectPanel, PageHead, SqlConsole, StackCard, Tabs, useStack } from '@loams/desktop-ui';
 import { Badge, Notice } from '@loams/ui';
 import { Branches } from './branches.js';
+import { ControlPlane } from './control/ControlPlane.js';
+import type { PgControlClient } from './control/types.js';
 
-/** `/postgres`: the local Neon stack. */
-export function PostgresPage({ desktop }: { desktop: LoamsDesktopApi }) {
+/**
+ * `/postgres`: the local Neon stack, and the Loams control plane (loams.postgres.v1:
+ * projects, branches, roles, databases, operations) when `control` is given.
+ */
+export function PostgresPage({
+  desktop,
+  control,
+}: {
+  desktop: LoamsDesktopApi;
+  control?: PgControlClient;
+}) {
   const state = useStack(desktop.stacks, 'postgres');
   const running = state?.phase === 'running';
+  const controlTab = control && {
+    id: 'control',
+    label: 'Control plane',
+    content: <ControlPlane client={control} copy={desktop.shell.clipboardWrite} />,
+  };
   return (
     <div className="lc-page flex flex-col gap-4">
       <PageHead
@@ -44,15 +60,19 @@ export function PostgresPage({ desktop }: { desktop: LoamsDesktopApi }) {
               label: 'SQL',
               content: <SqlConsole dialect="postgres" run={desktop.pg.query} />,
             },
+            ...(controlTab ? [controlTab] : []),
           ]}
         />
       ) : (
-        state &&
-        state.phase !== 'unavailable' && (
-          <Notice title="Start the stack to browse branches and run SQL">
-            Branches, connection details and the SQL console appear once the local stack is running.
-          </Notice>
-        )
+        <>
+          {state && state.phase !== 'unavailable' && (
+            <Notice title="Start the stack to browse branches and run SQL">
+              Branches, connection details and the SQL console appear once the local stack is
+              running.
+            </Notice>
+          )}
+          {controlTab && <Tabs tabs={[controlTab]} />}
+        </>
       )}
     </div>
   );

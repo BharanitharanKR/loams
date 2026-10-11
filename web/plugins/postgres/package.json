@@ -2,7 +2,7 @@
   "name": "@loams/plugin-postgres",
   "version": "0.1.0",
   "private": true,
-  "description": "Loams Desktop: the local Neon Postgres stack: branches, connection details and an SQL console.",
+  "description": "Loams Desktop: the local Neon Postgres stack (branches, connection details, SQL console) and the loams.postgres.v1 control plane (projects, branch tree, roles, databases, operations).",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
