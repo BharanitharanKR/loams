@@ -93,7 +93,8 @@ export type Preview =
 
 /** What the payload panel shows: pretty JSON, plain text, an object-store reference, or nothing. */
 export function payloadPreview(p: Payload): Preview {
-  if (p.text === undefined) return p.blobRef ? { kind: 'external', blobRef: p.blobRef } : { kind: 'binary' };
+  if (p.text === undefined)
+    return p.blobRef ? { kind: 'external', blobRef: p.blobRef } : { kind: 'binary' };
   let text = p.text;
   if (/^application\/(.+\+)?json\b/.test(p.contentType)) {
     try {

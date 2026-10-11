@@ -10,8 +10,8 @@ import {
   type JobQuery,
   type JobState,
   type JobSummary,
-  JobsClientError,
   type JobsClient,
+  JobsClientError,
   type Page,
   type QueueSummary,
   type ScheduleSummary,
@@ -42,7 +42,9 @@ const counts = (c: Partial<Record<JobState, number>>): Record<JobState, number> 
 const at = (minutesAgo: number): string =>
   new Date(Date.UTC(2026, 9, 10, 12, 0, 0) - minutesAgo * 60_000).toISOString();
 
-function job(j: Partial<JobDetail> & Pick<JobDetail, 'id' | 'queue' | 'name' | 'state'>): JobDetail {
+function job(
+  j: Partial<JobDetail> & Pick<JobDetail, 'id' | 'queue' | 'name' | 'state'>,
+): JobDetail {
   return {
     attempt: 0,
     maxAttempts: 3,
@@ -67,7 +69,14 @@ export function sampleFixtures(): JobsFixtures {
         paused: false,
         shards: 1,
         deadLetterQueue: 'emails.dlq',
-        counts: counts({ waiting: 42, prioritized: 3, delayed: 7, active: 8, completed: 12_480, failed: 11 }),
+        counts: counts({
+          waiting: 42,
+          prioritized: 3,
+          delayed: 7,
+          active: 8,
+          completed: 12_480,
+          failed: 11,
+        }),
         rates: { enqueued: 14.2, leased: 13.8, completed: 13.1, failed: 0.2 },
         oldestWaitingSeconds: 38,
         concurrency: 16,
@@ -161,7 +170,11 @@ export function sampleFixtures(): JobsFixtures {
         state: 'waiting',
         priority: 5,
         jobKey: 'rollup-2026-09',
-        payload: { contentType: 'application/x-msgpack', sizeBytes: 48_213, blobRef: 'blob:01JA2Z4N7P6Q5R4S3T2V1W0X9Y/payload' },
+        payload: {
+          contentType: 'application/x-msgpack',
+          sizeBytes: 48_213,
+          blobRef: 'blob:01JA2Z4N7P6Q5R4S3T2V1W0X9Y/payload',
+        },
       }),
       job({
         id: '01JA2Z3A2B3C4D5E6F7G8H9J0K',
@@ -250,7 +263,16 @@ function usage(
   residentBytes: number,
   errors: number,
 ): FunctionUsage {
-  return { function: fn, tier, runner, invocations, wallSeconds, cpuSeconds, residentBytes, errors };
+  return {
+    function: fn,
+    tier,
+    runner,
+    invocations,
+    wallSeconds,
+    cpuSeconds,
+    residentBytes,
+    errors,
+  };
 }
 
 const empty = (): JobsFixtures => ({
@@ -263,8 +285,14 @@ const empty = (): JobsFixtures => ({
 
 export const MOCK_PAGE_SIZE = 50;
 
-const summary = ({ payload: _p, headers: _h, attempts: _a, logs: _l, progress: _g, ...rest }: JobDetail): JobSummary =>
-  rest;
+const summary = ({
+  payload: _p,
+  headers: _h,
+  attempts: _a,
+  logs: _l,
+  progress: _g,
+  ...rest
+}: JobDetail): JobSummary => rest;
 
 /**
  * A JobsClient over fixtures, keyed by namespace. Namespaces not in `data` are empty.
@@ -278,10 +306,14 @@ export function createMockJobsClient(
     return data[n];
   };
   const clone = <T>(v: T): T => structuredClone(v);
-  const findDead = (n: string, queue: string, id: string): number => {
-    const i = ns(n).deadLetters.findIndex((d) => d.queue === queue && d.id === id);
-    if (i < 0) throw new JobsClientError('not_found', `no dead letter ${id} in ${queue}`);
-    return i;
+  // Removes the dead letter from its namespace and returns it, or refuses an unknown one.
+  const takeDead = (n: string, queue: string, id: string): DeadLetter => {
+    const list = ns(n).deadLetters;
+    const i = list.findIndex((d) => d.queue === queue && d.id === id);
+    const d = list[i];
+    if (!d) throw new JobsClientError('not_found', `no dead letter ${id} in ${queue}`);
+    list.splice(i, 1);
+    return d;
   };
   const bump = (n: string, queue: string, state: JobState, by: number) => {
     const q = ns(n).queues.find((x) => x.name === queue);
@@ -294,7 +326,10 @@ export function createMockJobsClient(
     },
     async listJobs(n, query: JobQuery): Promise<Page<JobSummary>> {
       const all = ns(n)
-        .jobs.filter((j) => (!query.queue || j.queue === query.queue) && (!query.state || j.state === query.state))
+        .jobs.filter(
+          (j) =>
+            (!query.queue || j.queue === query.queue) && (!query.state || j.state === query.state),
+        )
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
       const start = query.pageToken ? Number(query.pageToken) : 0;
       const items = all.slice(start, start + MOCK_PAGE_SIZE).map(summary);
@@ -313,8 +348,7 @@ export function createMockJobsClient(
       return clone(ns(n).deadLetters);
     },
     async retryDeadLetter(n, queue, id) {
-      const i = findDead(n, queue, id);
-      const [d] = ns(n).deadLetters.splice(i, 1);
+      const d = takeDead(n, queue, id);
       bump(n, d.queue, 'dead_lettered', -1);
       bump(n, d.originalQueue, 'waiting', 1);
       ns(n).jobs.push(
@@ -332,8 +366,7 @@ export function createMockJobsClient(
       );
     },
     async discardDeadLetter(n, queue, id) {
-      const i = findDead(n, queue, id);
-      ns(n).deadLetters.splice(i, 1);
+      takeDead(n, queue, id);
       bump(n, queue, 'dead_lettered', -1);
     },
     async functionUsage(n, window) {

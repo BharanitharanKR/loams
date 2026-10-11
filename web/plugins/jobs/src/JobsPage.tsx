@@ -71,7 +71,9 @@ export function JobsPage({ client, preview, namespace, initialTab }: JobsPagePro
         title="Jobs"
         badge={<Badge>{JOBS_PACKAGE}</Badge>}
         subtitle="Queues, jobs, schedules and dead letters, and what each function used."
-        actions={<NamespacePicker ns={ns} onOpen={setNs} storageKey={NAMESPACES_KEY} idPrefix="jobs-ns" />}
+        actions={
+          <NamespacePicker ns={ns} onOpen={setNs} storageKey={NAMESPACES_KEY} idPrefix="jobs-ns" />
+        }
       />
       {preview && (
         <Notice title="Sample data">
@@ -85,7 +87,11 @@ export function JobsPage({ client, preview, namespace, initialTab }: JobsPagePro
         tabs={[
           { id: 'queues', label: 'Queues', content: <QueuesPanel client={client} ns={ns} /> },
           { id: 'jobs', label: 'Jobs', content: <JobsPanel client={client} ns={ns} /> },
-          { id: 'schedules', label: 'Schedules', content: <SchedulesPanel client={client} ns={ns} /> },
+          {
+            id: 'schedules',
+            label: 'Schedules',
+            content: <SchedulesPanel client={client} ns={ns} />,
+          },
           {
             id: 'dead-letters',
             label: 'Dead letters',
@@ -134,9 +140,12 @@ function StateTag({ state }: { state: JobState }) {
 // ---------------------------------------------------------------- Queues
 
 function QueuesPanel({ client, ns }: PanelProps) {
-  const [loaded, reload] = useLoad(() => client.listQueues(ns), [client, ns], { keepOnReload: true });
+  const [loaded, reload] = useLoad(() => client.listQueues(ns), [client, ns], {
+    keepOnReload: true,
+  });
   if (loaded.state === 'loading') return <Loading what="queues" />;
-  if (loaded.state === 'error') return <Failed what="queues" message={loaded.message} retry={reload} />;
+  if (loaded.state === 'error')
+    return <Failed what="queues" message={loaded.message} retry={reload} />;
   const queues = loaded.data;
   const total = (f: (q: QueueSummary) => number) => queues.reduce((s, q) => s + f(q), 0);
   const columns: Column<QueueSummary>[] = [
@@ -156,12 +165,18 @@ function QueuesPanel({ client, ns }: PanelProps) {
         />
       ),
     },
-    { key: 'backlog', header: 'Depth', numeric: true, cell: (q) => formatNumber(backlog(q.counts)) },
+    {
+      key: 'backlog',
+      header: 'Depth',
+      numeric: true,
+      cell: (q) => formatNumber(backlog(q.counts)),
+    },
     {
       key: 'active',
       header: 'Active',
       numeric: true,
-      cell: (q) => (q.concurrency ? `${q.counts.active} / ${q.concurrency}` : formatNumber(q.counts.active)),
+      cell: (q) =>
+        q.concurrency ? `${q.counts.active} / ${q.concurrency}` : formatNumber(q.counts.active),
     },
     { key: 'failed', header: 'Failed', numeric: true, cell: (q) => formatNumber(q.counts.failed) },
     {
@@ -173,17 +188,34 @@ function QueuesPanel({ client, ns }: PanelProps) {
     { key: 'enq', header: 'Enqueued', numeric: true, cell: (q) => rateText(q.rates.enqueued) },
     { key: 'lease', header: 'Leased', numeric: true, cell: (q) => rateText(q.rates.leased) },
     { key: 'done', header: 'Completed', numeric: true, cell: (q) => rateText(q.rates.completed) },
-    { key: 'oldest', header: 'Oldest waiting', numeric: true, cell: (q) => ageText(q.oldestWaitingSeconds) },
+    {
+      key: 'oldest',
+      header: 'Oldest waiting',
+      numeric: true,
+      cell: (q) => ageText(q.oldestWaitingSeconds),
+    },
   ];
   return (
     <div className="flex flex-col gap-4">
       <Stats>
         <Stat label="Queues" value={formatNumber(queues.length)} />
-        <Stat label="Depth" value={formatNumber(total((q) => backlog(q.counts)))} detail="waiting, delayed, prioritized" />
+        <Stat
+          label="Depth"
+          value={formatNumber(total((q) => backlog(q.counts)))}
+          detail="waiting, delayed, prioritized"
+        />
         <Stat label="Active" value={formatNumber(total((q) => q.counts.active))} />
         <Stat label="Lease rate" value={rateText(total((q) => q.rates.leased))} />
       </Stats>
-      <Card title="Queues" flush actions={<Button size="sm" onClick={reload}>Refresh</Button>}>
+      <Card
+        title="Queues"
+        flush
+        actions={
+          <Button size="sm" onClick={reload}>
+            Refresh
+          </Button>
+        }
+      >
         <Table
           caption="Queues, their depth and their rates over the last minute"
           columns={columns}
@@ -206,15 +238,27 @@ function JobsPanel({ client, ns }: PanelProps) {
   const [queue, setQueue] = useState('');
   const [state, setState] = useState<JobState | ''>('');
   const [selected, setSelected] = useState<{ queue: string; id: string } | null>(null);
-  const [more, setMore] = useState<{ items: JobSummary[]; next?: string; busy: boolean; error?: string }>({
+  const [more, setMore] = useState<{
+    items: JobSummary[];
+    next?: string;
+    busy: boolean;
+    error?: string;
+  }>({
     items: [],
     busy: false,
   });
+  // Each first-page load starts a new generation; a response from an older one (a filter
+  // changed or a reload ran while it was in flight) must not touch the pagination state.
+  const generation = useRef(0);
   const [queues] = useLoad(() => client.listQueues(ns), [client, ns]);
   const [loaded, reload] = useLoad(
     async () => {
-      const page = await client.listJobs(ns, { queue: queue || undefined, state: state || undefined });
-      setMore({ items: [], next: page.nextPageToken, busy: false });
+      const gen = ++generation.current;
+      const page = await client.listJobs(ns, {
+        queue: queue || undefined,
+        state: state || undefined,
+      });
+      if (gen === generation.current) setMore({ items: [], next: page.nextPageToken, busy: false });
       return page;
     },
     [client, ns, queue, state],
@@ -223,6 +267,7 @@ function JobsPanel({ client, ns }: PanelProps) {
 
   const loadMore = async () => {
     if (!more.next) return;
+    const gen = generation.current;
     setMore((m) => ({ ...m, busy: true, error: undefined }));
     try {
       const page = await client.listJobs(ns, {
@@ -230,8 +275,14 @@ function JobsPanel({ client, ns }: PanelProps) {
         state: state || undefined,
         pageToken: more.next,
       });
-      setMore((m) => ({ items: [...m.items, ...page.items], next: page.nextPageToken, busy: false }));
+      if (gen !== generation.current) return;
+      setMore((m) => ({
+        items: [...m.items, ...page.items],
+        next: page.nextPageToken,
+        busy: false,
+      }));
     } catch (e) {
+      if (gen !== generation.current) return;
       setMore((m) => ({ ...m, busy: false, error: errorMessage(e) }));
     }
   };
@@ -291,7 +342,11 @@ function JobsPanel({ client, ns }: PanelProps) {
         </Field>
         <Field label="State">
           {(p) => (
-            <Select {...p} value={state} onChange={(e) => setState(e.target.value as JobState | '')}>
+            <Select
+              {...p}
+              value={state}
+              onChange={(e) => setState(e.target.value as JobState | '')}
+            >
               <option value="">All states</option>
               {JOB_STATES.map((s) => (
                 <option key={s} value={s}>
@@ -317,7 +372,9 @@ function JobsPanel({ client, ns }: PanelProps) {
             onRowClick={(j) => setSelected({ queue: j.queue, id: j.id })}
             empty={
               <Empty title="No jobs match" seed={27}>
-                {queue || state ? 'Try another queue or state.' : 'Nothing has been enqueued in this namespace.'}
+                {queue || state
+                  ? 'Try another queue or state.'
+                  : 'Nothing has been enqueued in this namespace.'}
               </Empty>
             }
           />
@@ -368,7 +425,8 @@ export function JobDetailView({
 
   let body: ReactNode;
   if (loaded.state === 'loading') body = <Loading what="the job" />;
-  else if (loaded.state === 'error') body = <Failed what="the job" message={loaded.message} retry={reload} />;
+  else if (loaded.state === 'error')
+    body = <Failed what="the job" message={loaded.message} retry={reload} />;
   else body = <JobBody job={loaded.data} />;
 
   return (
@@ -391,11 +449,35 @@ export function JobDetailView({
   );
 }
 
+/** A labelled region that scrolls its content and is reachable by keyboard. */
+function ScrollRegion({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className: string;
+  children: ReactNode;
+}) {
+  return (
+    // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable region must be keyboard reachable
+    <section aria-label={label} tabIndex={0} className={`${className} overflow-auto`}>
+      {children}
+    </section>
+  );
+}
+
 function JobBody({ job }: { job: JobDetail }) {
   const preview = payloadPreview(job.payload);
   const attemptCols: Column<JobDetail['attempts'][number]>[] = [
     { key: 'n', header: '#', numeric: true, cell: (a) => a.n },
-    { key: 'outcome', header: 'Outcome', cell: (a) => <StatusTag status={outcomeStatus(a.outcome)}>{outcomeLabel(a.outcome)}</StatusTag> },
+    {
+      key: 'outcome',
+      header: 'Outcome',
+      cell: (a) => (
+        <StatusTag status={outcomeStatus(a.outcome)}>{outcomeLabel(a.outcome)}</StatusTag>
+      ),
+    },
     { key: 'worker', header: 'Worker', cell: (a) => <code>{a.worker}</code> },
     { key: 'started', header: 'Started', cell: (a) => <When iso={a.startedAt} /> },
     {
@@ -408,7 +490,8 @@ function JobBody({ job }: { job: JobDetail }) {
     {
       key: 'error',
       header: 'Error',
-      cell: (a) => (a.error ? `${a.error.code}: ${a.error.message}` : <span className="text-muted">—</span>),
+      cell: (a) =>
+        a.error ? `${a.error.code}: ${a.error.message}` : <span className="text-muted">—</span>,
     },
   ];
   return (
@@ -469,14 +552,17 @@ function JobBody({ job }: { job: JobDetail }) {
 
       <section aria-labelledby={`payload-${job.id}`} className="flex flex-col gap-2">
         <h3 id={`payload-${job.id}`}>
-          Payload <Badge>{job.payload.contentType}</Badge> <span className="text-muted">{formatBytes(job.payload.sizeBytes)}</span>
+          Payload <Badge>{job.payload.contentType}</Badge>{' '}
+          <span className="text-muted">{formatBytes(job.payload.sizeBytes)}</span>
         </h3>
         {preview.kind === 'text' && (
           <>
-            <pre className="loams-pre max-h-80 overflow-auto" tabIndex={0} aria-label="Payload preview">
-              {preview.text}
-            </pre>
-            {preview.truncated && <p className="text-muted text-sm">Preview cut at 4,096 characters.</p>}
+            <ScrollRegion label="Payload preview" className="max-h-80">
+              <pre className="loams-pre">{preview.text}</pre>
+            </ScrollRegion>
+            {preview.truncated && (
+              <p className="text-muted text-sm">Preview cut at 4,096 characters.</p>
+            )}
           </>
         )}
         {preview.kind === 'external' && (
@@ -484,7 +570,9 @@ function JobBody({ job }: { job: JobDetail }) {
             Stored in the object store as <code>{preview.blobRef}</code>; it is not previewed here.
           </p>
         )}
-        {preview.kind === 'binary' && <p className="text-muted text-sm">Binary payload; no preview.</p>}
+        {preview.kind === 'binary' && (
+          <p className="text-muted text-sm">Binary payload; no preview.</p>
+        )}
         {Object.keys(job.headers).length > 0 && (
           <details>
             <summary>Headers ({Object.keys(job.headers).length})</summary>
@@ -520,18 +608,19 @@ function JobBody({ job }: { job: JobDetail }) {
         {job.logs.length === 0 ? (
           <p className="text-muted text-sm">No log lines.</p>
         ) : (
-          // biome-ignore lint/a11y/noNoninteractiveTabindex: a scrollable region must be reachable by keyboard
-          <ol className="loams-pre max-h-64 overflow-auto font-mono text-sm" aria-label="Job logs" tabIndex={0}>
-            {job.logs.map((l, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: log lines are append-only and may repeat
-              <li key={i}>
-                <time dateTime={l.at} className="text-muted">
-                  {timeText(l.at)}
-                </time>{' '}
-                {l.text}
-              </li>
-            ))}
-          </ol>
+          <ScrollRegion label="Job logs" className="max-h-64">
+            <ol className="loams-pre font-mono text-sm">
+              {job.logs.map((l, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: log lines are append-only and may repeat
+                <li key={i}>
+                  <time dateTime={l.at} className="text-muted">
+                    {timeText(l.at)}
+                  </time>{' '}
+                  {l.text}
+                </li>
+              ))}
+            </ol>
+          </ScrollRegion>
         )}
       </section>
     </>
@@ -541,11 +630,18 @@ function JobBody({ job }: { job: JobDetail }) {
 // ---------------------------------------------------------------- Schedules
 
 function SchedulesPanel({ client, ns }: PanelProps) {
-  const [loaded, reload] = useLoad(() => client.listSchedules(ns), [client, ns], { keepOnReload: true });
+  const [loaded, reload] = useLoad(() => client.listSchedules(ns), [client, ns], {
+    keepOnReload: true,
+  });
   if (loaded.state === 'loading') return <Loading what="schedules" />;
-  if (loaded.state === 'error') return <Failed what="schedules" message={loaded.message} retry={reload} />;
+  if (loaded.state === 'error')
+    return <Failed what="schedules" message={loaded.message} retry={reload} />;
   const columns: Column<ScheduleSummary>[] = [
-    { key: 'id', header: 'Schedule', cell: (s) => <Primary title={s.id} detail={`${s.queue} → ${s.task}`} /> },
+    {
+      key: 'id',
+      header: 'Schedule',
+      cell: (s) => <Primary title={s.id} detail={`${s.queue} → ${s.task}`} />,
+    },
     {
       key: 'cron',
       header: 'Cron',
@@ -558,13 +654,29 @@ function SchedulesPanel({ client, ns }: PanelProps) {
     {
       key: 'state',
       header: 'State',
-      cell: (s) => <StatusTag status={s.paused ? 'neutral' : 'progress'}>{s.paused ? 'Paused' : 'Active'}</StatusTag>,
+      cell: (s) => (
+        <StatusTag status={s.paused ? 'neutral' : 'progress'}>
+          {s.paused ? 'Paused' : 'Active'}
+        </StatusTag>
+      ),
     },
-    { key: 'next', header: 'Next run', cell: (s) => <When iso={s.paused ? undefined : s.nextRunAt} /> },
+    {
+      key: 'next',
+      header: 'Next run',
+      cell: (s) => <When iso={s.paused ? undefined : s.nextRunAt} />,
+    },
     { key: 'last', header: 'Last run', cell: (s) => <When iso={s.lastRunAt} /> },
   ];
   return (
-    <Card title="Schedules" flush actions={<Button size="sm" onClick={reload}>Refresh</Button>}>
+    <Card
+      title="Schedules"
+      flush
+      actions={
+        <Button size="sm" onClick={reload}>
+          Refresh
+        </Button>
+      }
+    >
       <Table
         caption="Cron schedules"
         columns={columns}
@@ -583,7 +695,9 @@ function SchedulesPanel({ client, ns }: PanelProps) {
 // ---------------------------------------------------------------- Dead letters
 
 function DeadLettersPanel({ client, ns }: PanelProps) {
-  const [loaded, reload] = useLoad(() => client.listDeadLetters(ns), [client, ns], { keepOnReload: true });
+  const [loaded, reload] = useLoad(() => client.listDeadLetters(ns), [client, ns], {
+    keepOnReload: true,
+  });
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
   const [confirm, setConfirm] = useState<DeadLetter | null>(null);
@@ -613,8 +727,16 @@ function DeadLettersPanel({ client, ns }: PanelProps) {
   };
 
   const columns: Column<DeadLetter>[] = [
-    { key: 'job', header: 'Job', cell: (d) => <Primary title={d.name} detail={<code>{d.id}</code>} /> },
-    { key: 'from', header: 'Failed on', cell: (d) => <Primary title={d.originalQueue} detail={`in ${d.queue}`} /> },
+    {
+      key: 'job',
+      header: 'Job',
+      cell: (d) => <Primary title={d.name} detail={<code>{d.id}</code>} />,
+    },
+    {
+      key: 'from',
+      header: 'Failed on',
+      cell: (d) => <Primary title={d.originalQueue} detail={`in ${d.queue}`} />,
+    },
     { key: 'attempts', header: 'Attempts', numeric: true, cell: (d) => d.attempts },
     { key: 'at', header: 'Failed', cell: (d) => <When iso={d.failedAt} /> },
     {
@@ -663,9 +785,19 @@ function DeadLettersPanel({ client, ns }: PanelProps) {
         )}
       </div>
       {loaded.state === 'loading' && <Loading what="dead letters" />}
-      {loaded.state === 'error' && <Failed what="dead letters" message={loaded.message} retry={reload} />}
+      {loaded.state === 'error' && (
+        <Failed what="dead letters" message={loaded.message} retry={reload} />
+      )}
       {loaded.state === 'ready' && (
-        <Card title="Dead letters" flush actions={<Button size="sm" onClick={reload}>Refresh</Button>}>
+        <Card
+          title="Dead letters"
+          flush
+          actions={
+            <Button size="sm" onClick={reload}>
+              Refresh
+            </Button>
+          }
+        >
           <Table
             caption="Jobs in dead-letter queues"
             columns={columns}
@@ -714,7 +846,11 @@ function DeadLettersPanel({ client, ns }: PanelProps) {
 
 // ---------------------------------------------------------------- Usage
 
-const WINDOW_LABEL: Record<UsageWindow, string> = { '1h': 'Last hour', '24h': 'Last 24 hours', '7d': 'Last 7 days' };
+const WINDOW_LABEL: Record<UsageWindow, string> = {
+  '1h': 'Last hour',
+  '24h': 'Last 24 hours',
+  '7d': 'Last 7 days',
+};
 
 function UsagePanel({ client, ns }: PanelProps) {
   const [span, setSpan] = useState<UsageWindow>('24h');
@@ -752,7 +888,11 @@ function UsagePanel({ client, ns }: PanelProps) {
   const sum = (f: (u: FunctionUsage) => number) => rows.reduce((s, u) => s + f(u), 0);
   const most = Math.max(1, ...rows.map((u) => u.invocations));
   const columns: Column<FunctionUsage>[] = [
-    { key: 'fn', header: 'Function', cell: (u) => <Primary title={u.function} detail={`${u.tier} · ${u.runner}`} /> },
+    {
+      key: 'fn',
+      header: 'Function',
+      cell: (u) => <Primary title={u.function} detail={`${u.tier} · ${u.runner}`} />,
+    },
     {
       key: 'inv',
       header: 'Invocations',
@@ -794,7 +934,11 @@ function UsagePanel({ client, ns }: PanelProps) {
         </Button>
       </div>
       <Stats>
-        <Stat label="Invocations" value={formatNumber(sum((u) => u.invocations))} detail={WINDOW_LABEL[span]} />
+        <Stat
+          label="Invocations"
+          value={formatNumber(sum((u) => u.invocations))}
+          detail={WINDOW_LABEL[span]}
+        />
         <Stat label="Wall time" value={secondsText(sum((u) => u.wallSeconds))} />
         <Stat label="CPU time" value={secondsText(sum((u) => u.cpuSeconds))} />
         <Stat label="Errors" value={formatNumber(sum((u) => u.errors))} />

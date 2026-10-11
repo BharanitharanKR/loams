@@ -36,4 +36,3 @@ export function failingClient(failing: (keyof JobsClient)[]): JobsClient {
     ]),
   ) as unknown as JobsClient;
 }
-
