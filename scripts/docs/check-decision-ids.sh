@@ -46,6 +46,29 @@ if [[ "$log_file" == "$root/docs/design/13-decision-log.md" ]]; then
   for id in $valid_ids; do
     declared_ids["$id"]=1
   done
+  # Rows that declare several IDs at once ("| D366–D371, D373 | … | Moved |")
+  # and struck-through answered questions ("| ~~Q568 | …") also declare IDs
+  # for citations; the duplicate check above stays on single-ID rows.
+  for id in $(awk -F '|' '
+    {
+      cell = ($1 ~ /^[[:space:]]*$/) ? $2 : $1
+      gsub(/~~/, "", cell)
+      if (cell !~ /^[[:space:]]*[DQ][0-9]+(([[:space:]]*(–|,)[[:space:]]*)[DQ][0-9]+)*[[:space:]]*$/) next
+      n = split(cell, parts, ",")
+      for (i = 1; i <= n; i++) {
+        part = parts[i]
+        gsub(/[[:space:]]/, "", part)
+        if (split(part, ends, "–") == 2) {
+          kind = substr(ends[1], 1, 1)
+          for (k = substr(ends[1], 2) + 0; k <= substr(ends[2], 2) + 0; k++) print kind k
+        } else {
+          print part
+        }
+      }
+    }
+  ' "$log_file"); do
+    declared_ids["$id"]=1
+  done
 
   while IFS=: read -r file line match; do
     if [[ "$file" == *"/docs/design/13-decision-log.md" ]] || [[ "$file" == *"/scripts/docs/testdata/"* ]]; then
@@ -56,7 +79,15 @@ if [[ "$log_file" == "$root/docs/design/13-decision-log.md" ]]; then
       echo "$rel_file:$line: dangling citation $match (not found in log)" >&2
       failed=1
     fi
-  done < <(grep -rI --exclude-dir={target,.git,node_modules,.venv,__pycache__,dist,gen,assets,gradle} -o -n -H -E '\b[DQ][0-9]+\b' "$root" || true)
+  done < <(
+    # A range ("D467–D479 are unassigned", "Q735–Q747 are reserved") names a
+    # block of numbers, not a decision, so its endpoints are not citations.
+    # docs/open-issues-analysis.md quotes the dangling IDs issue #375 removed.
+    grep -rI --exclude-dir={target,.git,node_modules,.venv,__pycache__,dist,gen,assets,gradle} \
+      --exclude=open-issues-analysis.md -n -H -E '\b[DQ][0-9]+\b' "$root" \
+      | perl -ne 'my ($loc, $text) = /^(.*?:\d+):(.*)$/s or next; $text =~ s/\b[DQ]\d+\s*–\s*[DQ]\d+\b//g; print "$loc:$1\n" while $text =~ /\b([DQ]\d+)\b/g' \
+      || true
+  )
 
   if [[ $failed -ne 0 ]]; then
     exit 1
