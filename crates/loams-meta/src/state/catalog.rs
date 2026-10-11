@@ -1,6 +1,9 @@
 //! Namespaces and streams.
 
-use loams_common::meta::{ApplyError, MAX_PARTITIONS, Namespace, Retention, Stream, WalClass};
+use loams_common::meta::{
+    ApplyError, Fence, MAX_PARTITIONS, Namespace, Retention, Stream, WalClass, graph_stream_name,
+    is_graph_id, legacy_graph_stream_name,
+};
 use loams_common::{NamespaceId, StreamId};
 
 use super::{MetaState, refuse_reserved, validate_name};
@@ -39,6 +42,56 @@ impl MetaState {
         }
         let id = self.insert_stream(namespace, name, partitions, class, retention);
         Ok(Reply::StreamCreated(id))
+    }
+
+    /// Graph `graph`'s implicit stream: found, renamed from its GR1 Task 11
+    /// name, or created (GR1 Task 12).
+    pub(super) fn ensure_graph_stream(
+        &mut self,
+        namespace: NamespaceId,
+        graph: &str,
+    ) -> Result<Reply, ApplyError> {
+        check_graph_id(graph)?;
+        if !self.namespaces.contains_key(&namespace) {
+            return Err(ApplyError::NamespaceNotFound(namespace));
+        }
+        let name = graph_stream_name(graph);
+        if let Some(&id) = self.stream_names.get(&(namespace, name.clone())) {
+            return Ok(Reply::StreamCreated(id));
+        }
+        let legacy = (namespace, legacy_graph_stream_name(graph));
+        if let Some(id) = self.stream_names.remove(&legacy) {
+            if let Some(stream) = self.streams.get_mut(&id) {
+                stream.name.clone_from(&name);
+            }
+            self.stream_names.insert((namespace, name), id);
+            return Ok(Reply::StreamCreated(id));
+        }
+        let id = self.insert_stream(namespace, name, 1, WalClass::Standard, Retention::default());
+        Ok(Reply::StreamCreated(id))
+    }
+
+    /// Drops graph `graph`'s implicit stream, under either name, while the
+    /// fence holds (GR1 Task 12).
+    pub(super) fn drop_graph_stream(
+        &mut self,
+        namespace: NamespaceId,
+        graph: &str,
+        fence: Option<Fence>,
+        now_ms: u64,
+    ) -> Result<Reply, ApplyError> {
+        check_graph_id(graph)?;
+        if let Some(fence) = &fence {
+            self.check_fence(fence)?;
+        }
+        self.clock_ms = self.clock_ms.max(now_ms);
+        let found = [graph_stream_name(graph), legacy_graph_stream_name(graph)]
+            .into_iter()
+            .find_map(|name| self.stream_names.get(&(namespace, name)).copied());
+        if let Some(id) = found {
+            self.remove_stream(id);
+        }
+        Ok(Reply::GraphStreamDropped(found))
     }
 
     /// Adds a stream, validated by the caller (the namespace exists and the
@@ -134,6 +187,17 @@ impl MetaState {
     /// Sequencer state of one partition, if the stream and partition exist.
     pub fn partition(&self, stream: StreamId, partition: u32) -> Option<&PartitionState> {
         self.partitions.get(&(stream, partition))
+    }
+}
+
+/// A graph stream is named after a graph id (`gr_<ULID>`).
+fn check_graph_id(graph: &str) -> Result<(), ApplyError> {
+    if is_graph_id(graph) {
+        Ok(())
+    } else {
+        Err(ApplyError::InvalidArgument(format!(
+            "{graph:?} is not a graph id (gr_<ULID>)"
+        )))
     }
 }
 

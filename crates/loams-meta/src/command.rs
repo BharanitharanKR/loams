@@ -303,6 +303,37 @@ pub enum Command {
     /// Forgets lapsed ledger entries. A retry removes nothing more. Fenced
     /// like [`Command::TrimPartition`].
     PruneIdempotencyKeys { fence: Option<Fence>, now_ms: u64 },
+    /// [`Command::CommitWal`] under leases (GR1 Task 12, D744; this and the
+    /// next two are appended last, so every earlier variant keeps its index).
+    /// A commit of an object not seen before is applied only while every
+    /// fence holds
+    /// ([`ApplyError::Fenced`](loams_common::meta::ApplyError::Fenced)
+    /// otherwise, and nothing changes); a retry of a committed object
+    /// returns its offsets as `CommitWal` does, whatever the fences say now.
+    CommitWalFenced {
+        object: String,
+        created_at_ms: u64,
+        chunks: Vec<WalChunk>,
+        fences: Vec<Fence>,
+    },
+    /// Creates graph `graph`'s implicit stream `_graph.<graph>` (one
+    /// partition, class `Standard`, default retention), or renames the
+    /// stream `graph.<graph>` (GR1 Task 11's name) to it, or finds it.
+    /// Replies [`Reply::StreamCreated`] in every case, so a retry is safe.
+    EnsureGraphStream {
+        namespace: NamespaceId,
+        graph: String,
+    },
+    /// Drops graph `graph`'s implicit stream (under either name), retiring the
+    /// objects only its index entries referenced, while the fence holds.
+    /// Replies [`Reply::GraphStreamDropped`]; `None` when there is no such
+    /// stream, so a retry after a lost acknowledgement succeeds.
+    DropGraphStream {
+        namespace: NamespaceId,
+        graph: String,
+        fence: Option<Fence>,
+        now_ms: u64,
+    },
 }
 
 /// The result of successfully applying a [`Command`].
@@ -352,6 +383,9 @@ pub enum Reply {
     /// [`Command::CompleteIdempotencyKeys`] or
     /// [`Command::ReleaseIdempotencyKeys`] applied.
     IdempotencyKeysUpdated,
+    /// The graph stream [`Command::DropGraphStream`] dropped, or `None` if
+    /// there was none (GR1 Task 12; appended last).
+    GraphStreamDropped(Option<StreamId>),
 }
 
 impl std::fmt::Display for Command {
@@ -466,6 +500,23 @@ impl std::fmt::Display for Command {
                 keys.len()
             ),
             Command::PruneIdempotencyKeys { .. } => write!(f, "PruneIdempotencyKeys"),
+            Command::CommitWalFenced {
+                object,
+                chunks,
+                fences,
+                ..
+            } => write!(
+                f,
+                "CommitWalFenced({object}, {} chunks, {} fences)",
+                chunks.len(),
+                fences.len()
+            ),
+            Command::EnsureGraphStream { namespace, graph } => {
+                write!(f, "EnsureGraphStream({namespace}/{graph})")
+            }
+            Command::DropGraphStream {
+                namespace, graph, ..
+            } => write!(f, "DropGraphStream({namespace}/{graph})"),
         }
     }
 }

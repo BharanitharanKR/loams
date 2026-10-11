@@ -403,6 +403,7 @@ impl TikvMeta {
         }
         let mut offsets = Vec::with_capacity(commit.chunks.len());
         let mut earlier_unknown = false;
+        let mut committed = false;
         for (group, members) in (0u32..).zip(groups) {
             if let Some(record) = records.get(&group) {
                 offsets.extend(record.offsets.iter().copied());
@@ -411,11 +412,17 @@ impl TikvMeta {
             let (result, unknown) = self.commit_group(commit, group, count, members).await;
             earlier_unknown |= unknown;
             match result {
-                Ok(group_offsets) => offsets.extend(group_offsets),
+                Ok(group_offsets) => {
+                    committed |= !commit.fences.is_empty();
+                    offsets.extend(group_offsets);
+                }
                 Err(e) => {
+                    // A fence that broke after an earlier group of this call
+                    // committed: that group's chunks are in, so the rejection
+                    // does not mean nothing changed (GR1 Task 12).
                     return Tracked {
                         result: Err(e),
-                        earlier_unknown,
+                        earlier_unknown: earlier_unknown || committed,
                     };
                 }
             }
@@ -470,6 +477,14 @@ impl TikvMeta {
                         return Ok(Err(regrouped(object, record.groups, groups)));
                     }
                     return Ok(Ok(record.offsets));
+                }
+                // The leases the commit is made under (GR1 Task 12): checked
+                // and locked in this transaction, so a takeover conflicts
+                // with it rather than slipping past.
+                for fence in &commit.fences {
+                    if let Err(e) = check_fence(txn, fence).await? {
+                        return Ok(Err(e));
+                    }
                 }
                 let clock_ms = Tikv::physical_ms(&txn.start_ts());
                 let stale = || ApplyError::StaleCommit {

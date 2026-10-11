@@ -126,6 +126,7 @@ async fn commit(meta: &dyn MetaStore, object: &str, chunks: Vec<WalChunk>) -> Ve
         object: object.to_string(),
         created_at_ms: meta.now_ms(),
         chunks,
+        fences: Vec::new(),
     };
     meta.commit_wal(commit).await.into_result().expect("commit")
 }
@@ -1295,6 +1296,7 @@ async fn tracked_writes_report_an_earlier_unknown_attempt() {
         object: "wal/1.wal".to_string(),
         created_at_ms: T0,
         chunks: vec![chunk(stream, 0, 10, 0..100), chunk(stream, 1, 3, 100..130)],
+        fences: Vec::new(),
     };
 
     single.client.inject_lost_ack();
@@ -1329,6 +1331,7 @@ async fn tracked_writes_report_an_earlier_unknown_attempt() {
             object: "wal/2.wal".to_string(),
             created_at_ms: T0,
             chunks: vec![chunk(stream, 0, 1, 0..10)],
+            fences: Vec::new(),
         })
         .await;
     assert!(!plain.earlier_unknown);

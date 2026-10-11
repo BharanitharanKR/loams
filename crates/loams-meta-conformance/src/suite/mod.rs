@@ -9,6 +9,7 @@ mod changes;
 mod collections;
 mod faults;
 mod gc;
+mod graph;
 mod hot;
 mod idempotency;
 mod leases;
@@ -31,6 +32,7 @@ pub use changes::*;
 pub use collections::*;
 pub use faults::*;
 pub use gc::*;
+pub use graph::*;
 pub use hot::*;
 pub use idempotency::*;
 pub use leases::*;
@@ -87,6 +89,7 @@ async fn commit(meta: &dyn MetaStore, object: &str, chunks: Vec<WalChunk>) -> Ve
         object: object.to_string(),
         created_at_ms: meta.now_ms(),
         chunks,
+        fences: Vec::new(),
     })
     .await
     .into_result()
