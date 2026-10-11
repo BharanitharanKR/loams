@@ -19,6 +19,8 @@
       name: '@loams/plugin-graph'
     - id: jobs
       name: '@loams/plugin-jobs'
+    - id: house
+      name: '@loams/plugin-house'
     - id: streams
       name: '@loams/plugin-streams'
     - id: overview

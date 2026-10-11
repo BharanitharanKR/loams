@@ -31,6 +31,7 @@
     "@loams/plugin-desktop-settings": "workspace:*",
     "@loams/plugin-factory": "workspace:*",
     "@loams/plugin-graph": "workspace:*",
+    "@loams/plugin-house": "workspace:*",
     "@loams/plugin-identity": "workspace:*",
     "@loams/plugin-jobs": "workspace:*",
     "@loams/plugin-live": "workspace:*",
