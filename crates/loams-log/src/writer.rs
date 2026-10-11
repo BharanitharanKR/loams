@@ -600,9 +600,20 @@ async fn flush(shared: &Shared, pending: Vec<Pending>) -> (Result<(), FlushFailu
             }
         }
         Err(failure @ FlushFailure::Rejected(ApplyError::Fenced { lease })) => {
-            let (fenced, others): (Vec<Pending>, Vec<Pending>) = pending
-                .into_iter()
-                .partition(|p| p.fence.as_ref().is_some_and(|f| &f.lease == lease));
+            // Several epochs of one lease may share a flush: a reloaded engine's first append
+            // can join a stale engine's late one (PR #443 review). Only the appends not at the
+            // lease's current epoch fail; the refusal names the lease, not the epoch. When the
+            // lease cannot be read, every append under it fails.
+            let current = match shared.meta.lease(Consistency::Linearizable, lease).await {
+                Ok(Some(held)) if held.owner.is_some() => Some(held.epoch),
+                _ => None,
+            };
+            let (fenced, others): (Vec<Pending>, Vec<Pending>) =
+                pending.into_iter().partition(|p| {
+                    p.fence
+                        .as_ref()
+                        .is_some_and(|f| &f.lease == lease && Some(f.epoch) != current)
+                });
             tracing::warn!(%lease, fenced = fenced.len(), others = others.len(), "a WAL flush was refused by a broken fence");
             if fenced.is_empty() {
                 // Not a fence of this flush's: fail the flush as a whole.

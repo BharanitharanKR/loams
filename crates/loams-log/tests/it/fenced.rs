@@ -96,3 +96,80 @@ async fn a_broken_fence_fails_only_its_appends_and_commits_nothing_of_them() {
     assert_eq!(meta.high_watermark(other, 0).await, 2);
     writer.shutdown().await.expect("shutdown");
 }
+
+/// One flush may carry two epochs of one lease: a stale engine's late append and its
+/// successor's. Only the stale one fails; the current one goes out in the next object (PR #443
+/// review).
+#[tokio::test]
+async fn a_broken_fence_spares_the_current_epoch_of_its_lease() {
+    let meta = Meta::start().await;
+    let (_, owned) = meta.stream("acme", "owned", 1).await;
+    let (_, store) = faulty_store();
+    let writer =
+        LogWriter::start(meta.client.clone(), store.clone(), manual_flush()).expect("start");
+    let lease = "graph/gr_01J9ZQ3V7K8X2M4N6P8R0T2V4W/owner";
+    let ttl = Duration::from_secs(30);
+    let first = meta
+        .client
+        .acquire_lease(lease, "node-1", ttl)
+        .await
+        .expect("acquire");
+    meta.client
+        .release_lease(lease, "node-1", first.epoch)
+        .await
+        .expect("release");
+    let second = meta
+        .client
+        .acquire_lease(lease, "node-1", ttl)
+        .await
+        .expect("take again");
+    assert!(second.epoch > first.epoch);
+    let fence = |epoch| Fence {
+        lease: lease.to_string(),
+        epoch,
+    };
+    let stale = {
+        let (writer, fence) = (writer.clone(), fence(first.epoch));
+        tokio::spawn(async move {
+            writer
+                .append_fenced(owned, 0, records("stale", 2), fence)
+                .await
+        })
+    };
+    let current = {
+        let (writer, fence) = (writer.clone(), fence(second.epoch));
+        tokio::spawn(async move {
+            writer
+                .append_fenced(owned, 0, records("current", 2), fence)
+                .await
+        })
+    };
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    writer.flush().await.expect("the flush that carried them");
+    let refused = stale
+        .await
+        .expect("join")
+        .expect_err("the stale epoch is refused");
+    assert!(
+        matches!(
+            &refused,
+            LogError::Meta(MetaError::Rejected(ApplyError::Fenced { .. }))
+        ),
+        "{refused:?}"
+    );
+    let ack = current
+        .await
+        .expect("join")
+        .expect("the current epoch commits");
+    assert_eq!((ack.base_offset, ack.last_offset), (0, 1));
+    let values: Vec<String> = read_direct(&meta.client, &store, owned, 0)
+        .await
+        .iter()
+        .map(|r| value(&r.record))
+        .collect();
+    assert!(
+        values.iter().all(|v| v.starts_with("current")),
+        "{values:?}"
+    );
+    writer.shutdown().await.expect("shutdown");
+}

@@ -359,6 +359,18 @@ impl TikvMeta {
                             "stream name {graph} names the missing stream {existing}"
                         )));
                     };
+                    // Only a stream shaped like a graph's moves under the reserved name (PR
+                    // #443 review): `graph.<gr_id>` is an ordinary name.
+                    if stream.partitions != 1
+                        || stream.class != WalClass::Standard
+                        || stream.retention != Retention::default()
+                    {
+                        return Ok(Err(ApplyError::InvalidArgument(format!(
+                            "stream {} ({}) is not shaped like a graph's stream (one partition, \
+                             standard class, no retention)",
+                            stream.id, stream.name
+                        ))));
+                    }
                     stream.name = name;
                     txn.delete(&legacy_key).await?;
                     put_stream(txn, &stream).await?;

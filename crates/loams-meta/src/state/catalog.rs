@@ -60,7 +60,13 @@ impl MetaState {
             return Ok(Reply::StreamCreated(id));
         }
         let legacy = (namespace, legacy_graph_stream_name(graph));
-        if let Some(id) = self.stream_names.remove(&legacy) {
+        if let Some(&id) = self.stream_names.get(&legacy) {
+            // `graph.<gr_id>` is an ordinary name anyone could have taken first: only a stream
+            // shaped like a graph's moves under the reserved name (PR #443 review).
+            if let Some(stream) = self.streams.get(&id) {
+                check_graph_stream_shape(stream)?;
+            }
+            self.stream_names.remove(&legacy);
             if let Some(stream) = self.streams.get_mut(&id) {
                 stream.name.clone_from(&name);
             }
@@ -187,6 +193,23 @@ impl MetaState {
     /// Sequencer state of one partition, if the stream and partition exist.
     pub fn partition(&self, stream: StreamId, partition: u32) -> Option<&PartitionState> {
         self.partitions.get(&(stream, partition))
+    }
+}
+
+/// A graph's stream has one partition, the standard class and no retention; a legacy-named
+/// stream of another shape is not adopted.
+fn check_graph_stream_shape(stream: &Stream) -> Result<(), ApplyError> {
+    if stream.partitions == 1
+        && stream.class == WalClass::Standard
+        && stream.retention == Retention::default()
+    {
+        Ok(())
+    } else {
+        Err(ApplyError::InvalidArgument(format!(
+            "stream {} ({}) is not shaped like a graph's stream (one partition, standard class, \
+             no retention)",
+            stream.id, stream.name
+        )))
     }
 }
 
