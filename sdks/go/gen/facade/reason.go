@@ -30,6 +30,20 @@ const (
 	ReasonPushTargetUnknown       Reason = "push_target_unknown"
 	ReasonNotImplemented          Reason = "not_implemented"
 	ReasonFeatureNotInVariant     Reason = "feature_not_in_variant"
+	ReasonHouseNotConfigured      Reason = "house_not_configured"
+	ReasonHouseSyntaxError        Reason = "house_syntax_error"
+	ReasonHouseUnknownTable       Reason = "house_unknown_table"
+	ReasonHouseUnknownDatabase    Reason = "house_unknown_database"
+	ReasonHouseAccessDenied       Reason = "house_access_denied"
+	ReasonHouseReadOnly           Reason = "house_read_only"
+	ReasonHouseTimeout            Reason = "house_timeout"
+	ReasonHouseMemoryLimit        Reason = "house_memory_limit"
+	ReasonHouseTooManyQueries     Reason = "house_too_many_queries"
+	ReasonHouseQuotaExceeded      Reason = "house_quota_exceeded"
+	ReasonHouseDisabledFunction   Reason = "house_disabled_function"
+	ReasonHouseCancelled          Reason = "house_cancelled"
+	ReasonHouseQueryNotFound      Reason = "house_query_not_found"
+	ReasonHouseQueryFailed        Reason = "house_query_failed"
 	ReasonProjectNotFound         Reason = "project_not_found"
 	ReasonBranchHasChildren       Reason = "branch_has_children"
 	ReasonBranchProtected         Reason = "branch_protected"
@@ -39,6 +53,9 @@ const (
 	ReasonQuotaExceeded           Reason = "quota_exceeded"
 	ReasonStorageUnavailable      Reason = "storage_unavailable"
 	ReasonSecretAlreadyIssued     Reason = "secret_already_issued"
+	ReasonLiveBadCursor           Reason = "live_bad_cursor"
+	ReasonLiveWorkerCrashed       Reason = "live_worker_crashed"
+	ReasonLiveDeployConflict      Reason = "live_deploy_conflict"
 	ReasonInvalidArgument         Reason = "invalid_argument"
 	ReasonNotFound                Reason = "not_found"
 	ReasonAlreadyExists           Reason = "already_exists"
@@ -76,6 +93,20 @@ var Reasons = []Reason{
 	ReasonPushTargetUnknown,
 	ReasonNotImplemented,
 	ReasonFeatureNotInVariant,
+	ReasonHouseNotConfigured,
+	ReasonHouseSyntaxError,
+	ReasonHouseUnknownTable,
+	ReasonHouseUnknownDatabase,
+	ReasonHouseAccessDenied,
+	ReasonHouseReadOnly,
+	ReasonHouseTimeout,
+	ReasonHouseMemoryLimit,
+	ReasonHouseTooManyQueries,
+	ReasonHouseQuotaExceeded,
+	ReasonHouseDisabledFunction,
+	ReasonHouseCancelled,
+	ReasonHouseQueryNotFound,
+	ReasonHouseQueryFailed,
 	ReasonProjectNotFound,
 	ReasonBranchHasChildren,
 	ReasonBranchProtected,
@@ -85,6 +116,9 @@ var Reasons = []Reason{
 	ReasonQuotaExceeded,
 	ReasonStorageUnavailable,
 	ReasonSecretAlreadyIssued,
+	ReasonLiveBadCursor,
+	ReasonLiveWorkerCrashed,
+	ReasonLiveDeployConflict,
 	ReasonInvalidArgument,
 	ReasonNotFound,
 	ReasonAlreadyExists,
@@ -117,6 +151,20 @@ var ReasonCodes = map[Reason]string{
 	ReasonPushTargetUnknown:       "not_found",
 	ReasonNotImplemented:          "unimplemented",
 	ReasonFeatureNotInVariant:     "unimplemented",
+	ReasonHouseNotConfigured:      "unimplemented",
+	ReasonHouseSyntaxError:        "invalid_argument",
+	ReasonHouseUnknownTable:       "not_found",
+	ReasonHouseUnknownDatabase:    "not_found",
+	ReasonHouseAccessDenied:       "permission_denied",
+	ReasonHouseReadOnly:           "failed_precondition",
+	ReasonHouseTimeout:            "deadline_exceeded",
+	ReasonHouseMemoryLimit:        "resource_exhausted",
+	ReasonHouseTooManyQueries:     "resource_exhausted",
+	ReasonHouseQuotaExceeded:      "resource_exhausted",
+	ReasonHouseDisabledFunction:   "permission_denied",
+	ReasonHouseCancelled:          "canceled",
+	ReasonHouseQueryNotFound:      "not_found",
+	ReasonHouseQueryFailed:        "unknown",
 	ReasonProjectNotFound:         "not_found",
 	ReasonBranchHasChildren:       "failed_precondition",
 	ReasonBranchProtected:         "failed_precondition",
@@ -126,6 +174,9 @@ var ReasonCodes = map[Reason]string{
 	ReasonQuotaExceeded:           "resource_exhausted",
 	ReasonStorageUnavailable:      "unavailable",
 	ReasonSecretAlreadyIssued:     "failed_precondition",
+	ReasonLiveBadCursor:           "invalid_argument",
+	ReasonLiveWorkerCrashed:       "internal",
+	ReasonLiveDeployConflict:      "failed_precondition",
 	ReasonInvalidArgument:         "invalid_argument",
 	ReasonNotFound:                "not_found",
 	ReasonAlreadyExists:           "already_exists",

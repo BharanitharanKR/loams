@@ -6,7 +6,7 @@
 // hand-written equivalent and it says so rather than pretending.
 //
 // The authority is the page. `cpp_error_reason_mapping` walks this table and
-// asserts that it has all twenty-six registry reasons, that every spelling is
+// asserts that it has all fifty-two registry reasons, that every spelling is
 // `snake_case`, and that the three distinct cases of R8 stay distinct — so a
 // reason added to the page without being added here fails a test rather than
 // being dropped.
@@ -43,6 +43,32 @@ constexpr Row kRows[] = {
     {Reason::kPushTargetUnknown, "push_target_unknown"},
     {Reason::kNotImplemented, "not_implemented"},
     {Reason::kFeatureNotInVariant, "feature_not_in_variant"},
+    {Reason::kHouseNotConfigured, "house_not_configured"},
+    {Reason::kHouseSyntaxError, "house_syntax_error"},
+    {Reason::kHouseUnknownTable, "house_unknown_table"},
+    {Reason::kHouseUnknownDatabase, "house_unknown_database"},
+    {Reason::kHouseAccessDenied, "house_access_denied"},
+    {Reason::kHouseReadOnly, "house_read_only"},
+    {Reason::kHouseTimeout, "house_timeout"},
+    {Reason::kHouseMemoryLimit, "house_memory_limit"},
+    {Reason::kHouseTooManyQueries, "house_too_many_queries"},
+    {Reason::kHouseQuotaExceeded, "house_quota_exceeded"},
+    {Reason::kHouseDisabledFunction, "house_disabled_function"},
+    {Reason::kHouseCancelled, "house_cancelled"},
+    {Reason::kHouseQueryNotFound, "house_query_not_found"},
+    {Reason::kHouseQueryFailed, "house_query_failed"},
+    {Reason::kProjectNotFound, "project_not_found"},
+    {Reason::kBranchHasChildren, "branch_has_children"},
+    {Reason::kBranchProtected, "branch_protected"},
+    {Reason::kLsnOutOfRetention, "lsn_out_of_retention"},
+    {Reason::kEndpointExistsForBranch, "endpoint_exists_for_branch"},
+    {Reason::kComputeStartFailed, "compute_start_failed"},
+    {Reason::kQuotaExceeded, "quota_exceeded"},
+    {Reason::kStorageUnavailable, "storage_unavailable"},
+    {Reason::kSecretAlreadyIssued, "secret_already_issued"},
+    {Reason::kLiveBadCursor, "live_bad_cursor"},
+    {Reason::kLiveWorkerCrashed, "live_worker_crashed"},
+    {Reason::kLiveDeployConflict, "live_deploy_conflict"},
     {Reason::kInvalidArgument, "invalid_argument"},
     {Reason::kNotFound, "not_found"},
     {Reason::kAlreadyExists, "already_exists"},

@@ -85,7 +85,7 @@ struct CallPlan {
 };
 
 /// The `google.rpc.Status` a Connect failure decodes into, exposed because
-/// `cpp_error_reason_mapping` walks all twenty-six registry reasons through it
+/// `cpp_error_reason_mapping` walks all fifty-two registry reasons through it
 /// and a test that rebuilt the message by hand would be testing its own encoding
 /// rather than the decoder.
 struct DecodedFailure {

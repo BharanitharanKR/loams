@@ -102,6 +102,84 @@ public enum Reason
     /// </summary>
     FeatureNotInVariant = 14,
 
+    /// <summary>A <c>loams.house.v1</c> call on a server with no House front configured.</summary>
+    HouseNotConfigured = 27,
+
+    /// <summary>A House statement that does not parse, or is outside the House surface.</summary>
+    HouseSyntaxError = 28,
+
+    /// <summary>The table a House statement names does not exist.</summary>
+    HouseUnknownTable = 29,
+
+    /// <summary>The database a House statement names does not exist.</summary>
+    HouseUnknownDatabase = 30,
+
+    /// <summary>The caller may not run this House statement or query operation.</summary>
+    HouseAccessDenied = 31,
+
+    /// <summary>A read-only House statement tried to write or change state.</summary>
+    HouseReadOnly = 32,
+
+    /// <summary>The House statement ran past its timeout.</summary>
+    HouseTimeout = 33,
+
+    /// <summary>The House statement exceeded its memory limit.</summary>
+    HouseMemoryLimit = 34,
+
+    /// <summary>No House worker was free within the acquire timeout.</summary>
+    HouseTooManyQueries = 35,
+
+    /// <summary>The House statement is past a namespace quota.</summary>
+    HouseQuotaExceeded = 36,
+
+    /// <summary>The statement uses a function, engine or table the House deny list refuses.</summary>
+    HouseDisabledFunction = 37,
+
+    /// <summary>The House statement was cancelled.</summary>
+    HouseCancelled = 38,
+
+    /// <summary>The House query the call names was not found.</summary>
+    HouseQueryNotFound = 39,
+
+    /// <summary>The House engine raised an error with no more specific reason.</summary>
+    HouseQueryFailed = 40,
+
+    /// <summary>The project a <c>loams.postgres.v1</c> call names does not exist.</summary>
+    ProjectNotFound = 41,
+
+    /// <summary>The branch has child branches, so it cannot be deleted.</summary>
+    BranchHasChildren = 42,
+
+    /// <summary>The branch is protected and cannot be deleted or restored over.</summary>
+    BranchProtected = 43,
+
+    /// <summary>The requested LSN is older than the history retention.</summary>
+    LsnOutOfRetention = 44,
+
+    /// <summary>The branch already has a read-write endpoint.</summary>
+    EndpointExistsForBranch = 45,
+
+    /// <summary>The compute could not be started.</summary>
+    ComputeStartFailed = 46,
+
+    /// <summary>A create or resize would go past a quota.</summary>
+    QuotaExceeded = 47,
+
+    /// <summary>The storage layer the call needs is down.</summary>
+    StorageUnavailable = 48,
+
+    /// <summary>The secret was already issued for this idempotency key and is answered once.</summary>
+    SecretAlreadyIssued = 49,
+
+    /// <summary>A Live function's <c>paginate</c> got a malformed, altered or foreign cursor.</summary>
+    LiveBadCursor = 50,
+
+    /// <summary>The isolated worker running a Live function crashed; the call never committed.</summary>
+    LiveWorkerCrashed = 51,
+
+    /// <summary>Another Live deploy activated first, so <c>expected_active</c> no longer matches.</summary>
+    LiveDeployConflict = 52,
+
     /// <summary>A malformed field or an unparseable value.</summary>
     InvalidArgument = 15,
 
@@ -182,6 +260,32 @@ public static class ReasonRegistry
         Reason.PushTargetUnknown,
         Reason.NotImplemented,
         Reason.FeatureNotInVariant,
+        Reason.HouseNotConfigured,
+        Reason.HouseSyntaxError,
+        Reason.HouseUnknownTable,
+        Reason.HouseUnknownDatabase,
+        Reason.HouseAccessDenied,
+        Reason.HouseReadOnly,
+        Reason.HouseTimeout,
+        Reason.HouseMemoryLimit,
+        Reason.HouseTooManyQueries,
+        Reason.HouseQuotaExceeded,
+        Reason.HouseDisabledFunction,
+        Reason.HouseCancelled,
+        Reason.HouseQueryNotFound,
+        Reason.HouseQueryFailed,
+        Reason.ProjectNotFound,
+        Reason.BranchHasChildren,
+        Reason.BranchProtected,
+        Reason.LsnOutOfRetention,
+        Reason.EndpointExistsForBranch,
+        Reason.ComputeStartFailed,
+        Reason.QuotaExceeded,
+        Reason.StorageUnavailable,
+        Reason.SecretAlreadyIssued,
+        Reason.LiveBadCursor,
+        Reason.LiveWorkerCrashed,
+        Reason.LiveDeployConflict,
         Reason.InvalidArgument,
         Reason.NotFound,
         Reason.AlreadyExists,
@@ -213,6 +317,32 @@ public static class ReasonRegistry
             [Reason.PushTargetUnknown] = "push_target_unknown",
             [Reason.NotImplemented] = "not_implemented",
             [Reason.FeatureNotInVariant] = "feature_not_in_variant",
+            [Reason.HouseNotConfigured] = "house_not_configured",
+            [Reason.HouseSyntaxError] = "house_syntax_error",
+            [Reason.HouseUnknownTable] = "house_unknown_table",
+            [Reason.HouseUnknownDatabase] = "house_unknown_database",
+            [Reason.HouseAccessDenied] = "house_access_denied",
+            [Reason.HouseReadOnly] = "house_read_only",
+            [Reason.HouseTimeout] = "house_timeout",
+            [Reason.HouseMemoryLimit] = "house_memory_limit",
+            [Reason.HouseTooManyQueries] = "house_too_many_queries",
+            [Reason.HouseQuotaExceeded] = "house_quota_exceeded",
+            [Reason.HouseDisabledFunction] = "house_disabled_function",
+            [Reason.HouseCancelled] = "house_cancelled",
+            [Reason.HouseQueryNotFound] = "house_query_not_found",
+            [Reason.HouseQueryFailed] = "house_query_failed",
+            [Reason.ProjectNotFound] = "project_not_found",
+            [Reason.BranchHasChildren] = "branch_has_children",
+            [Reason.BranchProtected] = "branch_protected",
+            [Reason.LsnOutOfRetention] = "lsn_out_of_retention",
+            [Reason.EndpointExistsForBranch] = "endpoint_exists_for_branch",
+            [Reason.ComputeStartFailed] = "compute_start_failed",
+            [Reason.QuotaExceeded] = "quota_exceeded",
+            [Reason.StorageUnavailable] = "storage_unavailable",
+            [Reason.SecretAlreadyIssued] = "secret_already_issued",
+            [Reason.LiveBadCursor] = "live_bad_cursor",
+            [Reason.LiveWorkerCrashed] = "live_worker_crashed",
+            [Reason.LiveDeployConflict] = "live_deploy_conflict",
             [Reason.InvalidArgument] = "invalid_argument",
             [Reason.NotFound] = "not_found",
             [Reason.AlreadyExists] = "already_exists",
@@ -269,6 +399,32 @@ public static class ReasonRegistry
             [Reason.PushTargetUnknown] = Code.NotFound,
             [Reason.NotImplemented] = Code.Unimplemented,
             [Reason.FeatureNotInVariant] = Code.Unimplemented,
+            [Reason.HouseNotConfigured] = Code.Unimplemented,
+            [Reason.HouseSyntaxError] = Code.InvalidArgument,
+            [Reason.HouseUnknownTable] = Code.NotFound,
+            [Reason.HouseUnknownDatabase] = Code.NotFound,
+            [Reason.HouseAccessDenied] = Code.PermissionDenied,
+            [Reason.HouseReadOnly] = Code.FailedPrecondition,
+            [Reason.HouseTimeout] = Code.DeadlineExceeded,
+            [Reason.HouseMemoryLimit] = Code.ResourceExhausted,
+            [Reason.HouseTooManyQueries] = Code.ResourceExhausted,
+            [Reason.HouseQuotaExceeded] = Code.ResourceExhausted,
+            [Reason.HouseDisabledFunction] = Code.PermissionDenied,
+            [Reason.HouseCancelled] = Code.Cancelled,
+            [Reason.HouseQueryNotFound] = Code.NotFound,
+            [Reason.HouseQueryFailed] = Code.Unknown,
+            [Reason.ProjectNotFound] = Code.NotFound,
+            [Reason.BranchHasChildren] = Code.FailedPrecondition,
+            [Reason.BranchProtected] = Code.FailedPrecondition,
+            [Reason.LsnOutOfRetention] = Code.FailedPrecondition,
+            [Reason.EndpointExistsForBranch] = Code.AlreadyExists,
+            [Reason.ComputeStartFailed] = Code.Unavailable,
+            [Reason.QuotaExceeded] = Code.ResourceExhausted,
+            [Reason.StorageUnavailable] = Code.Unavailable,
+            [Reason.SecretAlreadyIssued] = Code.FailedPrecondition,
+            [Reason.LiveBadCursor] = Code.InvalidArgument,
+            [Reason.LiveWorkerCrashed] = Code.Internal,
+            [Reason.LiveDeployConflict] = Code.FailedPrecondition,
             [Reason.InvalidArgument] = Code.InvalidArgument,
             [Reason.NotFound] = Code.NotFound,
             [Reason.AlreadyExists] = Code.AlreadyExists,
