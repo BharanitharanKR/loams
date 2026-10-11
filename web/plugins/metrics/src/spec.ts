@@ -7,7 +7,6 @@
 // Every edit here is a pure function from one spec to the next; nothing bumps `version`
 // (the server does that on save, as DashboardSpecService.patch does).
 
-import type { DashboardValidationResult } from '@loams-core/dashboards';
 import {
   type ChartSpec,
   type DashboardSpec,
@@ -16,6 +15,14 @@ import {
   type Widget,
 } from '@loams-core/types';
 import { metricDef } from './catalog.js';
+
+/**
+ * DashboardSpecService.validate's result shape. `@loams-core/dashboards` is not imported for
+ * it: its root loads the Cordis service and the Node-only store.
+ */
+export type DashboardValidationResult =
+  | { valid: true; errors: string[]; spec: DashboardSpec }
+  | { valid: false; errors: string[]; spec: undefined };
 
 export const GRID_COLUMNS = 12;
 export const MIN_W = 2;

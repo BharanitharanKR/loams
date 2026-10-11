@@ -40,9 +40,7 @@ export function PanelDialog({
     if (!def) return;
     // A title that was only the old metric's label follows the metric.
     const stale =
-      editing &&
-      metric !== editing.metric &&
-      title.trim() === metricDef(editing.metric)?.label;
+      editing && metric !== editing.metric && title.trim() === metricDef(editing.metric)?.label;
     onSubmit({ metric, type, title: (!stale && title.trim()) || def.label });
   };
 

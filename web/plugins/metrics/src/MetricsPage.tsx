@@ -2,8 +2,8 @@
 // spec laid out on react-grid-layout (as dashboard-ui lays it out); each panel is a
 // @loams/charts LiveChart or a stat tile. Edits stay in a draft per dashboard until Save.
 
-import type { DashboardSpec, Widget } from '@loams-core/types';
 import { Button, Empty, Field, Notice, Select } from '@loams/ui';
+import type { DashboardSpec, Widget } from '@loams-core/types';
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type Layout, Responsive, WidthProvider } from 'react-grid-layout/legacy';
 import 'react-grid-layout/css/styles.css';
@@ -236,8 +236,7 @@ export function MetricsPage({ client }: { client: MetricsClient }) {
     minW: MIN_W,
     minH: MIN_H,
   }));
-  const editingPanel =
-    dialog?.mode === 'edit' ? panels.find((p) => p.id === dialog.id) : undefined;
+  const editingPanel = dialog?.mode === 'edit' ? panels.find((p) => p.id === dialog.id) : undefined;
   const tabPanelId = 'mx-tabpanel';
 
   return (
@@ -318,7 +317,12 @@ export function MetricsPage({ client }: { client: MetricsClient }) {
               }
             >
               {d.title}
-              {changed ? <span aria-label=" (unsaved)"> •</span> : null}
+              {changed ? (
+                <>
+                  <span aria-hidden="true"> •</span>
+                  <span className="sr-only"> (unsaved)</span>
+                </>
+              ) : null}
             </button>
           );
         })}

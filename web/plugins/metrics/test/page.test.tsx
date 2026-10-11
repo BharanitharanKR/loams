@@ -1,13 +1,17 @@
-// The Metrics page over the mock client, with @loams/charts stubbed (test/charts-stub.tsx):
-// dashboards as tabs, panels as charts and stat tiles, and the edit, keyboard and save paths.
+// The Metrics page over the mock client, with LiveChart stubbed (test/charts-stub.tsx; ECharts
+// needs a canvas): dashboards as tabs, panels as charts and stat tiles, and the edit, keyboard
+// and save paths.
 
 import type { DashboardSpec } from '@loams-core/types';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createMockMetricsClient } from '../src/mock.js';
 import { MetricsPage } from '../src/MetricsPage.js';
+import { createMockMetricsClient } from '../src/mock.js';
 
-vi.mock('@loams/charts', () => import('./charts-stub.js'));
+vi.mock('@loams/charts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@loams/charts')>()),
+  LiveChart: (await import('./charts-stub.js')).LiveChart,
+}));
 
 afterEach(cleanup);
 
@@ -96,9 +100,9 @@ describe('metrics page', () => {
   it('adds a panel with a chosen metric and chart type', async () => {
     const client = await mount();
     fireEvent.click(screen.getByRole('button', { name: 'Edit layout' }));
-    expect(
-      screen.getByRole('button', { name: 'Done editing' }).getAttribute('aria-pressed'),
-    ).toBe('true');
+    expect(screen.getByRole('button', { name: 'Done editing' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Add panel' }));
     const dialog = screen.getByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('Metric'), {

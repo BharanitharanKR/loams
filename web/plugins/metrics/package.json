@@ -43,7 +43,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@loams-core/dashboards": "workspace:*",
     "@loams-core/types": "workspace:*",
     "@loams/charts": "workspace:*",
     "@loams/console-host": "workspace:*",

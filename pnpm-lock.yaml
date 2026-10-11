@@ -2028,9 +2028,6 @@ importers:
 
   web/plugins/metrics:
     dependencies:
-      '@loams-core/dashboards':
-        specifier: workspace:*
-        version: link:../../../plugins/core/dashboards
       '@loams-core/types':
         specifier: workspace:*
         version: link:../../../plugins/core/types

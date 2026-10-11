@@ -3,8 +3,8 @@
 // implementation the plugin uses until the server lands. A Connect client over the
 // console transport replaces the mock behind the same interface.
 
-import type { DashboardSpec } from '@loams-core/types';
 import type { SeriesPoint } from '@loams/charts';
+import type { DashboardSpec } from '@loams-core/types';
 
 export type { SeriesPoint };
 

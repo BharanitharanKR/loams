@@ -55,7 +55,10 @@ export function liveRows(
 }
 
 /** Backfill then live points, as one stream: what a stat tile's `useMetricStream` reads. */
-export function backfillThenLive(client: MetricsClient, src: PanelSource): AsyncIterable<SeriesPoint[]> {
+export function backfillThenLive(
+  client: MetricsClient,
+  src: PanelSource,
+): AsyncIterable<SeriesPoint[]> {
   return abortable(async function* (signal) {
     yield await client.query({ ...src, signal });
     if (src.intervalMs <= 0) return;
@@ -70,5 +73,7 @@ export function latestBySeries(points: readonly SeriesPoint[]): { series?: strin
     const prev = last.get(p.series);
     if (!prev || p.t >= prev.t) last.set(p.series, { t: p.t, v: p.v });
   }
-  return [...last.entries()].map(([series, { v }]) => (series === undefined ? { v } : { series, v }));
+  return [...last.entries()].map(([series, { v }]) =>
+    series === undefined ? { v } : { series, v },
+  );
 }

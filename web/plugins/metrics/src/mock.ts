@@ -116,7 +116,9 @@ export function mockPointsAt(metric: string, t: number): SeriesPoint[] {
 }
 
 function aborted(signal?: AbortSignal): Error {
-  return signal?.reason instanceof Error ? signal.reason : new DOMException('Aborted', 'AbortError');
+  return signal?.reason instanceof Error
+    ? signal.reason
+    : new DOMException('Aborted', 'AbortError');
 }
 
 /** Resolves after `ms`, or at once when the signal aborts. */

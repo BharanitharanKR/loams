@@ -3,9 +3,9 @@
 // focusable grid cell: arrows move it, Shift+arrows resize it, Delete removes it, Enter
 // edits it, so the grid never needs a mouse.
 
-import type { Widget } from '@loams-core/types';
 import { LiveChart, Sparkline, useMetricStream } from '@loams/charts';
 import { Button, cx } from '@loams/ui';
+import type { Widget } from '@loams-core/types';
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { formatValue, metricDef } from './catalog.js';
 import { failureText, type MetricsClient } from './client.js';
@@ -96,7 +96,6 @@ export function Panel({
   const height = Math.max(80, rows * CHART_HEIGHT_PER_ROW - 64);
 
   return (
-    // biome-ignore lint/a11y/noNoninteractiveTabindex: a grid cell the keyboard moves in edit mode
     <section
       aria-labelledby={titleId}
       aria-roledescription={editing ? 'movable panel' : undefined}
@@ -157,7 +156,10 @@ export function Panel({
   );
 }
 
-type Load = { phase: 'loading' } | { phase: 'error'; message: string } | { phase: 'ready'; rows: Row[] };
+type Load =
+  | { phase: 'loading' }
+  | { phase: 'error'; message: string }
+  | { phase: 'ready'; rows: Row[] };
 
 function ChartBody({
   panel,
