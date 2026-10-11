@@ -44,7 +44,8 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event != 'pull_request')
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -149,8 +150,7 @@ jobs:
 
   # The compose bundle: deploy/release and the Postgres stack its compose file
   # includes (deploy/loams-postgres-dev), in the layout byoc/install.sh copies
-  # to a VM, with .env.example pinned to this release's image tag. Only tracked
-  # files go in (git archive), so no local .env or secret can.
+  # to a VM, with .env.example pinned to this release's image tag.
   release:
     name: GitHub pre-release and assets
     needs: [guard, attest]
@@ -159,10 +159,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.guard.outputs.sha }}
-          persist-credentials: false
+      # No checkout: this job holds contents: write, so it never puts the
+      # tag's tree where a later step could run it. The bundle is the commit's
+      # tarball from the API, unpacked as data (two directories, no scripts run).
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: sbom-*
@@ -170,23 +169,31 @@ jobs:
           merge-multiple: true
       - name: the compose bundle
         env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.guard.outputs.sha }}
           VERSION: ${{ needs.guard.outputs.version }}
           OUT: ${{ runner.temp }}/assets
         run: |
           set -euo pipefail
-          test -f deploy/release/compose.yaml || { echo "deploy/release/compose.yaml is missing at this tag"; exit 1; }
           name="loams-compose-$VERSION"
           stage="$RUNNER_TEMP/$name"
-          mkdir -p "$stage"
-          git archive --format=tar HEAD deploy/release deploy/loams-postgres-dev \
-            | tar -x -C "$stage" --strip-components=1
+          src="$RUNNER_TEMP/src"
+          mkdir -p "$stage" "$src"
+          # Tracked files only (the API's tarball is git archive), so no local
+          # .env or secret can be in it. Its top directory is <repo>-<sha>.
+          gh api "repos/$GITHUB_REPOSITORY/tarball/$SHA" > "$RUNNER_TEMP/src.tar.gz"
+          tar -xzf "$RUNNER_TEMP/src.tar.gz" -C "$src" --strip-components=1 \
+            --wildcards '*/deploy/release' '*/deploy/loams-postgres-dev'
+          test -f "$src/deploy/release/compose.yaml" || { echo "deploy/release/compose.yaml is missing at this tag"; exit 1; }
+          cp -a "$src/deploy/release" "$src/deploy/loams-postgres-dev" "$stage/"
+          mtime=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA" -q .commit.committer.date)
           # The images are published by release-images.yml; the bundle only runs them.
           rm -f "$stage"/release/Containerfile.* "$stage/release/build.sh"
           if [ -f "$stage/release/.env.example" ]; then
             sed -i "s/^LOAMS_VERSION=.*/LOAMS_VERSION=$VERSION/" "$stage/release/.env.example"
           fi
           tar -C "$RUNNER_TEMP" --sort=name --owner=0 --group=0 --numeric-owner \
-            --mtime="$(git show -s --format=%cI HEAD)" -czf "$OUT/$name.tar.gz" "$name"
+            --mtime="$mtime" -czf "$OUT/$name.tar.gz" "$name"
           (cd "$OUT" && sha256sum -- * > SHA256SUMS)
           ls -l "$OUT"; cat "$OUT/SHA256SUMS"
       - name: create the pre-release if needed, keep it a pre-release, attach
@@ -211,8 +218,8 @@ jobs:
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag --prerelease --latest=false \
               --title "Loams $VERSION (preview)" --notes-file "$notes"
           else
-            # A release drafted by hand for this tag is still a preview: never
-            # let it become the repository's "Latest" release.
-            gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --prerelease --latest=false
+            # A release drafted by hand for this tag is published, and stays a
+            # preview: never the repository's "Latest" release.
+            gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
           fi
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber "$OUT"/*
