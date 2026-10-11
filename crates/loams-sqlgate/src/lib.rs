@@ -5,6 +5,7 @@
 //! - [`codec`]: the sans-I/O MySQL protocol (Task 3).
 //! - [`server`], [`auth`], [`upstream`], [`limits`], [`relay`]: the gate
 //!   server (Task 4, feature `server`).
+//! - [`migrate`]: moving idle sessions between pool members (Task 6).
 
 pub mod codec;
 
@@ -12,6 +13,8 @@ pub mod codec;
 pub mod auth;
 #[cfg(feature = "server")]
 pub mod limits;
+#[cfg(feature = "server")]
+pub mod migrate;
 #[cfg(feature = "server")]
 pub mod relay;
 #[cfg(feature = "server")]

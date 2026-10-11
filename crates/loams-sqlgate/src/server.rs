@@ -583,6 +583,17 @@ impl Gate {
         if client.write_all(&done).await.is_err() || client.flush().await.is_err() {
             return;
         }
+        // Task 6: the session can later move to another member as the
+        // same internal user.
+        let reconnect = crate::migrate::Reconnect {
+            tls: TlsConnector::from(self.config.upstream_tls.clone()),
+            credentials: self.deps.credentials.clone(),
+            branch: user.branch.clone(),
+            role: user.role,
+            client: ctx.clone(),
+            profile: self.config.profile,
+            timeout: self.config.upstream_timeout,
+        };
         crate::relay::relay(
             client,
             upstream,
@@ -593,6 +604,8 @@ impl Gate {
                 lease: admission.lease,
                 idle_timeout: self.config.idle_timeout,
                 shutdown: self.shutdown.subscribe(),
+                upstream_caps: reconnect.capabilities(),
+                reconnect: Some(reconnect),
             },
         )
         .await;

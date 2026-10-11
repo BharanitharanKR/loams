@@ -42,6 +42,11 @@ enable-sem = true
 # The first bootstrap creates root@localhost as auth_socket, never an open
 # root@%; with no socket, root is locked out (R2.10, R2.11).
 secure-bootstrap = true
+# SHOW SESSION_STATES fails unless TiDB has a signing key pair, and the
+# gate's idle-session migration runs it (SQ1 Task 6). The gate then logs in
+# to the new member as the same internal user, not with what TiDB signs.
+session-token-signing-cert = "/etc/tidb/tls/tls.crt"
+session-token-signing-key = "/etc/tidb/tls/tls.key"
 
 [log]
 level = "info"

@@ -156,6 +156,7 @@ What it costs (§13):
   - `instance.tidb_enable_ddl` on every pod (TiDB elects a DDL owner through PD's etcd, per keyspace);
   - `tidb_server_memory_limit = '80%'` of the pod limit and `tidb_mem_quota_query` by class, `tidb_redact_log = OFF` (§13.2), all as bootstrap SQL because they are global variables in v8.5.8 (SQ1 R2.2, R2.8);
   - `enable-global-kill = true`;
+  - `security.session-token-signing-cert` and `-key` set to the pool's TLS pair, without which `SHOW SESSION_STATES` fails and the gate cannot move idle sessions between members (SQ1 R6.2);
   - `security.enable-sem = true` and `security.secure-bootstrap = true`, with `socket = ""`. Root is `auth_socket` with no socket, so it is locked out, and `ri_control` is created by the bootstrap SQL (SQ1 R2.9–R2.11; v8.5.8 panics on a socket connection while the PROXY protocol is on).
 - **Bootstrap.** A new keyspace needs TiDB's bootstrap: it creates the `mysql.*` system tables and runs upgrade DDL. It runs **once, in `CreateDatabase`**, never on the connect path. A copy branch inherits the bootstrapped system tables from its parent, so branches never bootstrap again.
 

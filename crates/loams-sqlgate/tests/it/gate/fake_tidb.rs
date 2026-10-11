@@ -1,6 +1,13 @@
 //! A fake keyspace-mode TiDB: PROXY v2 header, greeting (with or without
 //! CLIENT_SSL), TLS, a switch to caching_sha2_password and full auth, then
 //! OK for every command (its info names the fake).
+//!
+//! For the migration (Task 6) each connection keeps a session "state" (a
+//! string) and a transaction flag: `SET STATE <s>` and `GET STATE` (in the
+//! OK's info) change and read it, `BEGIN` and `COMMIT` set the
+//! `SERVER_STATUS_IN_TRANS` flag of every OK, `SHOW SESSION_STATES` returns
+//! the state as a one-row result set (ERR 8146 inside a transaction or when
+//! the state is `locked`), and `SET SESSION_STATES '<s>'` restores it.
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
@@ -24,6 +31,10 @@ pub struct Seen {
     pub databases: Vec<Option<String>>,
     pub plaintext_credentials: usize,
     pub commands: Vec<u8>,
+    /// `SET SESSION_STATES` arguments received (unescaped).
+    pub restored: Vec<String>,
+    /// `SHOW SESSION_STATES` statements received.
+    pub shows: usize,
 }
 
 pub struct FakeTidb {
@@ -163,16 +174,17 @@ async fn serve(
         .await;
         return None;
     }
-    let ok = |info: &str| {
+    let ok_status = |info: &str, status: u16| {
         OkPacket {
             affected_rows: 0,
             last_insert_id: 0,
-            status: 2,
+            status,
             warnings: 0,
             info: info.as_bytes().to_vec(),
         }
         .encode(C::PROTOCOL_41)
     };
+    let ok = |info: &str| ok_status(info, 2);
     // Like TiDB: the database is checked after the password.
     match response.database.as_deref() {
         Some("missing") => {
@@ -192,12 +204,104 @@ async fn serve(
         _ => {}
     }
     w.write(7, &ok("")).await;
+    let deprecate_eof = response.capabilities.contains(C::DEPRECATE_EOF);
+    let mut state = String::from("fresh");
+    let mut in_txn = false;
     loop {
         let (_, cmd) = w.read().await?;
         let first = *cmd.first()?;
         seen.lock().expect("seen").commands.push(first);
         if first == 0x01 || cmd == b"\x03BYE" {
             return Some(());
+        }
+        let status = if in_txn { 3 } else { 2 };
+        let sql = cmd
+            .strip_prefix(b"\x03")
+            .map(|q| String::from_utf8_lossy(q).into_owned());
+        match sql.as_deref() {
+            Some("BEGIN") => {
+                in_txn = true;
+                w.write(1, &ok_status(opts.name, 3)).await;
+                continue;
+            }
+            Some("COMMIT") => {
+                in_txn = false;
+                w.write(1, &ok(opts.name)).await;
+                continue;
+            }
+            Some("GET STATE") => {
+                w.write(1, &ok_status(&state, status)).await;
+                continue;
+            }
+            Some("SHOW SESSION_STATES") => {
+                seen.lock().expect("seen").shows += 1;
+                if in_txn || state == "locked" {
+                    let msg =
+                        "cannot migrate the current session: session has an active transaction";
+                    w.write(1, &ErrPacket::new(8146, *b"HY000", msg).encode())
+                        .await;
+                    continue;
+                }
+                let lenenc = |v: &[u8]| [&[v.len() as u8][..], v].concat();
+                let coldef = |name: &str| {
+                    [
+                        &lenenc(b"def")[..],
+                        &lenenc(b""),
+                        &lenenc(b""),
+                        &lenenc(b""),
+                        &lenenc(name.as_bytes()),
+                        &lenenc(b""),
+                        &[
+                            0x0c, 0x3f, 0x00, 0xff, 0xff, 0xff, 0xff, 0xf5, 0, 0, 0, 0, 0,
+                        ],
+                    ]
+                    .concat()
+                };
+                let mut seq = 1;
+                let mut send = |p: Vec<u8>| {
+                    let s = seq;
+                    seq += 1;
+                    (s, p)
+                };
+                let mut packets = vec![
+                    send(vec![2]),
+                    send(coldef("Session_states")),
+                    send(coldef("Session_token")),
+                ];
+                if !deprecate_eof {
+                    packets.push(send(vec![0xfe, 0, 0, 2, 0]));
+                }
+                packets.push(send([lenenc(state.as_bytes()), lenenc(b"null")].concat()));
+                let mut end = ok("");
+                end[0] = 0xfe;
+                packets.push(send(if deprecate_eof {
+                    end
+                } else {
+                    vec![0xfe, 0, 0, 2, 0]
+                }));
+                for (s, p) in packets {
+                    w.write(s, &p).await;
+                }
+                continue;
+            }
+            Some(q) if q.starts_with("SET STATE ") => {
+                state = q["SET STATE ".len()..].to_owned();
+                w.write(1, &ok_status(opts.name, status)).await;
+                continue;
+            }
+            Some(q) if q.starts_with("SET SESSION_STATES '") && q.ends_with('\'') => {
+                let quoted = &q["SET SESSION_STATES '".len()..q.len() - 1];
+                let mut restored = String::new();
+                let mut chars = quoted.chars();
+                while let Some(c) = chars.next() {
+                    restored.push(if c == '\\' { chars.next()? } else { c });
+                }
+                state = restored.clone();
+                seen.lock().expect("seen").restored.push(restored);
+                w.write(1, &ok(opts.name)).await;
+                continue;
+            }
+            _ => {}
         }
         if cmd == b"\x03SLEEP" {
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
@@ -217,6 +321,6 @@ async fn serve(
             w.io.flush().await.ok()?;
             continue;
         }
-        w.write(1, &ok(opts.name)).await;
+        w.write(1, &ok_status(opts.name, status)).await;
     }
 }

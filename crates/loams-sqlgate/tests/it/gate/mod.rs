@@ -41,7 +41,7 @@ impl WakeCtl {
     /// Asks every admitted session to close as `c` says.
     pub fn close(&self, c: Close) {
         for tx in self.leases.lock().expect("leases").iter() {
-            let _ = tx.send(c);
+            let _ = tx.send(c.clone());
         }
     }
 
@@ -62,7 +62,7 @@ impl SessionLease for TestLease {
         if self.0.changed().await.is_err() {
             std::future::pending::<()>().await;
         }
-        *self.0.borrow_and_update()
+        self.0.borrow_and_update().clone()
     }
 }
 
@@ -305,6 +305,8 @@ impl Harness {
     }
 }
 
+mod migrate;
+mod migrate_real;
 mod real;
 mod tests;
 mod wake;

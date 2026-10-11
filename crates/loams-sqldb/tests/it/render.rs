@@ -225,7 +225,12 @@ fn rendered_config_holds_no_secret() {
                 render::tidb(&branch(), class, &endpoints),
                 render::tidb_init_sql(class),
             ] {
-                let lower = text.to_ascii_lowercase();
+                // TiDB's signing key pair is referenced by path (Task 6);
+                // its key names are the only "token" allowed.
+                let lower = text
+                    .to_ascii_lowercase()
+                    .replace("session-token-signing-cert = ", "")
+                    .replace("session-token-signing-key = ", "");
                 for word in FORBIDDEN {
                     assert!(
                         !lower.contains(word),
@@ -328,5 +333,26 @@ proptest! {
         prop_assert_eq!(ks, id.as_str());
         prop_assert_eq!(t["store"].as_str(), Some("tikv"));
         prop_assert_eq!(t["split-table"].as_bool(), Some(false));
+    }
+}
+
+/// SQ1 Task 6: `SHOW SESSION_STATES` (the gate's idle-session migration)
+/// fails without a session-token signing key, so every member signs with
+/// the pool's TLS key pair. The gate never uses the token itself.
+#[test]
+fn session_states_can_be_shown() {
+    for class in Class::ALL {
+        let t: toml::Table = render::tidb(&branch(), class, &desktop())
+            .parse()
+            .expect("TOML");
+        let security = t["security"].as_table().expect("[security]");
+        assert_eq!(
+            security["session-token-signing-cert"].as_str(),
+            Some("/etc/tidb/tls/tls.crt")
+        );
+        assert_eq!(
+            security["session-token-signing-key"].as_str(),
+            Some("/etc/tidb/tls/tls.key")
+        );
     }
 }

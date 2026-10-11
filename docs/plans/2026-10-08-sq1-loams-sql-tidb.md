@@ -929,3 +929,41 @@ Task 1 numbers are in [`docs/sqldb/performance.md`](../sqldb/performance.md) (on
   - `PoolResolver::members` became `ensure_running` (the gate's half of `EnsureRunning`); the lease is the gate's half of the drain.
   - The named `LOAMS_IT_SQLDB` tests live in `loams-sqlgate`'s test crate, which already drives real pools through `LocalRuntime`. Run them with `--test-threads=1`; they share the spike stack's PD.
   - `scripts/sqldb/spike/report.sh` renders the resume numbers as §4 of `docs/sqldb/performance.md` when `target-spike/resume-through-gate.jsonl` exists.
+- **R6.1 Idle-session migration (Task 6).**
+  - **Trigger.** The control plane asks through the session's lease: the gate's `Close` gains `Migrate(Vec<UpstreamMember>)`, "move to the first of these members that accepts the session". A session already on one of them stays. A later `WhenIdle` or `Now` still closes the session, so a session that never becomes movable is drained by the member's deadline. Tasks 12 and 14 send it on scale-in, rolling upgrade and pod replacement: they add the variant to `loams_sqldb::sagas::Close` and map it as `wake_real.rs` maps the others.
+  - **When.** Only between responses, outside a transaction and with no cursor open.
+    - `codec::response::ResponseTracker` (sans-I/O) follows TiDB's response framing from the command byte and from each frame's first 32 bytes: result sets with and without `CLIENT_DEPRECATE_EOF`, multi-results, cursors, fetch, prepare, `COM_FIELD_LIST`, single-packet answers and pipelined commands. From the terminators it keeps the server status (`IN_TRANS`, `IN_TRANS_READONLY`, `CURSOR_EXISTS`).
+    - It also records `COM_SET_OPTION`'s multi-statement switch.
+    - An unexpected packet, or a `LOAD DATA LOCAL` request, marks the session never movable.
+  - **TiDB has the last word.** `SHOW SESSION_STATES` answers ERR 8146 for what it cannot move: a transaction, unfetched cursor rows, bound long data, table or advisory locks, temporary tables. The session then stays and is tried again after its next command; TiDB's reason is logged at info.
+  - **How** (`migrate::migrate`).
+    - The relay holds the upstream writer (client commands wait in their socket) and runs `SHOW SESSION_STATES` on the old member.
+    - It logs in to the new member as the same `ri_<role>`, with no database.
+    - It runs `SET SESSION sql_mode = ''` and then `SET SESSION_STATES '<json>'`. The JSON is escaped with backslashes, the escaping TiDB's own `DecodeSessionStates` uses, which is why `sql_mode` is cleared first; the states restore the client's `sql_mode`.
+    - If the session had turned multi-statements off, it sends `COM_SET_OPTION` again.
+    - It switches the relay and sends `COM_QUIT` to the old member.
+    - Each step has the gate's `upstream_timeout`. A failure after the old member was asked closes the session with ERR 1053 (sequence 0, between commands).
+  - **What the client can notice.** `CONNECTION_ID()`, `@@port`, `@@hostname` and the process list change; the IT tells the members apart by `@@port`.
+- **R6.2 TiDB needs a session-token signing key for `SHOW SESSION_STATES` (Task 6 finding).**
+  - Without `[security] session-token-signing-cert` and `-key`, TiDB v8.5.8 answers 8146 ("no certificate or key file to sign the data"), so no session would ever move.
+  - `render::tidb` now points both keys at the pool's TLS key pair (`/etc/tidb/tls/tls.{crt,key}`). The gate never uses the signed token: it logs in with the internal password.
+  - Every member of a pool shares the pair, as TiDB requires for its token checks.
+  - `rendered_config_holds_no_secret` allows those two key names (paths only).
+  - Without the keys, `idle_session_survives_member_replacement` fails with "the session did not move" (`task-6-report.md`).
+  - **Note for Task 11:** a client can run `SHOW SESSION_STATES` itself and obtain a token signed for its `ri_<role>`, valid for one minute. The token can log in only through TiDB's `tidb_session_token` plugin, on a connection that reaches TiDB directly; the gate never offers that plugin to clients. Task 11 should still confirm that `ri_*` users cannot use that plugin, or give the pool a signing pair separate from its TLS pair.
+- **R6.3 Deviations in Task 6.**
+  - Files beyond `migrate.rs`:
+    - `codec/response.rs` (the tracker, sans-I/O and proptested);
+    - `relay.rs` (shared upstream writer, response tracking, the move);
+    - `upstream.rs` (`Close::Migrate`; `UpstreamMember: PartialEq`);
+    - `server.rs` (`Reconnect`);
+    - `crates/loams-sqldb/src/render/tidb.rs` and its goldens (R6.2);
+    - the fake TiDB (session states and transactions).
+  - **Tests.** The plan's three named tests run against real TiDB (`tests/it/gate/migrate_real.rs`, `LOAMS_IT_SQLDB=1`: a two-member pool, sessions start on member 0). `tests/it/gate/migrate.rs` covers the same rules against fake members on every run:
+    - `idle_session_moves_to_another_member_with_its_state`;
+    - `session_in_transaction_moves_after_commit`;
+    - `session_tidb_will_not_move_stays_until_it_can`;
+    - `session_already_on_a_target_member_stays`;
+    - `failed_migration_closes_the_session_with_1053`;
+    - `a_close_still_wins_over_a_pending_move`.
+  - **Not done here.** The suspend still decides "idle" by the quiet rule (R5.2), not by the tracker's in-transaction flag. **Carry-in for Task 12** (controller): the idle detector counts a command waiting on TiDB as activity (N8's rule), and could use the tracker for it.

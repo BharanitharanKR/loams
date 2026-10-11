@@ -31,7 +31,7 @@ use super::client;
 use super::pki::Pki;
 use super::real::{Cleanup, Creds, keyspace};
 
-fn upstream_member(m: &Member) -> UpstreamMember {
+pub(super) fn upstream_member(m: &Member) -> UpstreamMember {
     UpstreamMember {
         addr: m.mysql_addr,
         server_name: ServerName::IpAddress(m.mysql_addr.ip().into()),
@@ -118,7 +118,7 @@ struct Stack {
     _cleanup: Cleanup,
 }
 
-fn stamp() -> u64 {
+pub(super) fn stamp() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
@@ -284,7 +284,7 @@ impl Stack {
     }
 }
 
-fn branch_id(n: u64) -> BranchId {
+pub(super) fn branch_id(n: u64) -> BranchId {
     BranchId::parse(&format!("br_{n:016x}")).expect("id")
 }
 

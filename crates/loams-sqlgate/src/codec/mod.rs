@@ -10,12 +10,15 @@
 //! - [`auth`]: `caching_sha2_password` (fast and full), `AuthSwitchRequest`,
 //!   `AuthMoreData`.
 //! - [`command`]: command classification by first byte, OK and ERR packets.
+//! - [`response`]: where a relayed session stands between responses
+//!   (Task 6's migration).
 
 pub mod auth;
 pub mod command;
 pub mod connection;
 pub mod handshake;
 pub mod packet;
+pub mod response;
 
 /// Why a payload was refused.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -79,6 +82,12 @@ impl<'a> Reader<'a> {
         let out = &self.buf[self.pos..self.pos + n];
         self.pos += n;
         Ok(out)
+    }
+
+    /// The next byte, not consumed (the migration's row decoder).
+    #[cfg_attr(not(feature = "server"), allow(dead_code))]
+    pub(crate) fn peek(&self) -> Option<u8> {
+        self.buf.get(self.pos).copied()
     }
 
     pub(crate) fn rest(&mut self) -> &'a [u8] {

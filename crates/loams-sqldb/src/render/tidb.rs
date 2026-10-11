@@ -89,6 +89,11 @@ enable-sem = true
 # The first bootstrap creates root@localhost as auth_socket, never an open
 # root@%; with no socket, root is locked out (R2.10, R2.11).
 secure-bootstrap = true
+# SHOW SESSION_STATES fails unless TiDB has a signing key pair, and the
+# gate's idle-session migration runs it (SQ1 Task 6). The gate then logs in
+# to the new member as the same internal user, not with what TiDB signs.
+session-token-signing-cert = \"{TLS_DIR}/tls.crt\"
+session-token-signing-key = \"{TLS_DIR}/tls.key\"
 ",
         vcpu = Vcpu(class.vcpu_millis()),
         mem = class.memory_mib(),

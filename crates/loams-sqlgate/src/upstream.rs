@@ -23,7 +23,7 @@ use crate::codec::handshake::{
 use crate::wire::PacketIo;
 
 /// One `tidb-server` of a branch's pool.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpstreamMember {
     /// Its MySQL address.
     pub addr: SocketAddr,
@@ -59,8 +59,8 @@ pub enum UpstreamError {
     Protocol(String),
 }
 
-/// What the control plane asks of a session (plan SQ1 Task 5).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// What the control plane asks of a session (plan SQ1 Tasks 5 and 6).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Close {
     /// Keep it open; also cancels an earlier request (an aborted suspend).
     Open,
@@ -68,6 +68,14 @@ pub enum Close {
     WhenIdle,
     /// A suspend's deadline passed: close it now.
     Now,
+    /// The session's member is going away (scale-in, a rolling upgrade, a
+    /// pod replacement): move the session to the first of these members
+    /// that accepts it, at its next idle point outside a transaction
+    /// ([`crate::migrate`]). A session already on one of them stays. It
+    /// does not cancel an earlier `WhenIdle` or `Now`; a later one of those
+    /// still closes the session (a session that never became movable is
+    /// drained).
+    Migrate(Vec<UpstreamMember>),
 }
 
 /// A session's hold on its branch's pool, granted by `EnsureRunning`.
