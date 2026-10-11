@@ -800,4 +800,5 @@ Later tasks append their rulings below.
 
 | # | Ruling | Why | Cost if wrong |
 |---|---|---|---|
-| — | (Tasks 1 onwards append here) | | |
+| T3.1 | **The protobuf codec keeps attribute strings exactly.** `to_proto` writes a timestamp, integer, boolean or bytes value with its protobuf type only when that type prints back the same string, and as `ce_string` otherwise. The codec moved from `loams-stream-grpc` normalised `time` (Loams' own `2026-09-30T10:00:00.250Z` came back as `….25Z`), which would break `proto_round_trip_preserves_attribute_strings` and the `CloudEvent` round-trip rule. Canonical values (every `ProduceCloudEvents` test value) are encoded as before. `decode_batch` returns `protobuf::BatchError` (`Decode` or `Event { index, source }`); `from_proto` keeps its `&pb::CloudEvent` argument, and `from_json_batch` moved with the other three functions (T0-8) | One spelling per attribute through every format | A non-canonical `time` reaches gRPC consumers as `ce_string`; Loams' own readers accept it |
+| — | (Tasks 4 onwards append here) | | |

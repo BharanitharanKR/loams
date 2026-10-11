@@ -7706,6 +7706,10 @@ dependencies = [
  "bytes",
  "http",
  "loams-log",
+ "proptest",
+ "prost 0.14.4",
+ "prost-build",
+ "prost-types",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -8543,7 +8547,6 @@ name = "loams-stream-grpc"
 version = "0.0.1"
 dependencies = [
  "async-trait",
- "base64 0.23.1",
  "bytes",
  "loams-cloudevents",
  "loams-common",
@@ -8551,7 +8554,6 @@ dependencies = [
  "loams-query",
  "prost 0.14.4",
  "prost-types",
- "time",
  "tokio",
  "tokio-stream",
  "tokio-util",

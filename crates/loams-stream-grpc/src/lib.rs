@@ -15,27 +15,12 @@ use tonic::{Request, Response, Status};
 
 pub mod events;
 
-// The generated code names the CloudEvents package by relative paths, so
-// both packages live at their own module paths, as prost expects.
-mod generated {
-    pub mod io {
-        pub mod cloudevents {
-            pub mod v1 {
-                tonic::include_proto!("io.cloudevents.v1");
-            }
-        }
-    }
-    pub mod loams {
-        pub mod stream {
-            pub mod v1 {
-                tonic::include_proto!("loams.stream.v1");
-            }
-        }
-    }
+/// `loams.stream.v1`. Its `io.cloudevents.v1` messages are
+/// `loams_cloudevents::protobuf::pb`'s (through `extern_path`), so only this
+/// package is generated here.
+pub mod proto {
+    tonic::include_proto!("loams.stream.v1");
 }
-
-/// `loams.stream.v1`.
-pub use generated::loams::stream::v1 as proto;
 
 pub use events::EventProducer;
 use proto::produce_cloud_events_request::Events;
