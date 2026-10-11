@@ -395,6 +395,20 @@ describe('runtime config', () => {
       parseRuntimeConfig({ hosted: true, authMode: 'oidc' }).configError,
       /authClientId/,
     );
+    // A hosted console sends a bearer: no plain-http engine off loopback. The
+    // engine-served console keeps its LAN http engine.
+    assert.equal(
+      parseRuntimeConfig({ authMode: 'apikey', engineUrl: 'http://10.0.0.5:8080' }).server,
+      undefined,
+    );
+    assert.equal(
+      parseRuntimeConfig({ authMode: 'apikey', engineUrl: 'http://127.0.0.1:8080' }).server,
+      'http://127.0.0.1:8080',
+    );
+    assert.equal(
+      parseRuntimeConfig({ server: 'http://10.0.0.5:8080' }).server,
+      'http://10.0.0.5:8080',
+    );
     // An unknown mode is a config error, and keeps no OIDC client.
     for (const authMode of ['nope', 42, '']) {
       const bad = parseRuntimeConfig({

@@ -83,10 +83,6 @@ export function parseRuntimeConfig(raw: unknown): RuntimeConfig {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
   const r = raw as Record<string, unknown>;
   const config: RuntimeConfig = {};
-  // Only the origin: API paths are absolute (`/api/v1/...`, `/v1/...`). The engine-served
-  // console has always allowed plain http here (a LAN engine); keep that.
-  const server = originOf(r.engineUrl ?? r.server, true);
-  if (server) config.server = server;
   const issuer = issuerOf(r.authIssuer);
   const clientId = typeof r.authClientId === 'string' ? r.authClientId.trim() : '';
   if (issuer && clientId) {
@@ -95,6 +91,11 @@ export function parseRuntimeConfig(raw: unknown): RuntimeConfig {
   }
   const rawMode = r.authMode;
   if (r.hosted === true || config.auth || rawMode !== undefined) config.hosted = true;
+  // Only the origin: API paths are absolute (`/api/v1/...`, `/v1/...`). The engine-served
+  // console has always allowed plain http here (a LAN engine); keep that. A hosted console
+  // sends a bearer, so its engine is https, or http on loopback (as deploy/config.mjs).
+  const server = originOf(r.engineUrl ?? r.server, !config.hosted);
+  if (server) config.server = server;
   if (!config.hosted) return config;
   const mode =
     rawMode === undefined
