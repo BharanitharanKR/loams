@@ -5,6 +5,7 @@
 import { PageHead } from '@loams/desktop-ui';
 import { Badge, Button, Empty, formatBytes, Notice } from '@loams/ui';
 import { useCallback, useEffect, useState } from 'react';
+import { Connection } from './Connection.js';
 import {
   type Branch,
   canResume,
@@ -15,7 +16,6 @@ import {
   isTransitional,
   type SqlClient,
 } from './client.js';
-import { Connection } from './Connection.js';
 import { Query } from './Query.js';
 import { Stage } from './Stage.js';
 
@@ -30,7 +30,10 @@ export interface SqlPageProps {
   mocked?: boolean;
 }
 
-type Load<T> = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; value: T };
+type Load<T> =
+  | { state: 'loading' }
+  | { state: 'error'; message: string }
+  | { state: 'ready'; value: T };
 
 export function SqlPage({ client, copy, namespace = 'default', mocked }: SqlPageProps) {
   const [dbs, setDbs] = useState<Load<Database[]>>({ state: 'loading' });
@@ -57,7 +60,9 @@ export function SqlPage({ client, copy, namespace = 'default', mocked }: SqlPage
   const replace = useCallback(
     (db: Database) =>
       setDbs((s) =>
-        s.state === 'ready' ? { state: 'ready', value: s.value.map((d) => (d.id === db.id ? db : d)) } : s,
+        s.state === 'ready'
+          ? { state: 'ready', value: s.value.map((d) => (d.id === db.id ? db : d)) }
+          : s,
       ),
     [],
   );
@@ -112,7 +117,16 @@ export function SqlPage({ client, copy, namespace = 'default', mocked }: SqlPage
       )}
       <div className="grid gap-4 md:grid-cols-[16rem_1fr]">
         <DatabaseList databases={dbs.value} selected={selected} onSelect={setSelected} />
-        {db && <DatabaseDetail key={db.id} client={client} namespace={namespace} db={db} onChange={replace} copy={copy} />}
+        {db && (
+          <DatabaseDetail
+            key={db.id}
+            client={client}
+            namespace={namespace}
+            db={db}
+            onChange={replace}
+            copy={copy}
+          />
+        )}
       </div>
     </div>
   );
@@ -265,7 +279,13 @@ function DatabaseDetail({
         )}
       </section>
 
-      <Connection client={client} namespace={namespace} databaseId={db.id} branchId={branchId} copy={copy} />
+      <Connection
+        client={client}
+        namespace={namespace}
+        databaseId={db.id}
+        branchId={branchId}
+        copy={copy}
+      />
       <Query
         client={client}
         namespace={namespace}

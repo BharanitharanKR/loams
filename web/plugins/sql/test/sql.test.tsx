@@ -2,6 +2,7 @@
 
 import { validateManifest } from '@loams/console-host';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import pkg from '../package.json';
 import {
@@ -53,7 +54,14 @@ describe('client helpers', () => {
   });
 
   it('keeps the password out of the URI and command unless given', () => {
-    const c = { host: 'h.example.invalid', port: 4000, user: 'u.main', database: 'shop', password: 'p', tlsRequired: true };
+    const c = {
+      host: 'h.example.invalid',
+      port: 4000,
+      user: 'u.main',
+      database: 'shop',
+      password: 'p',
+      tlsRequired: true,
+    };
     expect(connectionUri(c)).toBe('mysql://u.main@h.example.invalid:4000/shop?ssl-mode=REQUIRED');
     expect(connectionUri(c, 'p w')).toContain('u.main:p%20w@');
     expect(mysqlCommand(c)).not.toContain(' p ');
@@ -64,11 +72,26 @@ describe('client helpers', () => {
 describe('mock client', () => {
   it('returns a password once, then only on rotation', async () => {
     const c = createMockSqlClient();
-    const first = await c.getConnectionInfo('default', 'db_shop000000000001', 'br_shopmain00000000', false);
+    const first = await c.getConnectionInfo(
+      'default',
+      'db_shop000000000001',
+      'br_shopmain00000000',
+      false,
+    );
     expect(first.password).not.toBe('');
-    const again = await c.getConnectionInfo('default', 'db_shop000000000001', 'br_shopmain00000000', false);
+    const again = await c.getConnectionInfo(
+      'default',
+      'db_shop000000000001',
+      'br_shopmain00000000',
+      false,
+    );
     expect(again.password).toBe('');
-    const rotated = await c.getConnectionInfo('default', 'db_shop000000000001', 'br_shopmain00000000', true);
+    const rotated = await c.getConnectionInfo(
+      'default',
+      'db_shop000000000001',
+      'br_shopmain00000000',
+      true,
+    );
     expect(rotated.password).not.toBe('');
     expect(rotated.password).not.toBe(first.password);
   });
@@ -108,8 +131,9 @@ describe('SqlPage', () => {
   it('lists branches of the selected database', async () => {
     mount();
     const table = await screen.findByRole('table', { name: 'Branches' });
-    expect(within(table).getByText('main')).toBeTruthy();
-    expect(within(table).getByText('dev')).toBeTruthy();
+    // `main` is both a branch name and `dev`'s parent, so match by row action.
+    expect(within(table).getByRole('button', { name: 'Use branch main' })).toBeTruthy();
+    expect(within(table).getByRole('button', { name: 'Use branch dev' })).toBeTruthy();
     expect(within(table).getByText('462118237114122241')).toBeTruthy();
   });
 
@@ -123,6 +147,16 @@ describe('SqlPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
     expect(screen.queryByTestId('sql-password')).toBeNull();
     expect(screen.getByRole('button', { name: 'Rotate password' })).toBeTruthy();
+  });
+
+  it('keeps the minted password when StrictMode drops the first load as stale', async () => {
+    render(
+      <StrictMode>
+        <SqlPage client={createMockSqlClient({ transitionMs: 0 })} copy={vi.fn()} mocked />
+      </StrictMode>,
+    );
+    const pw = await screen.findByTestId('sql-password');
+    expect(pw.textContent).toContain('mock-pw');
   });
 
   it('copies the connection string without the password', async () => {
@@ -168,12 +202,11 @@ describe('SqlPage', () => {
       statement: 'SELECT * FROM products',
       maxRows: PAGE_MAX_ROWS,
     });
-    expect(within(grid).getAllByRole('columnheader').map((h) => h.textContent)).toEqual([
-      'id',
-      'name',
-      'price',
-      'discontinued_at',
-    ]);
+    expect(
+      within(grid)
+        .getAllByRole('columnheader')
+        .map((h) => h.textContent),
+    ).toEqual(['id', 'name', 'price', 'discontinued_at']);
     expect(within(grid).getAllByText('NULL').length).toBe(2);
   });
 
@@ -191,7 +224,12 @@ describe('SqlPage', () => {
     mount(client);
     fireEvent.click(await screen.findByRole('button', { name: 'Use branch dev' }));
     await waitFor(() =>
-      expect(info).toHaveBeenLastCalledWith('default', 'db_shop000000000001', 'br_shopdev000000000', false),
+      expect(info).toHaveBeenLastCalledWith(
+        'default',
+        'db_shop000000000001',
+        'br_shopdev000000000',
+        false,
+      ),
     );
   });
 

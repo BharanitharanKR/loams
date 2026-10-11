@@ -127,7 +127,8 @@ export function createMockSqlClient(opts: MockOptions = {}): SqlClient {
     if (p && now() >= p.until) {
       db.stage = p.to;
       pending.delete(db.id);
-      for (const b of branches) if (b.databaseId === db.id && b.id === db.defaultBranchId) b.stage = p.to;
+      for (const b of branches)
+        if (b.databaseId === db.id && b.id === db.defaultBranchId) b.stage = p.to;
     }
     return db;
   };
@@ -147,7 +148,9 @@ export function createMockSqlClient(opts: MockOptions = {}): SqlClient {
 
   return {
     async listDatabases(namespace) {
-      return [...dbs.values()].filter((d) => d.namespace === namespace).map((d) => ({ ...settle(d) }));
+      return [...dbs.values()]
+        .filter((d) => d.namespace === namespace)
+        .map((d) => ({ ...settle(d) }));
     },
     async getDatabase(namespace, id) {
       return { ...find(namespace, id) };
@@ -213,7 +216,10 @@ export function createMockSqlClient(opts: MockOptions = {}): SqlClient {
         const rows = SAMPLE.rows.slice(0, input.maxRows);
         return { ...SAMPLE, rows, truncated: rows.length < SAMPLE.rows.length };
       }
-      throw new SqlFailure('syntax_error', `You have an error in your SQL syntax near '${s.slice(0, 20)}'.`);
+      throw new SqlFailure(
+        'syntax_error',
+        `You have an error in your SQL syntax near '${s.slice(0, 20)}'.`,
+      );
     },
   };
 }

@@ -3,8 +3,14 @@
 // rotation), and lives only in this component's state; it is never stored or logged.
 
 import { Button, Notice } from '@loams/ui';
-import { useEffect, useState } from 'react';
-import { type ConnectionInfo, connectionUri, failureMessage, mysqlCommand, type SqlClient } from './client.js';
+import { useEffect, useRef, useState } from 'react';
+import {
+  type ConnectionInfo,
+  connectionUri,
+  failureMessage,
+  mysqlCommand,
+  type SqlClient,
+} from './client.js';
 
 export interface ConnectionProps {
   client: SqlClient;
@@ -25,13 +31,30 @@ export function Connection({ client, namespace, databaseId, branchId, copy }: Co
   const [copied, setCopied] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // A password is returned only by the response that minted it. When that response
+  // arrives stale (StrictMode re-runs the effect, or the branch changed mid-flight),
+  // keep it per database and branch so the matching active load can still show it.
+  // It is never applied to another branch.
+  const unclaimed = useRef(new Map<string, string>());
+  const active = useRef('');
+  const settled = useRef(false);
+
   const load = async (rotate: boolean, live: () => boolean = () => true) => {
+    const key = `${databaseId}/${branchId}`;
     setBusy(true);
     try {
       const info = await client.getConnectionInfo(namespace, databaseId, branchId, rotate);
-      if (!live()) return;
+      if (!live()) {
+        if (info.password === '') return;
+        if (active.current === key && settled.current) setPassword(info.password);
+        else unclaimed.current.set(key, info.password);
+        return;
+      }
+      const minted = info.password || unclaimed.current.get(key) || '';
+      unclaimed.current.delete(key);
+      settled.current = true;
       setS({ state: 'ready', info });
-      setPassword(info.password);
+      setPassword(minted);
       setCopied('');
     } catch (e) {
       if (live()) setS({ state: 'error', message: failureMessage(e) });
@@ -43,6 +66,8 @@ export function Connection({ client, namespace, databaseId, branchId, copy }: Co
   // biome-ignore lint/correctness/useExhaustiveDependencies: reload when the branch changes
   useEffect(() => {
     let live = true;
+    active.current = `${databaseId}/${branchId}`;
+    settled.current = false;
     setS({ state: 'loading' });
     setPassword('');
     void load(false, () => live);
@@ -94,33 +119,33 @@ export function Connection({ client, namespace, databaseId, branchId, copy }: Co
         ))}
       </dl>
 
-      <div className="flex flex-col gap-1">
+      <section className="flex flex-col gap-1" aria-labelledby="sql-uri-label">
         <span className="text-muted text-xs" id="sql-uri-label">
           Connection string (password not included)
         </span>
         <div className="flex items-center gap-2">
-          <code className="font-mono text-sm break-all" aria-labelledby="sql-uri-label">
-            {uri}
-          </code>
-          <Button size="sm" onClick={() => void doCopy('uri', uri)} aria-label="Copy connection string">
+          <code className="font-mono text-sm break-all">{uri}</code>
+          <Button
+            size="sm"
+            onClick={() => void doCopy('uri', uri)}
+            aria-label="Copy connection string"
+          >
             Copy
           </Button>
         </div>
-      </div>
+      </section>
 
-      <div className="flex flex-col gap-1">
+      <section className="flex flex-col gap-1" aria-labelledby="sql-cmd-label">
         <span className="text-muted text-xs" id="sql-cmd-label">
           mysql client
         </span>
         <div className="flex items-center gap-2">
-          <code className="font-mono text-sm break-all" aria-labelledby="sql-cmd-label">
-            {cmd}
-          </code>
+          <code className="font-mono text-sm break-all">{cmd}</code>
           <Button size="sm" onClick={() => void doCopy('cmd', cmd)} aria-label="Copy mysql command">
             Copy
           </Button>
         </div>
-      </div>
+      </section>
 
       {password ? (
         <Notice tone="warn" title="Password: shown once">
@@ -130,10 +155,21 @@ export function Connection({ client, namespace, databaseId, branchId, copy }: Co
               <code className="font-mono text-sm" data-testid="sql-password">
                 {password}
               </code>
-              <Button size="sm" onClick={() => void doCopy('password', password)} aria-label="Copy password">
+              <Button
+                size="sm"
+                onClick={() => void doCopy('password', password)}
+                aria-label="Copy password"
+              >
                 Copy
               </Button>
-              <Button size="sm" variant="quiet" onClick={() => setPassword('')}>
+              <Button
+                size="sm"
+                variant="quiet"
+                onClick={() => {
+                  unclaimed.current.delete(`${databaseId}/${branchId}`);
+                  setPassword('');
+                }}
+              >
                 Hide
               </Button>
             </div>

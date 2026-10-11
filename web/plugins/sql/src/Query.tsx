@@ -133,7 +133,7 @@ export function ResultGrid({ result }: { result: QueryResult }) {
         {summary} · {result.elapsedMs} ms
       </p>
       {result.columns.length > 0 && (
-        <div className="loams-table-wrap" role="region" aria-label="Results" tabIndex={0}>
+        <section className="loams-table-wrap" aria-label="Results">
           <table className="loams-table">
             <caption className="sr-only">Query results</caption>
             <thead>
@@ -160,7 +160,7 @@ export function ResultGrid({ result }: { result: QueryResult }) {
               ))}
             </tbody>
           </table>
-        </div>
+        </section>
       )}
     </div>
   );
