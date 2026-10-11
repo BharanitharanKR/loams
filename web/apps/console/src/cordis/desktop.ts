@@ -16,6 +16,7 @@ import desktopServersPkg from '@loams/plugin-desktop-servers/package.json';
 import desktopSettingsPkg from '@loams/plugin-desktop-settings/package.json';
 import durablePkg from '@loams/plugin-durable/package.json';
 import factoryPkg from '@loams/plugin-factory/package.json';
+import gitPkg from '@loams/plugin-git/package.json';
 import graphPkg from '@loams/plugin-graph/package.json';
 import jobsPkg from '@loams/plugin-jobs/package.json';
 import housePkg from '@loams/plugin-house/package.json';
@@ -39,6 +40,7 @@ export const desktopModules: typeof modules = {
   '@loams/plugin-graph': () => import('@loams/plugin-graph'),
   '@loams/plugin-jobs': () => import('@loams/plugin-jobs'),
   '@loams/plugin-house': () => import('@loams/plugin-house'),
+  '@loams/plugin-git': () => import('@loams/plugin-git'),
   '@loams/plugin-streams': () => import('@loams/plugin-streams'),
   '@loams/plugin-overview': () => import('@loams/plugin-overview'),
   '@loams/plugin-desktop-settings': () => import('@loams/plugin-desktop-settings'),
@@ -59,6 +61,7 @@ export const desktopManifests: unknown[] = [
   graphPkg,
   jobsPkg,
   housePkg,
+  gitPkg,
   streamsPkg,
   overviewPkg,
   desktopSettingsPkg,
