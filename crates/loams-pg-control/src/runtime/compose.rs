@@ -682,30 +682,44 @@ impl ComputeRuntime for ComposeRuntime {
                 &env,
                 format!("NEON_CONTROL_PLANE_TOKEN={}\n", c.upcall_token.expose()).as_bytes(),
             )?;
-            let mut ns_state = self
-                .lock_state()
-                .namespaces
-                .get(ns)
-                .cloned()
-                .unwrap_or_default();
-            ns_state.format = STATE_FORMAT;
-            ns_state.computes.insert(
-                id.clone(),
-                Service {
-                    project_id: binding.project_id.clone(),
-                    endpoint_id: binding.endpoint_id.clone(),
-                    image: c.image.clone(),
-                    cu: c.cu,
-                    port: address.port,
-                },
-            );
-            // The state on disk first; the token goes with a compute that
-            // was never recorded.
-            if let Err(e) = self.persist(ns, &ns_state) {
-                let _ = remove_file(&env);
-                return Err(e);
+            // Recorded under the state lock that `ensure_address` and
+            // `remove_address` take, after checking again that the port is
+            // still the endpoint's: a `remove_address` since the check above
+            // could have freed it for another endpoint.
+            let mut st = self.lock_state();
+            let recorded = match st.ports.endpoints.get(&binding.endpoint_id) {
+                Some(port) if *port == address.port => {
+                    let mut ns_state = st.namespaces.get(ns).cloned().unwrap_or_default();
+                    ns_state.format = STATE_FORMAT;
+                    ns_state.computes.insert(
+                        id.clone(),
+                        Service {
+                            project_id: binding.project_id.clone(),
+                            endpoint_id: binding.endpoint_id.clone(),
+                            image: c.image.clone(),
+                            cu: c.cu,
+                            port: address.port,
+                        },
+                    );
+                    // The state on disk first.
+                    self.persist(ns, &ns_state).map(|()| ns_state)
+                }
+                _ => Err(RuntimeError::InvalidArgument(format!(
+                    "{address} is no longer endpoint {}'s address",
+                    binding.endpoint_id
+                ))),
+            };
+            match recorded {
+                Ok(ns_state) => {
+                    st.namespaces.insert(ns.to_owned(), ns_state);
+                }
+                Err(e) => {
+                    drop(st);
+                    // The token goes with a compute that was never recorded.
+                    let _ = remove_file(&env);
+                    return Err(e);
+                }
             }
-            self.lock_state().namespaces.insert(ns.to_owned(), ns_state);
         }
         if self.ps(ns, &service).await? == RuntimeStatus::Missing {
             self.compose(ns, &["up", "-d", "--no-build", &service])

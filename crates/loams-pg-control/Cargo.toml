@@ -48,6 +48,9 @@ rand.workspace = true
 # 10): ECDSA P-256 on ring, as loams-sqlgate uses it (0.14.10, already in the
 # lockfile).
 rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem", "ring"] }
+# Checking that the stored compute CA's certificate is its key's (certs.rs).
+# 0.18.1 is already in the lockfile (through rcgen).
+x509-parser = "0.18"
 ring.workspace = true
 serde.workspace = true
 serde_json.workspace = true
