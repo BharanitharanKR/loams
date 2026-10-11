@@ -1,7 +1,9 @@
+use std::cmp::Ordering;
+use std::collections::BinaryHeap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::ops::Range;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 
@@ -84,9 +86,16 @@ impl Inner {
         if path.is_root() {
             return Err(FsError::Unsupported("the root is a directory, not a file"));
         }
-        // An `FsPath` has no empty, `.` or `..` segment and is relative, so
-        // it cannot leave `files`.
-        Ok(self.files.join(path.as_str()))
+        // `FsPath` checks `/`-separated segments; the host may parse more
+        // (`\` and drive prefixes on Windows), so check what the host sees:
+        // only plain relative components can never leave `files`.
+        let rel = Path::new(path.as_str());
+        if !rel.components().all(|c| matches!(c, Component::Normal(_))) {
+            return Err(FsError::Unsupported(
+                "the path is not plain and relative on this host",
+            ));
+        }
+        Ok(self.files.join(rel))
     }
 
     /// Creates the missing directories above `host`, fsyncing the parent of
@@ -208,10 +217,75 @@ fn meta_of(meta: &fs::Metadata) -> FsMeta {
     }
 }
 
-/// Every regular file under `dir`, as `(path, meta)`, in no order. Names
-/// that are not UTF-8 or not valid `FsPath`s cannot have been written
-/// through an `Fs` and are skipped.
-fn walk(dir: &Path, prefix: &FsPath, out: &mut Vec<(FsPath, FsMeta)>) -> io::Result<()> {
+/// One page of a listing being gathered: the `limit` smallest paths after
+/// `after` seen so far, in a max-heap, so memory stays at `limit` entries.
+struct Page<'a> {
+    after: Option<&'a FsPath>,
+    limit: usize,
+    heap: BinaryHeap<Listed>,
+}
+
+/// A listed file, ordered by path alone.
+struct Listed(FsPath, FsMeta);
+
+impl PartialEq for Listed {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for Listed {}
+
+impl PartialOrd for Listed {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Listed {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+impl Page<'_> {
+    fn offer(&mut self, path: FsPath, meta: FsMeta) {
+        if self.after.is_some_and(|after| &path <= after) {
+            return;
+        }
+        if self.heap.len() == self.limit {
+            match self.heap.peek() {
+                Some(largest) if path < largest.0 => {
+                    self.heap.pop();
+                }
+                _ => return,
+            }
+        }
+        self.heap.push(Listed(path, meta));
+    }
+
+    /// Whether every file under the directory `dir` sorts at or before
+    /// `after`, so the walk can skip it.
+    fn skips_dir(&self, dir: &FsPath) -> bool {
+        self.after.is_some_and(|after| {
+            let prefix = format!("{dir}/");
+            prefix.as_str() < after.as_str() && !after.as_str().starts_with(&prefix)
+        })
+    }
+
+    fn into_sorted(self) -> Vec<(FsPath, FsMeta)> {
+        self.heap
+            .into_sorted_vec()
+            .into_iter()
+            .map(|Listed(path, meta)| (path, meta))
+            .collect()
+    }
+}
+
+/// Offers every regular file under `dir` to `page`. Names that are not
+/// UTF-8 or not valid `FsPath`s cannot have been written through an `Fs`
+/// and are skipped, and so are subdirectories `page` does not need.
+fn walk(dir: &Path, prefix: &FsPath, page: &mut Page<'_>) -> io::Result<()> {
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(e) if matches!(e.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {
@@ -234,9 +308,11 @@ fn walk(dir: &Path, prefix: &FsPath, out: &mut Vec<(FsPath, FsMeta)>) -> io::Res
             Err(e) => return Err(e),
         };
         if meta.is_dir() {
-            walk(&entry.path(), &path, out)?;
+            if !page.skips_dir(&path) {
+                walk(&entry.path(), &path, page)?;
+            }
         } else if meta.is_file() {
-            out.push((path, meta_of(&meta)));
+            page.offer(path, meta_of(&meta));
         }
     }
     Ok(())
@@ -412,26 +488,24 @@ impl Fs for NativeFs {
     ) -> Result<Vec<(FsPath, FsMeta)>, FsError> {
         let (dir, after) = (dir.clone(), after.cloned());
         self.blocking(move |inner| {
-            let mut found = Vec::new();
+            let mut page = Page {
+                after: after.as_ref(),
+                limit,
+                heap: BinaryHeap::new(),
+            };
+            if limit == 0 {
+                return Ok(Vec::new());
+            }
             if dir.is_root() {
-                walk(&inner.files, &FsPath::root(), &mut found)
+                walk(&inner.files, &FsPath::root(), &mut page).map_err(|e| io_error(&dir, e))?;
             } else {
-                let host = inner.files.join(dir.as_str());
+                let host = inner.host(&dir)?;
                 match fs::symlink_metadata(&host) {
-                    Ok(meta) if meta.is_file() => {
-                        found.push((dir.clone(), meta_of(&meta)));
-                        Ok(())
-                    }
-                    _ => walk(&host, &dir, &mut found),
+                    Ok(meta) if meta.is_file() => page.offer(dir.clone(), meta_of(&meta)),
+                    _ => walk(&host, &dir, &mut page).map_err(|e| io_error(&dir, e))?,
                 }
             }
-            .map_err(|e| io_error(&dir, e))?;
-            if let Some(after) = &after {
-                found.retain(|(path, _)| path > after);
-            }
-            found.sort_by(|a, b| a.0.cmp(&b.0));
-            found.truncate(limit);
-            Ok(found)
+            Ok(page.into_sorted())
         })
         .await
     }

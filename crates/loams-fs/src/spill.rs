@@ -72,14 +72,22 @@ impl Drop for SpillDir {
     }
 }
 
+/// Removes every file under `dir`, paging forward so each file is visited
+/// once even if a listing is stale. A failed removal does not stop the
+/// others; the first failure is returned at the end.
 async fn remove_all(fs: &dyn Fs, dir: &FsPath) -> Result<(), FsError> {
+    let mut first_err = None;
+    let mut after: Option<FsPath> = None;
     loop {
-        let page = fs.list(dir, None, CLEANUP_PAGE).await?;
-        if page.is_empty() {
-            return Ok(());
-        }
-        for (path, _) in page {
-            fs.remove(&path).await?;
+        let page = fs.list(dir, after.as_ref(), CLEANUP_PAGE).await?;
+        let Some((last, _)) = page.last() else {
+            return first_err.map_or(Ok(()), Err);
+        };
+        after = Some(last.clone());
+        for (path, _) in &page {
+            if let Err(e) = fs.remove(path).await {
+                first_err.get_or_insert(e);
+            }
         }
     }
 }

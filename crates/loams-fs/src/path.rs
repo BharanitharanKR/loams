@@ -15,10 +15,13 @@ pub struct FsPath(String);
 /// Why a string is not an [`FsPath`].
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum FsPathError {
+    /// The path is longer than [`MAX_PATH_BYTES`].
     #[error("path is {0} bytes, over the {MAX_PATH_BYTES}-byte limit")]
     TooLong(usize),
+    /// A segment is empty, `.` or `..` (so also an absolute path).
     #[error("path {0:?} has an empty, `.` or `..` segment")]
     BadSegment(String),
+    /// The path contains a NUL byte.
     #[error("path {0:?} contains a NUL byte")]
     Nul(String),
 }
