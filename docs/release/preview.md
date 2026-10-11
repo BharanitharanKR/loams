@@ -1,30 +1,36 @@
-# Loams preview: run the whole stack yourself
+# Loams v0.1.0-preview.1: run the whole stack yourself
 
-Status: **preview**, first published 2026-10-12. Everything listed as **Preview** in the
-[README's feature table](../../README.md#features) ships in this release. Preview means
-built, tested in CI and usable, but not production ready: APIs, on-disk formats, flags and
-image layouts can still change without a migration path, and parts of the security model are
-not hardened yet (see [Security model](#security-model)).
+Status: **preview**, v0.1.0-preview.1, first published 2026-10-12. Everything listed as
+**Preview** in the [README's feature table](../../README.md#features) ships in this release.
+Preview means built, tested in CI and usable, but not production ready: APIs, on-disk formats,
+flags and image layouts can still change without a migration path, and parts of the security
+model are not hardened yet (see [Security model](#security-model)).
 
-You run the Loams stack. We host two small things, and you can replace both:
+v0.1.0-preview.1 ships one path: **your own Tailscale tailnet plus our hosted console at
+`https://console.loams.dev`**. You run the Loams stack; we host the console and, for the
+optional `oidc` mode, the auth service.
 
 | Piece | Who runs it | Where |
 |---|---|---|
-| The engine stack: `loams`, the House, TiDB on TiKV and PD, the Postgres stack | **You** | Docker Compose on your laptop, or on your own VMs (BYOC) reached over SSH |
-| The private network between your devices and the stack | **You** | A tailnet: Tailscale, or your own Headscale |
-| The React console (static files) | Ostrium, or **you** | `https://console.loams.dev`, or your own Vercel or Cloudflare project, or the compose `console` service |
-| The auth service (OIDC issuer) | Ostrium | `https://auth.loams.dev` (placeholder domain, configurable) |
+| The engine stack: `loams`, TiDB on TiKV and PD, the Postgres stack | **You** | Docker Compose on your laptop, or on your own VMs (BYOC) with `deploy/release/byoc/install.sh` over SSH |
+| The private network between your devices and the stack | **You** | Your own Tailscale tailnet |
+| The React console (static files) | Ostrium | `https://console.loams.dev` |
+| The auth service (OIDC issuer), only for `oidc` mode | Ostrium | `https://auth.loams.dev` |
 
 The engine is never exposed on the public internet. Your browser reaches it over the tailnet,
 through the Tailscale client on your own device.
+
+**Coming soon, not in this release:** the console on your own Vercel or Cloudflare project,
+self-service OIDC clients (`auth.loams.dev/register`), Headscale networks, one-click OAuth
+deploy, and House/Analytics wired to the engine.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  subgraph hosted["Hosted by Ostrium (console: or on your Vercel / Cloudflare)"]
-    console["React console<br/>static assets"]
-    auth["Auth service<br/>OIDC issuer, JWKS"]
+  subgraph hosted["Hosted by Ostrium"]
+    console["React console at console.loams.dev<br/>static assets"]
+    auth["Auth service (oidc mode only)<br/>auth.loams.dev"]
   end
 
   subgraph device["Your device"]
@@ -32,12 +38,11 @@ flowchart LR
     tsclient["Tailscale client"]
   end
 
-  coord["Tailnet coordination<br/>Tailscale or your Headscale"]
+  coord["Tailscale coordination"]
 
   subgraph stack["Your engine stack: Docker Compose, local or on your VMs (BYOC)"]
-    ts["tailscale sidecar<br/>TS_HOSTNAME=loams"]
+    ts["tailscale sidecar<br/>TS_HOSTNAME=loams<br/>tailscale serve"]
     loams["loams<br/>engine"]
-    house["house<br/>loams-fabric + loams-house-worker"]
     tidb["tidb"]
     tikv["tikv"]
     pd["pd"]
@@ -45,12 +50,11 @@ flowchart LR
   end
 
   browser -- "1. load the console (HTTPS)" --> console
-  browser -- "2. sign in: Authorization Code + PKCE" --> auth
-  browser -- "3. API calls with a bearer token" --> tsclient
+  browser -. "2. sign in (oidc mode only)" .-> auth
+  browser -- "3. API calls" --> tsclient
   tsclient -- "WireGuard, tailnet only" --> ts
-  ts --> loams
-  loams -- "verify JWT against JWKS (cached)" --> auth
-  loams --> house
+  ts -- "127.0.0.1:7781, identity headers" --> loams
+  loams -. "oidc mode: verify JWT against JWKS (cached)" .-> auth
   loams --> tikv
   tidb --> tikv
   tikv --> pd
@@ -59,17 +63,18 @@ flowchart LR
   ts -.-> coord
 ```
 
-1. The browser loads the console's static files from the hosted console (or your own copy).
-   The console holds no data and no secrets.
-2. The console signs you in with OIDC Authorization Code + PKCE against the auth service.
-   Tokens live in memory only, never in `localStorage`; they are renewed through the auth
-   service's httpOnly cookie or a silent renew.
+1. The browser loads the console's static files from `console.loams.dev`. The console holds
+   no data and no secrets.
+2. In the default `tailscale` mode there is no separate sign-in: the console calls your
+   engine and Tailscale tells the engine who you are. In `oidc` mode the console signs you
+   in with Authorization Code + PKCE against the auth service; tokens live in memory only,
+   never in `localStorage`.
 3. The console calls your engine at `LOAMS_ENGINE_URL`, a tailnet URL such as
    `https://loams.<tailnet>.ts.net`. The request leaves your browser through your device's
    Tailscale client and reaches the stack's `tailscale` sidecar. Off the tailnet the URL does
    not resolve and nothing answers.
-4. The engine verifies the token against the issuer's JWKS (fetched outbound, cached). The
-   auth service never connects to your stack, and never sees your data.
+4. In `oidc` mode the engine verifies the token against the issuer's JWKS (fetched outbound,
+   cached). The auth service never connects to your stack, and never sees your data.
 
 ## What is in the stack
 
@@ -82,15 +87,16 @@ its settings in `deploy/release/.env.example`.
 | `tikv` | TiKV | Metadata, Live transactions, TiDB's storage |
 | `tidb` | `ghcr.io/ostrium-labs/tidb:v8.5.8-loams.1` | Loams SQL (MySQL compatible) |
 | `loams` | `ghcr.io/ostrium-labs/loams` | The engine, built with `live,live-tikv,durable,graph,tikv,pgwire,mysql-wire,stream-grpc` |
-| `house` | `ghcr.io/ostrium-labs/loams-fabric` | Loams House (the front, with `loams-house-worker` inside) |
+| `house` (profile `house`) | `ghcr.io/ostrium-labs/loams-fabric` | Loams House (the front, with `loams-house-worker` inside). Not started by default and not wired to the engine in this release: the engine answers `house_not_configured` |
 | Postgres stack | pinned in `deploy/pins/loams-postgres-images.toml` | Included from [`deploy/loams-postgres-dev`](../../deploy/loams-postgres-dev/README.md) |
-| `console` (optional) | static console | A local copy of the console, for when you do not want the hosted one |
+| `console` (profile `console`, optional) | static console | A local copy of the console, for local trials; the supported console is the hosted one |
 | `tailscale` | `tailscale/tailscale` | The stack's only door: joins the tailnet as `loams` and serves the engine there |
-| `headscale` (profile `headscale`) | Headscale | Your own tailnet coordination server, instead of Tailscale's |
+| `headscale` (profile `headscale`) | Headscale | Coming soon, unsupported in this release (see [the tailnet](#the-tailnet)) |
 
 `ghcr.io/ostrium-labs/loams-agentd` (the agent daemon) is published too, and is optional.
-Every Loams image is tagged `:<version>` and `:preview`; pin `:<version>` if you want a
-stack that does not move under you.
+Images are tagged `0.1.0-preview.1` and the rolling `:preview`, never `:latest`. The compose
+file pins `0.1.0-preview.1` through `LOAMS_VERSION`. The patched TiDB image
+`ghcr.io/ostrium-labs/tidb:v8.5.8-loams.1` is public and amd64 only.
 
 Only the `tailscale` service is reachable from outside the compose network. Nothing binds
 `0.0.0.0` on the host by default.
@@ -112,9 +118,8 @@ Edit `.env`:
 - `TS_AUTHKEY`: an auth key from your Tailscale admin console (Settings, Keys). A tagged,
   non-ephemeral, single-use key is the right shape; see [the tailnet](#the-tailnet).
 - `TS_HOSTNAME=loams`: the stack's name on the tailnet. Keep it unless you run two stacks.
-- `LOAMS_AUTH_MODE`: `oidc` by default, with `LOAMS_OIDC_ISSUER=https://auth.loams.dev`
-  and `LOAMS_OIDC_AUDIENCE`. API keys for the CLI and SDKs are on as well, from
-  `LOAMS_API_KEYS_FILE`. See [Auth modes](#auth-modes).
+- `LOAMS_AUTH_MODE`: `tailscale` by default, which needs nothing more. Set
+  `LOAMS_TAILSCALE_ALLOWED_USERS` to narrow who is admitted. See [Auth modes](#auth-modes).
 
 Then start it:
 
@@ -129,10 +134,11 @@ The engine's URL is `https://<TS_HOSTNAME>.<tailnet>.ts.net`, by default
 
 Enable **MagicDNS** and **HTTPS certificates** for your tailnet (Tailscale admin console, DNS),
 so the sidecar can serve `https://loams.<tailnet>.ts.net`. Open
-[console.loams.dev](https://console.loams.dev), sign in, and enter that URL as your engine.
+[console.loams.dev](https://console.loams.dev) in a browser on a device that is on the same
+tailnet, and enter that URL as your engine.
 
-From the CLI or an SDK, use the same tailnet URL with an API key from
-`LOAMS_API_KEYS_FILE`.
+From the CLI or an SDK, set `LOAMS_AUTH_MODE=apikey`, create a key with `loams auth new-key`
+and use the same tailnet URL.
 
 To stop, `docker compose down`. Your data stays in the compose volumes; `docker compose
 down -v` deletes it.
@@ -150,16 +156,18 @@ The stack is the same on a VM: one VM for a trial, or the services split across 
 tailnet. The VM needs no inbound port other than SSH, and SSH itself can move onto the tailnet
 once the stack is up.
 
+From a checkout on your own machine, `deploy/release/byoc/install.sh` does it over SSH: it
+installs Docker if missing, copies the compose bundle, writes `.env` (asking for your
+Tailscale auth key) and starts the stack.
+
 ```sh
-ssh you@your-vm
-# Docker Engine and the Compose plugin, from your distribution or docs.docker.com
-git clone https://github.com/ostrium-labs/loams.git
-cd loams/deploy/release
-cp .env.example .env
-$EDITOR .env                # TS_AUTHKEY, and TS_LOGIN_SERVER for Headscale
-docker compose up -d
-docker compose ps
+deploy/release/byoc/install.sh -i ~/.ssh/id_ed25519 you@your-vm
 ```
+
+By default it starts `loams`, `tailscale` and `tidb`; `--all` starts every service,
+the Postgres stack included, and `--version` picks the image tag (default `0.1.0-preview.1`).
+`byoc/uninstall.sh` removes it. To do it by hand instead, copy `deploy/release` to the VM,
+`cp .env.example .env`, set `TS_AUTHKEY` and run `docker compose up -d`.
 
 Your device then reaches the engine at `https://loams.<tailnet>.ts.net`, exactly as in the
 local quick start. Nothing on the VM listens on its public address.
@@ -170,88 +178,16 @@ local quick start. Nothing on the VM listens on its public address.
 `tag:loams`, and put it in `TS_AUTHKEY`. Add a policy rule that lets your own devices reach
 `tag:loams` on port 443, and nothing else reach it. Leave `TS_LOGIN_SERVER` empty.
 
-**Headscale.** Start the stack with the `headscale` profile, or point at a Headscale you
-already run:
+**Headscale: coming soon, unsupported in this release.** The `headscale` profile and
+`TS_LOGIN_SERVER` exist in the compose file, but Headscale issues no `*.ts.net` HTTPS
+certificates, so the hosted console (HTTPS) cannot call the engine through it: the browser
+blocks it as mixed content. Use Tailscale for v0.1.0-preview.1.
 
-```sh
-docker compose --profile headscale up -d headscale
-docker compose exec headscale headscale users create loams
-docker compose exec headscale headscale users list            # note the user's ID
-docker compose exec headscale headscale preauthkeys create --user <ID> --expiration 1h
-```
+## The console on your own Vercel or Cloudflare: coming soon
 
-Put the key in `TS_AUTHKEY`, set `TS_LOGIN_SERVER` to your Headscale's URL, and start the rest
-with `docker compose --profile headscale up -d`. On your own device:
-`tailscale up --login-server <your Headscale URL>`.
-
-Two things are different with Headscale:
-
-- **Headscale has to be reachable by every device that joins**, so it is the one component
-  you put behind a public HTTPS name (a reverse proxy with a certificate, or a small VM of its
-  own). It holds no Loams data.
-- **Headscale does not issue `*.ts.net` certificates**, so the sidecar cannot serve the engine
-  over HTTPS by itself. A console loaded over HTTPS (the hosted one, or yours on Vercel or
-  Cloudflare) cannot call a plain-HTTP engine: the browser blocks it as mixed content. Use the
-  local `console` service over the tailnet, or terminate TLS for the engine's tailnet name with
-  a certificate of your own.
-
-## The console on your own Vercel or Cloudflare
-
-The console is static files with a small runtime config, so you can host it yourself and
-still use our auth service, or your own OIDC issuer. Its runtime config is:
-
-| Variable | Value |
-|---|---|
-| `LOAMS_ENGINE_URL` | Your engine's tailnet URL, e.g. `https://loams.<tailnet>.ts.net` |
-| `LOAMS_AUTH_ISSUER` | `https://auth.loams.dev`, or your own OIDC issuer |
-| `LOAMS_AUTH_CLIENT_ID` | The OIDC client registered for your console's origin |
-
-The values are written into `config.json` when the build is staged, and read by the console at
-run time; nothing is baked into the bundle. Your console's origin must be a registered
-redirect URI of `LOAMS_AUTH_CLIENT_ID`, and the engine must accept the issuer and audience in
-the tokens it receives.
-
-**Cloudflare (Workers static assets).** From a checkout:
-
-```sh
-pnpm install --frozen-lockfile
-cd web
-pnpm build
-LOAMS_ENGINE_URL=https://loams.<tailnet>.ts.net \
-LOAMS_AUTH_ISSUER=https://auth.loams.dev \
-LOAMS_AUTH_CLIENT_ID=<client id> \
-  node apps/console/deploy/stage.mjs
-cd apps/console
-# edit wrangler.jsonc: your Worker name and route instead of console.loams.dev
-npx wrangler deploy
-```
-
-Staging writes `dist-cloudflare/` with the console under `/ui/`, a Content-Security-Policy
-that allows fetches only to the console itself and the configured engine, security headers
-(`_headers`) and the `/` to `/ui/` redirect (`_redirects`).
-
-**Vercel.** Import the repository and set:
-
-- Root directory: the repository root. Install command: `pnpm install --frozen-lockfile`.
-- Build command: `cd web && pnpm build && node apps/console/deploy/stage.mjs`.
-- Output directory: `web/apps/console/dist-cloudflare`.
-- Environment variables: `LOAMS_ENGINE_URL`, `LOAMS_AUTH_ISSUER`, `LOAMS_AUTH_CLIENT_ID`.
-
-Vercel does not read `_headers` or `_redirects`. Add a `vercel.json` at the project's root
-directory (here the repository root) with the redirect and the single-page fallback:
-
-```json
-{
-  "redirects": [{ "source": "/", "destination": "/ui/", "permanent": false }],
-  "rewrites": [{ "source": "/ui/:path*", "destination": "/ui/index.html" }]
-}
-```
-
-The CSP is a `<meta>` tag in the staged HTML, so it applies on Vercel too; the other security
-headers from `_headers` do not unless you copy them into `vercel.json`.
-
-Whichever host you use, it only serves files. API calls still go from the browser straight to
-your engine over the tailnet.
+Hosting the console on your own Vercel or Cloudflare project is not part of v0.1.0-preview.1.
+Use `https://console.loams.dev`. Likewise not in this release: self-service OIDC clients at
+`auth.loams.dev/register` and one-click OAuth deploy.
 
 ## Security model
 
@@ -261,21 +197,20 @@ your engine over the tailnet.
   reachable from outside the compose network, and only for tailnet members your tailnet
   policy allows. Nothing binds `0.0.0.0` on the host by default.
 - **Authentication on every request**, chosen by `LOAMS_AUTH_MODE`.
-- **The auth service never reaches your stack.** The engine fetches the issuer's JWKS
-  outbound; the auth service sees sign-ins, not data.
-- **No tokens in browser storage.** Access tokens are kept in memory; renewal uses the auth
-  service's httpOnly cookie or a silent renew.
+- **The auth service never reaches your stack.** In `oidc` mode the engine fetches the
+  issuer's JWKS outbound; the auth service sees sign-ins, not data.
+- **No tokens in browser storage.** In `oidc` mode access tokens are kept in memory.
 
 ### Auth modes
 
 | `LOAMS_AUTH_MODE` | Who it accepts | Settings |
 |---|---|---|
-| `oidc` | Bearer JWTs from the issuer, RS256 or EdDSA, verified against the issuer's JWKS (cached) with the expected audience | `LOAMS_OIDC_ISSUER`, `LOAMS_OIDC_AUDIENCE` |
-| `apikey` | API keys for the CLI and SDKs; the file holds only hashes of the keys | `LOAMS_API_KEYS_FILE` |
+| `tailscale` (default) | The Tailscale identity that `tailscale serve` adds. The engine trusts it only on the dedicated listener `LOAMS_TAILSCALE_LISTEN` (`127.0.0.1:7781`), which is the sidecar's serve target; every other listener ignores those headers, so a forged one on the main port gets a 401. Browser requests are limited by CORS to `https://console.loams.dev` (or `LOAMS_CORS_ORIGINS`) | `LOAMS_TAILSCALE_LISTEN`, `LOAMS_TAILSCALE_ALLOWED_USERS` (logins; empty admits every user your tailnet policy lets reach the node) |
+| `oidc` | Bearer JWTs from the issuer (`https://auth.loams.dev` or your own), RS256 or EdDSA, verified against its JWKS (cached) | `LOAMS_OIDC_ISSUER`, `LOAMS_OIDC_AUDIENCE=loams-console`, and one of `LOAMS_OIDC_ALLOWED_EMAILS`, `_SUBJECTS` or `_GROUPS`: the engine refuses to start without one |
+| `apikey` | API keys for the CLI and SDKs; the file holds only hashes. Create one with `loams auth new-key` | `LOAMS_API_KEYS_FILE` |
 | `off` | Loopback clients only; every other client is refused | none |
 
-The default compose configuration is `oidc` with the issuer `https://auth.loams.dev`, plus
-API keys for the CLI and SDKs.
+The compose default is `tailscale`.
 
 **What is not hardened yet:**
 
@@ -284,7 +219,7 @@ API keys for the CLI and SDKs.
 - **Keep the other listeners inside the stack.** The tailnet sidecar serves the engine's main
   port. The Qdrant, Elasticsearch, Flight SQL, Postgres-wire and MySQL-wire listeners, Resonate
   and the House's ClickHouse HTTP interface stay inside the compose network unless you publish
-  them. Do not publish them in this preview: the auth modes below are specified for the main
+  them. Do not publish them in this preview: the auth modes above are specified for the main
   port, and the other listeners are not all reviewed against them.
 - **Traffic inside the compose network is plain text**, between `loams`, the House, TiDB, TiKV,
   PD and the Postgres stack. The tailnet encrypts the hop from your device to the stack.
@@ -298,30 +233,31 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
 
 ## Known limitations
 
-- **Loams Postgres:** the control plane is partial. Its library (projects, branches, roles,
-  databases, the reconcilers and the Neon upcall API; PG2 Tasks 1 to 8) is merged, but it is not
-  wired into the `loams` binary yet (PG2 Task 9). In this preview the Postgres stack runs Neon's
-  storage and computes from `deploy/loams-postgres-dev`, and tenants, timelines and computes are
-  created by hand as its README shows. Its images are pinned to Neon's last public build until
-  the fork's own builds (NF1 Task 14).
-- **Loams Graph:** not crash-safe yet. Writes are acknowledged only after their change set
-  reaches the Loams log (GR1 Task 11,
-  [#424](https://github.com/ostrium-labs/loams/pull/424)), but rebuilding a graph from the log
-  after a crash (GR1 Task 14) and the kill-matrix fault gate (Task 16) are not done. Keep a
-  copy of graph data you cannot recreate.
-- **Loams Live:** the deploy flow (versioned deployments with compare-and-swap activation) is in
+- **Loams Postgres:** the control plane runs (PG2 Tasks 1 to 9: projects, branches, roles,
+  databases, the reconcilers and the Neon upcall API), but computes and endpoints are not
+  provisioned through it yet. In this preview the Postgres stack runs Neon's storage and
+  computes from `deploy/loams-postgres-dev`, and tenants, timelines and computes are created
+  by hand as its README shows. Its images are pinned to Neon's last public build until the
+  fork's own builds (NF1 Task 14).
+- **Loams Graph:** durability is partial. Writes reach the Loams log before they are
+  acknowledged (GR1 Task 11, [#424](https://github.com/ostrium-labs/loams/pull/424)), but
+  crash recovery (GR1 Task 14) is not done. Keep a copy of graph data you cannot recreate.
+- **Loams Live:** a change made on one node can take up to 60 seconds to reach live queries
+  on another node (cross-node pickup). The deploy flow (versioned deployments with compare-and-swap activation) is in
   progress ([#419](https://github.com/ostrium-labs/loams/pull/419)). Documents, transactions,
   indexes and live queries work.
 - **Loams House:** over the ClickHouse HTTP interface, a result larger than one engine block
   (about 65 000 rows) in a format with a header or footer (JSON, CSVWithNames, Parquet, Arrow)
   comes back malformed (HS1 ruling R8.4); the fix is pending. The `loams.house.v1` API, which the
   console uses, is not affected.
-- **Console:** several pages (House, Jobs, Connectors, SQL, Postgres control plane, Live
+- **Console:** several pages (Jobs, Connectors, SQL, Postgres control plane, Live
   deployments) still run against mocked clients and show demonstration data, not your stack.
+  House and Analytics are not wired to the engine in this preview (`--profile house` exists,
+  but the engine answers `house_not_configured`).
 - **Durable on TiKV** is in progress: Loams Durable keeps its state in SQLite on the `loams`
   service's data.
-- **Headscale and HTTPS:** see [the tailnet](#the-tailnet). The hosted console needs an HTTPS
-  engine URL.
+- **Not in this release:** Loams Git, connectors and jobs; Headscale networks; the console on
+  your own Vercel or Cloudflare; self-service OIDC clients; one-click OAuth deploy.
 - **Browsers on Chromium** may ask for permission the first time a page on a public origin
   calls an address on your tailnet (Local Network Access). Allow it for the console's origin.
 - **No upgrade path between previews.** Formats can change; read the
@@ -331,8 +267,7 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
 
 - **Bugs and rough edges:** open an issue at
   [github.com/ostrium-labs/loams/issues](https://github.com/ostrium-labs/loams/issues). Include
-  the image tags (`docker compose images`), your `LOAMS_AUTH_MODE`, whether you use Tailscale
-  or Headscale, and the output of `docker compose logs <service>` for the failing service.
+  the image tags (`docker compose images`), your `LOAMS_AUTH_MODE`, your Tailscale setup, and the output of `docker compose logs <service>` for the failing service.
   Remove tokens, API keys and `TS_AUTHKEY` from anything you paste.
 - **Security issues:** privately, through [SECURITY.md](../../SECURITY.md).
 - **Questions and ideas:** GitHub Discussions on the same repository.

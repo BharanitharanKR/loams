@@ -6,7 +6,7 @@
 
 Loams is an open-source, AI-native data platform built in Rust. It stores retrieval data in *your* object-storage bucket (RustFS, S3, GCS, Azure Blob or a local directory) in open formats: Lance and Tantivy today, Apache Iceberg next. Metadata lives in an embedded Raft metastore or in TiKV, and durable-execution state in SQLite (TiKV support is in progress). Retrieval compute is stateless and holds only caches, so it scales independently and can be replaced at any time.
 
-> **Preview.** Loams' first release is a preview: container images on `ghcr.io/ostrium-labs`, tagged `:preview`, that you run yourself with Docker Compose. It is not production ready, and APIs, formats and flags can change between previews. The crates are `loams-*` and the binary is `loams`; no crate or package is published to a registry yet. Start with [Running the preview](docs/release/preview.md); the design is public in [`docs/design`](docs/design/README.md).
+> **Preview.** Loams' first release, v0.1.0-preview.1, is a preview: container images on `ghcr.io/ostrium-labs` (tagged `0.1.0-preview.1` and the rolling `:preview`) that you run yourself with Docker Compose, over your own Tailscale tailnet, with the hosted console at `console.loams.dev`. It is not production ready, and APIs, formats and flags can change between previews. The crates are `loams-*` and the binary is `loams`; no crate or package is published to a registry yet. Start with [Running the preview](docs/release/preview.md); the design is public in [`docs/design`](docs/design/README.md).
 
 [Documentation](docs/README.md) · [Website](https://loams.dev) · [API reference](https://loams.dev/api-docs) · [Contributing](CONTRIBUTING.md)
 
@@ -14,7 +14,7 @@ Loams is an open-source, AI-native data platform built in Rust. It stores retrie
 
 | Your goal | Entry point |
 |---|---|
-| Run the preview stack | [Running the preview](docs/release/preview.md): Docker Compose, locally or on your VMs, over a tailnet |
+| Run the preview stack | [Running the preview](docs/release/preview.md): Docker Compose, locally or on your VMs, over your Tailscale tailnet |
 | Build and run the engine | [Quick start](#quick-start) and [platform build guides](docs/build-from-source/README.md) |
 | Understand the system | [Architecture](#architecture) and [design documents](docs/design/README.md) |
 | Use a client | [API surfaces](#api-surfaces) and [SDKs](sdks/README.md) |
@@ -50,9 +50,9 @@ Read the [pitch](docs/design/00-pitch.md) and the [architecture](docs/design/01-
 
 ## Features
 
-Loams' first release is a **preview** (2026-10-12): you run the whole stack yourself with Docker Compose, locally or on your own VMs over a tailnet, and use the hosted console or your own copy of it. See [Running the preview](docs/release/preview.md).
+Loams' first release, **v0.1.0-preview.1** (2026-10-12), is a preview: you run the whole stack yourself with Docker Compose, locally or on your own VMs over your own Tailscale tailnet, and use the hosted console at `https://console.loams.dev`. See [Running the preview](docs/release/preview.md).
 
-**Preview** means it ships in the preview images and is built and tested in CI, but it is not production ready: APIs, formats and flags can still change between previews. **In progress** and **Planned** do not ship in the preview. Statuses describe the code on `dev`; check the source ref you deploy.
+**Preview** means it ships in the v0.1.0-preview.1 images and is built and tested in CI, but it is not production ready: APIs, formats and flags can still change between previews. **In progress** and **Planned** do not ship in v0.1.0-preview.1. Statuses describe the code on `dev`; check the source ref you deploy.
 
 | Feature | What you get | Status |
 |---|---|---|
@@ -69,16 +69,16 @@ Loams' first release is a **preview** (2026-10-12): you run the whole stack your
 | TiKV metastore | The catalog, leases and timestamp oracle on TiKV (`--meta tikv://…`, cargo feature `tikv`) | Preview |
 | Loams Durable | An embedded Resonate server: durable promises and tasks on SQLite (cargo feature `durable`) | Preview |
 | Durable store on TiKV | Durable execution state on TiKV for clusters | In progress |
-| Loams Live | A reactive document database: transactions, indexes, live queries and a TypeScript SDK, on an embedded store or on TiKV (`live-tikv`) | Preview. The deploy flow (versioned deployments) is in progress |
-| Loams Graph | `loams.graph.v1` on the main port, GQL on Grafeo (cargo feature `graph`) | Preview. Writes are acknowledged after they reach the Loams log (GR1 Task 11), but recovery after a crash (Task 14) is not done: treat graph data as not crash-safe yet |
-| Loams House | ClickHouse-compatible analytics on chDB in `loams-fabric`, with `loams.house.v1` proxied by the engine | Preview. Results over one block in JSON, CSVWithNames, Parquet or Arrow are malformed over the ClickHouse HTTP interface until a pending fix; `loams.house.v1` is not affected |
+| Loams Live | A reactive document database: transactions, indexes, live queries and a TypeScript SDK, on an embedded store or on TiKV (`live-tikv`) | Preview. Cross-node pickup can take up to 60 s; the deploy flow (versioned deployments) is in progress |
+| Loams Graph | `loams.graph.v1` on the main port, GQL on Grafeo (cargo feature `graph`) | Preview. Writes reach the Loams log before they are acknowledged (GR1 Task 11), but crash recovery (Task 14) is not done: keep a copy of graph data you cannot recreate |
+| Loams House | ClickHouse-compatible analytics on chDB in `loams-fabric`, with `loams.house.v1` proxied by the engine | Preview. Not wired to the engine in this release (`--profile house` exists, the engine answers `house_not_configured`). Results over one block in JSON, CSVWithNames, Parquet or Arrow are malformed over the ClickHouse HTTP interface until a pending fix; `loams.house.v1` is not affected |
 | Loams SQL | MySQL-compatible SQL on a patched TiDB (`v8.5.8-loams.1`) over TiKV | Preview |
-| Loams Postgres | A fork of Neon whose storage lives on the bucket; the compose stack runs its storage and computes | Preview. The control plane is partial: its library is merged, the engine wiring is not |
+| Loams Postgres | A fork of Neon whose storage lives on the bucket; the compose stack runs its storage and computes | Preview. The control plane runs (PG2 Tasks 1 to 9), but computes and endpoints are not provisioned through it yet |
 | Postgres and MySQL wire | SQL over the Postgres and MySQL wire protocols, over collections | Preview |
 | Streaming gRPC API | Idempotent produce and streaming subscribe over gRPC | Preview |
-| Web console | The React console, hosted at `console.loams.dev` or deployed on your own Vercel or Cloudflare | Preview. Several pages still use mocked clients |
-| Engine auth | OIDC (JWTs checked against the issuer's JWKS), hashed API keys, or loopback-only (`LOAMS_AUTH_MODE`) | Preview |
-| Self-hosting with Docker Compose | The whole stack in `deploy/release/compose.yaml`, reachable only over a tailnet (Tailscale or Headscale), locally or on your VMs | Preview |
+| Web console | The React console, hosted at `console.loams.dev`. Your own Vercel or Cloudflare deployment is coming soon | Preview. Several pages still use mocked clients; House and Analytics are not wired to the engine |
+| Engine auth | Tailscale identity (default), OIDC (JWTs checked against the issuer's JWKS), hashed API keys, or loopback-only (`LOAMS_AUTH_MODE`) | Preview |
+| Self-hosting with Docker Compose | The whole stack in `deploy/release/compose.yaml`, reachable only over your Tailscale tailnet, locally or on your VMs with `byoc/install.sh` over SSH | Preview. Headscale is coming soon |
 | Graph expansion | GraphRAG expansion of 1 to 2 hops, planned together with the retrieval query | Planned |
 | Iceberg analytics | Iceberg tables through a REST catalog, readable by DuckDB, Spark, Trino and ClickHouse | Planned |
 | Kafka wire and OTLP | Kafka clients and OpenTelemetry logs ingest into streams | Planned |

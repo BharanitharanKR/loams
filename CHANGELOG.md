@@ -4,9 +4,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-## [Preview 1] - 2026-10-12
+## [0.1.0-preview.1] - 2026-10-12
 
-The first release of Loams, published as a **preview**: usable, tested in CI, not production
+The first release of Loams, v0.1.0-preview.1, published as a **preview**: usable, tested in CI, not production
 ready. Everything marked **Preview** in the [README's feature table](README.md#features) ships in
 it, and formats, APIs and flags can still change before the next preview. The entries after
 the known limitations, recorded before the preview was cut, are part of it too. Start with
@@ -17,33 +17,41 @@ the known limitations, recorded before the preview was cut, are part of it too. 
   whole stack with Docker Compose, locally or on your own VMs (BYOC) over SSH: `pd`, `tikv`,
   `tidb` (`ghcr.io/ostrium-labs/tidb:v8.5.8-loams.1`), `loams`, `house` (`loams-fabric`), the
   Postgres stack included from `deploy/loams-postgres-dev`, an optional local `console`, and a
-  `tailscale` sidecar (`TS_AUTHKEY`, `TS_LOGIN_SERVER` for Headscale, `TS_HOSTNAME=loams`).
-  The profile `headscale` adds a Headscale server. Only the `tailscale` service is reachable
+  `tailscale` sidecar (`TS_AUTHKEY`, `TS_HOSTNAME=loams`). The `house` profile starts the
+  House (not wired to the engine in this release). The `headscale` profile and `TS_LOGIN_SERVER`
+  exist but are coming soon and unsupported. `deploy/release/byoc/install.sh` installs the stack
+  on your own VM over SSH. Only the `tailscale` service is reachable
   from outside; nothing binds `0.0.0.0` on the host by default.
 - **Container images** on `ghcr.io/ostrium-labs`, built by `deploy/release/build.sh` from
-  `deploy/release/Containerfile.<name>` and published by CI on tags as `:<version>` and
-  `:preview`: `loams` (the engine, with `live,live-tikv,durable,graph,tikv,pgwire,mysql-wire,stream-grpc`),
+  `deploy/release/Containerfile.<name>` and published by CI on tags as `0.1.0-preview.1`
+  and the rolling `:preview` (never `:latest`): `loams` (the engine, with `live,live-tikv,durable,graph,tikv,pgwire,mysql-wire,stream-grpc`),
   `loams-fabric` (the House front, with `loams-house-worker` inside) and the optional
-  `loams-agentd`.
-- **Engine auth for the preview.** `LOAMS_AUTH_MODE` is `oidc` (JWTs verified against
-  `LOAMS_OIDC_ISSUER`'s JWKS, cached, RS256 or EdDSA, audience `LOAMS_OIDC_AUDIENCE`), `apikey`
-  (hashed keys in `LOAMS_API_KEYS_FILE`) or `off` (loopback clients only). The compose default is
-  `oidc` with the issuer `https://auth.loams.dev`, plus API keys for the CLI and SDKs.
-- **Hosted console and auth.** Ostrium hosts only the React console and the auth service. The
-  console signs in with OIDC Authorization Code + PKCE, keeps tokens in memory (never in
-  `localStorage`) and calls your engine at `LOAMS_ENGINE_URL` over your tailnet. It can also be
-  deployed on your own Vercel or Cloudflare with `LOAMS_ENGINE_URL`, `LOAMS_AUTH_ISSUER` and
-  `LOAMS_AUTH_CLIENT_ID`.
+  `loams-agentd`. The patched TiDB image `ghcr.io/ostrium-labs/tidb:v8.5.8-loams.1` is public, amd64 only.
+- **Engine auth.** `LOAMS_AUTH_MODE` is `tailscale` (the default: the identity `tailscale serve`
+  adds, trusted only on the dedicated `LOAMS_TAILSCALE_LISTEN` listener `127.0.0.1:7781`, narrowed
+  by `LOAMS_TAILSCALE_ALLOWED_USERS`, CORS limited to `console.loams.dev`), `oidc` (JWTs verified
+  against `LOAMS_OIDC_ISSUER`'s JWKS, audience `LOAMS_OIDC_AUDIENCE=loams-console`, and one of
+  `LOAMS_OIDC_ALLOWED_EMAILS`, `_SUBJECTS` or `_GROUPS` required), `apikey` (hashed keys, created
+  with `loams auth new-key`) or `off` (loopback clients only).
+- **Hosted console.** Ostrium hosts the React console at `https://console.loams.dev`. It calls
+  your engine at `LOAMS_ENGINE_URL` over your own Tailscale tailnet. The shipping path is your
+  tailnet plus the hosted console. Coming soon: the console on your own Vercel or Cloudflare,
+  `auth.loams.dev/register` self-service clients, Headscale networks, one-click OAuth deploy, and
+  House/Analytics wired to the engine.
 
 ### Known limitations
-- Loams Postgres: the control plane library is merged but not wired into the engine (PG2 Task 9).
-- Loams Graph: writes reach the Loams log before they are acknowledged (GR1 Task 11), but
-  recovery after a crash (GR1 Task 14) and the durability fault gate (Task 16) are not done.
-- Loams Live: the versioned deploy flow is in progress.
+- Loams Postgres: the control plane runs (PG2 Tasks 1 to 9), but computes and endpoints are not
+  provisioned through it yet.
+- Loams Graph: writes reach the Loams log before they are acknowledged (GR1 Task 11), but crash
+  recovery (GR1 Task 14) is not done.
+- Loams Live: a change can take up to 60 s to reach another node; the versioned deploy flow is
+  in progress.
+- Loams Git, connectors and jobs are not in this release.
 - Loams House: multi-block results in JSON, CSVWithNames, Parquet or Arrow are malformed over
   the ClickHouse HTTP interface until a pending fix (HS1 ruling R8.4); `loams.house.v1` is not
   affected.
-- Several console pages still run on mocked clients.
+- Several console pages still run on mocked clients; House and Analytics are not wired to the
+  engine.
 - See [`docs/release/preview.md`](docs/release/preview.md#known-limitations) for the full list
   and the security model.
 

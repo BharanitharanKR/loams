@@ -1,7 +1,7 @@
 # Publishing Loams: registries, secrets and the release path
 
 Status: **container images publish for the preview; no registry package is
-published.** Since the first preview (2026-10-12), CI publishes the release images to
+published.** Since v0.1.0-preview.1 (2026-10-12), CI publishes the release images to
 `ghcr.io/ostrium-labs` on tags; see [Container images](#container-images-ghcrio).
 Everything else on this page is still the checklist a maintainer works through
 before the first real package publish. It is written for
@@ -44,16 +44,17 @@ The preview's images, the contract the compose stack in
 - **Publish.** CI publishes on tags only, never from a pull request, with the
   workflow's own `GITHUB_TOKEN` (`packages: write`); there is no stored registry
   credential.
-- **Tags.** Every image gets `:<version>` and `:preview`. `:preview` moves with each
-  preview release; deployments that must not move pin `:<version>`.
+- **Tags.** Every image gets `:<version>` (for example `0.1.0-preview.1`, no `v` prefix) and
+  the rolling `:preview`, which moves with each preview release. There is no `:latest`.
+  Deployments that must not move pin `:<version>`.
 - **Images built elsewhere.** `ghcr.io/ostrium-labs/tidb:v8.5.8-loams.1` is built by
   [`scripts/sqldb/tidb-image/build.sh`](../../scripts/sqldb/tidb-image/build.sh) from an
-  annotated patch-queue tag and pinned in
+  annotated patch-queue tag, is public, amd64 only, and is pinned in
   [`release/sqldb-images.toml`](../../release/sqldb-images.toml), and the Postgres stack's images
   are pinned by digest in
   [`deploy/pins/loams-postgres-images.toml`](../../deploy/pins/loams-postgres-images.toml).
 - **Not yet.** No attestation or cosign signature is attached to the images in the
-  preview, and no multi-architecture guarantee is made per tag.
+  preview, and the Loams images are not promised to be multi-architecture.
 
 ## What crates.io actually publishes
 
