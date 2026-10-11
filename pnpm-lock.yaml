@@ -1364,9 +1364,6 @@ importers:
 
   web/plugins/deployments:
     dependencies:
-      '@loams-core/flows':
-        specifier: workspace:*
-        version: link:../../../plugins/core/flows
       '@loams/charts':
         specifier: workspace:*
         version: link:../../packages/charts

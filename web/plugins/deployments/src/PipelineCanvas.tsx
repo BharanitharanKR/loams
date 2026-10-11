@@ -60,13 +60,13 @@ export function PipelineCanvas({
   edges: Edge[];
   height?: number;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLElement>(null);
   const help = useId();
   const dark = useDarkTheme();
   const order = nodes.map((n) => n.id);
 
   const onKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>) => {
+    (e: KeyboardEvent<HTMLElement>) => {
       const nodeEl = (e.target as HTMLElement).closest<HTMLElement>('.react-flow__node');
       // Keys inside a stage's own buttons are theirs; only a focused stage moves.
       if (!nodeEl || e.target !== nodeEl) return;
@@ -80,10 +80,9 @@ export function PipelineCanvas({
   );
 
   return (
-    <div
+    <section
       ref={ref}
       className="ld-canvas"
-      role="group"
       aria-label={label}
       aria-describedby={help}
       onKeyDownCapture={onKeyDown}
@@ -115,6 +114,6 @@ export function PipelineCanvas({
           <Background variant={BackgroundVariant.Dots} gap={16} color="var(--op-rule)" />
         </ReactFlow>
       </ReactFlowProvider>
-    </div>
+    </section>
   );
 }

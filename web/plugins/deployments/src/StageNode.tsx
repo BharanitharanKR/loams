@@ -2,8 +2,8 @@
 // a progress bar (animated only when motion is allowed), duration or actor, the logs
 // action, and for promotion steps the env/secret key events (names only).
 
-import { Handle, type NodeProps, Position } from '@xyflow/react';
 import { StatusTag } from '@loams/ui';
+import { Handle, type NodeProps, Position } from '@xyflow/react';
 import { createContext, useContext } from 'react';
 import type { StageNode as StageNodeType } from './layout.js';
 import { STATE_LABEL, statusTone } from './model.js';
@@ -15,7 +15,12 @@ export interface PipelineActions {
 
 export const PipelineActionsContext = createContext<PipelineActions>({});
 
-const SECRET_VERB = { promoted: 'promoted', rotated: 'rotated', added: 'added', removed: 'removed' };
+const SECRET_VERB = {
+  promoted: 'promoted',
+  rotated: 'rotated',
+  added: 'added',
+  removed: 'removed',
+};
 
 export function StageNode({ data, selected }: NodeProps<StageNodeType>) {
   const { openLogs } = useContext(PipelineActionsContext);
@@ -57,7 +62,10 @@ export function StageNode({ data, selected }: NodeProps<StageNodeType>) {
         aria-valuemax={100}
         aria-valuenow={pct}
       >
-        <span className={running ? 'ld-progress-fill ld-running' : 'ld-progress-fill'} style={{ width: `${pct}%` }} />
+        <span
+          className={running ? 'ld-progress-fill ld-running' : 'ld-progress-fill'}
+          style={{ width: `${pct}%` }}
+        />
       </div>
       <div className="ld-node-foot">
         <span className="ld-muted">{data.detail ?? ' '}</span>

@@ -9,8 +9,8 @@ import { deriveState } from './model.js';
 import {
   type DeployClient,
   type DeployEvent,
-  type Deployment,
   type DeployMetric,
+  type Deployment,
   type EnvName,
   type LogLine,
   PROMOTION_STEPS,
@@ -143,7 +143,10 @@ export function fixturePromotions(now: number): { promotion: Promotion; planned:
   });
   const flowB: Planned = plan({
     promote_dev: [key('rotated', 'SEARCH_API_KEY', 'dev'), key('removed', 'LEGACY_TOKEN', 'dev')],
-    promote_main: [key('rotated', 'SEARCH_API_KEY', 'main'), key('removed', 'LEGACY_TOKEN', 'main')],
+    promote_main: [
+      key('rotated', 'SEARCH_API_KEY', 'main'),
+      key('removed', 'LEGACY_TOKEN', 'main'),
+    ],
   });
   const a: Promotion = {
     id: 'prm-88',
@@ -176,7 +179,12 @@ export function fixturePromotions(now: number): { promotion: Promotion; planned:
     for (const step of p.steps) {
       if (step.state !== 'succeeded') continue;
       for (const [i, e] of planned[step.kind].entries()) {
-        p.secretEvents.push({ ...e, id: `${p.id}-${step.kind}-${i}`, step: step.kind, at: step.at ?? now });
+        p.secretEvents.push({
+          ...e,
+          id: `${p.id}-${step.kind}-${i}`,
+          step: step.kind,
+          at: step.at ?? now,
+        });
       }
       planned[step.kind] = [];
     }
@@ -188,7 +196,12 @@ export function fixturePromotions(now: number): { promotion: Promotion; planned:
 }
 
 const LOG_TEXT: Record<StageKind, string[]> = {
-  build: ['Resolving dependencies', 'Compiling 214 units', 'Image layers cached: 11 of 14', 'Built'],
+  build: [
+    'Resolving dependencies',
+    'Compiling 214 units',
+    'Image layers cached: 11 of 14',
+    'Built',
+  ],
   upload: ['Pushing artifact', 'Verifying digest', 'Uploaded'],
   validate: ['Starting a canary instance', 'Waiting for /ready', 'Running smoke checks'],
   activate: ['Shifting traffic 10%', 'Shifting traffic 50%', 'Shifting traffic 100%', 'Active'],
@@ -206,6 +219,8 @@ function channel<T>(signal: AbortSignal) {
     wake?.();
     wake = undefined;
   };
+  // One listener for the channel's life, not one per idle wait.
+  signal.addEventListener('abort', () => wake?.(), { once: true });
   async function* iterate(): AsyncGenerator<T> {
     while (!signal.aborted) {
       const next = queue.shift();
@@ -215,7 +230,6 @@ function channel<T>(signal: AbortSignal) {
       }
       await new Promise<void>((resolve) => {
         wake = resolve;
-        signal.addEventListener('abort', () => resolve(), { once: true });
       });
     }
   }
@@ -346,7 +360,8 @@ export function createMockDeployClient(opts: MockOptions = {}): MockDeployClient
 
   function tick() {
     ticks++;
-    for (const d of deployments) if (d.state === 'running' || d.state === 'rolling_back') advance(d);
+    for (const d of deployments)
+      if (d.state === 'running' || d.state === 'rolling_back') advance(d);
     if (ticks % 8 === 0) startDeployment();
     if (ticks % 5 === 0) advancePromotions();
   }
@@ -383,7 +398,7 @@ export function createMockDeployClient(opts: MockOptions = {}): MockDeployClient
       if (!d) throw new Error(`No deployment ${id}`);
       if (!d.previousVersion) throw new Error(`${id} has no previous version to roll back to`);
       const rb = d.stages.find((s) => s.kind === 'rollback');
-      if (!rb || rb.state !== 'pending') throw new Error(`${id} is already rolling back`);
+      if (rb?.state !== 'pending') throw new Error(`${id} is already rolling back`);
       setStage(d, { ...rb, state: 'running', startedAt: now(), progress: 0 });
     },
 
@@ -392,7 +407,8 @@ export function createMockDeployClient(opts: MockOptions = {}): MockDeployClient
       const s = d?.stages.find((x) => x.kind === stage);
       if (!d || !s || s.startedAt === undefined) return [];
       const lines = LOG_TEXT[stage];
-      const shown = s.state === 'running' ? Math.max(1, Math.ceil(lines.length * s.progress)) : lines.length;
+      const shown =
+        s.state === 'running' ? Math.max(1, Math.ceil(lines.length * s.progress)) : lines.length;
       const out: LogLine[] = lines.slice(0, shown).map((text, i) => ({
         at: (s.startedAt as number) + i * 3_000,
         level: 'info',

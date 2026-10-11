@@ -1,9 +1,9 @@
-// Deployment and promotion pipelines -> React Flow nodes and edges. Positions come from
-// @loams-core/flows' `compileGraph` (the same longest-path ranking the dashboard graph
-// tile uses); this module only swaps the stock node for the `stage` node and paints
-// the edges by state.
+// Deployment and promotion pipelines -> React Flow nodes and edges. Both are straight
+// chains, so a stage's rank is its index and it sits one stride right of the one before
+// (what @loams-core/flows' longest-path ranking gives a chain, without pulling that
+// package's Node-only Cordis services into the console bundle, or its throw on an
+// empty graph). Stages use the custom `stage` node, and edges are painted by state.
 
-import { compileGraph } from '@loams-core/flows';
 import type { Edge, Node } from '@xyflow/react';
 import { eventsFor, formatMs, STAGE_LABEL, STATE_LABEL, stageDuration } from './model.js';
 import type {
@@ -47,13 +47,7 @@ export type StageNodeData = {
 
 export type StageNode = Node<StageNodeData, 'stage'>;
 
-const LAYOUT = {
-  direction: 'LR',
-  nodeWidth: NODE_WIDTH,
-  nodeHeight: NODE_HEIGHT,
-  rankSep: 40,
-  nodeSep: 24,
-} as const;
+const LAYOUT = { rankSep: 40, nodeSep: 24 } as const;
 
 function edgeStyle(state: StageState, branch: boolean) {
   const stroke =
@@ -75,12 +69,9 @@ function chain(
   return { nodes: ids.map((id) => ({ id, label: id })), edges: [...edges, ...extra] };
 }
 
-function positions(
-  spec: ReturnType<typeof chain>,
-  nodeHeight: number = NODE_HEIGHT,
-): Map<string, { x: number; y: number }> {
-  const compiled = compileGraph({ ...spec, layout: { ...LAYOUT, nodeHeight } }, []);
-  return new Map(compiled.nodes.map((n) => [n.id, n.position]));
+/** Left-to-right positions for a chain: one rank per stage, all on one row. */
+function positions(spec: ReturnType<typeof chain>): Map<string, { x: number; y: number }> {
+  return new Map(spec.nodes.map((n, i) => [n.id, { x: i * (NODE_WIDTH + LAYOUT.rankSep), y: 0 }]));
 }
 
 /**
@@ -156,7 +147,7 @@ export function promotionGraph(
   reducedMotion: boolean,
 ): { nodes: StageNode[]; edges: Edge[] } {
   const spec = chain(p.steps.map((s) => s.kind));
-  const pos = positions(spec, PROMOTION_NODE_HEIGHT);
+  const pos = positions(spec);
   const nodes: StageNode[] = p.steps.map((s) => {
     const secrets = eventsFor(s, p.secretEvents);
     const detail = [s.actor, s.ref].filter(Boolean).join(' · ') || undefined;

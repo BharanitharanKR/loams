@@ -24,7 +24,7 @@ import {
   summariseSecrets,
 } from '../src/model.js';
 import { nextStage } from '../src/PipelineCanvas.js';
-import type { DeployEvent, Deployment, Promotion, Stage } from '../src/types.js';
+import type { DeployEvent, Deployment, Stage } from '../src/types.js';
 
 const chartProps: Record<string, unknown>[] = [];
 
@@ -48,7 +48,6 @@ globalThis.ResizeObserver ??= class {
 };
 (globalThis as { DOMMatrixReadOnly?: unknown }).DOMMatrixReadOnly ??= class {
   m22 = 1;
-  constructor(_t?: string) {}
 };
 HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
   this.setAttribute('open', '');
@@ -67,6 +66,12 @@ function setReducedMotion(reduce: boolean) {
 }
 
 const NOW = 1_800_000_000_000;
+
+function firstPromotion() {
+  const first = fixturePromotions(NOW)[0];
+  if (!first) throw new Error('the fixtures have a promotion');
+  return first;
+}
 
 beforeEach(() => {
   chartProps.length = 0;
@@ -102,10 +107,18 @@ describe('model', () => {
     );
     expect(deriveState([...ok, stage('rollback', 'pending')])).toBe('succeeded');
     expect(
-      deriveState([stage('build', 'succeeded'), stage('upload', 'running'), stage('rollback', 'pending')]),
+      deriveState([
+        stage('build', 'succeeded'),
+        stage('upload', 'running'),
+        stage('rollback', 'pending'),
+      ]),
     ).toBe('running');
     expect(
-      deriveState([stage('validate', 'failed'), stage('activate', 'skipped'), stage('rollback', 'pending')]),
+      deriveState([
+        stage('validate', 'failed'),
+        stage('activate', 'skipped'),
+        stage('rollback', 'pending'),
+      ]),
     ).toBe('failed');
     expect(deriveState([...ok, stage('rollback', 'running')])).toBe('rolling_back');
     expect(deriveState([...ok, stage('rollback', 'succeeded')])).toBe('rolled_back');
@@ -129,9 +142,9 @@ describe('model', () => {
     expect(list.find((d) => d.id === a.id)?.stages.find((s) => s.kind === 'upload')?.progress).toBe(
       0.9,
     );
-    expect(before.find((d) => d.id === a.id)?.stages.find((s) => s.kind === 'upload')?.progress).toBe(
-      0.4,
-    );
+    expect(
+      before.find((d) => d.id === a.id)?.stages.find((s) => s.kind === 'upload')?.progress,
+    ).toBe(0.4);
   });
 
   it('allows a rollback only with a previous version and nothing in flight', () => {
@@ -152,7 +165,7 @@ describe('model', () => {
   });
 
   it('summarises secret events by kind', () => {
-    const [{ promotion }] = fixturePromotions(NOW) as [{ promotion: Promotion }];
+    const { promotion } = firstPromotion();
     expect(summariseSecrets(promotion.secretEvents)).toBe('1 promoted, 1 added');
   });
 });
@@ -168,7 +181,11 @@ describe('layout', () => {
     const xs = g.nodes.map((n) => n.position.x);
     expect([...xs].sort((a, b) => a - b)).toEqual(xs);
     expect(new Set(xs).size).toBe(4);
-    expect(g.edges.map((e) => e.id)).toEqual(['build->upload', 'upload->validate', 'validate->activate']);
+    expect(g.edges.map((e) => e.id)).toEqual([
+      'build->upload',
+      'upload->validate',
+      'validate->activate',
+    ]);
     // The running stage's incoming edge animates; with reduced motion nothing does.
     expect(g.edges.find((e) => e.target === 'upload')?.animated).toBe(true);
     expect(deploymentGraph(running, NOW, true).edges.some((e) => e.animated)).toBe(false);
@@ -195,7 +212,7 @@ describe('layout', () => {
   });
 
   it('draws the promotion path with key events on the promote steps, names only', () => {
-    const [{ promotion }] = fixturePromotions(NOW) as [{ promotion: Promotion }];
+    const { promotion } = firstPromotion();
     const g = promotionGraph(promotion, false);
     expect(g.nodes.map((n) => n.data.label)).toEqual(Object.values(PROMOTION_LABEL));
     const dev = g.nodes.find((n) => n.id === 'promote_dev');
@@ -288,7 +305,7 @@ describe('DeploymentsPage', () => {
     const client = createMockDeployClient({ intervalMs: 60_000 });
     render(<DeploymentsPage client={client} />);
     expect(await screen.findByRole('heading', { name: 'api v1.42.0' })).toBeTruthy();
-    expect(screen.getByRole('group', { name: 'api v1.42.0 pipeline' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'api v1.42.0 pipeline' })).toBeTruthy();
     expect(screen.getAllByText('Validate').length).toBeGreaterThanOrEqual(3);
     expect(screen.getByRole('heading', { name: 'billing-worker v0.19.0' })).toBeTruthy();
     expect(screen.getByLabelText('Deploys per hour, last 15 minutes')).toBeTruthy();
@@ -326,13 +343,36 @@ describe('DeploymentsPage', () => {
     await waitFor(() => expect(screen.getAllByText('Rolling back').length).toBeGreaterThan(0));
   });
 
+  it('sends one rollback request while the first is in flight', async () => {
+    const client = createMockDeployClient({ intervalMs: 60_000 });
+    let finish: () => void = () => {};
+    const spy = vi.spyOn(client, 'rollback').mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(<DeploymentsPage client={client} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Roll back to v3.8.0' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Roll back web?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Roll back' }));
+    const busy = await within(dialog).findByRole('button', { name: 'Rolling back…' });
+    expect((busy as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(busy);
+    expect(spy).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+    expect(within(dialog).queryByRole('alert')).toBeNull();
+  });
+
   it('opens a stage log from its node', async () => {
     const client = createMockDeployClient({ intervalMs: 60_000 });
     render(<DeploymentsPage client={client} />);
     await screen.findByRole('heading', { name: 'billing-worker v0.19.0' });
     const buttons = screen.getAllByLabelText('Validate logs');
     fireEvent.click(buttons[buttons.length - 1] as HTMLElement);
-    expect(await screen.findByText(/Health check \/ready returned 503/, { selector: 'li' })).toBeTruthy();
+    expect(
+      await screen.findByText(/Health check \/ready returned 503/, { selector: 'li' }),
+    ).toBeTruthy();
   });
 
   it('switches views with the arrow keys and shows the promotion path', async () => {
@@ -345,7 +385,7 @@ describe('DeploymentsPage', () => {
     expect(promo.getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(promo);
     expect(await screen.findByRole('heading', { name: 'Ledger v2 behind a flag' })).toBeTruthy();
-    expect(screen.getByRole('group', { name: 'Ledger v2 behind a flag promotion' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Ledger v2 behind a flag promotion' })).toBeTruthy();
     const table = screen.getByRole('table', {
       name: 'Env and secret changes for Rotate the search key, drop the legacy token (key names only)',
     });
@@ -357,11 +397,14 @@ describe('DeploymentsPage', () => {
     render(<DeploymentsPage client={client} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Timeline' }));
     expect(await screen.findByLabelText('Deployments per hour over the last hour')).toBeTruthy();
-    expect(screen.getByLabelText('Percent of deployments that failed over the last hour')).toBeTruthy();
+    expect(
+      screen.getByLabelText('Percent of deployments that failed over the last hour'),
+    ).toBeTruthy();
     const freq = chartProps.find((p) => p.spec === FREQUENCY_SPEC);
     const fail = chartProps.find((p) => p.spec === FAILURE_SPEC);
-    expect(freq?.windowMs).toBe(TIMELINE_WINDOW_MS);
-    expect((freq?.data as unknown[]).length).toBe(61);
-    expect(typeof (fail?.stream as AsyncIterable<unknown>)[Symbol.asyncIterator]).toBe('function');
+    if (!freq || !fail) throw new Error('both timeline charts render');
+    expect(freq.windowMs).toBe(TIMELINE_WINDOW_MS);
+    expect((freq.data as unknown[]).length).toBe(61);
+    expect(typeof (fail.stream as AsyncIterable<unknown>)[Symbol.asyncIterator]).toBe('function');
   });
 });

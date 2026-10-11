@@ -10,6 +10,7 @@ import {
   Badge,
   Button,
   Card,
+  type Column,
   Dialog,
   Empty,
   formatRelative,
@@ -17,7 +18,6 @@ import {
   Stat,
   Stats,
   StatusTag,
-  type Column,
   Table,
 } from '@loams/ui';
 import {
@@ -163,12 +163,20 @@ function Summary({ client }: { client: DeployClient }) {
       <Stat
         label="Deploys per hour"
         value={lastFreq === undefined ? '…' : lastFreq}
-        detail={<Sparkline points={freqPoints} ariaLabel="Deploys per hour, last 15 minutes" height={28} />}
+        detail={
+          <Sparkline
+            points={freqPoints}
+            ariaLabel="Deploys per hour, last 15 minutes"
+            height={28}
+          />
+        }
       />
       <Stat
         label="Failure rate"
         value={lastFail === undefined ? '…' : `${lastFail}%`}
-        detail={<Sparkline points={failPoints} ariaLabel="Failure rate, last 15 minutes" height={28} />}
+        detail={
+          <Sparkline points={failPoints} ariaLabel="Failure rate, last 15 minutes" height={28} />
+        }
       />
     </Stats>
   );
@@ -205,11 +213,11 @@ function useStream<T, S>(
 
 function LiveDeployments({ client }: { client: DeployClient }) {
   const open = useCallback((s: AbortSignal) => client.watchDeployments(s), [client]);
-  const { state: deployments, error, loaded } = useStream<DeployEvent, Deployment[]>(
-    open,
-    applyEvent,
-    [],
-  );
+  const {
+    state: deployments,
+    error,
+    loaded,
+  } = useStream<DeployEvent, Deployment[]>(open, applyEvent, []);
   const reduced = useReducedMotion();
   const now = useNow(deployments.some((d) => d.state === 'running' || d.state === 'rolling_back'));
   const [logs, setLogs] = useState<{ deployment: Deployment; stage: StageKind }>();
@@ -226,13 +234,20 @@ function LiveDeployments({ client }: { client: DeployClient }) {
     [deployments],
   );
 
+  const [rollingBack, setRollingBack] = useState(false);
+
   const rollback = async (d: Deployment) => {
+    // One request at a time: a second click would race the first and report a false failure.
+    if (rollingBack) return;
+    setRollingBack(true);
     setRollbackError(undefined);
     try {
       await client.rollback(d.id);
       setConfirm(undefined);
     } catch (e) {
       setRollbackError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRollingBack(false);
     }
   };
 
@@ -243,7 +258,12 @@ function LiveDeployments({ client }: { client: DeployClient }) {
       </Notice>
     );
   }
-  if (!loaded) return <p className="lc-muted" role="status">Loading deployments…</p>;
+  if (!loaded)
+    return (
+      <p className="lc-muted" role="status">
+        Loading deployments…
+      </p>
+    );
   if (deployments.length === 0) {
     return <Empty title="No deployments yet">A push to a tracked branch starts one.</Empty>;
   }
@@ -259,7 +279,9 @@ function LiveDeployments({ client }: { client: DeployClient }) {
               title={`${d.service} ${d.version}`}
               actions={
                 <>
-                  <StatusTag status={statusTone(d.state)}>{DEPLOYMENT_STATE_LABEL[d.state]}</StatusTag>{' '}
+                  <StatusTag status={statusTone(d.state)}>
+                    {DEPLOYMENT_STATE_LABEL[d.state]}
+                  </StatusTag>{' '}
                   {canRollback(d) && (
                     <Button variant="secondary" size="sm" onClick={() => setConfirm(d)}>
                       Roll back to {d.previousVersion}
@@ -297,8 +319,13 @@ function LiveDeployments({ client }: { client: DeployClient }) {
               <Button variant="quiet" onClick={() => setConfirm(undefined)}>
                 Cancel
               </Button>
-              <Button variant="danger" onClick={() => void rollback(confirm)}>
-                Roll back
+              <Button
+                variant="danger"
+                disabled={rollingBack}
+                aria-busy={rollingBack}
+                onClick={() => void rollback(confirm)}
+              >
+                {rollingBack ? 'Rolling back…' : 'Roll back'}
               </Button>
             </>
           )
@@ -399,11 +426,11 @@ const SECRET_COLUMNS: Column<SecretEvent>[] = [
 
 function Promotions({ client }: { client: DeployClient }) {
   const open = useCallback((s: AbortSignal) => client.watchPromotions(s), [client]);
-  const { state: promotions, error, loaded } = useStream<Promotion[], Promotion[]>(
-    open,
-    keepLatest,
-    [],
-  );
+  const {
+    state: promotions,
+    error,
+    loaded,
+  } = useStream<Promotion[], Promotion[]>(open, keepLatest, []);
   const reduced = useReducedMotion();
   if (error) {
     return (
@@ -412,7 +439,12 @@ function Promotions({ client }: { client: DeployClient }) {
       </Notice>
     );
   }
-  if (!loaded) return <p className="lc-muted" role="status">Loading promotions…</p>;
+  if (!loaded)
+    return (
+      <p className="lc-muted" role="status">
+        Loading promotions…
+      </p>
+    );
   if (promotions.length === 0) {
     return <Empty title="Nothing in flight">A workspace shows here once it asks for review.</Empty>;
   }
@@ -436,7 +468,12 @@ function Promotions({ client }: { client: DeployClient }) {
               <Badge>{p.workspace}</Badge>
               {summary && <span>Env and secrets: {summary}</span>}
             </p>
-            <PipelineCanvas label={`${p.title} promotion`} nodes={graph.nodes} edges={graph.edges} height={230} />
+            <PipelineCanvas
+              label={`${p.title} promotion`}
+              nodes={graph.nodes}
+              edges={graph.edges}
+              height={230}
+            />
             {p.secretEvents.length > 0 && (
               <Table
                 caption={`Env and secret changes for ${p.title} (key names only)`}
@@ -483,7 +520,12 @@ function Timeline({ client }: { client: DeployClient }) {
       </Notice>
     );
   }
-  if (!history) return <p className="lc-muted" role="status">Loading the timeline…</p>;
+  if (!history)
+    return (
+      <p className="lc-muted" role="status">
+        Loading the timeline…
+      </p>
+    );
   return (
     <div className="ld-charts">
       <Card title="Deploy frequency">
