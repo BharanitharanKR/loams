@@ -97,7 +97,7 @@ Only the `tailscale` service is reachable from outside the compose network. Noth
 
 ## Quick start: fully local
 
-You need Docker with the Compose plugin (v2.20 or later, for `include`), several GB of free
+You need Docker with the Compose plugin (v2.20.3 or later, for `include`), several GB of free
 memory (TiKV, TiDB and the Postgres stack are the large ones), and the Tailscale client on the
 machine whose browser you will use.
 
