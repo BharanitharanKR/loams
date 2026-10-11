@@ -8,9 +8,10 @@
 //!   contents under one content-derived name is corruption).
 //! - A larger blob is written with an unconditional multipart upload: two
 //!   writers of one content name write identical bytes, so either outcome
-//!   is correct. A store whose multipart completion is not known to be
-//!   atomic (RustFS until Q385 is confirmed) refuses it with
+//!   is correct. A store marked as not completing multipart uploads
+//!   atomically ([`StoreBlobStore::with_atomic_multipart`]) refuses it with
 //!   [`BlobError::TooLarge`], because a reader could see a partial object.
+//!   RustFS 1.0.0 was checked and is atomic (Q385, ruling T6.2).
 //! - Transient store errors are retried three times (50, 200 and 800 ms,
 //!   jittered). A retried create-only PUT whose first attempt was applied
 //!   finds the name taken and answers `Existed`.
@@ -113,11 +114,11 @@ pub enum BlobError {
         /// The blob.
         id: BlobId,
     },
-    /// A blob over the multipart threshold on a store whose multipart
-    /// completion is not known to be atomic (Ruling 1, Q385).
+    /// A blob over the multipart threshold on a store configured as not
+    /// completing multipart uploads atomically (Ruling 1).
     #[error(
-        "blob {id} has {len} bytes, more than the {max} this store accepts until its multipart \
-         completion is confirmed atomic (Q385)"
+        "blob {id} has {len} bytes, more than the {max} this store accepts: it is configured as \
+         not completing multipart uploads atomically"
     )]
     TooLarge {
         /// The blob.
@@ -214,8 +215,9 @@ impl StoreBlobStore {
 
     /// Declares whether the store completes a multipart upload atomically,
     /// so no reader sees part of the object. S3, R2, GCS and Azure document
-    /// it; RustFS is unconfirmed (Q385). When `false`, blobs over 64 MiB are
-    /// refused with [`BlobError::TooLarge`] (Ruling 1).
+    /// it, and RustFS 1.0.0 was checked (Q385, ruling T6.2). When `false`,
+    /// blobs over 64 MiB are refused with [`BlobError::TooLarge`] (Ruling 1):
+    /// for a store not known to be atomic.
     pub fn with_atomic_multipart(mut self, atomic: bool) -> Self {
         self.atomic_multipart = atomic;
         self
