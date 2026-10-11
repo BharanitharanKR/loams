@@ -36,12 +36,6 @@ const MAX_INPUT_BYTES: usize = 64 * 1024;
 const MAX_REPLAY_BYTES: usize = 1024 * 1024;
 const EXITED_TTL: Duration = Duration::from_secs(30 * 60);
 const REAPER_INTERVAL: Duration = Duration::from_secs(60);
-/// How long a typed action bootstrap waits for the shell's line editor before
-/// it is typed ahead anyway (a shell that never leaves canonical mode).
-#[cfg(not(windows))]
-const BOOTSTRAP_PROMPT_WAIT: Duration = Duration::from_secs(3);
-#[cfg(not(windows))]
-const BOOTSTRAP_POLL: Duration = Duration::from_millis(10);
 
 struct LiveTerminal {
     // Keep the private action script alive until the shell exits or the tab is closed.
@@ -252,12 +246,8 @@ impl Terminals {
         self.open_session(cwd, cols, rows, shell, environment, None)
     }
 
-    /// Run an exact command in a fresh interactive login shell. On Unix the
-    /// command goes in a private script that the shell sources after its login
-    /// files: through `ENV` (POSIX `sh` family), `--init-command` (fish), or a
-    /// short bootstrap typed once the line editor is reading (bash, zsh; see
-    /// [`deliver_bootstrap`]). Typed ahead blindly, a login profile that
-    /// flushes pending tty input would drop it.
+    /// Run an exact command in a fresh interactive login shell. On Unix, only a
+    /// short bootstrap crosses the PTY's limited initial canonical line buffer.
     pub fn open_with_command(
         &self,
         cwd: &str,
@@ -308,41 +298,19 @@ impl Terminals {
 
         #[cfg(windows)]
         let (initial_script, bootstrap) = (None, command.map(|command| format!("{command}\r")));
-        // The action must not be typed ahead while the login profile runs: a
-        // profile step that flushes or resets the tty (`tcflush`, a
-        // `TCSAFLUSH` mode change, a terminal reset) silently discards pending
-        // input. Where the shell offers a startup hook that runs after its
-        // login files, the action goes through it instead: POSIX `sh`-family
-        // shells source `$ENV` (unless the user has one), and fish runs
-        // `--init-command`. Other shells (bash, zsh) get the bootstrap typed
-        // once their line editor is reading; see [`deliver_bootstrap`].
-        #[cfg(not(windows))]
-        let delivery = match shell_name.as_str() {
-            "sh" | "dash" | "ash" | "ksh" | "mksh"
-                if !environment.contains_key("ENV") && std::env::var_os("ENV").is_none() =>
-            {
-                Delivery::Env
-            }
-            "fish" => Delivery::InitCommand,
-            _ => Delivery::Typed,
-        };
         #[cfg(not(windows))]
         let (initial_script, bootstrap) = if let Some(command) = command {
             let (suffix, source) = match shell_name.as_str() {
-                "fish" => (".fish", "source \"$LOAMS_DESKTOP_ACTION_SCRIPT\""),
-                _ => (".sh", ". \"$LOAMS_DESKTOP_ACTION_SCRIPT\""),
+                "fish" => (".fish", "source \"$LOAMS_DESKTOP_ACTION_SCRIPT\"\r"),
+                _ => (".sh", ". \"$LOAMS_DESKTOP_ACTION_SCRIPT\"\r"),
             };
             let mut script = tempfile::Builder::new()
                 .prefix("loams-desktop-action-")
                 .suffix(suffix)
                 .tempfile()?;
-            if delivery == Delivery::Env {
-                // Nested interactive shells must not run the action again.
-                script.write_all(b"unset ENV\n")?;
-            }
             script.write_all(command.as_bytes())?;
             script.flush()?;
-            (Some(script), Some(source))
+            (Some(script), Some(source.to_string()))
         } else {
             (None, None)
         };
@@ -358,12 +326,8 @@ impl Terminals {
                 .openpty(clamp_size(cols, rows))
                 .map_err(|e| EngineError::Other(format!("could not open a pty: {e}")))?;
             let mut cmd = CommandBuilder::new(&shell);
-            cmd.arg("-l"); // login shell — the user's real PATH/profile
-            if let Some(source) = bootstrap
-                && delivery == Delivery::InitCommand
-            {
-                cmd.arg("--init-command");
-                cmd.arg(source);
+            if !cfg!(windows) {
+                cmd.arg("-l"); // login shell — the user's real PATH/profile
             }
             cmd.cwd(cwd);
             cmd.env("TERM", "xterm-256color");
@@ -374,9 +338,6 @@ impl Terminals {
             }
             if let Some(script) = initial_script.as_ref() {
                 cmd.env("LOAMS_DESKTOP_ACTION_SCRIPT", script.path());
-                if delivery == Delivery::Env {
-                    cmd.env("ENV", script.path());
-                }
             }
             let child = pair
                 .slave
@@ -454,21 +415,11 @@ impl Terminals {
         };
         tokio::spawn(pump_output(Arc::downgrade(&session), raw_rx, wait));
 
-        #[cfg(windows)]
         if let Some(bootstrap) = bootstrap
             && let Err(err) = self.write_bytes(&id, bootstrap.as_bytes())
         {
             let _ = self.close(&id);
             return Err(err);
-        }
-        #[cfg(not(windows))]
-        if let Some(source) = bootstrap
-            && delivery == Delivery::Typed
-        {
-            tokio::spawn(deliver_bootstrap(
-                Arc::downgrade(&session),
-                format!("{source}\r").into_bytes(),
-            ));
         }
 
         Ok(TerminalSession {
@@ -526,7 +477,20 @@ impl Terminals {
         if bytes.len() > MAX_INPUT_BYTES {
             return Err(EngineError::Other("Terminal input is too large".into()));
         }
-        write_to(&mut lock(&*self.session(terminal_id)?), bytes)
+        let session = self.session(terminal_id)?;
+        let mut session = lock(&session);
+        if session.exited {
+            return Err(EngineError::Other("Terminal has exited".into()));
+        }
+        session.last_active_at = std::time::Instant::now();
+        let writer = session
+            .writer
+            .as_mut()
+            .ok_or_else(|| EngineError::Other("Terminal has exited".into()))?;
+        writer
+            .write_all(bytes)
+            .and_then(|_| writer.flush())
+            .map_err(|e| EngineError::Other(format!("Terminal write failed: {e}")))
     }
 
     pub fn resize(&self, terminal_id: &str, cols: u16, rows: u16) -> Result<(), EngineError> {
@@ -571,81 +535,6 @@ impl Terminals {
             dispose(&session, true);
         }
     }
-}
-
-fn write_to(session: &mut LiveTerminal, bytes: &[u8]) -> Result<(), EngineError> {
-    if session.exited {
-        return Err(EngineError::Other("Terminal has exited".into()));
-    }
-    session.last_active_at = std::time::Instant::now();
-    let writer = session
-        .writer
-        .as_mut()
-        .ok_or_else(|| EngineError::Other("Terminal has exited".into()))?;
-    writer
-        .write_all(bytes)
-        .and_then(|_| writer.flush())
-        .map_err(|e| EngineError::Other(format!("Terminal write failed: {e}")))
-}
-
-/// How a Unix action command reaches its fresh login shell.
-#[cfg(not(windows))]
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Delivery {
-    /// The shell sources the action script named by `$ENV`.
-    Env,
-    /// fish sources it from `--init-command`, after its config files.
-    InitCommand,
-    /// A bootstrap that sources it is typed into the PTY.
-    Typed,
-}
-
-/// Type the action bootstrap once the shell is reading its first command line.
-///
-/// Typed straight after spawn, the bootstrap is typeahead while the login
-/// profile runs, and a profile step that flushes or resets the tty (`tcflush`,
-/// a `TCSAFLUSH` mode change, a terminal reset) silently discards it. Line
-/// editors (bash readline, zsh ZLE) take the PTY out of canonical mode when
-/// they start reading, after the profile, so wait for that. (fish does too,
-/// but earlier, to query the terminal; it uses `--init-command` instead.) A shell that
-/// never leaves canonical mode gets the bootstrap typed after
-/// [`BOOTSTRAP_PROMPT_WAIT`], as before. A closed or exited terminal drops it.
-#[cfg(not(windows))]
-async fn deliver_bootstrap(session: Weak<Mutex<LiveTerminal>>, bootstrap: Vec<u8>) {
-    let deadline = tokio::time::Instant::now() + BOOTSTRAP_PROMPT_WAIT;
-    while !try_deliver_bootstrap(
-        &session,
-        &bootstrap,
-        tokio::time::Instant::now() >= deadline,
-    ) {
-        tokio::time::sleep(BOOTSTRAP_POLL).await;
-    }
-}
-
-/// One poll of [`deliver_bootstrap`]; `true` once it is written or moot.
-#[cfg(not(windows))]
-fn try_deliver_bootstrap(
-    session: &Weak<Mutex<LiveTerminal>>,
-    bootstrap: &[u8],
-    late: bool,
-) -> bool {
-    let Some(session) = session.upgrade() else {
-        return true;
-    };
-    let mut session = lock(&session);
-    let Some(master) = session.master.as_ref() else {
-        return true;
-    };
-    let canonical = master
-        .get_termios()
-        .is_none_or(|termios| termios.local_flags.bits() & libc::ICANON != 0);
-    if canonical && !late {
-        return false;
-    }
-    if let Err(err) = write_to(&mut session, bootstrap) {
-        tracing::debug!(error = %err, "terminal action bootstrap was not delivered");
-    }
-    true
 }
 
 fn dispose(session: &Arc<Mutex<LiveTerminal>>, kill: bool) -> bool {
@@ -1272,9 +1161,8 @@ mod initial_command_tests {
             if !std::path::Path::new(shell).exists() {
                 continue;
             }
-            // Start the shell late through a wrapper, whose name also takes
-            // the typed path: the PTY stays canonical for a while, and only the
-            // short bootstrap, never the long command, crosses its line buffer.
+            // Deliberately leave the PTY in canonical mode while the bootstrap
+            // is written, instead of relying on a scheduler-dependent race.
             let wrapper = root.path().join("slow-shell");
             std::fs::write(
                 &wrapper,
@@ -1357,135 +1245,14 @@ mod initial_command_tests {
         assert_eq!(session.shell, "sh");
         let output = root.path().join("result");
         let expected = format!("{0}|{0}", home.display());
-        // The override shell ran with the isolated HOME and ZDOTDIR.
-        wait_for_file(&terminals, &session.id, &output, &expected).await;
-        terminals.close(&session.id).unwrap();
-    }
-
-    #[tokio::test]
-    async fn bootstrap_survives_a_login_profile_that_flushes_typeahead() {
-        if which("python3").is_none() {
-            return;
-        }
-        // Model a login profile that discards pending tty input (as `tcflush`,
-        // a `TCSAFLUSH` mode change or a terminal reset does) after a delay
-        // in which a blindly typed bootstrap would already be pending.
-        let flush =
-            "sleep 0.3\npython3 -c 'import termios; termios.tcflush(0, termios.TCIFLUSH)'\n";
-        let terminals = Terminals::new();
-        for shell in ["/bin/sh", "/bin/bash", "/bin/zsh", "/usr/bin/fish"] {
-            if !std::path::Path::new(shell).exists() {
-                continue;
-            }
-            let root = tempfile::tempdir().unwrap();
-            let home = root.path().join("home");
-            let fish_config = home.join(".config/fish");
-            std::fs::create_dir_all(&fish_config).unwrap();
-            std::fs::write(home.join(".profile"), flush).unwrap();
-            // zsh: skip the global rc files (Ubuntu compinit may prompt) and
-            // the new-user wizard; its login profile flushes like the others.
-            std::fs::write(home.join(".zshenv"), "setopt no_global_rcs\n").unwrap();
-            std::fs::write(home.join(".zprofile"), flush).unwrap();
-            std::fs::write(home.join(".zshrc"), "").unwrap();
-            std::fs::write(fish_config.join("config.fish"), flush).unwrap();
-            let home = home.to_str().unwrap().to_string();
-            let environment = HashMap::from([
-                ("HOME".to_string(), home.clone()),
-                ("ZDOTDIR".to_string(), home.clone()),
-                ("XDG_CONFIG_HOME".to_string(), format!("{home}/.config")),
-            ]);
-            let session = terminals
-                .open_session(
-                    root.path().to_str().unwrap(),
-                    80,
-                    24,
-                    Some(shell),
-                    &environment,
-                    Some("printf ran > result"),
-                )
-                .unwrap();
-            let fish = shell.ends_with("fish");
-            if fish {
-                answer_terminal_queries(&terminals, &session.id);
-            }
-            let output = root.path().join("result");
-            wait_for_file(&terminals, &session.id, &output, "ran").await;
-            if fish {
-                // fish defers SIGHUP while it queries the terminal after the
-                // init command; let it reach its prompt so close ends it now.
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-            terminals.close(&session.id).unwrap();
-        }
-    }
-
-    /// fish 4 waits for replies to its terminal queries (xterm.js sends them
-    /// in the app): answer cursor position and primary device attributes.
-    fn answer_terminal_queries(terminals: &Terminals, terminal_id: &str) {
-        let mut rx = terminals
-            .subscribe(terminal_id, None)
-            .expect("subscribe to the terminal");
-        let (terminals, terminal_id) = (terminals.clone(), terminal_id.to_string());
-        tokio::spawn(async move {
-            while let Some(event) = rx.recv().await {
-                let TerminalEvent::Data { data, .. } = event else {
-                    continue;
-                };
-                let printed =
-                    String::from_utf8_lossy(&BASE64.decode(data).expect("base64 terminal output"))
-                        .into_owned();
-                if printed.contains("\x1b[6n") {
-                    let _ = terminals.write_bytes(&terminal_id, b"\x1b[1;1R");
-                }
-                if printed.contains("\x1b[0c") {
-                    let _ = terminals.write_bytes(&terminal_id, b"\x1b[?62;22c");
-                }
-            }
-        });
-    }
-
-    fn which(program: &str) -> Option<std::path::PathBuf> {
-        std::env::split_paths(&std::env::var_os("PATH")?)
-            .map(|dir| dir.join(program))
-            .find(|path| path.is_file())
-    }
-
-    /// Wait for `path` to hold `expected`; on timeout, fail with what the
-    /// terminal printed so a CI-only failure shows the shell's side.
-    async fn wait_for_file(
-        terminals: &Terminals,
-        terminal_id: &str,
-        path: &std::path::Path,
-        expected: &str,
-    ) {
-        let waited = tokio::time::timeout(Duration::from_secs(10), async {
-            while std::fs::read_to_string(path).ok().as_deref() != Some(expected) {
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while std::fs::read_to_string(&output).ok().as_deref() != Some(expected.as_str()) {
                 tokio::time::sleep(Duration::from_millis(20)).await;
             }
         })
-        .await;
-        if waited.is_err() {
-            let mut rx = terminals
-                .subscribe(terminal_id, None)
-                .expect("subscribe to the terminal");
-            let mut printed = Vec::new();
-            while let Ok(event) = rx.try_recv() {
-                match event {
-                    TerminalEvent::Data { data, .. } => {
-                        printed.extend(BASE64.decode(data).unwrap_or_default())
-                    }
-                    TerminalEvent::Exit { exit_code, .. } => {
-                        printed.extend(format!("<exit {exit_code}>").into_bytes())
-                    }
-                }
-            }
-            panic!(
-                "expected {expected:?} in {}, found {:?}; terminal printed {:?}",
-                path.display(),
-                std::fs::read_to_string(path).ok(),
-                String::from_utf8_lossy(&printed),
-            );
-        }
+        .await
+        .expect("the override shell ran with the isolated HOME and ZDOTDIR");
+        terminals.close(&session.id).unwrap();
     }
 
     #[tokio::test]
