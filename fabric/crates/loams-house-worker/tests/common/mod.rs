@@ -60,6 +60,7 @@ pub fn statement(sql: &str, format: &str) -> Execute {
         limits: Limits::default(),
         input: None,
         output: Output::Blocks,
+        database: None,
     }
 }
 

@@ -13,9 +13,15 @@ publish = false
 # iceberg's Arrow API is re-exported, so arrow 58 never meets the workspace's
 # arrow 59 in a signature (R0.3; `arrow_58_stays_in_the_lake` checks the graph).
 iceberg.workspace = true
+# The manifest and manifest list an append writes, as bytes for the caller's
+# store.
+bytes.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 [lints]
 workspace = true

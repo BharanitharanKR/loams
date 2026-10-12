@@ -448,9 +448,10 @@ pub const HOST_FUNCTIONS: &[HostFunction] = &[
 /// the namespace's own objects, and generators. The rest describe the host
 /// (`disks`, `server_settings`, `asynchronous_metrics`, `macros`,
 /// `user_directories`, `certificates`, `stack_trace`, …) or the engine's
-/// internals, and are `344` (§49 §13.1). `databases`, `tables`, `columns` and
-/// `parts` become Loams's own in HS1 Task 11. `information_schema` is allowed
-/// whole: its views name only these.
+/// internals, and are `344` (§49 §13.1). `databases`, `tables`, `columns`,
+/// `parts`, `processes` and `errors` are the House's own ([`crate::system`],
+/// HS1 Task 11). `information_schema` is allowed whole: its views name only
+/// these (chDB's, which list the worker's views of the statement).
 pub const ALLOWED_SYSTEM_TABLES: &[&str] = &[
     "one",
     "numbers",
@@ -485,9 +486,9 @@ pub const ALLOWED_SYSTEM_TABLES: &[&str] = &[
     "metrics",
 ];
 
-/// The database a session reads in chDB, which `merge()` may name: `default`
-/// until HS1 Task 11 builds the catalog's databases as views in the worker
-/// (Task 10 keeps them in the catalog only).
+/// The database `merge()` may name besides the current one. HS1 Task 11 builds
+/// every catalog database as views in the worker, but only for the statement
+/// that names it; `merge(db, …)` of another database stays refused.
 pub const OWN_DATABASE: &str = "default";
 
 /// The statements an `EXPLAIN AST` may open with (fix round 1): what the surface
@@ -670,6 +671,9 @@ pub enum Node {
     Engine(String),
     /// An identifier, possibly qualified (`system.disks`).
     Identifier(String),
+    /// A table an `EXPLAIN AST` names (`TableIdentifier`), possibly qualified:
+    /// checked as an identifier, and what HS1 Task 11's reads pin.
+    Table(String),
     /// A literal, as written (`'default'`, `UInt64_1`).
     Constant(String),
     /// The names of a `SETTINGS` clause (query tree only).
@@ -812,7 +816,11 @@ impl QueryTree {
                 let name = name.strip_suffix(')').map_or(name, |n| {
                     n.rsplit_once(" (children ").map_or(name, |(n, _)| n)
                 });
-                return Node::Identifier(name.to_string());
+                return if prefix == "TableIdentifier " {
+                    Node::Table(name.to_string())
+                } else {
+                    Node::Identifier(name.to_string())
+                };
             }
         }
         if let Some(rest) = label.strip_prefix("Literal ") {
@@ -828,7 +836,7 @@ impl QueryTree {
 
     /// The argument nodes of a function or table function: an AST
     /// `ExpressionList`'s children, or a query tree's `ARGUMENTS` → `LIST`'s.
-    fn arguments(&self, at: usize) -> Vec<usize> {
+    pub(crate) fn arguments(&self, at: usize) -> Vec<usize> {
         let children = |of: usize| {
             self.entries
                 .iter()
@@ -972,7 +980,7 @@ pub fn check(tree: &QueryTree) -> Result<(), ChError> {
                 }
             }
             Node::Engine(name) => check_engine(name, !tree.shared_create)?,
-            Node::Identifier(name) => check_identifier(name)?,
+            Node::Identifier(name) | Node::Table(name) => check_identifier(name)?,
             Node::Settings(names) => {
                 if let Some(name) = names.iter().find(|n| is_denied_setting(n)) {
                     return Err(setting_refused(name));

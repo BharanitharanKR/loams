@@ -124,6 +124,12 @@ pub struct Worker {
     bound: Option<Bind>,
     sessions: HashMap<String, SessionSlot>,
     ready: Ready,
+    /// Whether this worker is its engine's only user (its own process), so it
+    /// may drop every view database between statements (HS1 Task 11). In-process
+    /// workers share one engine and never do.
+    owns_engine: bool,
+    /// Whether the last statement left read views behind.
+    views_live: bool,
 }
 
 /// The engine configuration a worker with these arguments runs.
@@ -151,7 +157,9 @@ impl Worker {
         // the working directory, so it is the worker's own.
         std::env::set_current_dir(args.files_dir())
             .map_err(|err| loams_error("CANNOT_CHDIR", err))?;
-        Self::boot_on(engine_config(args), started)
+        let mut worker = Self::boot_on(engine_config(args), started)?;
+        worker.ready.s3_endpoint = args.s3_endpoint.clone();
+        Ok(worker)
     }
 
     /// Starts (or joins) the engine `config` describes and prepares a worker on it.
@@ -177,6 +185,7 @@ impl Worker {
             clickhouse_version: engine.version().to_string(),
             boot_ms: u32::try_from(started.elapsed().as_millis()).unwrap_or(u32::MAX),
             settings,
+            s3_endpoint: None,
         };
         Ok(Self {
             engine,
@@ -184,6 +193,8 @@ impl Worker {
             bound: None,
             sessions: HashMap::new(),
             ready,
+            owns_engine: false,
+            views_live: false,
         })
     }
 
@@ -198,6 +209,7 @@ impl Worker {
         R: Read + Send + 'static,
         W: Write,
     {
+        self.owns_engine = matches!(hosting, Hosting::Process(_));
         let frames = spawn_reader(reader, hosting);
         if let Err(err) = send(&mut writer, &Frame::Ready(self.ready.clone())) {
             return err;
@@ -321,6 +333,16 @@ impl Worker {
             *input_failure = Some(true);
         }
 
+        // The read views of §49 §7 are the statement's own (HS1 Task 11): what an
+        // earlier statement made is gone before this one's are made, so a name it
+        // does not name, or a pin it did not take, is never read.
+        if self.owns_engine && self.views_live {
+            drop_views(&self.control).map_err(|err| Failure::Engine(engine_error(&err)))?;
+            self.views_live = false;
+        }
+        if !execute.views.is_empty() {
+            self.views_live = true;
+        }
         for view in &execute.views {
             self.control
                 .execute_simple(view)
@@ -330,6 +352,7 @@ impl Worker {
         let now = Instant::now();
         let Some(spec) = &execute.session else {
             let fresh = self.user_connection(&execute.query_id)?;
+            use_database(&fresh, execute)?;
             apply_settings(&fresh, &bind, execute)?;
             return statement(&fresh, execute, frames, writer, input_failure);
         };
@@ -375,7 +398,8 @@ impl Worker {
             .filter(|name| is_setting_name(name))
             .collect();
         let before = snapshot(&slot.session, &names);
-        let applied_ok = apply_settings(&slot.session, &bind, execute);
+        let applied_ok = use_database(&slot.session, execute)
+            .and_then(|()| apply_settings(&slot.session, &bind, execute));
         let applied = snapshot(&slot.session, &names);
         let result = match applied_ok {
             Ok(()) => statement(&slot.session, execute, frames, writer, input_failure),
@@ -693,6 +717,67 @@ fn restore(
         }
     }
     true
+}
+
+/// The databases a worker never drops: the engine's own and `default`, which
+/// it empties instead (a dropped `default` breaks later connects, R1.9).
+const KEPT_DATABASES: &[&str] = &[
+    "system",
+    "information_schema",
+    "INFORMATION_SCHEMA",
+    "default",
+    "_temporary_and_external_tables",
+];
+
+/// A name in backquotes.
+fn quoted_name(name: &str) -> String {
+    format!("`{}`", name.replace('\\', "\\\\").replace('`', "\\`"))
+}
+
+/// Drops every read view an earlier statement made (HS1 Task 11): the views in
+/// `default` and every other `Memory` database the front created. Session
+/// temporary tables live elsewhere and stay.
+pub fn drop_views(control: &Session) -> Result<(), ChdbError> {
+    let names = |sql: &str| -> Result<Vec<String>, ChdbError> {
+        let bytes = control.query(sql, "TSVRaw", &[])?;
+        Ok(String::from_utf8_lossy(&bytes)
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect())
+    };
+    let kept = KEPT_DATABASES
+        .iter()
+        .map(|d| format!("'{d}'"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    for database in names(&format!(
+        "SELECT name FROM system.databases WHERE engine = 'Memory' AND name NOT IN ({kept})"
+    ))? {
+        control.execute_simple(&format!(
+            "DROP DATABASE IF EXISTS {}",
+            quoted_name(&database)
+        ))?;
+    }
+    for table in
+        names("SELECT name FROM system.tables WHERE database = 'default' AND NOT is_temporary")?
+    {
+        control.execute_simple(&format!(
+            "DROP TABLE IF EXISTS default.{}",
+            quoted_name(&table)
+        ))?;
+    }
+    Ok(())
+}
+
+/// `USE` the statement's database on its user connection (HS1 Task 11).
+fn use_database(session: &Session, execute: &Execute) -> Result<(), Failure> {
+    let Some(database) = &execute.database else {
+        return Ok(());
+    };
+    session
+        .execute_simple(&format!("USE {}", quoted_name(database)))
+        .map_err(|err| Failure::Engine(engine_error(&err)))
 }
 
 /// `DROP DATABASE default; CREATE DATABASE default ENGINE = Memory`, once.

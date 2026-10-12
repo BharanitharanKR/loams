@@ -81,6 +81,9 @@ loams-house-cache = { path = "../loams-house-cache" }
 loams-cache = { path = "../../../crates/loams-cache" }
 # `lake.rs` (HS1 Task 10): the catalog's Iceberg metadata, read back.
 loams-house-lake = { path = "../loams-house-lake" }
+# `read.rs` (HS1 Task 11): data files written to a `file://` bucket that the
+# catalog and `house-cache` share.
+loams-store = { path = "../../../crates/loams-store" }
 
 [lints]
 workspace = true

@@ -901,6 +901,129 @@ pub fn parse_show_create(text: &str) -> Option<Object> {
     c.done().then_some(object)
 }
 
+/// A `LIKE` filter of a `SHOW` statement.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShowLike {
+    /// `NOT LIKE`.
+    pub not: bool,
+    /// `ILIKE`.
+    pub insensitive: bool,
+    /// The pattern.
+    pub pattern: String,
+}
+
+/// A `SHOW` statement ClickHouse answers from a `system` table the House
+/// replaces (HS1 Task 11).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ShowList {
+    /// `SHOW [FULL] TABLES [FROM | IN db] [[NOT] [I]LIKE 'p' | WHERE expr] [LIMIT n]`.
+    Tables {
+        /// `FULL`: the engine too.
+        full: bool,
+        /// The database (the current one when absent).
+        from: Option<String>,
+        /// The `LIKE` filter.
+        like: Option<ShowLike>,
+        /// A `WHERE` expression, as written.
+        filter: Option<String>,
+        /// `LIMIT`, as written.
+        limit: Option<String>,
+    },
+    /// `SHOW DATABASES [[NOT] [I]LIKE 'p'] [LIMIT n]`.
+    Databases {
+        /// The `LIKE` filter.
+        like: Option<ShowLike>,
+        /// `LIMIT`, as written.
+        limit: Option<String>,
+    },
+    /// `SHOW [FULL] PROCESSLIST`.
+    Processlist,
+}
+
+/// The `SHOW` forms of [`ShowList`]; `None` for any other (chDB's, or a form the
+/// deny list refuses). `Some(Err)` for one of these forms that cannot be read.
+pub fn parse_show_list(text: &str) -> Option<Result<ShowList, HouseError>> {
+    let mut c = Cursor::new(text);
+    if !c.eat("SHOW") {
+        return None;
+    }
+    let full = c.eat("FULL");
+    if c.eat("PROCESSLIST") {
+        return Some(if c.done() {
+            Ok(ShowList::Processlist)
+        } else {
+            Err(syntax("Unexpected text after SHOW PROCESSLIST"))
+        });
+    }
+    let tables = c.is_word_at(c.at, "TABLES");
+    let databases = !full && c.is_word_at(c.at, "DATABASES");
+    if !tables && !databases {
+        return None;
+    }
+    c.at += 1;
+    Some((|| {
+        let mut from = None;
+        if tables && (c.eat("FROM") || c.eat("IN")) {
+            from = Some(c.ident()?);
+        }
+        let not = c.eat("NOT");
+        let like = if c.is_word_at(c.at, "LIKE") || c.is_word_at(c.at, "ILIKE") {
+            let insensitive = c.is_word_at(c.at, "ILIKE");
+            c.at += 1;
+            Some(ShowLike {
+                not,
+                insensitive,
+                pattern: c.string()?,
+            })
+        } else if not {
+            return Err(syntax("Expected LIKE or ILIKE after NOT"));
+        } else {
+            None
+        };
+        let mut filter = None;
+        if tables && like.is_none() && c.eat("WHERE") {
+            let start = c.offset();
+            let mut end = c.text.len();
+            while let Some(t) = c.peek() {
+                if t.depth == 0 && c.is_word_at(c.at, "LIMIT") {
+                    end = t.start;
+                    break;
+                }
+                c.at += 1;
+            }
+            let expr = c.text[start..end].trim();
+            if expr.is_empty() {
+                return Err(syntax("Expected an expression after WHERE"));
+            }
+            filter = Some(expr.to_string());
+        }
+        let mut limit = None;
+        if c.eat("LIMIT") {
+            let t = c
+                .peek()
+                .ok_or_else(|| syntax("Expected a number after LIMIT"))?;
+            let raw = c.raw(&t);
+            if !raw.chars().all(|ch| ch.is_ascii_digit()) {
+                return Err(syntax("Expected a number after LIMIT"));
+            }
+            limit = Some(raw.to_string());
+            c.at += 1;
+        }
+        c.expect_end()?;
+        Ok(if tables {
+            ShowList::Tables {
+                full,
+                from,
+                like,
+                filter,
+                limit,
+            }
+        } else {
+            ShowList::Databases { like, limit }
+        })
+    })())
+}
+
 /// `EXISTS [TABLE | DATABASE] name`, or `None` for chDB's forms.
 pub fn parse_exists(text: &str) -> Option<Object> {
     let mut c = Cursor::new(text);
@@ -981,6 +1104,20 @@ fn elements(expr: &str) -> Vec<Element> {
     pieces.into_iter().map(element).collect()
 }
 
+/// A key's elements as written (`ORDER BY (a, toDate(b))` → `a`, `toDate(b)`),
+/// each with the column it is when it is a bare column (HS1 Task 11's `FINAL`
+/// views group and deduplicate by them).
+pub fn key_elements(expr: &str) -> Vec<(String, Option<String>)> {
+    elements(expr)
+        .into_iter()
+        .map(|element| match element {
+            Element::Column(c) => (quote_name(&c), Some(c)),
+            Element::Call(f, c) => (format!("{f}({})", quote_name(&c)), None),
+            Element::Expr(text) => (text, None),
+        })
+        .collect()
+}
+
 fn element(text: &str) -> Element {
     let mut c = Cursor::new(text);
     if let Ok(name) = c.ident() {
@@ -1059,6 +1196,13 @@ impl LakeEngine {
                 ),
             },
         }
+    }
+
+    /// The engine a table's `loams.ch.engine` property names (HS1 Task 11's
+    /// `FINAL` views).
+    pub fn parse(text: &str) -> Result<Self, HouseError> {
+        let (name, args) = engine_clause(text)?;
+        Self::from_clause(&name, &args)
     }
 
     /// Reads an `ENGINE` clause; `48` for an engine that is not Tier 1.

@@ -13,7 +13,10 @@
 //!   metadata (its requirements checked, its updates applied, the metadata log
 //!   kept), and the names of metadata files — what the House's own catalogs (the
 //!   in-memory one and the SQLite one of `--single-node`) do where a REST catalog
-//!   does it server-side.
+//!   does it server-side;
+//! * [`append`]: a fast append of data files as one snapshot (HS1 Task 11's
+//!   minimum, which Task 12's write path extends), and [`files`]: the live
+//!   files of a snapshot, from its manifest list and manifests.
 //!
 //! # arrow 58 stays here (R0.3)
 //!
@@ -22,6 +25,8 @@
 //! names an Arrow type, so the two majors are linked side by side and never meet.
 //! `loams-house`'s `arrow_58_stays_in_the_lake` checks the dependency graph.
 
+pub mod append;
+pub mod files;
 pub mod metadata;
 
 pub use iceberg::spec;
