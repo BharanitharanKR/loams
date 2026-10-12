@@ -2034,7 +2034,9 @@ impl DocHost {
             let dead = match c.status {
                 SessionCommandStatus::Rejected | SessionCommandStatus::Expired => true,
                 SessionCommandStatus::Pending => {
-                    is_processed(&c.id) && !lock(&self.inner.executing).contains(&c.id)
+                    is_processed(&c.id)
+                        && !lock(&self.inner.executing).contains(&c.id)
+                        && Self::still_pending(&handle, &c.id)
                 }
                 _ => false,
             };
@@ -2143,6 +2145,7 @@ impl DocHost {
                     && !skipped.contains(&c.id)
                     && is_processed(&c.id)
                     && !lock(&self.inner.executing).contains(&c.id)
+                    && Self::still_pending(handle, &c.id)
                 {
                     tracing::warn!(chat = %handle.chat_id, command = %c.id,
                         "command consumed but never resolved (crash mid-execute?); rejecting");
@@ -2389,6 +2392,19 @@ impl DocHost {
     }
 
     /// Host-only outcome write (ledger rule 2).
+    /// Whether `command_id` is still `Pending` in the doc *now*. The dead-command
+    /// checks read their snapshot before they look at `executing`, and a drain
+    /// writes the outcome before it leaves `executing`: so a command found not
+    /// executing must be re-read, or a stale `Pending` overwrites the outcome
+    /// another drain just wrote (an Applied answer turned into "interrupted").
+    fn still_pending(handle: &ChatDocHandle, command_id: &str) -> bool {
+        handle.doc.read_commands().is_ok_and(|commands| {
+            commands
+                .iter()
+                .any(|c| c.id == command_id && c.status == SessionCommandStatus::Pending)
+        })
+    }
+
     fn resolve_command(
         &self,
         handle: &ChatDocHandle,
