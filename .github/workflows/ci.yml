@@ -1669,9 +1669,10 @@ jobs:
         working-directory: crates/loams-agentd-rpc
         run: |
           set -euo pipefail
+          host=$(rustc +nightly-2026-09-24 -vV | sed -n 's/^host: //p')  # cargo-fuzz is a musl build; see sqlgate-fuzz
           for t in frame handshake; do
             mkdir -p "fuzz/corpus/$t"
-            cargo +nightly-2026-09-24 fuzz run "$t" "fuzz/corpus/$t" -- -max_total_time=60 -rss_limit_mb=2048
+            cargo +nightly-2026-09-24 fuzz run --target "$host" "$t" "fuzz/corpus/$t" -- -max_total_time=60 -rss_limit_mb=2048
           done
       - name: upload crashing inputs
         if: failure()

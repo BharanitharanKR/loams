@@ -163,12 +163,18 @@ describe('GitPage', () => {
     });
     const searches = () => spy.mock.calls.filter(([r]) => r.query === 'no-such-owner');
     // The first page plus AUTO_SCAN_PAGES continuations, then it waits for the person.
-    const more = await screen.findByRole('button', { name: 'Keep searching' });
+    // The debounced search plus its continuations outlast findBy's 1 s default
+    // on a loaded CI runner.
+    const more = await screen.findByRole('button', { name: 'Keep searching' }, { timeout: 5000 });
     expect(searches()).toHaveLength(1 + AUTO_SCAN_PAGES);
     expect(searches().at(-1)?.[0].pageToken).toBe(`o:${AUTO_SCAN_PAGES * SEARCH_SCAN_WINDOW}`);
     fireEvent.click(more);
-    await waitFor(() => expect(searches()).toHaveLength(1 + 2 * AUTO_SCAN_PAGES));
-    expect(await screen.findByRole('button', { name: 'Keep searching' })).toBeTruthy();
+    await waitFor(() => expect(searches()).toHaveLength(1 + 2 * AUTO_SCAN_PAGES), {
+      timeout: 5000,
+    });
+    expect(
+      await screen.findByRole('button', { name: 'Keep searching' }, { timeout: 5000 }),
+    ).toBeTruthy();
   });
 
   it('workspace_detail_shows_changes_snapshots_and_lazy_files', async () => {
