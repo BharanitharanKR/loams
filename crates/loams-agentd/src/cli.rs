@@ -34,6 +34,15 @@ pub enum Command {
     Mcp(ConfigArg),
     /// Show the daemon directory and whether a daemon is running there.
     Status(ConfigArg),
+    /// Manage the per-user service: a systemd user unit (Linux), a
+    /// LaunchAgent (macOS) or a Run entry (Windows).
+    Service {
+        #[command(subcommand)]
+        command: ServiceCommand,
+    },
+    /// Copy the bundled binaries into the versioned runtime directory, check
+    /// them against SHA256SUMS and switch `current` to them.
+    InstallRuntime(InstallRuntimeArgs),
     /// Print the daemon's version.
     Version,
     /// Loams integration used by the Loams Bot harness (`loams bot-acp`).
@@ -53,14 +62,49 @@ pub enum LoamsCommand {
     BotAcp,
 }
 
+#[derive(Debug, Subcommand)]
+pub enum ServiceCommand {
+    /// Install the service for this config and start it. The runtime must be
+    /// installed first (`install-runtime`).
+    Install(ConfigArg),
+    /// Stop the service and remove it.
+    Uninstall(ConfigArg),
+    /// Start the installed service.
+    Start(ConfigArg),
+    /// Stop the service until the next login or `start`.
+    Stop(ConfigArg),
+    /// Whether the service is installed, and its state.
+    Status(ConfigArg),
+    /// Let the service start at boot and survive logout (Linux:
+    /// `loginctl enable-linger`).
+    EnableLinger,
+    /// Undo `enable-linger`.
+    DisableLinger,
+}
+
+#[derive(Debug, Args)]
+pub struct InstallRuntimeArgs {
+    /// The bundled binaries: `loams-agentd`, `loams`, `SHA256SUMS` and `VERSION`.
+    #[arg(long, value_name = "DIR")]
+    pub from: PathBuf,
+    /// The runtime directory, `<userData>/agentd/runtime`.
+    #[arg(long, value_name = "DIR")]
+    pub to: PathBuf,
+}
+
 #[derive(Debug, Args)]
 pub struct RunArgs {
-    /// Run as the per-user service.
-    #[arg(long, conflicts_with = "child")]
+    /// Run as the per-user service. On Windows this is the parent that runs
+    /// and restarts the `--worker`.
+    #[arg(long, conflicts_with_all = ["child", "worker"])]
     pub service: bool,
     /// Run as Loams Desktop's child process (background agents off).
-    #[arg(long)]
+    #[arg(long, conflicts_with = "worker")]
     pub child: bool,
+    /// Run as the service's worker, under the Windows parent. Elsewhere it
+    /// is the same as `--service`.
+    #[arg(long)]
+    pub worker: bool,
     #[command(flatten)]
     pub config: ConfigArg,
 }
@@ -68,7 +112,7 @@ pub struct RunArgs {
 impl RunArgs {
     /// The mode the flags ask for; `None` leaves it to `config.toml`.
     pub fn mode(&self) -> Option<DaemonMode> {
-        match (self.service, self.child) {
+        match (self.service || self.worker, self.child) {
             (true, _) => Some(DaemonMode::Service),
             (_, true) => Some(DaemonMode::Child),
             _ => None,

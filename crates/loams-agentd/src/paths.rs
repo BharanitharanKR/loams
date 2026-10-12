@@ -6,6 +6,7 @@
 //! config.toml   agentd.json   agentd.token   agentd.lock
 //! store/        the sessions engine's data (DocsStore, journals)
 //! adapters/     managed installs of the harnesses' ACP adapters
+//! runtime/      the installed binaries: <version>/, current (DD1 Task 8)
 //! logs/         the daemon's own log (agentd.log)
 //! ```
 //!
@@ -81,6 +82,12 @@ impl Paths {
     /// the fork used `~/.loams-desktop/adapters`).
     pub fn adapters(&self) -> PathBuf {
         self.dir.join("adapters")
+    }
+
+    /// `runtime/`, the installed binaries (design §50 §5.2), unless
+    /// `[paths] runtime` puts them elsewhere (Windows, T0-7).
+    pub fn runtime(&self) -> PathBuf {
+        self.dir.join("runtime")
     }
 
     pub fn logs(&self) -> PathBuf {
