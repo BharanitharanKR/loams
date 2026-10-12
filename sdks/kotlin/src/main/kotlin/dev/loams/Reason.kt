@@ -92,6 +92,84 @@ enum class Reason {
      */
     FEATURE_NOT_IN_VARIANT,
 
+    /** `house_not_configured` (docs/api/reasons.md). */
+    HOUSE_NOT_CONFIGURED,
+
+    /** `house_syntax_error` (docs/api/reasons.md). */
+    HOUSE_SYNTAX_ERROR,
+
+    /** `house_unknown_table` (docs/api/reasons.md). */
+    HOUSE_UNKNOWN_TABLE,
+
+    /** `house_unknown_database` (docs/api/reasons.md). */
+    HOUSE_UNKNOWN_DATABASE,
+
+    /** `house_access_denied` (docs/api/reasons.md). */
+    HOUSE_ACCESS_DENIED,
+
+    /** `house_read_only` (docs/api/reasons.md). */
+    HOUSE_READ_ONLY,
+
+    /** `house_timeout` (docs/api/reasons.md). */
+    HOUSE_TIMEOUT,
+
+    /** `house_memory_limit` (docs/api/reasons.md). */
+    HOUSE_MEMORY_LIMIT,
+
+    /** `house_too_many_queries` (docs/api/reasons.md). */
+    HOUSE_TOO_MANY_QUERIES,
+
+    /** `house_quota_exceeded` (docs/api/reasons.md). */
+    HOUSE_QUOTA_EXCEEDED,
+
+    /** `house_disabled_function` (docs/api/reasons.md). */
+    HOUSE_DISABLED_FUNCTION,
+
+    /** `house_cancelled` (docs/api/reasons.md). */
+    HOUSE_CANCELLED,
+
+    /** `house_query_not_found` (docs/api/reasons.md). */
+    HOUSE_QUERY_NOT_FOUND,
+
+    /** `house_query_failed` (docs/api/reasons.md). */
+    HOUSE_QUERY_FAILED,
+
+    /** `project_not_found` (docs/api/reasons.md). */
+    PROJECT_NOT_FOUND,
+
+    /** `branch_has_children` (docs/api/reasons.md). */
+    BRANCH_HAS_CHILDREN,
+
+    /** `branch_protected` (docs/api/reasons.md). */
+    BRANCH_PROTECTED,
+
+    /** `lsn_out_of_retention` (docs/api/reasons.md). */
+    LSN_OUT_OF_RETENTION,
+
+    /** `endpoint_exists_for_branch` (docs/api/reasons.md). */
+    ENDPOINT_EXISTS_FOR_BRANCH,
+
+    /** `compute_start_failed` (docs/api/reasons.md). */
+    COMPUTE_START_FAILED,
+
+    /** `quota_exceeded` (docs/api/reasons.md). */
+    QUOTA_EXCEEDED,
+
+    /** `storage_unavailable` (docs/api/reasons.md). */
+    STORAGE_UNAVAILABLE,
+
+    /** `secret_already_issued` (docs/api/reasons.md). */
+    SECRET_ALREADY_ISSUED,
+
+    /** `live_bad_cursor` (docs/api/reasons.md). */
+    LIVE_BAD_CURSOR,
+
+    /** `live_worker_crashed` (docs/api/reasons.md). */
+    LIVE_WORKER_CRASHED,
+
+    /** `live_deploy_conflict` (docs/api/reasons.md). */
+    LIVE_DEPLOY_CONFLICT,
+
     /** A malformed field or an unparseable value. */
     INVALID_ARGUMENT,
 
@@ -168,6 +246,32 @@ object ReasonRegistry {
         Reason.PUSH_TARGET_UNKNOWN,
         Reason.NOT_IMPLEMENTED,
         Reason.FEATURE_NOT_IN_VARIANT,
+        Reason.HOUSE_NOT_CONFIGURED,
+        Reason.HOUSE_SYNTAX_ERROR,
+        Reason.HOUSE_UNKNOWN_TABLE,
+        Reason.HOUSE_UNKNOWN_DATABASE,
+        Reason.HOUSE_ACCESS_DENIED,
+        Reason.HOUSE_READ_ONLY,
+        Reason.HOUSE_TIMEOUT,
+        Reason.HOUSE_MEMORY_LIMIT,
+        Reason.HOUSE_TOO_MANY_QUERIES,
+        Reason.HOUSE_QUOTA_EXCEEDED,
+        Reason.HOUSE_DISABLED_FUNCTION,
+        Reason.HOUSE_CANCELLED,
+        Reason.HOUSE_QUERY_NOT_FOUND,
+        Reason.HOUSE_QUERY_FAILED,
+        Reason.PROJECT_NOT_FOUND,
+        Reason.BRANCH_HAS_CHILDREN,
+        Reason.BRANCH_PROTECTED,
+        Reason.LSN_OUT_OF_RETENTION,
+        Reason.ENDPOINT_EXISTS_FOR_BRANCH,
+        Reason.COMPUTE_START_FAILED,
+        Reason.QUOTA_EXCEEDED,
+        Reason.STORAGE_UNAVAILABLE,
+        Reason.SECRET_ALREADY_ISSUED,
+        Reason.LIVE_BAD_CURSOR,
+        Reason.LIVE_WORKER_CRASHED,
+        Reason.LIVE_DEPLOY_CONFLICT,
         Reason.INVALID_ARGUMENT,
         Reason.NOT_FOUND,
         Reason.ALREADY_EXISTS,
@@ -197,6 +301,32 @@ object ReasonRegistry {
         Reason.PUSH_TARGET_UNKNOWN to "push_target_unknown",
         Reason.NOT_IMPLEMENTED to "not_implemented",
         Reason.FEATURE_NOT_IN_VARIANT to "feature_not_in_variant",
+        Reason.HOUSE_NOT_CONFIGURED to "house_not_configured",
+        Reason.HOUSE_SYNTAX_ERROR to "house_syntax_error",
+        Reason.HOUSE_UNKNOWN_TABLE to "house_unknown_table",
+        Reason.HOUSE_UNKNOWN_DATABASE to "house_unknown_database",
+        Reason.HOUSE_ACCESS_DENIED to "house_access_denied",
+        Reason.HOUSE_READ_ONLY to "house_read_only",
+        Reason.HOUSE_TIMEOUT to "house_timeout",
+        Reason.HOUSE_MEMORY_LIMIT to "house_memory_limit",
+        Reason.HOUSE_TOO_MANY_QUERIES to "house_too_many_queries",
+        Reason.HOUSE_QUOTA_EXCEEDED to "house_quota_exceeded",
+        Reason.HOUSE_DISABLED_FUNCTION to "house_disabled_function",
+        Reason.HOUSE_CANCELLED to "house_cancelled",
+        Reason.HOUSE_QUERY_NOT_FOUND to "house_query_not_found",
+        Reason.HOUSE_QUERY_FAILED to "house_query_failed",
+        Reason.PROJECT_NOT_FOUND to "project_not_found",
+        Reason.BRANCH_HAS_CHILDREN to "branch_has_children",
+        Reason.BRANCH_PROTECTED to "branch_protected",
+        Reason.LSN_OUT_OF_RETENTION to "lsn_out_of_retention",
+        Reason.ENDPOINT_EXISTS_FOR_BRANCH to "endpoint_exists_for_branch",
+        Reason.COMPUTE_START_FAILED to "compute_start_failed",
+        Reason.QUOTA_EXCEEDED to "quota_exceeded",
+        Reason.STORAGE_UNAVAILABLE to "storage_unavailable",
+        Reason.SECRET_ALREADY_ISSUED to "secret_already_issued",
+        Reason.LIVE_BAD_CURSOR to "live_bad_cursor",
+        Reason.LIVE_WORKER_CRASHED to "live_worker_crashed",
+        Reason.LIVE_DEPLOY_CONFLICT to "live_deploy_conflict",
         Reason.INVALID_ARGUMENT to "invalid_argument",
         Reason.NOT_FOUND to "not_found",
         Reason.ALREADY_EXISTS to "already_exists",
@@ -233,6 +363,32 @@ object ReasonRegistry {
         Reason.PUSH_TARGET_UNKNOWN to Code.NOT_FOUND,
         Reason.NOT_IMPLEMENTED to Code.UNIMPLEMENTED,
         Reason.FEATURE_NOT_IN_VARIANT to Code.UNIMPLEMENTED,
+        Reason.HOUSE_NOT_CONFIGURED to Code.UNIMPLEMENTED,
+        Reason.HOUSE_SYNTAX_ERROR to Code.INVALID_ARGUMENT,
+        Reason.HOUSE_UNKNOWN_TABLE to Code.NOT_FOUND,
+        Reason.HOUSE_UNKNOWN_DATABASE to Code.NOT_FOUND,
+        Reason.HOUSE_ACCESS_DENIED to Code.PERMISSION_DENIED,
+        Reason.HOUSE_READ_ONLY to Code.FAILED_PRECONDITION,
+        Reason.HOUSE_TIMEOUT to Code.DEADLINE_EXCEEDED,
+        Reason.HOUSE_MEMORY_LIMIT to Code.RESOURCE_EXHAUSTED,
+        Reason.HOUSE_TOO_MANY_QUERIES to Code.RESOURCE_EXHAUSTED,
+        Reason.HOUSE_QUOTA_EXCEEDED to Code.RESOURCE_EXHAUSTED,
+        Reason.HOUSE_DISABLED_FUNCTION to Code.PERMISSION_DENIED,
+        Reason.HOUSE_CANCELLED to Code.CANCELLED,
+        Reason.HOUSE_QUERY_NOT_FOUND to Code.NOT_FOUND,
+        Reason.HOUSE_QUERY_FAILED to Code.UNKNOWN,
+        Reason.PROJECT_NOT_FOUND to Code.NOT_FOUND,
+        Reason.BRANCH_HAS_CHILDREN to Code.FAILED_PRECONDITION,
+        Reason.BRANCH_PROTECTED to Code.FAILED_PRECONDITION,
+        Reason.LSN_OUT_OF_RETENTION to Code.FAILED_PRECONDITION,
+        Reason.ENDPOINT_EXISTS_FOR_BRANCH to Code.ALREADY_EXISTS,
+        Reason.COMPUTE_START_FAILED to Code.UNAVAILABLE,
+        Reason.QUOTA_EXCEEDED to Code.RESOURCE_EXHAUSTED,
+        Reason.STORAGE_UNAVAILABLE to Code.UNAVAILABLE,
+        Reason.SECRET_ALREADY_ISSUED to Code.FAILED_PRECONDITION,
+        Reason.LIVE_BAD_CURSOR to Code.INVALID_ARGUMENT,
+        Reason.LIVE_WORKER_CRASHED to Code.INTERNAL,
+        Reason.LIVE_DEPLOY_CONFLICT to Code.FAILED_PRECONDITION,
         Reason.INVALID_ARGUMENT to Code.INVALID_ARGUMENT,
         Reason.NOT_FOUND to Code.NOT_FOUND,
         Reason.ALREADY_EXISTS to Code.ALREADY_EXISTS,

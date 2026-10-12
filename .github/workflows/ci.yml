@@ -59,6 +59,12 @@ jobs:
       sdk-cpp: ${{ steps.filter.outputs.sdk-cpp }}
       sdk-csharp: ${{ steps.filter.outputs.sdk-csharp }}
       sdk-swift: ${{ steps.filter.outputs.sdk-swift }}
+      sdk-java: ${{ steps.filter.outputs.sdk-java }}
+      sdk-kotlin: ${{ steps.filter.outputs.sdk-kotlin }}
+      sdk-ruby: ${{ steps.filter.outputs.sdk-ruby }}
+      sdk-php: ${{ steps.filter.outputs.sdk-php }}
+      sdk-dart: ${{ steps.filter.outputs.sdk-dart }}
+      sdk-objc: ${{ steps.filter.outputs.sdk-objc }}
       web: ${{ steps.filter.outputs.web }}
       dapr-edge: ${{ steps.filter.outputs.dapr-edge }}
       spec: ${{ steps.filter.outputs.spec }}
@@ -302,6 +308,56 @@ jobs:
               - "docs/sdk/**"
               - "proto/**"
               - "sdks/swift/**"
+              - "sdks/conformance/**"
+            # API2 Task 19: the wave 2 and 3 SDKs that had no job. Advisory: none
+            # of them is in `required.needs` (API2-Q2).
+            sdk-java:
+              - ".github/workflows/**"
+              - "docs/api/reasons.md"
+              - "docs/sdk/**"
+              - "proto/**"
+              - "sdks/java/**"
+              - "sdks/fixtures/**"
+              - "sdks/conformance/**"
+            sdk-kotlin:
+              - ".github/workflows/**"
+              - "docs/api/reasons.md"
+              - "docs/sdk/**"
+              - "proto/**"
+              - "sdks/kotlin/**"
+              - "sdks/fixtures/**"
+              - "sdks/conformance/**"
+            sdk-ruby:
+              - ".github/workflows/**"
+              - "docs/api/reasons.md"
+              - "docs/sdk/**"
+              - "proto/**"
+              - "sdks/ruby/**"
+              - "sdks/fixtures/**"
+              - "sdks/conformance/**"
+            sdk-php:
+              - ".github/workflows/**"
+              - "docs/api/reasons.md"
+              - "docs/sdk/**"
+              - "proto/**"
+              - "sdks/php/**"
+              - "sdks/fixtures/**"
+              - "sdks/conformance/**"
+            sdk-dart:
+              - ".github/workflows/**"
+              - "docs/api/reasons.md"
+              - "docs/sdk/**"
+              - "proto/**"
+              - "sdks/dart/**"
+              - "sdks/fixtures/**"
+              - "sdks/conformance/**"
+            sdk-objc:
+              - ".github/workflows/**"
+              - "docs/api/reasons.md"
+              - "docs/sdk/**"
+              - "proto/**"
+              - "sdks/objc/**"
+              - "sdks/fixtures/**"
               - "sdks/conformance/**"
             web:
               - *pnpm-workspace
@@ -1554,6 +1610,119 @@ jobs:
           git diff --exit-code -- sdks/csharp/src/Loams/Gen || {
             echo "the committed stubs are stale: regenerate with sdks/csharp/buf.gen.proto.yaml"; exit 1;
           }
+
+  # API2 Task 19: a job for each SDK that had none (Java, Kotlin, Ruby, PHP,
+  # Dart, Objective-C). They run on a PR that touches their paths, on pushes to
+  # dev and main, and nightly. None is in `required.needs` (API2-Q2): promoting
+  # a language to PR-blocking is a separate ruling.
+  sdk-java:
+    name: the Java SDK and its conformance suite
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-java == 'true') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: the Java SDK's tests
+        working-directory: sdks/java
+        run: ./build.sh test
+
+  sdk-kotlin:
+    name: the Kotlin SDK and its conformance suite
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-kotlin == 'true') }}
+    runs-on: ubuntu-24.04
+    env:
+      KOTLIN_VERSION: '2.2.20'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      # build.sh looks for kotlinc on PATH. The runner has none.
+      - name: kotlinc
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/kotlinc.zip" \
+            "https://github.com/JetBrains/kotlin/releases/download/v${KOTLIN_VERSION}/kotlin-compiler-${KOTLIN_VERSION}.zip"
+          unzip -q "$RUNNER_TEMP/kotlinc.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/kotlinc/bin" >> "$GITHUB_PATH"
+      - name: the Kotlin SDK's tests
+        working-directory: sdks/kotlin
+        run: ./build.sh test
+
+  sdk-ruby:
+    name: the Ruby SDK and its conformance suite
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-ruby == 'true') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+          working-directory: sdks/ruby
+      - name: the Ruby SDK's tests
+        working-directory: sdks/ruby
+        run: bundle exec rake test
+
+  sdk-php:
+    name: the PHP SDK and its conformance suite
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-php == 'true') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+      # vendor/ is not tracked; Composer builds it from composer.lock.
+      - name: install
+        working-directory: sdks/php
+        run: composer install --no-interaction --no-progress
+      - name: the PHP SDK's tests
+        working-directory: sdks/php
+        run: vendor/bin/phpunit
+
+  sdk-dart:
+    name: the Dart SDK and its conformance suite
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-dart == 'true') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: install
+        working-directory: sdks/dart
+        run: dart pub get
+      - name: analyze
+        working-directory: sdks/dart
+        run: dart analyze
+      - name: the Dart SDK's tests
+        working-directory: sdks/dart
+        run: dart test
+
+  # Objective-C builds through SwiftPM (D614: no CocoaPods), so macOS.
+  sdk-objc:
+    name: the Objective-C SDK and its conformance suite
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-objc == 'true') }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: the Objective-C SDK builds
+        working-directory: sdks/objc
+        run: swift build
+      - name: the Objective-C SDK's tests
+        working-directory: sdks/objc
+        run: swift test --disable-swift-testing
 
   # GR1 Task 1 (design §48, D741): Loams Graph's engine crate, and the rule
   # that `loams` links Grafeo only with the `graph` feature (GR1 Global
