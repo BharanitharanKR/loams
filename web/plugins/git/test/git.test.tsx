@@ -3,7 +3,15 @@
 // real client lands, these tests keep running against the same GitClient interface.
 
 import { validateManifest } from '@loams/console-host';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  configure,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import pkg from '../package.json';
 import type { GitClient } from '../src/client.js';
@@ -17,6 +25,11 @@ import {
 } from '../src/mock.js';
 import { visibleRange } from '../src/VirtualList.js';
 import { AUTO_SCAN_PAGES } from '../src/WorkspaceList.js';
+
+// The page loads repositories, then a workspace page, then a tab's data, each
+// through the mock's async client: on a loaded CI runner that chain outlasts
+// findBy's 1 s default (repository_without_env_says_so took 1.3 s).
+configure({ asyncUtilTimeout: 5000 });
 
 afterEach(cleanup);
 
