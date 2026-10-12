@@ -14,7 +14,11 @@
 //! - the **reconciler** of projects, branches and endpoints
 //!   ([`Reconciler`]); with `--runtime compose` it drives computes through
 //!   the compose runtime ([`ComputesConfig`], Task 11), each compute
-//!   running the pinned image of its project's Postgres major;
+//!   running the pinned image of its project's Postgres major, and
+//!   suspends the computes that sit idle for their endpoint's suspend
+//!   timeout (Task 12; no PgDog fronts them until PG2c, so their activity
+//!   is `compute_ctl`'s alone), its lifecycle events counted by the default
+//!   observer;
 //! - **upkeep** on a timer: the idempotency ledger's expired entries and
 //!   finished operations past their retention are removed.
 //!

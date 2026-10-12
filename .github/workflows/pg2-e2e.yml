@@ -20,7 +20,10 @@
 # pg-control-compose-runtime (Task 10): it_compose_compute_answers_select_1,
 # a compute the compose runtime starts on deploy/loams-postgres-dev's network
 # reads its spec from the upcall listener and answers SELECT 1 on its
-# endpoint's host port.
+# endpoint's host port. The same job runs it_endpoint (Tasks 11 and 12): an
+# endpoint's start, suspend, restart and delete on real computes, and idle
+# detection (a query longer than the suspend timeout keeps the compute
+# running; idle, it suspends).
 #
 # The images are pinned by digest in the compose files; nothing here uses a tag.
 name: PG2 e2e
@@ -281,7 +284,7 @@ jobs:
           IT_UPCALL_HOST: host.docker.internal
           IT_EXTRA_HOSTS: host.docker.internal:host-gateway
         run: cargo test -p loams-pg-control --locked --test it_compose -- --ignored
-      - name: it_endpoint_starts_suspends_and_deletes
+      - name: it_endpoint (the lifecycle, and idle detection)
         env:
           IT_UPCALL_HOST: host.docker.internal
           IT_EXTRA_HOSTS: host.docker.internal:host-gateway

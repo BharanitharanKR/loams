@@ -30,6 +30,15 @@
 //!   when the version of its spec's inputs moved since it got its spec: a
 //!   `notify-attach` that landed after the compute read its spec (Task 8),
 //!   a role, database or setting change.
+//! - **Idle** (Task 12, [`crate::idle`]): each pass over a running compute
+//!   also samples its activity (`compute_ctl`'s `last_active`, PgDog's
+//!   clients of the endpoint); once it has been idle for the endpoint's
+//!   `suspend_timeout_s` the endpoint's `desired` becomes `suspended` and it
+//!   suspends, as below. A pass comes back when the suspend falls due, if
+//!   that is before the resync.
+//! - **Lifecycle events** ([`crate::observer`]): `Started` when a compute
+//!   runs, then `Suspended` (stopped on purpose) or `Failed` (crashed, or
+//!   did not start), each after the batch that records it.
 //! - **Suspending** writes `suspending` (the compute's record `Stopping`, so
 //!   the upcall refuses it a spec), then `/terminate`, then the runtime's
 //!   `stop`, then `suspended` with no compute. A start that arrives
@@ -59,6 +68,7 @@ use loams_postgres::spec::ComputeSpec;
 
 use super::project::Snapshot;
 use super::{Act, ReconcileError};
+use crate::idle::IdleMonitor;
 use crate::ids::ComputeId;
 use crate::model::{
     BranchState, CRASH_WINDOW_MS, ComputeBinding, ComputeKey, ComputeRec, ComputeStatus,
@@ -66,6 +76,8 @@ use crate::model::{
     OperationRec, OperationState, ProjectState, Record as _,
 };
 use crate::neon::NeonWrite;
+use crate::observer::{Lifecycle, LifecycleKind};
+use crate::pgdog::NoPgDog;
 use crate::runtime::{
     BackendAddr, ComputeHandle, ComputeLaunch, ComputeRuntime, RuntimeError, RuntimeStatus,
 };
@@ -98,6 +110,25 @@ pub enum CtlStatus {
     Terminated,
 }
 
+/// `compute_ctl`'s `last_active` (Task 12's idle detection).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Activity {
+    /// None since the compute started.
+    NotYet,
+    /// Last active then (ms since the Unix epoch, the compute's clock).
+    At(u64),
+    /// `compute_ctl` sent something that is not a time: unknown, so the
+    /// compute is not suspended on it.
+    Unreadable,
+}
+
+/// One answer of `compute_ctl`'s `/status`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CtlReport {
+    pub status: CtlStatus,
+    pub last_active: Activity,
+}
+
 /// A call to a compute's `compute_ctl` that did not answer as asked. The
 /// text is for logs only (it can name hosts).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -109,7 +140,7 @@ pub struct CtlError(pub String);
 #[async_trait]
 pub trait ComputeCtl: Send + Sync + 'static {
     /// `GET /status`.
-    async fn status(&self, compute: &ComputeRec) -> Result<CtlStatus, CtlError>;
+    async fn status(&self, compute: &ComputeRec) -> Result<CtlReport, CtlError>;
     /// `POST /configure` with `spec`.
     async fn configure(&self, compute: &ComputeRec, spec: &ComputeSpec) -> Result<(), CtlError>;
     /// `POST /terminate?mode=immediate`.
@@ -150,13 +181,21 @@ impl HttpComputeCtl {
 
 #[async_trait]
 impl ComputeCtl for HttpComputeCtl {
-    async fn status(&self, compute: &ComputeRec) -> Result<CtlStatus, CtlError> {
+    async fn status(&self, compute: &ComputeRec) -> Result<CtlReport, CtlError> {
         let status = self
             .client(compute)?
             .status()
             .await
             .map_err(|e| CtlError(e.to_string()))?;
-        Ok(match status.status {
+        let last_active = match status.last_active_ms() {
+            Ok(Some(at)) => Activity::At(at),
+            Ok(None) => Activity::NotYet,
+            Err(e) => {
+                tracing::warn!(compute = %compute.id, error = %e, "compute_ctl's last_active is not a time");
+                Activity::Unreadable
+            }
+        };
+        let status = match status.status {
             CtlState::Empty | CtlState::Init | CtlState::ConfigurationPending => {
                 CtlStatus::Starting
             }
@@ -168,6 +207,10 @@ impl ComputeCtl for HttpComputeCtl {
             CtlState::TerminationPendingFast
             | CtlState::TerminationPendingImmediate
             | CtlState::Terminated => CtlStatus::Terminated,
+        };
+        Ok(CtlReport {
+            status,
+            last_active,
         })
     }
 
@@ -209,10 +252,19 @@ pub struct Computes {
     pub start_timeout: Duration,
     /// How soon a pass comes back while a compute starts (default 500 ms).
     pub poll: Duration,
+    /// Idle detection (Task 12): PgDog's clients through [`NoPgDog`] by
+    /// default.
+    pub idle: Arc<IdleMonitor>,
+    /// Where compute lifecycle events go (Task 12): a [`DefaultObserver`]
+    /// by default.
+    ///
+    /// [`DefaultObserver`]: crate::observer::DefaultObserver
+    pub lifecycle: Lifecycle,
 }
 
 impl Computes {
-    /// The defaults: [`START_TIMEOUT`], a 500 ms poll.
+    /// The defaults: [`START_TIMEOUT`], a 500 ms poll, no PgDog, the
+    /// default observer.
     pub fn new(
         runtime: Arc<dyn ComputeRuntime>,
         ctl: Arc<dyn ComputeCtl>,
@@ -228,6 +280,8 @@ impl Computes {
             sources,
             start_timeout: START_TIMEOUT,
             poll: Duration::from_millis(500),
+            idle: Arc::new(IdleMonitor::new(Arc::new(NoPgDog))),
+            lifecycle: Lifecycle::default(),
         }
     }
 }
@@ -239,6 +293,8 @@ impl std::fmt::Debug for Computes {
             .field("sources", &self.sources)
             .field("start_timeout", &self.start_timeout)
             .field("poll", &self.poll)
+            .field("idle", &self.idle)
+            .field("lifecycle", &self.lifecycle)
             .finish_non_exhaustive()
     }
 }
@@ -321,6 +377,14 @@ enum Step {
     Done,
     Again(Duration),
     Removed,
+}
+
+/// What idle detection came to for a running compute.
+enum Idle {
+    /// It was idle: the endpoint is suspended.
+    Suspended,
+    /// Not idle (yet): when a pass should look again, if before the resync.
+    Due(Option<Duration>),
 }
 
 /// How a batch that writes the endpoint settles its operations.
@@ -548,6 +612,32 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         Ok(batch)
     }
 
+    /// Sends `event` of `compute` to the lifecycle observer (Task 12), after
+    /// the batch that made it true committed; an end also forgets the
+    /// compute's idle state.
+    fn emit(&self, compute: &ComputeRec, event: LifecycleKind) {
+        let Some(binding) = &compute.binding else {
+            return;
+        };
+        let ended = matches!(
+            event,
+            LifecycleKind::Suspended | LifecycleKind::Failed { .. }
+        );
+        self.c
+            .lifecycle
+            .emit(binding, &compute.id, event, self.now());
+        if ended {
+            self.c.idle.forget(&compute.id);
+        }
+    }
+
+    /// Clears the current compute, whose end (`event`) has committed.
+    fn ended(&mut self, event: LifecycleKind) {
+        if let Some(c) = self.compute.take() {
+            self.emit(&c.record, event);
+        }
+    }
+
     /// Removes the endpoint: its compute, its address, its records.
     async fn remove(&mut self, why: &str) -> Result<(), ReconcileError> {
         self.stop_compute(true).await?;
@@ -575,6 +665,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
                 .finish(&mut batch, std::slice::from_ref(op), error)?;
         }
         self.act.commit("endpoint.remove", batch).await?;
+        self.ended(LifecycleKind::Suspended);
         tracing::info!(endpoint = %self.ep().id, why, "endpoint removed");
         Ok(())
     }
@@ -595,7 +686,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         let batch = self.without_compute()?;
         self.write("endpoint.replace", rec, batch, Settle::default())
             .await?;
-        self.compute = None;
+        self.ended(LifecycleKind::Suspended);
         tracing::info!(endpoint = %self.ep().id, why, "compute replaced");
         Ok(())
     }
@@ -616,6 +707,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
                 let batch = self.without_compute()?;
                 self.write("endpoint.at_rest", rec, batch, Settle::default())
                     .await?;
+                self.ended(LifecycleKind::Suspended);
                 Ok(Step::Done)
             }
             EndpointState::Starting | EndpointState::Running | EndpointState::Suspending => {
@@ -669,7 +761,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
             },
         )
         .await?;
-        self.compute = None;
+        self.ended(LifecycleKind::Suspended);
         tracing::info!(endpoint = %self.ep().id, "compute suspended");
         Ok(())
     }
@@ -704,6 +796,17 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
     /// Fails the endpoint for good (until `StartEndpoint`): the compute
     /// stopped and cleared.
     async fn fail(&mut self, why: String) -> Result<Step, ReconcileError> {
+        let compute_why = why.clone();
+        self.fail_with(why, compute_why).await
+    }
+
+    /// [`fail`](Self::fail), the endpoint failing for `why` and its compute
+    /// for `compute_why`.
+    async fn fail_with(
+        &mut self,
+        why: String,
+        compute_why: String,
+    ) -> Result<Step, ReconcileError> {
         self.stop_compute(false).await?;
         let mut rec = self.ep().clone();
         rec.state = EndpointState::Failed;
@@ -712,7 +815,9 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         let batch = self.without_compute()?;
         self.write("endpoint.failed", rec, batch, Settle::default())
             .await?;
-        self.compute = None;
+        self.ended(LifecycleKind::Failed {
+            reason: compute_why,
+        });
         tracing::warn!(endpoint = %self.ep().id, failure = ?self.ep().failure, "endpoint failed");
         Ok(Step::Done)
     }
@@ -735,10 +840,13 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
             rec.crashes = crashes;
             self.cur.record = rec;
             return self
-                .fail(format!(
-                    "the compute crashed {CRASHES_TO_FAIL} times in 10 minutes; StartEndpoint \
-                     tries again"
-                ))
+                .fail_with(
+                    format!(
+                        "the compute crashed {CRASHES_TO_FAIL} times in 10 minutes; StartEndpoint \
+                         tries again"
+                    ),
+                    why.to_owned(),
+                )
                 .await;
         }
         self.stop_compute(false).await?;
@@ -749,7 +857,9 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         let batch = self.without_compute()?;
         self.write("endpoint.crashed", rec, batch, Settle::default())
             .await?;
-        self.compute = None;
+        self.ended(LifecycleKind::Failed {
+            reason: why.to_owned(),
+        });
         Ok(Step::Again(self.act.ctx.config.retry_initial))
     }
 
@@ -807,8 +917,11 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
             Err(e) => return Err(runtime_error("reading the compute's status", &e)),
         }
         let status = self.c.ctl.status(&compute.record).await;
-        match status {
-            Ok(CtlStatus::Running) => self.mark_running(compute, id).await,
+        match status.as_ref().map(|r| &r.status) {
+            Ok(CtlStatus::Running) => {
+                let last_active = status.map_or(Activity::NotYet, |r| r.last_active);
+                self.mark_running(compute, id, last_active).await
+            }
             Ok(CtlStatus::Failed(why)) => {
                 tracing::warn!(compute = %compute.record.id, error = %why, "compute_ctl reports a failure");
                 self.crash("compute_ctl reported a failure").await
@@ -944,11 +1057,13 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
     }
 
     /// `compute_ctl` runs: the address points at the compute, which is
-    /// `running`, and so is the endpoint.
+    /// `running`, and so is the endpoint. The compute's idle time starts
+    /// now, and the observer hears it started.
     async fn mark_running(
         &mut self,
         compute: Versioned<ComputeRec>,
         id: ComputeId,
+        last_active: Activity,
     ) -> Result<Step, ReconcileError> {
         let handle = ComputeHandle {
             compute_id: id,
@@ -976,6 +1091,12 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         let out = self
             .write("endpoint.running", rec, batch, Settle::default())
             .await?;
+        let reported = match last_active {
+            Activity::At(at) => Some(at),
+            Activity::NotYet | Activity::Unreadable => None,
+        };
+        self.c.idle.observe(&running.id, self.now(), reported, 0);
+        self.emit(&running, LifecycleKind::Started { cu: running.cu });
         self.compute = Some(Versioned {
             record: running,
             version: out[at].unwrap_or_default(),
@@ -1019,23 +1140,90 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
             Ok(_) => {}
             Err(e) => return Err(runtime_error("reading the compute's status", &e)),
         }
-        match self.c.ctl.status(&compute.record).await {
-            Ok(CtlStatus::Failed(why)) => {
-                tracing::warn!(compute = %compute.record.id, error = %why, "compute_ctl reports a failure");
-                return self.crash("compute_ctl reported a failure").await;
-            }
-            Ok(CtlStatus::Terminated) => return self.crash("compute_ctl terminated").await,
-            Ok(_) => {}
+        let last_active = match self.c.ctl.status(&compute.record).await {
+            Ok(report) => match report.status {
+                CtlStatus::Failed(why) => {
+                    tracing::warn!(compute = %compute.record.id, error = %why, "compute_ctl reports a failure");
+                    return self.crash("compute_ctl reported a failure").await;
+                }
+                CtlStatus::Terminated => return self.crash("compute_ctl terminated").await,
+                CtlStatus::Starting | CtlStatus::Running => report.last_active,
+            },
             Err(e) => {
                 tracing::info!(compute = %compute.record.id, error = %e, "compute_ctl did not answer");
+                Activity::Unreadable
             }
-        }
+        };
         if !self.ops.is_empty() {
             let rec = self.ep().clone();
             self.write("endpoint.running", rec, Batch::new(), Settle::default())
                 .await?;
         }
-        self.push_spec().await
+        let due = match self.idle(&compute.record, last_active).await? {
+            Idle::Suspended => return Ok(Step::Done),
+            Idle::Due(due) => due,
+        };
+        Ok(match (self.push_spec().await?, due) {
+            (Step::Again(a), Some(b)) => Step::Again(a.min(b)),
+            (Step::Done, Some(b)) => Step::Again(b),
+            (step, _) => step,
+        })
+    }
+
+    /// Idle detection ([`crate::idle`]): one sample of the running compute
+    /// (its `compute_ctl`'s `last_active`, PgDog's clients of the endpoint),
+    /// and the suspend once it has been idle for the endpoint's
+    /// `suspend_timeout_s`. A sample that could not be taken, an endpoint
+    /// with open operations or a replacement asked, and a timeout of 0
+    /// never suspend.
+    async fn idle(
+        &mut self,
+        compute: &ComputeRec,
+        last_active: Activity,
+    ) -> Result<Idle, ReconcileError> {
+        let ep = self.ep();
+        if ep.suspend_timeout_s == 0
+            || ep.desired != DesiredState::Running
+            || ep.replace_compute
+            || !self.ops.is_empty()
+        {
+            return Ok(Idle::Due(None));
+        }
+        let reported = match last_active {
+            Activity::At(at) => Some(at),
+            Activity::NotYet => None,
+            Activity::Unreadable => return Ok(Idle::Due(None)),
+        };
+        let Some(branch) = self.snap.branch(&ep.branch_id) else {
+            return Ok(Idle::Due(None));
+        };
+        let clients = match self
+            .c
+            .idle
+            .clients(&self.snap.project.record, &branch.record, ep)
+            .await
+        {
+            Ok(n) => n,
+            Err(e) => {
+                tracing::info!(endpoint = %ep.id, error = %e, "PgDog did not answer; not suspending");
+                return Ok(Idle::Due(None));
+            }
+        };
+        let idle_ms = self
+            .c
+            .idle
+            .observe(&compute.id, self.now(), reported, clients);
+        let timeout_ms = u64::from(ep.suspend_timeout_s) * 1000;
+        if idle_ms < timeout_ms {
+            // Come back when the suspend is due, unless the resync comes
+            // first.
+            let due = Duration::from_millis(timeout_ms - idle_ms);
+            return Ok(Idle::Due((due < self.act.ctx.config.resync).then_some(due)));
+        }
+        tracing::info!(endpoint = %ep.id, compute = %compute.id, idle_s = idle_ms / 1000, "idle: suspending");
+        self.cur.record.desired = DesiredState::Suspended;
+        self.stop_suspending().await?;
+        Ok(Idle::Suspended)
     }
 
     /// Pushes the compute's spec when the version of its inputs moved since

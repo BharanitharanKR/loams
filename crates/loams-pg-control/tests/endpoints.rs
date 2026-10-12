@@ -12,5 +12,9 @@ fn factory() -> Factory {
     local_factory(env!("CARGO_TARGET_TMPDIR"))
 }
 
+#[macro_use]
+#[path = "endpoints/env.rs"]
+mod env;
+
 #[path = "endpoints/cases.rs"]
 mod cases;

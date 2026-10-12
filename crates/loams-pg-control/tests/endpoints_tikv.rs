@@ -12,5 +12,9 @@ fn factory() -> Factory {
     tikv_factory()
 }
 
+#[macro_use]
+#[path = "endpoints/env.rs"]
+mod env;
+
 #[path = "endpoints/cases.rs"]
 mod cases;
