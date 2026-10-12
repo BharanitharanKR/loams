@@ -365,6 +365,7 @@ pub struct ProcessLauncher {
     sandbox: SandboxMode,
     forwarder: Option<Forward>,
     cgroups: Option<WorkerCgroups>,
+    open_acl: bool,
 }
 
 impl ProcessLauncher {
@@ -384,6 +385,7 @@ impl ProcessLauncher {
             sandbox,
             forwarder: None,
             cgroups: None,
+            open_acl: false,
         }
     }
 
@@ -449,9 +451,20 @@ impl ProcessLauncher {
         self
     }
 
-    /// The loopback endpoint each worker's `READ ON S3` grant names.
+    /// The loopback endpoint each worker's read views name (no grant names it:
+    /// HS1 R-ACL.1).
     pub fn with_s3_endpoint(mut self, endpoint: impl Into<String>) -> Self {
         self.s3_endpoint = Some(endpoint.into());
+        self
+    }
+
+    /// Test builds only: workers start with chDB's own all-powerful `default`
+    /// and no settings profile (`--test-open-acl`, HS1 R-ACL.1), so a test can
+    /// show that the engine's access control is what refuses a statement, or test
+    /// the layers behind it (`house-cache`, the sandbox) on their own.
+    #[cfg(feature = "test-hooks")]
+    pub fn with_open_acl(mut self) -> Self {
+        self.open_acl = true;
         self
     }
 
@@ -508,6 +521,9 @@ impl ProcessLauncher {
         if let Some(cgroups) = &self.cgroups {
             args.push("--cgroup".to_string());
             args.push(cgroups.dir(id).display().to_string());
+        }
+        if self.open_acl {
+            args.push("--test-open-acl".to_string());
         }
         args
     }
@@ -827,6 +843,7 @@ impl InprocWorker {
                 sandbox: SandboxMode::None,
                 forwarder_port: None,
                 cgroup: None,
+                open_acl: false,
             },
         }
     }

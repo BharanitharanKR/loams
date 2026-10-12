@@ -12,48 +12,10 @@ use std::collections::HashSet;
 
 use crate::errors::{ChError, HouseError};
 
-/// §32 §8.5's allowlist, plus what HTTP clients routinely send (`max_block_size`,
-/// `log_comment`, `http_headers_progress_interval_ms`, `extremes`): ruling R4.3.
-pub const ALLOWED_SETTINGS: &[&str] = &[
-    "max_execution_time",
-    "max_result_rows",
-    "max_result_bytes",
-    "result_overflow_mode",
-    "max_rows_to_read",
-    "max_bytes_to_read",
-    "max_memory_usage",
-    "date_time_input_format",
-    "date_time_output_format",
-    "join_algorithm",
-    "max_threads",
-    "session_timezone",
-    "insert_deduplicate",
-    "async_insert",
-    "wait_for_async_insert",
-    "max_block_size",
-    "log_comment",
-    "http_headers_progress_interval_ms",
-    "extremes",
-];
-
-/// Prefixes allowed whole (§32 §8.5): output and input format options, and the
-/// CSV and TSV options, less [`DENIED_SETTINGS`]. `format_schema*` and
-/// `format_template_*` name files and are not here.
-pub const ALLOWED_PREFIXES: &[&str] = &[
-    "output_format_",
-    "input_format_",
-    "format_csv_",
-    "format_tsv_",
-];
-
-/// The analyzer experiments a query may switch (fix round 1, M3). An explicit
-/// list, not the `allow_experimental_` prefix, which also opens `eval`, AI and
-/// URL-wildcard functions, catalogs and writers.
-pub const ALLOWED_EXPERIMENTS: &[&str] = &[
-    "allow_experimental_analyzer",
-    "allow_experimental_correlated_subqueries",
-    "allow_experimental_join_right_table_sorting",
-];
+/// The lists a request's settings are held to, shared with the worker's
+/// settings profile (HS1 ruling R-ACL.1): R4.3's names, the format prefixes and
+/// the analyzer experiments.
+pub use loams_house_ipc::policy::{ALLOWED_EXPERIMENTS, ALLOWED_PREFIXES, ALLOWED_SETTINGS};
 
 /// Settings no request may change, whatever list would allow them: the deny
 /// list's (HS1 Task 5), which also covers the `SETTINGS` clause.
@@ -113,10 +75,7 @@ pub fn is_loams(name: &str) -> bool {
 
 /// Whether `name` may be set at all.
 pub fn is_allowed(name: &str) -> bool {
-    (is_loams(name)
-        || ALLOWED_SETTINGS.contains(&name)
-        || ALLOWED_EXPERIMENTS.contains(&name)
-        || ALLOWED_PREFIXES.iter().any(|p| name.starts_with(p)))
+    (is_loams(name) || loams_house_ipc::policy::on_the_lists(name))
         && !crate::deny::is_denied_setting(name)
 }
 

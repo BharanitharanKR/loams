@@ -13,9 +13,40 @@
 //!   (HS1 R1.4).
 //! * `users.xml`, which **redefines `default`** with explicit grants instead of
 //!   chDB's all-powerful one (HS1 R1.8: chDB cannot `REVOKE`, but it can be told
-//!   what to grant at connect). No `FILE`, `URL`, `REMOTE`, `WRITE ON S3`, `SYSTEM`,
-//!   `CREATE TABLE` or `CREATE FUNCTION`; `READ ON S3` only for the worker's
-//!   loopback forwarder, when it has one.
+//!   what to grant at connect), and a settings profile that pins every setting a
+//!   request may not change (HS1 R-ACL.1).
+//!
+//! # The engine's access control (HS1 R-ACL.1)
+//!
+//! chDB authenticates **every** connection as `default`: `--user` is ignored and
+//! `EXECUTE AS` is disabled, because its local server never reads
+//! `access_control_improvements` (measured on 26.9.2.1). So there is one login
+//! identity, and the two connections differ by their settings: the user
+//! connection's `readonly = 2` and `allow_ddl = 0` take DDL, `INSERT` into tables,
+//! `SYSTEM`, `KILL`, access management and `ALLOW SQL SECURITY NONE` away from it,
+//! and neither can be set back (measured). What `default` holds:
+//!
+//! * no source at all — no `READ` or `WRITE` on `FILE`, `URL`, `S3`, `REMOTE`,
+//!   `MYSQL`, `POSTGRES`, `ODBC`, `JDBC`, `HDFS`, `HIVE`, `MONGO`, `REDIS`,
+//!   `SQLITE`, `AZURE`, `KAFKA`, `NATS`, `RABBITMQ`, `BIGQUERY`, `DISK` — so every
+//!   table function, engine and dictionary that reaches outside is `497`, on the
+//!   user connection and the control connection alike;
+//! * `SELECT`, `SHOW` and `CREATE TEMPORARY TABLE` (temporary tables and the
+//!   generator table functions);
+//! * for the control connection's read views (§49 §7): `CREATE`/`DROP VIEW`,
+//!   `CREATE`/`DROP DATABASE` (outside `system` and `information_schema`) and
+//!   `ALLOW SQL SECURITY NONE`. A read view names its columns and is `SQL SECURITY
+//!   NONE`, so it reads the bucket through the forwarder with no grant, and is
+//!   created without one (a view that names its columns is not analysed at
+//!   creation, measured). The user connection can create neither such a view nor
+//!   any other: `readonly` strips `ALLOW SQL SECURITY NONE` (`164`), and
+//!   `default` holds no `SET DEFINER`.
+//!
+//! No `SYSTEM`, `INTROSPECTION`, `dictGet`, `CREATE TABLE`, `CREATE FUNCTION`,
+//! `CREATE DICTIONARY`, `INSERT`, `KILL QUERY` or access management. `system`
+//! tables stay readable whatever the grants say (chDB never sets
+//! `select_from_system_db_requires_grant`, measured), so which `system` tables a
+//! statement reads is the deny list's (R5.2) and the front's (R11.6).
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -26,13 +57,29 @@ use loams_house_ipc::SandboxMode;
 /// plus the 512 MiB headroom its cgroup gets.
 pub const DEFAULT_MEMORY_LIMIT: u64 = 4 * 1024 * 1024 * 1024 + 512 * 1024 * 1024;
 
-/// The grants of HS1 R1.8, on `*.*`.
-pub const GRANTS: &str = "GRANT SELECT, SHOW, CREATE TEMPORARY TABLE, CREATE VIEW, DROP VIEW, \
-                          CREATE DATABASE, DROP DATABASE, INSERT ON *.*";
+/// The grants of `default`, the worker's only login identity (HS1 R1.8,
+/// R-ACL.1): nothing on any source.
+pub const GRANTS: &[&str] = &[
+    "GRANT SELECT, SHOW, CREATE TEMPORARY TABLE, CREATE VIEW, DROP VIEW, CREATE DATABASE, \
+     DROP DATABASE, ALLOW SQL SECURITY NONE ON *.*",
+    // Without these the control connection could make views in `system` and drop
+    // `information_schema` (measured).
+    "REVOKE CREATE VIEW, DROP VIEW, CREATE DATABASE, DROP DATABASE ON system.*",
+    "REVOKE CREATE VIEW, DROP VIEW, CREATE DATABASE, DROP DATABASE ON information_schema.*",
+    "REVOKE CREATE VIEW, DROP VIEW, CREATE DATABASE, DROP DATABASE ON INFORMATION_SCHEMA.*",
+    "REVOKE CREATE VIEW, DROP VIEW, CREATE DATABASE, DROP DATABASE ON \
+     _temporary_and_external_tables.*",
+];
+
+/// What a worker started with `--test-open-acl` grants instead: chDB's own
+/// all-powerful `default`, with no settings profile. Test builds only
+/// (`loams_house_ipc::TEST_HOOKS`): it shows that a refusal came from the
+/// engine's access control and not from another layer (R-ACL.1).
+pub const OPEN_GRANTS: &[&str] = &["GRANT ALL ON *.*"];
 
 pub use crate::settings::{
     MAX_EXECUTION_TIME_S, MAX_QUERY_MEMORY, MIN_EXECUTION_TIME_S, PINNED_OFF, PINNED_PATHS,
-    PINNED_SWITCHES, PINNED_VALUES, max_threads_cap,
+    PINNED_SWITCHES, PINNED_VALUES, max_threads_cap, pinned_by_default,
 };
 
 /// `user_scripts_path`: a directory that cannot exist, so `executable()` and
@@ -52,8 +99,9 @@ pub struct WorkerArgs {
     pub worker_id: String,
     /// The memory the worker is sized for, in bytes.
     pub memory_limit: u64,
-    /// The loopback endpoint the worker reads the bucket through, which its
-    /// `READ ON S3` grant is scoped to (HS1 Tasks 6 and 9). None: no S3 at all.
+    /// The loopback endpoint the worker reads the bucket through (HS1 Tasks 6 and
+    /// 9), which the read views name (`Ready::s3_endpoint`). It is no grant: only
+    /// the views reach it (R-ACL.1).
     pub s3_endpoint: Option<String>,
     /// How the worker seals itself (`--sandbox`, HS1 Task 6). `netns` when the
     /// flag is absent: a worker is sealed unless the front says otherwise.
@@ -63,12 +111,15 @@ pub struct WorkerArgs {
     pub forwarder_port: Option<u16>,
     /// The cgroup v2 directory the front made for this worker (`--cgroup`).
     pub cgroup: Option<PathBuf>,
+    /// `--test-open-acl`: [`OPEN_GRANTS`] and no settings profile. Accepted only
+    /// by a test build (`loams_house_ipc::TEST_HOOKS`, R-ACL.1).
+    pub open_acl: bool,
 }
 
 impl WorkerArgs {
     /// Parses `--tmp-dir <p> --worker-id <id> [--memory-limit <bytes>]
     /// [--s3-endpoint <url>] [--sandbox netns|pods|none] [--forwarder-port <p>]
-    /// [--cgroup <dir>]`.
+    /// [--cgroup <dir>] [--test-open-acl]`.
     pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Self, String> {
         let mut tmp_dir = None;
         let mut worker_id = None;
@@ -77,6 +128,7 @@ impl WorkerArgs {
         let mut sandbox = SandboxMode::Netns;
         let mut forwarder_port = None;
         let mut cgroup = None;
+        let mut open_acl = false;
         let mut args = args.into_iter();
         while let Some(flag) = args.next() {
             let mut value = || args.next().ok_or_else(|| format!("{flag} needs a value"));
@@ -99,6 +151,7 @@ impl WorkerArgs {
                     );
                 }
                 "--cgroup" => cgroup = Some(PathBuf::from(value()?)),
+                "--test-open-acl" if loams_house_ipc::TEST_HOOKS => open_acl = true,
                 other => return Err(format!("unknown argument {other:?}")),
             }
         }
@@ -113,6 +166,7 @@ impl WorkerArgs {
             sandbox,
             forwarder_port,
             cgroup,
+            open_acl,
         })
     }
 
@@ -139,6 +193,9 @@ impl WorkerArgs {
         if let Some(cgroup) = &self.cgroup {
             out.push("--cgroup".to_string());
             out.push(cgroup.display().to_string());
+        }
+        if self.open_acl {
+            out.push("--test-open-acl".to_string());
         }
         out
     }
@@ -224,17 +281,40 @@ pub fn config_xml(args: &WorkerArgs) -> String {
     )
 }
 
-/// `users.xml`: `default` redefined with HS1 R1.8's grants and the `worker`
+/// `users.xml`: `default` redefined with R-ACL.1's grants and the `worker`
 /// profile. A profile named `default` must exist too, or connect fails with `180`.
 pub fn users_xml(args: &WorkerArgs) -> String {
-    let mut grants = format!("        <query>{}</query>\n", xml_text(GRANTS));
-    if let Some(endpoint) = &args.s3_endpoint {
-        let _ = writeln!(
-            grants,
-            "        <query>GRANT READ ON S3({})</query>",
-            xml_text(&sql_string(&s3_grant_regex(endpoint)))
-        );
-    }
+    let grants: String = if args.open_acl { OPEN_GRANTS } else { GRANTS }
+        .iter()
+        .map(|query| format!("        <query>{}</query>\n", xml_text(query)))
+        .collect();
+    let profile = if args.open_acl {
+        String::new()
+    } else {
+        worker_profile()
+    };
+    format!(
+        "<clickhouse>\n  \
+           <users>\n    \
+             <default>\n      \
+               <password></password>\n      \
+               <networks><ip>127.0.0.1</ip></networks>\n      \
+               <profile>worker</profile>\n      \
+               <quota>default</quota>\n      \
+               <grants>\n{grants}      </grants>\n    \
+             </default>\n  \
+           </users>\n  \
+           <profiles>\n    \
+             <default/>\n    \
+             <worker>\n{profile}    </worker>\n  \
+           </profiles>\n  \
+           <quotas><default/></quotas>\n\
+         </clickhouse>\n"
+    )
+}
+
+/// The `worker` profile's body: the pinned values and every constraint.
+fn worker_profile() -> String {
     let mut pinned = String::new();
     let mut constraints = String::new();
     for name in PINNED_OFF {
@@ -246,6 +326,10 @@ pub fn users_xml(args: &WorkerArgs) -> String {
         let _ = writeln!(constraints, "        <{name}><readonly/></{name}>");
     }
     for name in PINNED_PATHS.iter().chain(PINNED_SWITCHES) {
+        let _ = writeln!(constraints, "        <{name}><readonly/></{name}>");
+    }
+    // R-ACL.1: every other setting chDB has that no list leaves changeable.
+    for name in pinned_by_default() {
         let _ = writeln!(constraints, "        <{name}><readonly/></{name}>");
     }
     // The caps of FL2 Ruling 10, enforced by the engine after its own parsing and
@@ -272,46 +356,7 @@ pub fn users_xml(args: &WorkerArgs) -> String {
         "        <max_threads><max>{}</max></max_threads>",
         max_threads_cap()
     );
-    format!(
-        "<clickhouse>\n  \
-           <users>\n    \
-             <default>\n      \
-               <password></password>\n      \
-               <networks><ip>127.0.0.1</ip></networks>\n      \
-               <profile>worker</profile>\n      \
-               <quota>default</quota>\n      \
-               <grants>\n{grants}      </grants>\n    \
-             </default>\n  \
-           </users>\n  \
-           <profiles>\n    \
-             <default/>\n    \
-             <worker>\n{pinned}      <constraints>\n{constraints}      </constraints>\n    \
-             </worker>\n  \
-           </profiles>\n  \
-           <quotas><default/></quotas>\n\
-         </clickhouse>\n"
-    )
-}
-
-/// The `READ ON S3` regex for a loopback endpoint: the endpoint, escaped, then
-/// anything. `house-cache` scopes keys to the namespace's prefix (HS1 Task 9).
-pub fn s3_grant_regex(endpoint: &str) -> String {
-    let mut out = String::with_capacity(endpoint.len() + 4);
-    for ch in endpoint.trim_end_matches('/').chars() {
-        if ".+*?()[]{}|^$\\".contains(ch) {
-            out.push('\\');
-        }
-        out.push(ch);
-    }
-    out.push_str("/.*");
-    out
-}
-
-/// A ClickHouse string literal: quoted, with `\\` and `'` escaped. The regex's own
-/// backslashes must survive the literal (`\\.` in the SQL is `\.` in the regex),
-/// and a quote in an endpoint must not end it (HS1 Task 2 review M4).
-pub fn sql_string(text: &str) -> String {
-    format!("'{}'", text.replace('\\', "\\\\").replace('\'', "\\'"))
+    format!("{pinned}      <constraints>\n{constraints}      </constraints>\n")
 }
 
 /// Escapes text for an XML element body.
@@ -347,6 +392,7 @@ mod tests {
             sandbox: SandboxMode::Netns,
             forwarder_port: Some(9180),
             cgroup: Some(PathBuf::from("/sys/fs/cgroup/house/w7")),
+            open_acl: false,
         }
     }
 
@@ -417,35 +463,31 @@ mod tests {
     }
 
     #[test]
-    fn sql_string_escapes_backslashes_and_quotes() {
-        assert_eq!(sql_string(r"a\.b"), r"'a\\.b'");
-        assert_eq!(sql_string("it's"), r"'it\'s'");
+    fn the_endpoint_is_no_grant() {
+        // R-ACL.1: the endpoint reaches the views' text, never `users.xml`, so a
+        // hostile one cannot end a grant early (the HS1 Task 2 review M4 case).
         let users = users_xml(&WorkerArgs {
             s3_endpoint: Some("http://127.0.0.1:1/x'); GRANT ALL ON *.* TO default; --".into()),
             ..args()
         });
-        let line = users
-            .lines()
-            .find(|l| l.contains("ON S3("))
-            .expect("the S3 grant");
-        let inner = line
-            .trim()
-            .strip_prefix("<query>GRANT READ ON S3('")
-            .and_then(|l| l.strip_suffix("')</query>"))
-            .expect("one literal");
-        let bytes = inner.as_bytes();
-        for (at, byte) in bytes.iter().enumerate() {
-            if *byte == b'\'' {
-                let backslashes = bytes[..at]
-                    .iter()
-                    .rev()
-                    .take_while(|b| **b == b'\\')
-                    .count();
-                assert!(
-                    backslashes % 2 == 1,
-                    "an unescaped quote ends the literal early: {line}"
-                );
-            }
+        assert!(!users.contains("127.0.0.1:1/"), "{users}");
+        assert!(!users.contains("GRANT ALL"), "{users}");
+    }
+
+    #[test]
+    fn open_acl_is_for_test_builds_only() {
+        let open = WorkerArgs {
+            open_acl: true,
+            ..args()
+        };
+        let parsed = WorkerArgs::parse(open.to_args());
+        if loams_house_ipc::TEST_HOOKS {
+            assert_eq!(parsed, Ok(open.clone()));
+            let users = users_xml(&open);
+            assert!(users.contains("<query>GRANT ALL ON *.*</query>"), "{users}");
+            assert!(!users.contains("<constraints>"), "{users}");
+        } else {
+            assert!(parsed.is_err(), "a shipped worker refuses --test-open-acl");
         }
     }
 
@@ -476,31 +518,54 @@ mod tests {
     }
 
     #[test]
-    fn users_file_grants_only_r1_8() {
+    fn users_file_grants_no_source() {
         let users = users_xml(&args());
-        assert!(users.contains(GRANTS));
-        assert!(
-            users.contains(r"GRANT READ ON S3('http://127\\.0\\.0\\.1:41887/.*')"),
-            "the regex's backslashes are doubled inside the SQL literal:\n{users}"
-        );
+        for query in GRANTS {
+            assert!(
+                users.contains(&format!("<query>{query}</query>")),
+                "{query}"
+            );
+        }
         assert!(
             users.contains("<networks><ip>127.0.0.1</ip></networks>"),
             "R1.11"
         );
+        // R-ACL.1: no source, no host access, no DDL beyond the read views.
+        let grants: String = users
+            .lines()
+            .filter(|l| l.contains("<query>GRANT"))
+            .collect();
         for absent in [
-            "FILE",
-            "URL",
-            "REMOTE",
+            " ON S3",
+            " ON URL",
+            " ON FILE",
+            " ON REMOTE",
+            "READ",
             "WRITE",
+            "SOURCES",
             "SYSTEM",
+            "INTROSPECTION",
             "CREATE TABLE",
             "FUNCTION",
+            "DICTIONARY",
+            "dictGet",
+            "INSERT",
+            "DEFINER",
+            "ALL ",
+            "KILL",
+            "IMPERSONATE",
+            "ACCESS",
         ] {
             assert!(
-                !users.contains(absent),
-                "{absent} must not be granted:\n{users}"
+                !grants.contains(absent),
+                "{absent} must not be granted:\n{grants}"
             );
         }
+        assert!(users.contains("<max_rows_to_group_by><readonly/></max_rows_to_group_by>"));
+        assert!(
+            !users.contains("<max_block_size><readonly/>"),
+            "an allowed setting"
+        );
         for name in crate::settings::pinned() {
             assert!(users.contains(&format!("<{name}><readonly/></{name}>")));
         }

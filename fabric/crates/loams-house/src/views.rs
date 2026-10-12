@@ -29,6 +29,12 @@
 //!   drops it when its `is_deleted` is 1; Summing groups by the key and sums.
 //!   chDB ignores `FINAL` on a view (measured), so the user's text runs as it is.
 //! * An external table (another writer's) reads as chDB reads Iceberg: no casts.
+//! * A view that reads the bucket names its columns and is `SQL SECURITY NONE`
+//!   (HS1 R-ACL.1): the worker's `default` holds no grant on any source, so the
+//!   view, which only the control connection can create, is the one way a
+//!   statement reaches the forwarder. Naming the columns is what lets the
+//!   control connection create it without a grant (chDB analyses a view's
+//!   `SELECT` at creation only when the columns are not given, measured).
 
 use loams_house_lake::files::LiveFile;
 
@@ -103,7 +109,7 @@ pub enum Mode<'a> {
 
 /// The view DDL for a pin.
 pub fn view_ddl(pin: &ReadPin, source: &str, mode: Mode<'_>) -> Result<String, HouseError> {
-    let name = format!(
+    let mut name = format!(
         "{}.{}",
         quote_name(&pin.table.database),
         quote_name(&pin.table.name)
@@ -131,9 +137,64 @@ pub fn view_ddl(pin: &ReadPin, source: &str, mode: Mode<'_>) -> Result<String, H
             _ => format!("SELECT {}\nFROM {source}", casts(pin)?.join(", ")),
         }
     };
+    if pin.snapshot_id.is_some() {
+        // It reads the bucket: R-ACL.1's form, columns named.
+        let columns: Vec<String> = columns(pin)
+            .iter()
+            .map(|c| Ok(format!("{} {}", quote_name(&c.name), column_type(pin, c)?)))
+            .collect::<Result<_, HouseError>>()?;
+        if columns.is_empty() {
+            return Err(HouseError::from(ChError::bad_arguments(format!(
+                "Table {}.{} has no columns at this snapshot",
+                pin.table.database, pin.table.name
+            ))));
+        }
+        name = format!("{name} ({}) SQL SECURITY NONE", columns.join(", "));
+    }
     Ok(format!(
         "CREATE OR REPLACE VIEW {name} AS\n{body}{settings}"
     ))
+}
+
+/// A column's type as the column list of a view prints it, outside any quotes
+/// (R-ACL.1). The text comes from the catalog's properties, which another writer
+/// of a shared REST catalog can set, so it must be one ClickHouse type and
+/// nothing a lexer could read differently: it parses as a type, and outside its
+/// string literals (`Enum` names) it holds only names, numbers, `(`, `)`, `,`,
+/// `=`, `-` (never `--`), `+`, `.` and spaces; inside them, no quote, backslash or line
+/// break. Anything else is `36`, and the table is not read.
+fn column_type<'a>(pin: &ReadPin, column: &'a ddl::ChColumn) -> Result<&'a str, HouseError> {
+    let text = column.ch_type.as_str();
+    let refused = || {
+        HouseError::from(ChError::bad_arguments(format!(
+            "Table {}.{} cannot be read: the type of column {} is not one the House \
+             can name in a view",
+            pin.table.database, pin.table.name, column.name
+        )))
+    };
+    ChType::parse(text).map_err(|_| refused())?;
+    let mut in_literal = false;
+    let mut previous = ' ';
+    for ch in text.chars() {
+        let fine = if in_literal {
+            !matches!(ch, '\\' | '\n' | '\r')
+        } else {
+            // `--` would start a comment.
+            (ch.is_ascii_alphanumeric() || " _(),=-+.'".contains(ch))
+                && !(ch == '-' && previous == '-')
+        };
+        previous = ch;
+        if !fine {
+            return Err(refused());
+        }
+        if ch == '\'' {
+            in_literal = !in_literal;
+        }
+    }
+    if in_literal {
+        return Err(refused());
+    }
+    Ok(text)
 }
 
 /// Whether a view of `pin` in `mode` carries expression text from the
@@ -472,10 +533,12 @@ mod tests {
         let ddl = view_ddl(&p, "SRC", Mode::Plain).expect("view");
         assert_eq!(
             ddl,
-            "CREATE OR REPLACE VIEW db.t AS\nSELECT CAST(k, 'UInt64') AS k, CAST(s, \
+            "CREATE OR REPLACE VIEW db.t (k UInt64, s Nullable(String), n UInt32) SQL SECURITY \
+             NONE AS\nSELECT CAST(k, 'UInt64') AS k, CAST(s, \
              'Nullable(String)') AS s, CAST(ifNull(n, CAST(plus(`k`, 1), 'UInt32')), 'UInt32') AS n\n\
              FROM SRC\nSETTINGS iceberg_snapshot_id = 42"
         );
+        assert!(view_body(&ddl).starts_with("SELECT CAST(k"));
         // FINAL on a MergeTree table is the plain view.
         assert_eq!(view_ddl(&p, "SRC", Mode::Final(&[])).expect("view"), ddl);
     }
@@ -527,7 +590,8 @@ mod tests {
         );
         let ddl = view_ddl(&s, "SRC", Mode::Final(&[])).expect("view");
         assert!(ddl.starts_with(
-            "CREATE OR REPLACE VIEW db.t AS\nSELECT k, sumWithOverflow(n) AS n, any(label) AS label"
+            "CREATE OR REPLACE VIEW db.t (k UInt64, n Int64, label String) SQL SECURITY NONE AS\n\
+             SELECT k, sumWithOverflow(n) AS n, any(label) AS label"
         ));
         assert!(ddl.contains("GROUP BY `k`\nHAVING NOT (n = 0)"));
     }
@@ -566,6 +630,34 @@ mod tests {
             let s = pin("SummingMergeTree", order_by, vec![column("k", "UInt64")]);
             let err = view_ddl(&s, "SRC", Mode::Final(&[])).expect_err(order_by);
             assert_eq!(err.code(), 497, "{order_by}: {err}");
+        }
+    }
+
+    #[test]
+    fn view_column_types_are_held_to_the_safe_form() {
+        // R-ACL.1: catalog text printed outside quotes is one plain type.
+        for good in [
+            "UInt64",
+            "Nullable(Decimal(20, 0))",
+            "Enum8('a' = 1, 'b c' = -2)",
+            "DateTime64(3, 'Asia/Tokyo')",
+            "LowCardinality(Nullable(String))",
+        ] {
+            let p = pin("MergeTree", "k", vec![column("k", good)]);
+            assert!(view_ddl(&p, "SRC", Mode::Plain).is_ok(), "{good}");
+        }
+        for bad in [
+            "UInt64) SQL SECURITY NONE AS SELECT * FROM file('/etc/passwd') --",
+            "UInt64 -- x",
+            "Enum8('a\\' = 1)",
+            "Enum8('a\n' = 1)",
+            "UInt64; DROP DATABASE d",
+            "Enum8('a = 1)",
+        ] {
+            let p = pin("MergeTree", "k", vec![column("k", bad)]);
+            // `62` when it is no type at all, `36` when it is one but not plain.
+            let err = view_ddl(&p, "SRC", Mode::Plain).expect_err(bad);
+            assert!([36, 62].contains(&err.code()), "{bad}: {}", err.code());
         }
     }
 }

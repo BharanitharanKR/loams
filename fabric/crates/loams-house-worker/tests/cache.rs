@@ -101,10 +101,14 @@ async fn upstream(test: &str) -> (Arc<Upstream>, String) {
     (Arc::new(upstream), prefix)
 }
 
-/// A pool of sealed workers reading through `proxy`.
+/// A pool of sealed workers reading through `proxy`. Their grants are open
+/// (`--test-open-acl`): these tests are `house-cache`'s, the layer behind the
+/// grants, so a statement names the bucket itself, as one past the grants would
+/// (HS1 R-ACL.1; `acl.rs` tests the grants).
 async fn sealed(test: &str, proxy: &HouseCache) -> WorkerPool {
     let launcher = ProcessLauncher::new(common::WORKER, tmp_root(test))
-        .with_forward_target(Arc::new(proxy.clone()));
+        .with_forward_target(Arc::new(proxy.clone()))
+        .with_open_acl();
     assert_eq!(launcher.sandbox(), SandboxMode::Netns, "sealed by default");
     WorkerPool::start(small(2), Arc::new(launcher))
         .await
