@@ -96,6 +96,8 @@ pub fn golden_batch(seq: Seq) -> WalBatch {
                     deny_delete: true,
                     deny_force: true,
                 }],
+                // Added by GT1 Task 13 (T13.2); empty, so the golden bytes do not change.
+                request_digest: Vec::new(),
             }),
             false,
         ),

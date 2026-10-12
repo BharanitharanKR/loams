@@ -8,6 +8,7 @@
 //! and opens no listener.
 
 pub mod blob;
+pub mod catalog;
 pub mod checkpointer;
 pub mod clock;
 pub mod error;
@@ -17,6 +18,7 @@ pub mod gc;
 pub mod ids;
 pub mod limits;
 pub mod odb;
+pub mod owner;
 pub mod paths;
 pub mod reflog;
 mod retry;
@@ -26,6 +28,9 @@ pub mod testing;
 pub mod wal;
 
 pub use blob::{BlobError, BlobId, BlobStore, LpkWriter, Put, StoreBlobStore};
+pub use catalog::{
+    BucketRepoCatalog, CatalogError, Created, RepoCatalog, RepoLifecycle, RepoRecord,
+};
 pub use checkpointer::{CheckpointPolicy, create_repo, state_at};
 pub use clock::{Clock, SystemClock};
 pub use error::IdError;
@@ -38,11 +43,12 @@ pub use ids::{
     SecretId, Seq, SnapN, TraceParent, WsId, WsName,
 };
 pub use odb::{ObjectDb, OdbError, PackCache, PackCacheOdb};
+pub use owner::RepoSequencers;
 pub use paths::RepoPaths;
 pub use reflog::{
     CommittedTxn, Expect, ReadAt, Receipt, RefError, RefLog, RefSnapshot, RefTxn, RefUpdate,
     RejectReason, Scope,
 };
-pub use sequencer::{BucketRefLog, GitEvent, SequencerConfig};
+pub use sequencer::{BucketRefLog, GitEvent, SequencerConfig, config_digest};
 pub use state::{Check, IdemIndex, RepoState, StateError};
 pub use wal::{Appended, Hint, StoreWalStore, WalError, WalStore};

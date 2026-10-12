@@ -18,6 +18,9 @@ use loams_proto::loams::errors::v1::ErrorInfo;
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
+#[cfg(feature = "git")]
+mod repos;
+
 /// Every RPC of `RepoService`, with whether it streams.
 const RPCS: &[(&str, bool)] = &[
     ("CreateRepo", false),
@@ -101,6 +104,19 @@ impl Running {
             .map(|(flags, data)| (flags, serde_json::from_slice(data).unwrap_or(Value::Null)))
             .collect();
         (status, messages)
+    }
+
+    /// The server's bucket (`<data_dir>/bucket`), as a second writer would open it.
+    #[cfg(feature = "git")]
+    pub(crate) fn bucket(&self) -> loams_store::Store {
+        let dir = self
+            ._dir
+            .path()
+            .join("bucket")
+            .canonicalize()
+            .expect("bucket dir");
+        let url = url::Url::from_directory_path(&dir).expect("an absolute path");
+        loams_store::Store::from_url(url.as_str(), Vec::<(String, String)>::new()).expect("store")
     }
 
     pub(crate) async fn shutdown(self) {
@@ -201,8 +217,7 @@ fn default_features_exclude_git() {
 }
 
 /// `GetInstance` lists `loams.repos.v1` as available exactly when the build has the `git`
-/// feature; every RPC of a build without it answers `feature_not_in_variant`, and of a build
-/// with it `not_implemented` until GT1 Task 13.
+/// feature, and every RPC of a build without it answers `feature_not_in_variant`.
 #[tokio::test]
 async fn catalogue_lists_repos_only_with_feature() {
     let running = Running::start().await;
@@ -228,13 +243,9 @@ async fn catalogue_lists_repos_only_with_feature() {
         .filter_map(Value::as_str)
         .collect();
     assert_eq!(versions.contains(&"loams.repos.v1"), served, "{versions:?}");
-    // Until GT1 Task 13 serves them, a `git` build's RPCs answer `not_implemented`.
-    let expected = if served {
-        "not_implemented"
-    } else {
-        "feature_not_in_variant"
-    };
-    for (rpc, streams) in RPCS {
+    // A `git` build serves them (`repos.rs`); every RPC of a build without it is refused.
+    let rpcs = if served { &[][..] } else { RPCS };
+    for (rpc, streams) in rpcs {
         let path = format!("/loams.repos.v1.RepoService/{rpc}");
         let body = json!({"namespace": "default", "name": "app"});
         let error = if *streams {
@@ -254,7 +265,7 @@ async fn catalogue_lists_repos_only_with_feature() {
             error
         };
         assert_eq!(error["code"], "unimplemented", "{rpc}: {error}");
-        assert_eq!(reason(&error), expected, "{rpc}");
+        assert_eq!(reason(&error), "feature_not_in_variant", "{rpc}");
     }
     running.shutdown().await;
 }

@@ -187,7 +187,9 @@ message ListReposRequest {
 }
 
 message ListReposResponse {
-  // By name. Deleted repositories are not listed.
+  // By name. Deleted repositories are not listed. Each carries the catalog's
+  // fields only: `default_branch`, `protections` and `seq` are read by
+  // GetRepo (GT1 Task 13).
   repeated Repo repos = 1;
   string next_page_token = 2;
 }
