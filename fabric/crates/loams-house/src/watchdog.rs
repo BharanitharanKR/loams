@@ -605,6 +605,7 @@ impl Launcher for ProcessLauncher {
                 opened = Some(EndpointGuard {
                     target: Arc::clone(target),
                     id: id.to_string(),
+                    armed: true,
                 });
                 Some(format!("http://{addr}/"))
             }
@@ -659,17 +660,20 @@ impl Launcher for ProcessLauncher {
 struct EndpointGuard {
     target: Arc<dyn ForwardTarget>,
     id: String,
+    armed: bool,
 }
 
 impl EndpointGuard {
-    fn disarm(self) {
-        std::mem::forget(self);
+    fn disarm(mut self) {
+        self.armed = false;
     }
 }
 
 impl Drop for EndpointGuard {
     fn drop(&mut self) {
-        self.target.gone(&self.id);
+        if self.armed {
+            self.target.gone(&self.id);
+        }
     }
 }
 
