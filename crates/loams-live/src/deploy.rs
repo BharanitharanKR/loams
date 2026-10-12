@@ -1271,18 +1271,20 @@ pub async fn retain_with(app: &AppEngine, pending_grace: Duration) -> Result<Ret
         .await?
         .value?;
     let kept = trimmed.kept;
+    // A failure here leaves the indexes `dropping` for the next round.
+    let indexes_removed =
+        backfill::drop_indexes_within(&engine.runner, backfill::JANITOR_DROP_KEYS)
+            .await
+            .unwrap_or_else(|error| {
+                tracing::warn!(app = %engine.name, %error, "deleting dropped indexes failed");
+                Vec::new()
+            });
     let mut report = Retained {
         records_deleted: trimmed.deleted,
         bundles_deleted: 0,
         abandoned: trimmed.abandoned,
         validations_released: trimmed.released,
-        // A failure here leaves the indexes `dropping` for the next round.
-        indexes_removed: backfill::drop_indexes(&engine.runner)
-            .await
-            .unwrap_or_else(|error| {
-                tracing::warn!(app = %engine.name, %error, "deleting dropped indexes failed");
-                Vec::new()
-            }),
+        indexes_removed,
     };
     for id in &report.abandoned {
         tracing::warn!(

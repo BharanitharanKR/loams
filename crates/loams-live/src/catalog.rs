@@ -5,8 +5,9 @@
 //! ([`table_for_insert`]); [`define_table`] creates a table or changes its
 //! indexes, and refuses an index change on a non-empty table (R1 plan
 //! Ruling 5; a deploy changes the indexes of a non-empty table online, LV1
-//! plan Task 9, through [`IndexState`]). Table ids come from the catalog counter, from 1; index ids from
-//! the table's `next_index_id`, from 2, and are never reused. A table's
+//! plan Task 9, through [`IndexState`]). Table ids come from the catalog
+//! counter, from 1; index ids from the table's `next_index_id`, from 2, and
+//! are never reused. A table's
 //! [`TableValidation`] (LV1 plan Task 8) rides in its record, so every write
 //! that loads the table has its validators.
 
