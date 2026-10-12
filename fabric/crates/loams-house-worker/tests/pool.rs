@@ -1447,3 +1447,50 @@ async fn pinned_workers_are_reserved_capped_and_lost_on_death() {
     );
     assert_eq!(pool.stats().pinned, 1);
 }
+
+/// HS1 R11.11: the control connection is not read-only, so the worker runs on
+/// it only the House's own view DDL — one statement, ClickHouse's parser says
+/// so, that makes a `Memory` database, makes or replaces a view, or drops a
+/// table — whatever the front sends. Anything else is refused before it runs.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn control_connection_runs_only_view_ddl() {
+    let pool = pool("control-ddl", small(1)).await;
+    let mut lease = pool.acquire("ns").await.expect("worker");
+    let pid = lease.pid();
+
+    let mut good = statement("SELECT a FROM d.v", "TSV");
+    good.views = vec![
+        "CREATE DATABASE IF NOT EXISTS d ENGINE = Memory".to_string(),
+        "CREATE OR REPLACE VIEW d.v AS\nSELECT 1 AS a".to_string(),
+        "DROP TABLE IF EXISTS d.gone".to_string(),
+    ];
+    assert_eq!(lease.run(good).await.expect("view DDL runs").bytes, b"1\n");
+
+    for ddl in [
+        "CREATE OR REPLACE VIEW d.v AS\nSELECT 1 AS a; CREATE DATABASE loams_injected ENGINE = Memory",
+        "CREATE DATABASE IF NOT EXISTS loams_injected ENGINE = Memory; SELECT 1",
+        "CREATE DATABASE IF NOT EXISTS loams_injected ENGINE = Atomic",
+        "CREATE DATABASE IF NOT EXISTS loams_injected ENGINE = Memory COMMENT 'x'",
+        "CREATE TABLE default.loams_injected (a UInt8) ENGINE = Memory",
+        "INSERT INTO d.v VALUES (1)",
+        "DROP DATABASE d",
+        "DROP TABLE IF EXISTS d.v; DROP DATABASE d",
+        "SELECT 1",
+    ] {
+        let mut bad = statement("SELECT 1", "TSV");
+        bad.views = vec![ddl.to_string()];
+        let err = lease.run(bad).await.expect_err(ddl);
+        assert_eq!(err.code(), 497, "{ddl}: {err}");
+    }
+    let databases = lease
+        .run(statement(
+            "SELECT name FROM system.databases WHERE name LIKE 'loams_injected%' \
+             UNION ALL SELECT name FROM system.tables WHERE name LIKE 'loams_injected%'",
+            "TSV",
+        ))
+        .await
+        .expect("listed");
+    assert_eq!(databases.bytes, b"", "nothing the refused DDL named exists");
+    assert_eq!(lease.pid(), pid, "the worker stays");
+    pool.release(lease, Outcome::Completed);
+}
