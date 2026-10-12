@@ -35,6 +35,7 @@ use loams_house_lake::files::LiveFile;
 use crate::catalog::LakeRoot;
 use crate::ddl::{self, LakeEngine, TableClass, quote_name, quote_string};
 use crate::errors::{ChError, HouseError};
+use crate::expr;
 use crate::read::ReadPin;
 use crate::types::ChType;
 
@@ -206,13 +207,13 @@ fn casts(pin: &ReadPin) -> Result<Vec<String>, HouseError> {
             } else {
                 // An optional field of a non-Nullable column: one `ALTER … ADD
                 // COLUMN` made (R10.6). Rows written before it read its default.
+                // The default is catalog text: printed again from its tree,
+                // never spliced (R11.11).
                 let default =
                     if column.default_kind == "DEFAULT" || column.default_kind == "MATERIALIZED" {
-                        format!(
-                            "CAST({}, {})",
-                            column.default_expression,
-                            quote_string(&column.ch_type)
-                        )
+                        let expression = expr::reprint(&column.default_expression)
+                            .map_err(|why| catalog_refusal(pin, &why))?;
+                        format!("CAST({expression}, {})", quote_string(&column.ch_type))
                     } else {
                         format!("defaultValueOfTypeName({})", quote_string(&column.ch_type))
                     };
@@ -247,9 +248,19 @@ fn empty(pin: &ReadPin) -> Result<String, HouseError> {
     ))
 }
 
-/// The sorting key's elements; `tuple()` has none.
-fn key(pin: &ReadPin) -> Vec<(String, Option<String>)> {
-    ddl::key_elements(&pin.table.order_by)
+/// The sorting key's elements, each printed again from its tree (R11.11);
+/// `tuple()` has none.
+fn key(pin: &ReadPin) -> Result<Vec<(String, Option<String>)>, HouseError> {
+    expr::key_elements(&pin.table.order_by).map_err(|why| catalog_refusal(pin, &why))
+}
+
+/// `497`: a table's catalog properties hold text the House does not run as an
+/// expression (R11.4, R11.11).
+pub fn catalog_refusal(pin: &ReadPin, why: &str) -> HouseError {
+    HouseError::from(ChError::access_denied(format!(
+        "Table {}.{}: its catalog properties hold an expression the House does not run ({why})",
+        pin.table.database, pin.table.name
+    )))
 }
 
 const SEQ: &str = "__loams_seq";
@@ -287,7 +298,7 @@ fn replacing(
     }
     order.push(format!("{SEQ} DESC"));
     order.push(format!("{ROW} DESC"));
-    let key: Vec<String> = key(pin).into_iter().map(|(text, _)| text).collect();
+    let key: Vec<String> = key(pin)?.into_iter().map(|(text, _)| text).collect();
     let limit_by = if key.is_empty() {
         "tuple()".to_string()
     } else {
@@ -335,7 +346,7 @@ fn summing(pin: &ReadPin, source: &str, engine: &LakeEngine) -> Result<String, H
             "not a SummingMergeTree table",
         )));
     };
-    let key = key(pin);
+    let key = key(pin)?;
     let key_columns: Vec<&str> = key.iter().filter_map(|(_, c)| c.as_deref()).collect();
     let columns = columns(pin);
     let is_summed = |c: &ddl::ChColumn| match summed {
@@ -462,7 +473,7 @@ mod tests {
         assert_eq!(
             ddl,
             "CREATE OR REPLACE VIEW db.t AS\nSELECT CAST(k, 'UInt64') AS k, CAST(s, \
-             'Nullable(String)') AS s, CAST(ifNull(n, CAST(k + 1, 'UInt32')), 'UInt32') AS n\n\
+             'Nullable(String)') AS s, CAST(ifNull(n, CAST(plus(`k`, 1), 'UInt32')), 'UInt32') AS n\n\
              FROM SRC\nSETTINGS iceberg_snapshot_id = 42"
         );
         // FINAL on a MergeTree table is the plain view.
@@ -502,7 +513,7 @@ mod tests {
         let ddl = view_ddl(&p, "SRC", Mode::Final(&files)).expect("view");
         assert!(ddl.contains("transform(_file, ['a.parquet']::Array(String), [3]::Array(Int64)"));
         assert!(ddl.contains("ORDER BY v DESC, __loams_seq DESC, __loams_row DESC"));
-        assert!(ddl.contains("LIMIT 1 BY k, toDate(d)"));
+        assert!(ddl.contains("LIMIT 1 BY `k`, toDate(`d`)"));
         assert!(ddl.contains("WHERE del = 0"));
 
         let s = pin(
@@ -518,6 +529,43 @@ mod tests {
         assert!(ddl.starts_with(
             "CREATE OR REPLACE VIEW db.t AS\nSELECT k, sumWithOverflow(n) AS n, any(label) AS label"
         ));
-        assert!(ddl.contains("GROUP BY k\nHAVING NOT (n = 0)"));
+        assert!(ddl.contains("GROUP BY `k`\nHAVING NOT (n = 0)"));
+    }
+
+    #[test]
+    fn catalog_text_is_reprinted_or_refused() {
+        // R11.11: a DEFAULT or a sorting key from the catalog never reaches the
+        // control connection as text.
+        for default in [
+            "1); DROP TABLE x; --",
+            "(SELECT count() FROM system.one)",
+            "numbers(1)",
+            "1, 2",
+        ] {
+            let mut added = column("n", "UInt32");
+            added.default_kind = "DEFAULT".to_string();
+            added.default_expression = default.to_string();
+            let mut p = pin("MergeTree", "k", vec![column("k", "UInt64"), added]);
+            p.fields[1].required = false;
+            let err = view_ddl(&p, "SRC", Mode::Plain).expect_err(default);
+            assert_eq!(err.code(), 497, "{default}: {err}");
+        }
+        for order_by in [
+            "k, (SELECT 1)",
+            "(k, url('http://127.0.0.1:1/x', 'CSV', 'a String'))",
+            "`k) FROM numbers(1) --`(k)",
+            "k); DROP DATABASE default; --",
+        ] {
+            let p = pin(
+                "ReplacingMergeTree",
+                order_by,
+                vec![column("k", "UInt64"), column("v", "UInt8")],
+            );
+            let err = view_ddl(&p, "SRC", Mode::Final(&[])).expect_err(order_by);
+            assert_eq!(err.code(), 497, "{order_by}: {err}");
+            let s = pin("SummingMergeTree", order_by, vec![column("k", "UInt64")]);
+            let err = view_ddl(&s, "SRC", Mode::Final(&[])).expect_err(order_by);
+            assert_eq!(err.code(), 497, "{order_by}: {err}");
+        }
     }
 }

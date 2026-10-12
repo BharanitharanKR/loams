@@ -589,8 +589,10 @@ pub async fn plan(
             Mode::Plain
         };
         if views::carries_expressions(&pin, mode) {
-            // Expression text from the catalog runs on the control connection:
-            // the deny list reads it first, as it reads a user's statement.
+            // Expression text from the catalog is printed again from its tree
+            // (`crate::expr`, R11.11), and the deny list still reads the view
+            // before the control connection runs it, as it reads a user's
+            // statement.
             let checked = views::view_ddl(&pin, views::CHECKED_SOURCE, mode)?;
             let body = views::view_body(&checked);
             let analysis = lease
@@ -598,13 +600,7 @@ pub async fn plan(
                 .await
                 .map_err(crate::deny::as_setting_refusal)?;
             crate::gate::admit(&analysis, body, crate::classify::Expect::Read, true, None)
-                .map_err(|err| {
-                    HouseError::from(ChError::access_denied(format!(
-                        "Table {}.{}: its catalog properties hold an expression the House does \
-                     not run ({err})",
-                        pin.table.database, pin.table.name
-                    )))
-                })?;
+                .map_err(|err| views::catalog_refusal(&pin, &err.to_string()))?;
         }
         plan.views.push(views::view_ddl(&pin, &source, mode)?);
         plan.pins.push(pin);

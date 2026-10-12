@@ -1207,6 +1207,109 @@ async fn catalog_expressions_are_deny_checked() {
     refused(addr, "SELECT count() FROM t FINAL", &[], "497").await;
 }
 
+/// HS1 R11.11: catalog expression text is parsed as one expression and printed
+/// again from its tree, never spliced: a `DEFAULT` or a sorting key that holds a
+/// statement, a subquery, a table function or a second expression is `497`, and
+/// a pure expression of the allowed functions reads as before.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn catalog_expressions_are_reprinted_from_the_ast() {
+    let house = lakehouse("catalog-reprint").await;
+    let addr = house.addr();
+    ok(
+        addr,
+        "CREATE TABLE t (k Int64, s String) ENGINE = ReplacingMergeTree ORDER BY k",
+    )
+    .await;
+    append(&house, 2, "default", "t", &kv(0..3)).await;
+    // ClickHouse checks an ALTER's default alone (no other column), so the
+    // stored text is set to expressions over the table's columns below.
+    ok(addr, "ALTER TABLE t ADD COLUMN n UInt32 DEFAULT plus(1, 1)").await;
+    assert_eq!(
+        ok(addr, "SELECT sum(n) FROM t").await,
+        "6\n",
+        "plus(1, 1) runs"
+    );
+
+    let set = |key: &'static str, value: String| {
+        let house = &house;
+        async move {
+            let table = load(house, 2, "default", "t").await;
+            house
+                .catalog
+                .commit(
+                    &table.ident,
+                    Vec::new(),
+                    vec![loams_house_lake::TableUpdate::SetProperties {
+                        updates: HashMap::from([(key.to_string(), value)]),
+                    }],
+                )
+                .await
+                .expect("tamper");
+        }
+    };
+    let types =
+        load(&house, 2, "default", "t").await.metadata.properties()["loams.ch.types"].clone();
+    assert!(types.contains("plus(1, 1)"), "{types}");
+
+    // Legitimate expressions still read.
+    for (default, sum) in [
+        ("plus(k, 2)", "9"),
+        ("CAST(k * 2 AS UInt32)", "6"),
+        ("if(k > 0, 1, 0)", "2"),
+        ("toUInt32(length(concat(s, 'x')))", "9"),
+    ] {
+        set("loams.ch.types", types.replace("plus(1, 1)", default)).await;
+        assert_eq!(
+            ok(addr, "SELECT sum(n) FROM t").await,
+            format!("{sum}\n"),
+            "{default}"
+        );
+    }
+    for default in [
+        "1); DROP TABLE t; --",
+        "1, 2",
+        "(SELECT count() FROM system.one)",
+        "(SELECT max(k) FROM numbers(10))",
+        "k IN (SELECT 1)",
+        "numbers(1)",
+        "url('http://127.0.0.1:1/x', 'CSV', 'a String')",
+        "1 SETTINGS max_threads = 1",
+        "x -> 1",
+    ] {
+        set("loams.ch.types", types.replace("plus(1, 1)", default)).await;
+        let text = refused(addr, "SELECT sum(n) FROM t", &[], "497").await;
+        assert!(text.contains("catalog properties"), "{default}: {text}");
+    }
+    set("loams.ch.types", types.clone()).await;
+    assert_eq!(ok(addr, "SELECT sum(n) FROM t").await, "6\n");
+
+    // The sorting key of a FINAL merge view.
+    for key in ["(k, toString(k))", "tuple(k)", "cityHash64(k)"] {
+        set("loams.ch.order_by", key.to_string()).await;
+        assert_eq!(
+            ok(addr, "SELECT count() FROM t FINAL").await,
+            "3\n",
+            "{key}"
+        );
+    }
+    for key in [
+        "k); DROP TABLE t; --",
+        "k, (SELECT 1)",
+        "(k, (SELECT max(number) FROM numbers(1)))",
+        "`k\\` FROM numbers(1) --`(k)",
+        "k, url('http://127.0.0.1:1/x', 'CSV', 'a String')",
+        "k; DROP DATABASE default",
+    ] {
+        set("loams.ch.order_by", key.to_string()).await;
+        let text = refused(addr, "SELECT count() FROM t FINAL", &[], "497").await;
+        assert!(text.contains("catalog properties"), "{key}: {text}");
+    }
+    set("loams.ch.order_by", "k".to_string()).await;
+    assert_eq!(ok(addr, "SELECT count() FROM t FINAL").await, "3\n");
+    assert_eq!(ok(addr, "SELECT sum(n) FROM t").await, "6\n", "nothing ran");
+    no_mergetree_in_chdb(&house).await;
+}
+
 /// `loams.house.v1.ExecuteQuery` reads lake tables as HTTP does: the Arrow
 /// header described through the views, the request's `database`, and time
 /// travel from its `settings`.

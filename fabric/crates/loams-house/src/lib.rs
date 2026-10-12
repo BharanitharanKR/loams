@@ -87,6 +87,7 @@ pub mod config;
 pub mod ddl;
 pub mod deny;
 pub mod errors;
+pub mod expr;
 #[cfg(feature = "test-hooks")]
 pub mod fuzz;
 pub mod gate;

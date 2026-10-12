@@ -344,6 +344,7 @@ impl Worker {
             self.views_live = true;
         }
         for view in &execute.views {
+            self.check_control_ddl(view).map_err(Failure::Engine)?;
             self.control
                 .execute_simple(view)
                 .map_err(|err| Failure::Engine(engine_error(&err)))?;
@@ -419,6 +420,29 @@ impl Worker {
             self.sessions.remove(&spec.key);
         }
         result
+    }
+
+    /// Whether the control connection may run `sql` (HS1 R11.11). It is not
+    /// read-only, and chDB has one user (`--user=` is ignored, `CREATE USER`
+    /// and `EXECUTE AS` are refused, R1.8), so no grant can confine it to view
+    /// DDL; the worker does: one statement, ClickHouse's own parser says so, of
+    /// one of the shapes [`control_ddl_shape`] takes.
+    fn check_control_ddl(&self, sql: &str) -> Result<(), EngineError> {
+        let one = matches!(
+            self.control.classify(sql),
+            Ok(analysis) if analysis.statements == 1
+        );
+        if one && control_ddl_shape(sql) {
+            return Ok(());
+        }
+        Err(EngineError {
+            code: 497,
+            name: "ACCESS_DENIED".to_string(),
+            message: "the worker's control connection runs only the House's view DDL \
+                      (one CREATE DATABASE … ENGINE = Memory, CREATE OR REPLACE VIEW or \
+                      DROP TABLE IF EXISTS)"
+                .to_string(),
+        })
     }
 
     /// `Classify`: ClickHouse's parser on the control connection, nothing run
@@ -734,6 +758,54 @@ fn quoted_name(name: &str) -> String {
     format!("`{}`", name.replace('\\', "\\\\").replace('`', "\\`"))
 }
 
+/// A name as the front prints it: a plain word, or back-quoted with `\\` and
+/// `` \` `` escaped. Returns the text after it.
+fn after_name(text: &str) -> Option<&str> {
+    let bytes = text.as_bytes();
+    match bytes.first()? {
+        b'`' => {
+            let mut at = 1;
+            while at < bytes.len() {
+                match bytes[at] {
+                    b'\\' => at += 2,
+                    b'`' => return Some(&text[at + 1..]),
+                    _ => at += 1,
+                }
+            }
+            None
+        }
+        first if first.is_ascii_alphabetic() || *first == b'_' => {
+            let end = bytes
+                .iter()
+                .position(|b| !(b.is_ascii_alphanumeric() || *b == b'_'))
+                .unwrap_or(bytes.len());
+            Some(&text[end..])
+        }
+        _ => None,
+    }
+}
+
+/// `<name>.<name>`, returning the text after it.
+fn after_qualified(text: &str) -> Option<&str> {
+    after_name(after_name(text)?.strip_prefix('.')?)
+}
+
+/// The shapes of the front's view DDL (`loams_house::views`, `system`): `CREATE
+/// DATABASE IF NOT EXISTS d ENGINE = Memory`, `CREATE OR REPLACE VIEW d.v AS\n…`
+/// and `DROP TABLE IF EXISTS d.t`, exactly.
+pub fn control_ddl_shape(sql: &str) -> bool {
+    if let Some(rest) = sql.strip_prefix("CREATE DATABASE IF NOT EXISTS ") {
+        return after_name(rest) == Some(" ENGINE = Memory");
+    }
+    if let Some(rest) = sql.strip_prefix("CREATE OR REPLACE VIEW ") {
+        return after_qualified(rest).is_some_and(|body| body.starts_with(" AS\n"));
+    }
+    if let Some(rest) = sql.strip_prefix("DROP TABLE IF EXISTS ") {
+        return after_qualified(rest) == Some("");
+    }
+    false
+}
+
 /// Drops every read view an earlier statement made (HS1 Task 11): the views in
 /// `default` and every other `Memory` database the front created. Session
 /// temporary tables live elsewhere and stay.
@@ -1003,7 +1075,34 @@ fn fill_memory(progress: &mut Progress) {
 
 #[cfg(test)]
 mod tests {
-    use super::is_setting_name;
+    use super::{control_ddl_shape, is_setting_name};
+
+    #[test]
+    fn control_ddl_shapes() {
+        for ok in [
+            "CREATE DATABASE IF NOT EXISTS d ENGINE = Memory",
+            "CREATE DATABASE IF NOT EXISTS `my db` ENGINE = Memory",
+            "CREATE DATABASE IF NOT EXISTS `a\\`b` ENGINE = Memory",
+            "CREATE OR REPLACE VIEW d.v AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW `__loams_system`.`tables` AS\nSELECT 1",
+            "DROP TABLE IF EXISTS d.`t`",
+        ] {
+            assert!(control_ddl_shape(ok), "{ok}");
+        }
+        for bad in [
+            "CREATE DATABASE IF NOT EXISTS d ENGINE = Atomic",
+            "CREATE DATABASE IF NOT EXISTS d ENGINE = Memory; SELECT 1",
+            "CREATE DATABASE IF NOT EXISTS `d ENGINE = Memory",
+            "CREATE OR REPLACE VIEW v AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a UInt8) AS SELECT 1",
+            "CREATE TABLE d.t (a UInt8) ENGINE = Memory",
+            "DROP TABLE IF EXISTS d.t; DROP DATABASE d",
+            "DROP DATABASE d",
+            "INSERT INTO d.v VALUES (1)",
+        ] {
+            assert!(!control_ddl_shape(bad), "{bad}");
+        }
+    }
 
     #[test]
     fn setting_names_are_identifiers() {
