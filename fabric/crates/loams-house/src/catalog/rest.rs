@@ -158,6 +158,15 @@ impl RestCatalog {
                 options.uri
             )));
         }
+        // A bearer token over plaintext would hand it to anyone on the path: a
+        // token waits for `https` (HS1 Task 20; PR #448 review).
+        if options.token.is_some() {
+            return Err(CatalogError::Invalid(format!(
+                "catalog URI {:?}: a token is sent only over https, which arrives with TLS \
+                 (HS1 Task 20)",
+                options.uri
+            )));
+        }
         let client = reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .build()

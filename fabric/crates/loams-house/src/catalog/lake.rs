@@ -478,7 +478,10 @@ impl Lake {
         };
         if let Some(relative) = self.root.relative(table.metadata.location()) {
             let prefix = format!("{}/", relative.trim_end_matches('/'));
-            if prefix != "/" {
+            // The `ns/` tree is the namespaces' own: a location in this
+            // namespace's part is granted already, and one in another's must never
+            // be (PR #448 review).
+            if prefix != "/" && !prefix.starts_with("ns/") {
                 grants.vouch(&namespace.to_string(), &prefix);
             }
         }
