@@ -233,6 +233,10 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
 
 ## Known limitations
 
+- **SDKs.** Use the SDKs from the repository (`sdks/<language>`); none is published to a package
+  registry yet. Supported in this preview, each tested in CI against a live server: TypeScript,
+  Python, Go, Rust, C#, C++ and Swift. Coming soon: Java, Kotlin, Ruby, PHP, Dart and Objective-C.
+
 - **Loams Postgres:** the control plane runs (PG2 Tasks 1 to 9: projects, branches, roles,
   databases, the reconcilers and the Neon upcall API), but computes and endpoints are not
   provisioned through it yet. In this preview the Postgres stack runs Neon's storage and

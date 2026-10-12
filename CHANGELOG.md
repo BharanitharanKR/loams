@@ -38,6 +38,10 @@ the known limitations, recorded before the preview was cut, are part of it too. 
   tailnet plus the hosted console. Coming soon: the console on your own Vercel or Cloudflare,
   `auth.loams.dev/register` self-service clients, Headscale networks, one-click OAuth deploy, and
   House/Analytics wired to the engine.
+- **SDKs (preview, from the repository).** Seven SDKs build and pass the shared conformance suite
+  against a live server in CI: TypeScript, Python, Go, Rust, C#, C++ and Swift (`sdks/<language>`).
+  They are not yet published to package registries. Coming soon: Java, Kotlin, Ruby, PHP, Dart and
+  Objective-C (present in `sdks/` but not yet built or tested in CI), and published packages.
 
 ### Known limitations
 - Loams Postgres: the control plane runs (PG2 Tasks 1 to 9), but computes and endpoints are not
