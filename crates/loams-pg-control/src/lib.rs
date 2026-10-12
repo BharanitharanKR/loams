@@ -13,7 +13,9 @@
 //! with the compute tokens it checks ([`upcall`]) (Task 8); who may call
 //! ([`authz`]) and the audit events every mutation emits ([`audit`])
 //! (Task 9); where computes run ([`runtime`]: the `ComputeRuntime` seam,
-//! the compose runtime and the computes' certificates) (Task 10). Reached
+//! the compose runtime and the computes' certificates) (Task 10); the
+//! endpoint RPCs, `WatchProject`, and the endpoint reconciler that runs
+//! the compute state machine ([`reconcile::endpoint`]) (Task 11). Reached
 //! only through `loams`'s feature `postgres` (Task 9), whose `pg-control`
 //! role serves this crate.
 

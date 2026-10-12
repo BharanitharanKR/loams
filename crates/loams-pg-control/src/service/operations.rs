@@ -55,7 +55,27 @@ pub(crate) fn pending(
         created_at_ms: now_ms,
         updated_at_ms: now_ms,
         progress: None,
+        endpoint_id: None,
     }
+}
+
+/// A `Pending` endpoint operation of `kind` (Task 11): its target names
+/// the endpoint and its branch.
+pub(crate) fn pending_endpoint(
+    kind: OperationKind,
+    namespace: &str,
+    endpoint: &crate::model::EndpointRec,
+    now_ms: u64,
+) -> OperationRec {
+    let mut op = pending(
+        kind,
+        namespace,
+        &endpoint.project_id,
+        Some(&endpoint.branch_id),
+        now_ms,
+    );
+    op.endpoint_id = Some(endpoint.id.clone());
+    op
 }
 
 /// Adds `op` and its two indexes (by id, and in its namespace) to

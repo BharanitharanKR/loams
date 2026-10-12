@@ -11,7 +11,10 @@
 //!   `--reflection`;
 //! - the **upcall listener** (`--pg-upcall-listen`): the routes Neon's
 //!   components call ([`UpcallServer`]), never on the API listener;
-//! - the **reconciler** of projects and branches ([`Reconciler`]);
+//! - the **reconciler** of projects, branches and endpoints
+//!   ([`Reconciler`]); with `--runtime compose` it drives computes through
+//!   the compose runtime ([`ComputesConfig`], Task 11), each compute
+//!   running the pinned image of its project's Postgres major;
 //! - **upkeep** on a timer: the idempotency ledger's expired entries and
 //!   finished operations past their retention are removed.
 //!
@@ -29,7 +32,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -41,12 +44,17 @@ use loams_pg_control::authz::{
     GrantsAuthorizer, KeysFile,
 };
 use loams_pg_control::neon::NeonClients;
+use loams_pg_control::reconcile::endpoint::{Computes, HttpComputeCtl};
 use loams_pg_control::reconcile::{Reconciler, ReconcilerConfig};
+use loams_pg_control::runtime::compose::{
+    ComposeBin, ComposeConfig, ComposeRuntime, CtlReach, TokioCommandRunner,
+};
+use loams_pg_control::runtime::images;
 use loams_pg_control::secrets::{FileSecretStore, KeySource, Secret, SecretRef, SecretStore};
 use loams_pg_control::service::operations::OPERATION_RETENTION;
 use loams_pg_control::service::{Clock, PgService, ServiceConfig};
 use loams_pg_control::upcall::{
-    ComputeCtlConfigurer, ComputeKeys, SIGNING_KEY_REF, UpcallConfig, UpcallServer,
+    ComputeCtlConfigurer, ComputeKeys, SIGNING_KEY_REF, SpecSources, UpcallConfig, UpcallServer,
     load_or_create_signing_key,
 };
 use loams_pg_control::{KvControlStore, StoreOptions};
@@ -90,15 +98,57 @@ impl fmt::Debug for PgStore {
     }
 }
 
-/// Where computes run (`--runtime`). Until Task 11's endpoint reconciler
-/// drives `loams_pg_control::runtime` (R10.8), it decides only the secret
-/// store.
+/// Where computes run (`--runtime`), and so where secrets live.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PgRuntime {
-    /// compose: secrets in the age-encrypted file under the data directory.
+    /// compose: computes are compose services ([`ComputesConfig`]);
+    /// secrets in the age-encrypted file under the data directory.
     Compose,
-    /// Kubernetes: secrets as Secrets in `namespace`.
+    /// Kubernetes: secrets as Secrets in `namespace`. Computes on
+    /// Kubernetes are Task 13's: until then endpoints are recorded but no
+    /// compute starts.
     Kubernetes { namespace: String },
+}
+
+/// How the compose runtime runs computes (Task 11, R10.8).
+#[derive(Clone, Debug)]
+pub struct ComputesConfig {
+    /// The compose command; `None`: the first of `docker compose`, `podman
+    /// compose` and `docker-compose` on `PATH`.
+    pub compose_bin: Option<ComposeBin>,
+    /// Where the compose files live; `None`: `<data_dir>/compose`.
+    pub compose_dir: Option<PathBuf>,
+    /// The storage stack's network the computes join
+    /// (`loams-neon_default` for `deploy/loams-postgres-dev`).
+    pub network: Option<String>,
+    /// The upcall listener as the computes reach it; `None`:
+    /// `http://host.docker.internal:<upcall port>` (Docker, with
+    /// `host.docker.internal:host-gateway` added to `extra_hosts`) or
+    /// `http://host.containers.internal:<upcall port>` (Podman).
+    pub control_plane_uri: Option<String>,
+    pub extra_hosts: Vec<String>,
+    /// Where endpoints' ports are published (loopback by default).
+    pub publish_ip: IpAddr,
+    /// How `pg-control` reaches each compute's `compute_ctl`.
+    pub ctl_reach: CtlReach,
+    /// Compute images by Postgres major, over the pin file's
+    /// ([`images::pinned`]).
+    pub image_overrides: BTreeMap<u32, String>,
+}
+
+impl Default for ComputesConfig {
+    fn default() -> Self {
+        ComputesConfig {
+            compose_bin: None,
+            compose_dir: None,
+            network: None,
+            control_plane_uri: None,
+            extra_hosts: Vec::new(),
+            publish_ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+            ctl_reach: CtlReach::Host,
+            image_overrides: BTreeMap::new(),
+        }
+    }
 }
 
 /// Who may call (`--pg-authz`).
@@ -147,6 +197,9 @@ pub struct PgControlConfig {
     pub upkeep_every: Duration,
     /// How long a finished operation stays readable.
     pub operation_retention: Duration,
+    /// With `--runtime compose`: how computes run. `None`: endpoints are
+    /// recorded but no compute starts (tests of the API alone).
+    pub computes: Option<ComputesConfig>,
 }
 
 impl fmt::Debug for PgControlConfig {
@@ -193,6 +246,7 @@ impl PgControlConfig {
             audit: Arc::new(LogAuditSink),
             upkeep_every: Duration::from_secs(600),
             operation_retention: OPERATION_RETENTION,
+            computes: Some(ComputesConfig::default()),
         }
     }
 }
@@ -214,6 +268,8 @@ pub enum PgControlError {
     Neon(#[from] loams_postgres::NeonError),
     #[error("the upcall listener: {0}")]
     Upcall(#[from] loams_pg_control::upcall::UpcallError),
+    #[error("the compute runtime: {0}")]
+    Runtime(String),
     #[error("binding the API listener {addr}: {source}")]
     Bind {
         addr: SocketAddr,
@@ -299,6 +355,82 @@ async fn open_secrets(config: &PgControlConfig) -> Result<Arc<dyn SecretStore>, 
     }
 }
 
+/// The compose runtime and what the reconciler drives computes with.
+fn computes(
+    config: &PgControlConfig,
+    settings: &ComputesConfig,
+    keys: &Arc<ComputeKeys>,
+    clock: &Clock,
+    upcall_addr: SocketAddr,
+) -> Result<Computes, PgControlError> {
+    let runtime_error = |e: &dyn fmt::Display| PgControlError::Runtime(e.to_string());
+    let bin = match &settings.compose_bin {
+        Some(b) => b.clone(),
+        None => ComposeBin::from_path().ok_or_else(|| {
+            PgControlError::Runtime(
+                "--runtime compose needs docker compose, podman compose or docker-compose on \
+                 PATH"
+                    .into(),
+            )
+        })?,
+    };
+    let podman = bin
+        .program
+        .file_name()
+        .is_some_and(|n| n.to_string_lossy().contains("podman"));
+    let mut extra_hosts = settings.extra_hosts.clone();
+    let control_plane_uri = match &settings.control_plane_uri {
+        Some(uri) => uri.clone(),
+        None if podman => format!("http://host.containers.internal:{}", upcall_addr.port()),
+        None => {
+            if !extra_hosts
+                .iter()
+                .any(|h| h.starts_with("host.docker.internal:"))
+            {
+                extra_hosts.push("host.docker.internal:host-gateway".into());
+            }
+            format!("http://host.docker.internal:{}", upcall_addr.port())
+        }
+    };
+    if upcall_addr.ip().is_loopback() {
+        tracing::warn!(
+            %upcall_addr,
+            "computes run in containers and cannot reach a loopback upcall listener; \
+             listen where they reach it (--pg-upcall-listen 0.0.0.0:7690)"
+        );
+    }
+    let mut compose = ComposeConfig::new(
+        bin,
+        settings
+            .compose_dir
+            .clone()
+            .unwrap_or_else(|| config.data_dir.join("compose")),
+        control_plane_uri,
+    );
+    compose.network = settings.network.clone();
+    compose.extra_hosts = extra_hosts;
+    compose.publish_ip = settings.publish_ip;
+    compose.ctl_reach = settings.ctl_reach;
+    let runtime = ComposeRuntime::open(compose, Arc::new(TokioCommandRunner))
+        .map_err(|e| runtime_error(&e))?;
+    let mut images = images::pinned().map_err(|e| runtime_error(&e))?;
+    for (major, image) in &settings.image_overrides {
+        images::check_image(image).map_err(|e| runtime_error(&e))?;
+        images.insert(*major, image.clone());
+    }
+    Ok(Computes::new(
+        Arc::new(runtime),
+        Arc::new(HttpComputeCtl::new(keys.clone(), clock.clone())),
+        keys.clone(),
+        images,
+        SpecSources {
+            pageservers: config.pageservers.clone(),
+            default_pageserver: config.default_pageserver,
+            wal_pools: config.wal_pools.clone(),
+        },
+    ))
+}
+
 /// The API listener's routes: every RPC path its own route, so any other
 /// path is axum's 404 (an upcall path among them).
 fn api_routes(service: PgService<NeonClients>, gate: Arc<Gate>, reflection: bool) -> AxumRouter {
@@ -379,6 +511,19 @@ impl PgControl {
         )
         .await?;
         let upcall_addr = upcall.local_addr();
+        let computes = match (&config.runtime, &config.computes) {
+            (PgRuntime::Compose, Some(settings)) => {
+                Some(computes(&config, settings, &keys, &clock, upcall_addr)?)
+            }
+            (PgRuntime::Kubernetes { .. }, Some(_)) => {
+                tracing::warn!(
+                    "--runtime kubernetes runs no computes until PG2 Task 13: endpoints are \
+                     recorded, and none starts"
+                );
+                None
+            }
+            (_, None) => None,
+        };
 
         let gate = Arc::new(Gate {
             authenticator,
@@ -404,12 +549,11 @@ impl PgControl {
             upcall.serve(async move { token.cancelled().await }).await;
         }));
         let holder = format!("pg-control-{}", ulid::Ulid::generate());
-        let reconciler = Arc::new(Reconciler::new(
-            store,
-            neon,
-            secrets,
-            ReconcilerConfig::new(holder),
-        ));
+        let mut reconciler = Reconciler::new(store, neon, secrets, ReconcilerConfig::new(holder));
+        if let Some(computes) = computes {
+            reconciler = reconciler.with_computes(computes);
+        }
+        let reconciler = Arc::new(reconciler);
         let token = stop.clone();
         tasks.push(tokio::spawn(async move {
             if let Err(e) = reconciler.run(async move { token.cancelled().await }).await {

@@ -76,6 +76,14 @@ impl Snapshot {
     /// Whether a pass has anything to do (without the lease).
     pub fn needs_work<S, N>(&self, ctx: &Ctx<S, N>) -> bool {
         let p = &self.project.record;
+        if ctx.computes.is_some()
+            && self
+                .endpoints
+                .iter()
+                .any(|e| super::endpoint::needs_work(&e.record))
+        {
+            return true;
+        }
         let any = |state| self.branches.iter().any(|b| b.record.state == state);
         match p.state {
             ProjectState::Creating | ProjectState::Deleting => true,

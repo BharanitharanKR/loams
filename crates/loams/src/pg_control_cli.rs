@@ -7,8 +7,12 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use loams::MetaBackend;
-use loams::pg_control::{PgAuth, PgControl, PgControlConfig, PgRuntime, PgStore, read_token};
+use loams::pg_control::{
+    ComputesConfig, PgAuth, PgControl, PgControlConfig, PgRuntime, PgStore, read_token,
+};
 use loams_pg_control::authz::{Actor, Grant, GrantObject, KeysFile, PrincipalKind, Relation};
+use loams_pg_control::runtime::compose::CtlReach;
+use loams_pg_control::runtime::images;
 use url::Url;
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
@@ -25,6 +29,15 @@ pub(crate) enum RuntimeArg {
     Compose,
     /// Kubernetes; secrets as Secrets in --kube-namespace.
     Kubernetes,
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub(crate) enum CtlReachArg {
+    /// pg-control runs on the host: each compute publishes compute_ctl on a
+    /// loopback port.
+    Host,
+    /// pg-control runs on the compose network: http://<service>:3080.
+    Network,
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
@@ -46,9 +59,36 @@ pub(crate) struct PgControlArgs {
     /// (the metastore's keyspace).
     #[arg(long, value_parser = MetaBackend::parse)]
     meta: Option<MetaBackend>,
-    /// Where computes run; until computes do, it picks the secret store.
+    /// Where computes run (and secrets live).
     #[arg(long, value_enum, default_value = "compose")]
     runtime: RuntimeArg,
+    /// With --runtime compose: the storage stack's network computes join
+    /// (loams-neon_default for deploy/loams-postgres-dev).
+    #[arg(long)]
+    compose_network: Option<String>,
+    /// With --runtime compose: where the compose files live (default
+    /// <data-dir>/compose).
+    #[arg(long)]
+    compose_dir: Option<PathBuf>,
+    /// The upcall listener as computes reach it (default
+    /// http://host.docker.internal:<port>, or host.containers.internal under
+    /// Podman); --pg-upcall-listen must be an address they reach.
+    #[arg(long)]
+    compute_control_plane_uri: Option<String>,
+    /// `<host>:<ip>` added to every compute's /etc/hosts (repeated).
+    #[arg(long = "compose-extra-host")]
+    compose_extra_host: Vec<String>,
+    /// Where endpoints' ports are published.
+    #[arg(long, default_value = "127.0.0.1")]
+    compose_publish_ip: std::net::IpAddr,
+    /// How pg-control reaches each compute's compute_ctl.
+    #[arg(long, value_enum, default_value = "host")]
+    compute_ctl_reach: CtlReachArg,
+    /// `<major>=<repository>@sha256:<digest>`: the compute image of a
+    /// Postgres major, over deploy/pins/loams-postgres-images.toml's
+    /// (repeated).
+    #[arg(long = "compute-image", value_parser = parse_image)]
+    compute_image: Vec<(u32, String)>,
     /// With --runtime kubernetes: the namespace of the Secrets.
     #[arg(long, default_value = "loams-postgres")]
     kube_namespace: String,
@@ -108,6 +148,10 @@ fn parse_pageserver(s: &str) -> Result<(u64, String), String> {
     Ok((id, url.to_owned()))
 }
 
+fn parse_image(s: &str) -> Result<(u32, String), String> {
+    images::parse_override(s).map_err(|e| format!("--compute-image: {e}"))
+}
+
 fn parse_pool(s: &str) -> Result<(String, Vec<String>), String> {
     let (name, list) = s
         .split_once('=')
@@ -143,6 +187,19 @@ fn config(args: PgControlArgs) -> Result<PgControlConfig, String> {
             namespace: args.kube_namespace,
         },
     };
+    config.computes = Some(ComputesConfig {
+        compose_bin: None,
+        compose_dir: args.compose_dir,
+        network: args.compose_network,
+        control_plane_uri: args.compute_control_plane_uri,
+        extra_hosts: args.compose_extra_host,
+        publish_ip: args.compose_publish_ip,
+        ctl_reach: match args.compute_ctl_reach {
+            CtlReachArg::Host => CtlReach::Host,
+            CtlReachArg::Network => CtlReach::Network,
+        },
+        image_overrides: args.compute_image.into_iter().collect(),
+    });
     config.listen = args.listen;
     config.upcall_listen = args.pg_upcall_listen;
     config.auth = match (args.pg_authz, args.pg_api_keys) {
@@ -334,6 +391,19 @@ mod tests {
         assert_eq!(
             parse_pageserver("1=postgresql://ps:6400").expect("a pageserver"),
             (1, "postgresql://ps:6400".into())
+        );
+        let digest = "sha256:13ab146d3e7bbabb25a8532f315ac443e7512351d1ede0bab586def5c70e26c3";
+        let image = format!("ghcr.io/ostrium-labs/loams-postgres-compute-v17@{digest}");
+        assert_eq!(
+            parse_image(&format!("17={image}")).expect("an image"),
+            (17, image)
+        );
+        assert!(parse_image("17=ghcr.io/x/compute:latest").is_err());
+        assert!(
+            parse_image(&format!(
+                "17=ghcr.io/ostrium-labs/neon-archive/compute-node-v17@{digest}"
+            ))
+            .is_err()
         );
     }
 }

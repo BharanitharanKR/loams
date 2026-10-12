@@ -448,6 +448,7 @@ fn endpoint(project: &str, id: &str) -> EndpointRec {
         compute_id: None,
         backend_addr: None,
         failure: None,
+        ..EndpointRec::new("", "", "", crate::model::EndpointType::ReadWrite)
     }
 }
 

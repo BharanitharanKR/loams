@@ -36,6 +36,8 @@ on:
       - "crates/loams-wal-decoder/**"
       - "crates/loams-postgres/**"
       - "crates/loams-pg-control/**"
+      # compiled into loams-pg-control (runtime::images)
+      - "deploy/pins/loams-postgres-images.toml"
       - "crates/loams/Cargo.toml"
       - "crates/loams/src/lib.rs"
       - "crates/loams/src/main.rs"
@@ -67,6 +69,8 @@ on:
       - "crates/loams-wal-decoder/**"
       - "crates/loams-postgres/**"
       - "crates/loams-pg-control/**"
+      # compiled into loams-pg-control (runtime::images)
+      - "deploy/pins/loams-postgres-images.toml"
       - "crates/loams/Cargo.toml"
       - "crates/loams/src/lib.rs"
       - "crates/loams/src/main.rs"

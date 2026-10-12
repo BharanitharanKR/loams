@@ -5,7 +5,8 @@
 //! reports what it sees. Two runtimes implement it: [`compose`] (single-node
 //! mode, the desktop, CI, and the preview release's Docker Compose stack)
 //! and Kubernetes (Task 13). [`certs`] issues the computes' TLS
-//! certificates from a local CA.
+//! certificates from a local CA; [`images`] names the pinned compute image
+//! of each Postgres major (Task 11).
 //!
 //! **Replace, never restart** (§46 §7.1). A compute that stops is not
 //! started again under the same id: the reconciler starts a new compute
@@ -20,6 +21,7 @@
 
 pub mod certs;
 pub mod compose;
+pub mod images;
 
 use std::fmt;
 use std::time::Duration;

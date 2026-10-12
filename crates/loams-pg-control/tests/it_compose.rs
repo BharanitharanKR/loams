@@ -255,6 +255,7 @@ async fn it_compose_compute_answers_select_1() {
         compute_id: Some(compute.to_string()),
         backend_addr: None,
         failure: None,
+        ..EndpointRec::new("", "", "", EndpointType::ReadWrite)
     };
 
     // The runtime: the address, then the compute.

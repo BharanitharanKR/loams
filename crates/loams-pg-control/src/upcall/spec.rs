@@ -8,6 +8,12 @@
 //! (timeline, the pageserver of `notify-attach`), and the branch's roles
 //! and databases in key order. Roles carry no password verifier yet: wiring
 //! the role secrets into the spec as SCRAM verifiers is Task 24's.
+//!
+//! Task 11: endpoint settings outside the allow-list
+//! ([`ALLOWED_PG_SETTINGS`](crate::service::endpoints::ALLOWED_PG_SETTINGS))
+//! never reach the spec, and [`build`] also answers the version of the
+//! spec's inputs, which the endpoint reconciler keeps in the compute's
+//! record to push a spec whose inputs changed.
 
 use std::collections::BTreeMap;
 
@@ -16,25 +22,28 @@ use loams_postgres::spec::{
     Setting,
 };
 use loams_postgres::{TenantId, TimelineId};
+use sha2::{Digest, Sha256};
 
 use crate::model::{
     BranchKey, BranchRec, BranchScope, BranchState, ComputeBinding, ComputeRec, DatabaseRec,
     EndpointKey, EndpointRec, EndpointType, ProjectKey, ProjectRec, ProjectState, Record, RoleRec,
     WalService,
 };
+use crate::service::endpoints::setting_allowed;
 use crate::store::{MAX_PAGE_SIZE, Page, PgControlStore, StoreError, Versioned};
 
 /// Where computes find storage: the pageservers by node id, and the
-/// `loams-wal` pools by name.
+/// `loams-wal` pools by name. The upcall listener and the endpoint
+/// reconciler (Task 11) build specs from the same.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct Sources {
+pub struct Sources {
     /// Node id → libpq URL (`postgresql://no_user@host:6400`).
-    pub(crate) pageservers: BTreeMap<u64, String>,
+    pub pageservers: BTreeMap<u64, String>,
     /// The node a branch with no shard map uses: single-node mode, where no
     /// storage controller sends `notify-attach`.
-    pub(crate) default_pageserver: Option<u64>,
+    pub default_pageserver: Option<u64>,
     /// Pool name → the connection strings of its acceptors or Service.
-    pub(crate) wal_pools: BTreeMap<String, Vec<String>>,
+    pub wal_pools: BTreeMap<String, Vec<String>>,
 }
 
 /// Why no spec.
@@ -71,21 +80,32 @@ pub(crate) async fn list_all<S: PgControlStore, R: Record>(
     }
 }
 
-/// The spec of `compute`, bound by `binding`.
-pub(crate) async fn attached<S: PgControlStore>(
+/// What a bound compute's spec is built from: the records of its project,
+/// endpoint, branch, and the branch's roles and databases (in key order).
+#[derive(Debug, Clone)]
+pub(crate) struct Inputs {
+    pub(crate) project: Versioned<ProjectRec>,
+    pub(crate) endpoint: EndpointRec,
+    pub(crate) branch: Versioned<BranchRec>,
+    pub(crate) roles: Vec<Versioned<RoleRec>>,
+    pub(crate) databases: Vec<Versioned<DatabaseRec>>,
+}
+
+/// The records a compute bound by `binding` is built from. With
+/// `current`, the endpoint must name that compute as its current one
+/// (`NotCurrent` otherwise): a replaced compute must not run.
+pub(crate) async fn read_inputs<S: PgControlStore>(
     store: &S,
-    sources: &Sources,
-    compute: &ComputeRec,
     binding: &ComputeBinding,
-) -> Result<ComputeSpec, SpecError> {
+    current: Option<&str>,
+) -> Result<Inputs, SpecError> {
     let project = store
         .get::<ProjectRec>(&ProjectKey {
             namespace: binding.namespace.clone(),
             id: binding.project_id.clone(),
         })
         .await?
-        .ok_or(SpecError::NotCurrent("the project is gone"))?
-        .record;
+        .ok_or(SpecError::NotCurrent("the project is gone"))?;
     let endpoint = store
         .get::<EndpointRec>(&EndpointKey {
             project_id: binding.project_id.clone(),
@@ -94,12 +114,14 @@ pub(crate) async fn attached<S: PgControlStore>(
         .await?
         .ok_or(SpecError::NotCurrent("the endpoint is gone"))?
         .record;
-    if endpoint.compute_id.as_deref() != Some(compute.id.as_str()) {
+    if let Some(id) = current
+        && endpoint.compute_id.as_deref() != Some(id)
+    {
         return Err(SpecError::NotCurrent(
             "the compute is not its endpoint's current compute",
         ));
     }
-    if project.state != ProjectState::Ready {
+    if project.record.state != ProjectState::Ready {
         return Err(SpecError::NotReady("the project is not ready".into()));
     }
     let branch = store
@@ -108,19 +130,61 @@ pub(crate) async fn attached<S: PgControlStore>(
             id: endpoint.branch_id.clone(),
         })
         .await?
-        .ok_or(SpecError::NotCurrent("the branch is gone"))?
-        .record;
-    if branch.state != BranchState::Ready {
+        .ok_or(SpecError::NotCurrent("the branch is gone"))?;
+    if branch.record.state != BranchState::Ready {
         return Err(SpecError::NotReady("the branch is not ready".into()));
     }
     let scope = BranchScope {
-        branch_id: branch.id.clone(),
+        branch_id: branch.record.id.clone(),
     };
     let roles = list_all::<S, RoleRec>(store, &scope).await?;
     let databases = list_all::<S, DatabaseRec>(store, &scope).await?;
-    build(
-        sources, compute, &project, &endpoint, &branch, &roles, &databases,
-    )
+    Ok(Inputs {
+        project,
+        endpoint,
+        branch,
+        roles,
+        databases,
+    })
+}
+
+/// The spec of `compute`, bound by `binding`.
+pub(crate) async fn attached<S: PgControlStore>(
+    store: &S,
+    sources: &Sources,
+    compute: &ComputeRec,
+    binding: &ComputeBinding,
+) -> Result<ComputeSpec, SpecError> {
+    let inputs = read_inputs(store, binding, Some(&compute.id)).await?;
+    Ok(build(sources, &compute.id, &inputs)?.0)
+}
+
+/// What a spec's inputs come to, as a number: a SHA-256 of the spec's
+/// bytes and of the versions of the records it was built from (never 0,
+/// which means "unknown"). Versions are never reused (R3.5), so inputs that
+/// changed and changed back still differ, and the endpoint reconciler
+/// pushes the spec again (Task 11).
+fn inputs_version(spec: &ComputeSpec, inputs: &Inputs) -> u64 {
+    let mut h = Sha256::new();
+    h.update(serde_json::to_vec(spec).unwrap_or_default());
+    h.update(inputs.project.version.to_be_bytes());
+    h.update(inputs.branch.version.to_be_bytes());
+    h.update(inputs.endpoint.settings_version.to_be_bytes());
+    for r in &inputs.roles {
+        h.update(r.record.name.as_bytes());
+        h.update([0]);
+        h.update(r.version.to_be_bytes());
+    }
+    h.update([0xff]);
+    for d in &inputs.databases {
+        h.update(d.record.name.as_bytes());
+        h.update([0]);
+        h.update(d.version.to_be_bytes());
+    }
+    let digest = h.finalize();
+    let mut first = [0u8; 8];
+    first.copy_from_slice(&digest[..8]);
+    u64::from_be_bytes(first).max(1)
 }
 
 /// The pageserver of an unsharded branch: its `notify-attach` shard 0, or
@@ -145,15 +209,15 @@ fn pageserver(sources: &Sources, branch: &BranchRec) -> Result<(u64, String), Sp
     Ok((node, url.clone()))
 }
 
-fn build(
+/// The spec of compute `compute_id` from `inputs`, and its inputs' version.
+pub(crate) fn build(
     sources: &Sources,
-    compute: &ComputeRec,
-    project: &ProjectRec,
-    endpoint: &EndpointRec,
-    branch: &BranchRec,
-    roles: &[Versioned<RoleRec>],
-    databases: &[Versioned<DatabaseRec>],
-) -> Result<ComputeSpec, SpecError> {
+    compute_id: &str,
+    inputs: &Inputs,
+) -> Result<(ComputeSpec, u64), SpecError> {
+    let project = &inputs.project.record;
+    let endpoint = &inputs.endpoint;
+    let branch = &inputs.branch.record;
     let (node, url) = pageserver(sources, branch)?;
     let WalService::LoamsWal { pool } = &project.wal;
     let safekeepers = sources
@@ -172,12 +236,18 @@ fn build(
     let mut builder =
         ComputeSpecBuilder::new(TenantId(project.tenant_id), TimelineId(branch.timeline_id))
             .ids(&project.id, &branch.id, &endpoint.id)
-            .compute_id(&compute.id)
+            .compute_id(compute_id)
             .safekeepers(safekeepers.iter().cloned())
             .pageserver(node, &url)
             .suspend_timeout_seconds(suspend)
             .mode(mode);
     for (name, value) in &endpoint.pg_settings {
+        // The API refuses these (Task 11); a record written before the
+        // allow-list still never overrides what the platform owns.
+        if !setting_allowed(name, value) {
+            tracing::warn!(endpoint = %endpoint.id, setting = %name, "an endpoint setting outside the allow-list is left out of the spec");
+            continue;
+        }
         builder = builder.setting(Setting::new(name, value, "string"));
     }
     // Where Postgres listens, after the endpoint's settings so that they
@@ -191,17 +261,19 @@ fn build(
             &crate::runtime::COMPUTE_PG_PORT.to_string(),
             "integer",
         ));
-    for r in roles {
+    for r in &inputs.roles {
         builder = builder.role(SpecRole {
             name: r.record.name.clone(),
             encrypted_password: None,
         });
     }
-    for d in databases {
+    for d in &inputs.databases {
         builder = builder.database(SpecDatabase {
             name: d.record.name.clone(),
             owner: d.record.owner.clone(),
         });
     }
-    Ok(builder.build())
+    let spec = builder.build();
+    let version = inputs_version(&spec, inputs);
+    Ok((spec, version))
 }
