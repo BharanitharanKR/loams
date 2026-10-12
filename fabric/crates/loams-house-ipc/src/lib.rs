@@ -47,6 +47,13 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+pub mod policy;
+
+/// Whether this build has the test-only hooks (`test-hooks`): `Frame::Abort`,
+/// `Frame::Probe`, and the worker's `--test-open-acl` (HS1 ruling R-ACL.1), which
+/// a worker built without them refuses as an unknown argument.
+pub const TEST_HOOKS: bool = cfg!(feature = "test-hooks");
+
 /// The protocol's name, for logs and the `Ready` check.
 pub const PROTOCOL_NAME: &str = "hsw1";
 

@@ -163,8 +163,8 @@ async fn unsealed(test: &str) -> WorkerPool {
 async fn run(lease: &mut WorkerLease, sql: &str) -> Result<Vec<u8>, HouseError> {
     let mut execute = statement(sql, "TSV");
     execute.session = common::session("sandbox");
-    // chDB's S3 client retries a refused connection for minutes by default.
-    execute.settings = vec![("s3_retry_attempts".to_string(), "0".to_string())];
+    // No `s3_retry_attempts` here: the profile pins it (HS1 R-ACL.1), and a
+    // source a statement names is refused before any connection.
     execute.limits.max_execution_time_ms = Some(20_000);
     tokio::time::timeout(Duration::from_secs(60), lease.run(execute))
         .await
@@ -315,13 +315,23 @@ async fn worker_reaches_only_its_forwarder() {
         .collect();
     assert_eq!(names, vec!["lo"], "{devices}");
 
-    // chDB reads the bucket through the forwarder.
-    let sql = format!(
-        "SELECT * FROM s3('http://127.0.0.1:{FORWARDER_PORT}/bucket/key.txt', 'dummy', 'dummy', LineAsString)"
-    );
-    let bytes = run(&mut lease, &sql)
+    // chDB reads the bucket through the forwarder, in a read view the control
+    // connection makes (a statement cannot name a source: HS1 R-ACL.1).
+    let mut execute = statement("SELECT * FROM d.object", "TSV");
+    execute.views = vec![
+        "CREATE DATABASE IF NOT EXISTS d ENGINE = Memory".to_string(),
+        format!(
+            "CREATE OR REPLACE VIEW d.object (line String) SQL SECURITY NONE AS SELECT * FROM \
+             s3('http://127.0.0.1:{FORWARDER_PORT}/bucket/key.txt', 'dummy', 'dummy', \
+             LineAsString)"
+        ),
+    ];
+    execute.limits.max_execution_time_ms = Some(20_000);
+    let bytes = tokio::time::timeout(Duration::from_secs(60), lease.run(execute))
         .await
-        .expect("a read through the forwarder");
+        .expect("bounded")
+        .expect("a read through the forwarder")
+        .bytes;
     assert_eq!(String::from_utf8_lossy(&bytes), OBJECT);
     assert!(
         upstream
