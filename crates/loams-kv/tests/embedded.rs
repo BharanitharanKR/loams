@@ -343,6 +343,108 @@ async fn gc_runs_in_bounded_batches() {
     assert_eq!(again.versions_deleted, 0);
 }
 
+/// A committed lock (`lock_keys`) leaves a lock version: GC drops those at or
+/// below the safe point and keeps the newest value beneath them, so the key
+/// still reads its value and a key only ever locked reads absent. Above the
+/// safe point a lock stays and still makes an older transaction conflict.
+#[tokio::test]
+async fn gc_drops_old_locks_and_keeps_values_beneath() {
+    let dir = tmp();
+    let store = open(&dir.path().join("store.redb"), "gc").await;
+    let h = handle(&store);
+    put(&store, b"v", b"1").await;
+    for _ in 0..3 {
+        store
+            .run(TxnOptions::new("kv.embedded.lock"), |txn| {
+                Box::pin(async move {
+                    txn.lock_keys([b"v".as_slice(), b"only"]).await?;
+                    txn.put(b"x", b"x".to_vec()).await
+                })
+            })
+            .await
+            .expect("the locker commits");
+    }
+    let report = h
+        .gc_once_at(wall_ms() + 3_600_000)
+        .await
+        .expect("a GC round");
+    // 3 locks of `v`, 3 of `only`, 2 older values of `x`.
+    assert_eq!(report.versions_deleted, 8, "{report:?}");
+    let now = store.now().await.expect("now");
+    assert_eq!(get_at(&store, now, b"v").await, Some(b"1".to_vec()));
+    assert_eq!(get_at(&store, now, b"only").await, None);
+    let again = h
+        .gc_once_at(wall_ms() + 3_600_000)
+        .await
+        .expect("a GC round");
+    assert_eq!(again.versions_deleted, 0, "the value beneath stays");
+
+    // A lock above the safe point still conflicts.
+    let started = std::sync::Arc::new(tokio::sync::Barrier::new(2));
+    let older = {
+        let (store, started) = (store.clone(), started.clone());
+        tokio::spawn(async move {
+            let mut opts = TxnOptions::new("kv.embedded.older");
+            opts.max_attempts = 1;
+            store
+                .run(opts, move |txn| {
+                    let started = started.clone();
+                    Box::pin(async move {
+                        started.wait().await;
+                        started.wait().await;
+                        txn.put(b"only", b"o".to_vec()).await
+                    })
+                })
+                .await
+        })
+    };
+    started.wait().await;
+    store
+        .run(TxnOptions::new("kv.embedded.lock"), |txn| {
+            Box::pin(async move {
+                txn.lock_keys([b"only".as_slice()]).await?;
+                txn.put(b"x", b"y".to_vec()).await
+            })
+        })
+        .await
+        .expect("the locker commits");
+    h.gc_once_at(wall_ms()).await.expect("a GC round");
+    started.wait().await;
+    let older = older.await.expect("joined");
+    assert!(matches!(older, Err(TxnError::Conflict)), "{older:?}");
+}
+
+/// A commit whose start GC has passed conflicts (and reruns): GC may have
+/// dropped the lock or tombstone it would conflict with.
+#[tokio::test]
+async fn a_commit_started_below_the_safe_point_conflicts() {
+    let dir = tmp();
+    let store = open(&dir.path().join("store.redb"), "gc").await;
+    let h = handle(&store).clone();
+    let attempts = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let committed = store
+        .run(TxnOptions::new("kv.embedded.old"), |txn| {
+            let (store, h, attempts) = (store.clone(), h.clone(), attempts.clone());
+            Box::pin(async move {
+                if attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                    // A later timestamp issued, and GC past this
+                    // transaction's read window: its open read no longer
+                    // holds GC back.
+                    store.now().await.expect("now");
+                    let report = h
+                        .gc_once_at(wall_ms() + 3_600_000)
+                        .await
+                        .expect("a GC round");
+                    assert!(report.safe_point > txn.start_ts(), "{report:?}");
+                }
+                txn.put(b"k", b"v".to_vec()).await
+            })
+        })
+        .await
+        .expect("the rerun commits");
+    assert_eq!(committed.attempts, 2);
+}
+
 /// A long GC round does not hold commits back for the whole pass: commits
 /// keep completing while a round works through its batches. Counted, not
 /// timed, so a loaded machine does not make it flaky (Task 23 review item
@@ -619,9 +721,12 @@ enum Seen {
 }
 
 /// The reference: snapshot isolation over versions numbered by commit order.
+/// A committed lock of a key it did not write is a version too for the
+/// conflict check (TiKV's `Lock` record), and no value to reads.
 #[derive(Debug, Default)]
 struct Model {
     versions: BTreeMap<u8, Vec<(u64, Option<u8>)>>,
+    locks: BTreeMap<u8, Vec<u64>>,
     commits: u64,
 }
 
@@ -678,11 +783,15 @@ impl Model {
     }
 
     fn commit(&mut self, txn: ModelTxn) -> Seen {
-        let touched: BTreeSet<u8> = txn.writes.keys().copied().chain(txn.locks).collect();
+        let touched: BTreeSet<u8> = txn.writes.keys().chain(&txn.locks).copied().collect();
         let newer = touched.iter().any(|k| {
             self.versions
                 .get(k)
                 .is_some_and(|vs| vs.iter().any(|(c, _)| *c > txn.start))
+                || self
+                    .locks
+                    .get(k)
+                    .is_some_and(|ls| ls.iter().any(|c| *c > txn.start))
         });
         if newer {
             return Seen::Conflict;
@@ -691,6 +800,11 @@ impl Model {
             return Seen::Committed;
         }
         self.commits += 1;
+        for k in &txn.locks {
+            if !txn.writes.contains_key(k) {
+                self.locks.entry(*k).or_default().push(self.commits);
+            }
+        }
         for (k, v) in txn.writes {
             self.versions.entry(k).or_default().push((self.commits, v));
         }

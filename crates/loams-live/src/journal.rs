@@ -174,11 +174,10 @@ impl Journal {
     /// absent): a **fence** (LV1 plan Task 8). Every mutation that writes
     /// also writes a head, so one that started before `txn`'s commit and
     /// commits after it conflicts on that head and reruns, at a start
-    /// timestamp past the fence, where it sees what `txn` wrote. A rewrite
-    /// leaves a version of each head on both backends, which `lock_keys`
-    /// does not on the embedded store (there it only makes the locking
-    /// transaction conflict). Concurrent appends make `txn` itself
-    /// conflict, and the runner retries it.
+    /// timestamp past the fence, where it sees what `txn` wrote. (`lock_keys`
+    /// on the heads fences the same way on both backends since row T21-20.)
+    /// Concurrent appends make `txn` itself conflict, and the runner
+    /// retries it.
     pub async fn fence(&self, txn: &mut Txn) -> Result<(), LiveError> {
         let keys: Vec<Vec<u8>> = (0..self.shards)
             .map(|shard| self.app.journal_head(shard))
