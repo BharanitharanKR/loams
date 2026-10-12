@@ -47,6 +47,18 @@ pub async fn serve(options: ServeOptions) -> anyhow::Result<()> {
         mode,
         default_harness,
     } = options;
+    // A service starts with the manager's minimal PATH: resolve the login
+    // shell's now, so harness CLIs are found (design §50 §5.1). Harness
+    // spawns add it to their PATH; it is cached for the process.
+    tokio::task::spawn_blocking(
+        || match loams_agentd_harness::shell_env::login_shell_path() {
+            Some(path) => tracing::info!(
+                entries = std::env::split_paths(path).count(),
+                "the login shell's PATH is resolved"
+            ),
+            None => tracing::info!("no login-shell PATH; harnesses use the daemon's PATH"),
+        },
+    );
     let token = crate::token::rotate(&paths)?;
     // Harness adapters live in the daemon directory, not `~/.loams-desktop`.
     loams_agentd_harness::set_adapters_root(paths.adapters());

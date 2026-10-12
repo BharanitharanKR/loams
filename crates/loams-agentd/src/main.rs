@@ -2,7 +2,9 @@
 //!
 //! Headless only (D782): `run` serves the sessions engine and its harnesses on
 //! a loopback RPC port, `mcp` is the stdio MCP shim injected into harness
-//! runs, `status` reports a running daemon, and `version` prints the build.
+//! runs, `status` reports a running daemon, `service` manages the per-user
+//! service and linger, `install-runtime` installs the versioned binaries, and
+//! `version` prints the build.
 //! Two hidden entry points serve harnesses: `loams bot-acp` (Loams Bot over
 //! ACP) and `--noop-browser` (browser suppression for Antigravity sign-in).
 
@@ -14,7 +16,7 @@ mod status;
 use std::process::ExitCode;
 
 use clap::Parser;
-use cli::{Cli, Command, LoamsCommand, RunArgs};
+use cli::{Cli, Command, LoamsCommand, RunArgs, ServiceCommand};
 use loams_agentd::config::Config;
 use loams_agentd::paths::Paths;
 use loams_agentd::server::{ServeOptions, serve};
@@ -101,6 +103,30 @@ fn main() -> ExitCode {
             };
             report(status::status(&config))
         }
+        Command::Service { command } => {
+            init_stderr_tracing("warn");
+            service(command)
+        }
+        Command::InstallRuntime(args) => {
+            init_stderr_tracing("warn");
+            match loams_agentd::runtime_install::install(&args.from, &args.to) {
+                Ok(installed) => {
+                    println!(
+                        "Installed {} in {}.",
+                        installed.version,
+                        installed.dir.display()
+                    );
+                    for version in installed.kept_in_use {
+                        eprintln!("loams-agentd: {version} is in use and was kept");
+                    }
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("loams-agentd: {error}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
         Command::Version => {
             println!("loams-agentd {}", hello::VERSION);
             ExitCode::SUCCESS
@@ -134,8 +160,50 @@ fn report(result: anyhow::Result<()>) -> ExitCode {
     }
 }
 
+/// `service …`: what it did on stdout; on failure the error on stderr and
+/// exit 1, or 4 for an invalid config.
+fn service(command: ServiceCommand) -> ExitCode {
+    use loams_agentd::service::{self, Action, ServiceError, linger};
+    let (action, config) = match command {
+        ServiceCommand::Install(config) => (Action::Install, config),
+        ServiceCommand::Uninstall(config) => (Action::Uninstall, config),
+        ServiceCommand::Start(config) => (Action::Start, config),
+        ServiceCommand::Stop(config) => (Action::Stop, config),
+        ServiceCommand::Status(config) => (Action::Status, config),
+        ServiceCommand::EnableLinger => return service_result(linger::set(true)),
+        ServiceCommand::DisableLinger => return service_result(linger::set(false)),
+    };
+    let Some(config) = config.resolve() else {
+        eprintln!(
+            "loams-agentd: service needs --config <path> (or {})",
+            cli::CONFIG_ENV
+        );
+        return ExitCode::from(EXIT_INVALID_CONFIG);
+    };
+    let result = service::run(action, &config);
+    if let Err(ServiceError::Config(error)) = &result {
+        eprintln!("loams-agentd: {error}");
+        return ExitCode::from(EXIT_INVALID_CONFIG);
+    }
+    service_result(result)
+}
+
+fn service_result(result: Result<String, loams_agentd::service::ServiceError>) -> ExitCode {
+    match result {
+        Ok(text) => {
+            println!("{text}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("loams-agentd: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 /// `run`: config (exit 4), directory, lock (exit 3), then the server; any
-/// other failure exits 70 (design §50 §5.1).
+/// other failure exits 70 (design §50 §5.1). On Windows `run --service` is
+/// the parent that runs `run --worker` and restarts it.
 fn run(args: &RunArgs) -> ExitCode {
     let Some(config_path) = args.config.resolve() else {
         eprintln!(
@@ -144,6 +212,10 @@ fn run(args: &RunArgs) -> ExitCode {
         );
         return ExitCode::from(EXIT_INVALID_CONFIG);
     };
+    #[cfg(windows)]
+    if args.service {
+        return ExitCode::from(loams_agentd::service::windows::supervise(&config_path));
+    }
     let config = match Config::load(&config_path) {
         Ok(config) => config,
         Err(error) => {
