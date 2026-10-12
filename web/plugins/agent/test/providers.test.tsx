@@ -87,7 +87,7 @@ describe('agent providers section', () => {
     const c = await card('DeepSeek');
     fireEvent.change(c.getByLabelText('Base URL'), { target: { value: 'https://other.test/v1' } });
     // A warning appears before saving, too.
-    expect(c.getByText('This is a different server')).toBeTruthy();
+    expect(await c.findByText('This is a different server')).toBeTruthy();
     fireEvent.click(c.getByRole('button', { name: 'Save' }));
     expect(await c.findByText('Enter the key for this server')).toBeTruthy();
     expect(c.getByText(/now points at https:\/\/other.test/)).toBeTruthy();
