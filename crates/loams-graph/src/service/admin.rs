@@ -2188,22 +2188,30 @@ impl GraphAdmin {
             return None;
         }
         let checkpointed = match (ns, &self.checkpointer) {
-            (Some(ns), Some(checkpointer)) => match self.cover(checkpointer, graph, ns).await {
-                Ok(took) => took,
-                Err(err) if reason == EvictReason::Memory => {
-                    tracing::warn!(%namespace, %name, error = %err, "checkpointing before an eviction failed; evicting anyway (the log is the graph)");
-                    false
+            (Some(ns), Some(checkpointer)) => {
+                match self.cover(checkpointer, Arc::clone(&graph), ns).await {
+                    Ok(took) => took,
+                    Err(err) if reason == EvictReason::Memory => {
+                        tracing::warn!(%namespace, %name, error = %err, "checkpointing before an eviction failed; evicting anyway (the log is the graph)");
+                        false
+                    }
+                    Err(err) => {
+                        tracing::warn!(%namespace, %name, error = %err, "checkpointing before an eviction failed; the eviction waits for the next pass");
+                        return None;
+                    }
                 }
-                Err(err) => {
-                    tracing::warn!(%namespace, %name, error = %err, "checkpointing before an eviction failed; the eviction waits for the next pass");
-                    return None;
-                }
-            },
-            _ => {
-                drop(graph);
-                false
             }
+            _ => false,
         };
+        // The owner lease may have moved on while the checkpoint ran (a refused manifest CAS or
+        // trim fences the graph, and so does a lost renewal): the fence path drops the engine,
+        // and this node must neither give up a lease it no longer holds nor call the graph
+        // evicted here (PR #459 review).
+        if graph.is_fenced() {
+            tracing::info!(%namespace, %name, "a graph was fenced while it was being evicted; left to the fence");
+            return None;
+        }
+        drop(graph);
         let (engine, ns_name, nm) = (
             Arc::clone(&self.engine),
             namespace.to_string(),
