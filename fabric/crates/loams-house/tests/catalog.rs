@@ -541,3 +541,22 @@ async fn local_catalog_tables_register_into_lakekeeper() {
     let _ = target.drop_database(&sales).await;
     let _ = target.drop_database(&top).await;
 }
+
+/// A bearer token is never sent over plaintext: until TLS (HS1 Task 20) a REST
+/// catalog with a token is refused before any request (PR #448 review).
+#[tokio::test]
+async fn rest_catalog_refuses_a_token_over_http() {
+    let refused = RestCatalog::connect(RestOptions {
+        uri: "http://127.0.0.1:1/catalog".to_string(),
+        warehouse: "w".to_string(),
+        token: Some("secret".to_string()),
+    })
+    .await;
+    match refused {
+        Err(CatalogError::Invalid(message)) => {
+            assert!(message.contains("https"), "{message}");
+            assert!(!message.contains("secret"), "{message}");
+        }
+        other => panic!("{other:?}"),
+    }
+}

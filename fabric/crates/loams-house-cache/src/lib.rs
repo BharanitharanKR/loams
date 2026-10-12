@@ -184,11 +184,15 @@ impl HouseCache {
     /// ending in `/`): what the catalog vouches for an external table's location
     /// (HS1 Task 10, R9.5). Workers bound now get it at once; workers bound later
     /// get it with their namespace's own prefix. A prefix that is not a whole
-    /// directory (`/`, empty, `..`) is ignored.
+    /// directory (`/`, empty, `..`), or lies in the namespaces' `ns/` tree, is
+    /// ignored.
     pub fn vouch(&self, namespace: &str, prefix: &str) {
+        // `ns/…` is the namespaces' own tree: a namespace gets its part of it only
+        // through `Grant::for_namespace`, never by a vouch (PR #448 review).
         let sound = prefix.ends_with('/')
             && prefix.len() > 1
             && !prefix.starts_with('/')
+            && !prefix.starts_with("ns/")
             && prefix
                 .trim_end_matches('/')
                 .split('/')

@@ -676,6 +676,28 @@ async fn external_tables_listed_read_only() {
         )
         .await
         .expect("another writer creates");
+    // Another writer's table inside another namespace's tree is listed, but its
+    // location is never vouched to this namespace (PR #448 review).
+    house
+        .catalog
+        .create_table(
+            &NamespaceIdent::new("ns_2".to_string()),
+            TableCreation::builder()
+                .name("intruder".to_string())
+                .location("s3://local/ns/3/house/x".to_string())
+                .schema(
+                    Schema::builder()
+                        .with_fields(vec![
+                            NestedField::required(1, "id", Type::Primitive(PrimitiveType::Long))
+                                .into(),
+                        ])
+                        .build()
+                        .expect("schema"),
+                )
+                .build(),
+        )
+        .await
+        .expect("another writer creates");
     ok(
         addr,
         "CREATE TABLE mine (k UInt8) ENGINE = MergeTree ORDER BY k",
@@ -694,6 +716,7 @@ async fn external_tables_listed_read_only() {
         classes,
         [
             ("events".to_string(), pb::TableClass::TABLE_CLASS_EXTERNAL),
+            ("intruder".to_string(), pb::TableClass::TABLE_CLASS_EXTERNAL),
             ("mine".to_string(), pb::TableClass::TABLE_CLASS_LAKE),
         ]
     );
@@ -703,6 +726,10 @@ async fn external_tables_listed_read_only() {
     assert!(
         vouched.contains(&("2".to_string(), "spark/warehouse/events/".to_string())),
         "{vouched:?}"
+    );
+    assert!(
+        vouched.iter().all(|(_, prefix)| !prefix.starts_with("ns/")),
+        "nothing in the namespaces' tree is vouched: {vouched:?}"
     );
     // DESCRIBE answers the types chDB reads it as.
     let described = ok(addr, "DESCRIBE events FORMAT TSVRaw").await;

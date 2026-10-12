@@ -428,7 +428,15 @@ async fn vouched_prefixes_join_the_namespace_grant() {
     );
 
     // Unsound prefixes are ignored.
-    for bad in ["/", "", "spark/../ns/2/", "spark", "/spark/"] {
+    for bad in [
+        "/",
+        "",
+        "spark/../ns/2/",
+        "spark",
+        "/spark/",
+        "ns/2/",
+        "ns/2/house/x/",
+    ] {
         loams_house::catalog::PrefixGrants::vouch(&proxy, "1", bad);
     }
     assert_eq!(proxy.grant_of("w1").expect("grant").prefixes, ["ns/1/"]);
