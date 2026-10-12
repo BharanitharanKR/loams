@@ -13,7 +13,7 @@ mod env;
 
 use std::time::{Duration, SystemTime};
 
-use loams_pg_control::model::{Cu, DesiredState, EndpointState, EndpointType};
+use loams_pg_control::model::{Cu, DesiredState, EndpointState, EndpointType, OperationState};
 use loams_pg_control::observer::{ComputeLifecycleEvent, LifecycleKind, field_names};
 use loams_pg_control::reconcile::Pass;
 use loams_pg_control::reconcile::endpoint::CtlStatus;
@@ -141,6 +141,28 @@ async fn suspends_after_timeout_when_idle() {
     let rec = e.endpoint(&project, &id).await.unwrap();
     assert_ne!(rec.compute_id.as_deref(), Some(compute.as_str()));
     assert_eq!(rec.backend_addr, addr, "the same address");
+}
+
+/// A `StartEndpoint` on an endpoint that is already running is activity:
+/// asked just before the timeout runs out, it is not followed by a suspend
+/// (the client that asked is about to connect); the timeout runs again from
+/// the pass that settled it (PR #463 review).
+#[tokio::test]
+async fn a_start_on_a_running_endpoint_is_activity() {
+    let e = fakes!();
+    let (project, id) = e.running_endpoint(60).await;
+    let compute = e.compute_id(&project, &id).await.unwrap();
+    e.after(30 * S, &project).await;
+    e.h.clock.advance_ms(29 * S);
+    let op = e.start(&project, &id, "start2").await;
+    // 64 s idle when the pass settles the start: not suspended.
+    e.after(5 * S, &project).await;
+    assert_eq!(e.op(&op).await, OperationState::Succeeded);
+    assert_eq!(e.state(&project, &id).await, Some(EndpointState::Running));
+    e.after(59 * S, &project).await;
+    assert_eq!(e.state(&project, &id).await, Some(EndpointState::Running));
+    e.after(S, &project).await;
+    e.suspended_by_idle(&project, &id, &compute).await;
 }
 
 /// `suspend_timeout_s = 0`: never suspended, however long it sits idle, and

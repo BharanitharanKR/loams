@@ -295,10 +295,12 @@ jobs:
           (cd deploy/loams-postgres-dev && docker compose logs --tail 200) || true
           docker compose -p loams-pg-it logs --tail 200 || true
           docker compose -p loams-pg-it-ep logs --tail 200 || true
+          docker compose -p loams-pg-it-idle logs --tail 200 || true
       - name: teardown
         if: always()
         working-directory: deploy/loams-postgres-dev
         run: |
           docker compose -p loams-pg-it down || true
           docker compose -p loams-pg-it-ep down || true
+          docker compose -p loams-pg-it-idle down || true
           docker compose down -v

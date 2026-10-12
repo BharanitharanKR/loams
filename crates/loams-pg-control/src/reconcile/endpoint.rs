@@ -1154,12 +1154,15 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
                 Activity::Unreadable
             }
         };
-        if !self.ops.is_empty() {
+        // An operation settled here (a start or restart of a running
+        // endpoint) was asked just now: the sample counts it as activity.
+        let asked = !self.ops.is_empty();
+        if asked {
             let rec = self.ep().clone();
             self.write("endpoint.running", rec, Batch::new(), Settle::default())
                 .await?;
         }
-        let due = match self.idle(&compute.record, last_active).await? {
+        let due = match self.idle(&compute.record, last_active, asked).await? {
             Idle::Suspended => return Ok(Step::Done),
             Idle::Due(due) => due,
         };
@@ -1175,11 +1178,12 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
     /// and the suspend once it has been idle for the endpoint's
     /// `suspend_timeout_s`. A sample that could not be taken, an endpoint
     /// with open operations or a replacement asked, and a timeout of 0
-    /// never suspend.
+    /// never suspend; an operation this pass settled (`asked`) is activity.
     async fn idle(
         &mut self,
         compute: &ComputeRec,
         last_active: Activity,
+        asked: bool,
     ) -> Result<Idle, ReconcileError> {
         let ep = self.ep();
         if ep.suspend_timeout_s == 0
@@ -1209,10 +1213,12 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
                 return Ok(Idle::Due(None));
             }
         };
-        let idle_ms = self
-            .c
-            .idle
-            .observe(&compute.id, self.now(), reported, clients);
+        let idle_ms = self.c.idle.observe(
+            &compute.id,
+            self.now(),
+            reported,
+            clients.saturating_add(u64::from(asked)),
+        );
         let timeout_ms = u64::from(ep.suspend_timeout_s) * 1000;
         if idle_ms < timeout_ms {
             // Come back when the suspend is due, unless the resync comes
