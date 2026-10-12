@@ -201,7 +201,8 @@ fn default_features_exclude_git() {
 }
 
 /// `GetInstance` lists `loams.repos.v1` as available exactly when the build has the `git`
-/// feature, and every RPC of a build without it answers `feature_not_in_variant`.
+/// feature; every RPC of a build without it answers `feature_not_in_variant`, and of a build
+/// with it `not_implemented` until GT1 Task 13.
 #[tokio::test]
 async fn catalogue_lists_repos_only_with_feature() {
     let running = Running::start().await;
@@ -227,29 +228,33 @@ async fn catalogue_lists_repos_only_with_feature() {
         .filter_map(Value::as_str)
         .collect();
     assert_eq!(versions.contains(&"loams.repos.v1"), served, "{versions:?}");
-    if !served {
-        for (rpc, streams) in RPCS {
-            let path = format!("/loams.repos.v1.RepoService/{rpc}");
-            let body = json!({"namespace": "default", "name": "app"});
-            let error = if *streams {
-                let (_, messages) = running.connect_stream(&path, &body).await;
-                let (_, end) = messages
-                    .into_iter()
-                    .find(|(flags, _)| flags & 0x02 != 0)
-                    .expect("an end-of-stream message");
-                end["error"].clone()
-            } else {
-                let (status, error) = running.connect(&path, &body).await;
-                assert_eq!(
-                    status,
-                    reqwest::StatusCode::NOT_IMPLEMENTED,
-                    "{rpc}: {error}"
-                );
-                error
-            };
-            assert_eq!(error["code"], "unimplemented", "{rpc}: {error}");
-            assert_eq!(reason(&error), "feature_not_in_variant", "{rpc}");
-        }
+    // Until GT1 Task 13 serves them, a `git` build's RPCs answer `not_implemented`.
+    let expected = if served {
+        "not_implemented"
+    } else {
+        "feature_not_in_variant"
+    };
+    for (rpc, streams) in RPCS {
+        let path = format!("/loams.repos.v1.RepoService/{rpc}");
+        let body = json!({"namespace": "default", "name": "app"});
+        let error = if *streams {
+            let (_, messages) = running.connect_stream(&path, &body).await;
+            let (_, end) = messages
+                .into_iter()
+                .find(|(flags, _)| flags & 0x02 != 0)
+                .expect("an end-of-stream message");
+            end["error"].clone()
+        } else {
+            let (status, error) = running.connect(&path, &body).await;
+            assert_eq!(
+                status,
+                reqwest::StatusCode::NOT_IMPLEMENTED,
+                "{rpc}: {error}"
+            );
+            error
+        };
+        assert_eq!(error["code"], "unimplemented", "{rpc}: {error}");
+        assert_eq!(reason(&error), expected, "{rpc}");
     }
     running.shutdown().await;
 }
