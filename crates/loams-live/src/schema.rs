@@ -31,13 +31,13 @@
 //! `backfilling` ([`begin_backfills`]; every write maintains it from there),
 //! the journal fence after it makes every mutation in flight rerun and
 //! maintain it too, then a [`backfill::TableJob`] with the
-//! [`IndexBackfill`](backfill::IndexBackfill) visitor writes the entries of the documents already there. The swap
-//! ([`apply`]) makes it ready, only if that backfill is the deployment's own
-//! and done. A ready or backfilling index the schema does not declare is
-//! **dropped**: the swap makes it `dropping` (writes stop maintaining it),
-//! and [`backfill::drop_indexes`] fences the journal, then deletes its
-//! entries, then its definition. A
-//! changed index (same name, other fields) is both. A failed or abandoned
+//! [`IndexBackfill`](backfill::IndexBackfill) visitor writes the entries of
+//! the documents already there. The swap ([`apply`]) makes it ready, only
+//! if that backfill is the deployment's own and done. A ready or
+//! backfilling index the schema does not declare is **dropped**: the swap
+//! makes it `dropping` (writes stop maintaining it), and
+//! [`backfill::drop_indexes`] fences the journal, then deletes its entries,
+//! then its definition. A changed index (same name, other fields) is both. A failed or abandoned
 //! backfill is [released](release): its indexes are dropped.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -305,8 +305,8 @@ pub async fn plan(
 /// Applies `schema` for `deployment` in `txn` (the swap): creates the
 /// tables [`plan`] finds missing, with their indexes and validators; sets
 /// each changed validator; makes each added index ready and each dropped
-/// one `dropping` (fencing the journal when it drops one, so no mutation
-/// in flight writes an entry of it after this commit); and writes the
+/// one `dropping` (writes stop maintaining it; [`backfill::drop_indexes`]
+/// fences the journal before it deletes the entries); and writes the
 /// schema record (or removes it, for a schema with no tables). A stricter
 /// validator that must be checked first is set only if the table enforces
 /// it for `deployment` (its check passed, [`enforce`]); the check's state

@@ -1,8 +1,11 @@
 //! Table jobs (design §45 §4.1–§4.2; LV1 plan Tasks 8 and 9): leased,
 //! checkpointed, rate-limited scans of one table's documents in batches.
 //! The validation scan of a stricter validator (Task 8) runs as one, and so
-//! does the backfill of new indexes ([`IndexBackfill`], Task 9). Dropped
-//! indexes' entries are deleted by [`drop_indexes`].
+//! does the backfill of new indexes ([`IndexBackfill`], Task 9), which
+//! starts once [`Journal::fence_after`](crate::Journal::fence_after) has
+//! fenced the journal after the transaction that added them. Dropped
+//! indexes' entries are deleted by [`drop_indexes`], which fences the
+//! journal after the swap that dropped them before it deletes.
 //!
 //! A job is a catalog record ([`JobRecord`], `0x01 ‖ 0x07 ‖ table_id ‖
 //! kind`), written with its owner's lease by the transaction that starts
@@ -550,10 +553,17 @@ pub async fn index_status(
         .index_named(index)
         .or_else(|| def.indexes.iter().find(|i| i.name == index))
         .ok_or_else(|| LiveError::NotFound(format!("index '{index}' of table '{table}'")))?;
-    let entries = prefix_range(app.index_prefix(def.id, IndexId::BY_CREATION_TIME));
-    let total = Reads::scan(&mut snap, &entries, usize::MAX, false)
-        .await?
-        .len() as u64;
+    // Counted in pages, so a large table is never held in memory at once.
+    let mut entries = prefix_range(app.index_prefix(def.id, IndexId::BY_CREATION_TIME));
+    let mut total = 0_u64;
+    loop {
+        let page = Reads::scan(&mut snap, &entries, STATUS_PAGE, false).await?;
+        total += page.len() as u64;
+        match page.last() {
+            Some((last, _)) if page.len() == STATUS_PAGE => entries.lo = key_after(last),
+            _ => break,
+        }
+    }
     let done = match found.state {
         IndexState::Ready => total,
         IndexState::Dropping => 0,
@@ -571,15 +581,31 @@ pub async fn index_status(
     })
 }
 
+/// The keys [`index_status`] counts per read.
+const STATUS_PAGE: usize = 4_096;
+
+/// The index entries one janitor round deletes at most
+/// ([`drop_indexes_within`]); the rest wait for the next round.
+pub const JANITOR_DROP_KEYS: usize = 100_000;
+
 /// Deletes the entries of every index being dropped, in batches of the
 /// runner's [`JobOptions::batch`] keys at its rate (one transaction each),
 /// then removes its definition; returns the indexes removed. It first
 /// fences the journal ([`Journal::fence_after`](crate::Journal::fence_after)),
 /// so every mutation that read the index as maintained has committed (its
 /// entries are then deleted here) or reruns and skips it. Idempotent: the
-/// server runs it after a deploy that drops an index and in each janitor
-/// round.
+/// server runs it after a deploy that drops an index; each janitor round
+/// runs [`drop_indexes_within`] [`JANITOR_DROP_KEYS`].
 pub async fn drop_indexes(runner: &Runner) -> Result<Vec<(TableId, IndexId)>, LiveError> {
+    drop_indexes_within(runner, usize::MAX).await
+}
+
+/// Like [`drop_indexes`], deleting at most about `budget` entries (whole
+/// batches); an index not finished stays `dropping` for the next call.
+pub async fn drop_indexes_within(
+    runner: &Runner,
+    budget: usize,
+) -> Result<Vec<(TableId, IndexId)>, LiveError> {
     let app = runner.app().clone();
     let mut snap = latest_snapshot(runner.store()).await?;
     let dropping: Vec<(TableId, IndexId)> = catalog::list_tables(&mut snap, &app)
@@ -606,8 +632,12 @@ pub async fn drop_indexes(runner: &Runner) -> Result<Vec<(TableId, IndexId)>, Li
     let batch = options.batch.max(1);
     let per_s = f64::from(options.docs_per_s.max(1));
     let mut removed = Vec::new();
-    for (table, index) in dropping {
+    let mut deleted = 0_usize;
+    'indexes: for (table, index) in dropping {
         loop {
+            if deleted >= budget {
+                break 'indexes;
+            }
             let started = Instant::now();
             let app = app.clone();
             let step = atomic(runner, "live.backfill.drop", |txn| {
@@ -645,6 +675,7 @@ pub async fn drop_indexes(runner: &Runner) -> Result<Vec<(TableId, IndexId)>, Li
                         break;
                     }
                     Dropped::Deleted(n) => {
+                        deleted += n;
                         let budget = Duration::from_secs_f64(n as f64 / per_s);
                         if let Some(pause) = budget.checked_sub(started.elapsed()) {
                             tokio::time::sleep(pause).await;
