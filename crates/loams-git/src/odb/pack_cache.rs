@@ -553,6 +553,10 @@ impl Lookup for Session<'_> {
 
 #[async_trait]
 impl ObjectDb for PackCacheOdb {
+    fn as_pack_cache(&self) -> Option<&PackCacheOdb> {
+        Some(self)
+    }
+
     async fn contains(&self, oid: &ObjectId) -> Result<bool, OdbError> {
         Ok(self.locate(oid, &Memo::default()).await?.is_some())
     }
@@ -573,13 +577,18 @@ impl ObjectDb for PackCacheOdb {
             odb: self,
             memo: Memo::default(),
         };
-        let extra = extra.map(DbLookup);
-        walk_closure(
-            &session,
-            extra.as_ref().map(|e| e as &dyn Lookup),
-            tips,
-            known,
-        )
-        .await
+        // A pushed pack read through the cache gets its own session too, so
+        // its idx and pack are parsed once per walk, not once per object.
+        let extra_session = extra.and_then(ObjectDb::as_pack_cache).map(|odb| Session {
+            odb,
+            memo: Memo::default(),
+        });
+        let extra_db = extra.map(DbLookup);
+        let extra: Option<&dyn Lookup> = match (&extra_session, &extra_db) {
+            (Some(session), _) => Some(session),
+            (None, Some(db)) => Some(db),
+            (None, None) => None,
+        };
+        walk_closure(&session, extra, tips, known).await
     }
 }
