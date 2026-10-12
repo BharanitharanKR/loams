@@ -167,8 +167,8 @@ Not forked, but fetched by upstream's build: `neondatabase/pgrag` (Apache-2.0, `
 
 ### 3.5 Governance (D804)
 
-- **CODEOWNERS** in each fork, replacing Neon's teams with `@ostrium-labs/loams-postgres-maintainers` (storage, compute, CI), `@ostrium-labs/postgres-maintainers` (`vendor/`, `pgxn/`, `compute/`) and `@ostrium-labs/security` (`deny.toml`, `.github/`, `LOAMS_PATCHES.md`, `NOTICE`). **At least two people** are in each maintainer team. The teams are an owner action. *As built (NF1 Task 5 rulings 1–2):* until the teams exist, each section is owned by the organisation's admins and names its team in a comment; the DCO check also exempts the commits in `LOAMS_PATCHES.md`'s "Commits without a trailer" table (`1218fb7a`).
-- **Branch protection** on `main` and `loams/*`: a PR, one CODEOWNER approval, the gate's required checks, DCO, no force-push, no deletion.
+- **CODEOWNERS** in each fork, replacing Neon's teams with `@ostrium-labs/loams-postgres-maintainers` (storage, compute, CI), `@ostrium-labs/postgres-maintainers` (`vendor/`, `pgxn/`, `compute/`) and `@ostrium-labs/security` (`deny.toml`, `.github/`, `LOAMS_PATCHES.md`, `NOTICE`, `CODEOWNERS`, `SECURITY.md`). **At least two people** are in each maintainer team. The teams are an owner action. *As built (NF1 Task 5 rulings 1–2):* until the teams exist, each section is owned by the organisation's admins and names its team in a comment; the DCO check also exempts the commits in `LOAMS_PATCHES.md`'s "Commits without a trailer" table (`1218fb7a`), read from the pull request's base, never from the pull request.
+- **Branch protection** (target) on `main` and `loams/*`: a PR, one CODEOWNER approval, the gate's required checks, DCO, no force-push, no deletion. *As built (NF1 Task 3 ruling 4, Task 4 ruling 6, Task 5 ruling 3):* no status check is required yet, because Actions are disabled on `loams-postgres`; `dco` and `patches` are added when they are enabled.
 - **DCO.** The same `check-dco.sh` as Loams. Neon's history is exempt (the check starts at `neon-fork-point`).
 - **The fork network.** The repository stays in `neondatabase/neon`'s fork network until GitHub support detaches it (Q730, an owner action). Until then PRs name the base `ostrium-labs/loams-postgres:main` explicitly.
 - **The bot.** A GitHub App, `loams-postgres-bot`, with `contents: write` and `pull_requests: write` on the eight forks and `ostrium-labs/loams` (and `packages: write` for image pushes). It pushes Postgres branches from the `loams-postgres` repository's CI and opens pin PRs on Loams. The owner creates it, or approves the controller creating it through GitHub's App manifest flow (Q733).
@@ -188,7 +188,7 @@ Not forked, but fetched by upstream's build: `neondatabase/pgrag` (Apache-2.0, `
 
 ### 3.7 Security (D805)
 
-- **Reporting.** Private vulnerability reporting is enabled on every fork. `SECURITY.md` points at Loams' policy (`security@ostriumlabs.com`, acknowledgement within 3 business days). *As built (NF1 Task 5 ruling 4):* enabled on the six unarchived forks; `SECURITY.md` on `loams-postgres`, `postgres` (`loams/meta`), `tokio-epoll-uring` and `pg_session_jwt`.
+- **Reporting.** Private vulnerability reporting is enabled on every unarchived fork. `SECURITY.md` points at Loams' policy (`security@ostriumlabs.com`, acknowledgement within 3 business days). *As built (NF1 Task 5 ruling 4):* enabled on the six unarchived forks; `SECURITY.md` on `loams-postgres`, `postgres` (`loams/meta`), `tokio-epoll-uring` and `pg_session_jwt`.
 - **Monitoring** (`loams-advisories.yml`, daily):
   - `cargo deny check advisories` on the fork's `Cargo.lock`;
   - Trivy (or Grype) scans of every pinned digest, covering Debian packages and extension binaries;
