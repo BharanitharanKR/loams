@@ -17,7 +17,9 @@ pub mod odb;
 pub mod paths;
 pub mod reflog;
 mod retry;
+pub mod sequencer;
 pub mod state;
+pub mod testing;
 pub mod wal;
 
 pub use blob::{BlobError, BlobId, BlobStore, LpkWriter, Put, StoreBlobStore};
@@ -31,6 +33,10 @@ pub use ids::{
 };
 pub use odb::{ObjectDb, OdbError, PackCache, PackCacheOdb};
 pub use paths::RepoPaths;
-pub use reflog::{Expect, Receipt, RefSnapshot, RefTxn, RefUpdate, RejectReason, Scope};
+pub use reflog::{
+    CommittedTxn, Expect, ReadAt, Receipt, RefError, RefLog, RefSnapshot, RefTxn, RefUpdate,
+    RejectReason, Scope,
+};
+pub use sequencer::{BucketRefLog, GitEvent, SequencerConfig};
 pub use state::{Check, IdemIndex, RepoState, StateError};
 pub use wal::{Appended, Hint, StoreWalStore, WalError, WalStore};

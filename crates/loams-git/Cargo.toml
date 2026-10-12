@@ -1,6 +1,6 @@
 [package]
 name = "loams-git"
-description = "Loams Git's portable core (design §36, §19): identifiers, paths, limits, the bucket WAL formats, the blob store, the WAL, the repository state machine and the pack-cache object database."
+description = "Loams Git's portable core (design §36, §19): identifiers, paths, limits, the bucket WAL formats, the blob store, the WAL, the repository state machine, the pack-cache object database and the bucket ref log."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -36,7 +36,7 @@ serde_json.workspace = true
 # `derived_blame` names hash the path.
 sha2.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["sync", "time"] }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 tracing.workspace = true
 # Generated ids (`r`, `w`, `m`, `s` + a lowercase ULID).
 ulid.workspace = true
@@ -45,6 +45,8 @@ ulid.workspace = true
 prost-build.workspace = true
 
 [dev-dependencies]
+# The linearizability checker (plan GT1 Task 10).
+loams-meta-conformance.workspace = true
 # `FaultyStore` wraps an `ObjectStore`.
 object_store.workspace = true
 proptest.workspace = true

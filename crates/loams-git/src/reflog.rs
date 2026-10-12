@@ -1,14 +1,23 @@
-//! The ref log's transaction types (§36 §5.2): what a writer asks the
-//! sequencer to commit, and what it gets back.
+//! The ref log (§36 §5.2): what a writer asks the sequencer to commit,
+//! what it gets back, and the [`RefLog`] trait.
 //!
-//! The `RefLog` trait and `BucketRefLog`, the sequencer over a
-//! [`WalStore`](crate::WalStore), come with GT1 Task 10; the state machine
-//! that checks and applies these transactions is [`crate::state`].
+//! [`BucketRefLog`](crate::BucketRefLog), the sequencer over a
+//! [`WalStore`](crate::WalStore), implements it (GT1 Task 10); the state
+//! machine that checks and applies these transactions is [`crate::state`].
 
 use std::collections::BTreeMap;
+use std::fmt;
+use std::sync::Arc;
 
+use async_trait::async_trait;
+use futures::stream::BoxStream;
+use sha2::{Digest, Sha256};
+
+use crate::format::event::TxnEvent;
 use crate::format::pb;
 use crate::ids::{IdemKey, ObjectId, Principal, RefName, RepoId, RepoPath, Seq, TraceParent};
+use crate::state::StateError;
+use crate::wal::WalError;
 
 /// What a ref must point at for an update to apply (§36 §5.2).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -145,4 +154,141 @@ pub struct RefSnapshot {
     pub packs: Vec<pb::PackRef>,
     /// The fork parent, whose packs objects fall through to.
     pub parent: Option<pb::ForkParent>,
+}
+
+/// Errors of a [`RefLog`] (§36 §5.2).
+#[derive(Debug, thiserror::Error)]
+pub enum RefError {
+    /// Some updates do not apply; nothing was applied.
+    #[error("rejected: {}", describe_rejections(.0))]
+    Rejected(Vec<(RefName, RejectReason)>),
+    /// The idempotency key was committed inside its window with another
+    /// request digest.
+    #[error("the idempotency key was used for another request")]
+    IdempotencyMismatch,
+    /// The transaction alone would exceed a segment (1 MiB).
+    #[error("the transaction is larger than one segment")]
+    TooLarge,
+    /// The sequencer is shutting down, lost its lease, or could not learn
+    /// whether the transaction committed; retry with the same key.
+    #[error("the sequencer is unavailable; retry")]
+    Unavailable,
+    /// A request no sequencer accepts (ruling T10.1): a transaction with no
+    /// updates or more than `MAX_REFS_PER_TXN` (4096), a pack named by an
+    /// invalid checksum, or a read at a seq the log does not hold.
+    #[error("invalid request: {reason}")]
+    Invalid {
+        /// What is wrong.
+        reason: String,
+    },
+    /// The repository has no checkpoint: it was never created (ruling T10.1).
+    #[error("repository not found")]
+    NotFound,
+    /// A checkpoint or segment that cannot be state (ruling T10.1).
+    #[error(transparent)]
+    State(#[from] StateError),
+    /// The WAL failed.
+    #[error(transparent)]
+    Wal(#[from] WalError),
+}
+
+fn describe_rejections(rejected: &[(RefName, RejectReason)]) -> String {
+    rejected
+        .iter()
+        .map(|(name, reason)| format!("{name}: {reason:?}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Which state a read sees (§36 §4.6).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ReadAt {
+    /// The tail: linearizable.
+    Latest,
+    /// At least this seq: every commit up to it is reflected.
+    AtLeast(Seq),
+    /// Exactly the state after this seq (retained `EXACTLY_RETENTION`, 24 h).
+    Exactly(Seq),
+}
+
+/// A committed transaction, as [`RefLog::watch`] streams it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CommittedTxn {
+    /// Its segment.
+    pub seq: Seq,
+    /// Its index in the segment's batch.
+    pub index: u32,
+    /// The transaction's event.
+    pub event: TxnEvent,
+}
+
+/// The principal of [`RefLog::cas_ref`]'s transactions.
+pub const CAS_REF_PRINCIPAL: &str = "loams-cas-ref";
+
+/// The request digest of a [`RefLog::cas_ref`] call: SHA-256 over the
+/// update, so a retry with the same key and update replays and another
+/// update under the key is a mismatch.
+pub fn cas_ref_digest(name: &RefName, old: &Expect, new: Option<&ObjectId>) -> [u8; 32] {
+    let mut hash = Sha256::new();
+    hash.update(b"cas_ref\0");
+    hash.update(name.as_str().as_bytes());
+    match old {
+        Expect::Oid(oid) => {
+            hash.update(b"\0oid\0");
+            hash.update(oid.as_bytes());
+        }
+        Expect::Absent => hash.update(b"\0absent"),
+        Expect::Any => hash.update(b"\0any"),
+    }
+    match new {
+        Some(oid) => {
+            hash.update(b"\0new\0");
+            hash.update(oid.as_bytes());
+        }
+        None => hash.update(b"\0delete"),
+    }
+    hash.finalize().into()
+}
+
+/// The ref log of one repository (§36 §5.2).
+#[async_trait]
+pub trait RefLog: Send + Sync + fmt::Debug {
+    /// Applies every update or none, at one sequence number, through group commit.
+    /// Linearizable: the transaction takes effect at its segment's PUT, between call and return.
+    /// Acknowledged only after the segment is durable.
+    async fn commit(&self, txn: RefTxn) -> Result<Receipt, RefError>;
+
+    /// The draft's `cas_ref(name, old, new)`: one update, through `commit`,
+    /// by [`CAS_REF_PRINCIPAL`] with [`cas_ref_digest`].
+    async fn cas_ref(
+        &self,
+        name: RefName,
+        old: Expect,
+        new: Option<ObjectId>,
+        key: IdemKey,
+    ) -> Result<Receipt, RefError> {
+        let request_digest = cas_ref_digest(&name, &old, new.as_ref());
+        let principal = Principal::parse(CAS_REF_PRINCIPAL).expect("a valid principal");
+        self.commit(RefTxn {
+            key,
+            request_digest,
+            updates: vec![RefUpdate {
+                name,
+                expect: old,
+                new,
+            }],
+            packs: Vec::new(),
+            principal,
+            scope: None,
+            trace: None,
+            push_options: Vec::new(),
+        })
+        .await
+    }
+
+    /// `Latest` is linearizable; `AtLeast(s)` reflects every commit up to `s`; `Exactly(s)` is retained 24 h.
+    async fn snapshot(&self, at: ReadAt) -> Result<Arc<RefSnapshot>, RefError>;
+
+    /// Committed transactions from `from`, in order, without gaps; resumable by seq.
+    fn watch(&self, from: Seq) -> BoxStream<'static, Result<CommittedTxn, RefError>>;
 }

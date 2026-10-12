@@ -8092,6 +8092,7 @@ dependencies = [
  "loams-cloudevents",
  "loams-common",
  "loams-fs",
+ "loams-meta-conformance",
  "loams-store",
  "object_store 0.14.2",
  "proptest",
