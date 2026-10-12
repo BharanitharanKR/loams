@@ -5,11 +5,14 @@
 
 import type { MethodName, Params } from './gen/methods';
 
-/** One call: the `method` and `params` of a `{id, method, params}` frame. */
-export interface Request<M extends MethodName = MethodName> {
-  method: M;
-  params: Params<M>;
-}
+/**
+ * One call: the `method` and `params` of a `{id, method, params}` frame.
+ * Without a type argument it is the union over every method, so `method` and
+ * `params` stay paired (a `Hello` cannot carry another method's params).
+ */
+export type Request<M extends MethodName = MethodName> = {
+  [K in M]: { method: K; params: Params<K> };
+}[M];
 
 /** Build a request; `params` must be the method's params type. */
 export function request<M extends MethodName>(method: M, params: Params<M>): Request<M> {

@@ -166,6 +166,8 @@ pub trait Method: 'static {
 
     /// The method's row in [`METHODS`].
     fn spec() -> &'static MethodSpec {
+        // Cannot fail: `method_table!` emits each marker together with its
+        // row (checked by `markers_name_their_rows`).
         method_spec(Self::NAME).expect("every marker in `calls` has a row in METHODS")
     }
 }

@@ -245,3 +245,12 @@ describe('requests.json', () => {
     expect(readFileSync(file, 'utf8')).toBe(text);
   });
 });
+
+describe('Request', () => {
+  it('pairs each method with its own params', () => {
+    // @ts-expect-error `Hello` cannot carry another method's params.
+    const mismatched: Request = { method: 'Hello', params: { chatId: 'chat-1' } };
+    const paired: Request<'WatchQueue'> = request('WatchQueue', { chatId: 'chat-1' });
+    expect([mismatched.method, paired.method]).toEqual(['Hello', 'WatchQueue']);
+  });
+});
