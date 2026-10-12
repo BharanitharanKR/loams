@@ -31,6 +31,7 @@ pub mod limits;
 pub mod owner;
 pub mod redact;
 pub mod service;
+pub mod snapshot;
 pub mod value;
 
 pub use classify::Access;

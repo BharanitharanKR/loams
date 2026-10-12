@@ -168,7 +168,7 @@ impl GraphLog {
     /// The lane and the opens run on the statement pool, where this blocks on the runtime's
     /// handle. A caller already inside a runtime (a test calling the engine directly) gets a
     /// scoped thread, since a runtime thread cannot block on its own runtime.
-    fn wait<T: Send>(&self, future: impl Future<Output = T> + Send) -> T {
+    pub(crate) fn wait<T: Send>(&self, future: impl Future<Output = T> + Send) -> T {
         let runtime = &self.inner.runtime;
         if tokio::runtime::Handle::try_current().is_err() {
             return runtime.block_on(future);

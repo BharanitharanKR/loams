@@ -171,6 +171,19 @@ pub fn encode(record: &GraphRecord) -> Result<Bytes, CodecError> {
     Ok(Bytes::from(out.0))
 }
 
+/// Encodes a property map on its own: [`RECORD_VERSION`], then the map exactly as a record's
+/// `UpsertNode` writes it. It is the `properties` column of a portable snapshot (GR1 Task 13), so
+/// a snapshot's values are the log's values, byte for byte.
+///
+/// # Errors
+///
+/// What [`encode`] refuses for a value.
+pub fn encode_props(props: &PropMap) -> Result<Bytes, CodecError> {
+    let mut out = Writer(vec![RECORD_VERSION]);
+    out.props(props)?;
+    Ok(Bytes::from(out.0))
+}
+
 fn language_tag(language: QueryLanguage) -> u8 {
     // The `loams.graph.v1` numbers, frozen here: a new language is a new tag, never a reuse.
     match language {
@@ -524,6 +537,26 @@ pub fn decode(bytes: &[u8]) -> Result<GraphRecord, CodecError> {
         return Err(input.malformed(input.at, format!("{rest} trailing bytes after the record")));
     }
     Ok(record)
+}
+
+/// Decodes a property map [`encode_props`] wrote. Total, as [`decode`] is.
+///
+/// # Errors
+///
+/// [`CodecError::Empty`], [`CodecError::UnknownVersion`], [`CodecError::Truncated`] or
+/// [`CodecError::Malformed`].
+pub fn decode_props(bytes: &[u8]) -> Result<PropMap, CodecError> {
+    let (&version, _) = bytes.split_first().ok_or(CodecError::Empty)?;
+    if version != RECORD_VERSION {
+        return Err(CodecError::UnknownVersion(version));
+    }
+    let mut input = Reader { bytes, at: 1 };
+    let props = input.props()?;
+    let rest = bytes.len() - input.at;
+    if rest != 0 {
+        return Err(input.malformed(input.at, format!("{rest} trailing bytes after the map")));
+    }
+    Ok(props)
 }
 
 struct Reader<'a> {

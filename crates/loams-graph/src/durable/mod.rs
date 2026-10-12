@@ -10,9 +10,11 @@
 //! * [`append`]: [`GraphLog`], the log as the graphs use it: append a group, read the stream back.
 //! * [`idempotency`]: `key → first run`, rebuilt from the stream on open.
 //!
-//! A graph's local Grafeo files are a cache (I4). Until snapshots (Task 13) and recovery from them
-//! (Task 14), opening a durable graph rebuilds it from its whole stream into a fresh engine
-//! (R11.4), and a graph whose append failed is rebuilt the same way before it serves again.
+//! A graph's local Grafeo files are a cache (I4). Until recovery from snapshots (Task 14), opening a
+//! durable graph rebuilds it from its whole stream into a fresh engine (R11.4), and a graph whose
+//! append failed is rebuilt the same way before it serves again. Only a stream trimmed below its
+//! snapshots (GR1 Task 13) is opened from the newest usable snapshot and the records after it
+//! ([`Base`]).
 
 pub mod append;
 pub mod idempotency;
@@ -130,6 +132,9 @@ pub struct DurableSpec {
     /// metastore refuses one once the lease has moved on. `None` appends unfenced (tests of the
     /// write path alone).
     pub fence: Option<loams_common::meta::Fence>,
+    /// Where the graph's snapshots are read from when its stream has been trimmed below them
+    /// (GR1 Task 13). `None` opens only an untrimmed stream.
+    pub snapshots: Option<crate::snapshot::SnapshotSource>,
 }
 
 impl fmt::Debug for DurableSpec {
@@ -174,6 +179,21 @@ pub(crate) struct Durable {
     /// The next record's `txn_seq` (one per record of either kind, R10.4). Changed only by the
     /// lane, under the exclusive gate.
     pub(crate) next_txn_seq: AtomicU64,
+    /// Bytes of records this engine appended since its last snapshot (the checkpointer's
+    /// "64 MiB of log" trigger, GR1 Task 13).
+    pub(crate) log_bytes: AtomicU64,
+    /// When this engine opened (the checkpointer's interval for a graph with no snapshot yet).
+    pub(crate) opened_at: std::time::Instant,
+}
+
+/// The snapshot a durable engine was restored from (GR1 Task 13): the stream's records below
+/// `offset` are in the engine already, and `next_txn_seq` is the snapshot's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Base {
+    /// The offset the snapshot covers.
+    pub(crate) offset: u64,
+    /// The `txn_seq` the snapshot's next record takes.
+    pub(crate) next_txn_seq: u64,
 }
 
 impl fmt::Debug for Durable {
@@ -196,8 +216,10 @@ impl Durable {
     }
 
     /// Opens a durable graph's state over `db`, a fresh engine (or, when `adopt`, the graph's
-    /// local files from before the log): replays the stream `from..to` into it, or appends the
-    /// adopted state as the first record, and checkpoints it (R9.5).
+    /// local files from before the log; or, with `base`, an engine restored from a snapshot):
+    /// replays the stream `from..to` into it, or appends the adopted state as the first record,
+    /// and checkpoints it (R9.5). With `base`, the records below its offset are read for their
+    /// idempotency keys and `txn_seq`s only, since the snapshot holds their effect.
     ///
     /// # Errors
     ///
@@ -209,13 +231,15 @@ impl Durable {
         graph: GraphId,
         bounds: (u64, u64),
         adopt: bool,
+        base: Option<Base>,
         persistent: bool,
     ) -> Result<Self, GraphError> {
         let (start, end) = bounds;
         let log = spec.log.clone();
         let now = log.now_ms();
         let mut idempotency = Idempotency::default();
-        let mut next_txn_seq = 1;
+        let mut next_txn_seq = base.map_or(1, |base| base.next_txn_seq);
+        let applied_below = base.map_or(0, |base| base.offset);
         let mut offset = end;
         if adopt {
             let ops = baseline(db);
@@ -249,12 +273,12 @@ impl Durable {
                 offset = ack.last_offset + 1;
             }
         } else {
-            if start > 0 {
-                // Trimmed below its start with no snapshot to begin from: Task 13 trims only
-                // below a snapshot, and Task 14 opens from it.
+            if start > applied_below {
+                // Trimmed above the snapshot the engine holds: records in between are lost. The
+                // checkpointer trims only at or below a snapshot it has committed (GR1 Task 13).
                 return Err(GraphError::LogUnavailable(format!(
-                    "the graph's stream starts at offset {start}, and graphs are not opened from \
-                     snapshots yet"
+                    "the graph's stream starts at offset {start}, above the {applied_below} its \
+                     snapshot covers"
                 )));
             }
             for record in log.read(spec.stream, start, end)? {
@@ -265,6 +289,8 @@ impl Durable {
                         record.offset
                     ))
                 })?;
+                // Below the snapshot's offset the engine holds the record's effect already.
+                let apply = record.offset >= applied_below;
                 let (seq, key, epoch) = match &decoded {
                     GraphRecord::ChangeSet(change) => {
                         if change.graph != graph {
@@ -273,8 +299,13 @@ impl Durable {
                                 record.offset, change.graph
                             )));
                         }
-                        apply_to_store(db, &change.ops)?;
+                        if apply {
+                            apply_to_store(db, &change.ops)?;
+                        }
                         (change.txn_seq, &change.idempotency_key, change.commit_epoch)
+                    }
+                    GraphRecord::Schema(schema) if !apply => {
+                        (schema.txn_seq, &schema.idempotency_key, schema.commit_epoch)
                     }
                     GraphRecord::Schema(schema) => {
                         // DDL is refused until Task 24 (R5.8), so no stream holds one yet; a
@@ -317,6 +348,8 @@ impl Durable {
             position: Position::new(offset, db.current_epoch().as_u64(), counts),
             idempotency: Mutex::new(idempotency),
             next_txn_seq: AtomicU64::new(next_txn_seq),
+            log_bytes: AtomicU64::new(0),
+            opened_at: std::time::Instant::now(),
             log,
         })
     }

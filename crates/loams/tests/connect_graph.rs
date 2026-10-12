@@ -744,6 +744,52 @@ async fn zero_maintenance_interval_refused() {
     assert!(err.to_string().contains("maintenance_every"), "{err}");
 }
 
+/// `checkpoint_every` must be greater than zero too (GR1 Task 13).
+#[cfg(feature = "graph")]
+#[tokio::test]
+async fn zero_checkpoint_interval_refused() {
+    let dir = TempDir::new().expect("temp dir");
+    let mut config = ServerConfig::new(dir.path());
+    config.listen = SocketAddr::from(([127, 0, 0, 1], 0));
+    config.graph.checkpoint_every = Duration::ZERO;
+    let err = Server::start(config).await.expect_err("refused");
+    assert!(err.to_string().contains("checkpoint_every"), "{err}");
+}
+
+/// The scheduled checkpoint (GR1 Task 13): a graph that changed and has no portable snapshot is
+/// snapshotted on the next tick, without anyone calling `checkpoint`.
+#[cfg(feature = "graph")]
+#[tokio::test]
+async fn graphs_are_checkpointed_on_schedule() {
+    let running = Running::start_with(|config| {
+        config.graph.checkpoint_every = Duration::from_millis(50);
+    })
+    .await;
+    let (status, _) = running
+        .connect(
+            "/loams.graph.v1.GraphAdminService/CreateGraph",
+            &json!({"namespace": "acme", "name": "kg"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let (status, _) = running
+        .connect(
+            "/loams.graph.v1.GraphService/Execute",
+            &json!({"namespace": "acme", "graph": "kg", "statement": "INSERT (:X)"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while running.server.graph_checkpoints().expect("graph is served") < 1 {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the graph was never checkpointed"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    running.server.shutdown().await.expect("shutdown");
+}
+
 /// The scheduled purge (Task 4 R4.9): a deleted graph's storage goes once the retention hold has
 /// passed, without anyone calling `purge_expired`.
 #[cfg(feature = "graph")]

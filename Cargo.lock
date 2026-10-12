@@ -8127,11 +8127,14 @@ dependencies = [
 name = "loams-graph"
 version = "0.1.0-preview.1"
 dependencies = [
+ "arrow-array",
+ "arrow-schema",
  "base64 0.23.1",
  "buffa",
  "buffa-types",
  "bytes",
  "connectrpc",
+ "crc32c",
  "fail 0.5.1",
  "futures",
  "grafeo",
@@ -8146,6 +8149,7 @@ dependencies = [
  "loams-meta",
  "loams-proto",
  "loams-store",
+ "parquet",
  "proptest",
  "prost 0.14.4",
  "prost-types",

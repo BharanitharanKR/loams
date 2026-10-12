@@ -316,6 +316,13 @@ pub struct GraphConfig {
     /// How often the purge and the catalog sweep run (config only, no flag; default 10 min;
     /// must be greater than zero).
     pub maintenance_every: Duration,
+    /// When graphs are snapshotted and how long their history is kept (config only; GR1 Task
+    /// 13): a native snapshot every 15 minutes or 64 MiB of log, a portable one weekly, a PITR
+    /// window of 7 days (at least 24 hours).
+    pub checkpoint: loams_graph::snapshot::CheckpointPolicy,
+    /// How often this node checks its graphs for a due snapshot (config only; default 1 min;
+    /// must be greater than zero).
+    pub checkpoint_every: Duration,
     /// The cap on graph statements running at once in this process (`--graph-statement-slots`;
     /// default twice the cores, at most 32). Past it a statement is refused with
     /// `RESOURCE_EXHAUSTED`. It also sizes the statement pool (GR1 Task 6).
@@ -352,6 +359,8 @@ impl GraphConfig {
             retention_hold: loams_graph::service::admin::DEFAULT_RETENTION_HOLD,
             sweep_grace: loams_graph::catalog::DOCUMENT_GRACE,
             maintenance_every: Duration::from_secs(600),
+            checkpoint: loams_graph::snapshot::CheckpointPolicy::default(),
+            checkpoint_every: Duration::from_secs(60),
             statement_slots: loams_graph::service::admin::default_statement_slots(),
             namespace_statements: loams_graph::limits::DEFAULT_NAMESPACE_STATEMENTS,
             limits: loams_graph::limits::StatementLimits::DEFAULT,
@@ -572,6 +581,11 @@ impl ServerConfig {
         if self.graph.maintenance_every.is_zero() {
             return Err(ServerError::Config(
                 "graph.maintenance_every must be greater than zero".to_string(),
+            ));
+        }
+        if self.graph.checkpoint_every.is_zero() {
+            return Err(ServerError::Config(
+                "graph.checkpoint_every must be greater than zero".to_string(),
             ));
         }
         let max_slots = loams_graph::service::admin::MAX_STATEMENT_SLOTS;
@@ -1119,7 +1133,8 @@ struct Assembled {
 }
 
 /// Loams Graph as the server runs it (GR1 Task 5): the admin service (catalog and engine) and
-/// the maintenance task that purges deleted graphs and sweeps catalog documents.
+/// the maintenance task that purges deleted graphs, sweeps catalog documents and snapshot
+/// objects, and takes the snapshots that are due (GR1 Task 13).
 #[cfg(feature = "graph")]
 #[derive(Debug)]
 struct GraphRuntime {
@@ -1133,6 +1148,8 @@ struct GraphRuntime {
     shutdown_wait: Duration,
     /// Catalog sweeps the maintenance task has completed.
     sweeps: Arc<std::sync::atomic::AtomicU64>,
+    /// Graphs the maintenance task has checkpointed (GR1 Task 13).
+    checkpoints: Arc<std::sync::atomic::AtomicU64>,
 }
 
 #[cfg(feature = "graph")]
@@ -1169,7 +1186,8 @@ impl GraphRuntime {
             .with_retention_hold(config.retention_hold)
             .with_statement_slots(config.statement_slots)
             .with_namespace_statements(config.namespace_statements)
-            .with_limits(config.limits);
+            .with_limits(config.limits)
+            .with_checkpoint_policy(config.checkpoint);
         // A cluster's graph nodes own graphs by lease and forward to each other (GR1 Task 12);
         // a single node owns every graph and still fences its appends.
         if let Some(registry) = registry {
@@ -1186,20 +1204,41 @@ impl GraphRuntime {
         let admin = Arc::new(admin);
         let stop = CancellationToken::new();
         let sweeps = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let checkpoints = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let maintenance = {
-            let (admin, stop, sweeps) = (admin.clone(), stop.clone(), sweeps.clone());
-            let (every, hold, grace) = (
+            let (admin, stop, sweeps, checkpoints) = (
+                admin.clone(),
+                stop.clone(),
+                sweeps.clone(),
+                checkpoints.clone(),
+            );
+            let (every, hold, grace, checkpoint_every) = (
                 config.maintenance_every,
                 config.retention_hold,
                 config.sweep_grace,
+                config.checkpoint_every,
             );
             tokio::spawn(async move {
                 let mut tick = tokio::time::interval(every);
                 tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                let mut checkpoint = tokio::time::interval(checkpoint_every);
+                checkpoint.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
                 loop {
                     tokio::select! {
                         () = stop.cancelled() => return,
                         _ = tick.tick() => {}
+                        _ = checkpoint.tick() => {
+                            // Snapshots of the graphs this node owns that are due (GR1 Task 13).
+                            let done = admin.checkpoint_due().await;
+                            if done > 0 {
+                                tracing::debug!(graphs = done, "checkpointed graphs");
+                                checkpoints.fetch_add(
+                                    done as u64,
+                                    std::sync::atomic::Ordering::Relaxed,
+                                );
+                            }
+                            continue;
+                        }
                     }
                     // This node's caches, then (on one node of the cluster at a time, under the
                     // maintenance lease) the purge and the catalog sweep (GR1 Task 12).
@@ -1223,6 +1262,7 @@ impl GraphRuntime {
             maintenance,
             shutdown_wait: config.shutdown_wait,
             sweeps,
+            checkpoints,
         })
     }
 
@@ -2464,6 +2504,16 @@ impl Server {
         self.graph
             .as_ref()
             .map(|g| g.sweeps.load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    /// How many graph checkpoints the maintenance task has taken, when Loams Graph is served
+    /// (GR1 Task 13).
+    #[cfg(feature = "graph")]
+    #[must_use]
+    pub fn graph_checkpoints(&self) -> Option<u64> {
+        self.graph
+            .as_ref()
+            .map(|g| g.checkpoints.load(std::sync::atomic::Ordering::Relaxed))
     }
 
     /// The graph data directory, when Loams Graph is served with one (GR1 Task 5).

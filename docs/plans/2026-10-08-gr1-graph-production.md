@@ -1617,3 +1617,86 @@ Controller rulings carried in: a reserved `_graph.<gr_id>` stream created by a m
 - plus three conformance cases (both metastores), `loams-log`'s `a_broken_fence_fails_only_its_appends_and_commits_nothing_of_them`, `loams-hot`'s `a_descriptor_with_an_unknown_role_keeps_the_known_ones`, and `owner.rs` unit tests.
 
 **R12.9 `ExecuteRequest.idempotency_key`** is documented as optional in preview and required for a writing statement from Task 24 (R11.9), in the proto and in the generated TypeScript.
+
+### Task 13 (2026-10-12, on `backend/gr1-t13`, stacked on Task 12)
+
+**R13.1 Where things live (deviation in path detail).**
+- Every bucket object of a graph is under `ns/<ns_id>/graphs/<gr_id>/` (`snapshot::graph_prefix`).
+- A snapshot's objects are under `snap/<offset>/<kind>-<ULID>/`. The plan's `<epoch>` is the durable epoch, which R9.5 made a log offset; it is zero-padded to 20 digits so listings sort. The ULID gives every checkpoint attempt its own objects, so a retry or a lost acknowledgement never overwrites anything a manifest names.
+- The manifest follows the catalog's idiom (R4.1), not a metastore value: a pointer holds at most 1 KiB, and a manifest lists every retained snapshot with its keys. It is a JSON document `manifest/<ULID>.json`, committed by a CAS of the namespace pointer `graph-manifest/<gr_id>`.
+
+**R13.2 The manifest (`src/snapshot/manifest.rs`).**
+- `GraphManifest { format, graph, snapshots, log_trim_offset }`. Each `SnapshotEntry` has `{ id, kind, offset, epoch, next_txn_seq, lease_epoch, keys, bytes, crc32c?, engine_version, created_at_ms, nodes, edges }`.
+- `offset` covers every record below it. `epoch` is Grafeo's and only informational (R9.5). `next_txn_seq` is the record counter R9.5 says the manifest carries.
+- Snapshots are kept oldest first: by offset, then time, then kind (native first), then id.
+- The CAS carries the owner lease as its fence (I5). A stale owner commits nothing (`SnapshotError::Fenced`, and the graph is then fenced here).
+- A lost CAS retries on the winner's manifest, up to 16 times with the catalog's backoff.
+- A lost acknowledgement is recognised in two ways: the pointer names the write's own document, or, on a retry after an unknown outcome, the change finds its own entry ids already in.
+- The latest `LinkApply` per link (R0.17) is not in the manifest yet. No link writes a graph before Task 18, which adds it.
+
+**R13.3 Retention (`retain`; trim rules).**
+- The **base** is the newest snapshot taken at least the PITR window ago.
+- The trim point is `min(base.offset, newest portable offset)`. It never moves back, and there is none without both a base and a portable snapshot.
+  - The base bound means every record below the trim point is older than the window, because a snapshot's time is read under the gate after its offset.
+  - The portable bound keeps the engine-upgrade fallback (§48 §6.5) replayable.
+- Every snapshot at or above the trim point is kept, so the stream is never trimmed past the oldest retained snapshot.
+- Above `max_snapshots` (default 48), the oldest are dropped, except three: the one at the trim point, the newest portable and the newest. A PITR restore then replays more log, but still finds a snapshot.
+- Outside `test-hooks` builds, the PITR window is at least the idempotency window (24 h). An open from a snapshot therefore still finds every key's record in the stream (R13.6).
+- The window is server-wide (`GraphConfig.checkpoint.pitr_window`, default 7 days). Per-namespace windows are Task 29.
+
+**R13.4 The checkpointer (`src/snapshot/checkpoint.rs`).**
+- **Take.** Under the graph's gate, held shared through `Graph::read_call`: client reads continue, the lane waits, and a panic poisons the graph. The durable offset, the next `txn_seq`, the counts and the metastore time are read first, then each snapshot is taken:
+  - Native: `backup_full` into `<graph dir>/snapshots/<ULID>/`, then a CRC-32C of the file.
+  - Portable: a copy of every node and edge.
+- **Upload.** After the gate is released. Multipart is used above 8 MiB. The staging directory is removed on every path.
+- **Commit and trim.** The manifest is committed with `retain` applied. Then `trim_partition(stream, 0, log_trim_offset, owner fence)` runs. A failed trim is logged and retried by the next checkpoint (trims are idempotent). A refused trim fences the graph.
+- **One at a time.** There is one checkpoint per graph at a time per node.
+- **When it runs:**
+  - A native snapshot is due once the graph changed since its newest snapshot, and either `interval` (15 min) passed or `log_bytes` (64 MiB, counted by the lane since the last snapshot) were appended.
+  - A portable snapshot is due when the graph has none, or once `portable_every` (7 days) passed and the graph changed.
+  - A graph held in memory (`--graph-ephemeral`, or no data directory) takes portable snapshots only, because Grafeo backs up only a database on disk (R0.12).
+  - On demand through `GraphAdmin::checkpoint(ns, name, kinds)`. That is the hook for Task 14's eviction and Task 28's engine upgrades.
+- The server checks every `checkpoint_every` (config only, default 1 min) and calls `GraphAdmin::checkpoint_due`.
+- Holding the gate during `backup_full` or the portable copy stalls writes for that long, but not reads. This is measured by Task 34's gates.
+- The portable copy is held in memory until it is uploaded, which Task 26's memory governance must count.
+
+**R13.5 The portable format (`src/snapshot/portable.rs`).**
+- `nodes/part-<n>.parquet` has columns `id` (UInt64), `labels` (List<Utf8>, sorted) and `properties` (Binary).
+- `edges/part-<n>.parquet` has columns `id`, `type`, `src`, `dst` and `properties`.
+- Rows are in id order, 65 536 per file. `manifest.json` (`loams.graph.portable` version 1) names the files, the offset, `next_txn_seq` and the counts.
+- A `properties` cell is the property map in the log record's own encoding: the version byte 1, then the map as `conformance/graph/records/v1/README.md` specifies it (`changeset::encode_props`/`decode_props`, new in the codec). So a snapshot's values are the log's values exactly, and one specification covers both.
+- Import goes through `apply_to_store`, which keeps the element ids.
+- The Parquet and Arrow crates are the workspace's 58.x. `parquet 58.4.0` was already in `Cargo.lock` through DataFusion, so no new version comes in. `loams-graph` gains `parquet`, `arrow-array`, `arrow-schema` and `crc32c`, all workspace dependencies.
+
+**R13.6 A trimmed stream opens from a snapshot (deviation: part of Task 14 pulled forward).**
+- Without this, the first trim would make a graph unopenable: R11.4 rebuilds from the whole stream and refuses a stream whose start is above 0. So when `start > 0`, `open_db` reads the manifest and picks a snapshot:
+  - the newest native snapshot whose offset is in `[start, end]`, when the graph is on disk and the snapshot's `engine_version` is this build's;
+  - otherwise the newest such portable snapshot.
+- A native snapshot is downloaded into the graph's `graph.grafeo` (size and CRC checked) before the engine opens it. A portable one is imported into the fresh engine.
+- Records from the snapshot's offset on are replayed. Records in `[start, offset)` are only read, to rebuild the idempotency keys and the `txn_seq` (`durable::Base`).
+- An untrimmed stream still opens by full replay. Task 14 makes every open start from the manifest, reuses local caches and adds eviction.
+
+**R13.7 Sweep and purge.**
+- **Sweep.** Under the maintenance lease, `GraphAdmin::maintain` sweeps every catalog graph's prefix (`ManifestStore::sweep`). It deletes snapshot objects no retained entry names, and manifest documents older than the current one by ULID. In both cases the object must have been written at least the sweep grace (the catalog's, 5-minute floor) before the current manifest document, using bucket timestamps only.
+  - A checkpoint in flight uploads after the current document, so it is never swept.
+  - A reader that finds a snapshot gone re-reads the manifest (an obligation on Tasks 14 and 29).
+- **Purge.** It deletes the graph's whole prefix before its stream and its record. A bucket failure leaves the purge for the next pass.
+  - The manifest pointer stays, like the owner lease (R12.6): the metastore cannot delete a pointer, and graph ids are never reused.
+
+**R13.8 Graceful leave.** `GraphAdmin::shutdown` still does not checkpoint before it releases leases (R12.7). The log is the graph, so a checkpoint there would only shorten the next owner's replay. Shutdown time stays bounded. Task 14's eviction checkpoints first.
+
+**R13.9 Tests** (`tests/recovery.rs`, 14):
+- The five planned:
+  - `snapshot_manifest_cas_conflict_retries`: a concurrent writer is injected between the read and the CAS.
+  - `trim_never_passes_oldest_snapshot` and `trim_never_inside_pitr_window`: proptests of 2 000 cases each over generated stream histories. The second checks that no record inside the window is below the trim point.
+  - `portable_snapshot_round_trip`: through the bucket and through the files alone.
+  - `checkpoint_concurrent_with_writes_is_consistent`: 4 writers; 3 checkpoints of both kinds taken mid-workload; each snapshot plus the records after it equals the live graph, ids included.
+- Beyond them:
+  - `a_lost_manifest_acknowledgement_is_recognised`, `a_stale_fence_commits_no_manifest`;
+  - `the_stream_is_trimmed_below_snapshots_outside_the_window_only`;
+  - `a_trimmed_graph_opens_from_its_snapshot`: on disk from the native snapshot with keys read below it, and in memory from the portable one;
+  - `checkpoints_follow_the_policy`;
+  - fault injection with `FaultyStore` and the lease: `a_failed_upload_commits_nothing_and_the_next_checkpoint_succeeds`, `a_stale_owner_commits_no_snapshot_and_trims_nothing`;
+  - `unreferenced_snapshot_objects_are_swept`, `a_purge_deletes_the_graphs_snapshots`.
+- `loams` `connect_graph` gains `graphs_are_checkpointed_on_schedule` and `zero_checkpoint_interval_refused`.
+- Unit tests: retention thinning and no trim without a portable snapshot.

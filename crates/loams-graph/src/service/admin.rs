@@ -27,6 +27,9 @@ use crate::limits::{
     StatementLimits, StatementPool, Watch, namespace_cap,
 };
 use crate::owner::{ForwardMethod, GraphNode, Ownership, Placement};
+use crate::snapshot::{
+    CheckpointPolicy, Checkpointed, Checkpointer, ManifestStore, SnapshotKind, SnapshotSource,
+};
 
 /// How long a deleted graph's storage is kept before it is purged, by default.
 pub const DEFAULT_RETENTION_HOLD: Duration = Duration::from_secs(24 * 3600);
@@ -133,6 +136,9 @@ pub struct GraphAdmin {
     /// The graph leases of this node (GR1 Task 12): a durable graph is served only by the node
     /// that holds its owner lease, and its appends carry the lease's epoch. Set with the log.
     ownership: Option<Arc<Ownership>>,
+    /// Takes the graphs' snapshots, commits their manifests and trims their streams (GR1 Task
+    /// 13). Set with the log: a graph with no log has no snapshots.
+    checkpointer: Option<Checkpointer>,
     /// This call came from another node (`GraphForward`): it is served here or refused, never
     /// forwarded again.
     forwarded: bool,
@@ -282,6 +288,7 @@ impl GraphAdmin {
             closed: Arc::default(),
             log: None,
             ownership: None,
+            checkpointer: None,
             forwarded: false,
             #[cfg(feature = "test-hooks")]
             after_open_hook: Arc::default(),
@@ -293,8 +300,28 @@ impl GraphAdmin {
     #[must_use]
     pub fn with_log(mut self, log: crate::durable::GraphLog) -> Self {
         let ownership = Ownership::single(log.meta().clone());
+        self.checkpointer = Some(Checkpointer::new(
+            ManifestStore::new(log.meta().clone(), self.catalog.store().clone()),
+            CheckpointPolicy::default(),
+        ));
         self.log = Some(log);
         self.with_ownership(ownership)
+    }
+
+    /// The same admin with another checkpoint policy (GR1 Task 13). Only after
+    /// [`GraphAdmin::with_log`].
+    #[must_use]
+    pub fn with_checkpoint_policy(mut self, policy: CheckpointPolicy) -> Self {
+        if let Some(checkpointer) = &self.checkpointer {
+            self.checkpointer = Some(Checkpointer::new(checkpointer.manifests().clone(), policy));
+        }
+        self
+    }
+
+    /// The checkpointer, when graphs are durable.
+    #[must_use]
+    pub fn checkpointer(&self) -> Option<&Checkpointer> {
+        self.checkpointer.as_ref()
     }
 
     /// The same admin with another node's view of graph ownership (GR1 Task 12): the cluster's
@@ -836,11 +863,25 @@ impl GraphAdmin {
                     }
                     None => (ensured, true),
                 };
+                // A trimmed stream opens from a snapshot (GR1 Task 13).
+                let snapshots = match &self.checkpointer {
+                    Some(checkpointer) => self
+                        .catalog
+                        .namespace_id(namespace)
+                        .await
+                        .map_err(map_catalog)?
+                        .map(|namespace| SnapshotSource {
+                            manifests: checkpointer.manifests().clone(),
+                            namespace,
+                        }),
+                    None => None,
+                };
                 Some(crate::durable::DurableSpec {
                     log: log.clone(),
                     stream,
                     adopt,
                     fence: epoch.map(|epoch| Ownership::fence(id, epoch)),
+                    snapshots,
                 })
             }
         };
@@ -1523,6 +1564,12 @@ impl GraphAdmin {
                         continue;
                     }
                 }
+                // Its snapshots and manifests go before its stream and its record (GR1 Task 13),
+                // so a purge cut short is finished by the next sweep.
+                if let Err(err) = self.purge_snapshots(&namespace, &meta).await {
+                    tracing::warn!(%namespace, id = %meta.id, error = %err, "deleting a deleted graph's snapshots failed; retried on the next sweep");
+                    continue;
+                }
                 // The graph's stream goes before its record, so a purge cut short is finished
                 // by the next sweep, which still finds the record (GR1 Task 12).
                 if self.log.is_some()
@@ -1598,6 +1645,9 @@ impl GraphAdmin {
             epoch: grant.epoch,
         };
         let purged = self.purge_expired_under(hold, Some(fence)).await;
+        if let Err(err) = self.sweep_snapshots(grace).await {
+            tracing::warn!(error = %err, "sweeping graph snapshots failed");
+        }
         let swept = self.sweep_documents(grace).await;
         if let Err(err) = meta
             .release_lease(crate::owner::MAINTENANCE_LEASE, &owner, grant.epoch)
@@ -1690,6 +1740,172 @@ impl GraphAdmin {
             Ok(removed)
         })
         .await
+    }
+
+    /// Deletes every bucket object of deleted graph `meta` (its snapshots and manifests).
+    async fn purge_snapshots(&self, namespace: &str, meta: &GraphMeta) -> Result<(), ConnectError> {
+        let Some(checkpointer) = &self.checkpointer else {
+            return Ok(());
+        };
+        let id = meta.graph_id().map_err(map_catalog)?;
+        let Some(ns) = self
+            .catalog
+            .namespace_id(namespace)
+            .await
+            .map_err(map_catalog)?
+        else {
+            return Ok(());
+        };
+        checkpointer
+            .manifests()
+            .purge(ns, id)
+            .await
+            .map(|_| ())
+            .map_err(|err| map_engine(err.into()))
+    }
+
+    /// Deletes the snapshot objects and manifest documents of every graph in the catalog that no
+    /// reader still needs ([`ManifestStore::sweep`]), written at least `grace` (floor 5 minutes
+    /// outside tests) before the graph's current manifest. Runs under the maintenance lease.
+    /// Answers how many objects went.
+    ///
+    /// # Errors
+    ///
+    /// `UNAVAILABLE` when the catalog is; a graph whose sweep fails is logged and skipped.
+    pub async fn sweep_snapshots(&self, grace: Duration) -> Result<usize, ConnectError> {
+        let Some(checkpointer) = &self.checkpointer else {
+            return Ok(0);
+        };
+        let grace = if cfg!(feature = "test-hooks") {
+            grace
+        } else {
+            grace.max(crate::catalog::MIN_DOCUMENT_GRACE)
+        };
+        let mut deleted = 0;
+        for namespace in self.catalog.namespaces().await.map_err(map_catalog)? {
+            let Some(ns) = self
+                .catalog
+                .namespace_id(&namespace)
+                .await
+                .map_err(map_catalog)?
+            else {
+                continue;
+            };
+            let mut token = String::new();
+            loop {
+                let page = match self.catalog.list(&namespace, 1000, &token).await {
+                    Ok(page) => page,
+                    Err(err) => {
+                        tracing::warn!(%namespace, error = %err, "sweeping graph snapshots: the namespace's catalog failed; skipped");
+                        break;
+                    }
+                };
+                for meta in &page.graphs {
+                    let Ok(id) = meta.graph_id() else { continue };
+                    match checkpointer.manifests().sweep(ns, id, grace).await {
+                        Ok(n) => deleted += n,
+                        Err(err) => {
+                            tracing::warn!(%namespace, id = %meta.id, error = %err, "sweeping a graph's snapshots failed");
+                        }
+                    }
+                }
+                match page.next_page_token {
+                    Some(next) => token = next,
+                    None => break,
+                }
+            }
+        }
+        Ok(deleted)
+    }
+
+    /// Takes the snapshots `kinds` of graph `namespace`/`name` now, commits them to its manifest
+    /// and trims its stream (GR1 Task 13: on demand, and before eviction and engine upgrades,
+    /// Tasks 14 and 28). Runs on the graph's owner: the graph is opened here if it is not.
+    ///
+    /// # Errors
+    ///
+    /// `FAILED_PRECONDITION` when graphs are not durable in this server, what opening the graph
+    /// answers (`NOT_FOUND`, `UNAVAILABLE`/`graph_reloading` when another node owns it), and
+    /// `UNAVAILABLE` when the bucket or the metastore fails or the owner lease moved on.
+    pub async fn checkpoint(
+        &self,
+        namespace: &str,
+        name: &str,
+        kinds: &[SnapshotKind],
+    ) -> Result<Checkpointed, ConnectError> {
+        let Some(checkpointer) = &self.checkpointer else {
+            return Err(refuse(
+                ErrorCode::FailedPrecondition,
+                "failed_precondition",
+                "graphs are not durable in this server, so they have no snapshots",
+            ));
+        };
+        let graph = self.open(namespace, name).await?;
+        let ns = self
+            .catalog
+            .namespace_id(namespace)
+            .await
+            .map_err(map_catalog)?
+            .ok_or_else(|| {
+                map_catalog(CatalogError::NotFound {
+                    namespace: namespace.to_string(),
+                    name: name.to_string(),
+                })
+            })?;
+        checkpointer
+            .checkpoint(graph, ns, kinds)
+            .await
+            .map_err(|err| map_engine(err.into()))
+    }
+
+    /// Takes every snapshot that is due of every durable graph open (and so owned) here, under
+    /// the checkpoint policy (GR1 Task 13). Run periodically by the server. Answers how many
+    /// graphs were checkpointed; a failure is logged and the graph is tried again next time.
+    pub async fn checkpoint_due(&self) -> usize {
+        let Some(checkpointer) = &self.checkpointer else {
+            return 0;
+        };
+        if self.is_shutting_down() {
+            return 0;
+        }
+        let mut namespaces = std::collections::HashMap::new();
+        let mut done = 0;
+        for graph in self.engine.list(None).unwrap_or_default() {
+            if !graph.is_durable() || graph.is_poisoned_or_failed() || graph.is_fenced() {
+                continue;
+            }
+            let namespace = graph.namespace().to_string();
+            let ns = match namespaces.get(&namespace) {
+                Some(ns) => *ns,
+                None => match self.catalog.namespace_id(&namespace).await {
+                    Ok(Some(ns)) => {
+                        namespaces.insert(namespace.clone(), ns);
+                        ns
+                    }
+                    Ok(None) => continue,
+                    Err(err) => {
+                        tracing::warn!(%namespace, error = %err, "checkpointing: the namespace could not be read");
+                        continue;
+                    }
+                },
+            };
+            let kinds = match checkpointer.due(&graph, ns).await {
+                Ok(kinds) if kinds.is_empty() => continue,
+                Ok(kinds) => kinds,
+                Err(err) => {
+                    tracing::warn!(%namespace, name = %graph.name(), error = %err, "checkpointing: reading the graph's manifest failed");
+                    continue;
+                }
+            };
+            let name = graph.name().to_string();
+            match checkpointer.checkpoint(graph, ns, &kinds).await {
+                Ok(_) => done += 1,
+                Err(err) => {
+                    tracing::warn!(%namespace, %name, error = %err, "checkpointing a graph failed; retried next time");
+                }
+            }
+        }
+        done
     }
 
     /// Deletes catalog documents older than `grace` that no reader still needs (the catalog's
