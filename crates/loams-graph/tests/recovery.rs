@@ -8,6 +8,10 @@
 //! * The stream is trimmed below the oldest retained snapshot and never inside the PITR window,
 //!   and a trimmed graph opens from its snapshot.
 //! * Objects no manifest names are swept, and a purge deletes a graph's objects.
+//! * Recovery (GR1 Task 14): a graph opens from its local cache when a clean close left one it
+//!   can trust, else from its manifest's newest usable snapshot, else from its whole stream, and
+//!   equals what it was; an idle graph is checkpointed and evicted, and its first read opens it
+//!   again; a corrupt cache or an unreadable native snapshot is passed over.
 //!
 //! Bucket faults are injected with `loams-store`'s `FaultyStore`, manifest CAS races and lost
 //! acknowledgements with the manifest store's test hooks (feature `test-hooks`).
@@ -24,6 +28,8 @@ use loams_common::{NamespaceId, StreamId};
 use loams_graph::catalog::GraphCatalog;
 use loams_graph::changeset::{GraphRecord, apply_to_store, decode};
 use loams_graph::durable::GraphLog;
+use loams_graph::evict::{EvictPolicy, EvictReason};
+use loams_graph::recovery::{CACHE_STAMP, RecoverySource};
 use loams_graph::service::admin::GraphAdmin;
 use loams_graph::snapshot::manifest::pointer_key;
 use loams_graph::snapshot::portable::GraphRows;
@@ -859,8 +865,17 @@ async fn a_trimmed_graph_opens_from_its_snapshot() {
         let before = values(&admin, "kg").await;
         let rows = live_rows(&admin, "kg").await;
         admin.shutdown(Duration::from_secs(5)).await;
+        // A clean shutdown leaves a local cache (GR1 Task 14); without it the open goes to the
+        // snapshot.
+        drop_local_files(fx.data_dir.path());
 
         let reopened = make(&fx);
+        let expected = if on_disk {
+            RecoverySource::Snapshot(SnapshotKind::Native)
+        } else {
+            RecoverySource::Snapshot(SnapshotKind::Portable)
+        };
+        assert_eq!(source(&reopened, "kg").await, expected);
         assert_eq!(values(&reopened, "kg").await, before, "on disk: {on_disk}");
         assert_eq!(live_rows(&reopened, "kg").await, rows);
         if on_disk {
@@ -1084,5 +1099,627 @@ async fn a_purge_deletes_the_graphs_snapshots() {
     assert_eq!(admin.purge_expired(Duration::ZERO).await.expect("purge"), 0);
     assert_eq!(admin.purge_expired(Duration::ZERO).await.expect("purge"), 1);
     assert!(fx.bucket.list(&prefix).await.expect("list").is_empty());
+    admin.shutdown(Duration::from_secs(5)).await;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Recovery, rehydration and eviction (GR1 Task 14)
+// ---------------------------------------------------------------------------------------------
+
+/// A small deterministic generator (SplitMix64), so a workload is the same on every run.
+struct Seeded(u64);
+
+impl Seeded {
+    fn next(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    fn below(&mut self, n: u64) -> u64 {
+        self.next() % n
+    }
+}
+
+/// Runs a random workload of `steps` writes on `graph`: node inserts, property sets, label adds
+/// and removes, edge inserts and deletes, node deletes, and (when `checkpoints`) a checkpoint of
+/// both kinds now and then, so a recovery has a snapshot and a tail after it.
+async fn workload(admin: &GraphAdmin, graph: &str, seed: u64, steps: usize, checkpoints: bool) {
+    let mut rng = Seeded(seed);
+    let mut alive: Vec<u64> = Vec::new();
+    let mut next = 0u64;
+    for step in 0..steps {
+        let pick = |rng: &mut Seeded, alive: &[u64]| alive[rng.below(alive.len() as u64) as usize];
+        let statement = match rng.below(10) {
+            _ if alive.len() < 2 => None,
+            0 | 1 => None,
+            2 => {
+                let k = pick(&mut rng, &alive);
+                Some(format!("MATCH (n:N {{k: {k}}}) SET n.v = 'set{step}'"))
+            }
+            3 => {
+                let k = pick(&mut rng, &alive);
+                Some(format!("MATCH (n:N {{k: {k}}}) SET n:M"))
+            }
+            4 => {
+                let k = pick(&mut rng, &alive);
+                Some(format!("MATCH (n:N {{k: {k}}}) REMOVE n:M"))
+            }
+            5 | 6 => {
+                let (a, b) = (pick(&mut rng, &alive), pick(&mut rng, &alive));
+                Some(format!(
+                    "MATCH (a:N {{k: {a}}}), (b:N {{k: {b}}}) INSERT (a)-[:E {{w: {step}}}]->(b)"
+                ))
+            }
+            7 => {
+                let a = pick(&mut rng, &alive);
+                Some(format!("MATCH (:N {{k: {a}}})-[e:E]->() DELETE e"))
+            }
+            8 => {
+                let at = rng.below(alive.len() as u64) as usize;
+                let k = alive.swap_remove(at);
+                Some(format!("MATCH (n:N {{k: {k}}}) DETACH DELETE n"))
+            }
+            _ => {
+                let k = pick(&mut rng, &alive);
+                Some(format!("MATCH (n:N {{k: {k}}}) SET n.x = {step}"))
+            }
+        };
+        let statement = statement.unwrap_or_else(|| {
+            let k = next;
+            next += 1;
+            alive.push(k);
+            format!("INSERT (:N {{k: {k}, v: 'n{k}'}})")
+        });
+        run(admin, graph, &statement).await;
+        if checkpoints && step % 17 == 16 {
+            admin
+                .checkpoint("acme", graph, &BOTH)
+                .await
+                .expect("checkpoint mid-workload");
+        }
+    }
+}
+
+/// Removes every local file of every graph (the data directory's `graphs/`).
+fn drop_local_files(dir: &std::path::Path) {
+    match std::fs::remove_dir_all(dir.join("graphs")) {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => panic!("removing local files: {err}"),
+    }
+}
+
+/// The local storage directory of graph `id` under `data_dir`.
+fn cache_dir(data_dir: &std::path::Path, id: GraphId) -> std::path::PathBuf {
+    data_dir.join("graphs").join(id.to_string())
+}
+
+/// Where graph `graph`'s engine was recovered from, once it is open.
+async fn source(admin: &GraphAdmin, graph: &str) -> RecoverySource {
+    admin
+        .open("acme", graph)
+        .await
+        .expect("open")
+        .recovery()
+        .expect("a durable graph records its recovery")
+        .source
+}
+
+async fn state(admin: &GraphAdmin, graph: &str) -> pb::GraphState {
+    admin
+        .get_graph(pb::GetGraphRequest {
+            namespace: "acme".to_string(),
+            name: graph.to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("get graph")
+        .state
+        .as_known()
+        .expect("a known state")
+}
+
+fn is_open(admin: &GraphAdmin, graph: &str) -> bool {
+    admin
+        .engine()
+        .list(Some("acme"))
+        .expect("list")
+        .iter()
+        .any(|g| g.name() == graph)
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn recover_equals_live() {
+    // A random workload with checkpoints along the way; then the engine and every local file go,
+    // and the graph comes back from its manifest's newest snapshot and the records after it,
+    // equal to what it was, element ids included. In memory it comes back from the portable
+    // snapshot.
+    for (seed, on_disk) in [(1, true), (2, true), (3, false)] {
+        let fx = Fixture::start().await;
+        let make = |fx: &Fixture| match on_disk {
+            true => fx.admin(policy(Duration::from_secs(3600))),
+            false => fx.admin_in_memory(policy(Duration::from_secs(3600))),
+        };
+        let admin = make(&fx);
+        create(&admin, "kg").await;
+        workload(&admin, "kg", seed, 120, true).await;
+        let live = live_rows(&admin, "kg").await;
+        assert!(!live.nodes.is_empty());
+        let manifest = fx.manifest("kg").await.expect("manifest");
+        let stream = fx.stream_of("kg").await;
+        let (_, end) = fx.bounds(stream).await;
+        let newest = manifest.snapshots.last().expect("a snapshot").offset;
+        assert!(
+            newest < end,
+            "records after the newest snapshot: {newest} < {end}"
+        );
+        admin.shutdown(Duration::from_secs(5)).await;
+        drop_local_files(fx.data_dir.path());
+
+        let recovered = make(&fx);
+        let expected = if on_disk {
+            RecoverySource::Snapshot(SnapshotKind::Native)
+        } else {
+            RecoverySource::Snapshot(SnapshotKind::Portable)
+        };
+        assert_eq!(source(&recovered, "kg").await, expected, "seed {seed}");
+        let graph = recovered.open("acme", "kg").await.expect("open");
+        let recovery = graph.recovery().expect("recovery");
+        assert_eq!(recovery.from_offset, newest);
+        assert_eq!(recovery.to_offset, end);
+        assert_eq!(
+            recovery.replayed,
+            end - newest,
+            "only the records after the snapshot"
+        );
+        drop(graph);
+        assert_eq!(live_rows(&recovered, "kg").await, live, "seed {seed}");
+        assert_eq!(fx.bounds(stream).await.1, end, "recovery appends nothing");
+        // It serves on: new ids do not collide with recovered ones.
+        run(&recovered, "kg", "INSERT (:N {k: 100000, v: 'after'})").await;
+        assert_eq!(
+            live_rows(&recovered, "kg").await.nodes.len(),
+            live.nodes.len() + 1
+        );
+        recovered.shutdown(Duration::from_secs(5)).await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn replay_twice_is_identity() {
+    // Each change set applied twice in a row leaves what applying it once does, so a recovery cut
+    // short after applying a record and before recording that is harmless. And recovery skips
+    // what a base already holds (R9.5: by log offset): recovering again from the snapshot, and
+    // again from the local cache the first recovery left, gives the same graph and appends
+    // nothing.
+    let fx = Fixture::start().await;
+    let admin = fx.admin(policy(Duration::from_secs(3600)));
+    create(&admin, "kg").await;
+    workload(&admin, "kg", 7, 90, true).await;
+    let live = live_rows(&admin, "kg").await;
+    let stream = fx.stream_of("kg").await;
+    let (_, end) = fx.bounds(stream).await;
+    admin.shutdown(Duration::from_secs(5)).await;
+
+    let records = fx.records(stream, 0, end).await;
+    let once = grafeo::GrafeoDB::new_in_memory();
+    let twice = grafeo::GrafeoDB::new_in_memory();
+    for (_, record) in &records {
+        if let GraphRecord::ChangeSet(change) = record {
+            apply_to_store(&once, &change.ops).expect("replay once");
+            apply_to_store(&twice, &change.ops).expect("replay");
+            apply_to_store(&twice, &change.ops).expect("replay the same record again");
+        }
+    }
+    assert_eq!(GraphRows::read(&once), GraphRows::read(&twice));
+    assert_eq!(GraphRows::read(&once), live);
+
+    for round in 0..2 {
+        drop_local_files(fx.data_dir.path());
+        let from_snapshot = fx.admin(policy(Duration::from_secs(3600)));
+        assert_eq!(
+            source(&from_snapshot, "kg").await,
+            RecoverySource::Snapshot(SnapshotKind::Native),
+            "round {round}"
+        );
+        let recovery = from_snapshot
+            .open("acme", "kg")
+            .await
+            .expect("open")
+            .recovery()
+            .expect("recovery");
+        assert_eq!(recovery.replayed, end - recovery.from_offset);
+        assert_eq!(live_rows(&from_snapshot, "kg").await, live, "round {round}");
+        from_snapshot.shutdown(Duration::from_secs(5)).await;
+        let from_cache = fx.admin(policy(Duration::from_secs(3600)));
+        assert_eq!(source(&from_cache, "kg").await, RecoverySource::LocalCache);
+        let graph = from_cache.open("acme", "kg").await.expect("open");
+        let recovery = graph.recovery().expect("recovery");
+        assert_eq!((recovery.from_offset, recovery.to_offset), (end, end));
+        assert_eq!(recovery.replayed, 0);
+        drop(graph);
+        assert_eq!(live_rows(&from_cache, "kg").await, live, "round {round}");
+        from_cache.shutdown(Duration::from_secs(5)).await;
+    }
+    assert_eq!(fx.bounds(stream).await.1, end, "recovery appends nothing");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn evicted_graph_rehydrates_on_first_read() {
+    // An idle graph is checkpointed and dropped from memory; GetGraph reports it EVICTED. Its
+    // first read opens it again (from the local cache on disk, from the portable snapshot in
+    // memory) and answers what it held, and that first read's latency is recorded (§17.2's cold
+    // gate).
+    for on_disk in [true, false] {
+        let fx = Fixture::start().await;
+        let base = match on_disk {
+            true => fx.admin(policy(Duration::from_secs(3600))),
+            false => fx.admin_in_memory(policy(Duration::from_secs(3600))),
+        };
+        let admin = base.with_evict_policy(EvictPolicy {
+            idle_after: Duration::ZERO,
+            node_memory: None,
+        });
+        create(&admin, "kg").await;
+        for k in 0..20 {
+            run(&admin, "kg", &format!("INSERT (:N {{k: {k}, v: 'v{k}'}})")).await;
+        }
+        let keyed = admin
+            .execute(request("kg", "INSERT (:N {k: 99, v: 'keyed'})", "key-99"))
+            .await
+            .expect("keyed write");
+        let before = values(&admin, "kg").await;
+        let rows = live_rows(&admin, "kg").await;
+        let stream = fx.stream_of("kg").await;
+        let (_, end) = fx.bounds(stream).await;
+        assert!(fx.manifest("kg").await.is_none(), "no snapshot yet");
+
+        let evicted = admin.evict_due().await;
+        assert_eq!(evicted.len(), 1, "{evicted:?}");
+        assert_eq!(evicted[0].name, "kg");
+        assert_eq!(evicted[0].reason, EvictReason::Idle);
+        assert!(evicted[0].checkpointed, "checkpointed first");
+        assert_eq!(evicted[0].cache_kept, on_disk);
+        assert!(!is_open(&admin, "kg"));
+        assert_eq!(state(&admin, "kg").await, pb::GraphState::Evicted);
+        let manifest = fx.manifest("kg").await.expect("the eviction's snapshot");
+        assert_eq!(manifest.snapshots.last().expect("snapshot").offset, end);
+        let id = fx.graph_id("kg").await;
+        assert_eq!(
+            admin.ownership().expect("ownership").held(id),
+            None,
+            "the owner lease is given up"
+        );
+        assert!(admin.rehydrations().is_empty());
+
+        // The first read.
+        assert_eq!(values(&admin, "kg").await, before);
+        let expected = if on_disk {
+            RecoverySource::LocalCache
+        } else {
+            RecoverySource::Snapshot(SnapshotKind::Portable)
+        };
+        assert_eq!(source(&admin, "kg").await, expected);
+        assert_eq!(live_rows(&admin, "kg").await, rows);
+        assert_eq!(state(&admin, "kg").await, pb::GraphState::Ready);
+        let cold = admin.rehydrations();
+        assert_eq!(cold.len(), 1, "one cold read recorded: {cold:?}");
+        assert_eq!(cold[0].graph, id);
+        assert_eq!(cold[0].source, Some(expected));
+        assert!(cold[0].first_read >= cold[0].open && cold[0].first_read > Duration::ZERO);
+        // A key written before the eviction still answers its first run.
+        let again = admin
+            .execute(request("kg", "INSERT (:N {k: 99, v: 'keyed'})", "key-99"))
+            .await
+            .expect("keyed retry");
+        assert_eq!(again.consistency_token, keyed.consistency_token);
+        // Later reads are warm: nothing more is recorded.
+        values(&admin, "kg").await;
+        assert_eq!(admin.rehydrations().len(), 1);
+        admin.shutdown(Duration::from_secs(5)).await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn engine_version_mismatch_uses_portable_snapshot() {
+    // A native snapshot written by an engine this build cannot read (simulated by tagging it
+    // with an unknown version) is passed over: the graph rebuilds from the portable snapshot and
+    // the records after it (§48 §6.5, §14.4).
+    let fx = Fixture::start().await;
+    let admin = fx.admin(policy(Duration::from_secs(3600)));
+    create(&admin, "kg").await;
+    workload(&admin, "kg", 11, 40, false).await;
+    admin
+        .checkpoint("acme", "kg", &BOTH)
+        .await
+        .expect("checkpoint");
+    run(
+        &admin,
+        "kg",
+        "INSERT (:N {k: 5000, v: 'after the snapshot'})",
+    )
+    .await;
+    let live = live_rows(&admin, "kg").await;
+    admin.shutdown(Duration::from_secs(5)).await;
+    let (ns, id) = (fx.namespace().await, fx.graph_id("kg").await);
+    fx.manifests()
+        .update(ns, id, None, |manifest| {
+            for entry in &mut manifest.snapshots {
+                if entry.kind == SnapshotKind::Native {
+                    entry.engine_version = "0.0.0-unknown".to_string();
+                }
+            }
+            Ok((true, ()))
+        })
+        .await
+        .expect("tag the native snapshot");
+    drop_local_files(fx.data_dir.path());
+
+    let reopened = fx.admin(policy(Duration::from_secs(3600)));
+    assert_eq!(
+        source(&reopened, "kg").await,
+        RecoverySource::Snapshot(SnapshotKind::Portable)
+    );
+    assert_eq!(live_rows(&reopened, "kg").await, live);
+    reopened.shutdown(Duration::from_secs(5)).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn local_cache_corruption_triggers_rebuild() {
+    // A clean close leaves a local cache the next open trusts. Bytes flipped in its `.grafeo`
+    // file are caught before the engine reads them, and the graph is rebuilt: from its snapshot
+    // when it has one, from its whole stream when it has none.
+    for snapshot in [false, true] {
+        let fx = Fixture::start().await;
+        let admin = fx.admin(policy(Duration::from_secs(3600)));
+        create(&admin, "kg").await;
+        workload(&admin, "kg", 21, 40, false).await;
+        if snapshot {
+            admin
+                .checkpoint("acme", "kg", &BOTH)
+                .await
+                .expect("checkpoint");
+        }
+        run(&admin, "kg", "INSERT (:N {k: 7000, v: 'tail'})").await;
+        let live = live_rows(&admin, "kg").await;
+        admin.shutdown(Duration::from_secs(5)).await;
+
+        // Untouched, the cache is used.
+        let reopened = fx.admin(policy(Duration::from_secs(3600)));
+        assert_eq!(source(&reopened, "kg").await, RecoverySource::LocalCache);
+        assert_eq!(live_rows(&reopened, "kg").await, live);
+        reopened.shutdown(Duration::from_secs(5)).await;
+
+        let file = cache_dir(fx.data_dir.path(), fx.graph_id("kg").await).join("graph.grafeo");
+        let mut bytes = std::fs::read(&file).expect("the cache file");
+        assert!(bytes.len() > 64);
+        let at = bytes.len() / 2;
+        for byte in &mut bytes[at..at + 8] {
+            *byte ^= 0xA5;
+        }
+        std::fs::write(&file, &bytes).expect("flip bytes");
+
+        let rebuilt = fx.admin(policy(Duration::from_secs(3600)));
+        let expected = if snapshot {
+            RecoverySource::Snapshot(SnapshotKind::Native)
+        } else {
+            RecoverySource::Log
+        };
+        assert_eq!(
+            source(&rebuilt, "kg").await,
+            expected,
+            "snapshot: {snapshot}"
+        );
+        assert_eq!(
+            live_rows(&rebuilt, "kg").await,
+            live,
+            "snapshot: {snapshot}"
+        );
+        rebuilt.shutdown(Duration::from_secs(5)).await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_stamp_that_does_not_match_its_file_is_not_trusted() {
+    // An older, valid database file under a newer stamp (a stamp that outlived its file) opens
+    // fine in Grafeo but lacks the newer writes: the stamp's size and CRC catch it, and the graph
+    // is rebuilt from its stream.
+    let fx = Fixture::start().await;
+    let admin = fx.admin(policy(Duration::from_secs(3600)));
+    create(&admin, "kg").await;
+    workload(&admin, "kg", 41, 30, false).await;
+    admin.shutdown(Duration::from_secs(5)).await;
+    let dir = cache_dir(fx.data_dir.path(), fx.graph_id("kg").await);
+    let older = std::fs::read(dir.join("graph.grafeo")).expect("the older file");
+
+    let admin = fx.admin(policy(Duration::from_secs(3600)));
+    run(&admin, "kg", "INSERT (:N {k: 9000, v: 'newer'})").await;
+    run(&admin, "kg", "MATCH (n:N {k: 0}) SET n.v = 'newer'").await;
+    let live = live_rows(&admin, "kg").await;
+    admin.shutdown(Duration::from_secs(5)).await;
+    assert!(dir.join(CACHE_STAMP).exists());
+    std::fs::write(dir.join("graph.grafeo"), &older).expect("put the older file back");
+
+    let reopened = fx.admin(policy(Duration::from_secs(3600)));
+    assert_eq!(source(&reopened, "kg").await, RecoverySource::Log);
+    assert_eq!(live_rows(&reopened, "kg").await, live);
+    reopened.shutdown(Duration::from_secs(5)).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_local_cache_replays_only_the_records_after_it() {
+    // A node's cache is at the offset it closed at. Another node then serves the graph and writes
+    // on. When the first node opens the graph again, it opens its cache and replays only the
+    // records after it, and the graph equals the other node's.
+    let fx = Fixture::start().await;
+    let other_dir = TempDir::new().expect("other node's data dir");
+    let other = || {
+        GraphAdmin::new(
+            Arc::new(Engine::with_data_dir(other_dir.path())),
+            fx.catalog(),
+        )
+        .with_log(fx.log())
+        .with_checkpoint_policy(policy(Duration::from_secs(3600)))
+    };
+    let first = fx.admin(policy(Duration::from_secs(3600)));
+    create(&first, "kg").await;
+    workload(&first, "kg", 31, 50, false).await;
+    let keyed = first
+        .execute(request(
+            "kg",
+            "INSERT (:N {k: 8000, v: 'keyed'})",
+            "key-8000",
+        ))
+        .await
+        .expect("keyed write");
+    let stream = fx.stream_of("kg").await;
+    let (_, closed_at) = fx.bounds(stream).await;
+    first.shutdown(Duration::from_secs(5)).await;
+
+    let second = other();
+    workload(&second, "kg", 32, 30, false).await;
+    let live = live_rows(&second, "kg").await;
+    let (_, end) = fx.bounds(stream).await;
+    assert!(end > closed_at);
+    second.shutdown(Duration::from_secs(5)).await;
+
+    let again = fx.admin(policy(Duration::from_secs(3600)));
+    assert_eq!(source(&again, "kg").await, RecoverySource::LocalCache);
+    let graph = again.open("acme", "kg").await.expect("open");
+    let recovery = graph.recovery().expect("recovery");
+    assert_eq!((recovery.from_offset, recovery.to_offset), (closed_at, end));
+    assert_eq!(recovery.replayed, end - closed_at);
+    drop(graph);
+    assert_eq!(live_rows(&again, "kg").await, live);
+    // The key recorded before the cache closed answers its first run.
+    let retried = again
+        .execute(request(
+            "kg",
+            "INSERT (:N {k: 8000, v: 'keyed'})",
+            "key-8000",
+        ))
+        .await
+        .expect("keyed retry");
+    assert_eq!(retried.consistency_token, keyed.consistency_token);
+    again.shutdown(Duration::from_secs(5)).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn memory_pressure_evicts_least_recently_used_first() {
+    // Over the node's memory budget, graphs are evicted least recently used first, idle or not;
+    // a graph a caller holds is not.
+    let fx = Fixture::start().await;
+    let admin = fx
+        .admin(policy(Duration::from_secs(3600)))
+        .with_evict_policy(EvictPolicy {
+            idle_after: Duration::from_secs(3600),
+            node_memory: None,
+        });
+    for name in ["a", "b", "c", "d"] {
+        create(&admin, name).await;
+        run(&admin, name, "INSERT (:N {k: 1, v: 'x'})").await;
+    }
+    // Used in the order c, a, d, b.
+    for name in ["c", "a", "d", "b"] {
+        values(&admin, name).await;
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    assert!(
+        admin.evict_due().await.is_empty(),
+        "nothing is idle, no budget"
+    );
+    let held = admin.open("acme", "a").await.expect("hold a");
+    let pressed = admin.clone().with_evict_policy(EvictPolicy {
+        idle_after: Duration::from_secs(3600),
+        node_memory: Some(1),
+    });
+    let evicted: Vec<(String, EvictReason)> = pressed
+        .evict_due()
+        .await
+        .into_iter()
+        .map(|e| (e.name, e.reason))
+        .collect();
+    assert_eq!(
+        evicted,
+        [
+            ("c".to_string(), EvictReason::Memory),
+            ("d".to_string(), EvictReason::Memory),
+            ("b".to_string(), EvictReason::Memory),
+        ]
+    );
+    assert!(is_open(&admin, "a"), "a held graph stays");
+    drop(held);
+    for name in ["a", "b", "c", "d"] {
+        assert_eq!(values(&admin, name).await.len(), 1, "{name} rehydrates");
+    }
+    admin.shutdown(Duration::from_secs(5)).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn eviction_releases_a_deleted_graphs_local_cache() {
+    // Task 4 review M3: a graph deleted elsewhere is never recovered here, and its local cache
+    // goes on this node's next eviction pass, whether the graph is open here or was evicted,
+    // without waiting for the purge.
+    let fx = Fixture::start().await;
+    let admin = fx
+        .admin(policy(Duration::from_secs(3600)))
+        .with_evict_policy(EvictPolicy {
+            idle_after: Duration::from_secs(3600),
+            node_memory: None,
+        });
+    create(&admin, "open").await;
+    create(&admin, "evicted").await;
+    run(&admin, "open", "INSERT (:N {k: 1, v: 'x'})").await;
+    run(&admin, "evicted", "INSERT (:N {k: 1, v: 'x'})").await;
+    assert!(admin.evict("acme", "evicted").await.expect("evict"));
+    let open_dir = cache_dir(fx.data_dir.path(), fx.graph_id("open").await);
+    let evicted_dir = cache_dir(fx.data_dir.path(), fx.graph_id("evicted").await);
+    assert!(open_dir.exists() && evicted_dir.join(CACHE_STAMP).exists());
+
+    // Another node deletes both; nothing purges.
+    let elsewhere = GraphAdmin::new(Arc::new(Engine::new()), fx.catalog());
+    for name in ["open", "evicted"] {
+        elsewhere
+            .delete_graph(pb::DeleteGraphRequest {
+                namespace: "acme".to_string(),
+                name: name.to_string(),
+                ..Default::default()
+            })
+            .await
+            .expect("delete");
+    }
+    let released: Vec<(String, EvictReason)> = admin
+        .evict_due()
+        .await
+        .into_iter()
+        .map(|e| (e.name, e.reason))
+        .collect();
+    assert_eq!(released.len(), 2, "{released:?}");
+    assert!(
+        released
+            .iter()
+            .all(|(_, reason)| *reason == EvictReason::Deleted)
+    );
+    assert!(!is_open(&admin, "open"));
+    assert!(!open_dir.exists(), "{}", open_dir.display());
+    assert!(!evicted_dir.exists(), "{}", evicted_dir.display());
+    // Nothing reopens them.
+    for name in ["open", "evicted"] {
+        let err = admin
+            .execute(request(name, "MATCH (n) RETURN n", ""))
+            .await
+            .expect_err("deleted");
+        assert_eq!(err.code, connectrpc::ErrorCode::NotFound);
+        let err = admin
+            .checkpoint("acme", name, &BOTH)
+            .await
+            .expect_err("deleted");
+        assert_eq!(err.code, connectrpc::ErrorCode::NotFound);
+    }
+    assert_eq!(admin.checkpoint_due().await, 0);
+    assert!(!open_dir.exists() && !evicted_dir.exists());
     admin.shutdown(Duration::from_secs(5)).await;
 }

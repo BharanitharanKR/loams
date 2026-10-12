@@ -206,6 +206,11 @@ SchemaChange    v1  { graph_id, lease_epoch, commit_epoch, statement, language }
 - **Amended by GR1 Task 9 (R9.5).** A replayed engine restarts at epoch 0 whatever the log's `commit_epoch`s were, so `commit_epoch` is not an order across recovery. Replay order and idempotency use the log offset (a record at or below the last applied offset is skipped), with `txn_seq` as Loams' own per-graph counter; `commit_epoch` is informational. `durable_epoch` after open is the last replayed log offset. A replayed engine is checkpointed (`wal_checkpoint`) before its local files may stand in for the log, because replay writes bypass Grafeo's WAL.
 - **Idle eviction.** A graph with no statement for `graph.idle_evict_after` (1 h by default) is checkpointed and dropped from memory. Its local files stay as a cache until disk pressure removes them. The next statement reopens it (cold-start target: §17.2).
 - **Engine upgrades.** If the new Grafeo cannot read the native snapshot, the owner rebuilds from the latest portable snapshot plus the log. The manifest's `engine_version` tells it which path to take.
+- **As built by GR1 Task 14 (R14.1–R14.8).**
+  - Every durable open chooses its base in order: the local cache, when a clean close stamped it (`cache.json`: offset, next `txn_seq`, idempotency keys, engine version, the database file's size and CRC-32C) and every check still holds; else the manifest's newest usable snapshot (native first when on disk and readable, then portable, older ones after a failure, the manifest re-read at most twice); else the whole stream when it starts at 0. Replay starts at the base's offset.
+  - The stamp is consumed before the engine opens the files, so only a clean close (eviction, shutdown) makes local files trusted. A crash, a reload or a fenced engine leaves none, and the graph is rebuilt.
+  - Eviction: idle (1 h), or least recently used while the open graphs' estimated memory is over `node_memory` (unset until Task 26). It checkpoints first unless a snapshot covers the durable offset, keeps a stamped local cache, gives the owner lease up, and reports `EVICTED`. A graph a caller holds is never evicted. A deleted graph's engine and local cache go on the next pass.
+  - Disk pressure does not yet remove local caches (Task 26).
 
 ## 7. Transactions and consistency (D744, D745)
 

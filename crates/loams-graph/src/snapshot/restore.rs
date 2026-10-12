@@ -1,11 +1,11 @@
-//! Opening a graph whose stream was trimmed (GR1 Task 13): from the newest usable snapshot, then
-//! the records after it.
+//! Opening a graph from a snapshot (GR1 Task 13, generalised by GR1 Task 14): the snapshots the
+//! manifest names that the stream's records continue from, in the order an open tries them, and
+//! the two ways a chosen one becomes the engine's base.
 //!
-//! Once the checkpointer trims a graph's stream, the records below the trim point are gone, so
-//! the graph can no longer be rebuilt from its stream alone (R11.4). It opens from a snapshot the
-//! manifest names at or above the stream's first offset: a native one when the graph is on disk
-//! and the snapshot's engine version is this build's, a portable one otherwise. The general open
-//! from snapshots (every open, local cache reuse, eviction) is GR1 Task 14's.
+//! A snapshot is usable when its offset is inside the stream (`[start, end]`): every record after
+//! it is still readable. A native one is usable only when the graph is on disk and its engine
+//! version is this build's; a portable one always is (§48 §6.5, I6). [`crate::recovery`] decides
+//! when to open from a snapshot at all (no trusted local cache) and what to do when one fails.
 
 use std::path::Path;
 
@@ -16,69 +16,63 @@ use crate::GraphId;
 use crate::durable::{Base, DurableSpec};
 use crate::engine::GraphError;
 
-/// The snapshot a trimmed graph opens from.
+/// A snapshot a graph may open from.
 #[derive(Debug, Clone)]
 pub(crate) struct Chosen {
-    entry: SnapshotEntry,
+    pub(crate) entry: SnapshotEntry,
     source: SnapshotSource,
 }
 
-/// Chooses the snapshot graph `graph` opens from, its stream holding `bounds` (`start > 0`).
+/// The snapshots graph `graph` may open from, its stream holding `bounds`, in the order to try
+/// them: native ones newest first (when `persistent`, and only those this engine reads), then
+/// portable ones newest first. Empty when the graph has no manifest, or no snapshot store is
+/// configured.
 ///
 /// # Errors
 ///
-/// [`GraphError::LogUnavailable`] when the manifest cannot be read, or names no snapshot the
-/// stream's records continue from.
-pub(crate) fn choose(
+/// [`GraphError::LogUnavailable`] when the manifest cannot be read.
+pub(crate) fn candidates(
     durable: &DurableSpec,
     graph: GraphId,
     bounds: (u64, u64),
     persistent: bool,
-) -> Result<Chosen, GraphError> {
+) -> Result<Vec<Chosen>, GraphError> {
     let (start, end) = bounds;
-    let source = durable.snapshots.clone().ok_or_else(|| {
-        GraphError::LogUnavailable(format!(
-            "the graph's stream starts at offset {start}, and no snapshot store is configured"
-        ))
-    })?;
-    let manifest = durable
+    let Some(source) = durable.snapshots.clone() else {
+        return Ok(Vec::new());
+    };
+    let Some(loaded) = durable
         .log
         .wait(source.manifests.load(source.namespace, graph))?
-        .ok_or_else(|| {
-            GraphError::LogUnavailable(format!(
-                "the graph's stream starts at offset {start}, and it has no manifest"
-            ))
-        })?
-        .manifest;
+    else {
+        return Ok(Vec::new());
+    };
     let usable = |entry: &&SnapshotEntry| entry.offset >= start && entry.offset <= end;
-    let native = manifest
+    let native = loaded
+        .manifest
         .snapshots
         .iter()
         .rev()
         .filter(usable)
-        .find(|entry| {
+        .filter(|entry| {
             entry.kind == SnapshotKind::Native
                 && persistent
                 && entry.engine_version == crate::ENGINE_VERSION
         });
-    let entry = native
-        .or_else(|| {
-            manifest
-                .snapshots
-                .iter()
-                .rev()
-                .filter(usable)
-                .find(|entry| entry.kind == SnapshotKind::Portable)
+    let portable = loaded
+        .manifest
+        .snapshots
+        .iter()
+        .rev()
+        .filter(usable)
+        .filter(|entry| entry.kind == SnapshotKind::Portable);
+    Ok(native
+        .chain(portable)
+        .map(|entry| Chosen {
+            entry: entry.clone(),
+            source: source.clone(),
         })
-        .cloned()
-        .ok_or_else(|| {
-            GraphError::LogUnavailable(format!(
-                "the graph's stream starts at offset {start}, and its manifest names no snapshot \
-                 this node can open from"
-            ))
-        })?;
-    tracing::info!(%graph, kind = entry.kind.as_str(), offset = entry.offset, "opening a trimmed graph from its snapshot");
-    Ok(Chosen { entry, source })
+        .collect())
 }
 
 /// Downloads a native snapshot to `file`, the graph's database file, before the engine opens
@@ -130,5 +124,6 @@ pub(crate) fn into_engine(
     Ok(Base {
         offset: chosen.entry.offset,
         next_txn_seq: chosen.entry.next_txn_seq,
+        keys: None,
     })
 }

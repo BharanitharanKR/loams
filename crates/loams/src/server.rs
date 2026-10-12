@@ -320,9 +320,14 @@ pub struct GraphConfig {
     /// 13): a native snapshot every 15 minutes or 64 MiB of log, a portable one weekly, a PITR
     /// window of 7 days (at least 24 hours).
     pub checkpoint: loams_graph::snapshot::CheckpointPolicy,
-    /// How often this node checks its graphs for a due snapshot (config only; default 1 min;
-    /// must be greater than zero).
+    /// How often this node checks its graphs for a due snapshot, and for graphs to evict
+    /// (config only; default 1 min; must be greater than zero).
     pub checkpoint_every: Duration,
+    /// When open graphs are evicted (config only; GR1 Task 14): after an hour with no
+    /// statement (`idle_after`, `graph.idle_evict_after`; must be greater than zero), and,
+    /// least recently used first, while their memory is over `node_memory` (none until Task
+    /// 26 sets it). An evicted graph is checkpointed first and reopens on its next statement.
+    pub evict: loams_graph::evict::EvictPolicy,
     /// The cap on graph statements running at once in this process (`--graph-statement-slots`;
     /// default twice the cores, at most 32). Past it a statement is refused with
     /// `RESOURCE_EXHAUSTED`. It also sizes the statement pool (GR1 Task 6).
@@ -361,6 +366,7 @@ impl GraphConfig {
             maintenance_every: Duration::from_secs(600),
             checkpoint: loams_graph::snapshot::CheckpointPolicy::default(),
             checkpoint_every: Duration::from_secs(60),
+            evict: loams_graph::evict::EvictPolicy::default(),
             statement_slots: loams_graph::service::admin::default_statement_slots(),
             namespace_statements: loams_graph::limits::DEFAULT_NAMESPACE_STATEMENTS,
             limits: loams_graph::limits::StatementLimits::DEFAULT,
@@ -586,6 +592,11 @@ impl ServerConfig {
         if self.graph.checkpoint_every.is_zero() {
             return Err(ServerError::Config(
                 "graph.checkpoint_every must be greater than zero".to_string(),
+            ));
+        }
+        if self.graph.evict.idle_after.is_zero() {
+            return Err(ServerError::Config(
+                "graph.evict.idle_after must be greater than zero".to_string(),
             ));
         }
         let max_slots = loams_graph::service::admin::MAX_STATEMENT_SLOTS;
@@ -1134,7 +1145,7 @@ struct Assembled {
 
 /// Loams Graph as the server runs it (GR1 Task 5): the admin service (catalog and engine) and
 /// the maintenance task that purges deleted graphs, sweeps catalog documents and snapshot
-/// objects, and takes the snapshots that are due (GR1 Task 13).
+/// objects, takes the snapshots that are due (GR1 Task 13) and evicts idle graphs (GR1 Task 14).
 #[cfg(feature = "graph")]
 #[derive(Debug)]
 struct GraphRuntime {
@@ -1150,6 +1161,8 @@ struct GraphRuntime {
     sweeps: Arc<std::sync::atomic::AtomicU64>,
     /// Graphs the maintenance task has checkpointed (GR1 Task 13).
     checkpoints: Arc<std::sync::atomic::AtomicU64>,
+    /// Graphs the maintenance task has evicted (GR1 Task 14).
+    evictions: Arc<std::sync::atomic::AtomicU64>,
 }
 
 #[cfg(feature = "graph")]
@@ -1187,7 +1200,8 @@ impl GraphRuntime {
             .with_statement_slots(config.statement_slots)
             .with_namespace_statements(config.namespace_statements)
             .with_limits(config.limits)
-            .with_checkpoint_policy(config.checkpoint);
+            .with_checkpoint_policy(config.checkpoint)
+            .with_evict_policy(config.evict);
         // A cluster's graph nodes own graphs by lease and forward to each other (GR1 Task 12);
         // a single node owns every graph and still fences its appends.
         if let Some(registry) = registry {
@@ -1205,12 +1219,14 @@ impl GraphRuntime {
         let stop = CancellationToken::new();
         let sweeps = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let checkpoints = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let evictions = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let maintenance = {
-            let (admin, stop, sweeps, checkpoints) = (
+            let (admin, stop, sweeps, checkpoints, evictions) = (
                 admin.clone(),
                 stop.clone(),
                 sweeps.clone(),
                 checkpoints.clone(),
+                evictions.clone(),
             );
             let (every, hold, grace, checkpoint_every) = (
                 config.maintenance_every,
@@ -1234,6 +1250,15 @@ impl GraphRuntime {
                                 tracing::debug!(graphs = done, "checkpointed graphs");
                                 checkpoints.fetch_add(
                                     done as u64,
+                                    std::sync::atomic::Ordering::Relaxed,
+                                );
+                            }
+                            // Then idle graphs, and deleted graphs' caches (GR1 Task 14).
+                            let evicted = admin.evict_due().await;
+                            if !evicted.is_empty() {
+                                tracing::debug!(graphs = evicted.len(), "evicted graphs");
+                                evictions.fetch_add(
+                                    evicted.len() as u64,
                                     std::sync::atomic::Ordering::Relaxed,
                                 );
                             }
@@ -1263,6 +1288,7 @@ impl GraphRuntime {
             shutdown_wait: config.shutdown_wait,
             sweeps,
             checkpoints,
+            evictions,
         })
     }
 
@@ -2514,6 +2540,16 @@ impl Server {
         self.graph
             .as_ref()
             .map(|g| g.checkpoints.load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    /// How many graphs the maintenance task has evicted, when Loams Graph is served (GR1 Task
+    /// 14).
+    #[cfg(feature = "graph")]
+    #[must_use]
+    pub fn graph_evictions(&self) -> Option<u64> {
+        self.graph
+            .as_ref()
+            .map(|g| g.evictions.load(std::sync::atomic::Ordering::Relaxed))
     }
 
     /// The graph data directory, when Loams Graph is served with one (GR1 Task 5).

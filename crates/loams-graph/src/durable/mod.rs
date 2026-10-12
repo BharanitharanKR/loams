@@ -10,11 +10,11 @@
 //! * [`append`]: [`GraphLog`], the log as the graphs use it: append a group, read the stream back.
 //! * [`idempotency`]: `key → first run`, rebuilt from the stream on open.
 //!
-//! A graph's local Grafeo files are a cache (I4). Until recovery from snapshots (Task 14), opening a
-//! durable graph rebuilds it from its whole stream into a fresh engine (R11.4), and a graph whose
-//! append failed is rebuilt the same way before it serves again. Only a stream trimmed below its
-//! snapshots (GR1 Task 13) is opened from the newest usable snapshot and the records after it
-//! ([`Base`]).
+//! A graph's local Grafeo files are a cache (I4). [`crate::recovery`] (GR1 Task 14) chooses what
+//! an engine starts from, its [`Base`]: the local cache a clean close left, the manifest's newest
+//! usable snapshot, or nothing (the whole stream). [`Durable::open`] then replays the records
+//! after the base. A graph whose append failed is rebuilt the same way before it serves again,
+//! never from its local files.
 
 pub mod append;
 pub mod idempotency;
@@ -184,16 +184,23 @@ pub(crate) struct Durable {
     pub(crate) log_bytes: AtomicU64,
     /// When this engine opened (the checkpointer's interval for a graph with no snapshot yet).
     pub(crate) opened_at: std::time::Instant,
+    /// How many records its open applied on top of its base (GR1 Task 14's `Recovery`).
+    pub(crate) replayed: u64,
 }
 
-/// The snapshot a durable engine was restored from (GR1 Task 13): the stream's records below
-/// `offset` are in the engine already, and `next_txn_seq` is the snapshot's.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// What a durable engine was restored from before its replay: a snapshot (GR1 Task 13) or a
+/// local cache (GR1 Task 14). The stream's records below `offset` are in the engine already, and
+/// `next_txn_seq` is the base's.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Base {
-    /// The offset the snapshot covers.
+    /// The offset the base covers.
     pub(crate) offset: u64,
-    /// The `txn_seq` the snapshot's next record takes.
+    /// The `txn_seq` the base's next record takes.
     pub(crate) next_txn_seq: u64,
+    /// The idempotency index at `offset`, when the base kept it (a local cache does): the
+    /// records below `offset` are then not read at all. `None` (a snapshot) reads them for their
+    /// keys.
+    pub(crate) keys: Option<Vec<(String, u64, idempotency::Outcome)>>,
 }
 
 impl fmt::Debug for Durable {
@@ -216,10 +223,11 @@ impl Durable {
     }
 
     /// Opens a durable graph's state over `db`, a fresh engine (or, when `adopt`, the graph's
-    /// local files from before the log; or, with `base`, an engine restored from a snapshot):
-    /// replays the stream `from..to` into it, or appends the adopted state as the first record,
-    /// and checkpoints it (R9.5). With `base`, the records below its offset are read for their
-    /// idempotency keys and `txn_seq`s only, since the snapshot holds their effect.
+    /// local files from before the log; or, with `base`, an engine restored from a snapshot or a
+    /// local cache): replays the stream `from..to` into it, or appends the adopted state as the
+    /// first record, and checkpoints it (R9.5). With `base`, the records below its offset are
+    /// only read for their idempotency keys and `txn_seq`s, since the base holds their effect,
+    /// and not even read when the base kept its keys.
     ///
     /// # Errors
     ///
@@ -238,9 +246,18 @@ impl Durable {
         let log = spec.log.clone();
         let now = log.now_ms();
         let mut idempotency = Idempotency::default();
-        let mut next_txn_seq = base.map_or(1, |base| base.next_txn_seq);
-        let applied_below = base.map_or(0, |base| base.offset);
+        let mut next_txn_seq = base.as_ref().map_or(1, |base| base.next_txn_seq);
+        let applied_below = base.as_ref().map_or(0, |base| base.offset);
+        // A base that kept its keys needs nothing below its offset.
+        let mut read_from = start;
+        if let Some(keys) = base.as_ref().and_then(|base| base.keys.as_ref()) {
+            for (key, recorded, outcome) in keys {
+                idempotency.insert(key, *outcome, *recorded, now);
+            }
+            read_from = applied_below.max(start);
+        }
         let mut offset = end;
+        let mut replayed = 0;
         if adopt {
             let ops = baseline(db);
             if !ops.is_empty() {
@@ -281,7 +298,7 @@ impl Durable {
                      snapshot covers"
                 )));
             }
-            for record in log.read(spec.stream, start, end)? {
+            for record in log.read(spec.stream, read_from, end)? {
                 let value = record.record.value.as_deref().unwrap_or_default();
                 let decoded = decode(value).map_err(|err| {
                     GraphError::engine(format!(
@@ -301,6 +318,7 @@ impl Durable {
                         }
                         if apply {
                             apply_to_store(db, &change.ops)?;
+                            replayed += 1;
                         }
                         (change.txn_seq, &change.idempotency_key, change.commit_epoch)
                     }
@@ -314,6 +332,7 @@ impl Durable {
                         session.execute(&schema.statement).map_err(|err| {
                             GraphError::engine(format!("replaying record {}: {err}", record.offset))
                         })?;
+                        replayed += 1;
                         (schema.txn_seq, &schema.idempotency_key, schema.commit_epoch)
                     }
                 };
@@ -333,7 +352,7 @@ impl Durable {
             }
         }
         // Replayed writes bypass Grafeo's WAL (R9.5): checkpoint before the local files stand for
-        // anything. Task 14 is what trusts them; until then this keeps them consistent.
+        // anything. They stand for an offset only once a clean close stamps them (GR1 Task 14).
         if persistent {
             db.wal_checkpoint().map_err(|err| {
                 GraphError::engine(format!("checkpointing the rebuilt graph: {err}"))
@@ -350,8 +369,18 @@ impl Durable {
             next_txn_seq: AtomicU64::new(next_txn_seq),
             log_bytes: AtomicU64::new(0),
             opened_at: std::time::Instant::now(),
+            replayed,
             log,
         })
+    }
+
+    /// The idempotency index, for the stamp a clean close leaves beside the local files (GR1
+    /// Task 14).
+    pub(crate) fn idempotency_entries(&self) -> Vec<(String, u64, idempotency::Outcome)> {
+        self.idempotency
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .entries()
     }
 
     /// The lease epoch this engine's appends carry (0 when unfenced).
