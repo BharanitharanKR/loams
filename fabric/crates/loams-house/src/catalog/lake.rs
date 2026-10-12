@@ -183,6 +183,7 @@ pub struct Lake {
     root: LakeRoot,
     retention: Duration,
     grants: Option<Arc<dyn PrefixGrants>>,
+    store: Option<loams_store::Store>,
 }
 
 impl fmt::Debug for Lake {
@@ -217,7 +218,42 @@ impl Lake {
             root,
             retention: DEFAULT_RETENTION,
             grants: None,
+            store: None,
         }
+    }
+
+    /// The store the tables live in, which the front reads manifests from
+    /// (`system.parts` and the `FINAL` views, HS1 Task 11).
+    pub fn with_store(mut self, store: loams_store::Store) -> Self {
+        self.store = Some(store);
+        self
+    }
+
+    /// A file of a table (a manifest list, a manifest), by its absolute
+    /// location: `210` when the House has no store or the store fails, `36` when
+    /// the location is outside the store.
+    pub async fn read_file(&self, location: &str) -> Result<bytes::Bytes, HouseError> {
+        let store = self.store.as_ref().ok_or_else(|| {
+            HouseError::from(ChError::network_error(
+                "this House reads no table files: it was started without --store",
+            ))
+        })?;
+        let key = self.root.relative(location).ok_or_else(|| {
+            HouseError::from(ChError::bad_arguments(format!(
+                "{location} is outside the House's store ({})",
+                self.root
+            )))
+        })?;
+        store
+            .get(key)
+            .await
+            .map(|(bytes, _)| bytes)
+            // The store's own words may name its endpoint or account (R9.2).
+            .map_err(|_| {
+                HouseError::from(ChError::network_error(
+                    "the store failed to read a table file",
+                ))
+            })
     }
 
     /// How long `UNDROP TABLE` can bring a table back.

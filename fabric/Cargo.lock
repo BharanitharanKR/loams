@@ -2973,9 +2973,11 @@ dependencies = [
 name = "loams-house-lake"
 version = "0.0.1"
 dependencies = [
+ "bytes",
  "iceberg",
  "serde_json",
  "thiserror",
+ "tokio",
  "uuid",
 ]
 
@@ -3012,6 +3014,7 @@ dependencies = [
  "loams-house-ipc",
  "loams-house-lake",
  "loams-house-proto",
+ "loams-store",
  "nix",
  "parquet 59.3.0",
  "proptest",

@@ -290,6 +290,12 @@ impl Settings {
             .map(|(_, v)| v.as_str())
     }
 
+    /// Every setting, Loams's own included (HS1 Task 11 reads `loams_snapshot_id`
+    /// and `loams_as_of` from them).
+    pub fn pairs(&self) -> &[(String, String)] {
+        &self.pairs
+    }
+
     /// What chDB gets: everything but Loams's own settings.
     pub fn for_engine(&self) -> Vec<(String, String)> {
         self.pairs

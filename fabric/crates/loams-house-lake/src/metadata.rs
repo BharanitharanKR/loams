@@ -34,7 +34,7 @@ pub enum LakeError {
 }
 
 impl LakeError {
-    fn from_iceberg(err: iceberg::Error) -> Self {
+    pub(crate) fn from_iceberg(err: iceberg::Error) -> Self {
         match err.kind() {
             iceberg::ErrorKind::CatalogCommitConflicts => Self::Conflict(err.to_string()),
             _ => Self::Invalid(err.to_string()),

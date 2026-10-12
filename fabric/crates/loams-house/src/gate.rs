@@ -17,6 +17,7 @@ use crate::classify::{Expect, Stmt, decide};
 use crate::ddl::{self, ChColumn, Described, Kind, Oracle};
 use crate::deny;
 use crate::errors::{ChError, HouseError};
+use crate::read::{ReadContext, ReadPlan};
 use crate::session::SessionGuard;
 
 /// The text chDB runs for a statement: the host functions answer the House's
@@ -313,6 +314,7 @@ impl<'a> WorkerOracle<'a> {
             limits: Limits::default(),
             input: None,
             output: Output::Blocks,
+            database: None,
         };
         let collected = self.lease().await?.run(execute).await?;
         let text = String::from_utf8_lossy(&collected.bytes);
@@ -420,4 +422,69 @@ impl Oracle for WorkerOracle<'_> {
             .filter_map(|r| r.into_iter().next())
             .collect())
     }
+}
+
+/// `SHOW TABLES`, `SHOW DATABASES` and `SHOW PROCESSLIST` as the `SELECT`
+/// ClickHouse rewrites them into, over the `system` tables the House replaces
+/// (HS1 Task 11): `Some(text)` to run instead. `SHOW TABLES FROM d` of a
+/// database the namespace lacks is `81`, as in ClickHouse.
+pub async fn show_answer(
+    lake: Option<&Lake>,
+    namespace: u64,
+    current: &str,
+    stmt: &Stmt,
+) -> Result<Option<String>, HouseError> {
+    let Stmt::Show { text } = stmt else {
+        return Ok(None);
+    };
+    let Some(answer) = crate::system::show_query(text, current) else {
+        return Ok(None);
+    };
+    let (query, database) = answer?;
+    if let Some(database) = database
+        && !matches!(
+            database.as_str(),
+            "system" | "information_schema" | "INFORMATION_SCHEMA"
+        )
+    {
+        match lake {
+            Some(lake) => lake.require_database(namespace, &database).await?,
+            None if database == "default" => {}
+            None => {
+                return Err(HouseError::from(ChError::unknown_database(format!(
+                    "Database {database} does not exist"
+                ))));
+            }
+        }
+    }
+    Ok(Some(query))
+}
+
+/// What an admitted statement reads, pinned, and the views its worker makes
+/// first (HS1 Task 11, [`crate::read::plan`]). `settings` are the session's and
+/// the request's, Loams's own included.
+#[allow(clippy::too_many_arguments)]
+pub async fn read_plan(
+    lake: Option<&Lake>,
+    namespace: u64,
+    database: &str,
+    user: &str,
+    lease: &mut WorkerLease,
+    analysis: &loams_house_ipc::Analysis,
+    sql: &str,
+    settings: &[(String, String)],
+) -> Result<ReadPlan, HouseError> {
+    crate::read::plan(
+        ReadContext {
+            lake,
+            namespace,
+            database,
+            user,
+        },
+        lease,
+        analysis,
+        sql,
+        settings,
+    )
+    .await
 }

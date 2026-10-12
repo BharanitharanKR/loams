@@ -351,7 +351,11 @@ async fn lake(
             )
         }
     };
-    let mut lake = Lake::new(catalog, root);
+    // The front reads manifests (`system.parts`, `FINAL` views; HS1 Task 11)
+    // from the same store.
+    let files = loams_store::Store::from_url(store_url, Vec::<(String, String)>::new())
+        .map_err(|err| bad(format!("--store {store_url:?}: {err}")))?;
+    let mut lake = Lake::new(catalog, root).with_store(files);
     if let Some(cache) = cache {
         lake = lake.with_grants(Arc::new(cache.clone()) as Arc<dyn PrefixGrants>);
     }

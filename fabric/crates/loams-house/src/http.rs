@@ -933,6 +933,35 @@ async fn run(
         .map(str::to_string)
         .or_else(|| session.as_ref().map(|g| g.state().database.clone()))
         .unwrap_or_else(|| "default".to_string());
+    // `SHOW TABLES`, `SHOW DATABASES`, `SHOW PROCESSLIST`: ClickHouse's own
+    // `SELECT` over the House's `system` tables (HS1 Task 11).
+    let shown = match &classified {
+        Classified::Known { stmt, format } => gate::show_answer(
+            shared.lake.as_deref(),
+            user.namespace,
+            &current_database,
+            stmt,
+        )
+        .await
+        .map(|query| query.map(|q| (q, format.clone()))),
+        Classified::Unparsed { .. } => Ok(None),
+    };
+    let (classified, sql) = match shown {
+        Ok(Some((query, format))) => (
+            Classified::Known {
+                stmt: Stmt::Query {
+                    text: query.clone(),
+                },
+                format,
+            },
+            query,
+        ),
+        Ok(None) => (classified, sql),
+        Err(err) => {
+            let close = !body.drain().await;
+            return meta.error(&err, &Progress::default(), close);
+        }
+    };
     let (classified, sql) = if let Classified::Known { stmt, format } = &classified {
         let answered = match &shared.lake {
             Some(lake) if get("database").is_some() => lake
@@ -1049,14 +1078,18 @@ async fn run(
             expect,
             readonly,
             unparsed.as_deref(),
-        ),
+        )
+        .map(|()| analysis),
         Err(err) => Err(deny::as_setting_refusal(err)),
     };
-    if let Err(err) = decided {
-        pool.release(lease, Outcome::Completed);
-        let close = !body.drain().await;
-        return meta.error(&err, &Progress::default(), close);
-    }
+    let analysis = match decided {
+        Ok(analysis) => analysis,
+        Err(err) => {
+            pool.release(lease, Outcome::Completed);
+            let close = !body.drain().await;
+            return meta.error(&err, &Progress::default(), close);
+        }
+    };
 
     // Settings: the session's, then the request's (which win); Loams's own stay here.
     let mut settings = Vec::new();
@@ -1075,12 +1108,48 @@ async fn run(
             .filter(|(k, _)| !crate::settings::is_loams(k))
             .cloned(),
     );
+    // What it reads (HS1 Task 11): its lake tables pinned and viewed, its
+    // `system` tables the House's. Loams's own settings choose the snapshot.
+    let streams_input = input.is_some();
+    let (views, sql) = if input.is_some() {
+        (Vec::new(), String::new())
+    } else {
+        let mut all: Vec<(String, String)> = session
+            .as_ref()
+            .map(|guard| guard.state().settings.pairs().to_vec())
+            .unwrap_or_default();
+        all.extend(
+            params
+                .iter()
+                .filter(|(k, _)| !k.starts_with("param_") && !NON_SETTINGS.contains(&k.as_str()))
+                .cloned(),
+        );
+        match gate::read_plan(
+            shared.lake.as_deref(),
+            user.namespace,
+            &current_database,
+            &user.user,
+            &mut lease,
+            &analysis,
+            &sql,
+            &all,
+        )
+        .await
+        {
+            Ok(plan) => (plan.views, plan.sql),
+            Err(err) => {
+                pool.release(lease, Outcome::Completed);
+                let close = !body.drain().await;
+                return meta.error(&err, &Progress::default(), close);
+            }
+        }
+    };
     let execute = Execute {
         query_id: meta.query_id.clone(),
         session: worker_session,
         settings,
-        views: Vec::new(),
-        sql: if input.is_some() { String::new() } else { sql },
+        views,
+        sql,
         format: meta.format.clone(),
         params: query_params,
         limits: Limits::default(),
@@ -1090,6 +1159,10 @@ async fn run(
         output: Output::Document {
             max_buffered_bytes: config.wait_end_of_query_max_bytes,
         },
+        // An `INSERT` whose data streams reads no table (its target is a
+        // temporary table or chDB refuses it), and its worker makes no view
+        // databases for it: the connection's database stays.
+        database: (!streams_input).then_some(current_database),
     };
     let has_input = execute.input.is_some();
     if let Err(err) = lease.start(execute).await {

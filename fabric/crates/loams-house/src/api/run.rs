@@ -206,6 +206,7 @@ pub(super) fn sorted<'a>(
 fn execute(
     st: &Statement,
     settings: &[(String, String)],
+    views: &[String],
     sql: String,
     format: &str,
     limits: Limits,
@@ -214,13 +215,18 @@ fn execute(
         query_id: st.query_id.clone(),
         session: None,
         settings: settings.to_vec(),
-        views: Vec::new(),
+        views: views.to_vec(),
         sql,
         format: format.to_string(),
         params: st.params.clone(),
         limits,
         input: None,
         output: loams_house_ipc::Output::Blocks,
+        database: Some(if st.database.is_empty() {
+            "default".to_string()
+        } else {
+            st.database.clone()
+        }),
     }
 }
 
@@ -333,6 +339,20 @@ impl HouseApi {
                 "sql",
                 "the result format is the request's `format`: drop the FORMAT clause",
             ));
+        }
+        // `SHOW TABLES`, `SHOW DATABASES`, `SHOW PROCESSLIST`: ClickHouse's own
+        // `SELECT` over the House's `system` tables (HS1 Task 11).
+        if let Classified::Known { stmt, .. } = &classified
+            && let Some(query) =
+                gate::show_answer(self.lake.as_deref(), user.namespace, database, stmt)
+                    .await
+                    .map_err(|err| to_connect(&err))?
+        {
+            plan.sql = query.clone();
+            classified = Classified::Known {
+                stmt: Stmt::Query { text: query },
+                format: None,
+            };
         }
         // The catalog's statements (HS1 Task 10), as over HTTP: DDL and `USE`
         // answer here, `DESCRIBE`/`SHOW CREATE`/`EXISTS` of a catalog table read
@@ -462,6 +482,35 @@ impl HouseApi {
             self.pool.release(lease, Outcome::Completed);
             return Err(err);
         }
+        // What it reads (HS1 Task 11): lake tables pinned, `system` tables the
+        // House's, chosen by the request's settings (Loams's own included).
+        let reads = if input.is_some() {
+            crate::read::ReadPlan::default()
+        } else {
+            match gate::read_plan(
+                self.lake.as_deref(),
+                user.namespace,
+                database,
+                &user.user,
+                &mut lease,
+                &analysis,
+                &sql,
+                &st.settings,
+            )
+            .await
+            {
+                Ok(reads) => reads,
+                Err(err) => {
+                    self.pool.release(lease, Outcome::Completed);
+                    return Err(to_connect(&err));
+                }
+            }
+        };
+        let sql = if input.is_some() {
+            sql
+        } else {
+            reads.sql.clone()
+        };
         if running.cancelled() {
             self.pool.release(lease, Outcome::Completed);
             return Err(to_connect(&cancelled_error(&st.query_id)));
@@ -497,6 +546,7 @@ impl HouseApi {
                 execute(
                     &st,
                     &settings,
+                    &reads.views,
                     format!("DESCRIBE TABLE (\n{sql}\n) SETTINGS describe_compact_output = 1"),
                     "JSONCompactEachRow",
                     Limits {
@@ -508,6 +558,7 @@ impl HouseApi {
                 execute(
                     &st,
                     &settings,
+                    &reads.views,
                     sql.clone(),
                     "JSONCompactEachRowWithNamesAndTypes",
                     Limits {
@@ -559,10 +610,15 @@ impl HouseApi {
         let mut main = execute(
             &st,
             &settings,
+            &reads.views,
             if input.is_some() { String::new() } else { text },
             format,
             limits,
         );
+        if input.is_some() {
+            // As over HTTP: a streamed `INSERT` gets no views, so no database.
+            main.database = None;
+        }
         main.input = input;
         let has_input = main.input.is_some();
         if let Err(err) = lease.start(main).await {
