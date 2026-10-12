@@ -15,16 +15,22 @@
 //! (Task 9); where computes run ([`runtime`]: the `ComputeRuntime` seam,
 //! the compose runtime and the computes' certificates) (Task 10); the
 //! endpoint RPCs, `WatchProject`, and the endpoint reconciler that runs
-//! the compute state machine ([`reconcile::endpoint`]) (Task 11). Reached
+//! the compute state machine ([`reconcile::endpoint`]) (Task 11); idle
+//! detection and the suspend ([`idle`], with PgDog's pools read through
+//! [`pgdog::PgDogAdmin`]) and the compute lifecycle events
+//! ([`observer::ComputeLifecycleObserver`]) (Task 12). Reached
 //! only through `loams`'s feature `postgres` (Task 9), whose `pg-control`
 //! role serves this crate.
 
 pub mod audit;
 pub mod authz;
+pub mod idle;
 pub mod ids;
 pub mod model;
 pub mod names;
 pub mod neon;
+pub mod observer;
+pub mod pgdog;
 pub mod reconcile;
 pub mod runtime;
 pub mod secrets;
