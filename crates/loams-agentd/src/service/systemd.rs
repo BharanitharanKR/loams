@@ -70,10 +70,12 @@ pub fn unit_dir() -> Result<PathBuf, ServiceError> {
     Ok(config.join("systemd/user"))
 }
 
+/// The unit file in [`unit_dir`].
 fn unit_path() -> Result<PathBuf, ServiceError> {
     Ok(unit_dir()?.join(SYSTEMD_UNIT))
 }
 
+/// `systemctl --user <args>`.
 fn systemctl(args: &[&str]) -> Result<String, ServiceError> {
     let mut all = vec!["--user"];
     all.extend_from_slice(args);
@@ -104,6 +106,7 @@ pub fn uninstall() -> Result<String, ServiceError> {
     Ok(format!("Removed {SYSTEMD_UNIT} ({}).", unit.display()))
 }
 
+/// Start the installed unit.
 pub fn start() -> Result<String, ServiceError> {
     systemctl(&["start", SYSTEMD_UNIT])?;
     Ok(format!("Started {SYSTEMD_UNIT}."))
@@ -115,6 +118,7 @@ pub fn stop() -> Result<String, ServiceError> {
     Ok(format!("Stopped {SYSTEMD_UNIT}."))
 }
 
+/// Whether the unit file exists, and `systemctl --user is-active`.
 pub fn status() -> Result<Status, ServiceError> {
     let unit = unit_path()?;
     let state = query("systemctl", &["--user", "is-active", SYSTEMD_UNIT])?;

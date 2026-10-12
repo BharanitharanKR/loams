@@ -52,6 +52,7 @@ pub enum InstallError {
     },
 }
 
+/// Map an I/O error to [`InstallError::Io`] on `path`.
 fn io_error(path: &Path) -> impl FnOnce(io::Error) -> InstallError + '_ {
     move |source| InstallError::Io {
         path: path.to_path_buf(),
@@ -93,15 +94,13 @@ pub fn install(from: &Path, to: &Path) -> Result<Installed, InstallError> {
         .collect::<Result<Vec<_>, InstallError>>()?;
 
     crate::owner_only::create_dir(to).map_err(io_error(to))?;
+    // One installer at a time, from staging through garbage collection.
+    let _lock = lock(to)?;
     let dir = to.join(&version);
     if !matches_sums(&dir, &expected) {
         let staging = to.join(format!(".{version}.{}.staging", std::process::id()));
-        let staged = stage(from, &staging, &expected).and_then(|()| {
-            if dir.exists() {
-                std::fs::remove_dir_all(&dir).map_err(io_error(&dir))?;
-            }
-            std::fs::rename(&staging, &dir).map_err(io_error(&dir))
-        });
+        let staged =
+            stage(from, &staging, &expected).and_then(|()| publish(&staging, &dir, &version));
         if let Err(error) = staged {
             let _ = std::fs::remove_dir_all(&staging);
             return Err(error);
@@ -148,6 +147,7 @@ pub fn service_exe(runtime: &Path) -> Option<PathBuf> {
     exe.is_file().then_some(exe)
 }
 
+/// The trimmed `VERSION` file, which must be a semantic version.
 fn read_version(path: &Path) -> Result<String, InstallError> {
     let text = std::fs::read_to_string(path).map_err(io_error(path))?;
     let version = text.trim();
@@ -172,6 +172,7 @@ fn listed_sum(sums: &str, file: &str) -> Option<String> {
     })
 }
 
+/// The lowercase hex SHA-256 of the file at `path`.
 fn sha256(path: &Path) -> io::Result<String> {
     let mut file = std::fs::File::open(path)?;
     let mut hasher = Sha256::new();
@@ -223,6 +224,59 @@ fn stage(from: &Path, staging: &Path, expected: &[(String, String)]) -> Result<(
     Ok(())
 }
 
+/// How long an installer waits for another to finish.
+const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// `<to>/.install.lock`, waiting up to [`LOCK_WAIT`] for another installer.
+fn lock(to: &Path) -> Result<crate::lock::InstanceLock, InstallError> {
+    let path = to.join(".install.lock");
+    let deadline = std::time::Instant::now() + LOCK_WAIT;
+    loop {
+        match crate::lock::InstanceLock::acquire_file(&path) {
+            Ok(lock) => return Ok(lock),
+            Err(crate::lock::LockError::Held { .. }) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Err(crate::lock::LockError::Held { holder }) => {
+                return Err(InstallError::Io {
+                    path,
+                    source: io::Error::new(
+                        io::ErrorKind::WouldBlock,
+                        format!("another install (pid {holder}) is still running"),
+                    ),
+                });
+            }
+            Err(crate::lock::LockError::Io(source)) => {
+                return Err(InstallError::Io { path, source });
+            }
+        }
+    }
+}
+
+/// Move the checked `staging` directory to `dir`. A `dir` already there (a
+/// damaged copy, which may be the one `current` names) is moved aside first
+/// and moved back if the swap fails, so `dir` is missing for two renames at
+/// most and never left missing. On Windows a running binary refuses the first
+/// rename, and nothing changes.
+fn publish(staging: &Path, dir: &Path, version: &str) -> Result<(), InstallError> {
+    if !dir.exists() {
+        return std::fs::rename(staging, dir).map_err(io_error(dir));
+    }
+    let parent = dir.parent().unwrap_or(dir);
+    let aside = parent.join(format!(".{version}.{}.replaced", std::process::id()));
+    std::fs::rename(dir, &aside).map_err(io_error(dir))?;
+    if let Err(source) = std::fs::rename(staging, dir) {
+        let _ = std::fs::rename(&aside, dir);
+        return Err(InstallError::Io {
+            path: dir.to_path_buf(),
+            source,
+        });
+    }
+    // A leftover is swept by the next install.
+    let _ = std::fs::remove_dir_all(&aside);
+    Ok(())
+}
+
 /// Point `current` at `version` atomically.
 fn switch_current(to: &Path, version: &str) -> Result<(), InstallError> {
     if cfg!(windows) {
@@ -245,9 +299,11 @@ fn switch_current(to: &Path, version: &str) -> Result<(), InstallError> {
     Ok(())
 }
 
-/// Remove every version but `current` and the newest other one, and staging
-/// directories that an interrupted install left. Returns the versions
-/// removed and those that could not be (a running binary on Windows).
+/// Remove every version but `current` and the newest other one, and the
+/// staging and replaced directories that an interrupted install left (the
+/// caller holds the install lock, so no other install owns them). Returns
+/// the versions removed and those that could not be (a running binary on
+/// Windows).
 fn collect_garbage(to: &Path, current: &str) -> (Vec<String>, Vec<String>) {
     let Ok(entries) = std::fs::read_dir(to) else {
         return (Vec::new(), Vec::new());
@@ -258,7 +314,7 @@ fn collect_garbage(to: &Path, current: &str) -> (Vec<String>, Vec<String>) {
             continue;
         }
         let name = entry.file_name().to_string_lossy().into_owned();
-        if name.starts_with('.') && name.ends_with(".staging") {
+        if name.starts_with('.') && (name.ends_with(".staging") || name.ends_with(".replaced")) {
             let _ = std::fs::remove_dir_all(entry.path());
         } else if name != current
             && let Ok(version) = semver::Version::parse(&name)

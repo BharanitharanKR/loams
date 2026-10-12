@@ -6,8 +6,16 @@
 //! supervises itself: `run --service` is a parent that spawns `run --worker`
 //! in a Job Object with kill-on-close, and restarts it when it exits with
 //! anything but 0, 3 or 4, after 1, 2, 4, 8, 16 then 30 s, at most 5 times in
-//! 10 minutes (the engine supervisor's policy). The worker's stdout and
-//! stderr, and the parent's own lines, go to `logs/agentd.stdout.log`.
+//! 10 minutes (the engine supervisor's policy). The parent joins the job
+//! itself before the first worker, so every worker is in it from its
+//! creation. The worker's stdout and stderr, and the parent's own lines, go
+//! to `logs/agentd.stdout.log`.
+//!
+//! The parent holds `agentd.service.lock` (one parent per directory; a
+//! second exits 3). `service stop` and `uninstall` write `agentd.stop`, which
+//! the parent checks before starting a worker and during each backoff, then
+//! stop the running worker over the RPC and wait for both locks, so a stop
+//! that lands between workers is not undone by a restart.
 //!
 //! Windows has no `current` symlink, so the Run value names the version that
 //! `current.txt` names when it is written; an upgrade writes it again with
@@ -100,17 +108,32 @@ impl RestartPolicy {
     }
 }
 
+/// The parent's lock in the daemon directory: one parent per directory, and
+/// [`request_stop`] can tell that a parent runs while no worker does.
+pub const PARENT_LOCK: &str = "agentd.service.lock";
+/// The stop marker in the daemon directory: [`request_stop`] writes it, and
+/// a parent that sees it starts no further worker.
+pub const STOP_MARKER: &str = "agentd.stop";
+
 /// The parent's loop: `spawn` a worker, wait for it, and restart it per
 /// [`RestartPolicy`], calling `sleep` for each delay and `log` for each line
-/// worth keeping. Returns the parent's exit code. A worker that cannot be
-/// spawned or waited for counts as a crash.
+/// worth keeping. `stopping` reports a stop request (the stop marker): it is
+/// checked before each worker starts and after each exits, so a stop that
+/// lands during a backoff or a worker's startup crash ends the parent with 0.
+/// Returns the parent's exit code. A worker that cannot be spawned or waited
+/// for counts as a crash.
 pub fn supervise_with(
     mut spawn: impl FnMut() -> io::Result<Child>,
     mut sleep: impl FnMut(Duration),
+    mut stopping: impl FnMut() -> bool,
     mut log: impl FnMut(&str),
 ) -> u8 {
     let mut policy = RestartPolicy::default();
     loop {
+        if stopping() {
+            log("[service] stop requested; no worker is started");
+            return EXIT_STOPPED;
+        }
         let code = match spawn().and_then(|mut worker| worker.wait()) {
             Ok(status) => status.code(),
             Err(error) => {
@@ -118,6 +141,12 @@ pub fn supervise_with(
                 None
             }
         };
+        if stopping() {
+            log(&format!(
+                "[service] the worker exited ({code:?}) on a stop request"
+            ));
+            return EXIT_STOPPED;
+        }
         match policy.on_exit(code, Instant::now()) {
             Decision::Exit(EXIT_INTERNAL) => {
                 log(&format!(
@@ -138,43 +167,73 @@ pub fn supervise_with(
     }
 }
 
-/// Ask the daemon of `paths` to stop over its RPC, and wait up to 30 s for
-/// it to release its lock. `false` when no daemon runs there.
+/// How long [`request_stop`] waits for the parent and the daemon to exit.
+const STOP_WAIT: Duration = Duration::from_secs(30);
+
+/// Stop the service of `paths`: write the stop marker when a parent runs (so
+/// it starts no further worker, even mid-backoff), ask a running daemon to
+/// stop over its RPC (`Hello`, then `StopEngine`; a daemon that is still
+/// starting is asked once it publishes discovery), and wait up to 30 s for
+/// both to release their locks. `false` when neither runs.
 pub fn request_stop(paths: &Paths) -> Result<bool, ServiceError> {
-    use loams_agentd_rpc::methods;
-    let Some(found) = crate::discovery::read(paths) else {
+    let parent_lock = paths.dir().join(PARENT_LOCK);
+    let marker = paths.dir().join(STOP_MARKER);
+    let parent_runs = || crate::lock::InstanceLock::holder_file(&parent_lock).is_some();
+    let daemon_runs = || crate::lock::holder(paths).is_some();
+    if !parent_runs() && !daemon_runs() {
         return Ok(false);
-    };
-    let token = crate::token::read(paths).map_err(ServiceError::io(&paths.token()))?;
+    }
+    if parent_runs() {
+        crate::owner_only::write(&marker, b"stop\n").map_err(ServiceError::io(&marker))?;
+    }
+    let mut asked = None;
+    let mut last_error = None;
+    let deadline = Instant::now() + STOP_WAIT;
+    while parent_runs() || daemon_runs() {
+        if let Some(found) = crate::discovery::read(paths)
+            && asked != Some(found.pid)
+        {
+            match ask_to_stop(paths, found.port) {
+                Ok(()) => asked = Some(found.pid),
+                Err(error) => last_error = Some(error),
+            }
+        }
+        if Instant::now() > deadline {
+            return Err(ServiceError::Other(match last_error {
+                Some(error) => format!("the daemon did not stop: {error}"),
+                None => "the service still runs after 30 s".to_owned(),
+            }));
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    let _ = std::fs::remove_file(&marker);
+    Ok(true)
+}
+
+/// `Hello`, then `StopEngine`, to the daemon on loopback `port`.
+fn ask_to_stop(paths: &Paths, port: u16) -> Result<(), String> {
+    use loams_agentd_rpc::{RpcError, methods};
+    let token = crate::token::read(paths).map_err(|error| error.to_string())?;
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .map_err(|error| ServiceError::Other(error.to_string()))?;
+        .map_err(|error| error.to_string())?;
     runtime
         .block_on(async {
             let client = loams_agentd_rpc::connect_ws_with_token(
-                &format!("ws://127.0.0.1:{}", found.port),
+                &format!("ws://127.0.0.1:{port}"),
                 token.expose(),
             )
             .await?;
             let hello = serde_json::to_value(crate::hello::cli_hello())
-                .map_err(|error| loams_agentd_rpc::RpcError::BadParams(error.to_string()))?;
+                .map_err(|error| RpcError::BadParams(error.to_string()))?;
             client.call(methods::HELLO, hello).await?;
             client
                 .call(methods::STOP_ENGINE, serde_json::json!({}))
                 .await
         })
-        .map_err(|error| ServiceError::Other(format!("the daemon did not stop: {error}")))?;
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while crate::lock::holder(paths).is_some() {
-        if Instant::now() > deadline {
-            return Err(ServiceError::Other(
-                "the daemon accepted the stop but still runs after 30 s".to_owned(),
-            ));
-        }
-        std::thread::sleep(Duration::from_millis(200));
-    }
-    Ok(true)
+        .map(drop)
+        .map_err(|error| error.to_string())
 }
 
 #[cfg(windows)]
@@ -190,10 +249,11 @@ mod imp {
     use windows_sys::Win32::System::JobObjects::AssignProcessToJobObject;
     use windows_sys::Win32::System::Threading::{
         CREATE_BREAKAWAY_FROM_JOB, CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW, DETACHED_PROCESS,
+        GetCurrentProcess,
     };
 
     use super::super::{Action, Launch, RUN_VALUE, STDOUT_LOG, ServiceError, Status};
-    use super::{render_run_value, request_stop, supervise_with};
+    use super::{PARENT_LOCK, STOP_MARKER, render_run_value, request_stop, supervise_with};
     use crate::paths::Paths;
 
     /// A service command on Windows.
@@ -231,7 +291,9 @@ mod imp {
             }),
             Action::Status => {
                 let value = registry::get(RUN_VALUE)?;
-                let running = crate::discovery::read(&paths).is_some();
+                let running = crate::discovery::read(&paths).is_some()
+                    || crate::lock::InstanceLock::holder_file(&paths.dir().join(PARENT_LOCK))
+                        .is_some();
                 Ok(Status {
                     installed: value.is_some(),
                     location: format!(
@@ -272,73 +334,96 @@ mod imp {
             })
     }
 
-    /// `run --service`: spawn `run --worker` in a kill-on-close Job Object
-    /// and restart it per the policy. Returns the exit code.
+    /// `run --service`: take the parent lock (another parent: exit 3), join a
+    /// kill-on-close Job Object, then spawn `run --worker` and restart it per
+    /// the policy until it stops, gives up or a stop is requested. Returns
+    /// the exit code.
     pub fn supervise(config: &Path) -> u8 {
         use std::io::Write;
-        let logs = Paths::of_config(config).map(|paths| paths.logs());
-        let log_path = logs.as_ref().ok().map(|logs| logs.join(STDOUT_LOG));
-        if let Ok(logs) = &logs {
-            let _ = crate::owner_only::create_dir(logs);
-        }
+        let Ok(paths) = Paths::of_config(config) else {
+            return crate::EXIT_INTERNAL;
+        };
+        let log_path = paths.logs().join(STDOUT_LOG);
+        let _ = crate::owner_only::create_dir(&paths.logs());
         let open_log = || {
-            log_path.as_ref().and_then(|path| {
-                std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(path)
-                    .ok()
-            })
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)
+                .ok()
         };
-        let exe = match std::env::current_exe() {
-            Ok(exe) => exe,
-            Err(_) => return crate::EXIT_INTERNAL,
+        let log = |line: &str| {
+            if let Some(mut file) = open_log() {
+                let _ = writeln!(file, "{line}");
+            }
         };
-        // Dropping the job (the parent exits or dies) kills the worker.
-        let job = match loams_agentd_harness::windows_process::Job::new() {
-            Ok(job) => job,
-            Err(error) => {
-                if let Some(mut file) = open_log() {
-                    let _ = writeln!(file, "[service] no Job Object: {error}");
-                }
+        let _parent = match crate::lock::InstanceLock::acquire_file(&paths.dir().join(PARENT_LOCK))
+        {
+            Ok(lock) => lock,
+            Err(crate::lock::LockError::Held { holder }) => {
+                log(&format!("[service] another parent runs (pid {holder})"));
+                return crate::EXIT_ALREADY_RUNNING;
+            }
+            Err(crate::lock::LockError::Io(error)) => {
+                log(&format!("[service] cannot take {PARENT_LOCK}: {error}"));
                 return crate::EXIT_INTERNAL;
             }
         };
+        // A marker left by an earlier stop must not stop this parent.
+        let marker = paths.dir().join(STOP_MARKER);
+        let _ = std::fs::remove_file(&marker);
+        let exe = match std::env::current_exe() {
+            Ok(exe) => exe,
+            Err(error) => {
+                log(&format!("[service] no executable path: {error}"));
+                return crate::EXIT_INTERNAL;
+            }
+        };
+        // The parent joins the job itself, so every worker is in it from its
+        // creation; dropping the job (the parent exits or dies) kills them.
+        let job = match loams_agentd_harness::windows_process::Job::new() {
+            Ok(job) => job,
+            Err(error) => {
+                log(&format!("[service] no Job Object: {error}"));
+                return crate::EXIT_INTERNAL;
+            }
+        };
+        // SAFETY: the job handle is owned above; GetCurrentProcess returns a
+        // pseudo-handle that needs no closing.
+        #[allow(unsafe_code)]
+        let joined = unsafe {
+            AssignProcessToJobObject(job.as_handle().as_raw_handle(), GetCurrentProcess())
+        };
+        if joined == 0 {
+            log(&format!(
+                "[service] cannot join the Job Object: {}",
+                std::io::Error::last_os_error()
+            ));
+            return crate::EXIT_INTERNAL;
+        }
+        let stopping = || marker.exists();
         supervise_with(
             || {
                 let stdout = open_log().map_or_else(Stdio::null, Stdio::from);
                 let stderr = open_log().map_or_else(Stdio::null, Stdio::from);
-                let worker = Command::new(&exe)
+                Command::new(&exe)
                     .args(["run", "--worker", "--config"])
                     .arg(config)
                     .stdin(Stdio::null())
                     .stdout(stdout)
                     .stderr(stderr)
                     .creation_flags(CREATE_NO_WINDOW)
-                    .spawn()?;
-                // SAFETY: both handles are live for the call: the job is owned
-                // above and the worker's handle by `worker`.
-                #[allow(unsafe_code)]
-                let assigned = unsafe {
-                    AssignProcessToJobObject(
-                        job.as_handle().as_raw_handle(),
-                        worker.as_raw_handle(),
-                    )
-                };
-                if assigned == 0 {
-                    let error = std::io::Error::last_os_error();
-                    let mut worker = worker;
-                    let _ = worker.kill();
-                    return Err(error);
-                }
-                Ok(worker)
+                    .spawn()
             },
-            std::thread::sleep,
-            |line| {
-                if let Some(mut file) = open_log() {
-                    let _ = writeln!(file, "{line}");
+            // The backoff ends early on a stop request.
+            |delay| {
+                let until = std::time::Instant::now() + delay;
+                while std::time::Instant::now() < until && !stopping() {
+                    std::thread::sleep(std::time::Duration::from_millis(200));
                 }
             },
+            stopping,
+            log,
         )
     }
 

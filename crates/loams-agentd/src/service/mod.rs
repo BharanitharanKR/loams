@@ -110,6 +110,7 @@ pub enum ServiceError {
 }
 
 impl ServiceError {
+    /// Map an I/O error to [`ServiceError::Io`] on `path`.
     fn io(path: &Path) -> impl FnOnce(io::Error) -> Self + '_ {
         move |source| Self::Io {
             path: path.to_path_buf(),
