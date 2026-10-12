@@ -20,6 +20,11 @@
 //!
 //! The writer's scope (`OutOfScope`) is not checked yet: Task 16 adds
 //! branch prefixes and GT4 adds cones.
+//!
+//! A configuration change (`HEAD`, protections) is decided by the
+//! idempotency index alone ([`RepoState::check_key`]) and applied with
+//! [`RepoState::apply_config`]; one that carries a request digest keeps its
+//! key in the window like a ref transaction (GT1 Task 13, ruling T13.2).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -187,9 +192,22 @@ enum Op {
     },
     PackSet(pb::PackSetChange),
     Config {
+        key: IdemKey,
+        digest: Option<[u8; 32]>,
+        time_unix_ms: i64,
         symrefs: BTreeMap<String, RefName>,
         protections: Vec<pb::Protection>,
     },
+}
+
+/// A configuration change's request digest: `None` when it has none (no
+/// idempotency entry), an error when it is not 32 bytes.
+fn config_digest(change: &pb::ConfigChange) -> Result<Option<[u8; 32]>, String> {
+    if change.request_digest.is_empty() {
+        Ok(None)
+    } else {
+        parse_digest(&change.request_digest).map(Some)
+    }
 }
 
 fn parse_oid(bytes: &[u8]) -> Result<ObjectId, String> {
@@ -343,15 +361,8 @@ impl RepoState {
 
     /// Decides `txn` against this state at `now_unix_ms`. Pure.
     pub fn check(&self, txn: &RefTxn, now_unix_ms: i64) -> Check {
-        if let Some(record) = self.idem.get(&txn.key, now_unix_ms) {
-            if record.digest != txn.request_digest {
-                return Check::Mismatch;
-            }
-            return Check::Replay(Receipt {
-                seq: record.seq,
-                index: record.index,
-                replayed: true,
-            });
+        if let Some(answer) = self.check_key(&txn.key, &txn.request_digest, now_unix_ms) {
+            return answer;
         }
         let mut counts: HashMap<&RefName, usize> = HashMap::new();
         for update in &txn.updates {
@@ -375,6 +386,77 @@ impl RepoState {
             Check::Accept
         } else {
             Check::Reject(rejected)
+        }
+    }
+
+    /// The idempotency answer for `key` with `digest` at `now_unix_ms`:
+    /// `Replay` with the first receipt or `Mismatch` while the key is inside
+    /// its window, `None` otherwise. Pure.
+    pub fn check_key(&self, key: &IdemKey, digest: &[u8; 32], now_unix_ms: i64) -> Option<Check> {
+        let record = self.idem.get(key, now_unix_ms)?;
+        if record.digest != *digest {
+            return Some(Check::Mismatch);
+        }
+        Some(Check::Replay(Receipt {
+            seq: record.seq,
+            index: record.index,
+            replayed: true,
+        }))
+    }
+
+    /// Applies a configuration change the sequencer accepted, as entry
+    /// `index` of segment `seq` at `now_unix_ms` (the time its event
+    /// carries): the symbolic refs and protections it lists replace the
+    /// current ones, and a change with a request digest keeps `key` in the
+    /// idempotency window (ruling T13.2). Validates first: an error changes
+    /// nothing.
+    pub fn apply_config(
+        &mut self,
+        change: &pb::ConfigChange,
+        key: &IdemKey,
+        seq: Seq,
+        index: u32,
+        now_unix_ms: i64,
+    ) -> Result<(), StateError> {
+        let corrupt = |reason: String| StateError::Corrupt { seq, reason };
+        let symrefs = parse_symrefs(&change.symrefs).map_err(corrupt)?;
+        let digest = config_digest(change).map_err(corrupt)?;
+        let entry = digest.map(|digest| (key, digest));
+        self.set_config(
+            symrefs,
+            change.protections.clone(),
+            entry,
+            seq,
+            index,
+            now_unix_ms,
+        );
+        Ok(())
+    }
+
+    /// Replaces the configuration; with `entry`, keeps its key and digest in
+    /// the idempotency window as entry `index` of `seq`.
+    fn set_config(
+        &mut self,
+        symrefs: BTreeMap<String, RefName>,
+        protections: Vec<pb::Protection>,
+        entry: Option<(&IdemKey, [u8; 32])>,
+        seq: Seq,
+        index: u32,
+        now_unix_ms: i64,
+    ) {
+        self.symrefs = symrefs;
+        self.protections = protections;
+        if let Some((key, digest)) = entry {
+            self.idem.prune(now_unix_ms);
+            self.idem.insert(
+                key.clone(),
+                IdemRecord {
+                    digest,
+                    seq,
+                    index,
+                    expires_unix_ms: now_unix_ms.saturating_add(window_ms()),
+                },
+            );
         }
     }
 
@@ -506,7 +588,10 @@ impl RepoState {
                 TxnBody::PackSet(change) => Op::PackSet(change),
                 TxnBody::Config(change) => Op::Config {
                     symrefs: parse_symrefs(&change.symrefs).map_err(|e| corrupt(index, e))?,
+                    digest: config_digest(&change).map_err(|e| corrupt(index, e))?,
                     protections: change.protections,
+                    key: event.key,
+                    time_unix_ms: event.time_unix_ms,
                 },
             });
         }
@@ -532,11 +617,21 @@ impl RepoState {
                     self.add_packs(change.added);
                 }
                 Op::Config {
+                    key,
+                    digest,
+                    time_unix_ms,
                     symrefs,
                     protections,
                 } => {
-                    self.symrefs = symrefs;
-                    self.protections = protections;
+                    let index = index_of(index)?;
+                    self.set_config(
+                        symrefs,
+                        protections,
+                        digest.map(|digest| (&key, digest)),
+                        seg.seq,
+                        index,
+                        time_unix_ms,
+                    );
                 }
             }
         }

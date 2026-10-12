@@ -1006,6 +1006,8 @@ async fn the_link_endpoint_shows_version_and_applied_for_collections() {
         hot_pin_all: false,
         #[cfg(feature = "graph")]
         graph: None,
+        #[cfg(feature = "git")]
+        git: None,
         roles: loams_hot::Roles::all(),
         forwarded: None,
         forward_stats: Arc::default(),

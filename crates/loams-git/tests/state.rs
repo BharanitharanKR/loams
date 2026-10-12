@@ -575,6 +575,7 @@ fn apply_segment_applies_every_event_kind() {
                 target: "refs/heads/main".into(),
             }],
             protections: protected_c(),
+            ..Default::default()
         }),
         T0,
     );
@@ -641,4 +642,69 @@ fn corrupt_segment_leaves_state_unchanged() {
         "{err:?}"
     );
     assert_eq!(state, before);
+}
+
+fn config(target: &str, digest: Option<u8>) -> pb::ConfigChange {
+    pb::ConfigChange {
+        symrefs: vec![pb::SymRef {
+            name: "HEAD".into(),
+            target: format!("refs/heads/{target}"),
+        }],
+        protections: protected_c(),
+        request_digest: digest.map_or_else(Vec::new, |d| vec![d; 32]),
+    }
+}
+
+/// A configuration change with a request digest keeps its key in the
+/// idempotency window, live and replayed (GT1 Task 13, ruling T13.2); one
+/// without a digest (compaction-era writers) keeps none.
+#[test]
+fn config_change_is_idempotent() {
+    let key = IdemKey::parse("config-1").expect("key");
+    let mut live = RepoState::empty(SHA1);
+    live.apply_config(&config("trunk", Some(9)), &key, Seq(1), 0, T0)
+        .expect("apply");
+    live.seq = Seq(1);
+    assert_eq!(live.symrefs["HEAD"], name("trunk"));
+    assert_eq!(live.protections, protected_c());
+    assert_eq!(
+        live.check_key(&key, &[9; 32], T0 + 1),
+        Some(Check::Replay(Receipt {
+            seq: Seq(1),
+            index: 0,
+            replayed: true,
+        }))
+    );
+    assert_eq!(
+        live.check_key(&key, &[8; 32], T0 + 1),
+        Some(Check::Mismatch)
+    );
+    assert_eq!(live.check_key(&key, &[9; 32], T0 + window()), None);
+
+    // The same change replayed from its segment gives the same state.
+    let mut replayed = RepoState::empty(SHA1);
+    replayed
+        .apply_segment(&segment(
+            Seq(1),
+            &[event(
+                "config-1",
+                TxnBody::Config(config("trunk", Some(9))),
+                T0,
+            )],
+        ))
+        .expect("apply");
+    assert_eq!(replayed, live);
+
+    // No digest, no entry.
+    let mut plain = RepoState::empty(SHA1);
+    plain
+        .apply_config(&config("trunk", None), &key, Seq(1), 0, T0)
+        .expect("apply");
+    assert_eq!(plain.check_key(&key, &[9; 32], T0 + 1), None);
+    // A target that is not a ref name is refused and changes nothing.
+    let mut bad = RepoState::empty(SHA1);
+    let mut change = config("trunk", Some(9));
+    change.symrefs[0].target = "not a ref".into();
+    assert!(bad.apply_config(&change, &key, Seq(1), 0, T0).is_err());
+    assert_eq!(bad, RepoState::empty(SHA1));
 }

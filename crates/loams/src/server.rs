@@ -281,6 +281,10 @@ pub struct ServerConfig {
     /// the `graph` role in Task 12).
     #[cfg(feature = "graph")]
     pub graph: GraphConfig,
+    /// Loams Git (GT1 Task 13, design §36; feature `git`): `RepoService` on the main port of a
+    /// `gateway` node, over the bucket, and the purge of deleted repositories.
+    #[cfg(feature = "git")]
+    pub git: GitConfig,
     /// `[house]`: the Loams House front the main port proxies
     /// `/loams.house.v1.*` to (HS1 Task 7, design §49 §18.1). No endpoint (the
     /// default) answers `house_not_configured`.
@@ -290,6 +294,32 @@ pub struct ServerConfig {
     /// `dev` and `standalone` only: a cluster node refuses any other mode
     /// until MT1.
     pub auth: crate::auth::AuthConfig,
+}
+
+/// Loams Git's server settings (GT1 Task 13).
+#[cfg(feature = "git")]
+#[derive(Clone, Debug)]
+pub struct GitConfig {
+    /// Serve `loams.repos.v1` at all (on a `gateway` node).
+    pub enabled: bool,
+    /// How long a `WatchRepo` stream stays quiet before it sends a heartbeat (AP0: 15 s).
+    pub watch_heartbeat: Duration,
+    /// How often deleted repositories are looked at for purging (default 1 min).
+    pub purge_every: Duration,
+    /// How long a deleted repository is kept before it is purged (`GC_GRACE`, 1 h).
+    pub purge_grace: Duration,
+}
+
+#[cfg(feature = "git")]
+impl Default for GitConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            watch_heartbeat: Duration::from_secs(15),
+            purge_every: Duration::from_secs(60),
+            purge_grace: loams_git::limits::GC_GRACE,
+        }
+    }
 }
 
 /// The largest engine statement time limit (§48 §13.1's maximum statement timeout).
@@ -426,6 +456,8 @@ impl ServerConfig {
             live: None,
             #[cfg(feature = "graph")]
             graph: GraphConfig::under(data_dir_for_graph),
+            #[cfg(feature = "git")]
+            git: GitConfig::default(),
             house: crate::api::house_proxy::HouseProxyConfig::default(),
             auth: crate::auth::AuthConfig::off(),
         }
@@ -877,6 +909,9 @@ pub struct Server {
     /// Loams Graph, when served (GR1 Task 5).
     #[cfg(feature = "graph")]
     graph: Option<GraphRuntime>,
+    /// Loams Git, when served (GT1 Task 13).
+    #[cfg(feature = "git")]
+    git: Option<GitRuntimeHandle>,
     /// The metastore as the trait object every component holds.
     meta_store: Arc<dyn MetaStore>,
     writer: LogWriter,
@@ -1141,6 +1176,8 @@ struct Assembled {
     es: Option<Es>,
     #[cfg(feature = "graph")]
     graph: Option<GraphRuntime>,
+    #[cfg(feature = "git")]
+    git: Option<GitRuntimeHandle>,
 }
 
 /// Loams Graph as the server runs it (GR1 Task 5): the admin service (catalog and engine) and
@@ -1310,6 +1347,89 @@ impl GraphRuntime {
         // After the graphs: a write still in its lane is answered before its log goes.
         if let Err(err) = self.log.shutdown().await {
             tracing::warn!(%err, "stopping the graph log writer");
+        }
+    }
+}
+
+/// Loams Git as the server runs it (GT1 Task 13): the catalog and sequencers `RepoService`
+/// shares, and the task that purges deleted repositories.
+#[cfg(feature = "git")]
+#[derive(Debug)]
+struct GitRuntimeHandle {
+    runtime: Arc<crate::api::repos::GitRuntime>,
+    stop: CancellationToken,
+    purge: JoinHandle<()>,
+}
+
+#[cfg(feature = "git")]
+impl GitRuntimeHandle {
+    fn start(config: &GitConfig, meta: Arc<dyn MetaStore>, store: Store) -> Self {
+        let catalog = loams_git::BucketRepoCatalog::new(store.clone());
+        let runtime = Arc::new(crate::api::repos::GitRuntime {
+            catalog: catalog.clone(),
+            sequencers: Arc::new(loams_git::RepoSequencers::new(
+                store,
+                Arc::new(loams_git::SystemClock),
+            )),
+            watch_heartbeat: config.watch_heartbeat,
+        });
+        let stop = CancellationToken::new();
+        let purge = {
+            let (stop, every, grace) = (stop.clone(), config.purge_every, config.purge_grace);
+            tokio::spawn(async move {
+                let mut tick = tokio::time::interval(every);
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                loop {
+                    tokio::select! {
+                        () = stop.cancelled() => return,
+                        _ = tick.tick() => {}
+                    }
+                    purge_deleted_repos(meta.as_ref(), &catalog, grace).await;
+                }
+            })
+        };
+        Self {
+            runtime,
+            stop,
+            purge,
+        }
+    }
+
+    async fn stop(self) {
+        self.stop.cancel();
+        let _ = self.purge.await;
+        self.runtime.sequencers.shutdown().await;
+    }
+}
+
+/// One pass of the purge of deleted repositories over every namespace (GT1 Task 13); a
+/// failure is logged and the next pass tries again.
+#[cfg(feature = "git")]
+async fn purge_deleted_repos(
+    meta: &dyn MetaStore,
+    catalog: &loams_git::BucketRepoCatalog,
+    grace: Duration,
+) {
+    let namespaces = match meta
+        .namespaces(loams_common::meta::Consistency::Local)
+        .await
+    {
+        Ok(namespaces) => namespaces,
+        Err(err) => {
+            tracing::warn!(%err, "listing namespaces for the repository purge failed");
+            return;
+        }
+    };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX));
+    for ns in namespaces {
+        match catalog.purge_deleted(ns.id, now, grace).await {
+            Ok(report) if report.purged > 0 => {
+                tracing::info!(ns = %ns.id, purged = report.purged, "purged deleted repositories");
+            }
+            Ok(_) => {}
+            Err(err) => tracing::warn!(ns = %ns.id, %err, "purging deleted repositories failed"),
         }
     }
 }
@@ -1720,6 +1840,8 @@ impl Server {
             es: parts.es,
             #[cfg(feature = "graph")]
             graph: parts.graph,
+            #[cfg(feature = "git")]
+            git: parts.git,
             cluster: None,
         };
         // The runtime after the collection service, before the listener
@@ -1823,6 +1945,8 @@ impl Server {
                     es: parts.es,
                     #[cfg(feature = "graph")]
                     graph: parts.graph,
+                    #[cfg(feature = "git")]
+                    git: parts.git,
                     cluster: Some(ClusterRuntime {
                         node_id,
                         roles,
@@ -2414,6 +2538,11 @@ impl Server {
             )?),
             false => None,
         };
+        // Loams Git on every gateway node (GT1 Task 13): sequencers are fenced by the bucket, so
+        // a node needs no lease to write (placement is GT1 Task 14).
+        #[cfg(feature = "git")]
+        let git = (roles.gateway && config.git.enabled)
+            .then(|| GitRuntimeHandle::start(&config.git, meta_store.clone(), store.clone()));
         let house = match roles.gateway {
             true => crate::api::house_proxy::HouseProxy::start(&config.house).map_err(|err| {
                 ServerError::Config(format!("the House proxy's HTTP client: {err}"))
@@ -2445,6 +2574,8 @@ impl Server {
             #[cfg(feature = "graph")]
             graph: graph.as_ref().map(|g| g.admin.clone()),
             house,
+            #[cfg(feature = "git")]
+            git: git.as_ref().map(|g| g.runtime.clone()),
         };
         let (app, tailscale) = match (roles.gateway, config.cluster.is_some()) {
             (true, false) => {
@@ -2514,6 +2645,8 @@ impl Server {
             es,
             #[cfg(feature = "graph")]
             graph,
+            #[cfg(feature = "git")]
+            git,
         })
     }
 
@@ -2778,6 +2911,12 @@ impl Server {
         if let Some(graph) = self.graph {
             shutdown_phase("graph");
             graph.stop().await;
+        }
+        // Loams Git's sequencers answer what they hold and write their last hints.
+        #[cfg(feature = "git")]
+        if let Some(git) = self.git {
+            shutdown_phase("git");
+            git.stop().await;
         }
         shutdown_phase("collections");
         self.collections.shutdown().await;

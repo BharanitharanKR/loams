@@ -820,3 +820,100 @@ async fn events_carry_the_apply_time() {
     assert_eq!(log.checkpoint(1_000_000), replayed.checkpoint(1_000_000));
     assert_eq!(log.checkpoint(1_000_000).idempotency.len(), 20);
 }
+
+fn head_to(branch: &str, protections: Vec<pb::Protection>) -> pb::ConfigChange {
+    pb::ConfigChange {
+        symrefs: vec![pb::SymRef {
+            name: "HEAD".into(),
+            target: format!("refs/heads/{branch}"),
+        }],
+        protections,
+        ..Default::default()
+    }
+}
+
+/// A configuration change commits through the sequencer under an
+/// idempotency key (GT1 Task 13, ruling T13.2): a retry replays its receipt,
+/// also after a restart rebuilds the state from the segment, and the key
+/// with another change is a mismatch.
+#[tokio::test]
+async fn commit_config_sets_head_and_replays() {
+    let (_, store) = faulty_store();
+    let log = mem_reflog(store.clone()).await;
+    log.commit(create("k1", "main", 1)).await.expect("commit");
+    let rule = pb::Protection {
+        pattern: "refs/heads/main".into(),
+        deny_delete: true,
+        deny_force: true,
+    };
+    let key = IdemKey::parse("cfg-1").expect("key");
+    let receipt = log
+        .commit_config(key.clone(), head_to("trunk", vec![rule.clone()]))
+        .await
+        .expect("config");
+    assert_eq!(
+        receipt,
+        Receipt {
+            seq: Seq(2),
+            index: 0,
+            replayed: false
+        }
+    );
+    let snap = log.snapshot(ReadAt::Latest).await.expect("snapshot");
+    assert_eq!(snap.symrefs["HEAD"], name("trunk"));
+    assert_eq!(snap.protections, vec![rule.clone()]);
+    // The rule now refuses deleting main.
+    let err = log
+        .commit(txn("k2", vec![update("main", Expect::Oid(oid(1)), None)]))
+        .await
+        .expect_err("protected");
+    assert!(matches!(err, RefError::Rejected(_)), "{err:?}");
+
+    let again = log
+        .commit_config(key.clone(), head_to("trunk", vec![rule.clone()]))
+        .await
+        .expect("replay");
+    assert_eq!(
+        again,
+        Receipt {
+            replayed: true,
+            ..receipt
+        }
+    );
+    let other = log
+        .commit_config(key.clone(), head_to("dev", Vec::new()))
+        .await
+        .expect_err("another change under the key");
+    assert!(matches!(err_kind(&other), "mismatch"), "{other:?}");
+    log.shutdown().await;
+
+    // A restart rebuilds the window from the segment.
+    let reopened = mem_reflog(store).await;
+    let replayed = reopened
+        .commit_config(key, head_to("trunk", vec![rule]))
+        .await
+        .expect("replay after restart");
+    assert_eq!(
+        replayed,
+        Receipt {
+            replayed: true,
+            ..receipt
+        }
+    );
+    // A target that is not a ref name is refused before queueing.
+    let mut bad = head_to("trunk", Vec::new());
+    bad.symrefs[0].target = "not a ref".into();
+    let err = reopened
+        .commit_config(IdemKey::parse("cfg-2").expect("key"), bad)
+        .await
+        .expect_err("invalid");
+    assert!(matches!(err, RefError::Invalid { .. }), "{err:?}");
+    assert_eq!(reopened.seq(), Seq(2));
+}
+
+fn err_kind(err: &RefError) -> &'static str {
+    match err {
+        RefError::IdempotencyMismatch => "mismatch",
+        _ => "other",
+    }
+}

@@ -39,6 +39,7 @@ use futures::stream::{self, BoxStream, StreamExt};
 use loams_cloudevents::protobuf::encode_batch;
 use loams_store::StoreError;
 use rand::RngCore;
+use sha2::{Digest, Sha256};
 use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 
@@ -48,7 +49,7 @@ use crate::clock::Clock;
 use crate::format::event::{TxnBody, TxnEvent, from_cloudevent, to_cloudevent};
 use crate::format::pb;
 use crate::format::segment::{WalBatch, WalSegment};
-use crate::ids::{IdemKey, NamespaceId, RepoId, Seq};
+use crate::ids::{IdemKey, NamespaceId, RefName, RepoId, Seq, TraceParent};
 use crate::limits::{
     HINT_EVERY, MAX_FENCE_RETRIES, MAX_GROUP_TXNS, MAX_REFS_PER_TXN, MAX_SEGMENT_BYTES,
 };
@@ -129,9 +130,59 @@ pub enum GitEvent {
     GroupSize(usize),
 }
 
+/// What a pending item commits.
+enum Work {
+    /// A ref transaction.
+    Ref(RefTxn),
+    /// A configuration change (`HEAD`, protections) under an idempotency
+    /// key; its `request_digest` is set (ruling T13.2).
+    Config {
+        key: IdemKey,
+        change: pb::ConfigChange,
+        trace: Option<TraceParent>,
+    },
+}
+
+impl Work {
+    fn key(&self) -> &IdemKey {
+        match self {
+            Work::Ref(txn) => &txn.key,
+            Work::Config { key, .. } => key,
+        }
+    }
+
+    fn trace(&self) -> Option<TraceParent> {
+        match self {
+            Work::Ref(txn) => txn.trace.clone(),
+            Work::Config { trace, .. } => trace.clone(),
+        }
+    }
+
+    /// The event body, in `format`.
+    fn body(&self, format: pb::ObjectFormat) -> TxnBody {
+        match self {
+            Work::Ref(txn) => TxnBody::RefTxn(txn.to_pb(format)),
+            Work::Config { change, .. } => TxnBody::Config(change.clone()),
+        }
+    }
+}
+
+/// The request digest of a configuration change: SHA-256 over its encoding
+/// with no digest, so a retry of the same change replays and another change
+/// under the key is a mismatch.
+pub fn config_digest(change: &pb::ConfigChange) -> [u8; 32] {
+    use prost::Message;
+    let mut plain = change.clone();
+    plain.request_digest.clear();
+    let mut hash = Sha256::new();
+    hash.update(b"config\0");
+    hash.update(plain.encode_to_vec());
+    hash.finalize().into()
+}
+
 /// A transaction waiting for its group.
 struct Pending {
-    txn: RefTxn,
+    work: Work,
     /// The encoded size of its event, as an upper bound.
     size: usize,
     /// Fences it has been through.
@@ -294,6 +345,79 @@ impl BucketRefLog {
         Ok(state.map_or(base, Arc::new))
     }
 
+    /// The encoded size of `work`'s event, as an upper bound in any
+    /// segment; `TooLarge` past a segment.
+    fn event_size(&self, work: &Work) -> Result<usize, RefError> {
+        let config = &self.shared.config;
+        let format = self.shared.state.borrow().format;
+        // The time is fixed width and the seq is the longest, so this is an
+        // upper bound of the event's size in any segment.
+        let probe = TxnEvent {
+            ns: config.ns,
+            repo: config.repo.clone(),
+            tenant: config.tenant.clone(),
+            key: work.key().clone(),
+            trace: work.trace(),
+            time_unix_ms: 0,
+            body: work.body(format),
+        };
+        let size = encode_batch(&[to_cloudevent(&probe, Seq(u64::MAX))]).len();
+        if size > config.max_segment_bytes {
+            return Err(RefError::TooLarge);
+        }
+        Ok(size)
+    }
+
+    /// Queues `work` and waits for its answer.
+    async fn submit(&self, work: Work, size: usize) -> Result<Receipt, RefError> {
+        let (reply, answer) = oneshot::channel();
+        let pending = Pending {
+            work,
+            size,
+            fences: 0,
+            reply,
+        };
+        self.shared
+            .queue
+            .send(Msg::Commit(Box::new(pending)))
+            .await
+            .map_err(|_| RefError::Unavailable)?;
+        answer.await.unwrap_or(Err(RefError::Unavailable))
+    }
+
+    /// Commits a configuration change: its symbolic refs and protections
+    /// replace the repository's, at one seq, through group commit (§36 §4.3's
+    /// `ConfigChange`; GT1 Task 13). Idempotent on `key` as a ref
+    /// transaction is: a retry of the same change inside the window answers
+    /// the first receipt, another change under the key is
+    /// `IdempotencyMismatch` (ruling T13.2). A symbolic ref whose name or
+    /// target is not a ref name is `Invalid`.
+    pub async fn commit_config(
+        &self,
+        key: IdemKey,
+        mut change: pb::ConfigChange,
+    ) -> Result<Receipt, RefError> {
+        for symref in &change.symrefs {
+            let name_ok = symref.name == "HEAD" || RefName::parse(&symref.name).is_ok();
+            if !name_ok || RefName::parse(&symref.target).is_err() {
+                return Err(RefError::Invalid {
+                    reason: format!(
+                        "symbolic ref {:?} -> {:?} is not a ref name",
+                        symref.name, symref.target
+                    ),
+                });
+            }
+        }
+        change.request_digest = config_digest(&change).to_vec();
+        let work = Work::Config {
+            key,
+            change,
+            trace: None,
+        };
+        let size = self.event_size(&work)?;
+        self.submit(work, size).await
+    }
+
     /// Checks a transaction before it is queued; returns its encoded size.
     async fn admit(&self, txn: &RefTxn) -> Result<usize, RefError> {
         if txn.updates.is_empty() || txn.updates.len() > MAX_REFS_PER_TXN {
@@ -304,23 +428,7 @@ impl BucketRefLog {
                 ),
             });
         }
-        let config = &self.shared.config;
-        let format = self.shared.state.borrow().format;
-        // The time is fixed width and the seq is the longest, so this is an
-        // upper bound of the event's size in any segment.
-        let probe = TxnEvent {
-            ns: config.ns,
-            repo: config.repo.clone(),
-            tenant: config.tenant.clone(),
-            key: txn.key.clone(),
-            trace: txn.trace.clone(),
-            time_unix_ms: 0,
-            body: TxnBody::RefTxn(txn.to_pb(format)),
-        };
-        let size = encode_batch(&[to_cloudevent(&probe, Seq(u64::MAX))]).len();
-        if size > config.max_segment_bytes {
-            return Err(RefError::TooLarge);
-        }
+        let size = self.event_size(&Work::Ref(txn.clone()))?;
         for pack in &txn.packs {
             let id = BlobId::parse(&pack.checksum).map_err(|err| RefError::Invalid {
                 reason: err.to_string(),
@@ -348,19 +456,7 @@ impl BucketRefLog {
 impl RefLog for BucketRefLog {
     async fn commit(&self, txn: RefTxn) -> Result<Receipt, RefError> {
         let size = self.admit(&txn).await?;
-        let (reply, answer) = oneshot::channel();
-        let pending = Pending {
-            txn,
-            size,
-            fences: 0,
-            reply,
-        };
-        self.shared
-            .queue
-            .send(Msg::Commit(Box::new(pending)))
-            .await
-            .map_err(|_| RefError::Unavailable)?;
-        answer.await.unwrap_or(Err(RefError::Unavailable))
+        self.submit(Work::Ref(txn), size).await
     }
 
     async fn snapshot(&self, at: ReadAt) -> Result<Arc<RefSnapshot>, RefError> {
@@ -633,11 +729,22 @@ impl Sequencer {
             let mut in_attempt: HashSet<IdemKey> = HashSet::new();
             let mut deferred: Vec<Pending> = Vec::new();
             for pending in group.drain(..) {
-                if in_attempt.contains(&pending.txn.key) {
+                if in_attempt.contains(pending.work.key()) {
                     deferred.push(pending);
                     continue;
                 }
-                let refusal = match next.check(&pending.txn, now) {
+                let check = match &pending.work {
+                    Work::Ref(txn) => next.check(txn, now),
+                    Work::Config { key, change, .. } => {
+                        let digest: [u8; 32] = change
+                            .request_digest
+                            .as_slice()
+                            .try_into()
+                            .unwrap_or([0; 32]);
+                        next.check_key(key, &digest, now).unwrap_or(Check::Accept)
+                    }
+                };
+                let refusal = match check {
                     Check::Accept => None,
                     // A key the state holds was committed: the answer does
                     // not depend on the tail.
@@ -656,11 +763,17 @@ impl Sequencer {
                     continue;
                 }
                 let index = u32::try_from(events.len()).expect("a group is small");
-                let body = pending.txn.to_pb(next.format);
-                let txn = &pending.txn;
-                if let Err(err) =
-                    next.apply_txn(&body, &txn.key, txn.request_digest, seq, index, now)
-                {
+                let body = pending.work.body(next.format);
+                let applied = match (&pending.work, &body) {
+                    (Work::Ref(txn), TxnBody::RefTxn(pb_txn)) => {
+                        next.apply_txn(pb_txn, &txn.key, txn.request_digest, seq, index, now)
+                    }
+                    (Work::Config { key, change, .. }, _) => {
+                        next.apply_config(change, key, seq, index, now)
+                    }
+                    (Work::Ref(_), _) => unreachable!("a ref transaction's body"),
+                };
+                if let Err(err) = applied {
                     pending.answer(Err(err.into()));
                     continue;
                 }
@@ -668,13 +781,13 @@ impl Sequencer {
                     ns: self.config.ns,
                     repo: self.config.repo.clone(),
                     tenant: self.config.tenant.clone(),
-                    key: txn.key.clone(),
-                    trace: txn.trace.clone(),
+                    key: pending.work.key().clone(),
+                    trace: pending.work.trace(),
                     time_unix_ms: now,
-                    body: TxnBody::RefTxn(body),
+                    body,
                 };
                 events.push(to_cloudevent(&event, seq));
-                in_attempt.insert(pending.txn.key.clone());
+                in_attempt.insert(pending.work.key().clone());
                 decided.push((pending, None));
             }
             if decided.is_empty() {

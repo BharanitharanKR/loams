@@ -38,7 +38,11 @@ message RefTransaction {
 message PackSetChange { repeated PackRef added = 1; repeated string removed = 2; string midx = 3; string commit_graph = 4; }
 message SymRef { string name = 1; string target = 2; }
 message Protection { string pattern = 1; bool deny_delete = 2; bool deny_force = 3; }
-message ConfigChange { repeated SymRef symrefs = 1; repeated Protection protections = 2; }
+message ConfigChange {
+  repeated SymRef symrefs = 1;
+  repeated Protection protections = 2;
+  bytes request_digest = 3;              // the idempotency key's request digest; empty = no entry (added by GT1 Task 13, T13.2)
+}
 
 message ForkParent { string repo_id = 1; uint64 seq = 2; }
 message IdemEntry { string key = 1; bytes request_digest = 2; uint64 seq = 3; uint32 index = 4; int64 expires_unix_ms = 5; }

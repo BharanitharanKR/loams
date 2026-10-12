@@ -164,7 +164,7 @@ message RefTransaction {
 message PackSetChange { repeated PackRef added = 1; repeated string removed = 2; string midx = 3; string commit_graph = 4; }
 message SymRef { string name = 1; string target = 2; }
 message Protection { string pattern = 1; bool deny_delete = 2; bool deny_force = 3; }
-message ConfigChange { repeated SymRef symrefs = 1; repeated Protection protections = 2; }
+message ConfigChange { repeated SymRef symrefs = 1; repeated Protection protections = 2; bytes request_digest = 3; }   // 3: GT1 Task 13, T13.2
 
 message ForkParent { string repo_id = 1; uint64 seq = 2; }
 message IdemEntry { string key = 1; bytes request_digest = 2; uint64 seq = 3; uint32 index = 4; int64 expires_unix_ms = 5; }
@@ -256,6 +256,8 @@ A push returns its sequence number as a consistency token, `git:<repo_id>:<seq>`
 ### 4.7 Forks
 
 Forking repository A at sequence `s` writes repository B's `checkpoints/00000000000000000000.lgc` with `parent = {A, s}`, A's refs at `s` and an empty pack set: one PUT, no data copy (§15 §3.1's alternates rule, kept). Object lookup falls through to the parent's pack set at `s`, recursively. GC computes reachability across a fork family (§15 §3.3).
+
+**As built (GT1b, Task 13; `crates/loams-git/src/catalog.rs`, plan rulings T13.1–T13.4).** The catalog changes only by create-only writes: `_names/<name>.json` is written after the repository's checkpoint 0 and is the commit point of a create or fork; a delete writes `_deleting/<repo_id>.json`, and a purge after `GC_GRACE` removes the objects, the name and the marker unless a fork still reads the repository. A configuration change (`HEAD`, protections) carries a request digest (`ConfigChange.request_digest = 3`) and is idempotent like a ref transaction.
 
 ### 4.8 The event-stream mirror
 
