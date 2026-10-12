@@ -8,9 +8,12 @@
 //! and opens no listener.
 
 pub mod blob;
+pub mod checkpointer;
 pub mod clock;
 pub mod error;
+pub mod fork;
 pub mod format;
+pub mod gc;
 pub mod ids;
 pub mod limits;
 pub mod odb;
@@ -23,10 +26,13 @@ pub mod testing;
 pub mod wal;
 
 pub use blob::{BlobError, BlobId, BlobStore, LpkWriter, Put, StoreBlobStore};
+pub use checkpointer::{CheckpointPolicy, create_repo, state_at};
 pub use clock::{Clock, SystemClock};
 pub use error::IdError;
+pub use fork::{ForkError, fork_repo, open_fork_odb};
 pub use format::FormatError;
 pub use format::segment::{WalBatch, WalSegment};
+pub use gc::{SegmentGcPlan, plan_segment_gc, run_segment_gc};
 pub use ids::{
     IdemKey, MountId, NamespaceId, ObjectId, Principal, RefName, RepoId, RepoName, RepoPath,
     SecretId, Seq, SnapN, TraceParent, WsId, WsName,
