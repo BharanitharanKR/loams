@@ -31,6 +31,7 @@
 use std::collections::{HashSet, VecDeque};
 use std::fmt;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -42,6 +43,7 @@ use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 
 use crate::blob::{BlobError, BlobId, BlobStore};
+use crate::checkpointer::{self, CheckpointPolicy};
 use crate::clock::Clock;
 use crate::format::event::{TxnBody, TxnEvent, from_cloudevent, to_cloudevent};
 use crate::format::pb;
@@ -79,6 +81,8 @@ pub struct SequencerConfig {
     /// Fences one transaction survives before it is answered `Unavailable`
     /// (`MAX_FENCE_RETRIES`, 16).
     pub max_fence_retries: usize,
+    /// When a checkpoint is written (every 256 segments or 8 MiB).
+    pub checkpoint: CheckpointPolicy,
     /// `<org>/<ns>`, the events' `tenantid` (D182).
     pub tenant: String,
     /// The repository's namespace.
@@ -96,6 +100,7 @@ impl SequencerConfig {
             group_linger: Duration::ZERO,
             hint_every: HINT_EVERY,
             max_fence_retries: MAX_FENCE_RETRIES,
+            checkpoint: CheckpointPolicy::default(),
             tenant: tenant.into(),
             ns,
             repo,
@@ -187,17 +192,9 @@ impl BucketRefLog {
             .latest_checkpoint(Seq(u64::MAX))
             .await?
             .ok_or(RefError::NotFound)?;
-        let checkpoint_seq = Seq(checkpoint.seq);
+        let checkpoint_seq = Arc::new(AtomicU64::new(checkpoint.seq));
         let mut state = RepoState::from_checkpoint(checkpoint)?;
-        loop {
-            let segments = wal.read_from(state.seq.next(), READ_BATCH).await?;
-            if segments.is_empty() {
-                break;
-            }
-            for segment in &segments {
-                state.apply_segment(segment)?;
-            }
-        }
+        checkpointer::replay(wal.as_ref(), &mut state, None).await?;
         let state = Arc::new(state);
         let (publish, state_rx) = watch::channel(Arc::clone(&state));
         let (queue, rx) = mpsc::channel(QUEUE_DEPTH);
@@ -214,6 +211,8 @@ impl BucketRefLog {
             rx,
             queue: VecDeque::new(),
             checkpoint_seq,
+            since_checkpoint: (0, 0),
+            checkpoint_task: None,
             hint_tx: Some(hint_tx),
             hint_task: Some(hint_task),
         };
@@ -293,27 +292,6 @@ impl BucketRefLog {
             }
         }
         Ok(state.map_or(base, Arc::new))
-    }
-
-    /// `Exactly(seq)` below the published state: the latest checkpoint at
-    /// or below it, then its segments.
-    async fn read_exactly_below(&self, seq: Seq) -> Result<Arc<RepoState>, RefError> {
-        let gone = || RefError::Invalid {
-            reason: format!("the state at seq {seq} is no longer retained"),
-        };
-        let checkpoint = self
-            .shared
-            .wal
-            .latest_checkpoint(seq)
-            .await?
-            .ok_or_else(gone)?;
-        let base = Arc::new(RepoState::from_checkpoint(checkpoint)?);
-        let state = self.read_forward(base, Some(seq)).await?;
-        if state.seq == seq {
-            Ok(state)
-        } else {
-            Err(gone())
-        }
     }
 
     /// Checks a transaction before it is queued; returns its encoded size.
@@ -409,7 +387,9 @@ impl RefLog for BucketRefLog {
                 }
                 state
             }
-            ReadAt::Exactly(seq) => self.read_exactly_below(seq).await?,
+            ReadAt::Exactly(seq) => {
+                Arc::new(checkpointer::state_at(self.shared.wal.as_ref(), seq).await?)
+            }
         };
         Ok(Arc::new(state.snapshot()))
     }
@@ -572,8 +552,13 @@ struct Sequencer {
     events: broadcast::Sender<GitEvent>,
     rx: mpsc::Receiver<Msg>,
     queue: VecDeque<Pending>,
-    /// The checkpoint the hint names.
-    checkpoint_seq: Seq,
+    /// The newest checkpoint known written; the hint names it.
+    checkpoint_seq: Arc<AtomicU64>,
+    /// Segments and event bytes applied since the last checkpoint was
+    /// started.
+    since_checkpoint: (u64, u64),
+    /// The checkpoint write in flight, if any.
+    checkpoint_task: Option<JoinHandle<()>>,
     hint_tx: Option<watch::Sender<Option<Hint>>>,
     hint_task: Option<JoinHandle<()>>,
 }
@@ -713,6 +698,11 @@ impl Sequencer {
                 let mut batch_id = [0u8; 16];
                 rand::rng().fill_bytes(&mut batch_id);
                 let batch = WalBatch { batch_id, events };
+                let bytes: u64 = decided
+                    .iter()
+                    .filter(|(_, refusal)| refusal.is_none())
+                    .map(|(pending, _)| pending.size as u64)
+                    .sum();
                 match self.wal.append(seq, &batch).await {
                     Ok(Appended::Committed { .. }) => {
                         next.seq = seq;
@@ -727,6 +717,8 @@ impl Sequencer {
                             let _ = self.events.send(GitEvent::Committed { seq, txns });
                         }
                         answer_decided(decided, Some(seq));
+                        // After the receipts: a checkpoint never delays one.
+                        self.applied(1, bytes);
                         self.requeue(deferred);
                         return;
                     }
@@ -802,6 +794,11 @@ impl Sequencer {
             }
         }
         self.adopt(state);
+        let bytes = applied
+            .iter()
+            .map(|segment| encode_batch(&segment.batch.events).len() as u64)
+            .sum();
+        self.applied(applied.len() as u64, bytes);
         for segment in &applied {
             if let Ok(txns) = committed_txns(segment) {
                 let txns = Arc::new(txns);
@@ -812,6 +809,39 @@ impl Sequencer {
             }
         }
         Ok(())
+    }
+
+    /// Counts `segments` segments of `bytes` event bytes applied, and
+    /// starts a checkpoint of the current state when the policy says so
+    /// and none is in flight.
+    fn applied(&mut self, segments: u64, bytes: u64) {
+        self.since_checkpoint.0 += segments;
+        self.since_checkpoint.1 += bytes;
+        let (segments, bytes) = self.since_checkpoint;
+        if !self.config.checkpoint.is_due(segments, bytes) {
+            return;
+        }
+        if self
+            .checkpoint_task
+            .as_ref()
+            .is_some_and(|task| !task.is_finished())
+        {
+            return;
+        }
+        self.since_checkpoint = (0, 0);
+        let checkpoint = self.state.to_checkpoint(self.clock.now_unix_ms());
+        let (wal, written) = (Arc::clone(&self.wal), Arc::clone(&self.checkpoint_seq));
+        self.checkpoint_task = Some(tokio::spawn(async move {
+            let seq = checkpoint.seq;
+            match wal.put_checkpoint(&checkpoint).await {
+                Ok(()) => {
+                    written.fetch_max(seq, Ordering::SeqCst);
+                }
+                Err(err) => {
+                    tracing::warn!(error = %err, seq, "writing a checkpoint failed; the next one retries");
+                }
+            }
+        }));
     }
 
     /// Makes `state` current: readers see it, and the hint follows it.
@@ -826,7 +856,7 @@ impl Sequencer {
     fn hint(&self) -> Hint {
         Hint {
             seq: self.state.seq,
-            checkpoint: self.checkpoint_seq.min(self.state.seq),
+            checkpoint: Seq(self.checkpoint_seq.load(Ordering::SeqCst)).min(self.state.seq),
             written_unix_ms: self.clock.now_unix_ms(),
         }
     }
@@ -846,6 +876,9 @@ impl Sequencer {
         // The side task stops once its channel closes; the last hint is
         // written after it, so an older one never lands last.
         drop(self.hint_tx.take());
+        if let Some(task) = self.checkpoint_task.take() {
+            let _ = task.await;
+        }
         if let Some(task) = self.hint_task.take() {
             let _ = task.await;
         }

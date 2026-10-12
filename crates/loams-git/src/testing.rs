@@ -7,13 +7,13 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use loams_store::Store;
 
 use crate::blob::StoreBlobStore;
+use crate::checkpointer::create_repo;
 use crate::clock::{Clock, SystemClock};
 use crate::format::pb;
 use crate::ids::{NamespaceId, RepoId, Seq};
 use crate::paths::RepoPaths;
 use crate::reflog::RefError;
 use crate::sequencer::{BucketRefLog, SequencerConfig};
-use crate::state::RepoState;
 use crate::wal::{StoreWalStore, WalStore};
 
 /// A clock tests set by hand. With a step, every read advances it by that
@@ -70,11 +70,11 @@ pub fn test_repo() -> RepoId {
     RepoId::parse(TEST_REPO).expect("a valid repository id")
 }
 
-/// Writes checkpoint 0 of an empty SHA-1 repository, unless one exists.
+/// Writes checkpoint 0 of an empty SHA-1 repository, unless it has a
+/// checkpoint already.
 pub async fn ensure_repo(wal: &dyn WalStore) -> Result<(), RefError> {
-    if wal.latest_checkpoint(Seq::ZERO).await?.is_none() {
-        wal.put_checkpoint(&RepoState::empty(pb::ObjectFormat::Sha1).to_checkpoint(0))
-            .await?;
+    if wal.latest_checkpoint(Seq(u64::MAX)).await?.is_none() {
+        create_repo(wal, pb::ObjectFormat::Sha1).await?;
     }
     Ok(())
 }

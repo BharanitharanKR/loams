@@ -161,3 +161,26 @@ pub async fn put_pack(blobs: &StoreBlobStore, (pack, idx): (Bytes, Bytes)) -> pb
     blobs.put(&id, bundle).await.expect("put");
     pack_ref
 }
+
+/// Opens a ref log of repository `repo` in namespace 7 of `store`, creating
+/// it (checkpoint 0) unless it exists.
+pub async fn open_log(
+    store: &Store,
+    repo: &RepoId,
+    clock: Arc<dyn loams_git::Clock>,
+    configure: impl FnOnce(&mut loams_git::SequencerConfig),
+) -> loams_git::BucketRefLog {
+    let paths = RepoPaths::new(NamespaceId(7), repo);
+    let wal = Arc::new(
+        loams_git::StoreWalStore::new(store.clone(), paths.clone()).with_clock(clock.clone()),
+    );
+    loams_git::testing::ensure_repo(wal.as_ref())
+        .await
+        .expect("create the repository");
+    let blobs = Arc::new(StoreBlobStore::new(store.clone(), paths));
+    let mut config = loams_git::SequencerConfig::new("org/7", NamespaceId(7), repo.clone());
+    configure(&mut config);
+    loams_git::BucketRefLog::open(wal, blobs, config, clock)
+        .await
+        .expect("open the repository")
+}
