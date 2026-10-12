@@ -23,7 +23,9 @@
 //! `SessionDoc::queue_writes` from its first read to its commit. Without it a
 //! push raced a take into `OutOfBound` or `ContainerDeleted`, and a take could
 //! delete the row next to the one it found (plan DD1 Task 3, the flaky
-//! `message_queue::concurrent_drains_release_one_message`).
+//! `message_queue::concurrent_drains_release_one_message`). Reads take the
+//! lock as well, so they never see a row that is only partly written (the
+//! flaky `queued_attachments::queued_row_waits_for_attachment_bytes_then_sends_resolved_paths`).
 
 use loro::ToJson;
 use serde::{Deserialize, Serialize};
@@ -118,7 +120,18 @@ impl SessionDoc {
     }
 
     /// The queue in send order. Malformed rows skip rather than poison the read.
+    ///
+    /// Takes the write lock too: a push creates the row and then fills it
+    /// field by field, and Loro shows those uncommitted ops to local readers.
+    /// An unlocked read could see a row with its id and text but not yet its
+    /// `attachments`, and the host's drain would then send a row whose
+    /// `pending://` bytes have not landed.
     pub fn read_queue(&self) -> Result<Vec<QueuedMessage>, DocError> {
+        let _queue = self.queue_lock();
+        self.read_queue_locked()
+    }
+
+    fn read_queue_locked(&self) -> Result<Vec<QueuedMessage>, DocError> {
         let raw = self
             .doc()
             .get_movable_list("queue")
@@ -330,7 +343,10 @@ impl SessionDoc {
         let Some(index) = index_of(&queue, id) else {
             return Ok(None);
         };
-        let item = self.read_queue()?.into_iter().find(|item| item.id == id);
+        let item = self
+            .read_queue_locked()?
+            .into_iter()
+            .find(|item| item.id == id);
         // Delivery gates are a model invariant, not merely a UI/engine
         // convention. This keeps future take call sites from accidentally
         // sending a row that is being edited or awaiting review.
@@ -348,7 +364,7 @@ impl SessionDoc {
     /// Remove and return the head — the host's turn-end flush.
     pub fn take_queue_head(&self) -> Result<Option<QueuedMessage>, DocError> {
         let _queue = self.queue_lock();
-        let Some(head) = self.read_queue()?.into_iter().next() else {
+        let Some(head) = self.read_queue_locked()?.into_iter().next() else {
             return Ok(None);
         };
         self.take_queued_locked(&head.id)
@@ -710,5 +726,35 @@ mod tests {
             "every row survives exactly once"
         );
         assert!(left.iter().any(|i| i.text == "b-edited"));
+    }
+
+    /// A push fills its new row field by field, and Loro shows uncommitted ops
+    /// to local readers. A read must never see the row before its
+    /// `attachments` land: the host's drain would treat a row that is waiting
+    /// on `pending://` bytes as sendable.
+    #[test]
+    fn reads_never_see_a_partly_written_row() {
+        let doc = std::sync::Arc::new(doc());
+        let writer = {
+            let doc = doc.clone();
+            std::thread::spawn(move || {
+                for n in 0..2_000 {
+                    let mut row = item(&format!("q{n}"), "with image");
+                    row.attachments = vec!["pending://att/shot.png".into()];
+                    doc.push_queued(&row).unwrap();
+                    doc.take_queued(&row.id).unwrap();
+                }
+            })
+        };
+        while !writer.is_finished() {
+            for row in doc.read_queue().unwrap() {
+                assert_eq!(
+                    row.attachments,
+                    vec!["pending://att/shot.png".to_string()],
+                    "read a row before its attachments were written"
+                );
+            }
+        }
+        writer.join().unwrap();
     }
 }
