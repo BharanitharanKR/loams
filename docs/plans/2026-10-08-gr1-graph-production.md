@@ -1713,7 +1713,7 @@ Controller rulings carried in: R13.6 (a trimmed stream opens from its newest usa
    - If any failed, the manifest is read again, at most twice, because a sweep may have retired what an older manifest named (R13.7's obligation).
 3. **Nothing.** The whole stream is replayed, when it starts at offset 0. This is also the fallback when the manifest cannot be read and the stream is untrimmed.
 
-A log error is fatal at every step (`UNAVAILABLE`, retry), because no other base avoids reading the log. Replay starts at the base's offset, so records the base holds are never applied again (R9.5). A graph from before the log is still adopted from its files (R11.5). `Graph::recovery()` answers `Recovery { source, from_offset, to_offset, elapsed }`, where `source` is `Adopted | Log | LocalCache | Snapshot(kind)`.
+A log error is fatal at every step (`UNAVAILABLE`, retry), because no other base avoids reading the log. Replay starts at the base's offset, so records the base holds are never applied again (R9.5). A graph from before the log is still adopted from its files (R11.5). `Graph::recovery()` answers `Recovery { source, from_offset, to_offset, replayed, elapsed }`, where `source` is `Adopted | Log | LocalCache | Snapshot(kind)` and `replayed` counts the records applied on top of the base.
 
 **R14.2 When local files are trusted (R9.5).**
 - A clean close leaves the stamp `cache.json` beside `graph.grafeo` (`Engine::evict` with `keep`, used by eviction and shutdown). It is written to a temporary file and renamed, then the directory is synced. It records the durable offset, the next `txn_seq`, the idempotency index, the engine version, and the database file's size and CRC-32C after the close.
@@ -1747,6 +1747,7 @@ A log error is fatal at every step (`UNAVAILABLE`, retry), because no other base
   4. Marks the graph evicted.
 - An in-memory durable graph keeps no cache. It rehydrates from its portable snapshot.
 - A graph's last use is `Graph::touch`, called for every statement `GraphAdmin` runs. Checkpoints and maintenance do not count as use.
+- **A graph fenced during the eviction's checkpoint** (a refused manifest CAS or trim, or a lost renewal) is left to the fence path. It is not closed by the eviction, its lease is not given up, and it is not marked evicted (PR #459 review).
 - **Residual race.** An open that took the lease epoch just before an eviction released it serves until its first append, which is refused by its fence. That write answers `graph_reloading` (retryable), and the graph is placed anew. Nothing acknowledged is lost (I5).
 
 **R14.5 State and the cold gate.**
@@ -1762,17 +1763,19 @@ A log error is fatal at every step (`UNAVAILABLE`, retry), because no other base
 - The checkpoint tick runs `evict_due` after `checkpoint_due`.
 - `Server::graph_evictions()` counts evictions (`idle_graphs_are_evicted_on_schedule`).
 
-**R14.9 Tests** (`tests/recovery.rs`, 8 new; 22 in the file):
+**R14.9 Tests** (`tests/recovery.rs`, 10 new; 24 in the file):
 - The five planned:
-  - `recover_equals_live`: three seeded random workloads of 120 writes, with checkpoints along the way, on disk twice and in memory once. Every local file is dropped, and the graph comes back from its newest snapshot (native or portable) plus the tail, equal to the live graph, ids included. It appends nothing and serves on.
+  - `recover_equals_live`: three seeded random workloads of 120 writes, with checkpoints along the way, on disk twice and in memory once. Every local file is dropped, and the graph comes back from its newest snapshot (native or portable) plus the tail (exactly `end - newest` records replayed), equal to the live graph, ids included. It appends nothing and serves on.
   - `replay_twice_is_identity`: each record applied twice in a row equals once. Recovery from the snapshot, then from the cache it left, twice over, gives the same graph and appends nothing.
   - `evicted_graph_rehydrates_on_first_read`: on disk and in memory. It checks the checkpoint before eviction, `EVICTED`, the lease given up, the rehydration source, the recorded latency, and that a key written before the eviction still answers.
   - `engine_version_mismatch_uses_portable_snapshot`.
   - `local_cache_corruption_triggers_rebuild`: once with a snapshot (native) and once without (whole stream).
 - Beyond them:
+  - `a_stamp_that_does_not_match_its_file_is_not_trusted`: an older, valid database file under a newer stamp. Grafeo would open it, but it lacks the newer writes. The stamp's size and CRC refuse it, and the graph is rebuilt from its stream.
   - `a_local_cache_replays_only_the_records_after_it`: a second "node" with its own data directory writes in between, and the first node's cache replays exactly `[closed_at, end)`. A key from before the cache still answers.
   - `memory_pressure_evicts_least_recently_used_first`: a held graph stays.
   - `eviction_releases_a_deleted_graphs_local_cache`.
+  - `a_graph_fenced_while_it_is_evicted_is_left_to_the_fence` (PR #459 review): the owner lease moves on before a memory eviction, and the eviction's checkpoint is refused and fences the graph. The graph is then not reported evicted, and the other node's lease is not touched.
 - `a_trimmed_graph_opens_from_its_snapshot` (Task 13) now drops the local files before reopening and asserts the snapshot source. Without that, its clean shutdown would leave a cache.
 - Unit tests:
   - `evict.rs`: LRU and budget order, one rehydration per eviction;

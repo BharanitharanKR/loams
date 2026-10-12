@@ -1723,3 +1723,46 @@ async fn eviction_releases_a_deleted_graphs_local_cache() {
     assert!(!open_dir.exists() && !evicted_dir.exists());
     admin.shutdown(Duration::from_secs(5)).await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_graph_fenced_while_it_is_evicted_is_left_to_the_fence() {
+    // The owner lease moves on before a memory eviction: the eviction's checkpoint is refused by
+    // the fence and fences the graph. A memory eviction goes on after a failed checkpoint, but not
+    // for a fenced graph: it is not reported evicted, and the other node's lease stays (PR #459
+    // review).
+    let fx = Fixture::start().await;
+    let admin = fx
+        .admin(policy(Duration::from_secs(3600)))
+        .with_evict_policy(EvictPolicy {
+            idle_after: Duration::from_secs(3600),
+            node_memory: Some(0),
+        });
+    create(&admin, "kg").await;
+    run(&admin, "kg", "INSERT (:N {k: 1, v: 'a'})").await;
+    let graph = admin.open("acme", "kg").await.expect("open");
+    let id = fx.graph_id("kg").await;
+    let epoch = graph.lease_epoch().expect("served under a lease");
+    drop(graph);
+    let ownership = admin.ownership().expect("ownership").clone();
+    ownership.pause_renewals(true);
+    let key = loams_graph::owner::owner_lease_key(id);
+    let thief = "v1;99;1;127.0.0.1:1";
+    fx.meta
+        .release_lease(&key, &ownership.me().lease_owner(), epoch)
+        .await
+        .expect("release");
+    fx.meta
+        .acquire_lease(&key, thief, Duration::from_secs(30))
+        .await
+        .expect("another node takes the lease");
+    assert!(admin.evict_due().await.is_empty());
+    assert_ne!(state(&admin, "kg").await, pb::GraphState::Evicted);
+    let lease = fx
+        .meta
+        .lease(Consistency::Linearizable, &key)
+        .await
+        .expect("lease")
+        .expect("held");
+    assert_eq!(lease.owner.as_deref(), Some(thief));
+    admin.shutdown(Duration::from_secs(5)).await;
+}
