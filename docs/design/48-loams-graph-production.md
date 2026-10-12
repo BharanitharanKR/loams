@@ -192,6 +192,12 @@ SchemaChange    v1  { graph_id, lease_epoch, commit_epoch, statement, language }
   - There is no per-record CRC, because log batches carry one.
 - **Snapshots.** A checkpoint job on the owner runs every 15 minutes or every 64 MiB of log, whichever comes first (defaults). It writes a native snapshot (Grafeo `backup_full` of a checkpointed database) to `ns/<ns_id>/graphs/<graph_id>/snap/<epoch>/`, then CAS-commits the manifest `{snapshot, covered_offset, covered_epoch, format, engine_version}` in the metastore. Weekly, and before any engine upgrade, it also writes a **portable snapshot**: Parquet files of nodes and edges with the typed values, which is the I6 escape hatch and the export format (§14.3).
 - **Retention.** The log is trimmed below the oldest retained snapshot's offset, never below the PITR window (7 days by default). GC follows §09's rules for unreferenced objects.
+- **As built by GR1 Task 13 (R13.1–R13.7).**
+  - The manifest is a bucket document committed by a fenced CAS of the metastore pointer `graph-manifest/<gr_id>`, as the catalog is (R4.1).
+  - Snapshots live under `ns/<ns_id>/graphs/<gr_id>/snap/<offset>/<kind>-<ULID>/`. The covered "epoch" is the durable log offset (R9.5).
+  - The trim point is the lower of two offsets: the newest snapshot older than the PITR window, and the newest portable snapshot.
+  - A portable snapshot's property values use the log record's encoding.
+  - A graph whose stream was trimmed opens from its newest usable snapshot. Every other graph still replays its whole stream until Task 14.
 
 ### 6.5 Opening, recovery and eviction
 

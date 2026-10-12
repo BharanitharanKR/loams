@@ -357,6 +357,12 @@ impl GraphCatalog {
         &self.meta
     }
 
+    /// The bucket the catalog documents (and the graphs' snapshots, GR1 Task 13) live in.
+    #[must_use]
+    pub fn store(&self) -> &Store {
+        &self.store
+    }
+
     /// The metastore clock, in milliseconds.
     #[must_use]
     pub fn now_ms(&self) -> u64 {
@@ -815,7 +821,10 @@ impl GraphCatalog {
             .map(|(_, doc)| doc.clone())
     }
 
-    async fn namespace_id(&self, namespace: &str) -> Result<Option<NamespaceId>, CatalogError> {
+    pub(crate) async fn namespace_id(
+        &self,
+        namespace: &str,
+    ) -> Result<Option<NamespaceId>, CatalogError> {
         Ok(self
             .meta
             .namespace_by_name(Consistency::Linearizable, namespace)

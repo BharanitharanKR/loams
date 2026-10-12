@@ -579,8 +579,10 @@ impl Graph {
     ) -> Result<Graph, GraphError> {
         // A durable graph's stream is the graph (I4): its local files are a cache, and until
         // Task 14 trusts them they are discarded and the engine is rebuilt from the stream. Only
-        // a graph from before the log, whose stream is still empty, keeps them (R11.5).
+        // a graph from before the log, whose stream is still empty, keeps them (R11.5). A stream
+        // trimmed below its snapshots starts from the newest usable one (GR1 Task 13).
         let mut plan = None;
+        let mut restore = None;
         if let Some(durable) = &spec.durable {
             let id = spec
                 .id
@@ -603,6 +605,14 @@ impl Graph {
                     }
                 }
             }
+            if !adopt && bounds.0 > 0 {
+                restore = Some(crate::snapshot::restore::choose(
+                    durable,
+                    id,
+                    bounds,
+                    spec.dir.is_some(),
+                )?);
+            }
             plan = Some((id, bounds, adopt));
         }
         let config = match spec.database_file() {
@@ -616,6 +626,9 @@ impl Graph {
                     std::fs::create_dir_all(dir).map_err(|err| {
                         GraphError::engine(format!("creating the graph's storage: {err}"))
                     })?;
+                }
+                if let (Some(durable), Some(chosen)) = (&spec.durable, &restore) {
+                    crate::snapshot::restore::native_file(durable, chosen, &file)?;
                 }
                 grafeo::Config::persistent(file)
             }
@@ -634,6 +647,12 @@ impl Graph {
             config
         };
         let db = GrafeoDB::with_config(config).map_err(as_engine_error)?;
+        let base = match (&spec.durable, &restore) {
+            (Some(durable), Some(chosen)) => {
+                Some(crate::snapshot::restore::into_engine(durable, chosen, &db)?)
+            }
+            _ => None,
+        };
         let durable = match (&spec.durable, plan) {
             (Some(durable), Some((id, bounds, adopt))) => Some(crate::durable::Durable::open(
                 &db,
@@ -641,6 +660,7 @@ impl Graph {
                 id,
                 bounds,
                 adopt,
+                base,
                 spec.dir.is_some(),
             )?),
             _ => None,
@@ -714,6 +734,22 @@ impl Graph {
     /// The graph's gate (R9.3).
     pub(crate) fn gate(&self) -> &crate::durable::visibility::Gate {
         &self.gate
+    }
+
+    /// The durable write path's state, for a durable graph.
+    pub(crate) fn durable_state(&self) -> Option<&crate::durable::Durable> {
+        self.durable.as_ref()
+    }
+
+    /// Every node and edge of the graph, in id order, read under its gate (shared), so it is the
+    /// durable state of a durable graph: a canonical dump, and what a portable snapshot holds
+    /// (GR1 Task 13).
+    ///
+    /// # Errors
+    ///
+    /// What [`Graph::call`] answers for a poisoned or panicking engine.
+    pub fn rows(&self) -> Result<crate::snapshot::portable::GraphRows, GraphError> {
+        self.read_call(|| Ok(crate::snapshot::portable::GraphRows::read(&self.db)))
     }
 
     /// The engine.
@@ -886,7 +922,7 @@ impl Graph {
     /// [`Graph::call`] for a client statement: under the graph's gate, shared, so it never runs
     /// while a write is not durable (R9.3). The poisoned check inside `call` runs after the gate
     /// is taken, so a statement that waited on a group the log refused answers `graph_reloading`.
-    fn read_call<T: Send>(
+    pub(crate) fn read_call<T: Send>(
         &self,
         f: impl FnOnce() -> Result<T, GraphError> + Send,
     ) -> Result<T, GraphError> {

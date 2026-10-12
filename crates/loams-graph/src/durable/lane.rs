@@ -24,6 +24,7 @@
 //! them (the gate), and none was acknowledged.
 
 use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::sync::{Mutex, PoisonError};
 use std::time::Instant;
@@ -329,6 +330,7 @@ impl WriteLane {
             None
         } else {
             let count = records.len() as u64;
+            let bytes: u64 = records.iter().map(|record| record.len() as u64).sum();
             let now = durable.log.now_ms();
             let batch = records
                 .into_iter()
@@ -339,6 +341,8 @@ impl WriteLane {
                 .append(durable.stream, batch, durable.fence.as_ref())
             {
                 Ok(ack) if ack.last_offset.checked_sub(ack.base_offset) == Some(count - 1) => {
+                    // The checkpointer's "64 MiB of log" trigger (GR1 Task 13).
+                    durable.log_bytes.fetch_add(bytes, Ordering::AcqRel);
                     Some((ack.base_offset, ack.last_offset + 1, now))
                 }
                 Ok(ack) => {
