@@ -1686,10 +1686,7 @@ pub fn plan_table(
     ]);
     for (key, value) in [
         (PROP_ORDER_BY, order_by.trim().to_string()),
-        (
-            PROP_PRIMARY_KEY,
-            stmt.primary_key.clone().unwrap_or_default(),
-        ),
+        (PROP_PRIMARY_KEY, primary_key.trim().to_string()),
         (PROP_PARTITION_BY, partition_by.trim().to_string()),
         (PROP_COMMENT, stmt.comment.clone().unwrap_or_default()),
     ] {

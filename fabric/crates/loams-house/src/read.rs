@@ -597,19 +597,14 @@ pub async fn plan(
                 .analyze(body, &[])
                 .await
                 .map_err(crate::deny::as_setting_refusal)?;
-            crate::gate::admit(
-                &analysis,
-                body,
-                crate::classify::Expect::Read,
-                true,
-                None,
-            )
-            .map_err(|err| {
-                HouseError::from(ChError::access_denied(format!(
-                    "Table {}.{}: its catalog properties hold an expression the House does                      not run ({err})",
-                    pin.table.database, pin.table.name
-                )))
-            })?;
+            crate::gate::admit(&analysis, body, crate::classify::Expect::Read, true, None)
+                .map_err(|err| {
+                    HouseError::from(ChError::access_denied(format!(
+                        "Table {}.{}: its catalog properties hold an expression the House does \
+                     not run ({err})",
+                        pin.table.database, pin.table.name
+                    )))
+                })?;
         }
         plan.views.push(views::view_ddl(&pin, &source, mode)?);
         plan.pins.push(pin);
