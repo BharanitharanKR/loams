@@ -62,6 +62,7 @@ fn xml_text(path: &std::path::Path) -> Result<String, ServiceError> {
         .replace('>', "&gt;"))
 }
 
+/// `~/Library/LaunchAgents/dev.loams.agentd.plist`.
 fn plist_path() -> Result<PathBuf, ServiceError> {
     Ok(super::home()?
         .join("Library/LaunchAgents")
@@ -78,6 +79,7 @@ fn target() -> String {
     format!("{}/{LAUNCHD_LABEL}", domain())
 }
 
+/// The real user id.
 #[cfg(unix)]
 fn uid() -> u32 {
     // SAFETY: getuid takes no arguments, touches no memory and cannot fail.
@@ -87,9 +89,24 @@ fn uid() -> u32 {
     }
 }
 
+/// No uid off Unix; launchd exists only on macOS.
 #[cfg(not(unix))]
 fn uid() -> u32 {
     0
+}
+
+/// Whether the agent is loaded in the user's domain.
+fn loaded() -> bool {
+    tool("launchctl", &["print", &target()]).is_ok()
+}
+
+/// Boot a loaded agent out; its failure is an error, because the agent
+/// would keep running. An agent that is not loaded needs nothing.
+fn boot_out_if_loaded() -> Result<(), ServiceError> {
+    if loaded() {
+        tool("launchctl", &["bootout", &target()])?;
+    }
+    Ok(())
 }
 
 /// Write the plist and bootstrap it (a loaded older one is booted out first).
@@ -98,7 +115,7 @@ pub fn install(launch: &Launch) -> Result<String, ServiceError> {
     if let Some(logs) = launch.stdout_log.parent() {
         crate::owner_only::create_dir(logs).map_err(ServiceError::io(logs))?;
     }
-    let _ = tool("launchctl", &["bootout", &target()]);
+    boot_out_if_loaded()?;
     super::write_file(&plist, &render_plist(launch)?)?;
     tool(
         "launchctl",
@@ -110,10 +127,11 @@ pub fn install(launch: &Launch) -> Result<String, ServiceError> {
     ))
 }
 
-/// Boot the agent out and remove the plist. Not installed is fine.
+/// Boot the agent out and remove the plist. Not installed is fine; a loaded
+/// agent that does not boot out is an error, and the plist stays.
 pub fn uninstall() -> Result<String, ServiceError> {
     let plist = plist_path()?;
-    let _ = tool("launchctl", &["bootout", &target()]);
+    boot_out_if_loaded()?;
     if super::remove_file(&plist)? {
         Ok(format!("Removed {LAUNCHD_LABEL} ({}).", plist.display()))
     } else {
@@ -145,6 +163,8 @@ pub fn stop() -> Result<String, ServiceError> {
     Ok(format!("Stopped {LAUNCHD_LABEL}."))
 }
 
+/// Whether the plist exists, and launchd's `state` for the agent (`not
+/// loaded` when `launchctl print` knows nothing of it).
 pub fn status() -> Result<Status, ServiceError> {
     let plist = plist_path()?;
     let printed = query("launchctl", &["print", &target()])?;

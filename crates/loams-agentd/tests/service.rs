@@ -271,6 +271,54 @@ fn install_runtime_keeps_two_versions() {
     assert_eq!(versions(&runtime), ["0.1.0", "0.10.0"]);
 }
 
+#[test]
+fn install_runtime_repairs_the_current_version() {
+    let root = temp_root("runtime-");
+    let runtime = root.path().join("runtime");
+    let from = bundle(root.path(), "0.2.0");
+    let output = install_runtime(&from, &runtime);
+    assert!(output.status.success(), "{}", text(&output));
+    let installed = runtime.join("0.2.0").join(format!("loams{EXE}"));
+    std::fs::write(&installed, b"damaged").expect("damage the active copy");
+
+    let output = install_runtime(&from, &runtime);
+    assert!(output.status.success(), "{}", text(&output));
+    assert_eq!(
+        std::fs::read(&installed).expect("read the repaired binary"),
+        std::fs::read(from.join(format!("loams{EXE}"))).expect("read the bundle")
+    );
+    assert_eq!(current(&runtime).as_deref(), Some("0.2.0"));
+    assert_eq!(versions(&runtime), ["0.2.0"], "nothing is left aside");
+}
+
+#[test]
+fn install_runtime_waits_for_another_install() {
+    let root = temp_root("runtime-");
+    let runtime = root.path().join("runtime");
+    std::fs::create_dir_all(&runtime).expect("create the runtime");
+    let held = loams_agentd::lock::InstanceLock::acquire_file(&runtime.join(".install.lock"))
+        .expect("hold the install lock");
+    let mut install = agentd()
+        .args(["install-runtime", "--from"])
+        .arg(bundle(root.path(), "0.2.0"))
+        .arg("--to")
+        .arg(&runtime)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("spawn install-runtime");
+    std::thread::sleep(std::time::Duration::from_millis(700));
+    assert!(
+        install.try_wait().expect("poll").is_none(),
+        "the second install waits"
+    );
+    assert_eq!(current(&runtime), None);
+    drop(held);
+    let status = install.wait().expect("wait for install-runtime");
+    assert!(status.success(), "{status:?}");
+    assert_eq!(current(&runtime).as_deref(), Some("0.2.0"));
+}
+
 // ---------------------------------------------------------------------------
 // Linger
 // ---------------------------------------------------------------------------
@@ -660,6 +708,7 @@ fn supervise(exit_codes: &[i32]) -> (u8, usize) {
             exit_with(code).spawn()
         },
         |delay| slept.push(delay),
+        || false,
         |_line| {},
     );
     assert_eq!(slept.len(), spawned - 1, "a sleep before every restart");
@@ -697,4 +746,51 @@ fn parent_restarts_worker_on_crash_only() {
     assert_eq!(supervise(&[0]), (0, 1), "0 is not");
     // Five restarts in ten minutes, then the parent gives up with 70.
     assert_eq!(supervise(&[70]), (70, 6));
+}
+
+/// A stop request that lands after a crash (during the backoff) ends the
+/// parent with 0 instead of restarting the worker.
+#[test]
+fn a_stop_between_workers_ends_the_parent() {
+    let spawned = std::cell::Cell::new(0);
+    let code = windows::supervise_with(
+        || {
+            spawned.set(spawned.get() + 1);
+            exit_with(70).spawn()
+        },
+        |_delay| {},
+        // The stop arrives while the first worker is down.
+        || spawned.get() >= 1,
+        |_line| {},
+    );
+    assert_eq!((code, spawned.get()), (0, 1));
+}
+
+/// `request_stop` with a parent between workers: it writes the stop marker,
+/// waits for the parent to let go of its lock, then removes the marker.
+#[test]
+fn request_stop_reaches_a_parent_between_workers() {
+    use loams_agentd::lock::InstanceLock;
+    use loams_agentd::paths::Paths;
+    let root = temp_root("stop-");
+    let dir = root.path().join("agentd");
+    std::fs::create_dir_all(&dir).expect("create the daemon directory");
+    let paths = Paths::at(&dir);
+    assert!(!windows::request_stop(&paths).expect("nothing runs"));
+
+    let parent = InstanceLock::acquire_file(&dir.join(windows::PARENT_LOCK)).expect("parent lock");
+    let marker = dir.join(windows::STOP_MARKER);
+    let stopper = std::thread::spawn(move || windows::request_stop(&paths));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !marker.exists() {
+        assert!(std::time::Instant::now() < deadline, "no stop marker");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(!stopper.is_finished(), "it waits for the parent");
+    drop(parent);
+    assert!(stopper.join().expect("join").expect("stopped"));
+    assert!(
+        !marker.exists(),
+        "the marker is removed once the parent is gone"
+    );
 }

@@ -50,10 +50,12 @@ impl Paths {
         Ok(Self { dir })
     }
 
+    /// The daemon directory.
     pub fn dir(&self) -> &Path {
         &self.dir
     }
 
+    /// `config.toml`.
     pub fn config(&self) -> PathBuf {
         self.dir.join("config.toml")
     }
@@ -90,6 +92,7 @@ impl Paths {
         self.dir.join("runtime")
     }
 
+    /// `logs/`: the daemon's `agentd.log` and a supervisor's `agentd.stdout.log`.
     pub fn logs(&self) -> PathBuf {
         self.dir.join("logs")
     }
