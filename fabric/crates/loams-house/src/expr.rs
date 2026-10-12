@@ -357,13 +357,28 @@ fn print(expr: &Expr) -> Result<String, String> {
             negated,
             low,
             high,
-        } => format!(
-            "({} {}BETWEEN {} AND {})",
-            print(expr)?,
-            if *negated { "NOT " } else { "" },
-            print(low)?,
-            print(high)?
-        ),
+        } => {
+            // As ClickHouse's parser expands it.
+            let value = print(expr)?;
+            let (low, high) = (print(low)?, print(high)?);
+            if *negated {
+                call(
+                    "or",
+                    &[
+                        call("less", &[value.clone(), low]),
+                        call("greater", &[value, high]),
+                    ],
+                )
+            } else {
+                call(
+                    "and",
+                    &[
+                        call("greaterOrEquals", &[value.clone(), low]),
+                        call("lessOrEquals", &[value, high]),
+                    ],
+                )
+            }
+        }
         Expr::InList {
             expr,
             list,
@@ -507,6 +522,14 @@ mod tests {
         );
         assert_eq!(ok("s LIKE 'a%'"), "like(`s`, 'a%')");
         assert_eq!(ok("k IS NULL"), "isNull(`k`)");
+        assert_eq!(
+            ok("k BETWEEN 1 AND 2"),
+            "and(greaterOrEquals(`k`, 1), lessOrEquals(`k`, 2))"
+        );
+        assert_eq!(
+            ok("k NOT BETWEEN 1 AND 2"),
+            "or(less(`k`, 1), greater(`k`, 2))"
+        );
         assert_eq!(ok("floor(x)"), "floor(`x`)");
         assert_eq!(ok("1 -- a comment"), "1");
         assert_eq!(ok("LOWER(s)"), "LOWER(`s`)");
