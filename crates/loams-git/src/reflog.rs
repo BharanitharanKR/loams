@@ -268,6 +268,8 @@ pub trait RefLog: Send + Sync + fmt::Debug {
         key: IdemKey,
     ) -> Result<Receipt, RefError> {
         let request_digest = cas_ref_digest(&name, &old, new.as_ref());
+        // A fixed segment of 13 printable ASCII bytes with no slash or
+        // backslash: the parser's rules hold, so this cannot fail.
         let principal = Principal::parse(CAS_REF_PRINCIPAL).expect("a valid principal");
         self.commit(RefTxn {
             key,

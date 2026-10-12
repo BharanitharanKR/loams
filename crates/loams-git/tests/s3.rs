@@ -156,6 +156,7 @@ async fn s3_commit_fork_and_gc_plan() {
         now,
         loams_git::limits::EXACTLY_RETENTION,
         loams_git::limits::GC_GRACE,
+        &[],
     )
     .await
     .expect("plan");

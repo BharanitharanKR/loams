@@ -10,11 +10,17 @@
 //!   no segment is that young). Segments above it are kept.
 //! - **The hint.** Readers trust the checkpoint the hint names (T7.3), so
 //!   `keep_from` is never above it: a stale hint keeps more.
+//! - **Forks.** A fork reads its parent's state at the seq it was forked at
+//!   for as long as it lives (§36 §4.7), so `keep_from` is never above the
+//!   newest checkpoint at or below the oldest live fork point. The caller
+//!   names the fork points (the fork index, Task 54; PR #454 review).
 //! - **Deleted:** segments at or below `keep_from`, checkpoints below it,
 //!   and segments above a gap (unreachable: a correct writer never writes
 //!   them), each only once its last-modified time is older than `grace`.
 //!
-//! Listings go through `Store::list_page`; deletes are idempotent.
+//! Listings go through `Store::list_page`; deletes are idempotent. A plan
+//! is run promptly: [`run_segment_gc`] reads the hint again first and
+//! refuses a plan the hint has since moved below.
 
 use std::time::Duration;
 
@@ -81,6 +87,7 @@ pub async fn plan_segment_gc(
     now_unix_ms: i64,
     exactly_retention: Duration,
     grace: Duration,
+    fork_points: &[Seq],
 ) -> Result<SegmentGcPlan, RefError> {
     let hint = wal.hint().await?;
     let checkpoints = list_seqs(
@@ -121,11 +128,19 @@ pub async fn plan_segment_gc(
         .find(|seq| *seq <= oldest_needed)
         // No checkpoint is that old: keep from the oldest there is.
         .unwrap_or(checkpoints[0].0);
-    let keep_from = if hint.is_empty() {
-        retained
-    } else {
-        retained.min(hint.checkpoint)
-    };
+    let mut keep_from = retained;
+    if !hint.is_empty() {
+        keep_from = keep_from.min(hint.checkpoint);
+    }
+    if let Some(oldest_fork) = fork_points.iter().min() {
+        let at_fork = checkpoints
+            .iter()
+            .rev()
+            .map(|(seq, _)| *seq)
+            .find(|seq| seq <= oldest_fork)
+            .unwrap_or(checkpoints[0].0);
+        keep_from = keep_from.min(at_fork);
+    }
 
     let old = |info: &ObjectInfo| modified(info) <= now_unix_ms.saturating_sub(millis(grace));
     let mut delete: Vec<(Seq, String)> = Vec::new();
@@ -149,8 +164,23 @@ pub async fn plan_segment_gc(
 }
 
 /// Deletes what `plan` names, oldest first; returns how many objects were
-/// deleted (deletes are idempotent, so a rerun counts them again).
-pub async fn run_segment_gc(store: &Store, plan: &SegmentGcPlan) -> Result<u64, RefError> {
+/// deleted (deletes are idempotent, so a rerun counts them again). The hint
+/// is read again first: a plan whose `keep_from` is now above the hinted
+/// checkpoint is refused (`Invalid`) and must be made again.
+pub async fn run_segment_gc(
+    wal: &dyn WalStore,
+    store: &Store,
+    plan: &SegmentGcPlan,
+) -> Result<u64, RefError> {
+    let hint = wal.hint().await?;
+    if !hint.is_empty() && hint.checkpoint < plan.keep_from {
+        return Err(RefError::Invalid {
+            reason: format!(
+                "the hint names checkpoint {} below the plan's {}; plan again",
+                hint.checkpoint, plan.keep_from
+            ),
+        });
+    }
     let mut deleted = 0;
     for path in &plan.delete {
         store.delete(path).await.map_err(WalError::Store)?;

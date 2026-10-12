@@ -91,15 +91,16 @@ pub(crate) async fn replay(
 /// or no longer retained), `NotFound` when the repository has no
 /// checkpoint at all.
 pub async fn state_at(wal: &dyn WalStore, seq: Seq) -> Result<RepoState, RefError> {
-    let checkpoint = wal.latest_checkpoint(seq).await?.ok_or_else(|| {
-        if seq == Seq(u64::MAX) {
-            RefError::NotFound
-        } else {
-            RefError::Invalid {
-                reason: format!("no checkpoint at or below seq {seq} is retained"),
-            }
+    let Some(checkpoint) = wal.latest_checkpoint(seq).await? else {
+        // No checkpoint at all is a repository that does not exist; none
+        // this old is a state no longer retained (PR #454 review).
+        if wal.latest_checkpoint(Seq(u64::MAX)).await?.is_none() {
+            return Err(RefError::NotFound);
         }
-    })?;
+        return Err(RefError::Invalid {
+            reason: format!("no checkpoint at or below seq {seq} is retained"),
+        });
+    };
     let mut state = RepoState::from_checkpoint(checkpoint)?;
     replay(wal, &mut state, Some(seq)).await?;
     if state.seq == seq {
