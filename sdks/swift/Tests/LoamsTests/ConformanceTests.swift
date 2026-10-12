@@ -121,18 +121,10 @@ final class ConformanceTests: XCTestCase {
         )
         XCTAssertFalse(info.services.isEmpty, "services is empty; it is what feature detection reads")
 
-        // A structured-reason error. The reason is what the SDK reads; the message
-        // is for a person and is not asserted on.
-        do {
-            _ = try await client.instance.whoAmI()
-            XCTFail("whoAmI answered, but this build has no authentication yet")
-        } catch let error as LoamsError {
-            XCTAssertTrue(error.isLoamsFailure, "whoAmI failed with \(type(of: error)), want a Loams failure")
-            XCTAssertEqual(
-                error.reason, .notImplemented,
-                "whoAmI reason is \(String(describing: error.reason)), want not_implemented"
-            )
-        }
+        // `loams dev` with auth off admits a loopback caller as the
+        // `dev-loopback` principal, so whoAmI answers.
+        // (This SDK's WhoAmIResponse carries no fields yet: a success is the check.)
+        _ = try await client.instance.whoAmI()
 
         // The unavailable-service path, three ways.
         //
@@ -594,8 +586,8 @@ final class ConformanceTests: XCTestCase {
         // `GetInstance.apiVersions` lists only what is served, so a mismatch here is
         // the server's, not the SDK's.
         XCTAssertEqual(
-            report.apiVersions, ["loams.instance.v1"],
-            "api_versions is \(report.apiVersions), want [loams.instance.v1]"
+            report.apiVersions, ["loams.instance.v1", "loams.collection.v1"],
+            "api_versions is \(report.apiVersions), want [loams.instance.v1, loams.collection.v1]"
         )
         XCTAssertFalse(
             report.compatible,

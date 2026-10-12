@@ -98,11 +98,12 @@ const RPCS = [
     name: 'instance_who_am_i',
     path: '/loams.instance.v1.InstanceService/WhoAmI',
     about:
-      'A structured-reason error: `unimplemented` carrying an ErrorInfo whose ' +
-      'reason is `not_implemented`, because this build has no authentication ' +
-      'yet. An SDK branches on the reason, never on the message.',
-    reason: 'not_implemented',
-    pinnedBy: ['R8'],
+      'A successful authenticated unary call: the principal the auth layer ' +
+      'admitted. `loams dev` with auth off admits a loopback caller as the ' +
+      '`dev-loopback` principal (#436), so this answers rather than refusing. ' +
+      '`not_implemented` is recorded from the apps mock instead.',
+    reason: null,
+    pinnedBy: ['R9'],
   },
   {
     name: 'live_query',

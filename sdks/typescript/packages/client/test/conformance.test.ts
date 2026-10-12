@@ -26,7 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { REQUIRED_TESTS, testName } from '../../../../conformance/required.mjs';
 import { Loams } from '../src/loams.js';
-import { FeatureNotInVariantError, isLoamsError } from '../src/runtime/errors.js';
+import { FeatureNotInVariantError } from '../src/runtime/errors.js';
 import { FIXTURES, type FixtureServer, startFixtureServer } from './helpers/server.js';
 import { requiredFixtures } from './helpers/corpus.js';
 import { TRANSPORT, driveRequiredFixtures } from './helpers/required.js';
@@ -111,14 +111,10 @@ describe('@loams/client conformance', () => {
     expect(info.apiVersions).toContain('loams.instance.v1');
     expect(info.services?.length).toBeGreaterThan(0);
 
-    // A structured-reason error. The reason is what the SDK reads; the message
-    // is for a person and is not asserted on.
-    const failed = await loams.instance.whoAmI({}).then(
-      () => undefined,
-      (error: unknown) => error,
-    );
-    expect(isLoamsError(failed)).toBe(true);
-    expect(failed).toMatchObject({ reason: 'not_implemented' });
+    // An authenticated call. `loams dev` with auth off admits a loopback caller
+    // as the `dev-loopback` principal, so WhoAmI answers.
+    const me = await loams.instance.whoAmI({});
+    expect(me.principal?.id).toBe('dev-loopback');
 
     // The unavailable-service path, three ways.
     //
@@ -178,7 +174,7 @@ describe('@loams/client conformance', () => {
     // `loams.live.v1` is served as `unavailable` in the standard variant, and
     // `GetInstance.api_versions` lists only what is served, so a mismatch here
     // is the server's, not the SDK's.
-    expect(report.apiVersions).toEqual(['loams.instance.v1']);
+    expect(report.apiVersions).toEqual(['loams.instance.v1', 'loams.collection.v1']);
     expect(report.compatible).toBe(false);
     expect(report.missing).toContain('loams.live.v1');
   });

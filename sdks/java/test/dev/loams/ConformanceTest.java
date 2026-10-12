@@ -171,16 +171,11 @@ public class ConformanceTest {
                 "services is empty; the catalogue is what feature detection reads",
                 info.getServicesList().isEmpty());
 
-        // A structured-reason error. The reason is what the SDK reads; the message is for a
-        // person and is not asserted on.
-        LoamsException whoAmIFailed = assertThrowsLoams(() -> client.instance().whoAmI(WhoAmIRequest.getDefaultInstance()));
+        // `loams dev` with auth off admits a loopback caller as the `dev-loopback`
+        // principal, so WhoAmI answers.
         assertEquals(
-                "WhoAmI reason is " + whoAmIFailed.reason() + ", want not_implemented",
-                dev.loams.facade.Reason.NOT_IMPLEMENTED,
-                whoAmIFailed.reason());
-        assertTrue(
-                "WhoAmI failed with " + whoAmIFailed.getClass().getSimpleName() + ", want an UnimplementedException",
-                whoAmIFailed instanceof UnimplementedException);
+                "dev-loopback",
+                client.instance().whoAmI(WhoAmIRequest.getDefaultInstance()).getPrincipal().getId());
 
         // The unavailable-service path, three ways.
         //
@@ -285,8 +280,8 @@ public class ConformanceTest {
         // `GetInstance.apiVersions` lists only what is served, so a mismatch here is the
         // server's, not the SDK's.
         assertEquals(
-                "api_versions is " + report.apiVersions() + ", want [loams.instance.v1]",
-                List.of("loams.instance.v1"),
+                "api_versions is " + report.apiVersions() + ", want [loams.instance.v1, loams.collection.v1]",
+                List.of("loams.instance.v1", "loams.collection.v1"),
                 report.apiVersions());
         assertFalse(
                 "the report says the instance is compatible, but it does not serve every package the SDK speaks",

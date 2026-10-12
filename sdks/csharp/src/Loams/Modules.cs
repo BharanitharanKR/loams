@@ -57,9 +57,9 @@ public sealed class InstanceModule
     /// The calling principal, its org and the environments it can reach.
     /// </summary>
     /// <remarks>
-    /// The corpus's four <c>instance_who_am_i_*</c> cases are this call on a build
-    /// with no authentication yet: <c>unimplemented</c> with reason
-    /// <c>not_implemented</c>. An SDK branches on the reason, never on the message.
+    /// The corpus's four <c>instance_who_am_i_*</c> cases are this call against a
+    /// loopback <c>loams dev</c> with auth off, which admits the caller as the
+    /// <c>dev-loopback</c> principal.
     /// </remarks>
     public Task<WhoAmIResponse> WhoAmIAsync(
         WhoAmIRequest? request = null,

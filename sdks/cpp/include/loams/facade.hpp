@@ -76,8 +76,9 @@ class InstanceModule {
   /// thing any client calls.
   void GetInstance(instance_v1::GetInstanceResponse* response);
 
-  /// `InstanceService/WhoAmI`. Throws `loams::UnauthenticatedError` on a build
-  /// with no authentication yet, with reason `not_implemented`.
+  /// `InstanceService/WhoAmI`: the principal the server's auth layer admitted
+  /// (`dev-loopback` from a loopback `loams dev` with auth off). Throws
+  /// `loams::UnauthenticatedError` when the server refuses the credentials.
   void WhoAmI(instance_v1::WhoAmIResponse* response);
 
   /// `InstanceService/GetInstance` with the encoding a caller picks, for the

@@ -116,10 +116,10 @@ func TestConformanceTestNames(t *testing.T) {
 // Canonical entrypoints matching the exact names required by run-test.sh and required.mjs
 func Test_go_conformance_all_required_fixtures(t *testing.T) { TestGoConformanceAllRequiredFixtures(t) }
 func Test_go_retry_reuses_idempotency_key(t *testing.T)      { TestGoRetryReusesIdempotencyKey(t) }
-func Test_go_error_reason_mapping(t *testing.T)             { TestGoErrorReasonMapping(t) }
+func Test_go_error_reason_mapping(t *testing.T)              { TestGoErrorReasonMapping(t) }
 func Test_go_stream_resume_with_cursor(t *testing.T)         { TestGoStreamResumeWithCursor(t) }
-func Test_go_token_source_refresh(t *testing.T)             { TestGoTokenSourceRefresh(t) }
-func Test_go_pagination_iterator(t *testing.T)             { TestGoPaginationIterator(t) }
+func Test_go_token_source_refresh(t *testing.T)              { TestGoTokenSourceRefresh(t) }
+func Test_go_pagination_iterator(t *testing.T)               { TestGoPaginationIterator(t) }
 
 type manifestJSON struct {
 	Fixtures []struct {
@@ -138,7 +138,7 @@ type recordedStepJSON struct {
 		BodyBase64 string            `json:"bodyBase64"`
 	} `json:"request"`
 	Response struct {
-		Status    int `json:"status"`
+		Status    int  `json:"status"`
 		Truncated bool `json:"truncated"`
 	} `json:"response"`
 	Expect map[string]any `json:"expect"`
@@ -522,15 +522,14 @@ func TestGoConformanceAllRequiredFixtures(t *testing.T) {
 			t.Error("services is empty; the catalogue is what feature detection reads")
 		}
 
-		_, err = client.Instance().WhoAmI(ctx, &WhoAmIRequest{})
-		if err == nil {
-			t.Fatal("WhoAmI answered, but this build has no authentication yet")
+		// `loams dev` with auth off admits a loopback caller as the
+		// `dev-loopback` principal, so WhoAmI answers.
+		me, err := client.Instance().WhoAmI(ctx, &WhoAmIRequest{})
+		if err != nil {
+			t.Fatalf("WhoAmI: %v", err)
 		}
-		if !IsLoamsError(err) {
-			t.Errorf("WhoAmI failed with %T, want a *LoamsError", err)
-		}
-		if got := ReasonOf(err); got != ReasonNotImplemented {
-			t.Errorf("WhoAmI reason is %q, want %q", got, ReasonNotImplemented)
+		if got := me.GetPrincipal().GetId(); got != "dev-loopback" {
+			t.Errorf("WhoAmI principal is %q, want dev-loopback", got)
 		}
 
 		if err := client.System().Guard(ctx, "live"); err == nil {
@@ -577,8 +576,8 @@ func TestGoConformanceReportsVersion(t *testing.T) {
 	if report.ServerVersion == "" {
 		t.Error("the report has no server version")
 	}
-	if len(report.APIVersions) != 1 || report.APIVersions[0] != "loams.instance.v1" {
-		t.Errorf("api_versions is %v, want [loams.instance.v1]", report.APIVersions)
+	if !containsString(report.APIVersions, "loams.instance.v1") || containsString(report.APIVersions, "loams.live.v1") {
+		t.Errorf("api_versions is %v, want loams.instance.v1 and not loams.live.v1 (served unavailable)", report.APIVersions)
 	}
 	if report.Compatible {
 		t.Error("the report says the instance is compatible, but it does not serve every package the SDK speaks")

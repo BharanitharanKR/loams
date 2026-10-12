@@ -457,8 +457,8 @@ where
 
     /// `loams.instance.v1.InstanceService/WhoAmI`: the calling principal.
     ///
-    /// `not_implemented` on every build today — there is no authentication yet —
-    /// so this is here for the contract rather than for a working call.
+    /// A loopback `loams dev` with auth off admits the caller as the
+    /// `dev-loopback` principal; an authenticated server names the caller.
     ///
     /// # Errors
     ///

@@ -35,35 +35,35 @@
     },
     {
       "name": "instance_who_am_i_json",
-      "about": "A structured-reason error: `unimplemented` carrying an ErrorInfo whose reason is `not_implemented`, because this build has no authentication yet. An SDK branches on the reason, never on the message. (The proto3 JSON mapping, which is what `curl` sends (design §44 §4).)",
+      "about": "A successful authenticated unary call: the principal the auth layer admitted. `loams dev` with auth off admits a loopback caller as the `dev-loopback` principal (#436), so this answers rather than refusing. `not_implemented` is recorded from the apps mock instead. (The proto3 JSON mapping, which is what `curl` sends (design §44 §4).)",
       "path": "/loams.instance.v1.InstanceService/WhoAmI",
       "contentType": "application/json",
-      "status": 501,
-      "reason": "not_implemented"
+      "status": 200,
+      "reason": null
     },
     {
       "name": "instance_who_am_i_proto",
-      "about": "A structured-reason error: `unimplemented` carrying an ErrorInfo whose reason is `not_implemented`, because this build has no authentication yet. An SDK branches on the reason, never on the message. (The binary encoding, which is what an SDK sends by default.)",
+      "about": "A successful authenticated unary call: the principal the auth layer admitted. `loams dev` with auth off admits a loopback caller as the `dev-loopback` principal (#436), so this answers rather than refusing. `not_implemented` is recorded from the apps mock instead. (The binary encoding, which is what an SDK sends by default.)",
       "path": "/loams.instance.v1.InstanceService/WhoAmI",
       "contentType": "application/proto",
-      "status": 501,
-      "reason": "not_implemented"
+      "status": 200,
+      "reason": null
     },
     {
       "name": "instance_who_am_i_grpc_web",
-      "about": "A structured-reason error: `unimplemented` carrying an ErrorInfo whose reason is `not_implemented`, because this build has no authentication yet. An SDK branches on the reason, never on the message. (gRPC-Web, the framing a browser sends. One length-prefixed frame: flag 0 and a zero-length message.)",
+      "about": "A successful authenticated unary call: the principal the auth layer admitted. `loams dev` with auth off admits a loopback caller as the `dev-loopback` principal (#436), so this answers rather than refusing. `not_implemented` is recorded from the apps mock instead. (gRPC-Web, the framing a browser sends. One length-prefixed frame: flag 0 and a zero-length message.)",
       "path": "/loams.instance.v1.InstanceService/WhoAmI",
       "contentType": "application/grpc-web+proto",
       "status": 200,
-      "reason": "not_implemented"
+      "reason": null
     },
     {
       "name": "instance_who_am_i_grpc_web_json",
-      "about": "A structured-reason error: `unimplemented` carrying an ErrorInfo whose reason is `not_implemented`, because this build has no authentication yet. An SDK branches on the reason, never on the message. (gRPC-Web carrying the proto3 JSON mapping, which a browser SDK can ask for.)",
+      "about": "A successful authenticated unary call: the principal the auth layer admitted. `loams dev` with auth off admits a loopback caller as the `dev-loopback` principal (#436), so this answers rather than refusing. `not_implemented` is recorded from the apps mock instead. (gRPC-Web carrying the proto3 JSON mapping, which a browser SDK can ask for.)",
       "path": "/loams.instance.v1.InstanceService/WhoAmI",
       "contentType": "application/grpc-web+json",
       "status": 200,
-      "reason": "not_implemented"
+      "reason": null
     },
     {
       "name": "live_query_json",
