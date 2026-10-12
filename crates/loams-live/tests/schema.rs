@@ -989,17 +989,24 @@ async fn table_job_resumes_from_its_checkpoint(store: TestStore) {
 }
 live_test!(table_job_resumes_from_its_checkpoint);
 
-/// The fence a tightening deploy commits with its new validators
-/// (`Journal::fence`): a transaction that appends to the journal, started
-/// before the fence and committing after it, conflicts and reruns, whether
-/// its shard's head existed before or not. So no mutation that read the
-/// old validators commits after them. (On the embedded store `lock_keys`
-/// would not do this: a lock leaves no version for others to conflict on.)
-async fn the_journal_fence_makes_mutations_in_flight_rerun(store: TestStore) {
+/// How [`mutations_in_flight_rerun_after`] fences the journal.
+#[derive(Debug, Clone, Copy)]
+enum Fence {
+    /// `Journal::fence`: every head rewritten unchanged.
+    Rewrite,
+    /// `lock_keys` on every head, as R1's `set_journal_shards` does.
+    Lock,
+}
+
+/// A transaction that appends to the journal, started before `fence`
+/// commits and committing after it, conflicts and reruns, whether its
+/// shard's head existed before or not.
+async fn mutations_in_flight_rerun_after(store: TestStore, fence: Fence) {
     let runner = Runner::open(store.store(), &store.live_config(APP))
         .await
         .expect("the runner opens");
     let journal = runner.journal().await.expect("the journal");
+    let app = runner.app().clone();
     for round in ["an absent head", "a present head"] {
         let attempts = Arc::new(AtomicU32::new(0));
         let (started_tx, started_rx) = oneshot::channel::<()>();
@@ -1040,12 +1047,18 @@ async fn the_journal_fence_makes_mutations_in_flight_rerun(store: TestStore) {
         started_rx.await.expect("the writer started");
         store
             .run(TxnOptions::new("test.fence"), |txn| {
-                let journal = journal.clone();
+                let (journal, app) = (journal.clone(), app.clone());
                 Box::pin(async move {
-                    journal
-                        .fence(txn)
-                        .await
-                        .map_err(|e| e.into_txn().expect_err("storage errors only"))
+                    match fence {
+                        Fence::Rewrite => journal
+                            .fence(txn)
+                            .await
+                            .map_err(|e| e.into_txn().expect_err("storage errors only")),
+                        Fence::Lock => {
+                            txn.lock_keys((0..journal.shards()).map(|s| app.journal_head(s)))
+                                .await
+                        }
+                    }
                 })
             })
             .await
@@ -1055,7 +1068,27 @@ async fn the_journal_fence_makes_mutations_in_flight_rerun(store: TestStore) {
             .await
             .expect("the writer task")
             .expect("the writer commits on its second attempt");
-        assert_eq!(attempts.load(Ordering::SeqCst), 2, "{round}: one rerun");
+        assert_eq!(
+            attempts.load(Ordering::SeqCst),
+            2,
+            "{fence:?}, {round}: one rerun"
+        );
     }
 }
+
+/// The fence a tightening deploy commits with its new validators
+/// (`Journal::fence`): no mutation that read the old validators commits
+/// after them.
+async fn the_journal_fence_makes_mutations_in_flight_rerun(store: TestStore) {
+    mutations_in_flight_rerun_after(store, Fence::Rewrite).await;
+}
 live_test!(the_journal_fence_makes_mutations_in_flight_rerun);
+
+/// `lock_keys` on the journal heads fences mutations in flight on both
+/// backends: a committed lock makes a later committer of the key conflict,
+/// on the embedded store as on TiKV (row T8-4's parity gap, fixed in
+/// `loams-kv`).
+async fn locked_journal_heads_make_mutations_in_flight_rerun(store: TestStore) {
+    mutations_in_flight_rerun_after(store, Fence::Lock).await;
+}
+live_test!(locked_journal_heads_make_mutations_in_flight_rerun);
