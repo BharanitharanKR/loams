@@ -339,7 +339,7 @@ async fn missing_from_closure_finds_a_missing_blob() {
     // The stored pack holds every object of both commits but one blob.
     let all = git.objects(&[&tip.to_string()]);
     let stored: Vec<ObjectId> = all.iter().copied().filter(|id| *id != left_out).collect();
-    let (_, store) = faulty_store();
+    let (faulty, store) = faulty_store();
     let (repo, paths) = repo_paths(5);
     let blobs = Arc::new(StoreBlobStore::new(store.clone(), paths));
     let pack = put_pack(&blobs, git.pack_objects(&stored)).await;
@@ -380,20 +380,28 @@ async fn missing_from_closure_finds_a_missing_blob() {
     let (pushed_id, pushed_paths) = repo_paths(6);
     let pushed_blobs = Arc::new(StoreBlobStore::new(store, pushed_paths));
     let pushed = put_pack(&pushed_blobs, git.pack_objects(&[left_out])).await;
+    // The pushed pack is read through a cache that keeps nothing, so every
+    // section it needs is a download.
+    let (_, uncached) = self::cache(1);
     let extra = PackCacheOdb::open(
         pushed_id,
         pushed_blobs,
-        cache,
+        uncached,
         &snapshot(1, vec![pushed], None),
         None,
     )
     .await
     .expect("open");
+    let gets = faulty.calls(Op::Get);
     assert_eq!(
         odb.missing_from_closure(&[tip], &[], Some(&extra))
             .await
             .expect("walk"),
         Vec::<ObjectId>::new()
+    );
+    assert!(
+        faulty.calls(Op::Get) - gets <= 2,
+        "the pushed pack's sections are read once per walk, not once per object"
     );
 }
 

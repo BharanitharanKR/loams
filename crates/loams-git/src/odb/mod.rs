@@ -65,6 +65,14 @@ pub enum OdbError {
 /// (Task 17) (plan GT1 shared contracts).
 #[async_trait]
 pub trait ObjectDb: Send + Sync + fmt::Debug {
+    /// This database as a [`PackCacheOdb`], when it is one, so a closure
+    /// walk can keep its parsed sections for the whole walk (PR #452
+    /// review). Other implementations keep the default.
+    #[doc(hidden)]
+    fn as_pack_cache(&self) -> Option<&PackCacheOdb> {
+        None
+    }
+
     /// Whether the object is held.
     async fn contains(&self, oid: &ObjectId) -> Result<bool, OdbError>;
     /// The object's kind and bytes, deltas resolved; `NotFound` when absent.
@@ -73,11 +81,12 @@ pub trait ObjectDb: Send + Sync + fmt::Debug {
     /// tags from `tips` and returns the objects found in neither this
     /// database nor `extra` (the pushed pack), in the order they were met.
     ///
-    /// The walk stops at `known`: objects whose closure is already
-    /// connected, such as the repository's current ref tips (every ref
-    /// update passed this check), as `git rev-list --objects <tips> --not
-    /// <known>` does. A push is then checked in proportion to the commits
-    /// it adds and the trees they reach, not to the repository's history.
+    /// The objects in `known` count as already seen: their closures are
+    /// connected, as the repository's current ref tips are (every ref
+    /// update passed this check), so the walk never enters a known commit's
+    /// history. Trees and blobs a new commit shares with a known one are
+    /// still visited (they are not looked up from `known`), so a push costs
+    /// the commits it adds and the trees they reach, not the history.
     /// A missing object is not descended into; submodule commits in trees
     /// are not followed.
     async fn missing_from_closure(
