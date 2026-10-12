@@ -251,6 +251,9 @@ struct Watch<N> {
     options: WatchOptions,
     /// The cursor to resume from, until the first read.
     resume: Option<String>,
+    /// A read has been tried: the next waits a poll first.
+    polled: bool,
+    /// The first read succeeded, and the snapshot or resume was handled.
     started: bool,
     held: Held,
     pending: VecDeque<WatchItem>,
@@ -324,6 +327,7 @@ impl<N: NeonRead> PgService<N> {
             project_id: project_id.to_owned(),
             options,
             resume: (!resume_cursor.is_empty()).then(|| resume_cursor.to_owned()),
+            polled: false,
             started: false,
             held: Held::new(),
             pending: VecDeque::new(),
@@ -348,9 +352,10 @@ impl<N: NeonRead> Watch<N> {
             if self.done {
                 return None;
             }
-            if self.started {
+            if self.polled {
                 tokio::time::sleep(self.options.poll).await;
             }
+            self.polled = true;
             let current = match self
                 .service
                 .read_current(&self.namespace, &self.project_id)
@@ -362,8 +367,9 @@ impl<N: NeonRead> Watch<N> {
                     return Some(Err(ServiceError::project_not_found(&self.project_id)));
                 }
                 Err(e) => {
+                    // `started` stays as it was: a failed first read still
+                    // leads to the snapshot or resume (PR #453 review).
                     tracing::warn!(project = %self.project_id, error = %e, "watch: a read failed; retrying");
-                    self.started = true;
                     continue;
                 }
             };
