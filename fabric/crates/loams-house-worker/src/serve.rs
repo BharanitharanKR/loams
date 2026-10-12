@@ -333,6 +333,13 @@ impl Worker {
             *input_failure = Some(true);
         }
 
+        // Every entry is checked before any runs (HS1 R11.11): a batch with one
+        // refused entry makes nothing, which matters most to in-process workers,
+        // which never drop views between statements.
+        for view in &execute.views {
+            self.check_control_ddl(view).map_err(Failure::Engine)?;
+        }
+
         // The read views of §49 §7 are the statement's own (HS1 Task 11): what an
         // earlier statement made is gone before this one's are made, so a name it
         // does not name, or a pin it did not take, is never read.
@@ -344,7 +351,6 @@ impl Worker {
             self.views_live = true;
         }
         for view in &execute.views {
-            self.check_control_ddl(view).map_err(Failure::Engine)?;
             self.control
                 .execute_simple(view)
                 .map_err(|err| Failure::Engine(engine_error(&err)))?;

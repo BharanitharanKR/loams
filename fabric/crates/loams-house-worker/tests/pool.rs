@@ -1482,6 +1482,13 @@ async fn control_connection_runs_only_view_ddl() {
         let err = lease.run(bad).await.expect_err(ddl);
         assert_eq!(err.code(), 497, "{ddl}: {err}");
     }
+    // A batch with one refused entry is refused whole, before any entry runs.
+    let mut mixed = statement("SELECT 1", "TSV");
+    mixed.views = vec![
+        "CREATE DATABASE IF NOT EXISTS loams_injected_mixed ENGINE = Memory".to_string(),
+        "CREATE DATABASE IF NOT EXISTS loams_injected ENGINE = Atomic".to_string(),
+    ];
+    assert_eq!(lease.run(mixed).await.expect_err("mixed").code(), 497);
     let databases = lease
         .run(statement(
             "SELECT name FROM system.databases WHERE name LIKE 'loams_injected%' \
