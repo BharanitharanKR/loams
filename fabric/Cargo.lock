@@ -2818,7 +2818,7 @@ checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
 
 [[package]]
 name = "loams-cache"
-version = "0.0.1"
+version = "0.1.0-preview.1"
 dependencies = [
  "bytes",
  "crc32c",
@@ -3026,7 +3026,7 @@ dependencies = [
 
 [[package]]
 name = "loams-store"
-version = "0.0.1"
+version = "0.1.0-preview.1"
 dependencies = [
  "async-trait",
  "bytes",
