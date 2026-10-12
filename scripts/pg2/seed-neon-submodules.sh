@@ -30,9 +30,16 @@ mapfile -t subs < <(git -C "$tmp/neon" ls-tree "$rev" vendor/ | awk '$2 == "comm
 [ "${#subs[@]}" -gt 0 ] || { echo "seed: no submodules at $rev" >&2; exit 1; }
 
 [ -d "$db" ] || git init -q --bare "$db"
+# One fetch for every missing commit, with auto gc and maintenance off: a
+# fetch per commit let the previous fetch's detached gc rewrite the shallow
+# file under the next one ("shallow file has changed since we read it").
+want=()
 for sha in "${subs[@]}"; do
   if [ "$(git -C "$db" cat-file -t "$sha" 2>/dev/null)" != commit ]; then
-    git -C "$db" fetch -q --depth=1 "$url" "+${sha}:refs/commit/${sha}"
+    want+=("+${sha}:refs/commit/${sha}")
   fi
   echo "seed: $sha"
 done
+if [ "${#want[@]}" -gt 0 ]; then
+  git -C "$db" -c gc.auto=0 -c maintenance.auto=false fetch -q --depth=1 "$url" "${want[@]}"
+fi
