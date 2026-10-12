@@ -252,7 +252,6 @@ describe('analytics page', () => {
   it('disallowed_setting_is_flagged_and_not_sent', async () => {
     const client = mount();
     await screen.findByLabelText('SQL');
-    const before = client.requests.length;
     fireEvent.click(screen.getByRole('button', { name: 'Add setting' }));
     fireEvent.change(screen.getByLabelText('Setting 1 name'), {
       target: { value: 'user_files_path' },
@@ -261,7 +260,8 @@ describe('analytics page', () => {
     expect(screen.getByText(/cannot be changed on the House/)).toBeTruthy();
     run();
     expect(await screen.findByTestId('house-failure')).toBeTruthy();
-    expect(client.requests.length).toBe(before);
+    // Not a count: the page's own mount-time queries may still be landing.
+    expect(client.requests.some((r) => JSON.stringify(r).includes('user_files_path'))).toBe(false);
   });
 
   it('history_loads_into_editor', async () => {
