@@ -1,0 +1,12 @@
+{
+  "answers": [
+    {
+      "labels": [
+        "main"
+      ],
+      "questionId": "q-1"
+    }
+  ],
+  "kind": "respondInput",
+  "requestId": "req-1"
+}

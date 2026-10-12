@@ -627,7 +627,7 @@ async fn scoped_token_cannot_resolve_approval() {
     ));
     // Nor any other owner method, on its own session.
     for (method, params) in [
-        (methods::STOP_ENGINE, serde_json::json!({})),
+        (methods::SHUTDOWN, serde_json::json!({})),
         (
             methods::WRITE_WORKSPACE_FILE,
             serde_json::json!({ "chatId": "main", "path": "x", "content": "y" }),

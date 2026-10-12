@@ -1,0 +1,10 @@
+{
+  "commands": [
+    {
+      "description": "Review the diff",
+      "inputHint": "path",
+      "name": "review"
+    }
+  ],
+  "type": "availableCommands"
+}

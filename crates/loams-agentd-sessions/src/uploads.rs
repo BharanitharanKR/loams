@@ -21,7 +21,7 @@ use std::time::Duration;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
-use serde::Serialize;
+pub use loams_agentd_proto::AttachmentChunk;
 
 use crate::EngineError;
 
@@ -81,18 +81,6 @@ pub fn pending_refs_in(text: &str) -> Vec<String> {
 const MAX_BYTES: u64 = 32 * 1024 * 1024;
 /// Multiple of 3 so independent base64 chunks concatenate losslessly.
 const READ_CHUNK_BYTES: u64 = 45_000;
-
-/// `ReadAttachmentChunk` reply.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AttachmentChunk {
-    pub name: String,
-    pub mime_type: String,
-    /// Base64 of this chunk's byte range.
-    pub data: String,
-    pub next_offset: u64,
-    pub done: bool,
-}
 
 struct UploadsInner {
     /// Profile-scoped durable home for new committed attachments.

@@ -1,0 +1,9 @@
+{
+  "chatId": "chat-1",
+  "encoding": "utf8",
+  "expectedCheckoutId": "checkout-1",
+  "expectedContentHash": "h-1",
+  "lineEnding": "lf",
+  "path": "src/main.rs",
+  "text": "fn main() { run(); }\n"
+}

@@ -1,0 +1,8 @@
+{
+  "chatId": "chat-1",
+  "checkoutId": "checkout-1",
+  "cwd": "/home/dev/project",
+  "diffChecksum": "sum-1",
+  "mode": "turn",
+  "path": "src/main.rs"
+}

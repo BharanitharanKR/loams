@@ -1,0 +1,7 @@
+{
+  "deviceId": "device-1",
+  "gitDetected": true,
+  "op": "createSpace",
+  "path": "/home/dev/other",
+  "spaceId": "space-2"
+}

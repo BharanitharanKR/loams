@@ -1,0 +1,9 @@
+{
+  "action": "commit",
+  "attachments": [],
+  "chatId": "chat-1",
+  "expectedTextHash": "hash-1",
+  "id": "queued-1",
+  "leaseId": "lease-1",
+  "text": "Then update the README"
+}

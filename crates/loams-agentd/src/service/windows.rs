@@ -172,7 +172,7 @@ const STOP_WAIT: Duration = Duration::from_secs(30);
 
 /// Stop the service of `paths`: write the stop marker when a parent runs (so
 /// it starts no further worker, even mid-backoff), ask a running daemon to
-/// stop over its RPC (`Hello`, then `StopEngine`; a daemon that is still
+/// stop over its RPC (`Hello`, then `Shutdown`; a daemon that is still
 /// starting is asked once it publishes discovery), and wait up to 30 s for
 /// both to release their locks. `false` when neither runs.
 pub fn request_stop(paths: &Paths) -> Result<bool, ServiceError> {
@@ -210,7 +210,7 @@ pub fn request_stop(paths: &Paths) -> Result<bool, ServiceError> {
     Ok(true)
 }
 
-/// `Hello`, then `StopEngine`, to the daemon on loopback `port`.
+/// `Hello`, then `Shutdown`, to the daemon on loopback `port`.
 fn ask_to_stop(paths: &Paths, port: u16) -> Result<(), String> {
     use loams_agentd_rpc::{RpcError, methods};
     let token = crate::token::read(paths).map_err(|error| error.to_string())?;
@@ -228,9 +228,7 @@ fn ask_to_stop(paths: &Paths, port: u16) -> Result<(), String> {
             let hello = serde_json::to_value(crate::hello::cli_hello())
                 .map_err(|error| RpcError::BadParams(error.to_string()))?;
             client.call(methods::HELLO, hello).await?;
-            client
-                .call(methods::STOP_ENGINE, serde_json::json!({}))
-                .await
+            client.call(methods::SHUTDOWN, serde_json::json!({})).await
         })
         .map(drop)
         .map_err(|error| error.to_string())

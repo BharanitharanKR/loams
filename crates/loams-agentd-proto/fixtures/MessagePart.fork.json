@@ -1,0 +1,6 @@
+{
+  "id": "fork:chat-2",
+  "kind": "fork",
+  "sourceChatId": "chat-1",
+  "sourceTitle": "Fix the build"
+}
