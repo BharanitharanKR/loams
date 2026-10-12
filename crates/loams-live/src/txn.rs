@@ -819,19 +819,9 @@ struct Inner {
     app: AppKeys,
     limits: Limits,
     options: RunnerOptions,
-    /// Mutations hold it shared for their whole run; [`Runner::try_quiesce`]
-    /// takes it exclusively.
-    gate: Arc<tokio::sync::RwLock<()>>,
     /// Counts this runner's commits that wrote a journal entry; the
     /// subscription manager ticks when it moves (§20 §8.2 step 1).
     commits: tokio::sync::watch::Sender<u64>,
-}
-
-/// Exclusive admission to an app's mutations, from [`Runner::try_quiesce`]:
-/// while it lives no mutation of this runner is in flight and new ones wait.
-#[derive(Debug)]
-pub struct Quiesced {
-    _guard: tokio::sync::OwnedRwLockWriteGuard<()>,
 }
 
 impl fmt::Debug for Runner {
@@ -912,7 +902,6 @@ impl Runner {
                 app,
                 limits: config.limits.clone(),
                 options,
-                gate: Arc::default(),
                 commits: tokio::sync::watch::Sender::new(0),
             }),
         })
@@ -936,22 +925,6 @@ impl Runner {
     /// The app's limits.
     pub fn limits(&self) -> &Limits {
         &self.inner.limits
-    }
-
-    /// Exclusive admission for a change that must not race mutations
-    /// (Task 13's index-changing `Deploy`, R1 plan row T9-1 and the review
-    /// of #73): `None` while a mutation of this runner is in flight (the
-    /// caller answers "busy" and the client retries); otherwise, until the
-    /// returned guard drops, new mutations wait at admission, so none can
-    /// start between the in-flight check and the change's commit. Per
-    /// runner, so per node: R1 serves an app from one node.
-    pub fn try_quiesce(&self) -> Option<Quiesced> {
-        self.inner
-            .gate
-            .clone()
-            .try_write_owned()
-            .ok()
-            .map(|guard| Quiesced { _guard: guard })
     }
 
     /// A receiver that changes after every mutation of this runner that
@@ -1023,7 +996,6 @@ impl Runner {
                 })
             })
             .transpose()?;
-        let _admitted = self.inner.gate.read().await;
         let request_id = idempotency_key.unwrap_or_default();
         let inner = self.inner.clone();
         let state = Arc::new(Mutex::new(Attempts::default()));

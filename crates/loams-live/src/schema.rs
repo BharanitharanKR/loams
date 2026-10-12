@@ -4,10 +4,8 @@
 //!
 //! **Tables** apply additively (Task 6): a declared table that does not
 //! exist is created with its indexes and validator, and nothing else
-//! changes. A table the schema leaves out keeps its data and its validator,
-//! and an existing table whose declared indexes differ from its own refuses
-//! the deploy ([`LiveError::FailedPrecondition`]) until online index
-//! changes (Task 9). While the active deployment declares at least one
+//! changes. A table the schema leaves out keeps its data, its indexes and
+//! its validator. While the active deployment declares at least one
 //! table, the schema record exists and an insert into an undeclared table
 //! fails ([`catalog::table_for_insert`]); an empty schema removes the
 //! record, so tables are created on their first insert again.
@@ -20,12 +18,27 @@
 //! of a table declared with `schema_validation: false`. A **stricter** one
 //! is first checked against the table's documents
 //! ([`SchemaChanges::validate`]): the deploy [enforces](enforce) it on new
-//! writes alongside the old one, in a transaction that fences every
-//! mutation in flight, then scans the table in a [`backfill::TableJob`]
+//! writes alongside the old one, fences every mutation in flight once that
+//! commits, then scans the table in a [`backfill::TableJob`]
 //! with the [`Conformance`] visitor. The swap ([`apply`]) makes it the
 //! table's validator only if that check is the deployment's own; a failed
 //! or abandoned check is [released](release), and the old validator holds
 //! alone again.
+//!
+//! **Indexes** of an existing table change online (Task 9, design §45
+//! §4.2). An index the schema declares (by name and fields) that the table
+//! does not have ready is **added**: the deploy's step-4 transaction adds it
+//! `backfilling` ([`begin_backfills`]; every write maintains it from there),
+//! the journal fence after it makes every mutation in flight rerun and
+//! maintain it too, then a [`backfill::TableJob`] with the
+//! [`IndexBackfill`](backfill::IndexBackfill) visitor writes the entries of the documents already there. The swap
+//! ([`apply`]) makes it ready, only if that backfill is the deployment's own
+//! and done. A ready or backfilling index the schema does not declare is
+//! **dropped**: the swap makes it `dropping` (writes stop maintaining it),
+//! and [`backfill::drop_indexes`] fences the journal, then deletes its
+//! entries, then its definition. A
+//! changed index (same name, other fields) is both. A failed or abandoned
+//! backfill is [released](release): its indexes are dropped.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -35,8 +48,9 @@ use loams_kv::Txn;
 use ulid::Ulid;
 
 use crate::backfill::{self, Finding, JobKind, Visitor};
-use crate::catalog::{self, Enforcing, IndexSpec, TableDef};
+use crate::catalog::{self, Enforcing, IndexDef, IndexSpec, IndexState, TableDef};
 use crate::docs::{Doc, Reads};
+use crate::ids::IndexId;
 use crate::keys::AppKeys;
 use crate::validate::{self, Validator};
 use crate::{Limits, LiveError, LiveValue, TableId, pb};
@@ -84,6 +98,27 @@ pub struct SchemaChanges {
     /// Of those, the ones whose documents it checks first (a stricter
     /// validator, with `schema_validation`).
     pub validate: Vec<String>,
+    /// The indexes of existing tables it adds (backfilled first), in
+    /// declaration order (LV1 plan Task 9).
+    pub indexes_added: Vec<IndexChange>,
+    /// The ready or backfilling indexes of existing tables it drops, in
+    /// table declaration order.
+    pub indexes_dropped: Vec<IndexChange>,
+}
+
+/// An index of a table that a schema adds or drops.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct IndexChange {
+    pub table: String,
+    pub index: String,
+}
+
+/// An existing table whose new indexes a deploy backfills.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Backfill {
+    pub table: crate::TableId,
+    /// The table's name, for findings and messages.
+    pub name: String,
 }
 
 /// A stricter validator a deploy checks a table's documents against.
@@ -218,12 +253,16 @@ pub fn loosens(new: Option<&Validator>, old: Option<&Validator>) -> bool {
     }
 }
 
+/// Whether `index` is what `spec` declares (name and fields).
+fn declares(spec: &IndexSpec, index: &IndexDef) -> bool {
+    spec.name == index.name && spec.fields == index.fields
+}
+
 /// What applying `schema` would change, read from the catalog: the declared
 /// tables that do not exist, the existing ones whose validator changes and,
 /// of those, the ones whose documents a stricter validator must be checked
-/// against. An existing table whose user indexes differ from the declared
-/// ones (by name and fields, in any order) is
-/// [`LiveError::FailedPrecondition`]: index changes wait for Task 9.
+/// against, and the indexes of existing tables it adds (declared, not
+/// ready) and drops (ready or backfilling, not declared).
 pub async fn plan(
     r: &mut impl Reads,
     app: &AppKeys,
@@ -235,22 +274,21 @@ pub async fn plan(
             changes.create.push(table.name.clone());
             continue;
         };
-        let have: BTreeMap<&str, &[String]> = existing
-            .indexes
-            .iter()
-            .map(|i| (i.name.as_str(), i.fields.as_slice()))
-            .collect();
-        let want: BTreeMap<&str, &[String]> = table
-            .indexes
-            .iter()
-            .map(|i| (i.name.as_str(), i.fields.as_slice()))
-            .collect();
-        if have != want {
-            return Err(LiveError::FailedPrecondition(format!(
-                "table '{}' exists with other indexes than the schema declares; changing the \
-                 indexes of an existing table needs online index changes (LV1 Task 9)",
-                table.name
-            )));
+        for spec in &table.indexes {
+            if !existing.ready_indexes().any(|i| declares(spec, i)) {
+                changes.indexes_added.push(IndexChange {
+                    table: table.name.clone(),
+                    index: spec.name.clone(),
+                });
+            }
+        }
+        for index in existing.indexes.iter().filter(|i| i.maintained()) {
+            if !table.indexes.iter().any(|spec| declares(spec, index)) {
+                changes.indexes_dropped.push(IndexChange {
+                    table: table.name.clone(),
+                    index: index.name.clone(),
+                });
+            }
         }
         let old = existing.validation.validator.as_ref();
         let new = table.validator.as_ref();
@@ -266,11 +304,15 @@ pub async fn plan(
 
 /// Applies `schema` for `deployment` in `txn` (the swap): creates the
 /// tables [`plan`] finds missing, with their indexes and validators; sets
-/// each changed validator; and writes the schema record (or removes it, for
-/// a schema with no tables). A stricter validator that must be checked
-/// first is set only if the table enforces it for `deployment` (its check
-/// passed, [`enforce`]); the check's state and job are cleared with it.
-/// Otherwise the swap is [`LiveError::FailedPrecondition`].
+/// each changed validator; makes each added index ready and each dropped
+/// one `dropping` (fencing the journal when it drops one, so no mutation
+/// in flight writes an entry of it after this commit); and writes the
+/// schema record (or removes it, for a schema with no tables). A stricter
+/// validator that must be checked first is set only if the table enforces
+/// it for `deployment` (its check passed, [`enforce`]); the check's state
+/// and job are cleared with it. An added index becomes ready only if
+/// `deployment`'s backfill of it is done ([`begin_backfills`]); its job is
+/// deleted. Otherwise the swap is [`LiveError::FailedPrecondition`].
 pub async fn apply(
     txn: &mut Txn,
     app: &AppKeys,
@@ -281,17 +323,29 @@ pub async fn apply(
     let changes = plan(txn, app, schema).await?;
     for declared in &schema.tables {
         let name = &declared.name;
+        let indexes_change = changes
+            .indexes_added
+            .iter()
+            .chain(&changes.indexes_dropped)
+            .any(|c| &c.table == name);
         let mut table = if changes.create.contains(name) {
             let table = catalog::define_table(txn, app, name, &declared.indexes, limits).await?;
             if declared.validator.is_none() {
                 continue;
             }
             table
-        } else if changes.validators.contains(name) {
+        } else if changes.validators.contains(name) || indexes_change {
             existing(txn, app, name).await?
         } else {
             continue;
         };
+        if indexes_change {
+            swap_indexes(txn, app, &mut table, declared, deployment).await?;
+        }
+        if !changes.validators.contains(name) && !changes.create.contains(name) {
+            put_table(txn, app, &table).await?;
+            continue;
+        }
         if changes.validate.contains(name) {
             let checked = table.validation.enforcing.as_ref().is_some_and(|e| {
                 e.deployment == deployment && Some(&e.validator) == declared.validator.as_ref()
@@ -318,14 +372,139 @@ pub async fn apply(
     Ok(changes)
 }
 
+/// The swap's index changes on `table` for `declared`: each index
+/// `deployment` backfilled for it becomes ready (its job must be done and
+/// is deleted), each other maintained index it does not declare
+/// `dropping`. Every declared index must then be ready.
+async fn swap_indexes(
+    txn: &mut Txn,
+    app: &AppKeys,
+    table: &mut TableDef,
+    declared: &TableSchema,
+    deployment: Ulid,
+) -> Result<(), LiveError> {
+    let ours = IndexState::Backfilling { deployment };
+    let job = backfill::load_job(txn, app, JobKind::Backfill, table.id).await?;
+    let backfilled = job
+        .as_ref()
+        .is_some_and(|j| j.deployment == deployment && j.done);
+    for index in &mut table.indexes {
+        let wanted = declared.indexes.iter().any(|spec| declares(spec, index));
+        if wanted && index.state == ours && backfilled {
+            index.state = IndexState::Ready;
+        } else if !wanted && index.maintained() {
+            index.state = IndexState::Dropping;
+        }
+    }
+    for spec in &declared.indexes {
+        if !table.ready_indexes().any(|i| declares(spec, i)) {
+            return Err(LiveError::FailedPrecondition(format!(
+                "table '{}': index '{}' was not backfilled for deployment {deployment} (its \
+                 backfill was released or taken over by another deploy); deploy again",
+                table.name, spec.name
+            )));
+        }
+    }
+    if job.is_some_and(|j| j.deployment == deployment) {
+        backfill::delete_job(txn, app, JobKind::Backfill, table.id).await?;
+    }
+    Ok(())
+}
+
+/// Starts `deployment`'s backfills of `schema`'s added indexes in `txn`
+/// (design §45 §4.2; LV1 plan Task 9): each existing table of [`plan`]'s
+/// `indexes_added` gets those indexes `backfilling` for `deployment` (a
+/// backfilling index of the same name and fields left by another deploy is
+/// taken over), and a backfill job whose lease `owner` holds for `lease`.
+/// A table another deployment is backfilling, with a live lease, is
+/// [`LiveError::FailedPrecondition`]. The caller fences the journal once
+/// it commits ([`Journal::fence_after`](crate::Journal::fence_after)), so
+/// every mutation that commits after the fence maintains the new indexes,
+/// and the backfill, which starts after it, sees every one that committed
+/// before.
+pub async fn begin_backfills(
+    txn: &mut Txn,
+    app: &AppKeys,
+    schema: &Schema,
+    deployment: Ulid,
+    owner: &str,
+    lease: std::time::Duration,
+) -> Result<Vec<Backfill>, LiveError> {
+    let now_ms = txn.start_ts().physical_ms();
+    let changes = plan(txn, app, schema).await?;
+    let mut out: Vec<Backfill> = Vec::new();
+    for declared in &schema.tables {
+        let added: Vec<&IndexSpec> = declared
+            .indexes
+            .iter()
+            .filter(|spec| {
+                changes
+                    .indexes_added
+                    .iter()
+                    .any(|c| c.table == declared.name && c.index == spec.name)
+            })
+            .collect();
+        if added.is_empty() {
+            continue;
+        }
+        let mut table = existing(txn, app, &declared.name).await?;
+        if let Some(held) = backfill::load_job(txn, app, JobKind::Backfill, table.id).await?
+            && held.deployment != deployment
+            && held.lease_live(now_ms)
+        {
+            return Err(LiveError::FailedPrecondition(format!(
+                "table '{}' is being backfilled by deployment {}; deploy again once that deploy \
+                 finishes",
+                declared.name, held.deployment
+            )));
+        }
+        for spec in added {
+            let taken = table
+                .indexes
+                .iter_mut()
+                .find(|i| matches!(i.state, IndexState::Backfilling { .. }) && declares(spec, i));
+            match taken {
+                Some(index) => index.state = IndexState::Backfilling { deployment },
+                None => {
+                    let id = table.next_index_id.max(IndexId::FIRST_USER);
+                    table.next_index_id = id + 1;
+                    table.indexes.push(IndexDef {
+                        id: IndexId(id),
+                        name: spec.name.clone(),
+                        fields: spec.fields.clone(),
+                        state: IndexState::Backfilling { deployment },
+                    });
+                }
+            }
+        }
+        put_table(txn, app, &table).await?;
+        backfill::create_job(
+            txn,
+            app,
+            JobKind::Backfill,
+            table.id,
+            deployment,
+            owner,
+            lease,
+        )
+        .await?;
+        out.push(Backfill {
+            table: table.id,
+            name: declared.name.clone(),
+        });
+    }
+    Ok(out)
+}
+
 /// Starts `deployment`'s checks of `schema`'s stricter validators in `txn`
 /// (design §45 §4.1): each table of [`plan`]'s `validate` enforces its new
 /// validator on new writes ([`TableValidation::enforcing`](catalog::TableValidation::enforcing)), and gets a
 /// validation job whose lease `owner` holds for `lease`. A table another
 /// deployment is checking, with a live job, is
 /// [`LiveError::FailedPrecondition`]; an abandoned check (its jobs' leases
-/// all expired) is replaced. The caller fences the journal in the same
-/// transaction, so no mutation that started before it commits after it.
+/// all expired) is replaced. The caller fences the journal once it commits
+/// ([`Journal::fence_after`](crate::Journal::fence_after)), so no mutation
+/// that read the old validators commits after the fence.
 pub async fn enforce(
     txn: &mut Txn,
     app: &AppKeys,
@@ -381,12 +560,15 @@ pub async fn enforce(
     Ok(out)
 }
 
-/// Ends `deployment`'s checks in `txn`: every table that enforces a
-/// validator for it stops, and its validation jobs are deleted. Returns
+/// Ends `deployment`'s checks and backfills in `txn`: every table that
+/// enforces a validator for it stops, every index it is backfilling is
+/// dropped ([`backfill::drop_indexes`] deletes their entries), and its jobs
+/// are deleted. Returns
 /// whether there was any.
 pub async fn release(txn: &mut Txn, app: &AppKeys, deployment: Ulid) -> Result<bool, LiveError> {
     let mut any = false;
     for mut table in catalog::list_tables(txn, app).await? {
+        let mut changed = false;
         if table
             .validation
             .enforcing
@@ -394,18 +576,41 @@ pub async fn release(txn: &mut Txn, app: &AppKeys, deployment: Ulid) -> Result<b
             .is_some_and(|e| e.deployment == deployment)
         {
             table.validation.enforcing = None;
+            changed = true;
+        }
+        if drop_backfilling(&mut table, |d| d == deployment) {
+            changed = true;
+        }
+        if changed {
             put_table(txn, app, &table).await?;
             any = true;
         }
-        if backfill::load_job(txn, app, JobKind::Validate, table.id)
-            .await?
-            .is_some_and(|j| j.deployment == deployment)
-        {
-            backfill::delete_job(txn, app, JobKind::Validate, table.id).await?;
-            any = true;
+        for kind in [JobKind::Validate, JobKind::Backfill] {
+            if backfill::load_job(txn, app, kind, table.id)
+                .await?
+                .is_some_and(|j| j.deployment == deployment)
+            {
+                backfill::delete_job(txn, app, kind, table.id).await?;
+                any = true;
+            }
         }
     }
     Ok(any)
+}
+
+/// Makes every index of `table` backfilling for a deployment `which`
+/// picks `dropping`; returns whether there was any.
+fn drop_backfilling(table: &mut TableDef, which: impl Fn(Ulid) -> bool) -> bool {
+    let mut any = false;
+    for index in &mut table.indexes {
+        if let IndexState::Backfilling { deployment } = index.state
+            && which(deployment)
+        {
+            index.state = IndexState::Dropping;
+            any = true;
+        }
+    }
+    any
 }
 
 /// What [`release_abandoned`] found.
@@ -417,9 +622,10 @@ pub struct Abandoned {
     pub live: BTreeSet<Ulid>,
 }
 
-/// The janitor's part (LV1 plan Task 8): releases, in `txn`, every check
-/// whose deployment has no job with a live lease at `now_ms` (its deploy
-/// died, or its node), and deletes jobs left without a check.
+/// The janitor's part (LV1 plan Tasks 8 and 9): releases, in `txn`, every
+/// check and backfill whose deployment has no job with a live lease at
+/// `now_ms` (its deploy died, or its node): the check stops, the indexes
+/// are dropped. It deletes jobs left without one.
 pub async fn release_abandoned(
     txn: &mut Txn,
     app: &AppKeys,
@@ -427,30 +633,49 @@ pub async fn release_abandoned(
 ) -> Result<Abandoned, LiveError> {
     let live = live_checks(txn, app, now_ms).await?;
     let mut released = Vec::new();
+    let mut note = |deployment: Ulid| {
+        if !released.contains(&deployment) {
+            released.push(deployment);
+        }
+    };
     for mut table in catalog::list_tables(txn, app).await? {
-        let job = backfill::load_job(txn, app, JobKind::Validate, table.id).await?;
+        let mut changed = false;
         let checking = table.validation.enforcing.as_ref().map(|e| e.deployment);
         if let Some(deployment) = checking
             && !live.contains(&deployment)
         {
             table.validation.enforcing = None;
-            put_table(txn, app, &table).await?;
-            if !released.contains(&deployment) {
-                released.push(deployment);
+            changed = true;
+            note(deployment);
+        }
+        for index in &table.indexes {
+            if let IndexState::Backfilling { deployment } = index.state
+                && !live.contains(&deployment)
+            {
+                note(deployment);
             }
         }
-        if let Some(job) = job
-            && !live.contains(&job.deployment)
-        {
-            backfill::delete_job(txn, app, JobKind::Validate, table.id).await?;
+        if drop_backfilling(&mut table, |d| !live.contains(&d)) {
+            changed = true;
+        }
+        if changed {
+            put_table(txn, app, &table).await?;
+        }
+        for kind in [JobKind::Validate, JobKind::Backfill] {
+            if let Some(job) = backfill::load_job(txn, app, kind, table.id).await?
+                && !live.contains(&job.deployment)
+            {
+                backfill::delete_job(txn, app, kind, table.id).await?;
+            }
         }
     }
     Ok(Abandoned { released, live })
 }
 
-/// The deployments with a validation job whose lease is live at `now_ms`.
-/// A deploy checks its tables one after another, so a job that is done
-/// keeps its deployment's other checks alive only while one of them runs.
+/// The deployments with a validation or backfill job whose lease is live
+/// at `now_ms`. A deploy checks and backfills its tables one after another,
+/// so a job that is done keeps its deployment's other jobs alive only while
+/// one of them runs.
 async fn live_checks(
     txn: &mut Txn,
     app: &AppKeys,
@@ -458,10 +683,12 @@ async fn live_checks(
 ) -> Result<BTreeSet<Ulid>, LiveError> {
     let mut live = BTreeSet::new();
     for table in catalog::list_tables(txn, app).await? {
-        if let Some(job) = backfill::load_job(txn, app, JobKind::Validate, table.id).await?
-            && job.lease_live(now_ms)
-        {
-            live.insert(job.deployment);
+        for kind in [JobKind::Validate, JobKind::Backfill] {
+            if let Some(job) = backfill::load_job(txn, app, kind, table.id).await?
+                && job.lease_live(now_ms)
+            {
+                live.insert(job.deployment);
+            }
         }
     }
     Ok(live)
@@ -474,9 +701,7 @@ async fn existing(txn: &mut Txn, app: &AppKeys, name: &str) -> Result<TableDef, 
 }
 
 async fn put_table(txn: &mut Txn, app: &AppKeys, table: &TableDef) -> Result<(), LiveError> {
-    txn.put(&app.table(table.id), table.to_proto().encode_to_vec())
-        .await?;
-    Ok(())
+    catalog::put_table(txn, app, table).await
 }
 
 /// The ids of the tables `validator`'s `id(table)`s name, read in `r`; a

@@ -34,6 +34,11 @@ pub enum LiveError {
     /// change on a non-empty table, R1 plan Ruling 5).
     #[error("failed precondition: {0}")]
     FailedPrecondition(String),
+    /// A query on an index a deploy is still backfilling (LV1 plan Task 9,
+    /// design §45 §4.2): `FAILED_PRECONDITION`, reason
+    /// `live_index_not_ready`. The text names the index and the table.
+    #[error("failed precondition: {0}")]
+    IndexNotReady(String),
     /// A deploy whose `expected_active` is not the active deployment (LV1
     /// plan Task 6, design §45 §3.3): `FAILED_PRECONDITION`, reason
     /// `live_deploy_conflict`. The text names both deployments.
@@ -117,6 +122,7 @@ impl LiveError {
             | LiveError::IsolationUnavailable => pb::ErrorCode::ERROR_CODE_INVALID_ARGUMENT,
             LiveError::NotFound(_) => pb::ErrorCode::ERROR_CODE_NOT_FOUND,
             LiveError::FailedPrecondition(_)
+            | LiveError::IndexNotReady(_)
             | LiveError::DeployConflict(_)
             | LiveError::JournalTrimmed { .. } => pb::ErrorCode::ERROR_CODE_FAILED_PRECONDITION,
             LiveError::LimitExceeded { .. } => pb::ErrorCode::ERROR_CODE_RESOURCE_EXHAUSTED,
@@ -148,6 +154,7 @@ impl LiveError {
             LiveError::BadCursor(_) => Some("live_bad_cursor"),
             LiveError::SchemaViolation { .. } => Some("live_schema_violation"),
             LiveError::DeployConflict(_) => Some("live_deploy_conflict"),
+            LiveError::IndexNotReady(_) => Some("live_index_not_ready"),
             LiveError::WorkerCrashed(_) => Some("live_worker_crashed"),
             _ => None,
         }

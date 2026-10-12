@@ -36,6 +36,10 @@ use crate::docs::Reads;
 use crate::keys::{AppKeys, KeyRange, key_after};
 use crate::{LiveError, pb};
 
+/// Attempts of one shard's fence ([`Journal::fence_after`]): a conflict
+/// needs an append to the shard inside the fence's short window.
+const FENCE_ATTEMPTS: u32 = 32;
+
 /// The most shards an app's journal may have (§20 §5.3).
 pub const MAX_SHARDS: u16 = 1024;
 
@@ -189,6 +193,37 @@ impl Journal {
                 None => txn.delete(&key).await?,
             }
         }
+        Ok(())
+    }
+
+    /// Fences the journal **after** a committed catalog change (LV1 plan
+    /// Task 9, row T9-3): one small transaction per shard that locks the
+    /// shard's head (`lock_keys`, which leaves a lock version on both
+    /// backends, row T21-20). A mutation that started before a shard's
+    /// fence committed and commits after it on that shard conflicts and
+    /// reruns, past the catalog change; one that committed earlier is done
+    /// before this returns. So once this returns, every mutation that read
+    /// the catalog before the change has either committed or will rerun.
+    /// Unlike [`fence`](Self::fence) in the change's own transaction, a
+    /// fence of one head conflicts only with appends to that shard in its
+    /// short window, so a busy journal does not starve it.
+    pub async fn fence_after(&self, store: &Store, mode: CommitMode) -> Result<(), LiveError> {
+        // The shards' fences are independent: run them together.
+        let fences = (0..self.shards).map(|shard| {
+            let head = self.app.journal_head(shard);
+            let mut opts = TxnOptions::new("live.journal.fence");
+            opts.commit_mode = Some(mode);
+            opts.max_attempts = FENCE_ATTEMPTS;
+            async move {
+                store
+                    .run(opts, |txn| {
+                        let head = head.clone();
+                        Box::pin(async move { txn.lock_keys([head]).await })
+                    })
+                    .await
+            }
+        });
+        futures::future::try_join_all(fences).await?;
         Ok(())
     }
 
