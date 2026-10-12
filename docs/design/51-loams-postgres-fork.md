@@ -196,7 +196,7 @@ Not forked, but fetched by upstream's build: `neondatabase/pgrag` (Apache-2.0, `
   - GitHub advisories on `pgdogdev/pgdog`, each extension's upstream and the small forks' original upstreams; `neondatabase/neon` is watched as a signal only, since no fix is expected from it;
   - `cargo fuzz` targets for the WAL decoder and the page-service and proxy protocol parsers, run nightly for 30 minutes each (new with the hard fork: nobody else fuzzes this code).
 
-  A finding opens an issue labelled with severity and a due date.
+  A finding opens an issue labelled with severity and a due date. *As built (NF1 Task 6 rulings 1–7):* `scripts/loams/sla.py` files every finding into a private tracker (`ostrium-labs/loams-postgres-security`, an owner action), one issue per finding key, labelled `sev:critical|high|pg-minor|other` with a due date from the table below; a hand-filed issue with a `sev:` label gets one too, and an overdue issue is labelled `overdue` and escalated once. Fuzzer crashes never reach a public repository, run log or artifact. The fuzz targets are `fuzz/` in `loams-postgres` (`wal_decoder_record`, `page_service_request`, `proxy_startup`, `proxy_scram`); the proxy targets run without AddressSanitizer (jemalloc's unprefixed malloc).
 - **Targets (target, Q724):**
 
   | Finding | Images published by |
