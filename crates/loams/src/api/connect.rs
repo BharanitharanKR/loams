@@ -163,6 +163,16 @@ const CATALOGUE: &[Package] = &[
         available: true,
         unstable: true,
     },
+    Package {
+        // Loams Git (GT1 Task 12, design §36 §19.10, D834, ruling T0-10): served with the `git`
+        // cargo feature (`RepoService` from GT1 Task 13); otherwise every RPC answers
+        // `feature_not_in_variant` (`super::repos`). The package's other services join this row
+        // as GT1 Tasks 18, 25 and 61 give them RPCs. Unstable until GT1 GA.
+        package: "loams.repos.v1",
+        services: &["loams.repos.v1.RepoService"],
+        available: super::repos::SERVED,
+        unstable: true,
+    },
 ];
 
 /// What this running server serves beyond the build's catalogue: the graph
@@ -479,6 +489,7 @@ pub(crate) fn routes(state: &AppState, hot_default: bool) -> AxumRouter {
     .register(rpc);
     rpc = Arc::new(LiveAbsent).register(rpc);
     rpc = super::graph::register(rpc, state);
+    rpc = super::repos::register(rpc, state);
     rpc = super::connect_collections::register(rpc, state);
     rpc = super::connect_documents::register(rpc, state);
     rpc = super::connect_query::register(rpc, state);
