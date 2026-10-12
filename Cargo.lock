@@ -4915,6 +4915,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
 
 [[package]]
+name = "git-wal-bench"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "clap",
+ "loams-git",
+ "loams-store",
+ "rand 0.9.5",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "gix-actor"
 version = "0.43.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

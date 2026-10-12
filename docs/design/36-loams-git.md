@@ -218,6 +218,22 @@ loop:
 - **Placement.** The sequencer runs on the rendezvous owner of the placement key `(ns, repo, repo_id)` (D75) under the metastore lease `task/git-seq/<ns>/<repo_id>`, and nodes that receive a push for a repository they do not own forward the transaction to the owner, as §15 §3.2's repo-affinity routing describes. On a commercial Cloudflare target (`loams-platform`) the sequencer is a Durable Object instead. A wrong owner, a zombie after a lease loss, or a `git-remote-loams` client writing the bucket directly is fenced by §4.2, never trusted.
 - **Idle repositories** keep no sequencer. The first push loads the hint, the checkpoint and the segments after it.
 
+**Measured (GT1a, Task 11; `bench/git-wal`, `bench/results/git-wal/20261012T0955Z-gt1-t11.jsonl`).** `git-wal-bench` drives `BucketRefLog` directly: each pusher uploads a 4 KiB pack, then commits an update of its own branch; `--put-delay-ms` adds that latency to every segment append and pack upload. Machine: Intel Core Ultra 5 225H (14 threads), Linux 7.2.4, debug build, 2026-10-12, other builds running. One repository, 32 pushers, 20 s per row unless noted.
+
+| Store | Added PUT delay | Commits/s | Commit p50 / p99 | Push p50 / p99 | Mean group | PUTs / GETs per commit |
+|---|---|---|---|---|---|---|
+| in-memory | 20 ms | 521 | 38 / 60 ms | 60 / 84 ms | 15.6 | 1.07 / 1.0 |
+| in-memory | 50 ms | 271 | 63 / 112 ms | 116 / 166 ms | 15.6 | 1.07 / 1.0 |
+| in-memory | **100 ms (the gate)** | **145** | **109 / 212 ms** | 212 / 315 ms | 15.4 | 1.07 / 1.0 |
+| in-memory | 150 ms | 98 | 158 / 312 ms | 311 / 465 ms | 15.3 | 1.08 / 1.0 |
+| in-memory, 8 pushers | 100 ms | 33 | 105 / 207 ms | 207 / 311 ms | 3.5 | 1.32 / 1.0 |
+| RustFS 1.0.0 (podman, loopback) | 0 | 619 | 27 / 60 ms | 39 / 169 ms | 13.9 | 1.07 / 1.0 |
+| RustFS 1.0.0 | 100 ms | 93 | 231 / 510 ms | 346 / 627 ms | 11.4 | 1.10 / 1.0 |
+| RustFS 1.0.0, 1 pusher | 0 | 33 | 16 / 25 ms | 29 / 78 ms | 1.0 | 2.03 / 1.0 |
+| RustFS 1.0.0, 8 repositories, 64 pushers | 0 | 731 | 42 / 294 ms | 65 / 543 ms | 2.9 | 1.35 / 1.0 |
+
+The **gate is met**: at 100 ms per PUT, one hot repository commits 145/s in memory and 93/s on RustFS (the delay is added to RustFS's own ~15 ms), with commit p99 at 212 and 510 ms, under 1 s. Throughput is about `group / L`: groups grow with load (15 at 32 pushers), as §4.4 estimated. The one GET per commit is the pack HEAD before queueing; a PUT per commit beyond the segment's share is the pack. R2, S3 Standard and S3 Express One Zone are not measured yet (GT-Q8: no credentials). **Q393 is decided: packs stay out of the WAL** (D390 stands). A pack PUT overlaps other groups' segment PUTs and costs one `L` of push latency, not throughput, and keeping packs out keeps every segment within RustFS's 1 MiB atomic conditional PUT.
+
 ### 4.5 Idempotency
 
 - **Keys.** A client may send `Idempotency-Key` (API pushes). For a git push, the receive path derives `sha256(principal ‖ pack checksum ‖ sorted (name, expect, new) triples)`, so git's own retry of the same push over a flaky connection is answered with the first push's result.
