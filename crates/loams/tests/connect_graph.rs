@@ -790,6 +790,73 @@ async fn graphs_are_checkpointed_on_schedule() {
     running.server.shutdown().await.expect("shutdown");
 }
 
+/// A zero idle-eviction time would evict every graph between statements (GR1 Task 14).
+#[cfg(feature = "graph")]
+#[tokio::test]
+async fn zero_idle_eviction_refused() {
+    let dir = TempDir::new().expect("temp dir");
+    let mut config = ServerConfig::new(dir.path());
+    config.listen = SocketAddr::from(([127, 0, 0, 1], 0));
+    config.graph.evict.idle_after = Duration::ZERO;
+    let err = Server::start(config).await.expect_err("refused");
+    assert!(err.to_string().contains("idle_after"), "{err}");
+}
+
+/// The scheduled eviction (GR1 Task 14): an idle graph is evicted on a tick, without anyone
+/// calling `evict`, reported `EVICTED`, and its next statement opens it again with what it held.
+#[cfg(feature = "graph")]
+#[tokio::test]
+async fn idle_graphs_are_evicted_on_schedule() {
+    let running = Running::start_with(|config| {
+        config.graph.checkpoint_every = Duration::from_millis(50);
+        config.graph.evict.idle_after = Duration::from_millis(100);
+    })
+    .await;
+    let (status, _) = running
+        .connect(
+            "/loams.graph.v1.GraphAdminService/CreateGraph",
+            &json!({"namespace": "acme", "name": "kg"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let (status, _) = running
+        .connect(
+            "/loams.graph.v1.GraphService/Execute",
+            &json!({"namespace": "acme", "graph": "kg", "statement": "INSERT (:X {k: 1})"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while running.server.graph_evictions().expect("graph is served") < 1 {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the graph was never evicted"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let (status, graph) = running
+        .connect(
+            "/loams.graph.v1.GraphAdminService/GetGraph",
+            &json!({"namespace": "acme", "name": "kg"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    assert_eq!(graph["state"], "GRAPH_STATE_EVICTED", "{graph}");
+    let (status, answer) = running
+        .connect(
+            "/loams.graph.v1.GraphService/Execute",
+            &json!({"namespace": "acme", "graph": "kg", "statement": "MATCH (n:X) RETURN n.k"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{answer}");
+    assert_eq!(
+        answer["rows"]["rows"].as_array().map(Vec::len),
+        Some(1),
+        "{answer}"
+    );
+    running.server.shutdown().await.expect("shutdown");
+}
+
 /// The scheduled purge (Task 4 R4.9): a deleted graph's storage goes once the retention hold has
 /// passed, without anyone calling `purge_expired`.
 #[cfg(feature = "graph")]

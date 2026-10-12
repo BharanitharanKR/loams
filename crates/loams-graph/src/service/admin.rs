@@ -21,7 +21,8 @@ use super::{data, engine_info, stream};
 use crate::catalog::{
     CatalogError, CatalogState, GraphCatalog, GraphLimits, GraphMeta, GraphMode, NewGraph,
 };
-use crate::engine::{Engine, Graph, GraphState, OpenSpec};
+use crate::engine::{Closed, Engine, Graph, GraphState, OpenSpec};
+use crate::evict::{EvictPolicy, EvictReason, Evicted, Evictor, Rehydration, Resident};
 use crate::limits::{
     DEFAULT_NAMESPACE_DETACHED, DEFAULT_NAMESPACE_STATEMENTS, Detached, NamespaceSlots,
     StatementLimits, StatementPool, Watch, namespace_cap,
@@ -142,6 +143,10 @@ pub struct GraphAdmin {
     /// This call came from another node (`GraphForward`): it is served here or refused, never
     /// forwarded again.
     forwarded: bool,
+    /// When open graphs are evicted (GR1 Task 14).
+    evict_policy: EvictPolicy,
+    /// The graphs this node evicted and its rehydrations, shared by every clone (GR1 Task 14).
+    evictor: Arc<Evictor>,
     #[cfg(feature = "test-hooks")]
     after_open_hook: Arc<std::sync::Mutex<Option<crate::catalog::AckHook>>>,
 }
@@ -290,6 +295,8 @@ impl GraphAdmin {
             ownership: None,
             checkpointer: None,
             forwarded: false,
+            evict_policy: EvictPolicy::default(),
+            evictor: Arc::default(),
             #[cfg(feature = "test-hooks")]
             after_open_hook: Arc::default(),
         }
@@ -322,6 +329,26 @@ impl GraphAdmin {
     #[must_use]
     pub fn checkpointer(&self) -> Option<&Checkpointer> {
         self.checkpointer.as_ref()
+    }
+
+    /// The same admin with another eviction policy (GR1 Task 14). Its clones share what was
+    /// evicted and rehydrated.
+    #[must_use]
+    pub fn with_evict_policy(mut self, policy: EvictPolicy) -> Self {
+        self.evict_policy = policy;
+        self
+    }
+
+    /// The eviction policy.
+    #[must_use]
+    pub fn evict_policy(&self) -> EvictPolicy {
+        self.evict_policy
+    }
+
+    /// The first statements on evicted graphs, newest last (§17.2's cold gate; GR1 Task 14).
+    #[must_use]
+    pub fn rehydrations(&self) -> Vec<Rehydration> {
+        self.evictor.rehydrations()
     }
 
     /// The same admin with another node's view of graph ownership (GR1 Task 12): the cluster's
@@ -618,7 +645,15 @@ impl GraphAdmin {
                     _process: slot,
                     _namespace: namespace_slot,
                 };
+                // The first statement on a graph this node evicted is a cold read (§17.2).
+                let cold = meta
+                    .graph_id()
+                    .ok()
+                    .filter(|id| admin.evictor.is_evicted(*id));
                 let graph = admin.open_meta(&meta).await?;
+                let opened = started.elapsed();
+                graph.touch();
+                let source = graph.recovery().map(|recovery| recovery.source);
                 let result = admin
                     .on_pool(move || {
                         let result = work(&graph, &limits);
@@ -626,6 +661,14 @@ impl GraphAdmin {
                         result
                     })
                     .await?;
+                if let Some(id) = cold {
+                    admin.evictor.rehydrated(Rehydration {
+                        graph: id,
+                        source,
+                        open: opened,
+                        first_read: started.elapsed(),
+                    });
+                }
                 Ok((result, slots))
             })
         };
@@ -676,8 +719,11 @@ impl GraphAdmin {
             (_, Some(GraphState::Poisoned | GraphState::Reloading)) => pb::GraphState::Reloading,
             (_, Some(GraphState::Failed)) => pb::GraphState::Failed,
             (_, Some(GraphState::Ready)) => pb::GraphState::Ready,
-            // Listed and not open: it is served, and opens on its next statement. (EVICTED is
-            // Task 14's, for a graph closed to free memory.)
+            // Closed here to free memory: its next statement opens it again (GR1 Task 14).
+            (_, None) if meta.graph_id().is_ok_and(|id| self.evictor.is_evicted(id)) => {
+                pb::GraphState::Evicted
+            }
+            // Listed and not open: it is served, and opens on its next statement.
             (_, None) => pb::GraphState::Ready,
         };
         let stats = open.as_ref().map(|g| {
@@ -775,6 +821,13 @@ impl GraphAdmin {
     /// (Task 4 review M8, GR1 Task 6).
     async fn open_catalog_graph(&self, meta: &GraphMeta) -> Result<Arc<Graph>, ConnectError> {
         let (namespace, name) = (meta.namespace.as_str(), meta.name.as_str());
+        // A deleted graph is never recovered, whatever record a caller read (Task 4 review M3).
+        if meta.is_deleting() {
+            return Err(map_catalog(CatalogError::NotFound {
+                namespace: namespace.to_string(),
+                name: name.to_string(),
+            }));
+        }
         let id = meta.graph_id().map_err(map_catalog)?;
         // The owner lease epoch this node serves the graph under (GR1 Task 12): a durable graph is
         // served only here, by the node holding its lease, and its engine only at that epoch.
@@ -1929,6 +1982,307 @@ impl GraphAdmin {
         done
     }
 
+    /// Evicts graph `namespace`/`name` now, if it is open here and nobody holds it (GR1 Task
+    /// 14): as an idle eviction does, it is checkpointed first, closed with its local files kept
+    /// and stamped, and its owner lease given up. Answers whether it was evicted.
+    ///
+    /// # Errors
+    ///
+    /// `NOT_FOUND` for a graph the catalog does not serve, `UNAVAILABLE` when the catalog is.
+    pub async fn evict(&self, namespace: &str, name: &str) -> Result<bool, ConnectError> {
+        let meta = self
+            .catalog
+            .get_by_name(namespace, name)
+            .await
+            .map_err(map_catalog)?;
+        let id = meta.graph_id().map_err(map_catalog)?;
+        let ns = self
+            .catalog
+            .namespace_id(namespace)
+            .await
+            .map_err(map_catalog)?;
+        Ok(self
+            .evict_one(namespace, name, id, ns, EvictReason::OnDemand)
+            .await
+            .is_some())
+    }
+
+    /// One eviction pass over the graphs open here (GR1 Task 14; [`crate::evict`]): graphs
+    /// deleted from the catalog are closed and their local caches removed, as are the caches of
+    /// evicted graphs deleted since; then, least recently used first, graphs idle for the
+    /// policy's time, and while the open graphs' memory is over the node's budget, any graph
+    /// nobody holds. Answers what it evicted, in order. Run periodically by the server; a
+    /// failure is logged and the graph is tried again next time.
+    pub async fn evict_due(&self) -> Vec<Evicted> {
+        let mut done = Vec::new();
+        if self.is_shutting_down() {
+            return done;
+        }
+        let policy = self.evict_policy;
+        let open: Vec<(String, String, crate::GraphId)> = self
+            .engine
+            .list(None)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|graph| {
+                let id = graph.id()?;
+                Some((graph.namespace().to_string(), graph.name().to_string(), id))
+            })
+            .collect();
+        // Deleted graphs first: open here, or evicted earlier.
+        let mut residents = Vec::new();
+        let mut namespaces = std::collections::HashMap::new();
+        for (namespace, name, id) in open {
+            match self.served(&namespace, &name, id).await {
+                Some(true) => {}
+                Some(false) => {
+                    if let Some(evicted) = self.release_deleted(&namespace, &name, id).await {
+                        done.push(evicted);
+                    }
+                    continue;
+                }
+                None => continue,
+            }
+            let Some(graph) = self
+                .open_graph(&namespace, &name)
+                .filter(|graph| graph.id() == Some(id) && graph.is_durable())
+            else {
+                continue;
+            };
+            let idle_for = graph.idle_for();
+            let bytes = if policy.node_memory.is_some() {
+                let held = Arc::clone(&graph);
+                blocking(move || Ok(held.resident_bytes()))
+                    .await
+                    .unwrap_or(0)
+            } else {
+                0
+            };
+            drop(graph);
+            if !namespaces.contains_key(&namespace) {
+                match self.catalog.namespace_id(&namespace).await {
+                    Ok(ns) => {
+                        namespaces.insert(namespace.clone(), ns);
+                    }
+                    Err(err) => {
+                        tracing::warn!(%namespace, error = %err, "evicting: the namespace could not be read");
+                        continue;
+                    }
+                }
+            }
+            residents.push(Resident {
+                namespace,
+                name,
+                graph: id,
+                idle_for,
+                bytes,
+            });
+        }
+        for (id, namespace, name) in self.evictor.evicted() {
+            if self.served(&namespace, &name, id).await == Some(false) {
+                self.evictor.forget(id);
+                if let Some(evicted) = self.release_deleted(&namespace, &name, id).await {
+                    done.push(evicted);
+                }
+            }
+        }
+        let mut total: u64 = residents.iter().map(|r| r.bytes).sum();
+        for resident in crate::evict::by_lru(residents) {
+            if self.is_shutting_down() {
+                break;
+            }
+            let Some(reason) = crate::evict::reason(&policy, &resident, total) else {
+                continue;
+            };
+            let ns = namespaces.get(&resident.namespace).copied().flatten();
+            if let Some(evicted) = self
+                .evict_one(
+                    &resident.namespace,
+                    &resident.name,
+                    resident.graph,
+                    ns,
+                    reason,
+                )
+                .await
+            {
+                total = total.saturating_sub(resident.bytes);
+                done.push(evicted);
+            }
+        }
+        done
+    }
+
+    /// Whether the catalog still serves graph `namespace`/`name` as `id`: `None` when it cannot
+    /// be read (nothing is done to the graph then).
+    async fn served(&self, namespace: &str, name: &str, id: crate::GraphId) -> Option<bool> {
+        match self.catalog.get_by_name(namespace, name).await {
+            Ok(meta) => Some(meta.graph_id().is_ok_and(|served| served == id)),
+            Err(CatalogError::NotFound { .. }) => Some(false),
+            Err(err) => {
+                tracing::warn!(%namespace, %name, error = %err, "evicting: the graph's catalog record could not be read");
+                None
+            }
+        }
+    }
+
+    /// Closes deleted graph `id` if it is open here and removes its local cache (Task 4 review
+    /// M3), and gives its owner lease up.
+    async fn release_deleted(
+        &self,
+        namespace: &str,
+        name: &str,
+        id: crate::GraphId,
+    ) -> Option<Evicted> {
+        let (engine, ns, nm) = (
+            Arc::clone(&self.engine),
+            namespace.to_string(),
+            name.to_string(),
+        );
+        let closed =
+            blocking(move || engine.evict(&ns, &nm, Some(id), false).map_err(map_engine)).await;
+        match closed {
+            Ok(Closed::Removed) => {}
+            Ok(Closed::Busy) => return None,
+            Ok(_) => {
+                if let Some(ownership) = &self.ownership {
+                    ownership.release(id).await;
+                }
+                return None;
+            }
+            Err(err) => {
+                tracing::warn!(%namespace, %name, error = %err, "releasing a deleted graph's local cache failed; retried next time");
+                return None;
+            }
+        }
+        if let Some(ownership) = &self.ownership {
+            ownership.release(id).await;
+        }
+        tracing::info!(%namespace, %name, graph = %id, "released a deleted graph's local cache");
+        Some(Evicted {
+            namespace: namespace.to_string(),
+            name: name.to_string(),
+            graph: id,
+            reason: EvictReason::Deleted,
+            checkpointed: false,
+            cache_kept: false,
+        })
+    }
+
+    /// Evicts graph `id`, open here as `namespace`/`name`, for `reason`: checkpointed first when
+    /// its snapshots do not cover its durable state (an idle or on-demand eviction whose
+    /// checkpoint fails waits for the next pass; a memory one goes on, since the log is the
+    /// graph), then closed with its local files stamped, its owner lease given up, and marked
+    /// evicted. `None` when it is not open, not durable, not serving cleanly, or held.
+    async fn evict_one(
+        &self,
+        namespace: &str,
+        name: &str,
+        id: crate::GraphId,
+        ns: Option<loams_common::NamespaceId>,
+        reason: EvictReason,
+    ) -> Option<Evicted> {
+        let graph = self
+            .open_graph(namespace, name)
+            .filter(|graph| graph.id() == Some(id) && graph.is_durable())?;
+        if graph.is_poisoned_or_failed() || graph.is_fenced() {
+            return None;
+        }
+        let checkpointed = match (ns, &self.checkpointer) {
+            (Some(ns), Some(checkpointer)) => match self.cover(checkpointer, graph, ns).await {
+                Ok(took) => took,
+                Err(err) if reason == EvictReason::Memory => {
+                    tracing::warn!(%namespace, %name, error = %err, "checkpointing before an eviction failed; evicting anyway (the log is the graph)");
+                    false
+                }
+                Err(err) => {
+                    tracing::warn!(%namespace, %name, error = %err, "checkpointing before an eviction failed; the eviction waits for the next pass");
+                    return None;
+                }
+            },
+            _ => {
+                drop(graph);
+                false
+            }
+        };
+        let (engine, ns_name, nm) = (
+            Arc::clone(&self.engine),
+            namespace.to_string(),
+            name.to_string(),
+        );
+        let closed = blocking(move || {
+            engine
+                .evict(&ns_name, &nm, Some(id), true)
+                .map_err(map_engine)
+        })
+        .await;
+        let cache_kept = match closed {
+            Ok(Closed::Stamped) => true,
+            Ok(Closed::Closed) => false,
+            Ok(_) => return None,
+            Err(err) => {
+                tracing::warn!(%namespace, %name, error = %err, "evicting a graph failed");
+                return None;
+            }
+        };
+        // A statement that opened it again since (under a fresh lease or this one) keeps the
+        // lease; otherwise the next node may take the graph at once.
+        if let Some(ownership) = &self.ownership
+            && self
+                .open_graph(namespace, name)
+                .filter(|graph| graph.id() == Some(id))
+                .is_none()
+        {
+            ownership.release(id).await;
+        }
+        self.evictor.mark_evicted(id, namespace, name);
+        tracing::info!(%namespace, %name, graph = %id, reason = reason.as_str(), checkpointed, cache_kept, "evicted a graph");
+        Some(Evicted {
+            namespace: namespace.to_string(),
+            name: name.to_string(),
+            graph: id,
+            reason,
+            checkpointed,
+            cache_kept,
+        })
+    }
+
+    /// Takes a snapshot of `graph` unless its manifest already has one at its durable offset that
+    /// this node could open it from (on disk any kind, in memory a portable one). Answers whether
+    /// it took one.
+    async fn cover(
+        &self,
+        checkpointer: &Checkpointer,
+        graph: Arc<Graph>,
+        ns: loams_common::NamespaceId,
+    ) -> Result<bool, crate::snapshot::SnapshotError> {
+        let (Some(id), Some(offset)) = (
+            graph.id(),
+            graph
+                .durable_state()
+                .map(|durable| durable.position.offset()),
+        ) else {
+            return Ok(false);
+        };
+        if offset == 0 {
+            return Ok(false);
+        }
+        let manifest = checkpointer.manifests().load(ns, id).await?;
+        let kind = graph
+            .storage_dir()
+            .map_or(Some(SnapshotKind::Portable), |_| None);
+        let covered = manifest
+            .as_ref()
+            .and_then(|loaded| loaded.manifest.newest(kind))
+            .is_some_and(|entry| entry.offset >= offset);
+        if covered {
+            return Ok(false);
+        }
+        checkpointer
+            .checkpoint(graph, ns, &[SnapshotKind::Native])
+            .await
+            .map(|_| true)
+    }
+
     /// Deletes catalog documents older than `grace` that no reader still needs (the catalog's
     /// [`GraphCatalog::sweep_documents`]); run with [`crate::catalog::DOCUMENT_GRACE`] beside
     /// [`GraphAdmin::purge_expired`].
@@ -1985,12 +2339,24 @@ impl GraphAdmin {
                 "graph statements still running at shutdown are detached; their graphs stay registered until the engine drops, and they end with the process"
             );
         }
+        // Each graph closes cleanly and keeps its local files, stamped, so the next open here
+        // starts from them (GR1 Task 14).
         for graph in self.engine.list(None).unwrap_or_default() {
-            let (namespace, name) = (graph.namespace().to_string(), graph.name().to_string());
+            let (namespace, name, id) = (
+                graph.namespace().to_string(),
+                graph.name().to_string(),
+                graph.id(),
+            );
             drop(graph);
             let (engine, ns, nm) = (Arc::clone(&self.engine), namespace.clone(), name.clone());
-            if let Err(err) = blocking(move || engine.close(&ns, &nm).map_err(map_engine)).await {
-                tracing::warn!(%namespace, %name, error = %err, "closing a graph at shutdown failed");
+            match blocking(move || engine.evict(&ns, &nm, id, true).map_err(map_engine)).await {
+                Ok(Closed::Busy) => {
+                    tracing::warn!(%namespace, %name, "a graph still in use at shutdown stays open until it is released");
+                }
+                Ok(_) => {}
+                Err(err) => {
+                    tracing::warn!(%namespace, %name, error = %err, "closing a graph at shutdown failed");
+                }
             }
         }
         // Graceful: the next owner takes each lease at once instead of after its TTL (GR1 Task

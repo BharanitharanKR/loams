@@ -445,6 +445,22 @@ pub struct Graph {
     /// Set when the graph's owner lease moved on while this engine served it (an append refused
     /// by its fence, or a lease this node lost): it never serves again here (GR1 Task 12).
     fenced: AtomicBool,
+    /// How a durable graph's engine was recovered (GR1 Task 14).
+    recovery: Option<crate::recovery::Recovery>,
+    /// When the graph was last used, on [`clock_ms`]'s clock (GR1 Task 14's LRU).
+    last_used_ms: AtomicU64,
+}
+
+/// Milliseconds on a monotonic clock that starts with the process: graphs' last-use times.
+fn clock_ms() -> u64 {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    u64::try_from(
+        START
+            .get_or_init(std::time::Instant::now)
+            .elapsed()
+            .as_millis(),
+    )
+    .unwrap_or(u64::MAX)
 }
 
 impl fmt::Debug for Graph {
@@ -577,93 +593,59 @@ impl Graph {
         mut spec: OpenSpec,
         engine: &Engine,
     ) -> Result<Graph, GraphError> {
-        // A durable graph's stream is the graph (I4): its local files are a cache, and until
-        // Task 14 trusts them they are discarded and the engine is rebuilt from the stream. Only
-        // a graph from before the log, whose stream is still empty, keeps them (R11.5). A stream
-        // trimmed below its snapshots starts from the newest usable one (GR1 Task 13).
-        let mut plan = None;
-        let mut restore = None;
-        if let Some(durable) = &spec.durable {
-            let id = spec
-                .id
-                .ok_or_else(|| GraphError::engine("a durable graph needs its catalog id"))?;
-            if spec.read_only {
-                return Err(GraphError::engine(
-                    "a durable graph is not opened read-only: it is rebuilt from its stream",
-                ));
+        // The engine's configuration for a database file (or in memory, `None`).
+        let read_only = spec.read_only;
+        let durable_cdc = spec.durable.is_some();
+        let config = |file: Option<PathBuf>| {
+            let config = match file {
+                None => grafeo::Config::in_memory(),
+                // `read_only` is the engine's own read-only mode: a shared lock and no WAL
+                // replay, so a read-only graph cannot be made to write even by a statement the
+                // gate mis-classifies. Grafeo requires an existing `.grafeo` file for it.
+                Some(file) if read_only => grafeo::Config::read_only(file),
+                Some(file) => grafeo::Config::persistent(file),
+            };
+            let config = match engine.query_timeout {
+                Some(limit) => config.with_query_timeout(limit),
+                None => config.without_query_timeout(),
             }
-            let bounds = durable.log.bounds(durable.stream)?;
-            let adopt = durable.adopt && bounds.1 == 0;
-            if !adopt && let Some(dir) = &spec.dir {
-                match std::fs::remove_dir_all(dir) {
-                    Ok(()) => {}
-                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(err) => {
-                        return Err(GraphError::engine(format!(
-                            "clearing the graph's local cache: {err}"
-                        )));
-                    }
+            .with_max_property_size(engine.max_property_bytes);
+            // A durable graph's change sets are captured from Grafeo's CDC (R9.1, R9.9).
+            if durable_cdc {
+                let mut config = config.with_cdc();
+                config.cdc_retention = crate::durable::cdc_retention();
+                config
+            } else {
+                config
+            }
+        };
+        // A durable graph's stream is the graph (I4): its local files are a cache, and the engine
+        // starts from the base `recovery` chooses (its stamped local cache, a snapshot, or
+        // nothing) and replays the records after it (GR1 Task 14).
+        let (db, durable, recovery) = match &spec.durable {
+            Some(durable) => {
+                let id = spec
+                    .id
+                    .ok_or_else(|| GraphError::engine("a durable graph needs its catalog id"))?;
+                if spec.read_only {
+                    return Err(GraphError::engine(
+                        "a durable graph is not opened read-only: it is rebuilt from its stream",
+                    ));
                 }
+                let (db, state, recovery) =
+                    crate::recovery::open(id, durable, spec.dir.as_deref(), &config)?;
+                (db, Some(state), Some(recovery))
             }
-            if !adopt && bounds.0 > 0 {
-                restore = Some(crate::snapshot::restore::choose(
-                    durable,
-                    id,
-                    bounds,
-                    spec.dir.is_some(),
-                )?);
-            }
-            plan = Some((id, bounds, adopt));
-        }
-        let config = match spec.database_file() {
-            None => grafeo::Config::in_memory(),
-            // `read_only` is the engine's own read-only mode: a shared lock and no WAL
-            // replay, so a read-only graph cannot be made to write even by a statement the gate
-            // mis-classifies. Grafeo requires an existing `.grafeo` file for it.
-            Some(file) if spec.read_only => grafeo::Config::read_only(file),
-            Some(file) => {
-                if let Some(dir) = &spec.dir {
+            None => {
+                if let (Some(dir), false) = (&spec.dir, spec.read_only) {
                     std::fs::create_dir_all(dir).map_err(|err| {
                         GraphError::engine(format!("creating the graph's storage: {err}"))
                     })?;
                 }
-                if let (Some(durable), Some(chosen)) = (&spec.durable, &restore) {
-                    crate::snapshot::restore::native_file(durable, chosen, &file)?;
-                }
-                grafeo::Config::persistent(file)
+                let db =
+                    GrafeoDB::with_config(config(spec.database_file())).map_err(as_engine_error)?;
+                (db, None, None)
             }
-        };
-        let config = match engine.query_timeout {
-            Some(limit) => config.with_query_timeout(limit),
-            None => config.without_query_timeout(),
-        }
-        .with_max_property_size(engine.max_property_bytes);
-        // A durable graph's change sets are captured from Grafeo's CDC (R9.1, R9.9).
-        let config = if spec.durable.is_some() {
-            let mut config = config.with_cdc();
-            config.cdc_retention = crate::durable::cdc_retention();
-            config
-        } else {
-            config
-        };
-        let db = GrafeoDB::with_config(config).map_err(as_engine_error)?;
-        let base = match (&spec.durable, &restore) {
-            (Some(durable), Some(chosen)) => {
-                Some(crate::snapshot::restore::into_engine(durable, chosen, &db)?)
-            }
-            _ => None,
-        };
-        let durable = match (&spec.durable, plan) {
-            (Some(durable), Some((id, bounds, adopt))) => Some(crate::durable::Durable::open(
-                &db,
-                durable,
-                id,
-                bounds,
-                adopt,
-                base,
-                spec.dir.is_some(),
-            )?),
-            _ => None,
         };
         // A reload never adopts: by then the local files may hold commits the log refused.
         if let Some(durable) = &mut spec.durable {
@@ -683,7 +665,31 @@ impl Graph {
             durable,
             reloading: AtomicBool::new(false),
             fenced: AtomicBool::new(false),
+            recovery,
+            last_used_ms: AtomicU64::new(clock_ms()),
         })
+    }
+
+    /// How this graph's engine was recovered, for a durable graph (GR1 Task 14).
+    pub fn recovery(&self) -> Option<crate::recovery::Recovery> {
+        self.recovery
+    }
+
+    /// Marks the graph used now, for least-recently-used eviction (GR1 Task 14).
+    pub fn touch(&self) {
+        self.last_used_ms.fetch_max(clock_ms(), Ordering::Relaxed);
+    }
+
+    /// How long since the graph was last used ([`Graph::touch`], or its open).
+    pub fn idle_for(&self) -> Duration {
+        Duration::from_millis(clock_ms().saturating_sub(self.last_used_ms.load(Ordering::Relaxed)))
+    }
+
+    /// The engine's own estimate of the memory it holds, in bytes (Grafeo's `memory_usage`,
+    /// which under-counts: R0.9; Task 26 refines it). 0 for a graph that is not serving.
+    pub fn resident_bytes(&self) -> u64 {
+        self.call(|| Ok(self.db.memory_usage().total_bytes as u64))
+            .unwrap_or(0)
     }
 
     /// The catalog id this graph was opened for, if any.
@@ -1688,6 +1694,22 @@ impl OpenHookSlot {
     }
 }
 
+/// What [`Engine::evict`] did with a graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Closed {
+    /// It was not open here (with that id), and nothing was removed.
+    NotOpen,
+    /// A caller holds it: it stays open.
+    Busy,
+    /// Closed, its local files kept but not stamped: in memory, not durable, or not serving
+    /// cleanly (its next open rebuilds it).
+    Closed,
+    /// Closed, and its local files stamped: its next open starts from them.
+    Stamped,
+    /// Closed (if it was open), and its local files removed.
+    Removed,
+}
+
 /// The engine: the open graphs of one Loams process.
 ///
 /// Deliberately not a global. `Engine` is held by the service and injected, so a test can stand up
@@ -1925,6 +1947,107 @@ impl Engine {
             tracing::warn!(%namespace, %name, error = %err, "closing a discarded graph failed; dropping it");
         }
         Ok(graphs.remove(&key).is_some())
+    }
+
+    /// Closes graph `namespace`/`name` (the one with id `id`, when given) unless a caller holds
+    /// it (GR1 Task 14: eviction, shutdown, and a deleted graph's release), under the graph's
+    /// opening latch, so no open of it runs meanwhile:
+    ///
+    /// * `keep`: its local files stay. A durable graph on disk that is serving cleanly (not
+    ///   reloading, poisoned, fenced or failed) is stamped after its close
+    ///   ([`crate::recovery::CACHE_STAMP`]), so its next open starts from them.
+    /// * otherwise its local directory is removed, open or not (a deleted graph's cache).
+    ///
+    /// # Errors
+    ///
+    /// A poisoned registry, or a local directory that cannot be removed.
+    pub fn evict(
+        &self,
+        namespace: &str,
+        name: &str,
+        id: Option<crate::GraphId>,
+        keep: bool,
+    ) -> Result<Closed, GraphError> {
+        validate_names(namespace, name)?;
+        let key = (namespace.to_string(), name.to_string());
+        let latch = {
+            let mut latches = self
+                .opening
+                .lock()
+                .map_err(|_| poisoned("the graph opening latches are poisoned"))?;
+            Arc::clone(latches.entry(key.clone()).or_default())
+        };
+        let _release = LatchRelease {
+            engine: self,
+            key: &key,
+            latch: &latch,
+        };
+        let _opening = latch
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let graph = {
+            let mut graphs = self
+                .graphs
+                .lock()
+                .map_err(|_| poisoned("the graph registry is poisoned"))?;
+            match graphs.get(&key) {
+                Some(open) if id.is_none_or(|id| open.id() == Some(id)) => {
+                    if Arc::strong_count(open) > 1 {
+                        return Ok(Closed::Busy);
+                    }
+                    graphs.remove(&key)
+                }
+                _ => None,
+            }
+        };
+        let dir = match (&graph, id) {
+            (Some(graph), _) => graph.spec.dir.clone(),
+            (None, Some(id)) => self
+                .data_dir
+                .as_ref()
+                .map(|dir| dir.join("graphs").join(id.to_string())),
+            (None, None) => None,
+        };
+        let mut closed = if graph.is_some() {
+            Closed::Closed
+        } else {
+            Closed::NotOpen
+        };
+        if let Some(graph) = graph {
+            let clean = keep
+                && graph.persistent
+                && !graph.needs_reopen()
+                && !graph.is_fenced()
+                && !graph.failed.load(Ordering::Acquire);
+            let pending = graph
+                .durable
+                .as_ref()
+                .filter(|_| clean)
+                .map(crate::recovery::PendingStamp::of);
+            match graph.db.close() {
+                Ok(()) => {
+                    if let (Some(pending), Some(dir)) = (pending, &dir) {
+                        match crate::recovery::write_stamp(dir, pending) {
+                            Ok(()) => closed = Closed::Stamped,
+                            Err(err) => {
+                                tracing::warn!(%namespace, %name, error = %err, "stamping a graph's local cache failed; its next open rebuilds it");
+                            }
+                        }
+                    }
+                }
+                Err(err) => {
+                    tracing::warn!(%namespace, %name, error = %err, "closing a graph failed; its local cache is not trusted");
+                }
+            }
+        }
+        if !keep && let Some(dir) = dir {
+            let existed = dir.exists();
+            crate::recovery::clear(&dir)?;
+            if existed || closed != Closed::NotOpen {
+                closed = Closed::Removed;
+            }
+        }
+        Ok(closed)
     }
 
     /// Closes a graph and releases its storage.
