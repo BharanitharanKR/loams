@@ -501,25 +501,39 @@ async fn invalid_bundle_fails_without_pointer_change(store: TestStore) {
     assert_eq!(all[0].state, DeploymentState::Active);
     assert_eq!(objects(&bundles).await.len(), 1);
 
-    // A schema the catalog refuses (an index change on an existing table
-    // waits for online index changes, LV1 plan Task 9) fails at step 4:
-    // its record says why, and the pointer stays.
+    // A schema the catalog refuses fails at step 4: its record says why,
+    // and the pointer stays. Here a new index (LV1 plan Task 9) whose
+    // entry for an existing document would pass `max_index_key_bytes`.
+    let insert = deploy::resolve(&app, INSERT).expect("_system:insert");
+    app.runner()
+        .mutate(
+            insert,
+            args(&[
+                ("table", LiveValue::Str("notes".into())),
+                (
+                    "fields",
+                    args(&[("big", LiveValue::Str("x".repeat(5_000)))]),
+                ),
+            ]),
+            None,
+        )
+        .await
+        .expect("an unindexed large field");
+    let mut too_large = notes_schema();
+    too_large.tables[0].indexes.push(IndexSpec {
+        name: "by_big".into(),
+        fields: vec!["big".into()],
+    });
     let err = deploy::deploy(
         &app,
         DeployRequest {
-            schema: Schema {
-                tables: vec![TableSchema {
-                    name: "notes".into(),
-                    indexes: Vec::new(),
-                    ..TableSchema::default()
-                }],
-            },
+            schema: too_large,
             ..request(bundle(2), Some(v1.record.id))
         },
         "a",
     )
     .await
-    .expect_err("an index change");
+    .expect_err("an index that cannot hold a document");
     assert!(matches!(err, LiveError::FailedPrecondition(_)), "{err}");
     assert!(err.to_string().contains("notes"), "{err}");
     assert_eq!(app.active(), Some(v1.record.id));
@@ -1119,10 +1133,7 @@ async fn rollback_reapplies_previous_schema(store: TestStore) {
     assert!(!format!("{tables:?}").contains("by_len"), "{tables:?}");
     assert!(format!("{tables:?}").contains("by_body"), "{tables:?}");
 }
-live_test!(
-    #[ignore = "an index change on an existing table needs LV1 plan Task 9 (online index changes), which removes this ignore"]
-    rollback_reapplies_previous_schema
-);
+live_test!(rollback_reapplies_previous_schema);
 
 /// Version `n` of the app for the subscription tests: every query's result
 /// names `n`.

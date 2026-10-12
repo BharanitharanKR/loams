@@ -68,6 +68,8 @@ enum TableJobKind {
   TABLE_JOB_KIND_UNSPECIFIED = 0;
   // A validation scan of a stricter validator (LV1 plan Task 8).
   TABLE_JOB_KIND_VALIDATE = 1;
+  // The backfill of the table's new indexes (LV1 plan Task 9).
+  TABLE_JOB_KIND_BACKFILL = 2;
 }
 
 // One document a table job found.
@@ -86,6 +88,26 @@ message IndexDef {
   string name = 2;
   // The indexed top-level fields, at most 16.
   repeated string fields = 3;
+  // Where the index is in its life (LV1 plan Task 9). Unspecified: ready
+  // (an index defined before Task 9).
+  IndexState state = 4;
+  // The deployment whose deploy is backfilling it (16 bytes), while
+  // `state` is `INDEX_STATE_BACKFILLING`.
+  bytes deployment = 5;
+}
+
+// Where a user index is in its life (LV1 plan Task 9, design §45 §4.2).
+enum IndexState {
+  // Ready (a record written before Task 9).
+  INDEX_STATE_UNSPECIFIED = 0;
+  // Every write maintains it and a backfill job writes the entries of the
+  // documents already there; no query reads it.
+  INDEX_STATE_BACKFILLING = 1;
+  // Queries read it; every write maintains it.
+  INDEX_STATE_READY = 2;
+  // No write maintains it and no query reads it; its entries are being
+  // deleted, then the definition goes.
+  INDEX_STATE_DROPPING = 3;
 }
 
 // The app's own settings: the value of its catalog record `0x01 ‖ 0x05`

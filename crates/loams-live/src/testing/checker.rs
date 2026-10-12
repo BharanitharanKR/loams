@@ -45,6 +45,14 @@
 //! the pointer names at the evaluation's timestamp, so a result of the
 //! wrong deployment is a stale result.
 //!
+//! **Index changes** (LV1 plan Task 9). `AddIndex` deploys the next
+//! version with a schema declaring every table with `by_n` and a second
+//! index `by_n2` on `n`, which the deploy backfills while the writers run;
+//! `DropIndex` deploys one declaring `by_n` alone, which drops `by_n2`.
+//! After the run the checker deletes dropped indexes' entries and checks
+//! that every table's index entries are exactly those its documents give
+//! (no entry missing, none left over).
+//!
 //! The subscription manager runs with its safety rerun off, so a missed
 //! invalidation stays visible instead of being repaired. The report counts,
 //! per session, the update-carrying Transitions that arrived while the
@@ -219,6 +227,9 @@ pub enum ViolationKind {
     SessionClosed,
     /// A disturbance that a later task wires.
     Unwired,
+    /// A table's index entries differ from those its documents give (LV1
+    /// plan Task 9).
+    Index,
     /// The workload itself failed (a mutation, a table definition).
     Workload,
 }
@@ -344,17 +355,18 @@ impl BundleLoader for Loader {
     }
 }
 
-/// Deploys version `n` against `expected`; returns its id.
+/// Deploys version `n` with `schema` against `expected`; returns its id.
 async fn deploy_version(
     engine: &AppEngine,
     n: i64,
     expected: Option<Ulid>,
+    schema: crate::schema::Schema,
 ) -> Result<Ulid, String> {
     let outcome = deploy::deploy(
         engine,
         DeployRequest {
             bundle: format!("checker-v{n}").into_bytes(),
-            schema: crate::schema::Schema::default(),
+            schema,
             expected_active: expected,
             message: String::new(),
             dry_run: false,
@@ -579,11 +591,12 @@ pub async fn run_reactive_checker(store: Store, w: Workload) -> Report {
 /// The task (of the LV1 plan) that wires `d`, when it is not wired yet.
 fn unwired(d: Disturbance) -> Option<&'static str> {
     match d {
-        Disturbance::AddIndex { .. } | Disturbance::DropIndex { .. } => Some("Task 9"),
         Disturbance::IdentityChange { .. } => Some("Task 17"),
         Disturbance::NodeKill { .. } => Some("Task 24"),
         Disturbance::Deploy { .. }
         | Disturbance::Rollback { .. }
+        | Disturbance::AddIndex { .. }
+        | Disturbance::DropIndex { .. }
         | Disturbance::Disconnect { .. }
         | Disturbance::DropInvalidation { .. } => None,
     }
@@ -682,7 +695,7 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
         by_id: HashMap::new(),
         at: HashMap::new(),
     };
-    let first = deploy_version(&engine, 1, None).await?;
+    let first = deploy_version(&engine, 1, None, crate::schema::Schema::default()).await?;
     versions.by_id.insert(first, 1);
     // The deployments activated, oldest first; a rollback pops the current
     // one and activates the one before it.
@@ -830,7 +843,23 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
             }
             Disturbance::Deploy { .. } => {
                 let current = activated.last().map(|(id, _)| *id);
-                let id = deploy_version(&engine, next_version, current).await?;
+                let id = deploy_version(
+                    &engine,
+                    next_version,
+                    current,
+                    crate::schema::Schema::default(),
+                )
+                .await?;
+                versions.by_id.insert(id, next_version);
+                activated.push((id, next_version));
+                next_version += 1;
+                report.activations += 1;
+            }
+            Disturbance::AddIndex { .. } | Disturbance::DropIndex { .. } => {
+                let current = activated.last().map(|(id, _)| *id);
+                let add = matches!(d, Disturbance::AddIndex { .. });
+                let id = deploy_version(&engine, next_version, current, index_schema(tables, add))
+                    .await?;
                 versions.by_id.insert(id, next_version);
                 activated.push((id, next_version));
                 next_version += 1;
@@ -1036,7 +1065,94 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
         }
     }
     report.deployments_seen = seen_versions.len();
+
+    // Every table's index entries are those its documents give.
+    crate::backfill::drop_indexes(&runner)
+        .await
+        .map_err(|e| format!("deleting dropped indexes: {e}"))?;
+    for t in 0..tables {
+        if let Some(detail) = index_mismatch(&runner, &table_name(t)).await? {
+            report
+                .violations
+                .push(Violation::new(ViolationKind::Index, None, detail));
+        }
+    }
     Ok(())
+}
+
+/// The schema of `AddIndex` (`add`) and `DropIndex`: every table with
+/// `by_n`, and with `add` also `by_n2`.
+fn index_schema(tables: usize, add: bool) -> crate::schema::Schema {
+    let mut indexes = vec![IndexSpec {
+        name: "by_n".into(),
+        fields: vec!["n".into()],
+    }];
+    if add {
+        indexes.push(IndexSpec {
+            name: "by_n2".into(),
+            fields: vec!["n".into()],
+        });
+    }
+    crate::schema::Schema {
+        tables: (0..tables)
+            .map(|t| crate::schema::TableSchema {
+                name: table_name(t),
+                indexes: indexes.clone(),
+                ..crate::schema::TableSchema::default()
+            })
+            .collect(),
+    }
+}
+
+/// How table `name`'s stored index entries differ from those its
+/// documents give now, if they do.
+async fn index_mismatch(runner: &Runner, name: &str) -> Result<Option<String>, String> {
+    let app = runner.app().clone();
+    let limits = runner.limits().clone();
+    let table_name = name.to_string();
+    let found = runner
+        .store()
+        .run(TxnOptions::new("checker.indexes"), move |txn| {
+            let (app, limits, name) = (app.clone(), limits.clone(), table_name.clone());
+            Box::pin(async move {
+                let check = async {
+                    let Some(table) = catalog::load_table(txn, &app, &name).await? else {
+                        return Ok(None);
+                    };
+                    let docs = app.documents(table.id);
+                    let mut want = BTreeSet::new();
+                    for (key, value) in txn.scan(&docs.lo, Some(&docs.hi), usize::MAX).await? {
+                        let id = app.doc_id_of_document(table.id, &key).ok_or_else(|| {
+                            LiveError::Corrupt("a document key of the wrong length".into())
+                        })?;
+                        let doc = crate::docs::Doc::decode(id, &value)?;
+                        want.extend(crate::docs::index_keys(&app, &table, &doc, &limits)?);
+                    }
+                    let entries = app.table_indexes(table.id);
+                    let have: BTreeSet<Vec<u8>> = txn
+                        .scan(&entries.lo, Some(&entries.hi), usize::MAX)
+                        .await?
+                        .into_iter()
+                        .map(|(k, _)| k)
+                        .collect();
+                    if have == want {
+                        return Ok(None);
+                    }
+                    Ok(Some(format!(
+                        "table {name}: {} index entries stored, {} expected; {} missing, {} \
+                         left over",
+                        have.len(),
+                        want.len(),
+                        want.difference(&have).count(),
+                        have.difference(&want).count()
+                    )))
+                };
+                crate::txn::lift(check.await)
+            })
+        })
+        .await
+        .map_err(|e| format!("reading table {name}'s indexes: {e}"))?;
+    found.value.map_err(|e| format!("checking an index: {e}"))
 }
 
 fn short(text: &str) -> String {

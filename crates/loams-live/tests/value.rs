@@ -142,6 +142,7 @@ fn table() -> TableDef {
             id: IndexId(2),
             name: "by_a_b".to_string(),
             fields: vec!["a".to_string(), "b".to_string()],
+            state: loams_live::catalog::IndexState::Ready,
         }],
         next_index_id: 3,
         validation: Default::default(),

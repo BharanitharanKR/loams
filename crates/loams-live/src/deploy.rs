@@ -14,20 +14,28 @@
 //! 2. store the bundle and read it back to check its hash;
 //! 3. write the `pending` record;
 //! 4. when the schema makes a table's validator stricter (Task 8, design
-//!    §45 §4.1): in one transaction, check the pointer, mark the record
-//!    `validating`, [enforce](schema::enforce) the new validators on new
-//!    writes and fence the journal; then scan each such table in a
-//!    [`TableJob`](backfill::TableJob). A document that does not match
-//!    fails the deployment (listing up to 100 ids) and the new validators
-//!    are [released](schema::release);
+//!    §45 §4.1) or adds an index to an existing table (Task 9, §4.2): in
+//!    one transaction, check the pointer, mark the record `validating` (or
+//!    `backfilling`, with only indexes), [enforce](schema::enforce) the
+//!    new validators on new writes and add the new indexes `backfilling`
+//!    ([`schema::begin_backfills`]); fence the journal after it
+//!    ([`Journal::fence_after`]); then scan each
+//!    such table in a [`TableJob`](backfill::TableJob): the validations
+//!    first, then the backfills (the record moves to `backfilling`). A
+//!    document that does not match, or whose new index entry is too large,
+//!    fails the deployment (listing up to 100 ids), and the new validators
+//!    and indexes are [released](schema::release);
 //! 5. in one transaction: compare-and-swap the pointer against
 //!    `expected_active` (a mismatch fails the deployment with
 //!    `FAILED_PRECONDITION`, reason `live_deploy_conflict`), apply the
-//!    schema ([`schema::apply`]: additive table creation, and the
-//!    validators; index changes are Task 9's), mark the deployment `active`
+//!    schema ([`schema::apply`]: additive table creation, the validators,
+//!    the backfilled indexes made ready and the dropped ones `dropping`),
+//!    mark the deployment `active`
 //!    and the one it replaces `superseded`. A failure at 4 or 5 marks the
 //!    record `failed` with the reason;
-//! 6. the `catalog` journal entry that switches every node at one tick is
+//! 6. a dropped index's entries are deleted in the background
+//!    ([`backfill::drop_indexes`], also each janitor round);
+//! 7. the `catalog` journal entry that switches every node at one tick is
 //!    Task 11's. Until then a node picks up another node's deploy when it
 //!    [refreshes](AppEngine::refresh) (the server does each janitor round).
 //!
@@ -75,7 +83,7 @@ use sha2::{Digest, Sha256};
 use tokio::sync::watch;
 use ulid::Ulid;
 
-use crate::backfill::{Finding, JobKind, MAX_FINDINGS, TableJob};
+use crate::backfill::{self, Finding, IndexBackfill, JobKind, MAX_FINDINGS, TableJob};
 use crate::docs::Reads;
 use crate::journal::Journal;
 use crate::keys::{AppKeys, KeyRange};
@@ -103,6 +111,11 @@ pub const PENDING_GRACE: Duration = Duration::from_secs(10 * 60);
 /// The reason the janitor gives a `pending` record it fails.
 const ABANDONED: &str = "the deploy did not finish (its record stayed pending past the grace \
                          period; it was failed by the janitor)";
+
+/// The reason the janitor gives a `backfilling` record whose backfills it
+/// released (LV1 plan Task 9).
+const ABANDONED_BACKFILL: &str = "the deploy did not finish backfilling its new indexes (its \
+                                  backfill jobs' leases expired; the janitor dropped them)";
 
 /// The reason the janitor gives a `validating` record whose checks it
 /// released.
@@ -224,10 +237,13 @@ pub struct Retained {
     /// The `pending` records older than the grace period that were failed
     /// (deploys that never activated).
     pub abandoned: Vec<Ulid>,
-    /// The deployments whose validator checks were released because their
-    /// jobs' leases expired (LV1 plan Task 8); a `validating` record among
-    /// them is failed.
+    /// The deployments whose validator checks or index backfills were
+    /// released because their jobs' leases expired (LV1 plan Tasks 8 and
+    /// 9); a `validating` or `backfilling` record among them is failed.
     pub validations_released: Vec<Ulid>,
+    /// The dropped indexes whose entries and definitions this round deleted
+    /// (LV1 plan Task 9).
+    pub indexes_removed: Vec<(crate::TableId, crate::IndexId)>,
 }
 
 /// Turns a bundle into functions: the function runtime (`loams-live-js`'s
@@ -784,7 +800,7 @@ enum Path {
 fn check_state(record: &DeploymentRecord, path: Path) -> Result<(), LiveError> {
     let in_flight = matches!(
         record.state,
-        DeploymentState::Pending | DeploymentState::Validating
+        DeploymentState::Pending | DeploymentState::Validating | DeploymentState::Backfilling
     );
     match path {
         Path::Deploy if !in_flight => Err(LiveError::FailedPrecondition(format!(
@@ -798,20 +814,26 @@ fn check_state(record: &DeploymentRecord, path: Path) -> Result<(), LiveError> {
     }
 }
 
-/// Step 4 for deployment `id` (LV1 plan Task 8, design §45 §4.1): when its
-/// schema makes a table's validator stricter, checks the table's documents
-/// first. One transaction compares the pointer with `expected`, marks a new
-/// deployment's record `validating`, [enforces](schema::enforce) the new
-/// validators on new writes (alongside the old ones) and fences the journal,
-/// so every mutation in flight reruns and sees them; then each table is
-/// scanned by a [`TableJob`] with the [`Conformance`] visitor, at batches
-/// that all read after that commit. Returns whether there was anything to
-/// check.
+/// Step 4 for deployment `id` (LV1 plan Tasks 8 and 9, design §45 §4.1,
+/// §4.2): when its schema makes a table's validator stricter, checks the
+/// table's documents first, and when it adds an index to an existing
+/// table, backfills it. One transaction compares the pointer with
+/// `expected`, marks a new deployment's record `validating` (or
+/// `backfilling`), [enforces](schema::enforce) the new validators on new
+/// writes (alongside the old ones) and adds the new indexes `backfilling`
+/// ([`schema::begin_backfills`]). Then the journal is fenced
+/// ([`Journal::fence_after`]), so every mutation in flight reruns and sees
+/// them. Then each validated table is scanned by a [`TableJob`] with the
+/// [`Conformance`] visitor, and each backfilled one with the
+/// [`IndexBackfill`] visitor, at batches that all read after the fence.
+/// Returns whether there was anything to do.
 ///
-/// A document that does not match (up to [`MAX_FINDINGS`] are listed) is
-/// [`LiveError::FailedPrecondition`] naming them; the checks are released
-/// and a new deployment's record is `failed`, as on a conflict or any
-/// other error of this step. The pointer never changes here.
+/// A document that does not match, or whose new index entry would be too
+/// large (up to [`MAX_FINDINGS`] are listed), is
+/// [`LiveError::FailedPrecondition`] naming them; the checks and backfills
+/// are released and a new deployment's record is `failed`, as on a
+/// conflict or any other error of this step. The pointer never changes
+/// here.
 async fn validate(
     app: &AppEngine,
     id: Ulid,
@@ -839,7 +861,7 @@ async fn validate(
             return Err(err);
         }
     };
-    if planned.validate.is_empty() {
+    if planned.validate.is_empty() && planned.indexes_added.is_empty() {
         return Ok(false);
     }
     let owner = app.next_id().to_string();
@@ -856,20 +878,25 @@ async fn validate(
                 .ok_or_else(|| LiveError::NotFound(format!("deployment {id} does not exist")))?;
             check_state(&record, path)?;
             let checks = schema::enforce(txn, &keys, &record.schema, id, &owner, lease).await?;
+            let backfills =
+                schema::begin_backfills(txn, &keys, &record.schema, id, &owner, lease).await?;
             if path == Path::Deploy {
-                record.state = DeploymentState::Validating;
+                record.state = if checks.is_empty() {
+                    DeploymentState::Backfilling
+                } else {
+                    DeploymentState::Validating
+                };
                 txn.put(&keys.deployment(&id.to_bytes()), record.encode())
                     .await?;
             }
             let shards = catalog::load_journal_shards(txn, &keys)
                 .await?
                 .ok_or_else(|| LiveError::Internal("the app has no journal record".into()))?;
-            Journal::new(keys.clone(), shards)?.fence(txn).await?;
-            Ok(checks)
+            Ok((checks, backfills, shards))
         })
     })
     .await;
-    let checks = match fenced {
+    let (checks, backfills, shards) = match fenced {
         Ok(committed) => committed.value,
         Err(Refusal::Own(err)) => {
             if err.reason() == Some("live_deploy_conflict") {
@@ -885,6 +912,17 @@ async fn validate(
             return Err(err);
         }
     };
+    // The fence (row T9-3): every mutation that read the catalog before the
+    // step-4 commit has committed, or will rerun past it, before any scan.
+    let fence = async {
+        Journal::new(keys.clone(), shards)?
+            .fence_after(runner.store(), runner.options().commit_mode)
+            .await
+    };
+    if let Err(err) = fence.await {
+        fail(runner, id, fail_reason(&err).as_deref(), true).await;
+        return Err(err);
+    }
     if app
         .inner
         .crash_after_fence
@@ -932,7 +970,82 @@ async fn validate(
         fail(runner, id, fail_reason(&err).as_deref(), true).await;
         return Err(err);
     }
+    if backfills.is_empty() {
+        return Ok(true);
+    }
+    if path == Path::Deploy && !checks.is_empty() {
+        let moved = atomic(runner, "live.deploy.backfilling", |txn| {
+            let keys = keys.clone();
+            Box::pin(async move {
+                set_state(txn, &keys, id, |s| {
+                    (*s == DeploymentState::Validating).then_some(DeploymentState::Backfilling)
+                })
+                .await
+            })
+        })
+        .await;
+        if let Err(Refusal::Own(err) | Refusal::Storage(err)) = moved {
+            fail(runner, id, fail_reason(&err).as_deref(), true).await;
+            return Err(err);
+        }
+    }
+    let visitor = Arc::new(IndexBackfill::new(id, runner.limits().clone()));
+    for table in &backfills {
+        let job = TableJob::new(
+            runner.clone(),
+            JobKind::Backfill,
+            table.table,
+            owner.clone(),
+        );
+        match job
+            .run(visitor.clone(), MAX_FINDINGS - findings.len())
+            .await
+        {
+            Ok(done) => findings.extend(
+                done.findings
+                    .into_iter()
+                    .take(MAX_FINDINGS - findings.len())
+                    .map(|f| (table.name.clone(), f)),
+            ),
+            Err(err) => {
+                fail(runner, id, fail_reason(&err).as_deref(), true).await;
+                return Err(err);
+            }
+        }
+        if findings.len() >= MAX_FINDINGS {
+            break;
+        }
+    }
+    if !findings.is_empty() {
+        let err = LiveError::FailedPrecondition(describe_index_findings(id, &findings));
+        tracing::warn!(
+            app = %app.inner.name,
+            deployment = %id,
+            documents = findings.len(),
+            "a deploy's new indexes cannot hold existing documents; it failed"
+        );
+        fail(runner, id, fail_reason(&err).as_deref(), true).await;
+        return Err(err);
+    }
     Ok(true)
+}
+
+/// The error text of a failed backfill: the documents whose new index entry
+/// cannot be written, by table, and why for the first (sizes and field
+/// names, never values).
+fn describe_index_findings(id: Ulid, findings: &[(String, Finding)]) -> String {
+    let listed = findings
+        .iter()
+        .map(|(table, f)| format!("{} of '{table}'", f.id))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let (table, first) = &findings[0];
+    format!(
+        "deployment {id}: existing documents cannot be indexed by its new indexes: {listed}; \
+         document {} of table '{table}': {}. Fix the documents (a migration), or change the \
+         index, then deploy again",
+        first.id, first.detail
+    )
 }
 
 /// The error text of a failed check: the offending ids by table, and what
@@ -1014,6 +1127,17 @@ async fn commit_now(
             app.serve(Served::Loaded(app.loaded(id, loaded)), at);
             drop(switching);
             drop(switch);
+            if !changes.indexes_dropped.is_empty() {
+                // The dropped indexes' entries go in the background (and in
+                // the janitor's rounds, should this node die first).
+                let runner = engine.runner.clone();
+                let app_name = engine.name.clone();
+                tokio::spawn(async move {
+                    if let Err(error) = backfill::drop_indexes(&runner).await {
+                        tracing::warn!(app = %app_name, %error, "deleting dropped indexes failed");
+                    }
+                });
+            }
             match path {
                 Path::Deploy => {
                     tracing::info!(app = %engine.name, deployment = %id, by, "deployed")
@@ -1152,6 +1276,13 @@ pub async fn retain_with(app: &AppEngine, pending_grace: Duration) -> Result<Ret
         bundles_deleted: 0,
         abandoned: trimmed.abandoned,
         validations_released: trimmed.released,
+        // A failure here leaves the indexes `dropping` for the next round.
+        indexes_removed: backfill::drop_indexes(&engine.runner)
+            .await
+            .unwrap_or_else(|error| {
+                tracing::warn!(app = %engine.name, %error, "deleting dropped indexes failed");
+                Vec::new()
+            }),
     };
     for id in &report.abandoned {
         tracing::warn!(
@@ -1164,7 +1295,8 @@ pub async fn retain_with(app: &AppEngine, pending_grace: Duration) -> Result<Ret
         tracing::warn!(
             app = %engine.name,
             deployment = %id,
-            "a deploy's validator checks were abandoned; the janitor released them"
+            "a deploy's validator checks or index backfills were abandoned; the janitor \
+             released them"
         );
     }
     let objects = engine
@@ -1247,15 +1379,22 @@ async fn trim_records(txn: &mut Txn, keys: &AppKeys, grace_ms: u64) -> Result<Tr
                     ..record
                 };
                 txn.put(&key, failed.encode()).await?;
-            } else if record.state == DeploymentState::Validating
-                && !checks.live.contains(&record.id)
+            } else if matches!(
+                record.state,
+                DeploymentState::Validating | DeploymentState::Backfilling
+            ) && !checks.live.contains(&record.id)
             {
                 if !trimmed.released.contains(&record.id) {
                     trimmed.released.push(record.id);
                 }
+                let reason = if record.state == DeploymentState::Validating {
+                    ABANDONED_VALIDATION
+                } else {
+                    ABANDONED_BACKFILL
+                };
                 let failed = DeploymentRecord {
                     state: DeploymentState::Failed {
-                        reason: ABANDONED_VALIDATION.to_string(),
+                        reason: reason.to_string(),
                     },
                     ..record
                 };
@@ -1463,8 +1602,13 @@ async fn fail(runner: &Runner, id: Ulid, reason: Option<&str>, release: bool) {
             }
             if let Some(failed) = failed {
                 set_state(txn, &keys, id, |s| {
-                    matches!(s, DeploymentState::Pending | DeploymentState::Validating)
-                        .then(|| failed.clone())
+                    matches!(
+                        s,
+                        DeploymentState::Pending
+                            | DeploymentState::Validating
+                            | DeploymentState::Backfilling
+                    )
+                    .then(|| failed.clone())
                 })
                 .await?;
             }

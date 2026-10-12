@@ -1,7 +1,8 @@
-//! Table jobs (design §45 §4.1–§4.2; LV1 plan Task 8): leased,
+//! Table jobs (design §45 §4.1–§4.2; LV1 plan Tasks 8 and 9): leased,
 //! checkpointed, rate-limited scans of one table's documents in batches.
-//! The validation scan of a stricter validator (Task 8) runs as one, and the
-//! index backfill of Task 9 will too.
+//! The validation scan of a stricter validator (Task 8) runs as one, and so
+//! does the backfill of new indexes ([`IndexBackfill`], Task 9). Dropped
+//! indexes' entries are deleted by [`drop_indexes`].
 //!
 //! A job is a catalog record ([`JobRecord`], `0x01 ‖ 0x07 ‖ table_id ‖
 //! kind`), written with its owner's lease by the transaction that starts
@@ -31,14 +32,15 @@ use std::time::{Duration, Instant};
 
 use buffa::Message;
 use futures::future::BoxFuture;
-use loams_kv::Txn;
+use loams_kv::{Txn, TxnError};
 use ulid::Ulid;
 
-use crate::docs::{Doc, Reads};
-use crate::ids::{DOC_ID_BYTES, DocId, TableId};
-use crate::keys::{AppKeys, KeyRange, key_after};
-use crate::txn::{Refusal, atomic};
-use crate::{LiveError, Runner, pb};
+use crate::catalog::{self, IndexState};
+use crate::docs::{self, Doc, Reads};
+use crate::ids::{DOC_ID_BYTES, DocId, IndexId, TableId};
+use crate::keys::{AppKeys, KeyRange, key_after, prefix_range};
+use crate::txn::{Refusal, atomic, latest_snapshot};
+use crate::{Limits, LiveError, Runner, pb};
 
 /// Documents per batch by default (design §45 §4.2).
 pub const DEFAULT_BATCH: usize = 256;
@@ -49,6 +51,11 @@ pub const DEFAULT_DOCS_PER_S: u32 = 5_000;
 
 /// How long a lease lasts after its owner's last batch, by default.
 pub const DEFAULT_LEASE: Duration = Duration::from_secs(30);
+
+/// Batches in a row a job lets fail on conflicts (halving the batch each
+/// time) before it gives up: from 256 documents, eight to reach one, then
+/// eight at one.
+const MAX_BATCH_CONFLICTS: u32 = 16;
 
 /// The most findings a job keeps (design §45 §4.1: a failed validation
 /// reports up to 100 offending ids).
@@ -80,6 +87,8 @@ impl Default for JobOptions {
 pub enum JobKind {
     /// Checks the documents against a stricter validator (Task 8).
     Validate,
+    /// Writes the entries of the table's backfilling indexes (Task 9).
+    Backfill,
 }
 
 impl JobKind {
@@ -87,12 +96,14 @@ impl JobKind {
     fn byte(self) -> u8 {
         match self {
             JobKind::Validate => 1,
+            JobKind::Backfill => 2,
         }
     }
 
     fn to_proto(self) -> pb::TableJobKind {
         match self {
             JobKind::Validate => pb::TableJobKind::TABLE_JOB_KIND_VALIDATE,
+            JobKind::Backfill => pb::TableJobKind::TABLE_JOB_KIND_BACKFILL,
         }
     }
 
@@ -100,6 +111,7 @@ impl JobKind {
     pub fn name(self) -> &'static str {
         match self {
             JobKind::Validate => "validation",
+            JobKind::Backfill => "index backfill",
         }
     }
 }
@@ -169,6 +181,7 @@ impl JobRecord {
         }
         let kind = match p.kind.as_known() {
             Some(pb::TableJobKind::TABLE_JOB_KIND_VALIDATE) => JobKind::Validate,
+            Some(pb::TableJobKind::TABLE_JOB_KIND_BACKFILL) => JobKind::Backfill,
             _ => return Err(corrupt(format!("unknown kind {:?}", p.kind))),
         };
         let deployment: [u8; 16] = p
@@ -327,16 +340,32 @@ impl TableJob {
         stop_after: usize,
     ) -> Result<JobRecord, LiveError> {
         let options = self.runner.options().jobs;
-        let batch = options.batch.max(1);
+        let full = options.batch.max(1);
+        let mut batch = full;
+        let mut conflicts = 0;
         let docs_per_s = f64::from(options.docs_per_s.max(1));
         loop {
             let started = Instant::now();
-            let (record, scanned) = self
-                .batch(&visitor, batch, options.lease, docs_per_s)
-                .await?;
+            let (record, scanned) =
+                match self.batch(&visitor, batch, options.lease, docs_per_s).await {
+                    Ok(done) => done,
+                    // Writers kept touching the batch's documents past the
+                    // runner's attempts: halve the batch (a batch that locks
+                    // fewer documents meets fewer writers), down to one
+                    // document, which gets a few more tries (row T9-4).
+                    Err(LiveError::Txn(TxnError::Conflict)) if conflicts < MAX_BATCH_CONFLICTS => {
+                        conflicts += 1;
+                        batch = (batch / 2).max(1);
+                        continue;
+                    }
+                    Err(e) => return Err(e),
+                };
             if record.done || record.findings.len() >= stop_after {
                 return Ok(record);
             }
+            // A batch went through: grow back towards the configured size.
+            conflicts = 0;
+            batch = (batch * 2).min(full);
             let budget = Duration::from_secs_f64(scanned as f64 / docs_per_s);
             if let Some(pause) = budget.checked_sub(started.elapsed()) {
                 tokio::time::sleep(pause).await;
@@ -424,6 +453,221 @@ impl TableJob {
     }
 }
 
+/// The index backfill's [`Visitor`] (LV1 plan Task 9): for each document
+/// of the batch, the entry of every index of the table that `deployment`
+/// is backfilling. It first locks the batch's documents (`lock_keys`), so a
+/// write to one of them that commits while the batch runs makes one of the
+/// two rerun: no entry of an old version of a document is written after
+/// that version is gone. A document whose entry would pass
+/// `max_index_key_bytes` is a [`Finding`], and gets no entry. An index no
+/// longer backfilling for `deployment` (released, or taken over by another
+/// deploy) is skipped.
+#[derive(Debug, Clone)]
+pub struct IndexBackfill {
+    /// The deployment whose backfilling indexes are filled.
+    pub deployment: Ulid,
+    /// The app's limits (`max_index_key_bytes`).
+    pub limits: Limits,
+}
+
+impl IndexBackfill {
+    pub fn new(deployment: Ulid, limits: Limits) -> Self {
+        IndexBackfill { deployment, limits }
+    }
+}
+
+impl Visitor for IndexBackfill {
+    fn visit<'a>(
+        &'a self,
+        txn: &'a mut Txn,
+        app: &'a AppKeys,
+        docs: &'a [Doc],
+    ) -> BoxFuture<'a, Result<Vec<Finding>, LiveError>> {
+        Box::pin(async move {
+            let Some(table) = docs.first().map(|d| d.id.table) else {
+                return Ok(Vec::new());
+            };
+            let def = catalog::load_table_by_id(txn, app, table)
+                .await?
+                .ok_or_else(|| {
+                    LiveError::FailedPrecondition(format!("table {} is gone", table.0))
+                })?;
+            let ours = IndexState::Backfilling {
+                deployment: self.deployment,
+            };
+            let indexes: Vec<_> = def.indexes.iter().filter(|i| i.state == ours).collect();
+            if indexes.is_empty() {
+                return Ok(Vec::new());
+            }
+            txn.lock_keys(docs.iter().map(|d| app.document(&d.id)))
+                .await?;
+            let mut findings = Vec::new();
+            for doc in docs {
+                for index in &indexes {
+                    match docs::index_key(app, &def, index, doc, &self.limits) {
+                        Ok(key) => txn.put(&key, Vec::new()).await?,
+                        Err(
+                            e @ (LiveError::LimitExceeded { .. } | LiveError::InvalidArgument(_)),
+                        ) => {
+                            findings.push(Finding {
+                                id: doc.id,
+                                detail: e.to_string(),
+                            });
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+            }
+            Ok(findings)
+        })
+    }
+}
+
+/// An index's status (LV1 plan Task 9, `GetIndexStatus`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexStatus {
+    pub state: IndexState,
+    /// Documents the backfill has done (every document, once ready).
+    pub done: u64,
+    /// The table's documents now (its `by_creation_time` entries).
+    pub total_estimate: u64,
+}
+
+/// The status of index `index` of table `table` of `runner`'s app, read
+/// now: a ready or backfilling one of that name first, else one being
+/// dropped. An unknown table or index is [`LiveError::NotFound`].
+pub async fn index_status(
+    runner: &Runner,
+    table: &str,
+    index: &str,
+) -> Result<IndexStatus, LiveError> {
+    let app = runner.app();
+    let mut snap = latest_snapshot(runner.store()).await?;
+    let def = catalog::load_table(&mut snap, app, table)
+        .await?
+        .ok_or_else(|| LiveError::NotFound(format!("table '{table}'")))?;
+    let found = def
+        .index_named(index)
+        .or_else(|| def.indexes.iter().find(|i| i.name == index))
+        .ok_or_else(|| LiveError::NotFound(format!("index '{index}' of table '{table}'")))?;
+    let entries = prefix_range(app.index_prefix(def.id, IndexId::BY_CREATION_TIME));
+    let total = Reads::scan(&mut snap, &entries, usize::MAX, false)
+        .await?
+        .len() as u64;
+    let done = match found.state {
+        IndexState::Ready => total,
+        IndexState::Dropping => 0,
+        IndexState::Backfilling { deployment } => {
+            load_job(&mut snap, app, JobKind::Backfill, def.id)
+                .await?
+                .filter(|j| j.deployment == deployment)
+                .map_or(0, |j| j.scanned)
+        }
+    };
+    Ok(IndexStatus {
+        state: found.state,
+        done,
+        total_estimate: total,
+    })
+}
+
+/// Deletes the entries of every index being dropped, in batches of the
+/// runner's [`JobOptions::batch`] keys at its rate (one transaction each),
+/// then removes its definition; returns the indexes removed. It first
+/// fences the journal ([`Journal::fence_after`](crate::Journal::fence_after)),
+/// so every mutation that read the index as maintained has committed (its
+/// entries are then deleted here) or reruns and skips it. Idempotent: the
+/// server runs it after a deploy that drops an index and in each janitor
+/// round.
+pub async fn drop_indexes(runner: &Runner) -> Result<Vec<(TableId, IndexId)>, LiveError> {
+    let app = runner.app().clone();
+    let mut snap = latest_snapshot(runner.store()).await?;
+    let dropping: Vec<(TableId, IndexId)> = catalog::list_tables(&mut snap, &app)
+        .await?
+        .iter()
+        .flat_map(|t| {
+            t.indexes
+                .iter()
+                .filter(|i| i.state == IndexState::Dropping)
+                .map(|i| (t.id, i.id))
+        })
+        .collect();
+    if dropping.is_empty() {
+        return Ok(Vec::new());
+    }
+    let shards = catalog::load_journal_shards(&mut snap, &app)
+        .await?
+        .ok_or_else(|| LiveError::Internal("the app has no journal record".into()))?;
+    drop(snap);
+    crate::Journal::new(app.clone(), shards)?
+        .fence_after(runner.store(), runner.options().commit_mode)
+        .await?;
+    let options = runner.options().jobs;
+    let batch = options.batch.max(1);
+    let per_s = f64::from(options.docs_per_s.max(1));
+    let mut removed = Vec::new();
+    for (table, index) in dropping {
+        loop {
+            let started = Instant::now();
+            let app = app.clone();
+            let step = atomic(runner, "live.backfill.drop", |txn| {
+                let app = app.clone();
+                Box::pin(async move {
+                    let Some(mut def) = catalog::load_table_by_id(txn, &app, table).await? else {
+                        return Ok(Dropped::Gone);
+                    };
+                    if !def
+                        .indexes
+                        .iter()
+                        .any(|i| i.id == index && i.state == IndexState::Dropping)
+                    {
+                        return Ok(Dropped::Gone);
+                    }
+                    let range = prefix_range(app.index_prefix(table, index));
+                    let keys = Reads::scan(txn, &range, batch, false).await?;
+                    for (key, _) in &keys {
+                        txn.delete(key).await?;
+                    }
+                    if keys.len() < batch {
+                        def.indexes.retain(|i| i.id != index);
+                        catalog::put_table(txn, &app, &def).await?;
+                        return Ok(Dropped::Removed);
+                    }
+                    Ok(Dropped::Deleted(keys.len()))
+                })
+            })
+            .await;
+            match step {
+                Ok(c) => match c.value {
+                    Dropped::Gone => break,
+                    Dropped::Removed => {
+                        removed.push((table, index));
+                        break;
+                    }
+                    Dropped::Deleted(n) => {
+                        let budget = Duration::from_secs_f64(n as f64 / per_s);
+                        if let Some(pause) = budget.checked_sub(started.elapsed()) {
+                            tokio::time::sleep(pause).await;
+                        }
+                    }
+                },
+                Err(Refusal::Own(e) | Refusal::Storage(e)) => return Err(e),
+            }
+        }
+    }
+    Ok(removed)
+}
+
+/// What one batch of [`drop_indexes`] did.
+enum Dropped {
+    /// The index is no longer being dropped (another node finished it).
+    Gone,
+    /// It deleted this many entries; more may be left.
+    Deleted(usize),
+    /// It deleted the last entries and the definition.
+    Removed,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -468,5 +712,7 @@ mod tests {
         let app = AppKeys::dedicated();
         let key = app.table_job(TableId(3), JobKind::Validate.byte());
         assert_eq!(key, vec![0x01, 0x07, 0, 0, 0, 3, 1]);
+        let key = app.table_job(TableId(3), JobKind::Backfill.byte());
+        assert_eq!(key, vec![0x01, 0x07, 0, 0, 0, 3, 2]);
     }
 }
