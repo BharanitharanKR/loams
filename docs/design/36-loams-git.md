@@ -1018,6 +1018,8 @@ The projection is **always present** as `.git` at the workspace root, so tools t
 
 New reasons: `workspace_not_found`, `workspace_fenced` (aborted), `workspace_read_only` (failed_precondition), `workspace_name_taken` (already_exists), `object_missing` (failed_precondition), `secret_detected` (failed_precondition), `env_unsealed` (invalid_argument), `env_access_denied` (permission_denied), `env_foreign_reference` (permission_denied).
 
+**As built (GT1b, Task 12; `proto/loams/repos/v1/`).** `loams.repos.v1` holds four files: `repos.proto` (`RepoService`: `CreateRepo`, `GetRepo`, `ListRepos`, `ForkRepo`, `DeleteRepo`, `UpdateRepoConfig`, `ListRefs`, `CompactRepo`, `WatchRepo`) and empty stubs of `workspaces.proto`, `objects.proto` and `env.proto`, which Tasks 25, 18 and 61 fill in. Every reason above and `RepoService`'s own (`repo_not_found`, `repo_already_exists`, `repo_deleting`, `ref_stale`, `ref_protected`, `out_of_scope`, `object_format_unsupported`, `fork_too_deep`, `quota_exceeded`, `sequencer_unavailable`, `idempotency_key_reused`) is registered in `docs/api/reasons.md`. The package is in the catalogue with `available` following the `loams` cargo feature `git`, and is unstable until GA.
+
 ### 19.11 Agent scale
 
 - **Cost (estimate, R2 prices of §12).** A workspace costs 1–2 PUTs to create ($4.50–9 per million workspaces) and about 1 KB to keep (one million idle workspaces ≈ 1 GB ≈ $0.015 a month). A save is two PUTs plus a hint at most once a second: an agent saving every 10 s for 8 hours makes about 2,900 saves, about 5,800 PUTs, **about $0.03 per agent-day**. Reads are Class B ($0.36 per million) and are shared across a host's agents by the host cache.

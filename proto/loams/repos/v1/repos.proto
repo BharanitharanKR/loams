@@ -1,0 +1,336 @@
+syntax = "proto3";
+
+// Loams Git repositories (design §36, §19.10, D834; plan GT1 Task 12):
+// git repositories whose refs live in a write-ahead log on the bucket and
+// whose objects are packs beside it. This file is the repository control
+// plane, `RepoService`. The package's other files are `workspaces.proto`
+// (`WorkspaceService`, GT1 Task 25), `objects.proto` (`ObjectService`, Task
+// 18) and `env.proto` (`EnvService`, Task 61); git's own data path stays Git
+// Smart HTTP (D603, Tasks 46–52). The on-disk formats are the crate-local
+// `loams.git.v1` package, never exposed here (Ruling 20).
+//
+// Rules this package keeps (AP0, design §44):
+//
+// - **Unstable until GT1 GA.** The service carries `ModuleOptions.unstable`,
+//   so `buf breaking` skips the package (buf.yaml) and SDKs mark the module
+//   experimental.
+// - **Addressing.** Every request names its namespace in a top-level
+//   `namespace` and the repository by `name`. Bucket paths use the immutable
+//   `repo_id` ("r" + 26 lowercase ULID characters), never the name, so a
+//   repository deleted and created again under one name never shares data
+//   with the old one. Names match `[a-z0-9][a-z0-9._-]{0,99}` and do not end
+//   in ".git".
+// - **Reads are `NO_SIDE_EFFECTS`.** Every read of one repository takes
+//   `string consistency_token = 14` and answers one. A token is
+//   "git:<repo_id>:<seq>" (§36 §4.6): a read given one reflects at least that
+//   seq, so a caller that wrote and then reads sees its own write.
+//   `ListRepos` reads the catalog, which has no seq, and takes none.
+// - **Every mutation has `string idempotency_key = 15`.** A retry with the
+//   same key and request answers the first call's result; a create under a
+//   taken name with another key is `repo_already_exists`.
+// - **Pagination** is `page_size` and `page_token`, answered with
+//   `next_page_token` (empty on the last page).
+// - **Watch streams** send a snapshot, then changes, then a heartbeat every
+//   15 s while nothing else is sent (AP0).
+// - **Operations.** `DeleteRepo` and `CompactRepo` answer a
+//   `loams.operations.v1.Operation` whose `target` is `{repo, repo_id}`. The
+//   kinds: `repo.delete` and `repo.compact`.
+// - **Errors** carry a `loams.errors.v1.ErrorInfo` whose `reason` is in
+//   `docs/api/reasons.md`: `repo_not_found`, `repo_already_exists`,
+//   `repo_deleting`, `ref_stale`, `ref_protected`, `out_of_scope`,
+//   `object_format_unsupported`, `fork_too_deep`, `quota_exceeded`,
+//   `sequencer_unavailable` and `idempotency_key_reused`, plus the generic
+//   `invalid_argument` and `internal`. The package's other services add
+//   `workspace_not_found`, `workspace_fenced`, `workspace_read_only`,
+//   `workspace_name_taken`, `object_missing`, `secret_detected`,
+//   `env_unsealed`, `env_access_denied` and `env_foreign_reference` (§19.10).
+package loams.repos.v1;
+
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+import "loams/operations/v1/operations.proto";
+import "loams/options/v1/options.proto";
+
+// Repositories: create, fork, configure, delete, and read their refs.
+service RepoService {
+  option (loams.options.v1.module) = {
+    name: "repos"
+    summary: "Loams Git: git repositories on the bucket, with O(1) forks and linearizable refs."
+    // Until Loams Git GA: `buf breaking` skips the package (buf.yaml) and
+    // SDKs mark the module experimental.
+    unstable: true
+  };
+
+  // Creates an empty repository: its checkpoint 0, then its name.
+  rpc CreateRepo(CreateRepoRequest) returns (CreateRepoResponse);
+  rpc GetRepo(GetRepoRequest) returns (GetRepoResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  rpc ListRepos(ListReposRequest) returns (ListReposResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Forks a repository at a seq: one checkpoint PUT plus the new name, no
+  // data copied (§36 §4.7). `fork_too_deep` past 8 parents.
+  rpc ForkRepo(ForkRepoRequest) returns (ForkRepoResponse);
+  // Hides the repository at once; its data and name are purged after a
+  // grace period, and not while a fork of it lives (`repo_deleting` until
+  // then). Operation `repo.delete`.
+  rpc DeleteRepo(DeleteRepoRequest) returns (DeleteRepoResponse);
+  // Sets the default branch (`HEAD`) and the protection rules, committed
+  // through the repository's sequencer.
+  rpc UpdateRepoConfig(UpdateRepoConfigRequest) returns (UpdateRepoConfigResponse);
+  rpc ListRefs(ListRefsRequest) returns (ListRefsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Repacks the repository (GT1 Task 53). Operation `repo.compact`.
+  rpc CompactRepo(CompactRepoRequest) returns (CompactRepoResponse);
+  // The repository's committed transactions, in order and without gaps.
+  rpc WatchRepo(WatchRepoRequest) returns (stream WatchRepoResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// The object format of a repository. SHA-1 only for now; SHA-256 is
+// `object_format_unsupported` (Q388).
+enum ObjectFormat {
+  OBJECT_FORMAT_UNSPECIFIED = 0;
+  OBJECT_FORMAT_SHA1 = 1;
+  OBJECT_FORMAT_SHA256 = 2;
+}
+
+// Where a repository is in its life.
+enum RepoState {
+  REPO_STATE_UNSPECIFIED = 0;
+  REPO_STATE_ACTIVE = 1;
+  // Deleted and waiting to be purged; no RPC but GetRepo sees it.
+  REPO_STATE_DELETING = 2;
+}
+
+// A repository.
+message Repo {
+  string namespace = 1;
+  string name = 2;
+  // "r" + 26 lowercase ULID characters; never changes.
+  string repo_id = 3;
+  ObjectFormat object_format = 4;
+  // The ref `HEAD` points at, for example "refs/heads/main"; empty when
+  // `HEAD` is not set.
+  string default_branch = 5;
+  repeated Protection protections = 6;
+  // Set on a fork: objects fall through to the parent at that seq.
+  ForkParent fork_parent = 7;
+  // The repository's state was read at this seq.
+  uint64 seq = 8;
+  google.protobuf.Timestamp created_at = 9;
+  RepoState state = 10;
+}
+
+// A protection rule: `pattern` is a ref name in which each `*` matches any
+// run of characters, `/` included.
+message Protection {
+  string pattern = 1;
+  // Refuses deleting a matching ref.
+  bool deny_delete = 2;
+  // Refuses a force update of a matching ref.
+  bool deny_force = 3;
+}
+
+// The repository a fork was made from, and the seq it reads it at.
+message ForkParent {
+  // The parent's name when the fork was made.
+  string name = 1;
+  string repo_id = 2;
+  uint64 seq = 3;
+}
+
+// One ref.
+message Ref {
+  // A full ref name ("refs/heads/main"), or "HEAD".
+  string name = 1;
+  // The object id it points at, in lowercase hex; empty for a symbolic ref
+  // whose target does not exist.
+  string oid = 2;
+  // For a symbolic ref, the ref it points at.
+  string symref_target = 3;
+}
+
+message CreateRepoRequest {
+  string namespace = 1;
+  string name = 2;
+  // Unspecified is SHA-1.
+  ObjectFormat object_format = 3;
+  // `HEAD`'s target; empty is "refs/heads/main".
+  string default_branch = 4;
+  string idempotency_key = 15;
+}
+
+message CreateRepoResponse {
+  Repo repo = 1;
+  string consistency_token = 2;
+}
+
+message GetRepoRequest {
+  string namespace = 1;
+  string name = 2;
+  string consistency_token = 14;
+}
+
+message GetRepoResponse {
+  Repo repo = 1;
+  string consistency_token = 2;
+}
+
+message ListReposRequest {
+  string namespace = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListReposResponse {
+  // By name. Deleted repositories are not listed.
+  repeated Repo repos = 1;
+  string next_page_token = 2;
+}
+
+message ForkRepoRequest {
+  string namespace = 1;
+  // The repository forked.
+  string source = 2;
+  // The new repository's name.
+  string name = 3;
+  // A token of `source` to fork at; empty forks at its latest seq.
+  string at_consistency_token = 4;
+  string idempotency_key = 15;
+}
+
+message ForkRepoResponse {
+  Repo repo = 1;
+  string consistency_token = 2;
+}
+
+message DeleteRepoRequest {
+  string namespace = 1;
+  string name = 2;
+  string idempotency_key = 15;
+}
+
+message DeleteRepoResponse {
+  loams.operations.v1.Operation operation = 1;
+}
+
+message UpdateRepoConfigRequest {
+  string namespace = 1;
+  string name = 2;
+  // A full ref name under "refs/heads/".
+  string default_branch = 3;
+  // The whole rule set, replacing the current one.
+  repeated Protection protections = 4;
+  // The fields this call changes: "default_branch", "protections". An empty
+  // mask is `invalid_argument`.
+  google.protobuf.FieldMask update_mask = 5;
+  string idempotency_key = 15;
+}
+
+message UpdateRepoConfigResponse {
+  Repo repo = 1;
+  string consistency_token = 2;
+}
+
+message ListRefsRequest {
+  string namespace = 1;
+  string name = 2;
+  // Only refs whose name starts with this, for example "refs/heads/".
+  string prefix = 3;
+  int32 page_size = 4;
+  // Every page of one listing reads the seq the first page read.
+  string page_token = 5;
+  string consistency_token = 14;
+}
+
+message ListRefsResponse {
+  // By name; `HEAD` first on the first page.
+  repeated Ref refs = 1;
+  string next_page_token = 2;
+  string consistency_token = 3;
+}
+
+message CompactRepoRequest {
+  string namespace = 1;
+  string name = 2;
+  string idempotency_key = 15;
+}
+
+message CompactRepoResponse {
+  loams.operations.v1.Operation operation = 1;
+}
+
+message WatchRepoRequest {
+  string namespace = 1;
+  string name = 2;
+  // Resumes after this token's seq. Empty starts with a snapshot; a token
+  // whose transactions are no longer retained starts with a snapshot whose
+  // `snapshot_reset` is set.
+  string consistency_token = 14;
+}
+
+message WatchRepoResponse {
+  oneof event {
+    RepoSnapshot snapshot = 1;
+    Transaction transaction = 2;
+    // Every 15 s while nothing else is sent.
+    Heartbeat heartbeat = 3;
+  }
+  // The seq this message brings the watcher to.
+  string consistency_token = 4;
+  // The resume token was too old: this snapshot replaces everything held.
+  bool snapshot_reset = 5;
+}
+
+// The repository and every ref at one seq.
+message RepoSnapshot {
+  Repo repo = 1;
+  repeated Ref refs = 2;
+}
+
+// One committed transaction.
+message Transaction {
+  uint64 seq = 1;
+  // Its index in the seq's batch.
+  uint32 index = 2;
+  google.protobuf.Timestamp time = 3;
+  // Who made it (the credential's subject), for ref updates.
+  string principal = 4;
+  oneof change {
+    RefUpdates ref_updates = 5;
+    ConfigChange config = 6;
+    PackSetChange pack_set = 7;
+  }
+}
+
+// Refs a push or an API write changed, all at once.
+message RefUpdates {
+  repeated RefUpdate updates = 1;
+}
+
+// One ref's new value.
+message RefUpdate {
+  string name = 1;
+  // The new object id in lowercase hex; empty when the ref was deleted.
+  string new_oid = 2;
+}
+
+// The default branch and protection rules after the change.
+message ConfigChange {
+  string default_branch = 1;
+  repeated Protection protections = 2;
+}
+
+// Compaction changed the pack set; no ref changed.
+message PackSetChange {
+  uint32 packs_added = 1;
+  uint32 packs_removed = 2;
+}
+
+message Heartbeat {
+  google.protobuf.Timestamp time = 1;
+}

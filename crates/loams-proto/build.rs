@@ -14,7 +14,8 @@
 //! §8's `Query` — and `page_token` on `ScrollDocumentsRequest`. Tasks 5–8
 //! append `loams.sql.v1`, `loams.link.v1`, `loams.admin.v1`, `loams.auth.v1`
 //! and `loams.internal.v1`. GR1 Task 1 adds `loams.graph.v1` (design §48),
-//! and PG2 Task 1 `loams.postgres.v1` (design §46 §4).
+//! PG2 Task 1 `loams.postgres.v1` (design §46 §4), and GT1 Task 12
+//! `loams.repos.v1` (design §36 §19.10).
 //!
 //! `loams.live.v1` is **not** here: R1's `loams-live-proto` already
 //! generates it, and a proto package's Rust types are generated exactly
@@ -42,6 +43,14 @@ const FILES: &[&str] = &[
     // service is served by `pg-control` behind the `loams` feature
     // `postgres` (PG2 Task 9), so the default server does not register it.
     "loams/postgres/v1/postgres.proto",
+    // Loams Git (design §36 §19.10, GT1 Task 12, ruling T0-10): the types are
+    // always generated; `RepoService` is served by the `loams` feature `git`.
+    // `workspaces`, `objects` and `env` are empty stubs that GT1 Tasks 25, 18
+    // and 61 fill in, so the package is registered here once.
+    "loams/repos/v1/repos.proto",
+    "loams/repos/v1/workspaces.proto",
+    "loams/repos/v1/objects.proto",
+    "loams/repos/v1/env.proto",
 ];
 
 fn main() {

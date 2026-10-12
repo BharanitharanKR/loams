@@ -31,6 +31,7 @@ pub mod internal;
 #[cfg(feature = "postgres")]
 mod postgres_messages;
 mod query;
+mod repos;
 mod sql;
 pub mod streams;
 
