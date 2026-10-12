@@ -313,6 +313,11 @@ nucleo-matcher = "0.3"
 portable-pty = "0.8"
 rusqlite = { version = "0.32", features = ["bundled"] }
 similar = "2"
+# Generates the TypeScript wire types of `@loams/agentd-client` (design §50 §8,
+# D789; plan DD1 T0-4 picked 12.0.1 and its features). `no-serde-warnings`
+# silences notes on deserialize-only attributes (`alias`, `other`); the
+# fixture `satisfies` checks in TypeScript catch any real mismatch.
+ts-rs = { version = "12.0.1", features = ["serde-compat", "serde-json-impl", "uuid-impl", "chrono-impl", "no-serde-warnings"] }
 zip = { version = "7.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [profile.dev]

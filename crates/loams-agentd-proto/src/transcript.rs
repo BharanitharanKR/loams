@@ -1,4 +1,5 @@
-//! Delta frames for `WatchDocMessages`.
+//! Delta frames for `WatchDocMessages` (moved from `loams-agentd-doc`, plan DD1
+//! Task 9; the doc crate re-exports it as `transcript_delta`).
 //!
 //! The watch used to re-serialize the entire transcript on every 120ms commit
 //! tick (measured at 1.13MB per frame on a 1.6MB chat, ~4 copies deep through
@@ -11,30 +12,35 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use ts_rs::TS;
 
-use crate::parts::MessagePart;
-use crate::schema::SessionMessageEntry;
+use crate::chat::MessagePart;
+use crate::chat::SessionMessageEntry;
 
 /// Transcript changes and the current host-owned context snapshot travel together.
 /// Older readers ignore `contextUsage`; older hosts decode as unknown usage.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptUpdate {
     #[serde(flatten)]
     pub frame: TranscriptFrame,
     #[serde(default)]
-    pub context_usage: Option<loams_agentd_proto::ContextUsage>,
+    pub context_usage: Option<crate::ContextUsage>,
     /// Historical content included in this update, independent of reset/delta
     /// encoding. Omitted on ordinary live updates and by older engines.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replay_baseline: Option<TranscriptBaseline>,
+    /// Set on the first frame of an `openingTail` watch: it holds only the
+    /// local tail, and a full `reset` follows.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub history_pending: bool,
 }
 
 /// Compact presentation watermark: stable part ids and text byte lengths.
 /// Keeping the cutoff (rather than a one-frame boolean) lets a viewport
 /// coalesce historical and live updates without animating the history or
 /// swallowing the first live arrival. No transcript text is duplicated.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct TranscriptBaseline {
     pub entries: HashMap<String, HashMap<String, usize>>,
 }
@@ -101,7 +107,7 @@ impl TranscriptBaseline {
 }
 
 /// One `WatchDocMessages` stream item.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(untagged)]
 pub enum TranscriptFrame {
     Reset {
@@ -123,7 +129,7 @@ pub enum TranscriptFrame {
 /// An inserted or replaced entry, positioned after `after` (`None` = head).
 /// Anchors are prior upserts of the same frame or unchanged entries, so
 /// applying upserts in frame order always finds them settled.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct TranscriptUpsert {
     pub after: Option<String>,
     pub entry: SessionMessageEntry,
@@ -133,7 +139,7 @@ pub struct TranscriptUpsert {
 /// upserts re-send the whole live entry per tick, which for a long single
 /// reply is the whole reply again (continuations re-join before the watch);
 /// this carries only the new tokens.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct TextAppend {
     pub entry: String,
     pub part: String,
@@ -345,8 +351,8 @@ pub fn apply_transcript_frame(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parts::MessagePart;
-    use crate::schema::MessageRole;
+    use crate::chat::MessagePart;
+    use crate::chat::MessageRole;
 
     fn entry(id: &str, text: &str) -> SessionMessageEntry {
         SessionMessageEntry {
@@ -513,10 +519,11 @@ mod context_update_tests {
         let value = serde_json::to_value(TranscriptUpdate {
             frame: TranscriptFrame::reset(&[]),
             replay_baseline: Some(TranscriptBaseline::default()),
-            context_usage: Some(loams_agentd_proto::ContextUsage {
+            context_usage: Some(crate::ContextUsage {
                 tokens: Some(0),
                 window: Some(200000),
             }),
+            history_pending: false,
         })
         .unwrap();
         assert_eq!(value["contextUsage"]["tokens"], 0);

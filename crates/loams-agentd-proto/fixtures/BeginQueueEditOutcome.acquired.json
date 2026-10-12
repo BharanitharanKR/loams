@@ -1,0 +1,8 @@
+{
+  "attachments": [],
+  "baseTextHash": "hash-1",
+  "expiresAtMs": 1791797430000,
+  "leaseId": "lease-1",
+  "outcome": "acquired",
+  "text": "Then update the docs"
+}

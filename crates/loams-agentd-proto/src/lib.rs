@@ -5,19 +5,24 @@
 
 pub mod agent;
 pub mod brand;
+pub mod chat;
 pub mod daemon;
 pub mod entities;
 pub mod file_mentions;
 pub mod invocation;
 pub mod motion;
+pub mod params;
 pub mod preview;
 pub mod rpc;
 pub mod sidebar_pins;
+pub mod transcript;
 pub mod view;
 pub mod workspace;
 
 pub use agent::*;
+pub use chat::*;
 pub use entities::*;
+pub use params::*;
 pub use preview::*;
 pub use sidebar_pins::*;
 pub use workspace::*;

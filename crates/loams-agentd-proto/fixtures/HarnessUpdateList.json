@@ -1,0 +1,18 @@
+[
+  {
+    "canApply": true,
+    "channel": "stable",
+    "checkedAt": 1791797400000,
+    "harness": "codex",
+    "installedVersion": "0.40.0",
+    "latestVersion": "0.41.0",
+    "manualCommand": "npm install -g @openai/codex",
+    "phase": "downloading",
+    "progress": {
+      "completedBytes": 512,
+      "message": "Downloading",
+      "totalBytes": 1024
+    },
+    "source": "npm"
+  }
+]

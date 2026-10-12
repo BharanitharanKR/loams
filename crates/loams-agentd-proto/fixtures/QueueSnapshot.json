@@ -1,0 +1,24 @@
+{
+  "items": [
+    {
+      "attachments": [
+        "/home/dev/.uploads/shot.png"
+      ],
+      "deliveryGate": {
+        "acquiredAtMs": 1791797400000,
+        "baseTextHash": "hash-1",
+        "expiresAtMs": 1791797430000,
+        "kind": "editing",
+        "leaseId": "lease-1",
+        "ownerDeviceId": "device-1",
+        "ownerInstanceId": "window-1"
+      },
+      "editedAt": 1791797400005,
+      "holdForTurnEnd": true,
+      "id": "queued-1",
+      "issuedAt": 1791797400000,
+      "issuedBy": "device-1",
+      "text": "Then update the docs"
+    }
+  ]
+}

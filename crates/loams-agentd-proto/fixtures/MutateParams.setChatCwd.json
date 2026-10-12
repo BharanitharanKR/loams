@@ -1,0 +1,5 @@
+{
+  "chatId": "chat-1",
+  "cwd": "/home/dev/project-wt/fix-linker",
+  "op": "setChatCwd"
+}

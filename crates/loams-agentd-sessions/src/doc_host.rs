@@ -19,7 +19,6 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError, Weak};
 
-use serde::Serialize;
 use sha2::{Digest as _, Sha256};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
@@ -35,6 +34,11 @@ use loams_agentd_proto::{
     ConversationSourceContext, HarnessId, UserInputAnswer, UserInputQuestion,
 };
 use loams_agentd_store::DocsStore;
+
+pub use loams_agentd_proto::chat::{
+    BeginQueueEditOutcome, FinishQueueEditOutcome,
+    FinishQueuedMessageEditAction as FinishQueueEditAction, RenewQueueEditOutcome,
+};
 
 use crate::chat_persistence::CHAT2_DOC_EPOCH;
 use crate::project_actions::{
@@ -184,63 +188,6 @@ fn queued_message_prompt(text: &str, attachments: &[String]) -> String {
 
 fn queue_text_hash(text: &str) -> String {
     format!("{:x}", Sha256::digest(text.as_bytes()))
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(
-    tag = "outcome",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum BeginQueueEditOutcome {
-    Acquired {
-        lease_id: String,
-        text: String,
-        attachments: Vec<String>,
-        base_text_hash: String,
-        expires_at_ms: i64,
-    },
-    Locked {
-        owner_device_id: String,
-        expires_at_ms: i64,
-    },
-    Missing,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(
-    tag = "outcome",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum RenewQueueEditOutcome {
-    Renewed { expires_at_ms: i64 },
-    Lost,
-    Missing,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FinishQueueEditAction {
-    Commit,
-    Cancel,
-    Discard,
-    ReleaseUnchanged,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(
-    tag = "outcome",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum FinishQueueEditOutcome {
-    Committed,
-    Cancelled,
-    Discarded,
-    Released,
-    Conflict { current_text: String },
-    Lost,
-    Missing,
 }
 
 /// Content and its historical presentation cutoff travel atomically, even

@@ -1,0 +1,11 @@
+{
+  "checkoutId": "checkout-1",
+  "contentHash": "h-1",
+  "encoding": "utf8",
+  "lineEnding": "lf",
+  "modifiedAt": "2026-10-12T09:30:00Z",
+  "path": "src/main.rs",
+  "size": 13,
+  "text": "fn main() {}\n",
+  "truncated": false
+}

@@ -1,0 +1,12 @@
+[
+  {
+    "checkoutId": "checkout-1",
+    "createdAt": "2026-10-12T09:30:00Z",
+    "deviceId": "device-1",
+    "gitCheckedAt": "2026-10-12T09:30:00Z",
+    "gitDetected": true,
+    "id": "space-1",
+    "name": "project",
+    "path": "/home/dev/project"
+  }
+]

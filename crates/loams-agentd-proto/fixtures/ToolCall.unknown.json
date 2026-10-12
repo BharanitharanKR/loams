@@ -1,0 +1,7 @@
+{
+  "input": {
+    "model": "claude-haiku"
+  },
+  "kind": "unknown",
+  "name": "Agent: review"
+}

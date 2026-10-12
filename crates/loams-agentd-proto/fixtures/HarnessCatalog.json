@@ -1,0 +1,15 @@
+[
+  {
+    "canInstall": false,
+    "enabled": true,
+    "id": "codex",
+    "installed": true,
+    "name": "Codex",
+    "reasoningLevels": [
+      "low",
+      "high"
+    ],
+    "steeringMode": "step-boundary",
+    "supportsSteering": true
+  }
+]

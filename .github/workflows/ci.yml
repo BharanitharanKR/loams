@@ -176,10 +176,14 @@ jobs:
               - "crates/*/Cargo.toml"
               - "deny.toml"
             # The desktop agent daemon (design §50, DD1 Task 4): the headless
-            # guard (D782) and the loams-agentd* clippy and test suites.
+            # guard (D782) and the loams-agentd* clippy and test suites. The
+            # TypeScript contract package is here too: loams-agentd-proto's
+            # tests check its generated files and parse its requests.json
+            # (DD1 Task 9); the monorepo web job runs its own suite.
             agentd:
               - *toolchain
               - "crates/loams-agentd*/**"
+              - "web/packages/agentd-client/**"
               - "scripts/ci/agentd-*"
               - ".config/nextest.toml"
             # Loams Graph (GR1, design §48): the engine crate, its proto, the
