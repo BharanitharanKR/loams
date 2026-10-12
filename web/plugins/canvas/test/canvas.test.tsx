@@ -113,7 +113,9 @@ describe('CanvasPage', () => {
   it('opens the details panel on click and deep links to the product page', async () => {
     const { view, navigate } = mount();
     await screen.findByText('Storefront');
-    fireEvent.click(within(nodeEl(view.container, 'pg-main')).getByText('main'));
+    // React Flow mounts its nodes a tick after the page renders.
+    const node = await waitFor(() => nodeEl(view.container, 'pg-main'));
+    fireEvent.click(within(node).getByText('main'));
     const panel = await screen.findByRole('complementary', { name: 'main' });
     expect(within(panel).getByText('2 CU')).toBeTruthy();
     expect(within(panel).getByLabelText(/^CPU \(%\) for main/)).toBeTruthy();

@@ -327,7 +327,8 @@ describe('DeploymentsPage', () => {
     await screen.findByRole('heading', { name: 'api v1.42.0' });
     const bar = () =>
       container.querySelector('[aria-label="Upload progress"]')?.getAttribute('aria-valuenow');
-    expect(bar()).toBe('40');
+    // The stage graph's nodes mount a tick after the heading.
+    await waitFor(() => expect(bar()).toBe('40'));
     act(() => client.tick());
     await waitFor(() => expect(Number(bar())).toBeGreaterThan(40));
   });
