@@ -76,11 +76,11 @@ async fn reads_objects_written_by_git() {
     let tag = git.rev("v1");
 
     let (_, store) = faulty_store();
-    let (_, paths) = repo_paths(1);
+    let (repo, paths) = repo_paths(1);
     let blobs = Arc::new(StoreBlobStore::new(store, paths));
     let pack = put_pack(&blobs, git.pack_revs(&["main", "v1"], &[])).await;
     let (_, cache) = cache(CACHE_BYTES);
-    let odb = PackCacheOdb::open(blobs, cache, &snapshot(1, vec![pack], None), None)
+    let odb = PackCacheOdb::open(repo, blobs, cache, &snapshot(1, vec![pack], None), None)
         .await
         .expect("open");
 
@@ -130,11 +130,11 @@ async fn delta_objects_resolve() {
         );
 
         let (_, store) = faulty_store();
-        let (_, paths) = repo_paths(2);
+        let (repo, paths) = repo_paths(2);
         let blobs = Arc::new(StoreBlobStore::new(store, paths));
         let pack = put_pack(&blobs, (pack, idx)).await;
         let (_, cache) = cache(CACHE_BYTES);
-        let odb = PackCacheOdb::open(blobs, cache, &snapshot(1, vec![pack], None), None)
+        let odb = PackCacheOdb::open(repo, blobs, cache, &snapshot(1, vec![pack], None), None)
             .await
             .expect("open");
         assert_reads_like_git(&odb, &git, &ids).await;
@@ -155,7 +155,7 @@ async fn fork_falls_through_to_parent_at_seq() {
     // seq 1 and committed its own pack.
     let (_, store) = faulty_store();
     let (parent_id, parent_paths) = repo_paths(3);
-    let (_, child_paths) = repo_paths(4);
+    let (child_id, child_paths) = repo_paths(4);
     let parent_blobs = Arc::new(StoreBlobStore::new(store.clone(), parent_paths));
     let child_blobs = Arc::new(StoreBlobStore::new(store, child_paths));
     let p1 = put_pack(&parent_blobs, git.pack_revs(&[&first.to_string()], &[])).await;
@@ -167,6 +167,7 @@ async fn fork_falls_through_to_parent_at_seq() {
 
     // The parent at seq 2 holds both packs; at seq 1 only the first.
     let parent_now = PackCacheOdb::open(
+        parent_id.clone(),
         parent_blobs.clone(),
         cache.clone(),
         &snapshot(2, vec![p1.clone(), p2], None),
@@ -176,6 +177,7 @@ async fn fork_falls_through_to_parent_at_seq() {
     .expect("open");
     assert!(parent_now.contains(&second).await.expect("contains"));
     let parent_at_fork = PackCacheOdb::open(
+        parent_id.clone(),
         parent_blobs,
         cache.clone(),
         &snapshot(1, vec![p1], None),
@@ -184,6 +186,7 @@ async fn fork_falls_through_to_parent_at_seq() {
     .await
     .expect("open");
     let child = PackCacheOdb::open(
+        child_id,
         child_blobs,
         cache,
         &snapshot(1, vec![c1], Some((parent_id.as_str(), 1))),
@@ -217,12 +220,14 @@ async fn fork_falls_through_to_parent_at_seq() {
 async fn fork_depth_is_bounded() {
     let (_, store) = faulty_store();
     let (_, cache) = cache(CACHE_BYTES);
+    // Repository `byte`, forked from `parent` at seq 1 when there is one.
     let open = |byte: u8, parent: Option<Arc<PackCacheOdb>>| {
-        let (_, paths) = repo_paths(byte);
+        let (repo, paths) = repo_paths(byte);
         let blobs = Arc::new(StoreBlobStore::new(store.clone(), paths));
-        let snap = snapshot(1, Vec::new(), parent.as_ref().map(|_| ("rparent", 1)));
+        let named = parent.as_ref().map(|p| p.repo().as_str().to_string());
+        let snap = snapshot(1, Vec::new(), named.as_deref().map(|id| (id, 1)));
         let cache = cache.clone();
-        async move { PackCacheOdb::open(blobs, cache, &snap, parent).await }
+        async move { PackCacheOdb::open(repo, blobs, cache, &snap, parent).await }
     };
 
     // A root and MAX_FORK_DEPTH forks below it open; one more does not.
@@ -241,33 +246,81 @@ async fn fork_depth_is_bounded() {
         "{deeper:?}"
     );
 
-    // A fork opened without its parent, or a parent the snapshot does not
-    // name, or a parent at another seq, is refused.
-    let (_, paths) = repo_paths(0x40);
-    let blobs = Arc::new(StoreBlobStore::new(store.clone(), paths));
-    let orphan = snapshot(1, Vec::new(), Some(("rparent", 1)));
-    let refused = PackCacheOdb::open(blobs.clone(), cache.clone(), &orphan, None).await;
-    assert!(
-        matches!(refused, Err(OdbError::ParentMismatch { .. })),
-        "{refused:?}"
-    );
+    // A fork opened without its parent, a parent the snapshot does not
+    // name, another repository at the same seq, and the parent at another
+    // seq are refused.
     let root = Arc::new(open(0x41, None).await.expect("root"));
-    let refused = PackCacheOdb::open(
-        blobs.clone(),
-        cache.clone(),
-        &snapshot(1, vec![], None),
-        Some(root.clone()),
-    )
-    .await;
-    assert!(
-        matches!(refused, Err(OdbError::ParentMismatch { .. })),
-        "{refused:?}"
+    let other = Arc::new(open(0x42, None).await.expect("other"));
+    let (repo, paths) = repo_paths(0x40);
+    let blobs = Arc::new(StoreBlobStore::new(store.clone(), paths));
+    let fork = snapshot(1, Vec::new(), Some((root.repo().as_str(), 1)));
+    let cases = [
+        (fork.clone(), None),
+        (snapshot(1, Vec::new(), None), Some(root.clone())),
+        (fork, Some(other)),
+        (
+            snapshot(1, Vec::new(), Some((root.repo().as_str(), 7))),
+            Some(root.clone()),
+        ),
+    ];
+    for (snap, parent) in cases {
+        let refused =
+            PackCacheOdb::open(repo.clone(), blobs.clone(), cache.clone(), &snap, parent).await;
+        assert!(
+            matches!(refused, Err(OdbError::ParentMismatch { .. })),
+            "{refused:?}"
+        );
+    }
+    let fork = snapshot(1, Vec::new(), Some((root.repo().as_str(), 1)));
+    PackCacheOdb::open(repo, blobs, cache, &fork, Some(root))
+        .await
+        .expect("the named parent at its seq");
+}
+
+#[tokio::test]
+async fn missing_from_closure_stops_at_known() {
+    let Some(git) = GitRepo::init("missing_from_closure_stops_at_known") else {
+        return;
+    };
+    let first = git.commit(&[("a.txt", "old\n")], "first");
+    let old_blob = git.rev(&format!("{first}:a.txt"));
+    let tip = git.commit(&[("a.txt", "new\n")], "second");
+
+    // The stored pack lacks a blob only the first commit reaches.
+    let stored: Vec<ObjectId> = git
+        .objects(&[&tip.to_string()])
+        .into_iter()
+        .filter(|id| *id != old_blob)
+        .collect();
+    let (_, store) = faulty_store();
+    let (repo, paths) = repo_paths(8);
+    let blobs = Arc::new(StoreBlobStore::new(store, paths));
+    let pack = put_pack(&blobs, git.pack_objects(&stored)).await;
+    let (_, cache) = cache(CACHE_BYTES);
+    let odb = PackCacheOdb::open(repo, blobs, cache, &snapshot(1, vec![pack], None), None)
+        .await
+        .expect("open");
+
+    // The whole history is walked without a boundary; with the first
+    // commit known (a current ref tip), the walk does not enter it.
+    assert_eq!(
+        odb.missing_from_closure(&[tip], &[], None)
+            .await
+            .expect("walk"),
+        vec![old_blob]
     );
-    let at_other_seq = snapshot(1, Vec::new(), Some(("rparent", 7)));
-    let refused = PackCacheOdb::open(blobs, cache.clone(), &at_other_seq, Some(root)).await;
-    assert!(
-        matches!(refused, Err(OdbError::ParentMismatch { .. })),
-        "{refused:?}"
+    assert_eq!(
+        odb.missing_from_closure(&[tip], &[first], None)
+            .await
+            .expect("walk"),
+        Vec::<ObjectId>::new()
+    );
+    assert_eq!(
+        odb.missing_from_closure(&[first], &[first], None)
+            .await
+            .expect("walk"),
+        Vec::<ObjectId>::new(),
+        "a known tip is not checked"
     );
 }
 
@@ -287,28 +340,36 @@ async fn missing_from_closure_finds_a_missing_blob() {
     let all = git.objects(&[&tip.to_string()]);
     let stored: Vec<ObjectId> = all.iter().copied().filter(|id| *id != left_out).collect();
     let (_, store) = faulty_store();
-    let (_, paths) = repo_paths(5);
+    let (repo, paths) = repo_paths(5);
     let blobs = Arc::new(StoreBlobStore::new(store.clone(), paths));
     let pack = put_pack(&blobs, git.pack_objects(&stored)).await;
     let (_, cache) = cache(CACHE_BYTES);
-    let odb = PackCacheOdb::open(blobs, cache.clone(), &snapshot(1, vec![pack], None), None)
-        .await
-        .expect("open");
+    let odb = PackCacheOdb::open(
+        repo,
+        blobs,
+        cache.clone(),
+        &snapshot(1, vec![pack], None),
+        None,
+    )
+    .await
+    .expect("open");
 
     assert_eq!(
-        odb.missing_from_closure(&[tip], None).await.expect("walk"),
+        odb.missing_from_closure(&[tip], &[], None)
+            .await
+            .expect("walk"),
         vec![left_out],
         "the one missing blob"
     );
     assert_eq!(
-        odb.missing_from_closure(&[first], None)
+        odb.missing_from_closure(&[first], &[], None)
             .await
             .expect("walk"),
         Vec::<ObjectId>::new(),
         "the first commit is whole"
     );
     assert_eq!(
-        odb.missing_from_closure(&[absent()], None)
+        odb.missing_from_closure(&[absent()], &[], None)
             .await
             .expect("walk"),
         vec![absent()],
@@ -316,14 +377,20 @@ async fn missing_from_closure_finds_a_missing_blob() {
     );
 
     // A pushed pack (`extra`) that carries the blob completes the closure.
-    let (_, pushed_paths) = repo_paths(6);
+    let (pushed_id, pushed_paths) = repo_paths(6);
     let pushed_blobs = Arc::new(StoreBlobStore::new(store, pushed_paths));
     let pushed = put_pack(&pushed_blobs, git.pack_objects(&[left_out])).await;
-    let extra = PackCacheOdb::open(pushed_blobs, cache, &snapshot(1, vec![pushed], None), None)
-        .await
-        .expect("open");
+    let extra = PackCacheOdb::open(
+        pushed_id,
+        pushed_blobs,
+        cache,
+        &snapshot(1, vec![pushed], None),
+        None,
+    )
+    .await
+    .expect("open");
     assert_eq!(
-        odb.missing_from_closure(&[tip], Some(&extra))
+        odb.missing_from_closure(&[tip], &[], Some(&extra))
             .await
             .expect("walk"),
         Vec::<ObjectId>::new()
@@ -338,7 +405,7 @@ async fn cache_eviction_never_breaks_reads() {
     let first = git.commit(&[("a.txt", "one\n")], "first");
     let second = git.commit(&[("b.txt", &"two\n".repeat(500))], "second");
     let (faulty, store) = faulty_store();
-    let (_, paths) = repo_paths(7);
+    let (repo, paths) = repo_paths(7);
     let blobs = Arc::new(StoreBlobStore::new(store, paths));
     let p1 = put_pack(&blobs, git.pack_revs(&[&first.to_string()], &[])).await;
     let range = format!("{first}..{second}");
@@ -349,7 +416,7 @@ async fn cache_eviction_never_breaks_reads() {
 
     // A cache of one byte keeps nothing: every read downloads again.
     let (fs, tiny) = cache(1);
-    let odb = PackCacheOdb::open(blobs.clone(), tiny.clone(), &snap, None)
+    let odb = PackCacheOdb::open(repo.clone(), blobs.clone(), tiny.clone(), &snap, None)
         .await
         .expect("open");
     for _ in 0..2 {
@@ -368,7 +435,7 @@ async fn cache_eviction_never_breaks_reads() {
 
     // A cache that holds everything serves the second pass without a GET.
     let (fs, roomy) = cache(CACHE_BYTES);
-    let odb = PackCacheOdb::open(blobs.clone(), roomy.clone(), &snap, None)
+    let odb = PackCacheOdb::open(repo.clone(), blobs.clone(), roomy.clone(), &snap, None)
         .await
         .expect("open");
     assert_reads_like_git(&odb, &git, &ids).await;
@@ -395,7 +462,7 @@ async fn cache_eviction_never_breaks_reads() {
     // A cache that holds one pack evicts the least recently used one.
     let budget = p2.pack_len + p2.idx_len + p1.idx_len;
     let (fs, small) = cache(budget);
-    let odb = PackCacheOdb::open(blobs, small.clone(), &snap, None)
+    let odb = PackCacheOdb::open(repo, blobs, small.clone(), &snap, None)
         .await
         .expect("open");
     assert_reads_like_git(&odb, &git, &ids).await;

@@ -72,11 +72,18 @@ pub trait ObjectDb: Send + Sync + fmt::Debug {
     /// The connectivity check (§36 §6.3 step 3): walks commits, trees and
     /// tags from `tips` and returns the objects found in neither this
     /// database nor `extra` (the pushed pack), in the order they were met.
+    ///
+    /// The walk stops at `known`: objects whose closure is already
+    /// connected, such as the repository's current ref tips (every ref
+    /// update passed this check), as `git rev-list --objects <tips> --not
+    /// <known>` does. A push is then checked in proportion to the commits
+    /// it adds and the trees they reach, not to the repository's history.
     /// A missing object is not descended into; submodule commits in trees
     /// are not followed.
     async fn missing_from_closure(
         &self,
         tips: &[ObjectId],
+        known: &[ObjectId],
         extra: Option<&dyn ObjectDb>,
     ) -> Result<Vec<ObjectId>, OdbError>;
 }
@@ -107,21 +114,23 @@ impl Lookup for DbLookup<'_> {
     }
 }
 
-/// The objects reachable from `tips` that neither `primary` nor `extra`
-/// holds (see [`ObjectDb::missing_from_closure`]). `extra` is asked first:
-/// it is the small pushed pack. A blob named by a tree is only checked for
-/// existence, never read.
+/// The objects reachable from `tips`, short of `known`, that neither
+/// `primary` nor `extra` holds (see [`ObjectDb::missing_from_closure`]).
+/// `extra` is asked first: it is the small pushed pack. A blob named by a
+/// tree is only checked for existence, never read.
 pub(crate) async fn walk_closure(
     primary: &dyn Lookup,
     extra: Option<&dyn Lookup>,
     tips: &[ObjectId],
+    known: &[ObjectId],
 ) -> Result<Vec<ObjectId>, OdbError> {
     let hash = gix_hash::Kind::Sha1;
     let corrupt = |oid: ObjectId, err: &dyn fmt::Display| OdbError::CorruptObject {
         oid,
         reason: err.to_string(),
     };
-    let mut seen: HashSet<ObjectId> = HashSet::new();
+    // Known objects count as seen: they are neither checked nor descended.
+    let mut seen: HashSet<ObjectId> = known.iter().copied().collect();
     // `true`: a tree entry says the object is a blob.
     let mut queue: VecDeque<(ObjectId, bool)> = tips.iter().map(|tip| (*tip, false)).collect();
     let mut missing = Vec::new();
