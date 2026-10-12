@@ -14,9 +14,9 @@ use loams_git::limits::{EXACTLY_RETENTION, GC_GRACE};
 use loams_git::testing::ManualClock;
 use loams_git::wal::{Hint, WalStore};
 use loams_git::{
-    BucketRefLog, Expect, IdemKey, ObjectId, Principal, RefError, RefLog, RefName, RefTxn,
-    RefUpdate, RepoId, RepoPaths, RepoState, SegmentGcPlan, Seq, StoreWalStore, plan_segment_gc,
-    run_segment_gc, state_at,
+    BucketRefLog, Expect, IdemKey, ObjectId, Principal, ReadAt, RefError, RefLog, RefName, RefTxn,
+    RefUpdate, RepoId, RepoPaths, RepoState, SegmentGcPlan, Seq, StoreWalStore, fork_repo,
+    open_fork_odb, plan_segment_gc, run_segment_gc, state_at,
 };
 use loams_store::Store;
 
@@ -31,6 +31,8 @@ struct Fixture {
     paths: RepoPaths,
     wal: StoreWalStore,
     now: i64,
+    /// Live fork points of the repository.
+    forks: Vec<Seq>,
 }
 
 impl Fixture {
@@ -78,6 +80,7 @@ impl Fixture {
             paths,
             wal,
             now,
+            forks: Vec::new(),
         };
         (fixture, log)
     }
@@ -111,6 +114,7 @@ impl Fixture {
             self.now,
             EXACTLY_RETENTION,
             GC_GRACE,
+            &self.forks,
         )
         .await
         .expect("plan")
@@ -198,7 +202,10 @@ async fn gc_keeps_exactly_retention() {
     let mut got = plan.delete.clone();
     got.sort();
     assert_eq!(got, expected);
-    assert_eq!(run_segment_gc(&fx.store, &plan).await.expect("gc"), 11);
+    assert_eq!(
+        run_segment_gc(&fx.wal, &fx.store, &plan).await.expect("gc"),
+        11
+    );
 
     for seq in 10..=30 {
         assert_eq!(
@@ -222,7 +229,7 @@ async fn gc_keeps_exactly_retention() {
     fx.age_checkpoints([20], 30 * HOUR);
     let plan = fx.plan().await;
     assert_eq!(plan.keep_from, Seq(20));
-    run_segment_gc(&fx.store, &plan).await.expect("gc");
+    run_segment_gc(&fx.wal, &fx.store, &plan).await.expect("gc");
     let reopened = open_log(
         &fx.store,
         &RepoId::parse("rgc").expect("repo"),
@@ -257,7 +264,7 @@ async fn gc_deletes_unreachable_above_gap_after_grace() {
     fx.age(&stray, GC_GRACE.as_millis() as i64);
     let plan = fx.plan().await;
     assert_eq!(plan.delete, vec![stray.clone()]);
-    run_segment_gc(&fx.store, &plan).await.expect("gc");
+    run_segment_gc(&fx.wal, &fx.store, &plan).await.expect("gc");
     assert!(!fx.file(&stray).exists());
     assert_eq!(state_at(&fx.wal, Seq(30)).await.expect("tail").seq, Seq(30));
 
@@ -290,7 +297,7 @@ async fn gc_never_deletes_segments_a_reader_needs() {
     // ...GC keeps every segment above it...
     let plan = fx.plan().await;
     assert_eq!(plan.keep_from, Seq(10));
-    run_segment_gc(&fx.store, &plan).await.expect("gc");
+    run_segment_gc(&fx.wal, &fx.store, &plan).await.expect("gc");
 
     // ...and the reader finishes its replay at the tail.
     let segments = fx.wal.read_from(Seq(11), 100).await.expect("read");
@@ -303,6 +310,77 @@ async fn gc_never_deletes_segments_a_reader_needs() {
     fx.publish_hint(30, 20).await;
     let plan = fx.plan().await;
     assert_eq!(plan.keep_from, Seq(20));
-    run_segment_gc(&fx.store, &plan).await.expect("gc");
+    run_segment_gc(&fx.wal, &fx.store, &plan).await.expect("gc");
     assert_eq!(fx.truth(30).await.to_checkpoint(0), truth.to_checkpoint(0));
+}
+
+/// A fork reads its parent's state at the fork point for as long as it
+/// lives: GC keeps a checkpoint at or below it and the segments after it
+/// (PR #454 review).
+#[tokio::test]
+async fn gc_keeps_what_a_fork_reads() {
+    let (mut fx, log) = Fixture::new("gc-fork").await;
+    let parent = RepoId::parse("rgc").expect("repo");
+    let child = RepoId::parse("rgcfork").expect("repo");
+    let child_wal = StoreWalStore::new(
+        fx.store.clone(),
+        RepoPaths::new(loams_git::NamespaceId(7), &child),
+    );
+    fork_repo(&log, &child_wal, &parent, ReadAt::Exactly(Seq(5)))
+        .await
+        .expect("fork at 5");
+    log.shutdown().await;
+    fx.age_segments(1..=30, 30 * HOUR);
+    fx.age_checkpoints([0, 10, 20], 30 * HOUR);
+    fx.publish_hint(30, 20).await;
+    let at_fork = fx.truth(5).await;
+
+    // Without the fork point, GC would go up to checkpoint 20.
+    assert_eq!(fx.plan().await.keep_from, Seq(20));
+    fx.forks = vec![Seq(5)];
+    let plan = fx.plan().await;
+    assert_eq!(
+        plan.keep_from,
+        Seq(0),
+        "checkpoint 0 is the newest at or below 5"
+    );
+    run_segment_gc(&fx.wal, &fx.store, &plan).await.expect("gc");
+
+    assert_eq!(fx.truth(5).await.to_checkpoint(0), at_fork.to_checkpoint(0));
+    let fork_state = state_at(&child_wal, Seq(0)).await.expect("the fork");
+    let cache = Arc::new(loams_git::PackCache::new(
+        Arc::new(loams_fs::MemFs::new(1 << 20)),
+        1 << 20,
+    ));
+    let odb = open_fork_odb(
+        &fx.store,
+        loams_git::NamespaceId(7),
+        &child,
+        &fork_state.snapshot(),
+        cache,
+    )
+    .await
+    .expect("the fork's object database opens after GC");
+    assert_eq!(odb.depth(), 1);
+}
+
+/// A plan is refused once the hint has moved below its `keep_from`.
+#[tokio::test]
+async fn gc_plan_is_refused_after_the_hint_moves_back() {
+    let (fx, log) = Fixture::new("gc-stale-plan").await;
+    log.shutdown().await;
+    fx.age_segments(1..=30, 30 * HOUR);
+    fx.age_checkpoints([0, 10, 20], 30 * HOUR);
+    fx.publish_hint(30, 20).await;
+    let plan = fx.plan().await;
+    assert_eq!(plan.keep_from, Seq(20));
+    fx.publish_hint(30, 10).await;
+    assert!(matches!(
+        run_segment_gc(&fx.wal, &fx.store, &plan).await,
+        Err(RefError::Invalid { .. })
+    ));
+    assert!(
+        fx.file(&fx.paths.segment(Seq(15))).exists(),
+        "nothing was deleted"
+    );
 }

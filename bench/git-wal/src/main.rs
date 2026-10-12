@@ -140,7 +140,8 @@ async fn pusher(
             rand::rng().fill_bytes(&mut body);
             let id = BlobId::parse(&random_hex(20)).expect("blob id");
             tokio::time::sleep(delay).await;
-            if blobs.put(&id, Bytes::from(body)).await.is_err() {
+            if let Err(err) = blobs.put(&id, Bytes::from(body)).await {
+                eprintln!("pusher {id}: uploading pack {}: {err}", id.as_str());
                 failed += 1;
                 continue;
             }

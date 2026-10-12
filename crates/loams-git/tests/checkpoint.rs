@@ -270,7 +270,22 @@ async fn create_repo_is_idempotent_and_sha1_only() {
         ),
         other => panic!("{other:?}"),
     }
-    // A repository without a checkpoint is not found.
+    // A repository without a checkpoint is not found, by reads too.
+    let none = StoreWalStore::new(
+        store.clone(),
+        RepoPaths::new(
+            loams_git::NamespaceId(1),
+            &loams_git::RepoId::parse("rabsent").expect("id"),
+        ),
+    );
+    assert!(matches!(
+        loams_git::state_at(&none, Seq(3)).await,
+        Err(RefError::NotFound)
+    ));
+    assert!(matches!(
+        loams_git::state_at(&wal, Seq(3)).await,
+        Err(RefError::Invalid { .. })
+    ));
     let other = StoreWalStore::new(
         store.clone(),
         RepoPaths::new(
