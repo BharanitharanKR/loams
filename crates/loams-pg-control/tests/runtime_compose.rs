@@ -178,6 +178,7 @@ fn endpoint(id: &str) -> EndpointRec {
         compute_id: None,
         backend_addr: None,
         failure: None,
+        ..EndpointRec::new("", "", "", EndpointType::ReadWrite)
     }
 }
 

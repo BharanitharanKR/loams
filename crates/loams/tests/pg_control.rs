@@ -267,6 +267,9 @@ mod postgres {
             config.pageserver = "http://127.0.0.1:9".parse().expect("a URL");
             config.wal = "http://127.0.0.1:9".parse().expect("a URL");
             config.audit = audit.clone();
+            // The API alone: no compute runtime (the endpoint reconciler is
+            // tested in loams-pg-control on fakes).
+            config.computes = None;
             edit(&mut config);
             let control = PgControl::start(config).await.expect("pg-control starts");
             Running {
@@ -706,13 +709,209 @@ mod postgres {
         assert_eq!(reason(&e), "invalid_argument");
         let (status, e) = pg
             .call(
-                "StartEndpoint",
+                "UpgradeProject",
                 json!({"namespace": "acme", "projectId": id, "idempotencyKey": "k3"}),
                 None,
             )
             .await;
         assert_eq!(status, 501, "{e}");
         assert_eq!(reason(&e), "not_implemented");
+        pg.shutdown().await;
+    }
+
+    /// The endpoint RPCs (Task 11) with the proto's shapes: a create, its
+    /// read and listing, an update of its settings, a start's operation
+    /// naming the endpoint; a second read-write endpoint, a setting outside
+    /// the allow-list and a promotion (Task 16) are refused.
+    #[tokio::test]
+    async fn endpoint_rpcs_round_trip() {
+        let pg = Running::start(|_| {}).await;
+        let (status, created) = pg
+            .call(
+                "CreateProject",
+                json!({"namespace": "acme", "name": "shop", "idempotencyKey": "k1"}),
+                None,
+            )
+            .await;
+        assert_eq!(status, 200, "{created}");
+        let project = created["project"]["id"].as_str().expect("an id").to_owned();
+        let main = created["project"]["defaultBranchId"]
+            .as_str()
+            .expect("main")
+            .to_owned();
+
+        let create = json!({
+            "namespace": "acme", "projectId": project, "type": "ENDPOINT_TYPE_READ_WRITE",
+            "minCu": 0.5, "maxCu": 2.0, "suspendTimeout": "600s",
+            "pgSettings": {"work_mem": "64MB"}, "idempotencyKey": "e1"
+        });
+        let (status, ep) = pg.call("CreateEndpoint", create.clone(), None).await;
+        assert_eq!(status, 200, "{ep}");
+        let endpoint = &ep["endpoint"];
+        let id = endpoint["id"].as_str().expect("an id").to_owned();
+        assert!(id.starts_with("ep-"));
+        assert_eq!(endpoint["branchId"], main.as_str());
+        assert_eq!(endpoint["state"], "ENDPOINT_STATE_IDLE");
+        assert_eq!(endpoint["minCu"], 0.5);
+        assert_eq!(endpoint["maxCu"], 2.0);
+        assert_eq!(endpoint["suspendTimeout"], "600s");
+        assert_eq!(endpoint["poolMode"], "POOL_MODE_TRANSACTION");
+        assert_eq!(endpoint["pgSettings"]["work_mem"], "64MB");
+        let (_, replay) = pg.call("CreateEndpoint", create, None).await;
+        assert_eq!(replay["endpoint"]["id"], id.as_str());
+
+        let (status, e) = pg
+            .call(
+                "CreateEndpoint",
+                json!({"namespace": "acme", "projectId": project, "type": "ENDPOINT_TYPE_READ_WRITE", "idempotencyKey": "e2"}),
+                None,
+            )
+            .await;
+        assert_eq!(status, 409, "{e}");
+        assert_eq!(reason(&e), "endpoint_exists_for_branch");
+        let (status, e) = pg
+            .call(
+                "CreateEndpoint",
+                json!({"namespace": "acme", "projectId": project, "type": "ENDPOINT_TYPE_READ_ONLY",
+                       "pgSettings": {"shared_preload_libraries": "evil"}, "idempotencyKey": "e3"}),
+                None,
+            )
+            .await;
+        assert_eq!(status, 400, "{e}");
+        assert_eq!(reason(&e), "invalid_argument");
+
+        let (status, got) = pg
+            .call(
+                "GetEndpoint",
+                json!({"namespace": "acme", "projectId": project, "endpointId": id}),
+                None,
+            )
+            .await;
+        assert_eq!(status, 200, "{got}");
+        assert_eq!(got["endpoint"]["id"], id.as_str());
+        let (status, listed) = pg
+            .call(
+                "ListEndpoints",
+                json!({"namespace": "acme", "projectId": project, "branchId": main}),
+                None,
+            )
+            .await;
+        assert_eq!(status, 200, "{listed}");
+        assert_eq!(listed["endpoints"].as_array().map(Vec::len), Some(1));
+
+        let (status, updated) = pg
+            .call(
+                "UpdateEndpoint",
+                json!({"namespace": "acme", "projectId": project,
+                       "endpoint": {"id": id, "pgSettings": {"statement_timeout": "30s"}},
+                       "updateMask": "pgSettings", "idempotencyKey": "u1"}),
+                None,
+            )
+            .await;
+        assert_eq!(status, 200, "{updated}");
+        assert_eq!(
+            updated["endpoint"]["pgSettings"],
+            json!({"statement_timeout": "30s"})
+        );
+
+        let (status, started) = pg
+            .call(
+                "StartEndpoint",
+                json!({"namespace": "acme", "projectId": project, "endpointId": id, "idempotencyKey": "s1"}),
+                None,
+            )
+            .await;
+        assert_eq!(status, 200, "{started}");
+        let op = &started["operation"];
+        assert_eq!(op["kind"], "postgres.endpoint.start");
+        assert_eq!(op["target"]["endpoint"], id.as_str());
+        assert_eq!(op["target"]["branch"], main.as_str());
+
+        let (status, e) = pg
+            .call(
+                "RestartEndpoint",
+                json!({"namespace": "acme", "projectId": project, "endpointId": id, "promote": true, "idempotencyKey": "r1"}),
+                None,
+            )
+            .await;
+        assert_eq!(status, 501, "{e}");
+        assert_eq!(reason(&e), "not_implemented");
+
+        let (status, deleted) = pg
+            .call(
+                "DeleteEndpoint",
+                json!({"namespace": "acme", "projectId": project, "endpointId": id, "idempotencyKey": "d1"}),
+                None,
+            )
+            .await;
+        assert_eq!(status, 200, "{deleted}");
+        assert_eq!(deleted["operation"]["kind"], "postgres.endpoint.delete");
+        pg.shutdown().await;
+    }
+
+    /// `WatchProject` streams a snapshot first (Connect server streaming,
+    /// JSON envelopes).
+    #[tokio::test]
+    async fn watch_project_streams_a_snapshot() {
+        let pg = Running::start(|_| {}).await;
+        let (status, created) = pg
+            .call(
+                "CreateProject",
+                json!({"namespace": "acme", "name": "shop", "idempotencyKey": "k1"}),
+                None,
+            )
+            .await;
+        assert_eq!(status, 200, "{created}");
+        let project = created["project"]["id"].as_str().expect("an id").to_owned();
+        let body = json!({"namespace": "acme", "projectId": project}).to_string();
+        let mut framed = vec![0u8];
+        framed.extend_from_slice(&u32::try_from(body.len()).expect("small").to_be_bytes());
+        framed.extend_from_slice(body.as_bytes());
+        let mut response = reqwest::Client::new()
+            .post(format!(
+                "{}/loams.postgres.v1.PostgresService/WatchProject",
+                pg.base
+            ))
+            .header("content-type", "application/connect+json")
+            .body(framed)
+            .send()
+            .await
+            .expect("a stream");
+        assert_eq!(response.status().as_u16(), 200);
+        let mut buf = Vec::new();
+        let first = loop {
+            let chunk = tokio::time::timeout(std::time::Duration::from_secs(10), response.chunk())
+                .await
+                .expect("a frame within 10 s")
+                .expect("reads")
+                .expect("not the end");
+            buf.extend_from_slice(&chunk);
+            // The first frame, once it is whole.
+            if buf.len() >= 5 {
+                let len = u32::from_be_bytes([buf[1], buf[2], buf[3], buf[4]]) as usize;
+                if buf.len() >= 5 + len {
+                    let message = &buf[5..5 + len];
+                    assert_eq!(
+                        buf[0],
+                        0,
+                        "a message, not the end: {}",
+                        String::from_utf8_lossy(message)
+                    );
+                    break serde_json::from_slice::<Value>(message).expect("json");
+                }
+            }
+        };
+        assert_eq!(first["snapshot"]["project"]["id"], project.as_str());
+        assert_eq!(
+            first["snapshot"]["branches"].as_array().map(Vec::len),
+            Some(1)
+        );
+        assert!(
+            first["cursor"]
+                .as_str()
+                .is_some_and(|c| c.starts_with("w1."))
+        );
+        drop(response);
         pg.shutdown().await;
     }
 

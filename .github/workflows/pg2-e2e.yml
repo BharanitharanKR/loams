@@ -36,6 +36,8 @@ on:
       - "rust-toolchain.toml"
       - "crates/loams-postgres/**"
       - "crates/loams-pg-control/**"
+      # compiled into loams-pg-control (runtime::images)
+      - "deploy/pins/loams-postgres-images.toml"
       - "crates/loams-kv/**"
       - "crates/loams-proto/**"
       - "proto/**"
@@ -57,6 +59,8 @@ on:
       - "rust-toolchain.toml"
       - "crates/loams-postgres/**"
       - "crates/loams-pg-control/**"
+      # compiled into loams-pg-control (runtime::images)
+      - "deploy/pins/loams-postgres-images.toml"
       - "crates/loams-kv/**"
       - "crates/loams-proto/**"
       - "proto/**"
@@ -239,7 +243,7 @@ jobs:
         run: docker compose down -v
 
   pg-control-compose-runtime:
-    name: pg-control's compose runtime against deploy/loams-postgres-dev (it_compose)
+    name: pg-control's compose runtime and endpoint lifecycle against deploy/loams-postgres-dev (it_compose, it_endpoint)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -252,7 +256,7 @@ jobs:
           shared-key: pg2-loams-pg-control
           save-if: false
       - name: build the test
-        run: cargo test -p loams-pg-control --locked --test it_compose --no-run
+        run: cargo test -p loams-pg-control --locked --test it_compose --test it_endpoint --no-run
       - name: pull the pinned images
         working-directory: deploy/loams-postgres-dev
         run: |
@@ -277,14 +281,21 @@ jobs:
           IT_UPCALL_HOST: host.docker.internal
           IT_EXTRA_HOSTS: host.docker.internal:host-gateway
         run: cargo test -p loams-pg-control --locked --test it_compose -- --ignored
+      - name: it_endpoint_starts_suspends_and_deletes
+        env:
+          IT_UPCALL_HOST: host.docker.internal
+          IT_EXTRA_HOSTS: host.docker.internal:host-gateway
+        run: cargo test -p loams-pg-control --locked --test it_endpoint -- --ignored
       - name: logs
         if: failure()
         run: |
           (cd deploy/loams-postgres-dev && docker compose logs --tail 200) || true
           docker compose -p loams-pg-it logs --tail 200 || true
+          docker compose -p loams-pg-it-ep logs --tail 200 || true
       - name: teardown
         if: always()
         working-directory: deploy/loams-postgres-dev
         run: |
           docker compose -p loams-pg-it down || true
+          docker compose -p loams-pg-it-ep down || true
           docker compose down -v

@@ -129,7 +129,7 @@ live-tikv = ["live", "tikv", "loams-live/tikv"]
 # `loams pg-control` role, serving `loams.postgres.v1` and the upcalls Neon's
 # components call. Off by default: the default build links none of it. With
 # `tikv` too, `--store tikv` keeps its records on TiKV.
-postgres = ["dep:loams-pg-control", "dep:loams-postgres"]
+postgres = ["dep:loams-pg-control", "dep:loams-postgres", "dep:futures"]
 # `--runtime kubernetes`: role secrets and the signing key as Kubernetes
 # Secrets (the kube client).
 postgres-kubernetes = ["postgres", "loams-pg-control/kubernetes"]

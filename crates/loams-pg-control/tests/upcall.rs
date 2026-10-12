@@ -248,6 +248,7 @@ impl Rig {
                 compute_id: Some(i.compute.to_string()),
                 backend_addr: Some("ep.local:55500".into()),
                 failure: None,
+                ..EndpointRec::new("", "", "", EndpointType::ReadWrite)
             },
             None,
         )
