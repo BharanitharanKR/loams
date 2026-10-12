@@ -218,7 +218,8 @@ describe('analytics page', () => {
     expect(within(banner).getByText(/first 1,000 rows/)).toBeTruthy();
     fireEvent.click(within(banner).getByRole('button', { name: /Stream up to/ }));
     await waitFor(() => expect(client.requests.at(-1)?.maxRows).toBe(SERVER_MAX_ROWS));
-    expect(await screen.findByText(/5,000 rows/)).toBeTruthy();
+    // The status line and the result footer can both say it.
+    expect((await screen.findAllByText(/5,000 rows/)).length).toBeGreaterThan(0);
   });
 
   it('refused_statement_shows_clickhouse_code', async () => {
