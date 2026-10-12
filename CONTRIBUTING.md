@@ -150,7 +150,7 @@ Loams uses the [Developer Certificate of Origin](https://developercertificate.or
 git commit -s -m "log: add a WAL object encoder"
 ```
 
-This adds a `Signed-off-by: Your Name <you@example.com>` trailer, certifying that you wrote the change or otherwise have the right to submit it under the project's license. To sign off commits you already made, run `git rebase --signoff dev`.
+This adds a `Signed-off-by: Your Name <you@example.com>` trailer, certifying that you wrote the change or otherwise have the right to submit it under the project's license. To sign off commits you already made, run `git rebase --signoff dev`. If they are already on a shared branch, add a signed-off commit instead, with one line per commit in its body: `I, Your Name <you@example.com>, hereby add my Signed-off-by to this commit: <full sha>` (your author email must match the commit's).
 
 ## Code of Conduct
 
