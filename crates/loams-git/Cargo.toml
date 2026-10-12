@@ -1,0 +1,36 @@
+[package]
+name = "loams-git"
+description = "Loams Git's portable core (design §36, §19): identifiers, object paths, limits, and the bucket WAL formats."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+bytes.workspace = true
+# Segment and checkpoint trailers (§36 §4.3).
+crc32c.workspace = true
+# The gitoxide 0.88 train, pinned exactly in the workspace (plan GT1 R0.8).
+gix-hash.workspace = true
+gix-validate.workspace = true
+# The protobuf format only: `record` would pull in loams-log (R0.4, T0-7).
+loams-cloudevents = { path = "../loams-cloudevents", version = "0.1.0-preview.1", default-features = false, features = ["protobuf"] }
+loams-common.workspace = true
+# The loams.git.v1 on-disk messages (R0.5).
+prost.workspace = true
+# `derived_blame` names hash the path.
+sha2.workspace = true
+thiserror.workspace = true
+# Generated ids (`r`, `w`, `m`, `s` + a lowercase ULID).
+ulid.workspace = true
+
+[build-dependencies]
+prost-build.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

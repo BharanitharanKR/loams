@@ -8,6 +8,9 @@ use std::time::Duration;
 use std::collections::BTreeMap;
 
 use clap::{Parser, Subcommand};
+
+#[cfg(feature = "postgres")]
+mod pg_control_cli;
 use loams::{ClusterConfig, MetaBackend, Server, ServerConfig};
 use loams_hot::Roles;
 
@@ -218,6 +221,28 @@ enum HotSwitch {
 /// `cluster`.
 #[derive(Debug, clap::Args)]
 struct Native {
+    /// Loams Graph's data directory (feature `graph`): graphs live under
+    /// <DIR>/graphs/<graph_id>/ [default: <data-dir>/graph for dev; required
+    /// for standalone unless --graph-ephemeral or --no-graph].
+    #[arg(long, conflicts_with_all = ["graph_ephemeral", "no_graph"])]
+    graph_data_dir: Option<PathBuf>,
+    /// Keep graphs in memory (development only): a graph is lost on restart,
+    /// and fails rather than reopening after an engine panic.
+    #[arg(long, conflicts_with = "no_graph")]
+    graph_ephemeral: bool,
+    /// Serve no Loams Graph API (its RPCs answer feature_not_in_variant).
+    #[arg(long)]
+    no_graph: bool,
+    /// Loams Graph: graph statements that may run at once in this process;
+    /// past it a statement is refused with RESOURCE_EXHAUSTED [default: twice
+    /// the cores, at most 32; at most 256].
+    #[arg(long)]
+    graph_statement_slots: Option<usize>,
+    /// Loams Graph: the engine's own statement time limit, a backstop (it
+    /// does not stop a statement inside one long operator), and the largest
+    /// timeout a request may ask for [default: 30000; at most 300000].
+    #[arg(long)]
+    graph_query_timeout_ms: Option<u64>,
     /// Address of the Arrow Flight SQL listener [default: 127.0.0.1:8082
     /// for dev, 0.0.0.0:8082 for standalone].
     #[arg(long, conflicts_with = "no_flight_sql")]
@@ -225,6 +250,11 @@ struct Native {
     /// Serve no Flight SQL.
     #[arg(long)]
     no_flight_sql: bool,
+    /// The Loams House front (`loams-fabric house`) this port proxies
+    /// `/loams.house.v1.*` to, such as http://127.0.0.1:8123 (design §49
+    /// §18.1). Without it, loams.house.v1 answers house_not_configured.
+    #[arg(long, value_parser = parse_house_endpoint)]
+    house_endpoint: Option<url::Url>,
     /// MySQL wire listener for collection queries (loopback only).
     #[cfg(feature = "mysql-wire")]
     #[arg(long)]
@@ -245,6 +275,27 @@ struct Native {
     #[cfg(feature = "stream-grpc")]
     #[arg(long)]
     stream_grpc_listen: Option<SocketAddr>,
+    /// Loams SQL gate listener (TLS; plaintext only from loopback peers).
+    #[cfg(feature = "sqldb")]
+    #[arg(long, requires_all = ["sqlgate_tls_cert", "sqlgate_tls_key", "sqlgate_upstream_ca"])]
+    sqlgate_listen: Option<SocketAddr>,
+    /// The gate's certificate chain (PEM).
+    #[cfg(feature = "sqldb")]
+    #[arg(long, requires = "sqlgate_listen")]
+    sqlgate_tls_cert: Option<std::path::PathBuf>,
+    /// The gate's private key (PEM).
+    #[cfg(feature = "sqldb")]
+    #[arg(long, requires = "sqlgate_listen")]
+    sqlgate_tls_key: Option<std::path::PathBuf>,
+    /// The CA (PEM) that signs the TiDB pools' certificates.
+    #[cfg(feature = "sqldb")]
+    #[arg(long, requires = "sqlgate_listen")]
+    sqlgate_upstream_ca: Option<std::path::PathBuf>,
+    /// When the gate accepts plaintext: never, or loopback (from loopback
+    /// peers only) [default: loopback for `loams dev`, never otherwise].
+    #[cfg(feature = "sqldb")]
+    #[arg(long, requires = "sqlgate_listen")]
+    sqlgate_plaintext: Option<loams_sqlgate::server::PlaintextPolicy>,
     /// Address of the Qdrant REST API [default: 127.0.0.1:6333].
     #[arg(long, conflicts_with = "no_qdrant")]
     qdrant_listen: Option<SocketAddr>,
@@ -458,6 +509,25 @@ fn parse_durable_listen(text: &str) -> Result<SocketAddr, String> {
     text.parse().map_err(|err| format!("{err}"))
 }
 
+/// `--house-endpoint`: an `http` URL with a host. `https` is refused by name:
+/// the engine's HTTP client has no TLS until HS1 Task 20, and accepting it would
+/// only turn into "unreachable" on every call.
+fn parse_house_endpoint(text: &str) -> Result<url::Url, String> {
+    let url = url::Url::parse(text).map_err(|err| format!("--house-endpoint {text:?}: {err}"))?;
+    if url.scheme() == "https" {
+        return Err(format!(
+            "--house-endpoint {text:?}: https is not supported yet (this build has no TLS \
+             client; HS1 Task 20); use http:// on loopback or a private network"
+        ));
+    }
+    if url.scheme() != "http" || url.host().is_none() {
+        return Err(format!(
+            "--house-endpoint {text:?}: expected http://host:port"
+        ));
+    }
+    Ok(url)
+}
+
 /// `--durable-set key=value`.
 fn parse_key_value(text: &str) -> Result<(String, String), String> {
     match text.split_once('=') {
@@ -469,7 +539,41 @@ fn parse_key_value(text: &str) -> Result<(String, String), String> {
 }
 
 impl Native {
+    /// Loams Graph's settings (GR1 Task 5). `dev` keeps graphs under `<data-dir>/graph` by
+    /// default; `standalone` and `cluster` need `--graph-data-dir` (or `--graph-ephemeral`, or
+    /// `--no-graph`), and the server refuses to start without one.
+    fn apply_graph(&self, config: &mut ServerConfig, dev: bool) {
+        #[cfg(feature = "graph")]
+        {
+            config.graph.enabled = !self.no_graph;
+            config.graph.ephemeral = self.graph_ephemeral;
+            if let Some(slots) = self.graph_statement_slots {
+                config.graph.statement_slots = slots;
+            }
+            if let Some(ms) = self.graph_query_timeout_ms {
+                config.graph.query_timeout = Duration::from_millis(ms);
+            }
+            if let Some(dir) = &self.graph_data_dir {
+                config.graph.data_dir = Some(dir.clone());
+            } else if !dev || self.graph_ephemeral {
+                config.graph.data_dir = None;
+            }
+        }
+        #[cfg(not(feature = "graph"))]
+        {
+            let _ = (config, dev);
+            if self.graph_data_dir.is_some()
+                || self.graph_ephemeral
+                || self.graph_statement_slots.is_some()
+                || self.graph_query_timeout_ms.is_some()
+            {
+                tracing::warn!("this build has no Loams Graph (the graph feature is off)");
+            }
+        }
+    }
+
     fn apply(&self, config: &mut ServerConfig, default_flight: SocketAddr) {
+        config.house.endpoint = self.house_endpoint.clone();
         config.flight_sql = if self.no_flight_sql {
             None
         } else {
@@ -500,6 +604,28 @@ impl Native {
         #[cfg(feature = "stream-grpc")]
         {
             config.stream_grpc = self.stream_grpc_listen;
+        }
+        #[cfg(feature = "sqldb")]
+        {
+            config.sqlgate = match (
+                self.sqlgate_listen,
+                &self.sqlgate_tls_cert,
+                &self.sqlgate_tls_key,
+                &self.sqlgate_upstream_ca,
+            ) {
+                (Some(listen), Some(cert), Some(key), Some(ca)) => {
+                    Some(loams::sqlgate::SqlgateConfig {
+                        listen,
+                        tls_cert: cert.clone(),
+                        tls_key: key.clone(),
+                        upstream_ca: ca.clone(),
+                        plaintext: self
+                            .sqlgate_plaintext
+                            .unwrap_or(loams_sqlgate::server::PlaintextPolicy::Never),
+                    })
+                }
+                _ => None,
+            };
         }
         self.apply_qdrant(config);
         self.apply_durable(config);
@@ -633,6 +759,261 @@ impl Native {
     }
 }
 
+/// Loams Live (R1 plan Task 12, feature `live`), on `dev` and `standalone`.
+#[cfg(feature = "live")]
+#[derive(Debug, clap::Args)]
+struct LiveArgs {
+    /// Address of the Loams Live sync API; loopback only (127.0.0.0/8,
+    /// ::1, localhost), since the Live API has no authentication in R1
+    /// (D111).
+    #[arg(long, default_value = "127.0.0.1:7710", value_parser = parse_live_listen)]
+    live_listen: SocketAddr,
+    // The help names `tikv://` only in a build that has it: the desktop app
+    // reads `dev --help` to tell the two apart (row T23-9).
+    #[cfg_attr(
+        feature = "live-tikv",
+        doc = "Where Live keeps its data: `embedded` (a store under <data-dir>/live/) or \
+               `tikv://<pd>[,<pd>]/<keyspace>` (the keyspace defaults to loams_live_<app>) \
+               [default: embedded]."
+    )]
+    #[cfg_attr(
+        not(feature = "live-tikv"),
+        doc = "Where Live keeps its data: `embedded`, a store under <data-dir>/live/ (this \
+               build has no other) [default: embedded]."
+    )]
+    #[arg(long, value_parser = parse_live_store, conflicts_with_all = ["live_pd", "live_keyspace"])]
+    live_store: Option<LiveStore>,
+    /// Deprecated: use --live-store tikv://<pd>/<keyspace>. PD endpoints of
+    /// a Live TiKV cluster, comma-separated. Hidden, and refused, in a build
+    /// without the live-tikv feature.
+    #[arg(
+        long,
+        value_delimiter = ',',
+        value_parser = parse_live_tikv_alias,
+        hide = !cfg!(feature = "live-tikv")
+    )]
+    live_pd: Vec<String>,
+    /// Deprecated: use --live-store tikv://<pd>/<keyspace>. The Live app's
+    /// TiKV keyspace [default: loams_live_<app>]. Hidden, and refused, in a
+    /// build without the live-tikv feature.
+    #[arg(long, value_parser = parse_live_tikv_alias, hide = !cfg!(feature = "live-tikv"))]
+    live_keyspace: Option<String>,
+    /// The Live app.
+    #[arg(long, default_value = "dev", value_parser = parse_live_app)]
+    live_app: String,
+    /// How far behind a fresh timestamp each subscription tick reads, in
+    /// milliseconds (R1 plan row T12-1).
+    #[arg(long, default_value_t = 50)]
+    live_tick_read_lag_ms: u64,
+    /// Where Live functions run: in_process (trusted, single-tenant code)
+    /// or isolated (sandboxed worker processes; Linux only).
+    #[arg(long, value_enum, default_value_t = LiveIsolation::InProcess)]
+    live_isolation: LiveIsolation,
+    /// Whose Live code this node serves: single, or multi (which needs
+    /// --live-isolation isolated).
+    #[arg(long, value_enum, default_value_t = LiveTenancy::Single)]
+    live_tenancy: LiveTenancy,
+    /// Serve no Loams Live API.
+    #[arg(
+        long,
+        conflicts_with_all = ["live_listen", "live_store", "live_pd", "live_keyspace", "live_app"]
+    )]
+    no_live: bool,
+}
+
+/// `--live-isolation` (design §45 §3.1, `[live] isolation`).
+#[cfg(feature = "live")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum LiveIsolation {
+    #[value(name = "in_process")]
+    InProcess,
+    #[value(name = "isolated")]
+    Isolated,
+}
+
+/// `--live-tenancy` (design §45 §3.1, `[live] tenancy`).
+#[cfg(feature = "live")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum LiveTenancy {
+    #[value(name = "single")]
+    Single,
+    #[value(name = "multi")]
+    Multi,
+}
+
+/// What `--live-store` names (LV1 plan Task 23).
+#[cfg(feature = "live")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LiveStore {
+    /// The embedded store under `<data_dir>/live/`.
+    Embedded,
+    /// A TiKV keyspace (`None`: `loams_live_<app>`).
+    #[cfg(feature = "live-tikv")]
+    Tikv {
+        pd: Vec<String>,
+        keyspace: Option<String>,
+    },
+}
+
+/// The PD the deprecated `--live-keyspace` alone implies: the dev
+/// playground's.
+#[cfg(feature = "live-tikv")]
+const LIVE_PD_DEFAULT: &str = "127.0.0.1:19379";
+
+/// `--live-pd` and `--live-keyspace`: they select Live on TiKV, so a build
+/// without the live-tikv feature refuses them rather than running Live on
+/// the embedded store a user did not ask for (row T23-7).
+#[cfg(feature = "live")]
+fn parse_live_tikv_alias(value: &str) -> Result<String, String> {
+    #[cfg(feature = "live-tikv")]
+    {
+        Ok(value.to_string())
+    }
+    #[cfg(not(feature = "live-tikv"))]
+    {
+        let _ = value;
+        Err(
+            "--live-pd and --live-keyspace select Live on TiKV and need a build with the \
+             live-tikv feature; this build runs Live on the embedded store (drop the flag, \
+             or build with --features live-tikv)"
+                .to_string(),
+        )
+    }
+}
+
+/// `--live-store`: `embedded` or `tikv://<pd>[,<pd>][/<keyspace>]`; the
+/// latter only in a build with the live-tikv feature.
+#[cfg(feature = "live")]
+fn parse_live_store(value: &str) -> Result<LiveStore, String> {
+    if value == "embedded" {
+        return Ok(LiveStore::Embedded);
+    }
+    let Some(rest) = value.strip_prefix("tikv://") else {
+        return Err(format!(
+            "--live-store {value:?}: expected embedded or tikv://<pd>[,<pd>]/<keyspace>"
+        ));
+    };
+    #[cfg(not(feature = "live-tikv"))]
+    {
+        let _ = rest;
+        Err("--live-store tikv:// needs a build with the live-tikv feature".to_string())
+    }
+    #[cfg(feature = "live-tikv")]
+    {
+        let (hosts, keyspace) = match rest.split_once('/') {
+            Some((hosts, keyspace)) => (hosts, Some(keyspace)),
+            None => (rest, None),
+        };
+        let pd: Vec<String> = hosts
+            .split(',')
+            .map(str::trim)
+            .filter(|h| !h.is_empty())
+            .map(str::to_string)
+            .collect();
+        if pd.is_empty() {
+            return Err(format!("--live-store {value:?}: names no PD endpoint"));
+        }
+        if keyspace.is_some_and(|k| k.contains('/')) {
+            return Err(format!(
+                "--live-store {value:?}: a keyspace has no '/'; expected \
+                 tikv://<pd>[,<pd>]/<keyspace>"
+            ));
+        }
+        Ok(LiveStore::Tikv {
+            pd,
+            keyspace: keyspace.filter(|k| !k.is_empty()).map(str::to_string),
+        })
+    }
+}
+
+#[cfg(feature = "live")]
+impl LiveArgs {
+    fn apply(&self, config: &mut ServerConfig) {
+        if self.no_live {
+            config.live = None;
+            return;
+        }
+        let store = self.store(&config.data_dir);
+        let mut live = loams_live::LiveConfig::with_store(&self.live_app, store);
+        live.listen = self.live_listen;
+        live.subs.tick_read_lag = Duration::from_millis(self.live_tick_read_lag_ms);
+        live.isolation = match self.live_isolation {
+            LiveIsolation::InProcess => loams_live::Isolation::InProcess,
+            LiveIsolation::Isolated => loams_live::Isolation::Isolated,
+        };
+        live.tenancy = match self.live_tenancy {
+            LiveTenancy::Single => loams_live::Tenancy::Single,
+            LiveTenancy::Multi => loams_live::Tenancy::Multi,
+        };
+        config.live = Some(live);
+    }
+
+    /// The store the flags name: `--live-store`, else the deprecated
+    /// `--live-pd`/`--live-keyspace` (TiKV; refused at parsing without the
+    /// live-tikv feature, row T23-7), else the embedded store.
+    fn store(&self, data_dir: &std::path::Path) -> loams_live::StoreConfig {
+        let embedded = || {
+            loams_live::StoreConfig::Embedded(loams_live::EmbeddedConfig::new(
+                loams_live::store_path(data_dir),
+                loams_live::keyspace_of(&self.live_app),
+            ))
+        };
+        match &self.live_store {
+            Some(LiveStore::Embedded) => embedded(),
+            #[cfg(feature = "live-tikv")]
+            Some(LiveStore::Tikv { pd, keyspace }) => {
+                loams_live::StoreConfig::Tikv(loams_tikv::TikvConfig::new(
+                    pd.clone(),
+                    keyspace
+                        .clone()
+                        .unwrap_or_else(|| loams_live::keyspace_of(&self.live_app)),
+                ))
+            }
+            #[cfg(feature = "live-tikv")]
+            None if !self.live_pd.is_empty() || self.live_keyspace.is_some() => {
+                eprintln!(
+                    "loams: warning: --live-pd and --live-keyspace are deprecated; use \
+                     --live-store tikv://<pd>[,<pd>]/<keyspace>"
+                );
+                let pd = if self.live_pd.is_empty() {
+                    vec![LIVE_PD_DEFAULT.to_string()]
+                } else {
+                    self.live_pd.clone()
+                };
+                let keyspace = self
+                    .live_keyspace
+                    .clone()
+                    .unwrap_or_else(|| loams_live::keyspace_of(&self.live_app));
+                loams_live::StoreConfig::Tikv(loams_tikv::TikvConfig::new(pd, keyspace))
+            }
+            None => embedded(),
+        }
+    }
+}
+
+/// `--live-app`: a Live app name (the catalog's name rules).
+#[cfg(feature = "live")]
+fn parse_live_app(value: &str) -> Result<String, String> {
+    loams_live::catalog::check_name("app", value)
+        .map(|()| value.to_string())
+        .map_err(|err| format!("--live-app {value:?}: {err}"))
+}
+
+/// `--live-listen`: an `ip:port`, or `localhost:<port>` (127.0.0.1). The
+/// loopback check runs at startup, with the error of design §20 §7.1.
+#[cfg(feature = "live")]
+fn parse_live_listen(value: &str) -> Result<SocketAddr, String> {
+    if let Some(port) = value.strip_prefix("localhost:") {
+        let port: u16 = port
+            .parse()
+            .map_err(|_| format!("--live-listen {value:?}: the port is not a number"))?;
+        return Ok(SocketAddr::from(([127, 0, 0, 1], port)));
+    }
+    value
+        .parse()
+        .map_err(|_| format!("--live-listen {value:?}: expected ip:port or localhost:port"))
+}
+
 #[derive(Debug, Subcommand)]
 enum Command {
     /// Run everything in one process, with data in a local directory.
@@ -652,6 +1033,9 @@ enum Command {
         meta: Option<MetaBackend>,
         #[command(flatten)]
         native: Native,
+        #[cfg(feature = "live")]
+        #[command(flatten)]
+        live: LiveArgs,
         #[command(flatten)]
         tuning: Box<Tuning>,
     },
@@ -672,6 +1056,9 @@ enum Command {
         meta: Option<MetaBackend>,
         #[command(flatten)]
         native: Native,
+        #[cfg(feature = "live")]
+        #[command(flatten)]
+        live: LiveArgs,
     },
     /// Run one node of a cluster: the roles given, a metastore replica over
     /// HTTP, and data in an object-store bucket. `--listen` must be on a
@@ -738,6 +1125,71 @@ enum Command {
         #[command(subcommand)]
         command: DurableCommand,
     },
+    /// Engine authentication (LOAMS_AUTH_MODE): API keys.
+    Auth {
+        #[command(subcommand)]
+        command: AuthCommand,
+    },
+    /// One isolated Loams Live function worker (LV1 plan Task 5): started
+    /// by the server with piped stdio, never by hand. It speaks
+    /// `loams.live.worker.v1` frames on stdin and stdout and sandboxes
+    /// itself before it runs any function code.
+    #[cfg(feature = "live")]
+    #[command(hide = true)]
+    LiveWorker,
+    /// Loams Postgres's control plane (design §46 §6.1, PG2): serves
+    /// `loams.postgres.v1` on --listen and the upcalls Neon's components call
+    /// on --pg-upcall-listen, and reconciles projects and branches.
+    #[cfg(feature = "postgres")]
+    PgControl(Box<pg_control_cli::PgControlArgs>),
+    /// Mint an API key for `loams pg-control --pg-authz api-key`: prints the
+    /// key (shown only this once) and the entry to add to the keys file.
+    #[cfg(feature = "postgres")]
+    PgApiKey(pg_control_cli::PgApiKeyArgs),
+}
+
+/// `loams auth …`: commands that start no server.
+#[derive(Debug, Subcommand)]
+enum AuthCommand {
+    /// Create an API key: prints the key once (keep it; it is not stored)
+    /// on stdout, and on stderr the line to append to LOAMS_API_KEYS_FILE
+    /// (with --append, appends it there itself).
+    NewKey {
+        /// A label for the key, shown as the principal's name.
+        #[arg(long, default_value = "")]
+        label: String,
+        /// Append the hashed line to this key file (created mode 0600).
+        #[arg(long)]
+        append: Option<PathBuf>,
+    },
+}
+
+/// `loams auth new-key`.
+fn auth_command(command: &AuthCommand) -> ExitCode {
+    match command {
+        AuthCommand::NewKey { label, append } => {
+            let (key, line) = loams::auth::api_key::new_key(label);
+            if let Some(path) = append {
+                use std::io::Write as _;
+                let mut options = std::fs::OpenOptions::new();
+                options.create(true).append(true);
+                #[cfg(unix)]
+                std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+                let written = options
+                    .open(path)
+                    .and_then(|mut file| writeln!(file, "{line}"));
+                if let Err(err) = written {
+                    eprintln!("loams: {}: {err}", path.display());
+                    return ExitCode::FAILURE;
+                }
+                eprintln!("appended the key's hash to {}", path.display());
+            } else {
+                eprintln!("append this line to LOAMS_API_KEYS_FILE:\n{line}");
+            }
+            println!("{key}");
+            ExitCode::SUCCESS
+        }
+    }
 }
 
 /// `loams durable …`: commands that start no server.
@@ -817,27 +1269,48 @@ fn config(command: Command) -> ServerConfig {
             config.cluster = Some(cluster);
             // After `cluster`: a cluster node has no default durable store.
             native.apply(&mut config, STANDALONE_FLIGHT_SQL);
+            native.apply_graph(&mut config, false);
             tuning.apply(&mut config);
             config
         }
         Command::Warm { .. } => unreachable!("loams warm starts no server"),
         Command::Durable { .. } => unreachable!("loams durable starts no server"),
+        Command::Auth { .. } => unreachable!("loams auth starts no server"),
+        #[cfg(feature = "live")]
+        Command::LiveWorker => unreachable!("loams live-worker starts no server"),
+        #[cfg(feature = "postgres")]
+        Command::PgControl(_) | Command::PgApiKey(_) => {
+            unreachable!("loams pg-control starts no engine server")
+        }
         Command::Dev {
             data_dir,
             listen,
             flush_interval_ms,
             meta,
             native,
+            #[cfg(feature = "live")]
+            live,
             tuning,
         } => {
             let mut config = ServerConfig::new(data_dir);
             config.listen = listen;
             config.meta = meta.unwrap_or_default();
+            #[cfg(feature = "live")]
+            live.apply(&mut config);
             if let Some(ms) = flush_interval_ms {
                 config.log.flush_interval = Duration::from_millis(ms);
             }
+            #[cfg(feature = "sqldb")]
+            let dev_plaintext = native.sqlgate_plaintext.is_none();
             native.apply(&mut config, DEV_FLIGHT_SQL);
+            native.apply_graph(&mut config, true);
             tuning.apply(&mut config);
+            // The desktop's gate takes plaintext from loopback peers unless
+            // told otherwise; a gateway never does (fix round 1, M6).
+            #[cfg(feature = "sqldb")]
+            if let Some(gate) = config.sqlgate.as_mut().filter(|_| dev_plaintext) {
+                gate.plaintext = loams_sqlgate::server::PlaintextPolicy::LoopbackOnly;
+            }
             // Q603's proposed default: `loams dev` publishes the schema of
             // the Connect API on the main port (design §44 §4), a production
             // deployment does not unless it asks.
@@ -850,12 +1323,17 @@ fn config(command: Command) -> ServerConfig {
             listen,
             meta,
             native,
+            #[cfg(feature = "live")]
+            live,
         } => {
             let mut config = ServerConfig::new(data_dir);
             config.listen = listen;
             config.meta = meta.unwrap_or_default();
+            #[cfg(feature = "live")]
+            live.apply(&mut config);
             config.bucket = Some(bucket);
             native.apply(&mut config, STANDALONE_FLIGHT_SQL);
+            native.apply_graph(&mut config, false);
             config
         }
     }
@@ -991,26 +1469,53 @@ async fn durable(_command: &DurableCommand) -> ExitCode {
     ExitCode::FAILURE
 }
 
+fn main() -> ExitCode {
+    let cli = Cli::parse();
+    // LV1 plan Task 5: the worker runs before an async runtime or a log
+    // subscriber exists, so it is single-threaded when it sandboxes itself.
+    #[cfg(feature = "live")]
+    if let Command::LiveWorker = cli.command {
+        return loams_live_js::worker_main();
+    }
+    serve(cli)
+}
+
 #[tokio::main]
-async fn main() -> ExitCode {
+async fn serve(cli: Cli) -> ExitCode {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,openraft=warn")),
         )
         .init();
-    let cli = Cli::parse();
     if let Command::Warm { target, server } = &cli.command {
         return warm(target, server).await;
     }
     if let Command::Durable { command } = &cli.command {
         return durable(command).await;
     }
+    if let Command::Auth { command } = &cli.command {
+        return auth_command(command);
+    }
+    #[cfg(feature = "postgres")]
+    let cli = match cli.command {
+        Command::PgControl(args) => return pg_control_cli::run(*args).await,
+        Command::PgApiKey(args) => return pg_control_cli::mint(&args),
+        command => Cli { command },
+    };
     if let Err(err) = arm_failpoints() {
         eprintln!("loams: {err}");
         return ExitCode::FAILURE;
     }
-    let server = match Server::start(config(cli.command)).await {
+    let mut config = config(cli.command);
+    config.auth = match loams::auth::AuthConfig::from_env() {
+        Ok(auth) => auth,
+        Err(err) => {
+            eprintln!("loams: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let server = match Server::start(config).await {
         Ok(server) => server,
         Err(err) => {
             eprintln!("loams: {err}");
@@ -1032,6 +1537,11 @@ async fn main() -> ExitCode {
     if let Some(addr) = server.es_addr() {
         println!("loams es listening on http://{addr}");
     }
+    // R1 plan Task 12 semantics 7: before the HTTP line.
+    #[cfg(feature = "live")]
+    if let Some(addr) = server.live_addr() {
+        println!("loams live listening on http://{addr}");
+    }
     println!("loams listening on http://{}", server.local_addr());
     // M1.6 W14, M1.7 A4: printed once the listener is bound.
     if let Some(addr) = server.flight_sql_addr() {
@@ -1048,6 +1558,10 @@ async fn main() -> ExitCode {
     #[cfg(feature = "stream-grpc")]
     if let Some(addr) = server.stream_grpc_addr() {
         println!("loams stream gRPC listening on grpc://{addr}");
+    }
+    #[cfg(feature = "sqldb")]
+    if let Some(addr) = server.sqlgate_addr() {
+        println!("loams SQL gate listening on mysql://{addr}");
     }
     shutdown_signal().await;
     tracing::info!("shutting down");
@@ -1067,6 +1581,98 @@ mod tests {
     fn dev_config(args: &[&str]) -> ServerConfig {
         let cli = Cli::try_parse_from(["loams", "dev"].iter().chain(args)).expect("parse");
         config(cli.command)
+    }
+
+    /// GR1 Task 5: `loams dev` keeps graphs under `<data-dir>/graph`; `standalone` has no graph
+    /// data dir unless one is given (and the server then refuses to start), and
+    /// `--graph-ephemeral` / `--no-graph` say so explicitly.
+    #[cfg(feature = "graph")]
+    #[test]
+    fn graph_data_dir_defaults_per_command() {
+        let dev = dev_config(&["--data-dir", "/d"]);
+        assert_eq!(
+            dev.graph.data_dir,
+            Some(std::path::PathBuf::from("/d/graph"))
+        );
+        assert!(dev.graph.enabled && !dev.graph.ephemeral);
+        let parse = |args: &[&str]| {
+            let cli = Cli::try_parse_from(
+                ["loams", "standalone", "--bucket", "file:///b"]
+                    .iter()
+                    .chain(args),
+            )
+            .expect("parse");
+            config(cli.command)
+        };
+        let standalone = parse(&[]);
+        assert_eq!(standalone.graph.data_dir, None);
+        assert!(
+            standalone.validate().is_err(),
+            "refuses without a graph data dir"
+        );
+        let given = parse(&["--graph-data-dir", "/g"]);
+        assert_eq!(given.graph.data_dir, Some(std::path::PathBuf::from("/g")));
+        let ephemeral = parse(&["--graph-ephemeral"]);
+        assert!(ephemeral.graph.ephemeral && ephemeral.graph.data_dir.is_none());
+        let off = parse(&["--no-graph"]);
+        assert!(!off.graph.enabled);
+        let capped = parse(&[
+            "--graph-ephemeral",
+            "--graph-statement-slots",
+            "3",
+            "--graph-query-timeout-ms",
+            "1500",
+        ]);
+        assert_eq!(capped.graph.statement_slots, 3);
+        assert_eq!(
+            capped.graph.query_timeout,
+            std::time::Duration::from_millis(1500)
+        );
+        assert!(capped.validate().is_ok());
+        assert!(
+            parse(&["--graph-ephemeral", "--graph-statement-slots", "0"])
+                .validate()
+                .is_err()
+        );
+        // At most 256 (GR1 Task 6 fix round 1, M4).
+        assert!(
+            parse(&["--graph-ephemeral", "--graph-statement-slots", "256"])
+                .validate()
+                .is_ok()
+        );
+        assert!(
+            parse(&["--graph-ephemeral", "--graph-statement-slots", "257"])
+                .validate()
+                .is_err()
+        );
+        assert!(
+            parse(&["--graph-ephemeral", "--graph-query-timeout-ms", "0"])
+                .validate()
+                .is_err()
+        );
+    }
+
+    /// HS1 Task 7: `--house-endpoint` is `[house] endpoint`; without it the
+    /// House is not configured, and only an http URL with a host is taken.
+    #[test]
+    fn house_endpoint_is_the_house_proxy_target() {
+        assert_eq!(dev_config(&[]).house.endpoint, None);
+        let config = dev_config(&["--house-endpoint", "http://127.0.0.1:8123"]);
+        assert_eq!(
+            config.house.endpoint.as_ref().map(url::Url::as_str),
+            Some("http://127.0.0.1:8123/")
+        );
+        for bad in [
+            "127.0.0.1:8123",
+            "unix:///run/house.sock",
+            "http://",
+            "https://house:8443",
+        ] {
+            assert!(
+                Cli::try_parse_from(["loams", "dev", "--house-endpoint", bad]).is_err(),
+                "{bad}"
+            );
+        }
     }
 
     /// Q603's proposed default: `loams dev` publishes the Connect schema on
@@ -1132,6 +1738,42 @@ mod tests {
     }
 
     #[cfg(feature = "qdrant")]
+    #[cfg(feature = "sqldb")]
+    #[test]
+    fn sqlgate_flags_set_the_config() {
+        assert_eq!(dev_config(&[]).sqlgate, None);
+        let config = dev_config(&[
+            "--sqlgate-listen",
+            "127.0.0.1:3307",
+            "--sqlgate-tls-cert",
+            "/c.pem",
+            "--sqlgate-tls-key",
+            "/k.pem",
+            "--sqlgate-upstream-ca",
+            "/ca.pem",
+        ]);
+        let gate = config.sqlgate.expect("configured");
+        assert_eq!(gate.listen, "127.0.0.1:3307".parse().unwrap());
+        assert_eq!(gate.tls_key, std::path::PathBuf::from("/k.pem"));
+        // M6: `loams dev` (the desktop) takes plaintext from loopback.
+        use loams_sqlgate::server::PlaintextPolicy;
+        assert_eq!(gate.plaintext, PlaintextPolicy::LoopbackOnly);
+        let flags = [
+            "--sqlgate-listen",
+            "127.0.0.1:3307",
+            "--sqlgate-tls-cert",
+            "/c.pem",
+            "--sqlgate-tls-key",
+            "/k.pem",
+            "--sqlgate-upstream-ca",
+            "/ca.pem",
+            "--sqlgate-plaintext",
+            "never",
+        ];
+        let gate = dev_config(&flags).sqlgate.expect("configured");
+        assert_eq!(gate.plaintext, PlaintextPolicy::Never);
+    }
+
     #[cfg(feature = "stream-grpc")]
     #[test]
     fn stream_grpc_flag_sets_the_config() {
@@ -1431,6 +2073,298 @@ mod tests {
         config.meta = MetaBackend::parse(url).expect("url");
         let err = config.validate().expect_err("refused").to_string();
         assert!(err.contains("dev and standalone only"), "{err}");
+    }
+
+    /// The store of a Live config.
+    #[cfg(feature = "live")]
+    fn live_store(live: &loams_live::LiveConfig) -> &loams_live::StoreConfig {
+        &live.store
+    }
+
+    /// The embedded store of a Live config.
+    #[cfg(feature = "live")]
+    fn live_embedded(live: &loams_live::LiveConfig) -> &loams_live::EmbeddedConfig {
+        match live_store(live) {
+            loams_live::StoreConfig::Embedded(e) => e,
+            #[allow(unreachable_patterns)]
+            other => panic!("expected the embedded store, got {other:?}"),
+        }
+    }
+
+    /// The TiKV handle of a Live config.
+    #[cfg(feature = "live-tikv")]
+    fn live_tikv(live: &loams_live::LiveConfig) -> &loams_tikv::TikvConfig {
+        match live_store(live) {
+            loams_live::StoreConfig::Tikv(tikv) => tikv,
+            other => panic!("expected a TiKV store, got {other:?}"),
+        }
+    }
+
+    /// R1 plan Task 12 and LV1 plan Task 23: `--live-*` on `dev` and
+    /// `standalone` configure Loams Live, on by default on the embedded store
+    /// under `<data_dir>/live/` (`--no-live` turns it off); the tick read lag
+    /// is a Live config key (row T12-1).
+    #[cfg(feature = "live")]
+    #[test]
+    fn live_flags_set_the_live_config() {
+        let config = dev_config(&[]);
+        let live = config.live.clone().expect("on by default");
+        assert_eq!(live.listen, SocketAddr::from(([127, 0, 0, 1], 7710)));
+        let store = live_embedded(&live);
+        assert_eq!(
+            store.path,
+            config.data_dir.join("live").join("store.redb"),
+            "the embedded store under <data_dir>/live/"
+        );
+        assert_eq!(store.keyspace, "loams_live_dev");
+        assert_eq!(live.app, "dev");
+        assert_eq!(live.subs.tick_read_lag, Duration::from_millis(50));
+        let explicit = dev_config(&["--live-store", "embedded"]).live.expect("on");
+        assert_eq!(
+            live_store(&explicit).backend(),
+            loams_live::Backend::Embedded
+        );
+        let live = dev_config(&[
+            "--live-listen",
+            "localhost:7711",
+            "--live-app",
+            "chat",
+            "--live-tick-read-lag-ms",
+            "0",
+        ])
+        .live
+        .expect("configured");
+        assert_eq!(live.listen, SocketAddr::from(([127, 0, 0, 1], 7711)));
+        assert_eq!(live_embedded(&live).keyspace, "loams_live_chat");
+        assert_eq!(live.subs.tick_read_lag, Duration::ZERO);
+        assert!(dev_config(&["--no-live"]).live.is_none());
+        let standalone = Cli::try_parse_from([
+            "loams",
+            "standalone",
+            "--bucket",
+            "file:///tmp/b",
+            "--no-live",
+        ])
+        .map(config_of)
+        .expect("parse");
+        assert!(standalone.live.is_none());
+        assert!(Cli::try_parse_from(["loams", "dev", "--live-app", "no spaces"]).is_err());
+        assert!(Cli::try_parse_from(["loams", "dev", "--no-live", "--live-app", "x"]).is_err());
+        assert!(
+            Cli::try_parse_from(["loams", "dev", "--no-live", "--live-store", "embedded"]).is_err()
+        );
+        for bad in ["tikv://", "tikv:///ks", "mem://x", "embedded/x"] {
+            assert!(
+                Cli::try_parse_from(["loams", "dev", "--live-store", bad]).is_err(),
+                "{bad}"
+            );
+        }
+    }
+
+    /// LV1 plan Task 23: `--live-store tikv://<pd>[,<pd>]/<keyspace>` runs
+    /// Live on TiKV (the keyspace defaults to `loams_live_<app>`).
+    #[cfg(feature = "live-tikv")]
+    #[test]
+    fn live_store_tikv_selects_the_tikv_store() {
+        let live = dev_config(&["--live-store", "tikv://10.0.0.1:2379,10.0.0.2:2379/ks"])
+            .live
+            .expect("on");
+        assert_eq!(live_tikv(&live).pd, ["10.0.0.1:2379", "10.0.0.2:2379"]);
+        assert_eq!(live_tikv(&live).keyspace, "ks");
+        let live = dev_config(&["--live-store", "tikv://pd:2379", "--live-app", "chat"])
+            .live
+            .expect("on");
+        assert_eq!(live_tikv(&live).pd, ["pd:2379"]);
+        assert_eq!(live_tikv(&live).keyspace, "loams_live_chat");
+        let err = Cli::try_parse_from(["loams", "dev", "--live-store", "tikv://pd:2379/ks/extra"])
+            .expect_err("a / in the keyspace")
+            .to_string();
+        assert!(err.contains("a keyspace has no '/'"), "{err}");
+    }
+
+    /// Row T23-9: `dev --help` names `tikv://` for `--live-store` (and lists
+    /// the deprecated aliases) only in a build with live-tikv, so the desktop
+    /// app's probe can tell the builds apart.
+    #[cfg(feature = "live")]
+    #[test]
+    fn live_store_help_names_tikv_only_with_live_tikv() {
+        use clap::CommandFactory;
+        let mut cli = Cli::command();
+        let dev = cli.find_subcommand_mut("dev").expect("dev");
+        let help = dev.render_long_help().to_string();
+        // The flag's line and its description, up to the next flag.
+        let mut lines = help
+            .lines()
+            .skip_while(|l| !l.trim_start().starts_with("--live-store"));
+        let first = lines.next().unwrap_or_default().to_string();
+        let block: String = std::iter::once(first)
+            .chain(
+                lines
+                    .take_while(|l| !l.trim_start().starts_with('-'))
+                    .map(str::to_string),
+            )
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(block.contains("--live-store"), "{help}");
+        assert_eq!(
+            block.contains("tikv://"),
+            cfg!(feature = "live-tikv"),
+            "{block}"
+        );
+        assert_eq!(
+            help.contains("--live-pd"),
+            cfg!(feature = "live-tikv"),
+            "{help}"
+        );
+    }
+
+    /// LV1 plan Task 23: `--live-pd` and `--live-keyspace` stay one release
+    /// as aliases of `--live-store tikv://…` (the PD default stays
+    /// 127.0.0.1:19379 when only the keyspace is given).
+    #[cfg(feature = "live-tikv")]
+    #[test]
+    fn live_pd_alias_maps_to_tikv_store() {
+        let live = dev_config(&[
+            "--live-pd",
+            "10.0.0.1:2379,10.0.0.2:2379",
+            "--live-app",
+            "chat",
+        ])
+        .live
+        .expect("on");
+        assert_eq!(live_tikv(&live).pd, ["10.0.0.1:2379", "10.0.0.2:2379"]);
+        assert_eq!(live_tikv(&live).keyspace, "loams_live_chat");
+        let live = dev_config(&["--live-keyspace", "other"]).live.expect("on");
+        assert_eq!(live_tikv(&live).pd, ["127.0.0.1:19379"]);
+        assert_eq!(live_tikv(&live).keyspace, "other");
+        assert!(
+            Cli::try_parse_from([
+                "loams",
+                "dev",
+                "--live-pd",
+                "a:1",
+                "--live-store",
+                "embedded"
+            ])
+            .is_err(),
+            "--live-store and the aliases exclude each other"
+        );
+    }
+
+    /// LV1 plan Task 23: a build without `live-tikv` refuses
+    /// `--live-store tikv://…` with the feature named.
+    #[cfg(all(feature = "live", not(feature = "live-tikv")))]
+    #[test]
+    fn live_store_tikv_requires_feature() {
+        let err = Cli::try_parse_from(["loams", "dev", "--live-store", "tikv://pd:2379/ks"])
+            .expect_err("no TiKV backend in this build")
+            .to_string();
+        assert!(
+            err.contains("--live-store tikv:// needs a build with the live-tikv feature"),
+            "{err}"
+        );
+    }
+
+    /// LV1 row T23-7: a build without `live-tikv` refuses the deprecated
+    /// `--live-pd` and `--live-keyspace` (they ask for TiKV) instead of
+    /// running Live on the embedded store.
+    #[cfg(all(feature = "live", not(feature = "live-tikv")))]
+    #[test]
+    fn live_pd_requires_live_tikv() {
+        for args in [
+            ["loams", "dev", "--live-pd", "127.0.0.1:19379"],
+            ["loams", "dev", "--live-keyspace", "loams_live_dev"],
+        ] {
+            let err = Cli::try_parse_from(args)
+                .expect_err("no TiKV backend in this build")
+                .to_string();
+            assert!(
+                err.contains("need a build with the live-tikv feature"),
+                "{err}"
+            );
+        }
+    }
+
+    /// R1 plan Task 12 semantics 7 and the loopback rule (D111): a
+    /// non-loopback `--live-listen` fails startup with the error of design
+    /// §20 §7.1; loopback addresses pass.
+    #[cfg(feature = "live")]
+    use loams::ServerError;
+
+    #[cfg(feature = "live")]
+    #[test]
+    fn a_non_loopback_live_listen_fails_startup() {
+        for bad in ["0.0.0.0:7710", "192.168.1.10:7710", "[::]:7710"] {
+            let err = dev_config(&["--live-listen", bad])
+                .validate()
+                .expect_err(bad);
+            assert!(
+                matches!(err, ServerError::LiveListenNotLoopback { .. }),
+                "{bad}: {err}"
+            );
+            assert_eq!(
+                err.to_string(),
+                format!(
+                    "--live-listen {} is not a loopback address; the Live API has no \
+                     authentication until the unified auth plan (D111)",
+                    bad.parse::<SocketAddr>().expect("an address")
+                )
+            );
+        }
+        for ok in [
+            "127.0.0.1:7710",
+            "localhost:7710",
+            "[::1]:7710",
+            "127.0.0.2:1",
+        ] {
+            dev_config(&["--live-listen", ok])
+                .validate()
+                .unwrap_or_else(|e| panic!("{ok}: {e}"));
+        }
+        assert!(Cli::try_parse_from(["loams", "dev", "--live-listen", "nohost:1"]).is_err());
+    }
+
+    /// LV1 plan Task 5: `--live-isolation` and `--live-tenancy` set
+    /// `[live] isolation` and `tenancy`; multi-tenancy in process fails
+    /// startup, and `live-worker` is a hidden subcommand.
+    #[cfg(feature = "live")]
+    #[test]
+    fn live_isolation_and_tenancy_flags() {
+        let live = |args: &[&str]| dev_config(args).live.expect("live is on");
+        let defaults = live(&[]);
+        assert_eq!(defaults.isolation, loams_live::Isolation::InProcess);
+        assert_eq!(defaults.tenancy, loams_live::Tenancy::Single);
+        let isolated = live(&["--live-isolation", "isolated", "--live-tenancy", "multi"]);
+        assert_eq!(isolated.isolation, loams_live::Isolation::Isolated);
+        assert_eq!(isolated.tenancy, loams_live::Tenancy::Multi);
+        let err = dev_config(&["--live-tenancy", "multi"])
+            .validate()
+            .expect_err("multi tenancy in process");
+        assert_eq!(
+            err.to_string(),
+            r#"invalid configuration: live: tenancy = "multi" needs isolation = "isolated" (Linux only)"#
+        );
+        #[cfg(target_os = "linux")]
+        dev_config(&["--live-isolation", "isolated", "--live-tenancy", "multi"])
+            .validate()
+            .expect("multi tenancy with isolated workers");
+        for bad in [
+            ["--live-isolation", "in-process"],
+            ["--live-tenancy", "many"],
+        ] {
+            assert!(
+                Cli::try_parse_from(["loams", "dev"].iter().chain(&bad)).is_err(),
+                "{bad:?}"
+            );
+        }
+        assert!(matches!(
+            Cli::try_parse_from(["loams", "live-worker"]).map(|c| c.command),
+            Ok(Command::LiveWorker)
+        ));
+        let help = Cli::try_parse_from(["loams", "--help"])
+            .expect_err("help")
+            .to_string();
+        assert!(!help.contains("live-worker"), "{help}");
     }
 
     /// Owner ruling T7-3: a build without the `tikv` feature refuses

@@ -2,5 +2,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 apps/console/dist-cloudflare/
+apps/console/dist-vercel/
+.vercel/
 apps/console/deploy/.test-tmp/
 .wrangler/

@@ -24,11 +24,10 @@
 // that needs an origin and a server that answers preflights, which no test in
 // this repository has. It is stated in the PR rather than claimed.
 
-import { Code } from '@connectrpc/connect';
 import { createGrpcWebTransport } from '@connectrpc/connect-web';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Loams } from '../src/loams.js';
-import { FeatureNotInVariantError, isLoamsError } from '../src/runtime/errors.js';
+import { FeatureNotInVariantError } from '../src/runtime/errors.js';
 import { createLoamsTransport } from '../src/runtime/transports.js';
 import type { FixtureServer } from './helpers/server.js';
 import { startFixtureServer } from './helpers/server.js';
@@ -70,14 +69,10 @@ describe('typescript_grpc_web_transport_in_a_browser', () => {
     }
   });
 
-  it('reads the same structured reason over gRPC-Web as over Connect', async () => {
+  it('reads the same principal over gRPC-Web as over Connect', async () => {
     for (const [name, loams] of Object.entries(clients())) {
-      const error = await loams.instance.whoAmI({}).then(
-        () => undefined,
-        (thrown: unknown) => thrown,
-      );
-      expect(isLoamsError(error), name).toBe(true);
-      expect(error, name).toMatchObject({ code: Code.Unimplemented, reason: 'not_implemented' });
+      const me = await loams.instance.whoAmI({});
+      expect(me.principal?.id, name).toBe('dev-loopback');
     }
   });
 

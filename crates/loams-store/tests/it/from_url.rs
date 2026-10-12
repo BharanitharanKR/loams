@@ -86,3 +86,18 @@ async fn memory_url_with_prefix_scopes_the_inner_store_and_round_trips() {
     store.put("obj", Bytes::from_static(b"v")).await.unwrap();
     assert_eq!(store.get("obj").await.unwrap().0, Bytes::from_static(b"v"));
 }
+
+#[test]
+fn only_stores_that_list_in_order_skip_the_full_listing() {
+    // `Store`'s `Debug` shows the flag `list_page` relies on.
+    let sorted = |store: &Store| format!("{store:?}").contains("sorted_listing: true");
+    assert!(sorted(&Store::in_memory()));
+    assert!(sorted(&Store::from_url("memory:///", NO_OPTIONS).unwrap()));
+    // S3 Express One Zone directory buckets do not list in order.
+    let s3 = Store::from_url("s3://bucket/prefix", [("aws_region", "us-east-1")]).unwrap();
+    assert!(!sorted(&s3));
+    assert!(sorted(&s3.with_sorted_listing(true)));
+    let dir = tempfile::tempdir().unwrap();
+    let url = format!("file://{}", dir.path().display());
+    assert!(!sorted(&Store::from_url(&url, NO_OPTIONS).unwrap()));
+}

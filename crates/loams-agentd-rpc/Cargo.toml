@@ -1,0 +1,37 @@
+[package]
+name = "loams-agentd-rpc"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT"
+publish = false
+
+[dependencies]
+loams-agentd-proto.workspace = true
+tokio.workspace = true
+# 0.24 as in the fork; loams-web-bridge is on 0.30 (not a workspace key).
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+# The upgrade request is parsed by hand (handshake.rs); already in the lock
+# through hyper and tungstenite.
+httparse = "1.10"
+# Constant-time token comparison; already in the lock.
+subtle = "2.6"
+# Scoped run tokens: 32 bytes from the OS RNG, base64url.
+getrandom = "0.3"
+base64.workspace = true
+
+[dev-dependencies]
+tracing-subscriber.workspace = true
+loams-agentd-proto.workspace = true
+
+# Deterministic stalled-transport deadlines.
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

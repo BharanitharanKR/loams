@@ -1,0 +1,11 @@
+# Build context of deploy/release/Containerfile.* (built from the repository
+# root by deploy/release/build.sh). Keeps VCS data, build output and JS
+# dependencies out of the context; sources stay in, since crates read files
+# across the tree (protos, docs) at build time.
+.git
+**/target
+**/node_modules
+**/dist
+**/.loams
+apps/desktop-electron
+apps/mobile

@@ -1,13 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 import { configDefaults } from 'vitest/config';
 
 // The engine serves the build at /ui (design §19 §3). In development the
-// console API comes from loams-console-mock (`cargo run -p
-// loams-console-mock`, port 8081) unless LOAMS_API points at an engine.
-const api = process.env.LOAMS_API ?? 'http://127.0.0.1:8081';
+// console API comes from loams-apps-mock (`cargo run -p loams-apps-mock`,
+// port 8084), which serves the console's REST contract and the app protos on
+// one listener, unless LOAMS_API points at an engine.
+const api = process.env.LOAMS_API ?? 'http://127.0.0.1:8084';
 
 const require = createRequire(import.meta.url);
 
@@ -73,7 +75,7 @@ function cspMeta(): Plugin {
 
 export default defineConfig({
   base: '/ui/',
-  plugins: [react(), sandboxAssets('/ui/'), cspMeta()],
+  plugins: [react(), tailwindcss(), sandboxAssets('/ui/'), cspMeta()],
   server: {
     port: 5173,
     proxy: {
@@ -97,6 +99,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     // Deployment tests use node:test and run in the package test command.
-    exclude: [...configDefaults.exclude, 'deploy/**'],
+    // So do the browser tests (AP1d Task 4, D638), which need a real Chrome and
+    // run under `test:browser`. Under jsdom `document.modelContext` does not
+    // exist at all, which is the whole reason that harness is separate.
+    exclude: [...configDefaults.exclude, 'deploy/**', 'browser/**'],
   },
 });

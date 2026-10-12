@@ -17,7 +17,7 @@
 //!   authenticates, then hands a `START_WAL_PUSH` socket to the owning shard
 //!   ([`Shards::handoff`]); the shard runs the whole push there: reading
 //!   proposer messages, the acceptor, journal writes, durable acks. Readers
-//!   (the feeder, replication, the HTTP API) stay on tokio and reach the
+//!   (replication, the broker, the HTTP API) stay on tokio and reach the
 //!   shards' stores through [`ShardedStore`].
 
 use std::collections::{HashMap, VecDeque};
@@ -273,7 +273,7 @@ pub struct ShardStarter {
 impl ShardStarter {
     pub fn run(self, svc: Arc<WalService<ShardedStore>>) -> Result<(), Error> {
         // Shard threads run inside the caller's tokio context, so code they
-        // reach that needs a reactor or a spawner (the feeder) finds one.
+        // reach that needs a reactor or a spawner finds one.
         let tokio_rt = tokio::runtime::Handle::try_current().ok();
         let mut started = Vec::new();
         for (k, (store, mut rx)) in self.stores.into_iter().zip(self.rxs).enumerate() {
@@ -343,6 +343,8 @@ enum Ev {
     Msg(ProposerMessage),
     Tick,
     Closed,
+    /// Pageserver feedback that arrived on this instance.
+    Feedback(crate::types::PageserverFeedback),
 }
 
 async fn send(wr: &mut compio::net::TcpStream, out: &mut Vec<u8>) -> Result<(), Error> {
@@ -482,6 +484,8 @@ async fn push(
 
     let (tx, mut ev) = mpsc::channel(QUEUE);
     let reader = compio::runtime::spawn(read_proposer(rd, tx.clone()));
+    let fb_tx = tx.clone();
+    let mut forwarder = None;
     let ttx = tx;
     let interval = cfg.commit_flush_interval;
     let ticker = compio::runtime::spawn(async move {
@@ -511,7 +515,25 @@ async fn push(
         session = true;
         svc.session(tl, 1);
         svc.publish(tl, &acc.state());
-        svc.ensure_feeder(tl);
+        // Pageserver feedback goes out as it arrives, in a copy of the last
+        // AppendResponse (the fork's `network_write`); other replies carry
+        // none. A lagging receiver skips what it missed.
+        let mut feedback = svc.subscribe_feedback(tl);
+        let ftx = fb_tx.clone();
+        forwarder = Some(compio::runtime::spawn(async move {
+            loop {
+                match feedback.recv().await {
+                    Ok(fb) => {
+                        if ftx.send(Ev::Feedback(fb)).await.is_err() {
+                            return;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
+                }
+            }
+        }));
+        let mut last_resp: Option<crate::proto::AppendResponse> = None;
         let mut pending: Option<ProposerMessage> = None;
         // Appends in flight, oldest first: issued in LSN order and answered in
         // that order, so every response's flush LSN covers completed writes
@@ -526,7 +548,7 @@ async fn push(
             };
             if must_land {
                 let (f, r) = land(&mut flights).await;
-                answer(&svc, tl, &mut acc, f, r, &mut wr, &mut out).await?;
+                answer(&svc, tl, &mut acc, f, r, &mut wr, &mut out, &mut last_resp).await?;
                 continue;
             }
             let msg = match pending.take() {
@@ -549,7 +571,8 @@ async fn push(
                     futures::pin_mut!(landing, next);
                     match futures::future::select(landing, next).await {
                         futures::future::Either::Left(((f, r), _)) => {
-                            answer(&svc, tl, &mut acc, f, r, &mut wr, &mut out).await?;
+                            answer(&svc, tl, &mut acc, f, r, &mut wr, &mut out, &mut last_resp)
+                                .await?;
                             continue;
                         }
                         futures::future::Either::Right((e, _)) => match e {
@@ -557,6 +580,15 @@ async fn push(
                             Some(Ev::Tick) => {
                                 acc.refresh().await?;
                                 acc.persist_commit_lsn().await?;
+                                continue;
+                            }
+                            Some(Ev::Feedback(fb)) => {
+                                if let Some(resp) = &last_resp {
+                                    let mut r = resp.clone();
+                                    r.pageserver_feedback = Some(fb);
+                                    put_reply(&mut out, &AcceptorMessage::AppendResponse(r));
+                                    send(&mut wr, &mut out).await?;
+                                }
                                 continue;
                             }
                             Some(Ev::Msg(m)) => m,
@@ -585,6 +617,8 @@ async fn push(
                     let mut bytes = first.wal.len();
                     let mut batch = vec![first];
                     let mut closed = false;
+                    // Feedback met while batching goes out after the batch.
+                    let mut late_feedback = Vec::new();
                     while bytes < MAX_BATCH_BYTES {
                         match ev.try_recv() {
                             Ok(Ev::Msg(ProposerMessage::Append(a))) if a.h.term == term => {
@@ -596,6 +630,7 @@ async fn push(
                                 break;
                             }
                             Ok(Ev::Tick) => {}
+                            Ok(Ev::Feedback(fb)) => late_feedback.push(fb),
                             Ok(Ev::Closed) | Err(mpsc::error::TryRecvError::Disconnected) => {
                                 closed = true;
                                 break;
@@ -609,8 +644,19 @@ async fn push(
                             // Answers stay in order: after the writes in flight.
                             while !flights.is_empty() {
                                 let (f, res) = land(&mut flights).await;
-                                answer(&svc, tl, &mut acc, f, res, &mut wr, &mut out).await?;
+                                answer(
+                                    &svc,
+                                    tl,
+                                    &mut acc,
+                                    f,
+                                    res,
+                                    &mut wr,
+                                    &mut out,
+                                    &mut last_resp,
+                                )
+                                .await?;
                             }
+                            crate::service::remember_response(&r, &mut last_resp);
                             put_reply(&mut out, &r);
                             send(&mut wr, &mut out).await?;
                         }
@@ -626,6 +672,16 @@ async fn push(
                             });
                         }
                     }
+                    if let Some(resp) = &last_resp {
+                        for fb in late_feedback {
+                            let mut r = resp.clone();
+                            r.pageserver_feedback = Some(fb);
+                            put_reply(&mut out, &AcceptorMessage::AppendResponse(r));
+                        }
+                        if !out.is_empty() {
+                            send(&mut wr, &mut out).await?;
+                        }
+                    }
                     if closed {
                         // The proposer hung up mid-batch: what was issued is
                         // answered below, then the push ends.
@@ -637,7 +693,17 @@ async fn push(
         }
         while !flights.is_empty() {
             let (f, res) = land(&mut flights).await;
-            answer(&svc, tl, &mut acc, f, res, &mut wr, &mut out).await?;
+            answer(
+                &svc,
+                tl,
+                &mut acc,
+                f,
+                res,
+                &mut wr,
+                &mut out,
+                &mut last_resp,
+            )
+            .await?;
         }
         acc.persist_commit_lsn().await?;
         Ok(())
@@ -645,6 +711,7 @@ async fn push(
     .await;
     drop(reader);
     drop(ticker);
+    drop(forwarder);
     if session {
         svc.session(tl, -1);
     }
@@ -687,6 +754,7 @@ async fn land(flights: &mut VecDeque<Flight>) -> (Flight, Option<StoreAppend>) {
 
 /// Answer one landed append: adopt its outcome, refresh the tail readers
 /// use, and reply.
+#[allow(clippy::too_many_arguments)]
 async fn answer(
     svc: &Arc<WalService<ShardedStore>>,
     tl: TimelineId,
@@ -695,6 +763,7 @@ async fn answer(
     res: Option<StoreAppend>,
     wr: &mut compio::net::TcpStream,
     out: &mut Vec<u8>,
+    last_resp: &mut Option<crate::proto::AppendResponse>,
 ) -> Result<(), Error> {
     let term = f.pending.term();
     let r = acc.finish_appends(f.pending, res).await?;
@@ -705,6 +774,7 @@ async fn answer(
             svc.tail_push(tl, a.h.begin_lsn, a.wal.clone());
         }
     }
+    crate::service::remember_response(&r, last_resp);
     put_reply(out, &r);
     send(wr, out).await?;
     svc.publish(tl, &acc.state());
@@ -712,7 +782,7 @@ async fn answer(
 }
 
 /// The shards' stores behind one [`WalStore`], routed by timeline: what the
-/// tokio side (readers, the feeder, the HTTP API) uses.
+/// tokio side (readers, the broker, the HTTP API) uses.
 #[derive(Debug, Clone)]
 pub struct ShardedStore {
     stores: Vec<Arc<NvmeWalStore>>,

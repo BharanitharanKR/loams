@@ -1,0 +1,46 @@
+name: Release compose
+
+# Checks the self-hosted preview bundle (deploy/release): the compose file
+# resolves with .env.example and with each profile, nothing publishes a host
+# port on 0.0.0.0, and the shell scripts pass shellcheck. Builds no image.
+on:
+  pull_request:
+    paths:
+      - "deploy/release/**"
+      - "deploy/loams-postgres-dev/**"
+      - ".github/workflows/release-compose.yml"
+  push:
+    branches: [main, dev]
+    paths:
+      - "deploy/release/**"
+      - "deploy/loams-postgres-dev/**"
+      - ".github/workflows/release-compose.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
+
+jobs:
+  compose:
+    name: compose config and scripts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: compose config (default, every profile, without Postgres)
+        working-directory: deploy/release
+        run: |
+          docker compose --env-file .env.example config -q
+          docker compose --env-file .env.example --profile '*' config -q
+          LOAMS_POSTGRES_COMPOSE=./postgres-off.yaml docker compose --env-file .env.example config -q
+      - name: no host port on 0.0.0.0
+        working-directory: deploy/release
+        run: |
+          docker compose --env-file .env.example --profile '*' config --format json \
+            | jq -e '[.services[] | (.ports // [])[] | select((.host_ip // "") != "127.0.0.1")] | length == 0'
+      - name: shellcheck
+        run: shellcheck deploy/release/build.sh deploy/release/byoc/install.sh deploy/release/byoc/uninstall.sh

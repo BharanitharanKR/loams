@@ -1,0 +1,1 @@
+{"tenant_id":"4c6f616d734e656f6e54656e616e7431","preferred_az":"eu-west-1a","stripe_size":2048,"shards":[{"node_id":1,"shard_number":0},{"node_id":2,"shard_number":1}]}

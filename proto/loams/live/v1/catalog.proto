@@ -5,6 +5,8 @@ syntax = "proto3";
 
 package loams.live.v1;
 
+import "loams/live/v1/live.proto";
+
 // A table: the value of its catalog record `0x01 ‖ 0x02 ‖ id:u32 BE`. The
 // built-in indexes `by_id` (id 0, the document key itself) and
 // `by_creation_time` (id 1) are implicit and not listed.
@@ -40,4 +42,54 @@ message AppDef {
   // while the journal is empty (no head, entry or checkpoint); R2 migrates
   // a non-empty journal.
   uint32 journal_shards = 2;
+}
+
+// One deployment of the app (design §45 §3.3, D683; LV1 plan Task 6): the
+// value of its catalog record `0x01 ‖ 0x06 ‖ id[16]`. Immutable but for
+// `state` and `failure_reason`. The bundle itself is an object of the
+// bundle store at `live/<app>/deployments/<id>.js` (R1 plan Ruling 10),
+// checked against `bundle_sha256` whenever a node loads it. The active
+// deployment is the pointer record `0x01 ‖ 0x03`, whose value is the
+// active id's 16 bytes.
+message DeploymentRecord {
+  // The encoding version; 1 in LV1.
+  uint32 format = 1;
+  // The deployment's ULID, 16 bytes (big-endian, so ids sort by time).
+  bytes id = 2;
+  // SHA-256 of the bundle, 32 bytes.
+  bytes bundle_sha256 = 3;
+  // The schema the deployment declares (only additive table creation in
+  // Task 6; validators and index changes in Tasks 8 and 9).
+  Schema schema = 4;
+  // The TSO physical time of the deploy's first transaction, in ms.
+  uint64 created_at_ms = 5;
+  // The principal that deployed it.
+  string created_by = 6;
+  string message = 7;
+  // The deployment that was active when this one was deployed (16 bytes);
+  // empty for the app's first deployment.
+  bytes parent = 8;
+  DeploymentState state = 9;
+  // Why the deployment failed, when `state` is `DEPLOYMENT_STATE_FAILED`.
+  string failure_reason = 10;
+}
+
+// Where a deployment is in its life (design §45 §3.3).
+enum DeploymentState {
+  DEPLOYMENT_STATE_UNSPECIFIED = 0;
+  // Its record is written; its schema is not applied yet.
+  DEPLOYMENT_STATE_PENDING = 1;
+  // A stricter validator scans existing data (LV1 plan Task 8).
+  DEPLOYMENT_STATE_VALIDATING = 2;
+  // A new index is backfilled (LV1 plan Task 9).
+  DEPLOYMENT_STATE_BACKFILLING = 3;
+  // The pointer names it: new calls run its functions.
+  DEPLOYMENT_STATE_ACTIVE = 4;
+  // A later deployment replaced it.
+  DEPLOYMENT_STATE_SUPERSEDED = 5;
+  // It never became active; `failure_reason` says why.
+  DEPLOYMENT_STATE_FAILED = 6;
+  // It is active, but its isolated workers crashed five times within a
+  // minute (design §45 §3.1). Calls are still served.
+  DEPLOYMENT_STATE_DEGRADED = 7;
 }

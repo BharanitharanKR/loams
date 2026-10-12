@@ -1,6 +1,10 @@
+mod backends;
 mod conditional;
+mod copy;
 mod error;
 mod fault;
 mod from_url;
+mod list_page;
+mod multipart;
 mod reads;
 mod store;

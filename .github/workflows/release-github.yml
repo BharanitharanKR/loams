@@ -1,0 +1,220 @@
+name: Release (GitHub release, SBOM, provenance)
+
+# The second half of a preview release. "Release images" (release-images.yml)
+# builds deploy/release/Containerfile.<name> on a v* tag and publishes
+# ghcr.io/ostrium-labs/<name>:<version> and :preview for linux/amd64 and
+# linux/arm64. When it succeeds, this workflow:
+#
+#   1. resolves each published :<version> manifest list to its digest,
+#   2. attests an SPDX SBOM for it (anchore/sbom-action + actions/attest-sbom),
+#      pushed to the registry next to the image. Build provenance is attested
+#      by release-images.yml itself, in the tag's run, so it names the tag's
+#      commit; a workflow_run's token would name the default branch's,
+#   3. creates the GitHub release as a pre-release (never "Latest") and attaches
+#      the compose bundle (deploy/release plus the Postgres stack it includes),
+#      the SBOMs and SHA256SUMS.
+#
+# Everything is a preview: a tag such as v0.1.0-preview.1 gives images
+# :0.1.0-preview.1 and :preview (never :latest; release-images.yml owns the
+# tags), and a pre-release on GitHub, also when the release already existed.
+# This workflow pushes no image and moves no tag; it only adds attestations.
+on:
+  workflow_run:
+    workflows: ["Release images"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing vX.Y.Z(-pre) tag whose published images to attest and release."
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: release-github-${{ inputs.tag || github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io/ostrium-labs
+
+jobs:
+  guard:
+    name: release tag
+    # A tag push's workflow_run carries the tag in head_branch; a branch run of
+    # "Release images" (there is none today) is not a release.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.guard.outputs.tag }}
+      version: ${{ steps.guard.outputs.version }}
+      sha: ${{ steps.guard.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: the tag is a vX.Y.Z(-pre) tag on the default branch
+        id: guard
+        env:
+          TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "$TAG is not a vX.Y.Z(-pre) tag"; exit 1
+          fi
+          sha=$(git rev-parse --verify "refs/tags/$TAG^{commit}") \
+            || { echo "$TAG has no commit in this repository"; exit 1; }
+          if [ -n "$RUN_SHA" ] && [ "$RUN_SHA" != "$sha" ]; then
+            echo "$TAG is at $sha but the image build ran at $RUN_SHA; refusing"; exit 1
+          fi
+          git merge-base --is-ancestor "$sha" "origin/$DEFAULT_BRANCH" \
+            || { echo "$TAG is not on $DEFAULT_BRANCH; refusing to release from anywhere else"; exit 1; }
+          {
+            echo "tag=$TAG"
+            echo "version=${TAG#v}"
+            echo "sha=$sha"
+          } >> "$GITHUB_OUTPUT"
+          echo "$TAG at $sha"
+
+  attest:
+    name: ${{ matrix.image }} provenance and SBOM
+    needs: guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [loams, loams-fabric, loams-agentd]
+    steps:
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: the published manifest list's digest
+        id: manifest
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ matrix.image }}
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "$IMAGE:$VERSION"
+          digest=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)
+          [[ "$digest" == sha256:* ]] || { echo "no digest for $IMAGE:$VERSION"; exit 1; }
+          # :preview must be this release; release-images.yml moved it.
+          preview=$(docker buildx imagetools inspect "$IMAGE:preview" --format '{{json .Manifest}}' | jq -r .digest)
+          [ "$preview" = "$digest" ] || echo "::warning::$IMAGE:preview is $preview, not $VERSION ($digest): a newer tag moved it"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: SBOM (SPDX)
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          image: ${{ env.REGISTRY }}/${{ matrix.image }}@${{ steps.manifest.outputs.digest }}
+          format: spdx-json
+          output-file: ${{ runner.temp }}/${{ matrix.image }}-${{ needs.guard.outputs.version }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: SBOM attestation (attested to the registry)
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ matrix.image }}
+          subject-digest: ${{ steps.manifest.outputs.digest }}
+          sbom-path: ${{ runner.temp }}/${{ matrix.image }}-${{ needs.guard.outputs.version }}.spdx.json
+          push-to-registry: true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom-${{ matrix.image }}
+          path: ${{ runner.temp }}/${{ matrix.image }}-${{ needs.guard.outputs.version }}.spdx.json
+          if-no-files-found: error
+          retention-days: 7
+
+  # The compose bundle: deploy/release and the Postgres stack its compose file
+  # includes (deploy/loams-postgres-dev), in the layout byoc/install.sh copies
+  # to a VM, with .env.example pinned to this release's image tag.
+  release:
+    name: GitHub pre-release and assets
+    needs: [guard, attest]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      # No checkout: this job holds contents: write, so it never puts the
+      # tag's tree where a later step could run it. The bundle is the commit's
+      # tarball from the API, unpacked as data (two directories, no scripts run).
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: sbom-*
+          path: ${{ runner.temp }}/assets
+          merge-multiple: true
+      - name: the compose bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.guard.outputs.sha }}
+          VERSION: ${{ needs.guard.outputs.version }}
+          OUT: ${{ runner.temp }}/assets
+        run: |
+          set -euo pipefail
+          name="loams-compose-$VERSION"
+          stage="$RUNNER_TEMP/$name"
+          src="$RUNNER_TEMP/src"
+          mkdir -p "$stage" "$src"
+          # Tracked files only (the API's tarball is git archive), so no local
+          # .env or secret can be in it. Its top directory is <repo>-<sha>.
+          gh api "repos/$GITHUB_REPOSITORY/tarball/$SHA" > "$RUNNER_TEMP/src.tar.gz"
+          tar -xzf "$RUNNER_TEMP/src.tar.gz" -C "$src" --strip-components=1 \
+            --wildcards '*/deploy/release' '*/deploy/loams-postgres-dev'
+          test -f "$src/deploy/release/compose.yaml" || { echo "deploy/release/compose.yaml is missing at this tag"; exit 1; }
+          cp -a "$src/deploy/release" "$src/deploy/loams-postgres-dev" "$stage/"
+          mtime=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA" -q .commit.committer.date)
+          # The images are published by release-images.yml; the bundle only runs them.
+          rm -f "$stage"/release/Containerfile.* "$stage/release/build.sh"
+          if [ -f "$stage/release/.env.example" ]; then
+            sed -i "s/^LOAMS_VERSION=.*/LOAMS_VERSION=$VERSION/" "$stage/release/.env.example"
+          fi
+          tar -C "$RUNNER_TEMP" --sort=name --owner=0 --group=0 --numeric-owner \
+            --mtime="$mtime" -czf "$OUT/$name.tar.gz" "$name"
+          (cd "$OUT" && sha256sum -- * > SHA256SUMS)
+          ls -l "$OUT"; cat "$OUT/SHA256SUMS"
+      - name: create the pre-release if needed, keep it a pre-release, attach
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.guard.outputs.tag }}
+          VERSION: ${{ needs.guard.outputs.version }}
+          REGISTRY: ${{ env.REGISTRY }}
+          OUT: ${{ runner.temp }}/assets
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            notes="$RUNNER_TEMP/notes.md"
+            {
+              echo "Loams $VERSION (preview). Run it yourself with Docker Compose: see deploy/release/README.md in the attached bundle."
+              echo
+              echo "Images (linux/amd64, linux/arm64; provenance and SBOM attested, verify with \`gh attestation verify oci://<image> -R $GITHUB_REPOSITORY\`):"
+              for image in loams loams-fabric loams-agentd; do
+                echo "- \`$REGISTRY/$image:$VERSION\` (also \`:preview\`)"
+              done
+            } > "$notes"
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag --prerelease --latest=false \
+              --title "Loams $VERSION (preview)" --notes-file "$notes"
+          else
+            # A release drafted by hand for this tag is published, and stays a
+            # preview: never the repository's "Latest" release.
+            gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+          fi
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber "$OUT"/*

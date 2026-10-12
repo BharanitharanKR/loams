@@ -13,6 +13,7 @@ import type { Context } from '@loams/cordis';
 import type { approvals, devices, instance, notifications, operations } from '@loams/proto';
 import type { EnvironmentRef, SlotRegistry } from '@loams/slots';
 import type { ComponentType } from 'react';
+import type { ActionRegistry } from './actions.js';
 
 /** What differs between the shells the console runs in (today: the browser). */
 export interface PlatformService {
@@ -24,6 +25,11 @@ export interface PlatformService {
   openExternal(url: string): Promise<void>;
   notify(n: { title: string; body: string; route?: string }): Promise<void>;
   clipboardWrite(text: string): Promise<void>;
+  /**
+   * Optional: the platform calls back when GetInstance may now answer differently
+   * (the desktop's local engine became ready). The host re-reads `flags` then.
+   */
+  onInstanceStale?(callback: () => void): () => void;
 }
 
 /** `GetInstance`'s answer, as plugins gate on it (AP1a Ruling 6). */
@@ -93,6 +99,8 @@ export interface Services extends RpcServices {
   slots: SlotRegistry;
   router: RouterService;
   session: SessionService;
+  /** The callable surface plugins register into (§42 §5, D569). */
+  actions: ActionRegistry;
 }
 
 export type ServiceName = keyof Services;

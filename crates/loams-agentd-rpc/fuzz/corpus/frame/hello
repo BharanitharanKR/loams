@@ -1,0 +1,2 @@
+{"id":1,"method":"Hello","params":{"client":"cli","clientVersion":"1","protocol":1}}
+{"id":1,"cancel":true}

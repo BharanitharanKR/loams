@@ -1,0 +1,11 @@
+# TiKV for the release compose stack: API v2 with TTL, which keyspaces need
+# (design §20 §9.1). TiKV otherwise sizes itself from host RAM; these keep a
+# single store near 3 GB. Raise both on a dedicated machine.
+memory-usage-limit = "3GB"
+
+[storage]
+api-version = 2
+enable-ttl = true
+
+[storage.block-cache]
+capacity = "1GB"

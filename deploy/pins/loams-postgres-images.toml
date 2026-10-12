@@ -1,0 +1,28 @@
+# Written by scripts/nf1/pins.py (set); checked by pins.py (check). Do not edit by hand.
+schema = 1
+fork_release = "mirror-77e22e4b"
+fork_commit = "77e22e4bf09d88b70b4a83a38c2f6de6301816b4"
+
+[majors]
+supported = [17]
+beta = []
+maintenance = [16]
+default = 17
+
+[images.storage]
+repository = "ghcr.io/neondatabase/neon"
+digest = "sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f"
+source = "mirror:ghcr.io/neondatabase/neon@sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f"
+pg_minors = { "16" = "16.9", "17" = "17.5" }
+
+[images.compute-v16]
+repository = "ghcr.io/neondatabase/compute-node-v16"
+digest = "sha256:b3e151661bd2ee11eb2843c8926001966cb23969227e9673c5f42fc3fbe14249"
+source = "mirror:ghcr.io/neondatabase/compute-node-v16@sha256:b3e151661bd2ee11eb2843c8926001966cb23969227e9673c5f42fc3fbe14249"
+pg_minor = "16.9"
+
+[images.compute-v17]
+repository = "ghcr.io/neondatabase/compute-node-v17"
+digest = "sha256:13ab146d3e7bbabb25a8532f315ac443e7512351d1ede0bab586def5c70e26c3"
+source = "mirror:ghcr.io/neondatabase/compute-node-v17@sha256:13ab146d3e7bbabb25a8532f315ac443e7512351d1ede0bab586def5c70e26c3"
+pg_minor = "17.5"

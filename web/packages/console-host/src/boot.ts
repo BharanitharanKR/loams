@@ -16,11 +16,12 @@ import { createClient, type Transport } from '@connectrpc/connect';
 import { Context, type Fiber, FiberStates } from '@loams/cordis';
 import { instance } from '@loams/proto';
 import { SlotRegistry } from '@loams/slots';
+import { ActionRegistry, type Admission } from './actions.js';
 import { type CatalogEntry, CatalogError } from './catalog.js';
 import { guard } from './guard.js';
 import { type PluginManifest, type Tier, validateManifest } from './manifest.js';
 import type { Permission } from './permissions.js';
-import type { FlagsService } from './services.js';
+import type { FlagsService, PlatformService } from './services.js';
 import { type PluginSource, tierOf } from './tiers.js';
 
 /** What a plugin module exports (its default export, or the module itself). */
@@ -81,6 +82,8 @@ export interface BootOptions {
 export interface ConsoleHandle {
   ctx: Context;
   slots: SlotRegistry;
+  /** The callable surface plugins registered (the WebMCP tools' source). */
+  actions: ActionRegistry;
   plugins(): PluginRecord[];
   /** Plugins still waiting for services (the all-fibers sweep). */
   pending(): PendingReport[];
@@ -104,30 +107,53 @@ export const flagsPlugin: PluginModule = {
   async apply(ctx) {
     const transport = (ctx as unknown as { transport: Transport }).transport;
     const client = createClient(instance.InstanceService, transport);
-    let flags: FlagsService;
-    try {
-      const info = await client.getInstance({});
-      const editions = { 1: 'oss', 2: 'cloud', 3: 'byoc' } as const;
-      flags = {
-        edition: editions[info.edition as 1 | 2 | 3] ?? 'unknown',
-        instanceName: info.name,
-        serverVersion: info.serverVersion,
-        features: { ...info.features },
-        apiVersions: [...info.apiVersions],
-        has: (api) => info.apiVersions.includes(api),
-      };
-    } catch (error) {
-      console.warn('loams console: GetInstance failed; no API is available', error);
-      flags = {
-        edition: 'unknown',
-        instanceName: '',
-        serverVersion: '',
-        features: {},
-        apiVersions: [],
-        has: () => false,
-      };
-    }
-    ctx.provide('flags', flags);
+    const unknown: FlagsService = {
+      edition: 'unknown',
+      instanceName: '',
+      serverVersion: '',
+      features: {},
+      apiVersions: [],
+      has: () => false,
+    };
+    /** The instance's flags, or undefined when GetInstance failed. */
+    const read = async (): Promise<FlagsService | undefined> => {
+      try {
+        const info = await client.getInstance({});
+        const editions = { 1: 'oss', 2: 'cloud', 3: 'byoc' } as const;
+        return {
+          edition: editions[info.edition as 1 | 2 | 3] ?? 'unknown',
+          instanceName: info.name,
+          serverVersion: info.serverVersion,
+          features: { ...info.features },
+          apiVersions: [...info.apiVersions],
+          has: (api) => info.apiVersions.includes(api),
+        };
+      } catch (error) {
+        console.warn('loams console: GetInstance failed; no API is available', error);
+        return undefined;
+      }
+    };
+    let release = ctx.provide('flags', (await read()) ?? unknown);
+    let disposed = false;
+    ctx.effect(() => () => {
+      disposed = true;
+    });
+    // A platform may say the instance changed (the desktop engine came up): re-read,
+    // and re-provide only when the answer differs, so dependent plugins restart once.
+    // A failed re-read keeps the current flags, and a read that lands after this
+    // plugin was disposed provides nothing.
+    const platform = ctx.get('platform', true) as PlatformService | undefined;
+    const off = platform?.onInstanceStale?.(() => {
+      void read().then((next) => {
+        if (!next || disposed) return;
+        const cur = ctx.get('flags', true) as FlagsService | undefined;
+        if (cur && JSON.stringify(cur.apiVersions) === JSON.stringify(next.apiVersions)) return;
+        // Dropping the service restarts the plugins that inject it; they read the new one.
+        release();
+        release = ctx.provide('flags', next);
+      });
+    });
+    if (off) ctx.effect(() => off);
   },
 };
 
@@ -145,6 +171,47 @@ export async function boot(options: BootOptions): Promise<ConsoleHandle> {
     name: 'slots',
     apply(c: Context) {
       c.provide('slots', slots);
+    },
+  });
+
+  // The `actions` service (D569). Its admissions come from the manifests, so a
+  // plugin can register only the actions it declared and only call them with
+  // the permissions its manifest lists. A third-party row's permissions are the
+  // granted subset, the same expression the sandbox bridge uses, computed here
+  // rather than off `records` because the service has to exist before any
+  // plugin loads.
+  const admissions: Record<string, Admission> = {};
+  for (const entry of options.catalog) {
+    const manifest = manifests.get(entry.name);
+    if (!manifest) continue;
+    const tier = tierOf(
+      manifest,
+      options.sources?.[entry.name] ?? {
+        bundled: entry.name in options.modules,
+      },
+      options.trustedPublishers,
+    );
+    const permissions =
+      tier === 'third-party'
+        ? (options.grant?.(manifest) ?? []).filter((p) => manifest.permissions.includes(p))
+        : manifest.permissions;
+    admissions[entry.id] = {
+      actions: manifest.actions,
+      // The service list admission checks must be the one the plugin fiber
+      // actually gets, not the manifest's wider one. A catalog row may narrow
+      // `inject` (it can never widen it — see `catalog.ts`), so admitting
+      // against `manifest.inject` would authorise a method-backed action for
+      // a service this plugin was deliberately denied: the tool would be
+      // strictly more capable than the UI beside it, which is the one thing
+      // D569's "exactly as the UI would" forbids.
+      policy: { services: entry.inject ?? manifest.inject, permissions },
+    };
+  }
+  const actions = new ActionRegistry(admissions);
+  await ctx.plugin({
+    name: 'actions',
+    apply(c: Context) {
+      c.provide('actions', actions);
     },
   });
   await ctx.plugin({ name: options.platform.name ?? 'platform', apply: options.platform.apply });
@@ -255,6 +322,7 @@ export async function boot(options: BootOptions): Promise<ConsoleHandle> {
   const handle: ConsoleHandle = {
     ctx,
     slots,
+    actions,
     plugins: () => [...records.values()].map((r) => ({ ...r, status: statusOf(r) })),
     pending: () =>
       [...records.values()]

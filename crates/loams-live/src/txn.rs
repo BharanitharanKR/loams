@@ -30,14 +30,16 @@ use std::time::Duration;
 
 use buffa::Message;
 use futures::future::BoxFuture;
-use loams_tikv::{CommitMode, Snap, Tikv, Timestamp, TimestampExt, Txn, TxnError, TxnOptions};
+use loams_kv::{CommitMode, Snap, Store, Ts, Txn, TxnError, TxnOptions};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use sha2::{Digest, Sha256};
+use ulid::Ulid;
 
 use crate::catalog::{self, TableDef};
+use crate::cursor::{self, CursorKey};
 use crate::docs::{self, Doc, IndexRange, Reads, WriteRecord};
-use crate::ids::{DocId, TableId};
+use crate::ids::{DocId, IndexId, TableId};
 use crate::journal::Journal;
 use crate::keys::{AppKeys, IDEMPOTENCY_HASH_BYTES, KeyRange};
 use crate::{Limits, LiveConfig, LiveError, LiveValue, pb};
@@ -65,14 +67,54 @@ pub enum FnKind {
     Mutation,
 }
 
+/// Who may call a function (D699): end users and platform principals
+/// (`query`, `mutation`), or platform principals only (`internalQuery`,
+/// `internalMutation`). A function that declares none is public (LV1 row
+/// T0-13), so deployed apps keep working.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Visibility {
+    #[default]
+    Public,
+    Internal,
+}
+
+/// The identity a call runs as. LV1 plan Task 16 defines it (end users
+/// through OIDC); until then it has no values, so every
+/// [`CallCtx::identity`] is `None`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Identity {}
+
+/// What a function call knows about its caller (LV1 plan Task 4), carried
+/// by its [`LiveTxn`]: the identity (Task 16), the request id (a mutation's
+/// idempotency key, else empty; it seeds a JavaScript function's
+/// `Math.random`) and the deployment that serves the function (Task 6;
+/// `None` for built-ins and tests).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CallCtx {
+    pub identity: Option<Identity>,
+    pub request_id: String,
+    pub deployment: Option<String>,
+}
+
 /// A server function: a built-in `_system:*` function or (Task 13) a
 /// deployed JavaScript export. A mutation's `call` is rerun on conflict, so
-/// it must have no effect outside `txn`.
+/// it must have no effect outside `txn`. The call's [`CallCtx`] is
+/// [`LiveTxn::ctx`].
 pub trait Function: Send + Sync {
     /// The function's path (`_system:insert`, `module:export`).
     fn name(&self) -> &str;
     /// Query or mutation.
     fn kind(&self) -> FnKind;
+    /// Who may call it; public unless the function says otherwise.
+    fn visibility(&self) -> Visibility {
+        Visibility::Public
+    }
+    /// The deployment that serves it (LV1 plan Task 6): the nil ULID for
+    /// the built-in functions and for functions not served through a
+    /// deployment.
+    fn deployment(&self) -> Ulid {
+        Ulid::nil()
+    }
     /// Runs the function in `txn` with `args`.
     fn call<'a>(
         &'a self,
@@ -114,6 +156,50 @@ pub struct Usage {
     pub index_ranges: usize,
 }
 
+/// The level of a `console.*` line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogLevel {
+    Debug,
+    Log,
+    Info,
+    Warn,
+    Error,
+}
+
+/// One `console.*` line of a function call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LogLine {
+    pub level: LogLevel,
+    /// The line, cut to the per-line limit at a character boundary.
+    pub line: String,
+    /// The line was longer than the per-line limit and was cut.
+    pub truncated: bool,
+}
+
+/// What a function call produced beside its result (LV1 plan Task 3): its
+/// `console.*` lines, up to the per-call limit (D682), and how many lines
+/// past it were dropped. A mutation reports its committing attempt's
+/// output only, so a rerun is invisible.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CallOutput {
+    pub logs: Vec<LogLine>,
+    /// Lines dropped after the per-call line limit.
+    pub dropped: u64,
+}
+
+/// One page of an index range ([`LiveTxn::paginate`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Page {
+    /// The page's documents, in the range's order.
+    pub docs: Vec<Doc>,
+    /// Where the next page starts: after this page's last document (or, for
+    /// an empty page, where this one started). After the last page it
+    /// still marks the end, so documents added later are read from there.
+    pub continue_cursor: String,
+    /// The page came back short: the range has no more documents now.
+    pub is_done: bool,
+}
+
 enum Access<'a> {
     Mutation(&'a mut Txn),
     Query(&'a mut Snap),
@@ -126,12 +212,18 @@ pub struct LiveTxn<'a> {
     access: Access<'a>,
     app: &'a AppKeys,
     limits: &'a Limits,
-    start_ts: Timestamp,
+    start_ts: Ts,
     tables: HashMap<TableId, Option<TableDef>>,
     names: HashMap<String, TableId>,
     read_set: ReadSet,
     writes: Vec<WriteRecord>,
     usage: Usage,
+    ctx: CallCtx,
+    /// The app's cursor key, read on the first page.
+    cursor_key: Option<CursorKey>,
+    output: CallOutput,
+    /// A storage error the next store call returns (tests only).
+    fault: Option<TxnError>,
 }
 
 impl fmt::Debug for LiveTxn<'_> {
@@ -153,11 +245,11 @@ impl<'a> LiveTxn<'a> {
 
     /// A query's transaction, reading `snap`.
     pub fn for_query(snap: &'a mut Snap, app: &'a AppKeys, limits: &'a Limits) -> Self {
-        let start_ts = snap.ts().clone();
+        let start_ts = snap.ts();
         LiveTxn::new(Access::Query(snap), app, limits, start_ts)
     }
 
-    fn new(access: Access<'a>, app: &'a AppKeys, limits: &'a Limits, start_ts: Timestamp) -> Self {
+    fn new(access: Access<'a>, app: &'a AppKeys, limits: &'a Limits, start_ts: Ts) -> Self {
         LiveTxn {
             access,
             app,
@@ -168,13 +260,60 @@ impl<'a> LiveTxn<'a> {
             read_set: ReadSet::default(),
             writes: Vec::new(),
             usage: Usage::default(),
+            ctx: CallCtx::default(),
+            cursor_key: None,
+            output: CallOutput::default(),
+            fault: None,
         }
+    }
+
+    /// Testing: the next store call (`get`, `query`, `table`, `insert`,
+    /// `patch`, `replace` or `delete`) fails with `error` instead of
+    /// reaching the store, as a conflict or a lost region would. The
+    /// function runtimes' suites use it to check that a storage error
+    /// inside a host call is never swallowed (LV1 plan Task 3, I3).
+    #[doc(hidden)]
+    pub fn fail_next_store_call(&mut self, error: TxnError) {
+        self.fault = Some(error);
+    }
+
+    /// The injected storage error, once.
+    fn injected(&mut self) -> Result<(), LiveError> {
+        match self.fault.take() {
+            Some(e) => Err(LiveError::Txn(e)),
+            None => Ok(()),
+        }
+    }
+
+    /// The call's context: its identity, request id and deployment.
+    pub fn ctx(&self) -> &CallCtx {
+        &self.ctx
+    }
+
+    /// Sets the call's context (the runner sets the request id).
+    pub fn set_ctx(&mut self, ctx: CallCtx) {
+        self.ctx = ctx;
+    }
+
+    /// The limits of the call's app.
+    pub fn limits(&self) -> &Limits {
+        self.limits
+    }
+
+    /// The call's output so far; a function appends its `console.*` lines.
+    pub fn output_mut(&mut self) -> &mut CallOutput {
+        &mut self.output
+    }
+
+    /// The call's output so far.
+    pub fn output(&self) -> &CallOutput {
+        &self.output
     }
 
     /// The timestamp every read sees: the transaction's start timestamp, or
     /// the query's snapshot timestamp.
-    pub fn start_ts(&self) -> Timestamp {
-        self.start_ts.clone()
+    pub fn start_ts(&self) -> Ts {
+        self.start_ts
     }
 
     /// Whether this is a mutation (it may write).
@@ -195,6 +334,7 @@ impl<'a> LiveTxn<'a> {
     /// The document `id`, or `None`. In a mutation the document key is
     /// locked (§20 §5.2): a concurrent write to it makes one side rerun.
     pub async fn get(&mut self, id: DocId) -> Result<Option<Doc>, LiveError> {
+        self.injected()?;
         self.count_scanned(1)?;
         let key = self.app.document(&id);
         let doc = match &mut self.access {
@@ -214,6 +354,17 @@ impl<'a> LiveTxn<'a> {
     /// depends on the range (its id may be created later); a user index of
     /// a missing table is [`LiveError::NotFound`].
     pub async fn query(&mut self, range: IndexRange) -> Result<Vec<Doc>, LiveError> {
+        Ok(self.scan(range, &[]).await?.0)
+    }
+
+    /// [`query`](Self::query) from after the key `after` (empty: from the
+    /// start), also returning the last key read.
+    async fn scan(
+        &mut self,
+        range: IndexRange,
+        after: &[u8],
+    ) -> Result<(Vec<Doc>, Option<Vec<u8>>), LiveError> {
+        self.injected()?;
         self.usage.index_ranges += 1;
         if self.usage.index_ranges > self.limits.max_index_ranges {
             return Err(LiveError::limit(
@@ -241,15 +392,113 @@ impl<'a> LiveTxn<'a> {
             max_scanned_docs: remaining,
             ..self.limits.clone()
         };
-        let (found, read) = match &mut self.access {
+        let (found, read, last) = match &mut self.access {
             Access::Mutation(txn) => {
-                docs::scan(&mut **txn, self.app, &table, &range, &limits).await
+                docs::scan_after(&mut **txn, self.app, &table, &range, after, &limits).await
             }
-            Access::Query(snap) => docs::scan(&mut **snap, self.app, &table, &range, &limits).await,
+            Access::Query(snap) => {
+                docs::scan_after(&mut **snap, self.app, &table, &range, after, &limits).await
+            }
         }
         .map_err(|e| self.scan_limit(e))?;
         self.count_scanned(found.len())?;
         self.read_set.ranges.push(read);
+        Ok((found, last))
+    }
+
+    /// One page of `range` (LV1 plan Task 4): up to `num_items` documents
+    /// after the position `cursor` names (`None`: from the start of the
+    /// range), and the cursor of the next page. `range.limit` is ignored.
+    ///
+    /// The read set gains the range from the resume point to the page's
+    /// last key when the page is full, so a write after the page does not
+    /// invalidate it, and to the end of the range when it is short. The
+    /// cursor must be this app's ([`cursor::decode`]) and, unless it is a
+    /// start cursor (no key: the start of any range), of this index and
+    /// table, else [`LiveError::BadCursor`].
+    pub async fn paginate(
+        &mut self,
+        range: IndexRange,
+        cursor: Option<&str>,
+        num_items: u32,
+    ) -> Result<Page, LiveError> {
+        if num_items == 0 {
+            return Err(LiveError::invalid(
+                "paginate: numItems is at least 1".to_string(),
+            ));
+        }
+        let key = self.cursor_key().await?;
+        let prefix = docs::index_keys_prefix(self.app, range.table, range.index);
+        let start = match cursor {
+            None => Vec::new(),
+            Some(text) => {
+                let bound = cursor::decode(&key, text)?;
+                if !bound.key.is_empty()
+                    && (bound.index != range.index || !bound.key.starts_with(&prefix))
+                {
+                    return Err(LiveError::BadCursor(
+                        "the pagination cursor belongs to another index or table".into(),
+                    ));
+                }
+                bound.key
+            }
+        };
+        let index = range.index;
+        let range = IndexRange {
+            limit: Some(num_items),
+            ..range
+        };
+        let (docs, last) = self.scan(range, &start).await?;
+        let end = cursor::KeyBound {
+            index,
+            key: last.unwrap_or(start),
+        };
+        Ok(Page {
+            is_done: docs.len() < num_items as usize,
+            docs,
+            continue_cursor: cursor::encode(&key, &end),
+        })
+    }
+
+    /// The page of a range on a table that does not exist: empty and done,
+    /// with a start cursor, so the next page, once the table exists, starts
+    /// at the beginning. `cursor` must be this app's start cursor: a cursor
+    /// with a position names a key of an existing table (R1 never removes
+    /// a table), so it is [`LiveError::BadCursor`] here.
+    pub async fn empty_page(&mut self, cursor: Option<&str>) -> Result<Page, LiveError> {
+        let key = self.cursor_key().await?;
+        if let Some(text) = cursor
+            && !cursor::decode(&key, text)?.key.is_empty()
+        {
+            return Err(LiveError::BadCursor(
+                "the pagination cursor belongs to another table".into(),
+            ));
+        }
+        let start = cursor::KeyBound {
+            index: IndexId::BY_ID,
+            key: Vec::new(),
+        };
+        Ok(Page {
+            docs: Vec::new(),
+            continue_cursor: cursor::encode(&key, &start),
+            is_done: true,
+        })
+    }
+
+    /// The app's cursor key, read once per transaction. It is written with
+    /// the app and never changes, so it is not part of the read set.
+    async fn cursor_key(&mut self) -> Result<CursorKey, LiveError> {
+        if let Some(key) = &self.cursor_key {
+            return Ok(key.clone());
+        }
+        let found = match &mut self.access {
+            Access::Mutation(txn) => catalog::load_cursor_key(&mut **txn, self.app).await?,
+            Access::Query(snap) => catalog::load_cursor_key(&mut **snap, self.app).await?,
+        }
+        .ok_or_else(|| {
+            LiveError::Internal("the app has no cursor key; its runner never opened".into())
+        })?;
+        self.cursor_key = Some(found.clone());
         Ok(found)
     }
 
@@ -257,6 +506,7 @@ impl<'a> LiveTxn<'a> {
     /// set gains the index entries of every table not created yet, so the
     /// insert that creates it invalidates the read.
     pub async fn table(&mut self, name: &str) -> Result<Option<TableDef>, LiveError> {
+        self.injected()?;
         if let Some(id) = self.names.get(name) {
             return Ok(self.tables.get(id).cloned().flatten());
         }
@@ -270,25 +520,47 @@ impl<'a> LiveTxn<'a> {
                 Ok(Some(table))
             }
             None => {
-                let counter = self.app.table_counter();
-                let next = match &mut self.access {
-                    Access::Mutation(txn) => txn.get(&counter).await?,
-                    Access::Query(snap) => snap.get(&counter).await?,
-                };
-                let next = match next {
-                    None => 1,
-                    Some(bytes) => {
-                        u32::from_be_bytes(bytes.as_slice().try_into().map_err(|_| {
-                            LiveError::Corrupt("the table counter is not 4 bytes".into())
-                        })?)
-                    }
-                };
-                self.read_set
-                    .ranges
-                    .push(self.app.tables_from(TableId(next)));
+                self.depend_on_new_tables().await?;
                 Ok(None)
             }
         }
+    }
+
+    /// Every table, by id, with its user indexes. The read set gains the
+    /// index entries of every table not created yet, so creating a table
+    /// invalidates the read (index changes of a deployed schema do not).
+    pub async fn tables(&mut self) -> Result<Vec<TableDef>, LiveError> {
+        let found = match &mut self.access {
+            Access::Mutation(txn) => catalog::list_tables(&mut **txn, self.app).await?,
+            Access::Query(snap) => catalog::list_tables(&mut **snap, self.app).await?,
+        };
+        for table in &found {
+            self.remember(table);
+        }
+        self.depend_on_new_tables().await?;
+        Ok(found)
+    }
+
+    /// Adds the index entries of every table not created yet to the read set.
+    async fn depend_on_new_tables(&mut self) -> Result<(), LiveError> {
+        let counter = self.app.table_counter();
+        let next = match &mut self.access {
+            Access::Mutation(txn) => txn.get(&counter).await?,
+            Access::Query(snap) => snap.get(&counter).await?,
+        };
+        let next = match next {
+            None => 1,
+            Some(bytes) => u32::from_be_bytes(
+                bytes
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| LiveError::Corrupt("the table counter is not 4 bytes".into()))?,
+            ),
+        };
+        self.read_set
+            .ranges
+            .push(self.app.tables_from(TableId(next)));
+        Ok(())
     }
 
     /// Inserts a document into the table named `table` (created on first
@@ -298,6 +570,7 @@ impl<'a> LiveTxn<'a> {
         table: &str,
         fields: BTreeMap<String, LiveValue>,
     ) -> Result<DocId, LiveError> {
+        self.injected()?;
         let Access::Mutation(txn) = &mut self.access else {
             return Err(query_write("insert"));
         };
@@ -315,6 +588,7 @@ impl<'a> LiveTxn<'a> {
         id: DocId,
         fields: BTreeMap<String, LiveValue>,
     ) -> Result<(), LiveError> {
+        self.injected()?;
         self.rewrite(id, fields, true).await
     }
 
@@ -324,11 +598,13 @@ impl<'a> LiveTxn<'a> {
         id: DocId,
         fields: BTreeMap<String, LiveValue>,
     ) -> Result<(), LiveError> {
+        self.injected()?;
         self.rewrite(id, fields, false).await
     }
 
     /// Deletes document `id`; a missing document is [`LiveError::NotFound`].
     pub async fn delete(&mut self, id: DocId) -> Result<(), LiveError> {
+        self.injected()?;
         if !self.is_mutation() {
             return Err(query_write("delete"));
         }
@@ -495,7 +771,7 @@ pub struct Mutated {
     /// Its commit timestamp. For a replay (an idempotency hit) and for a
     /// commit resolved through its token, the timestamp of the read that
     /// found the record or token: at or after the commit.
-    pub commit_ts: Timestamp,
+    pub commit_ts: Ts,
     /// What the function returned.
     pub result: LiveValue,
     /// Attempts, from 1.
@@ -511,6 +787,8 @@ pub struct Mutated {
     pub earlier_unknown: bool,
     /// What the committing attempt used.
     pub usage: Usage,
+    /// The committing attempt's output (empty for a replay).
+    pub output: CallOutput,
 }
 
 /// A query's answer.
@@ -519,8 +797,9 @@ pub struct Queried {
     pub result: LiveValue,
     pub read_set: ReadSet,
     /// The snapshot timestamp it read at.
-    pub ts: Timestamp,
+    pub ts: Ts,
     pub usage: Usage,
+    pub output: CallOutput,
 }
 
 /// Runs mutations and queries of one app. Cheap to clone.
@@ -530,7 +809,7 @@ pub struct Runner {
 }
 
 struct Inner {
-    tikv: Tikv,
+    store: Store,
     app: AppKeys,
     limits: Limits,
     options: RunnerOptions,
@@ -552,7 +831,7 @@ pub struct Quiesced {
 impl fmt::Debug for Runner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Runner")
-            .field("tikv", &self.inner.tikv)
+            .field("store", &self.inner.store)
             .field("options", &self.inner.options)
             .finish_non_exhaustive()
     }
@@ -564,6 +843,7 @@ enum Outcome {
         result: LiveValue,
         journal: Option<(u16, u64)>,
         usage: Usage,
+        output: CallOutput,
     },
     Replayed(LiveValue),
 }
@@ -579,29 +859,36 @@ struct Attempts {
 }
 
 impl Runner {
-    /// A runner for the app on `tikv` (whose root is the app's), with the
+    /// A runner for the app on `store` (whose root is the app's), with the
     /// config's limits and the default options. Writes the app's journal
     /// shard count (`config.journal_shards`) when the app has none yet; a
     /// stored count wins over the config (R1 plan row T10-1).
-    pub async fn open(tikv: Tikv, config: &LiveConfig) -> Result<Self, LiveError> {
-        Runner::open_with(tikv, config, RunnerOptions::default()).await
+    pub async fn open(store: Store, config: &LiveConfig) -> Result<Self, LiveError> {
+        Runner::open_with(store, config, RunnerOptions::default()).await
     }
 
     /// Like [`open`](Self::open), with `options`.
     pub async fn open_with(
-        tikv: Tikv,
+        store: Store,
         config: &LiveConfig,
         options: RunnerOptions,
     ) -> Result<Self, LiveError> {
         let app = AppKeys::dedicated();
         let shards = config.journal_shards;
         let keys = app.clone();
-        let stored = tikv
+        let stored = store
             .run(catalog_txn("live.app.open", &options), move |txn| {
                 let keys = keys.clone();
-                Box::pin(
-                    async move { lift(catalog::ensure_journal_shards(txn, &keys, shards).await) },
-                )
+                Box::pin(async move {
+                    // The app's records: its journal shard count and its
+                    // pagination cursor key (LV1 Task 4).
+                    let ensured = async {
+                        let shards = catalog::ensure_journal_shards(txn, &keys, shards).await?;
+                        catalog::ensure_cursor_key(txn, &keys).await?;
+                        Ok(shards)
+                    };
+                    lift(ensured.await)
+                })
             })
             .await?
             .value?;
@@ -615,7 +902,7 @@ impl Runner {
         }
         Ok(Runner {
             inner: Arc::new(Inner {
-                tikv,
+                store,
                 app,
                 limits: config.limits.clone(),
                 options,
@@ -625,9 +912,9 @@ impl Runner {
         })
     }
 
-    /// The TiKV handle.
-    pub fn tikv(&self) -> &Tikv {
-        &self.inner.tikv
+    /// The app's store.
+    pub fn store(&self) -> &Store {
+        &self.inner.store
     }
 
     /// The app's keys.
@@ -638,6 +925,11 @@ impl Runner {
     /// The options.
     pub fn options(&self) -> &RunnerOptions {
         &self.inner.options
+    }
+
+    /// The app's limits.
+    pub fn limits(&self) -> &Limits {
+        &self.inner.limits
     }
 
     /// Exclusive admission for a change that must not race mutations
@@ -667,11 +959,11 @@ impl Runner {
     pub async fn journal(&self) -> Result<Journal, LiveError> {
         let at = self
             .inner
-            .tikv
+            .store
             .now()
             .await
             .map_err(|e| LiveError::Internal(e.to_string()))?;
-        let mut snap = snapshot(&self.inner.tikv, at).await?;
+        let mut snap = snapshot(&self.inner.store, at).await?;
         let shards = catalog::load_journal_shards(&mut snap, &self.inner.app)
             .await?
             .ok_or_else(no_app_record)?;
@@ -684,7 +976,7 @@ impl Runner {
     pub async fn set_journal_shards(&self, shards: u16) -> Result<(), LiveError> {
         let keys = self.inner.app.clone();
         self.inner
-            .tikv
+            .store
             .run(
                 catalog_txn("live.app.journal_shards", &self.inner.options),
                 move |txn| {
@@ -736,7 +1028,7 @@ impl Runner {
         let body_state = state.clone();
         let run = self
             .inner
-            .tikv
+            .store
             .run(opts, move |txn| {
                 let inner = inner.clone();
                 let f = f.clone();
@@ -782,6 +1074,7 @@ impl Runner {
                 result,
                 journal,
                 usage,
+                output,
             } => Mutated {
                 commit_ts: committed.commit_ts,
                 result,
@@ -790,6 +1083,7 @@ impl Runner {
                 replayed: false,
                 earlier_unknown: committed.earlier_unknown,
                 usage,
+                output,
             },
             Outcome::Replayed(result) => Mutated {
                 commit_ts: committed.commit_ts,
@@ -799,6 +1093,7 @@ impl Runner {
                 replayed: true,
                 earlier_unknown: committed.earlier_unknown,
                 usage: Usage::default(),
+                output: CallOutput::default(),
             },
         })
     }
@@ -808,7 +1103,7 @@ impl Runner {
         &self,
         f: &dyn Function,
         args: LiveValue,
-        at: Timestamp,
+        at: Ts,
     ) -> Result<Queried, LiveError> {
         if f.kind() != FnKind::Query {
             return Err(LiveError::invalid(format!(
@@ -816,7 +1111,7 @@ impl Runner {
                 f.name()
             )));
         }
-        let mut snap = snapshot(&self.inner.tikv, at.clone()).await?;
+        let mut snap = snapshot(&self.inner.store, at).await?;
         let mut txn = LiveTxn::for_query(&mut snap, &self.inner.app, &self.inner.limits);
         let result =
             tokio::time::timeout(self.inner.limits.mutation_deadline, f.call(&mut txn, args))
@@ -827,6 +1122,7 @@ impl Runner {
             usage: txn.usage,
             read_set: txn.read_set,
             ts: at,
+            output: txn.output,
         })
     }
 }
@@ -849,7 +1145,7 @@ async fn mutation_attempt(
     state: &Mutex<Attempts>,
 ) -> Result<Outcome, LiveError> {
     let app = &inner.app;
-    let now_ms = Tikv::physical_ms(&txn.start_ts());
+    let now_ms = txn.start_ts().physical_ms();
     let mut keys = vec![app.app_def()];
     if let Some(idem) = &idem {
         keys.push(app.idempotency(&idem.hash));
@@ -888,10 +1184,15 @@ async fn mutation_attempt(
     }
 
     let mut live = LiveTxn::for_mutation(txn, app, &inner.limits);
+    live.set_ctx(CallCtx {
+        request_id: request_id.clone(),
+        ..CallCtx::default()
+    });
     let result = f.call(&mut live, args).await?;
     let has_ranges = !live.read_set.ranges.is_empty();
     let usage = live.usage;
     let writes = std::mem::take(&mut live.writes);
+    let output = std::mem::take(&mut live.output);
     drop(live);
     if writes.is_empty() {
         // Read-only: no journal entry and no idempotency record; a retry of
@@ -900,6 +1201,7 @@ async fn mutation_attempt(
             result,
             journal: None,
             usage,
+            output,
         });
     }
 
@@ -910,7 +1212,7 @@ async fn mutation_attempt(
             expires_ms: now_ms
                 .saturating_add(u64::try_from(IDEMPOTENCY_TTL.as_millis()).unwrap_or(u64::MAX)),
             function: f.name().to_string(),
-            start_ts: txn.start_ts().version(),
+            start_ts: txn.start_ts().0,
             args_hash: idem.args.to_vec(),
             ..Default::default()
         };
@@ -949,6 +1251,7 @@ async fn mutation_attempt(
         result,
         journal: Some(position),
         usage,
+        output,
     })
 }
 
@@ -960,7 +1263,7 @@ impl Reads for Found<'_> {
         Ok(self.0.get(key).cloned())
     }
 
-    async fn batch_get(&mut self, keys: Vec<Vec<u8>>) -> Result<Vec<loams_tikv::Pair>, TxnError> {
+    async fn batch_get(&mut self, keys: Vec<Vec<u8>>) -> Result<Vec<loams_kv::Pair>, TxnError> {
         let mut out: Vec<_> = keys
             .into_iter()
             .filter_map(|k| self.0.get(&k).cloned().map(|v| (k, v)))
@@ -974,7 +1277,7 @@ impl Reads for Found<'_> {
         _range: &KeyRange,
         _limit: usize,
         _reverse: bool,
-    ) -> Result<Vec<loams_tikv::Pair>, TxnError> {
+    ) -> Result<Vec<loams_kv::Pair>, TxnError> {
         Err(TxnError::Fatal("no scans over a batch get".into()))
     }
 }
@@ -1017,7 +1320,8 @@ fn no_app_record() -> LiveError {
     )
 }
 
-fn catalog_txn(op: &'static str, options: &RunnerOptions) -> TxnOptions {
+/// The options of a catalog transaction named `op`.
+pub(crate) fn catalog_txn(op: &'static str, options: &RunnerOptions) -> TxnOptions {
     let mut opts = TxnOptions::new(op);
     opts.commit_mode = Some(options.commit_mode);
     opts
@@ -1031,17 +1335,27 @@ fn lock(state: &Mutex<Attempts>) -> std::sync::MutexGuard<'_, Attempts> {
 
 /// A run body's result: a storage error goes back to the runner (which
 /// retries conflicts); any other stays in the value.
-fn lift<T>(r: Result<T, LiveError>) -> Result<Result<T, LiveError>, TxnError> {
+pub(crate) fn lift<T>(r: Result<T, LiveError>) -> Result<Result<T, LiveError>, TxnError> {
     match r {
         Ok(v) => Ok(Ok(v)),
         Err(e) => e.into_txn().map(Err),
     }
 }
 
-async fn snapshot(tikv: &Tikv, at: Timestamp) -> Result<Snap, LiveError> {
-    tikv.snapshot(at)
+pub(crate) async fn snapshot(store: &Store, at: Ts) -> Result<Snap, LiveError> {
+    store
+        .snapshot(at)
         .await
         .map_err(|e| LiveError::Internal(format!("a snapshot: {e}")))
+}
+
+/// A snapshot of `store` at a fresh timestamp.
+pub(crate) async fn latest_snapshot(store: &Store) -> Result<Snap, LiveError> {
+    let at = store
+        .now()
+        .await
+        .map_err(|e| LiveError::Internal(format!("a timestamp: {e}")))?;
+    snapshot(store, at).await
 }
 
 #[cfg(test)]

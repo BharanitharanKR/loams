@@ -1,7 +1,10 @@
 # Publishing Loams: registries, secrets and the release path
 
-Status: **infrastructure only, nothing published**. This page is the checklist a
-maintainer works through before the first real publish. It is written for
+Status: **container images publish for the preview; no registry package is
+published.** Since v0.1.0-preview.1 (2026-10-12), CI publishes the release images to
+`ghcr.io/ostrium-labs` on tags; see [Container images](#container-images-ghcrio).
+Everything else on this page is still the checklist a maintainer works through
+before the first real package publish. It is written for
 `ostrium-labs/loams`; the decisions it follows are in
 [`docs/design/13-decision-log.md`](../design/13-decision-log.md).
 
@@ -16,12 +19,42 @@ rather than as empty workflows.
 | **crates.io** | **Workflow present, publishing off.** [`.github/workflows/release-crates.yml`](../../.github/workflows/release-crates.yml) verifies every publishable crate on a published release and uploads only when a maintainer dispatches it inside the `crates-io` environment. | The namespace is `loams` on crates.io (D400), the crates are `loams-*`, and 18 of them are publishable as they stand. |
 | PyPI | Not implemented | There is no Python SDK yet (#285). `sdks/` holds `typescript/` only, and D400 keeps the PyPI name `loams` reserved for it. A workflow that builds nothing would be a file that only looks finished. |
 | npm | Not implemented | The packages are publish-shaped but nothing publishes them yet. `@loams/client` (SDK2 Task 0) and `@loams/live` ship from `sdks/typescript/packages/`, with `exports`, types, a build script and a conformance suite; `@loams/proto` in `web/` is generated from the same protos and is consumed from the workspace. Publishing them needs the version and provenance decision in D400, and the thirteen-language release cadence the design describes, so the `@loams` scope (D400) stays reserved. |
-| Maven Central | Not applicable | D400 defers Java SDKs: there is no Loam-written Java. The Kotlin template in `buf.gen.kotlin.yaml` generates code for `ostrium-labs/loams-mobile`; a client library is that repository's decision, and publishing a Java artifact from here would put a second, unowned release in the pipeline. |
+| Maven Central | Not applicable | D400 defers Java SDKs: there is no Loams-written Java. The Kotlin template in `buf.gen.kotlin.yaml` generates code for `ostrium-labs/loams-mobile`; a client library is that repository's decision, and publishing a Java artifact from here would put a second, unowned release in the pipeline. |
 | Go modules | Not applicable | No Go module and no `go.mod` anywhere in the tree. D101 places a Go SDK in M2, and D400 gives it the `loams.dev/...` path, which needs a `go-import` responder on `loams.dev` — that route belongs to the site repository, not here. |
-| GitHub Packages (`ghcr.io`) | Not implemented | There is no image to publish: the only Dockerfile in the tree is `deploy/dapr/edge/Dockerfile`, a sidecar for one deployment. D292 chooses cargo-dist for binaries and GitHub Releases, and image publishing (attestations, cosign) has no artifact to run against yet. It should arrive with the server image, not before it. |
+| GitHub Packages (`ghcr.io`) | **Publishing, preview.** | The server image arrived with the preview, so the rule below is met: `loams`, `loams-fabric` and `loams-agentd` publish to `ghcr.io/ostrium-labs` on tags. See [Container images](#container-images-ghcrio). |
 
 A rule for later: a registry gets a workflow when something in this repository
 is ready to be installed from it, not when the issue lists it.
+
+## Container images (`ghcr.io`)
+
+The preview's images, the contract the compose stack in
+[`deploy/release/compose.yaml`](../../deploy/release/compose.yaml) and
+[the preview guide](preview.md) rely on:
+
+| Image | Containerfile | Contents |
+|---|---|---|
+| `ghcr.io/ostrium-labs/loams` | `deploy/release/Containerfile.loams` | The engine, built with the features `live,live-tikv,durable,graph,tikv,pgwire,mysql-wire,stream-grpc` |
+| `ghcr.io/ostrium-labs/loams-fabric` | `deploy/release/Containerfile.loams-fabric` | The House front, with `loams-house-worker` inside |
+| `ghcr.io/ostrium-labs/loams-agentd` | `deploy/release/Containerfile.loams-agentd` | The agent daemon (optional) |
+
+- **Build.** `deploy/release/build.sh` builds every image from its
+  `deploy/release/Containerfile.<name>`, locally with Docker or Podman and in CI the
+  same way.
+- **Publish.** CI publishes on tags only, never from a pull request, with the
+  workflow's own `GITHUB_TOKEN` (`packages: write`); there is no stored registry
+  credential.
+- **Tags.** Every image gets `:<version>` (for example `0.1.0-preview.1`, no `v` prefix) and
+  the rolling `:preview`, which moves with each preview release. There is no `:latest`.
+  Deployments that must not move pin `:<version>`.
+- **Images built elsewhere.** `ghcr.io/ostrium-labs/tidb:v8.5.8-loams.1` is built by
+  [`scripts/sqldb/tidb-image/build.sh`](../../scripts/sqldb/tidb-image/build.sh) from an
+  annotated patch-queue tag, is public, amd64 only, and is pinned in
+  [`release/sqldb-images.toml`](../../release/sqldb-images.toml), and the Postgres stack's images
+  are pinned by digest in
+  [`deploy/pins/loams-postgres-images.toml`](../../deploy/pins/loams-postgres-images.toml).
+- **Not yet.** No attestation or cosign signature is attached to the images in the
+  preview, and the Loams images are not promised to be multi-architecture.
 
 ## What crates.io actually publishes
 

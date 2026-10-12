@@ -132,12 +132,15 @@ export function Dialog({
   title,
   children,
   footer,
+  dismissible = true,
 }: {
   open: boolean;
   onClose: () => void;
   title: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /** False keeps Escape and the close button from dismissing it (while work is pending). */
+  dismissible?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -156,11 +159,20 @@ export function Dialog({
       ref={ref}
       className="loams-dialog"
       onClose={() => openRef.current && onClose()}
+      onCancel={(e) => {
+        if (!dismissible) e.preventDefault();
+      }}
       aria-labelledby={titleId}
     >
       <div className="loams-dialog-head">
         <h2 id={titleId}>{title}</h2>
-        <Button variant="quiet" size="icon" aria-label="Close" onClick={onClose}>
+        <Button
+          variant="quiet"
+          size="icon"
+          aria-label="Close"
+          onClick={onClose}
+          disabled={!dismissible}
+        >
           ×
         </Button>
       </div>

@@ -4,6 +4,8 @@
 
 > **Status: In progress** (2026-10-04). Track CN, after FL1 (it needs the Fabric stack, `ingest` and the plugins); it can run beside FL2. Branches `cn1-t<N>`, stacked; PRs target `main`. CN1 adds the crate `loams-flow` to the `fabric/` workspace, the `flow` role of `loams-fabric`, a Java service `loams-connect` (Task 12) and registry data under `connectors/`. It changes no engine code. **Tasks 1 and 2 are in review on `cn1-t1-registry`**: the registry is 203 manifests and 203 instance-config schemas, `matrix.py --check` renders Appendix A from the CSV byte-for-byte, and `camel_catalog.py --check` reports 0 errors and 0 cells needing a doc edit against `apache/camel` at tag `camel-4.22.1` (kestra_catalog: 0 findings). Three Appendix A Camel cells were corrected as a result — Redshift to `aws2-redshift-data`, Kubernetes to three concrete `kubernetes-*` schemes, SMTP/IMAP to `smtp`/`imaps`; Tasks 0–2's dependency measurements are in [`cn1-dependency-spike.md`](cn1-dependency-spike.md) and their rulings in the table at the end.
 
+> **Revised 2026-10-10 (CN2, D852–D854).** The owner ruled that Loams builds first-party native connectors ([CN2](2026-10-10-cn2-connectors.md) OR-1, OR-4, OR-8, OR-9). So that nothing is built twice, CN1's **unbuilt** non-native parts are superseded by CN2 and must not be built here: Debezium Server CDC (Task 8), the Iggy-plugin sinks and sources (Task 9's S3 and Iceberg sinks, Task 10's Elasticsearch and ClickHouse sink), and the Iggy and Debezium runtime supervisors of Task 3 beyond what CN2 Task 22 keeps as fallbacks. CN1's native modules that are not yet built (Tasks 3–7, 9's sources, 10's ClickHouse source, 11, 13, 15's Rust half) are built once on `loams-connector-sdk` in their CN2 family crates (CN2 Tasks 4 and 8). The superseded text below stays as the record; each affected task carries a note. Tasks 1 and 2 are merged on `dev`.
+
 **Goal:** Ship [§33](../design/33-connectors.md)'s registry, capability schema and the 21 ★ connectors of §33 §8:
 - `loams.flow.v1` connector protos, the manifest loader and validator, and the 200-connector registry generated from one catalog file, with drift checks against the Camel and Kestra catalogs;
 - connector instances, the `FlowService` API, the runtime supervisors (native, Iggy connectors runtime, Camel `loams-connect`, Debezium Server) and the contract-test kit;
@@ -18,7 +20,7 @@
 
 **Tech Stack:**
 - Rust 1.97.1, the `fabric/` workspace. New dependencies (Task 0 verifies versions, licences, build cost): `jsonschema` 0.30+ (MIT), `serde_yaml_ng` or `serde_norway` (MIT/Apache; Task 0 picks a maintained YAML crate), `rdkafka` 0.39 with `cmake-build` and `ssl-vendored` (MIT; librdkafka BSD-2-Clause), `tokio-postgres` 0.7 (MIT/Apache), `mysql_async` 0.37 (MIT/Apache), `object_store` 0.14 (Apache-2.0), `iceberg` 0.10 (Apache-2.0), `parquet` 59, `arrow-ipc`/`arrow-flight` 59, `apache-avro` 0.22 (Apache-2.0), `adbc_core` and `adbc_driver_manager` 0.24 (Apache-2.0), `clickhouse` 0.15 (Apache-2.0), `aws-sdk-kinesis` 1.x (Apache-2.0), `redis` 1.7 (BSD-3-Clause), `reqwest` 0.12, `hmac`, `sha2`, `opentelemetry-proto` (Apache-2.0) for OTLP decoding.
-- Services for tests (added to `deploy/fabric/compose.yaml` under profile `connectors`, pinned by digest): Apache Kafka 4.x in KRaft mode (Apache-2.0), Postgres 17 with `wal_level=logical`, MySQL 8.4 with row binlog, Debezium Server 3.7.0.Final, Elasticsearch-compatible target (Loams's own ES gateway from `loams dev`, plus OpenSearch 3.x (Apache-2.0) for a third-party check), ClickHouse server (the FL2 reference image), Redis-compatible Valkey 8 (BSD-3-Clause), floci 2.1.0 (MIT, D60) for Kinesis and S3 events, RustFS (S3), Lakekeeper.
+- Services for tests (added to `deploy/fabric/compose.yaml` under profile `connectors`, pinned by digest): Apache Kafka 4.x in KRaft mode (Apache-2.0), Postgres 17 with `wal_level=logical`, MySQL 8.4 with row binlog, Debezium Server 3.7.0.Final, Elasticsearch-compatible target (Loams’ own ES gateway from `loams dev`, plus OpenSearch 3.x (Apache-2.0) for a third-party check), ClickHouse server (the FL2 reference image), Redis-compatible Valkey 8 (BSD-3-Clause), floci 2.1.0 (MIT, D60) for Kinesis and S3 events, RustFS (S3), Lakekeeper.
 - ADBC drivers: Snowflake and BigQuery drivers (Apache-2.0, `adbc-drivers/*`), Postgres, SQLite, DuckDB and Flight SQL drivers (Apache Arrow ADBC); shipped as shared libraries pinned by SHA-256 (Q349).
 - Java (Task 12 only, **run, never written**): the `apache/camel` 4.22.x runtime image or Camel JBang (`camel run *.yaml`), JDK 21 inside it. **Java is deferred (owner, 2026-10-01): Loams writes no Java in CN1** — no Maven project, no Loams processor, no Java SDK; routes are YAML, transforms use Camel's built-in `jq`/`jsonata` languages and `camel-cloudevents`.
 - Names: published packages `loams-*` (crates.io, PyPI) and `@loams/*` (npm); CloudEvents types `io.loams.dev.<domain>.<name>.v1` (owner rulings, 2026-10-01).
@@ -52,7 +54,7 @@
 | 6 | **Debezium Server runs one container per CDC instance** with the HTTP sink to `loams-fabric ingest` (`debezium.sink.type=http`, CloudEvents structured format through Debezium's CloudEvents converter, verify the 3.7 property names in Task 0), offsets and schema history in files on a volume | Unmodified Debezium; one failure domain per source database | Many containers for many sources; Q351's Iggy `postgres_source` for small Postgres sources |
 | 7 | **`loams-connect` is the unmodified Camel runtime in Main mode** (not Quarkus) in CN1, with YAML-DSL routes loaded from a mounted directory and reloaded on change; no Loams Java (Java deferred, owner 2026-10-01) | Least moving parts; Quarkus native is Q352 for CN2 | JVM start time and memory; measured in Task 12 |
 | 8 | **JDBC drivers are not shipped**: `loams-connect` loads drivers from a mounted directory; the PostgreSQL (BSD-2-Clause) and MariaDB Connector/J (LGPL-2.1-or-later, loaded, not modified) drivers are documented; MySQL Connector/J (GPL-2.0 with FOSS exception) is the user's choice | Keeps the image's licence set clean (D359) | One more step for users of JDBC |
-| 9 | **ADBC drivers load by path from an allowlist** in the instance's namespace config (`adbc.drivers = ["snowflake", "bigquery", …]`) and only from `/opt/loams/adbc/<name>/<version>/` with a SHA-256 check | A driver is native code in Loams's process | A compromised driver image still runs in-process; Q349 |
+| 9 | **ADBC drivers load by path from an allowlist** in the instance's namespace config (`adbc.drivers = ["snowflake", "bigquery", …]`) and only from `/opt/loams/adbc/<name>/<version>/` with a SHA-256 check | A driver is native code in Loams’ process | A compromised driver image still runs in-process; Q349 |
 
 ## Carried in
 
@@ -138,6 +140,8 @@ pub struct CapabilityError { pub connector: String, pub capability: String, pub 
 
 ### Task 3: Instances, `FlowService`, runtimes, secrets and the contract-test kit
 
+> **Partly superseded (2026-10-10).** `Source` and `Sink` move into `loams-connector-sdk` ([CN2](2026-10-10-cn2-connectors.md) Task 4, OR-5), keeping their method names. `IggyRuntime`, `DebeziumRuntime` and `CamelRuntime` are built only as the narrowed fallback runtimes of CN2 Task 22. Instances, `FlowService`, `SecretStore` and the contract-test kit stay here.
+
 **Files:** `fabric/proto/loams/flow/v1/flow.proto`, `fabric/crates/loams-flow/src/{instance.rs,store.rs,secrets.rs,service.rs,runtime/*.rs}`, `fabric/crates/loams-flow-conformance/**`, `fabric/crates/loams-flow/tests/{secrets.rs,runtime.rs}`.
 
 **Produces:**
@@ -190,7 +194,7 @@ pub struct SourceBatch { pub events: Vec<CloudEvent>, pub position: Position }
 
 **Files:** `fabric/crates/loams-flow/src/formats/*.rs`, `connectors/registry/{parquet,avro,arrow}.yaml`, `fabric/crates/loams-flow/tests/formats.rs`; in `dina-kar/iggy` `loams/fluss-sink`: an Arrow fast path (`datacontenttype = application/vnd.apache.arrow.stream` events appended as batches without per-row decoding).
 
-**Semantics:** `formats::decode(format, bytes, schema) -> RecordBatch stream` and `encode(format, batch) -> bytes` for Parquet (files and row groups), Avro (object container files, single-object encoding, and the Confluent wire format with a registry client stub until Q344), Arrow IPC stream and file, and Flight (`DoGet` source with a ticket, `DoPut` sink, including against Loams's Flight SQL endpoint for collections and streams). Schema mapping Avro ↔ Arrow per the Arrow project's rules (logical types: timestamp-millis/micros, date, decimal, uuid).
+**Semantics:** `formats::decode(format, bytes, schema) -> RecordBatch stream` and `encode(format, batch) -> bytes` for Parquet (files and row groups), Avro (object container files, single-object encoding, and the Confluent wire format with a registry client stub until Q344), Arrow IPC stream and file, and Flight (`DoGet` source with a ticket, `DoPut` sink, including against Loams’ Flight SQL endpoint for collections and streams). Schema mapping Avro ↔ Arrow per the Arrow project's rules (logical types: timestamp-millis/micros, date, decimal, uuid).
 
 **Tests:** `parquet_roundtrip_all_types`; `avro_container_and_confluent_framing`; `avro_logical_types_map`; `arrow_ipc_roundtrip`; `flight_doget_from_loams` (a `loams dev` collection scanned through Flight into Arrow events); `fluss_sink_arrow_fast_path` (in the fork's tests and ours: the decode counter stays 0).
 
@@ -218,6 +222,8 @@ pub struct SourceBatch { pub events: Vec<CloudEvent>, pub position: Position }
 
 ### Task 8: Debezium-Postgres ★ and Debezium-MySQL ★ (CDC)
 
+> **Superseded by [CN2](2026-10-10-cn2-connectors.md) Tasks 10 and 11 (OR-8, OR-9, D853); do not build.** Native CDC on the `postgresql` and `mysql` manifests is the default; the two Debezium manifests stay as fallbacks, run by CN2 Task 22. CN1 Task 14's CDC end-to-end test runs on the native path.
+
 **Files:** `fabric/crates/loams-flow/src/connectors/cdc.rs`, `fabric/crates/loams-flow/src/runtime/debezium.rs`, `connectors/registry/{debezium-postgres,debezium-mysql}.yaml`, `deploy/fabric/connectors/debezium/*.properties.tmpl`, `fabric/crates/loams-flow/tests/cdc.rs`, `docs/guides/connectors/cdc.md`.
 
 **Semantics (§33 D357, §7):** an instance renders Debezium Server's properties (connector class, slot and publication names `loams_<instance>`, `snapshot.mode=initial`, incremental snapshots through a signal table, the HTTP sink URL `http://<ingest>/v1/namespaces/{ns}/fabric/topics/{topic}/events`, the CloudEvents structured format) and starts the container (Ruling 6). `ingest` receives Debezium's CloudEvents; `cdc.rs` adds `loamsop` (from `op`) and `loamslsn` (Postgres `lsn` / MySQL `file:pos` + `gtid` when present) as extensions in `ingest`'s CDC mode (the route option `cdc = debezium`). A route template creates `<table>_current` (Fluss PK, Versioned on `_loams_lsn_order`, a monotonic numeric derived from the LSN or binlog position) and `<table>_history` (Fluss Log). Monitoring: slot lag (`pg_replication_slots` polled by the flow process with a read-only role), Debezium's metrics endpoint scraped; `flow_cdc_slot_lag_bytes` and `flow_cdc_behind_ms` gauges; an alert rule example.
@@ -227,6 +233,8 @@ pub struct SourceBatch { pub events: Vec<CloudEvent>, pub position: Position }
 **Commit:** `connectors: Postgres and MySQL CDC through Debezium Server`.
 
 ### Task 9: S3 ★ and Iceberg ★
+
+> **Partly superseded (2026-10-10).** The S3 sink (Iggy `s3_sink`) is replaced by [CN2](2026-10-10-cn2-connectors.md) Task 13 and the Iceberg raw-topic sink (Iggy `iceberg_sink`) by CN2 Task 17; the Iggy templates are not written here. The S3 and Iceberg sources are built once on the SDK (CN2 Task 8).
 
 **Files:** `fabric/crates/loams-flow/src/connectors/{s3.rs,iceberg.rs}`, `connectors/registry/{s3,iceberg}.yaml`, `deploy/fabric/connectors/iggy/{s3_sink,iceberg_sink}.toml.tmpl`, tests, docs.
 
@@ -238,9 +246,11 @@ pub struct SourceBatch { pub events: Vec<CloudEvent>, pub position: Position }
 
 ### Task 10: Elasticsearch ★ and ClickHouse ★
 
+> **Superseded by [CN2](2026-10-10-cn2-connectors.md) Tasks 15 and 17 (OR-8); do not build.** Elasticsearch is native in CN2 Task 15, tested against Elasticsearch and OpenSearch, with Loams’ ES gateway only as an additional target (OR-2); the ClickHouse sink is native in CN2 Task 17 and the ClickHouse source is built there on the SDK. Iggy's `elasticsearch_*` and `clickhouse_sink` remain fallbacks only (CN2 Task 22).
+
 **Files:** `connectors/registry/{elasticsearch,clickhouse}.yaml`, `deploy/fabric/connectors/iggy/{elasticsearch_sink,elasticsearch_source,clickhouse_sink}.toml.tmpl`, `fabric/crates/loams-flow/src/connectors/clickhouse.rs` (source only), tests, docs.
 
-**Semantics:** Elasticsearch through Iggy's `elasticsearch_sink` and `elasticsearch_source` (configs rendered by `IggyRuntime`), checked against both OpenSearch and Loams's own ES gateway (`loams dev`), so a route into "Elasticsearch" can target a Loams collection unchanged. ClickHouse sink through Iggy's `clickhouse_sink`; native ClickHouse source over HTTP with the `clickhouse` crate, `SELECT … FORMAT ArrowStream` in key-range partitions, incremental by a cursor column; tested against the FL2 reference server and against Loams House when FL2 has merged.
+**Semantics:** Elasticsearch through Iggy's `elasticsearch_sink` and `elasticsearch_source` (configs rendered by `IggyRuntime`), checked against both OpenSearch and Loams’ own ES gateway (`loams dev`), so a route into "Elasticsearch" can target a Loams collection unchanged. ClickHouse sink through Iggy's `clickhouse_sink`; native ClickHouse source over HTTP with the `clickhouse` crate, `SELECT … FORMAT ArrowStream` in key-range partitions, incremental by a cursor column; tested against the FL2 reference server and against Loams House when FL2 has merged.
 
 **Tests:** `es_sink_to_opensearch_and_loams`; `es_source_scroll_resumes`; `clickhouse_sink_batches`; `clickhouse_source_arrow_partitions`; `clickhouse_source_against_house` (skipped until FL2); contract suites.
 
@@ -268,6 +278,8 @@ pub struct SourceBatch { pub events: Vec<CloudEvent>, pub position: Position }
 
 ### Task 13: Kinesis ★, Redis ★ and OpenTelemetry ★
 
+> **Built on the SDK (2026-10-10).** Unchanged in scope, but written directly in the CN2 family crates (`loams-connector-cloud`, `-kv`, `-protocols`; [CN2](2026-10-10-cn2-connectors.md) Task 8) rather than under `loams_flow::connectors`.
+
 **Files:** `fabric/crates/loams-flow/src/connectors/{kinesis.rs,redis.rs,otlp.rs}`, manifests, tests, docs.
 
 **Semantics:** **Kinesis**: shard iterators with checkpointed sequence numbers per shard (position), resharding followed through parent/child shards, `PutRecords` sink with partial-failure retries; floci in CI. **Redis**: Streams source with `XREADGROUP` in group `loams-<instance>` and `XACK` after the Fabric acknowledges; sinks `XADD`, `SET`/`HSET` by key template, `PUBLISH`; Valkey in CI. **OpenTelemetry**: OTLP/HTTP (`/v1/logs`, `/v1/traces`, `/v1/metrics`, protobuf and JSON) and OTLP/gRPC receivers on `ingest`'s listener under `/v1/namespaces/{ns}/fabric/otlp/{instance}/…` (and a plain `:4318`/`:4317` loopback listener bound to one namespace for collectors that cannot set paths); one CloudEvent per log record, span or data point; `partial_success` for invalid records; OTLP logs meant for search still go to the engine's §02 §7.1 endpoint.
@@ -288,11 +300,11 @@ pub struct SourceBatch { pub events: Vec<CloudEvent>, pub position: Position }
 
 ### Task 15: The collaboration sinks — Zulip ★target, ItsPlane and Forgejo
 
-**Added 2026-10-04** (owner, D628). Not part of the précis' 21, so it is **P1 and unstarred** and does not change D358's ★ count; the catalog goes from 200 rows to 203. It exists because the owner asked for the ability to import data **from Slack, GitHub and Jira into Loams's own Zulip, ItsPlane and Forgejo**. Slack, GitHub and Jira are already in the registry as P2 Camel connectors (`slack`, `github2`, `jira` — all three confirmed present in Camel 4.22.1), so the missing half was always the three targets.
+**Added 2026-10-04** (owner, D628). Not part of the précis' 21, so it is **P1 and unstarred** and does not change D358's ★ count; the catalog goes from 200 rows to 203. It exists because the owner asked for the ability to import data **from Slack, GitHub and Jira into Loams’ own Zulip, ItsPlane and Forgejo**. Slack, GitHub and Jira are already in the registry as P2 Camel connectors (`slack`, `github2`, `jira` — all three confirmed present in Camel 4.22.1), so the missing half was always the three targets.
 
 **Why native and not a runtime:** Camel 4.22.1 has **no component** for Zulip, ItsPlane or Forgejo (verified at tag `camel-4.22.1`: `camel-zulip`, `camel-plane` and `camel-gitea` are all absent), so D354's "buy first" has nothing to buy and all three are `native` Rust in `loams-flow`, speaking each app's public REST API. The OpenAPI generator (Q358's `progenitor`) is CN3's and is not needed here.
 
-**Why nothing changes in `ostrium-labs/loams-plugins`:** that repository states in four places (`CONTRIBUTING.md`, `docs/README.md`, `docs/upstreams.md`, `docs/security.md`) that adapters are read-only, its Zulip, Forgejo and ItsPlane adapters issue no mutating request by design, and two of them have tests asserting every request is a `GET`. Its `Forgejo` adapter's own header gives the reason: Forgejo derives the token scope from the HTTP method, so a `GET`-only adapter can never hold a write scope. The write credential therefore lives in Loams's `SecretStore` (D189) and the target writes happen from the Rust side. **Any later proposal to add a writer inside `loams-plugins` is a policy change for the owner, not an implementation detail** — it would contradict those four statements.
+**Why nothing changes in `ostrium-labs/loams-plugins`:** that repository states in four places (`CONTRIBUTING.md`, `docs/README.md`, `docs/upstreams.md`, `docs/security.md`) that adapters are read-only, its Zulip, Forgejo and ItsPlane adapters issue no mutating request by design, and two of them have tests asserting every request is a `GET`. Its `Forgejo` adapter's own header gives the reason: Forgejo derives the token scope from the HTTP method, so a `GET`-only adapter can never hold a write scope. The write credential therefore lives in Loams’ `SecretStore` (D189) and the target writes happen from the Rust side. **Any later proposal to add a writer inside `loams-plugins` is a policy change for the owner, not an implementation detail** — it would contradict those four statements.
 
 **Licences (D359):** Loams neither ships nor links any of the three, so each is reached over its public HTTP API — D359's carve-out, the same one SaaS services get. ItsPlane's upstream is **AGPL-3.0** and Forgejo's is MIT; `connectors/licences.toml` records both as `kind = "service"` with the reason, so the AGPL id is present as an identifier and never as code or text (`scripts/spec/provenance.sh`).
 
@@ -321,8 +333,8 @@ pub struct SourceBatch { pub events: Vec<CloudEvent>, pub position: Position }
 | E | 4 | CN1 (5/11): HTTP and webhooks | ~900 lines |
 | F | 5 | CN1 (6/11): Parquet, Avro, Arrow | ~800 lines |
 | G | 6 | CN1 (7/11): Kafka | ~800 lines |
-| H | 7, 8 | CN1 (8/11): Postgres, MySQL, CDC through Debezium | ~1 500 lines |
-| I | 9, 10 | CN1 (9/11): S3, Iceberg, Elasticsearch, ClickHouse | ~1 300 lines |
+| H | 7, ~~8~~ | CN1 (8/11): Postgres, MySQL (~~CDC through Debezium~~: CN2 Tasks 10–11) | ~1 500 lines |
+| I | 9 (sources), ~~10~~ | CN1 (9/11): S3 and Iceberg sources (~~sinks, Elasticsearch, ClickHouse~~: CN2 Tasks 13, 15, 17) | ~1 300 lines |
 | J | 11, 12 | CN1 (10/11): ADBC (Snowflake, BigQuery) and JDBC via `loams-connect` | ~1 200 lines Rust + YAML route templates |
 | K | 13, 14 | CN1 (11/11): Kinesis, Redis, OTLP, the gate and the catalog | ~1 300 lines |
 | L | 15 | CN1 (12/12): the Zulip, ItsPlane and Forgejo sinks and the import routes (D628) | ~900 lines + 3 route templates |

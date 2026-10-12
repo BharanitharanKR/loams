@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // @loams/charts and the flows layout import core compilers from their source
+    // files (@loams-core/*/src/compiler.ts), because those packages' roots also
+    // load Node-only Cordis services.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src", "test"]
+}

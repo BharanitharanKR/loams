@@ -333,8 +333,19 @@ impl EsGateway {
     /// Serves [`EsGateway::router`] on `listener` until `shutdown` is
     /// cancelled.
     pub fn serve(self, listener: tokio::net::TcpListener, shutdown: CancellationToken) -> EsHandle {
+        self.serve_with(listener, shutdown, |router| router)
+    }
+
+    /// [`EsGateway::serve`], with the router passed through `wrap` first
+    /// (the server's authentication layer).
+    pub fn serve_with(
+        self,
+        listener: tokio::net::TcpListener,
+        shutdown: CancellationToken,
+        wrap: impl FnOnce(Router) -> Router,
+    ) -> EsHandle {
         let addr = listener.local_addr().unwrap_or(self.config().listen);
-        let router = self.router();
+        let router = wrap(self.router());
         let task = tokio::spawn(async move {
             axum::serve(listener, router)
                 .with_graceful_shutdown(shutdown.cancelled_owned())

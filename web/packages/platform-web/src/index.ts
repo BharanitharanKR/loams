@@ -1,7 +1,10 @@
 // @loams/platform-web: `platform` and `transport` in a browser (§37 §5.4).
 //
-// The browser console keeps the cookie session (§19 §6): requests go with
-// `credentials: 'include'`. For local development against
+// The engine-served console keeps the cookie session (§19 §6): requests go
+// with `credentials: 'include'`. The hosted and BYOC console instead signs in
+// with OIDC and passes `token`, which returns the access token held in memory;
+// it is sent as `Authorization: Bearer` and cookies stay home (`credentials:
+// 'omit'`), since the engine is another origin. For local development against
 // `loams-apps-mock`, `devBearer` adds the mock's fake token; it is never set
 // in a production build. `transport` lets the demo mode pass an in-memory
 // mock instead of a network transport.
@@ -18,13 +21,26 @@ export interface WebPlatformOptions {
   devBearer?: string;
   /** Use this transport instead of the network (the demo mode). */
   transport?: Transport;
+  /**
+   * The current access token (OIDC or an API key), read on every request. When set,
+   * requests carry it as a bearer and send no cookies.
+   */
+  token?: () => string | undefined | Promise<string | undefined>;
 }
 
-export function webFetch(devBearer?: string): typeof globalThis.fetch {
-  return (input, init) => {
+export function webFetch(
+  devBearer?: string,
+  token?: WebPlatformOptions['token'],
+): typeof globalThis.fetch {
+  return async (input, init) => {
     const headers = new Headers(init?.headers);
-    if (devBearer) headers.set('authorization', `Bearer ${devBearer}`);
-    return globalThis.fetch(input, { ...init, headers, credentials: 'include' });
+    const bearer = token ? await token() : devBearer;
+    if (bearer) headers.set('authorization', `Bearer ${bearer}`);
+    return globalThis.fetch(input, {
+      ...init,
+      headers,
+      credentials: token ? 'omit' : 'include',
+    });
   };
 }
 
@@ -34,7 +50,7 @@ export function createWebPlatform(options: WebPlatformOptions = {}): PluginModul
     apply(ctx: Context) {
       const baseUrl = options.baseUrl ?? globalThis.location?.origin;
       if (!baseUrl) throw new Error('platform-web: no baseUrl and no page origin');
-      const fetch = webFetch(options.devBearer);
+      const fetch = webFetch(options.devBearer, options.token);
       const platform: PlatformService = {
         kind: 'web',
         fetch,

@@ -7,9 +7,16 @@
 // which keeps a plugin's bundle to the services it uses.
 
 export * as approvals from './gen/loams/approvals/v1/approvals_pb.js';
+export * as collection from './gen/loams/collection/v1/collection_pb.js';
+export * as documents from './gen/loams/collection/v1/document_pb.js';
+export * as query from './gen/loams/collection/v1/query_pb.js';
 export * as devices from './gen/loams/devices/v1/devices_pb.js';
 export * as errors from './gen/loams/errors/v1/errors_pb.js';
+export * as graph from './gen/loams/graph/v1/graph_pb.js';
+export * as house from './gen/loams/house/v1/house_pb.js';
 export * as instance from './gen/loams/instance/v1/instance_pb.js';
+export * as live from './gen/loams/live/v1/live_pb.js';
+export * as liveValue from './gen/loams/live/v1/value_pb.js';
 export * as notifications from './gen/loams/notifications/v1/notifications_pb.js';
 export * as operations from './gen/loams/operations/v1/operations_pb.js';
 // loams.options.v1 is not a wire surface: it declares no message a client

@@ -47,7 +47,7 @@ impl QueryStats {
     /// The storage counters are progress and take the newest block's value; the
     /// result counters accumulate, because a result arrives in pieces and the
     /// summary wants the total.
-    fn absorb(&mut self, block: &ffi::Block) {
+    pub(crate) fn absorb(&mut self, block: &ffi::Block) {
         self.result_rows += block.rows_read;
         self.result_bytes += block.bytes_read;
         self.rows_read = block.storage_rows_read;

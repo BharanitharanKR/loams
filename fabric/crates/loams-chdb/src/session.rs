@@ -9,11 +9,12 @@
 //!
 //! Two measured facts shape the rest of it:
 //!
-//! * **`chdb_connect` refuses a second connection whose arguments differ from the
-//!   first one's** — the second call returns null. A session therefore takes the
-//!   engine's arguments unchanged, and settings cannot be connection arguments even
-//!   though the header says query-level settings are applied at connect. They are
-//!   applied per statement instead, as a `SET` before each one.
+//! * **`chdb_connect` refuses a second connection whose server-level arguments
+//!   differ from the first one's** — the second call returns null. A session
+//!   therefore takes the engine's arguments, and its [`Settings`] are applied per
+//!   statement, as a `SET` before each one. Differing *query-level* arguments are
+//!   accepted (HS1 R1.9), which [`crate::Engine::session_with_args`] uses for the
+//!   House worker's `--readonly=2` user connection.
 //! * **A cancellation spends the connection it happened on.** After
 //!   `chdb_stream_cancel_query`, the next streaming statement on that connection
 //!   answers `"No active streaming query"`, with no code and no way to recover the
@@ -27,19 +28,19 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use loams_chdb_sys::ffi;
 
 use crate::arrow::{ArrowHandle, ArrowStream, RecordBatchReader};
-use crate::engine::{EngineConfig, SessionId, Settings, engine_error};
+use crate::engine::{SessionId, Settings, engine_error};
 use crate::error::ChdbError;
-use crate::query::{self, QueryStream, Registry};
+use crate::query::{self, QueryStats, QueryStream, Registry};
 
 /// A session: one chDB connection, its own settings, its own statements.
 #[derive(Debug)]
 pub struct Session {
     id: SessionId,
     settings: Settings,
-    /// The arguments a connection of this session must be opened with, which are
-    /// the engine's own: a second `chdb_connect` with any other argument returns
-    /// null, Task 1 measured.
-    config: EngineConfig,
+    /// The arguments a connection of this session is opened with: the engine's
+    /// own, plus any query-level ones [`crate::Engine::session_with_args`] added
+    /// (HS1 R1.9). A reconnect after a cancellation uses the same ones.
+    args: Vec<String>,
     /// The session's connection, or `None` when a cancellation has spent it.
     connection: Mutex<Option<Arc<ffi::Connection>>>,
     registry: Arc<Registry>,
@@ -49,14 +50,14 @@ impl Session {
     /// Opens a session on a connection of its own.
     pub(crate) fn open(
         id: SessionId,
-        config: &EngineConfig,
+        args: Vec<String>,
         settings: &Settings,
     ) -> Result<Self, ChdbError> {
-        let connection = Arc::new(ffi::Connection::open(&config.to_args()).map_err(engine_error)?);
+        let connection = Arc::new(ffi::Connection::open(&args).map_err(engine_error)?);
         Ok(Self {
             id,
             settings: settings.clone(),
-            config: config.clone(),
+            args,
             connection: Mutex::new(Some(connection)),
             registry: Arc::new(Registry::default()),
         })
@@ -86,8 +87,7 @@ impl Session {
         if let Some(connection) = guard.as_ref() {
             return Ok(Arc::clone(connection));
         }
-        let connection =
-            Arc::new(ffi::Connection::open(&self.config.to_args()).map_err(engine_error)?);
+        let connection = Arc::new(ffi::Connection::open(&self.args).map_err(engine_error)?);
         *guard = Some(Arc::clone(&connection));
         Ok(connection)
     }
@@ -140,10 +140,74 @@ impl Session {
         ))
     }
 
+    /// Runs a statement and returns its whole result at once.
+    ///
+    /// For the statements chDB refuses to stream — DDL such as `CREATE TEMPORARY
+    /// TABLE` answers `36` "Streaming query is not supported" through
+    /// `chdb_stream_query` (HS1 Task 2) — whose result is small or empty.
+    pub fn query(
+        &self,
+        sql: &str,
+        format: &str,
+        params: &[(String, String)],
+    ) -> Result<Vec<u8>, ChdbError> {
+        let connection = self.connection()?;
+        Self::apply_settings_of(&connection, &self.settings)?;
+        connection.query(sql, format, params).map_err(engine_error)
+    }
+
+    /// [`Session::query`] with the result's counters.
+    ///
+    /// The House's HTTP interface uses it for the formats a result must be
+    /// formatted whole for (HS1 R8.12): one output format sees every block, so a
+    /// `JSON` result is one document, where the streaming ABI formats each block on
+    /// its own (R8.4).
+    pub fn query_with_stats(
+        &self,
+        sql: &str,
+        format: &str,
+        params: &[(String, String)],
+    ) -> Result<(Vec<u8>, QueryStats), ChdbError> {
+        let connection = self.connection()?;
+        Self::apply_settings_of(&connection, &self.settings)?;
+        let block = connection
+            .query_block(sql, format, params)
+            .map_err(engine_error)?;
+        let mut stats = QueryStats::default();
+        stats.absorb(&block);
+        Ok((block.bytes, stats))
+    }
+
+    /// Classifies `sql` with ClickHouse's own parser, without running it (HS1
+    /// Task 4, FL2 Ruling 6).
+    pub fn classify(&self, sql: &str) -> Result<Analysis, ChdbError> {
+        let raw = self.connection()?.classify(sql).map_err(engine_error)?;
+        Ok(Analysis {
+            class: QueryClass::from_raw(raw.class),
+            statements: raw.statements,
+            flags: raw.flags,
+        })
+    }
+
     /// Runs a statement that produces no rows: `SET`, `USE`, and the `SET`s this
     /// session applies to itself.
     pub fn execute_simple(&self, sql: &str) -> Result<(), ChdbError> {
         self.connection()?.execute(sql).map_err(engine_error)
+    }
+
+    /// Begins a streaming `INSERT` on this session's connection (HS1 R1.7).
+    ///
+    /// `insert` is the statement without `FORMAT` or data (`INSERT INTO t`), and
+    /// `format` the body's format. The body goes in with [`InsertStream::append`]
+    /// in chunks of any size, and [`InsertStream::finish`] commits it. The
+    /// connection runs nothing else until the stream is finished or dropped.
+    pub fn insert(&self, insert: &str, format: &str) -> Result<InsertStream, ChdbError> {
+        let connection = self.connection()?;
+        Self::apply_settings_of(&connection, &self.settings)?;
+        let inner = connection
+            .insert_stream(insert, format)
+            .map_err(engine_error)?;
+        Ok(InsertStream { inner })
     }
 
     /// Runs a query and streams the result as Arrow record batches.
@@ -271,4 +335,63 @@ impl Session {
         }
         Ok(())
     }
+}
+
+/// A streaming `INSERT` body: see [`Session::insert`].
+#[derive(Debug)]
+pub struct InsertStream {
+    inner: ffi::InsertStream,
+}
+
+/// What a finished `INSERT` wrote.
+pub use loams_chdb_sys::ffi::InsertSummary;
+
+impl InsertStream {
+    /// Appends a chunk of the body; the library copies it.
+    pub fn append(&mut self, data: &[u8]) -> Result<(), ChdbError> {
+        self.inner.append(data).map_err(engine_error)
+    }
+
+    /// Ends the body and commits it.
+    pub fn finish(self) -> Result<InsertSummary, ChdbError> {
+        self.inner.finish().map_err(engine_error)
+    }
+}
+
+/// ClickHouse's class of a statement: what it does to state that outlives it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QueryClass {
+    /// `SELECT`, `SHOW`, `DESCRIBE`, `EXPLAIN`, `EXISTS`, `CHECK`.
+    ReadOnly,
+    /// `INSERT`, `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `RENAME`, `OPTIMIZE`, …
+    Mutating,
+    /// Functions, named collections, access management, `system` writes.
+    MutatingGlobal,
+    /// `USE`, `SET`, `SYSTEM`, `KILL`, `INTO OUTFILE`, `INSERT INTO FUNCTION`, …
+    Control,
+    /// Did not parse.
+    Unknown,
+}
+
+impl QueryClass {
+    fn from_raw(raw: u32) -> Self {
+        match raw {
+            0 => Self::ReadOnly,
+            1 => Self::Mutating,
+            2 => Self::MutatingGlobal,
+            3 => Self::Control,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+/// What [`Session::classify`] reports.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Analysis {
+    /// The class.
+    pub class: QueryClass,
+    /// Executable statements (0 when it does not parse).
+    pub statements: u32,
+    /// `chdb_query_analysis_flag`s.
+    pub flags: u32,
 }

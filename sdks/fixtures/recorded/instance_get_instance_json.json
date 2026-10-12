@@ -15,12 +15,13 @@
       "content-type": "application/json"
     },
     "body": {
-      "instanceId": "01M41B4RP8BR7444NE7D61S0HN",
+      "instanceId": "01M4Q3ZVB5412VVG42XWRJGSJB",
       "name": "Loams",
       "edition": "EDITION_OSS",
       "serverVersion": "0.0.1",
       "apiVersions": [
-        "loams.instance.v1"
+        "loams.instance.v1",
+        "loams.collection.v1"
       ],
       "signInMethods": [
         {
@@ -38,10 +39,38 @@
           ]
         },
         {
+          "package": "loams.collection.v1",
+          "version": "v1",
+          "available": true,
+          "services": [
+            "loams.collection.v1.NamespaceService",
+            "loams.collection.v1.CollectionService",
+            "loams.collection.v1.DocumentService",
+            "loams.collection.v1.QueryService"
+          ]
+        },
+        {
           "package": "loams.live.v1",
           "version": "v1",
           "services": [
             "loams.live.v1.LiveService"
+          ],
+          "unstable": true
+        },
+        {
+          "package": "loams.graph.v1",
+          "version": "v1",
+          "services": [
+            "loams.graph.v1.GraphAdminService",
+            "loams.graph.v1.GraphService"
+          ],
+          "unstable": true
+        },
+        {
+          "package": "loams.house.v1",
+          "version": "v1",
+          "services": [
+            "loams.house.v1.HouseService"
           ],
           "unstable": true
         }

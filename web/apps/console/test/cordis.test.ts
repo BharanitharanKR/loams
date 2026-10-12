@@ -35,7 +35,9 @@ const navLabels = (root: HTMLElement) =>
 describe('the cordis console', () => {
   it('boots the oss catalog and renders the first-party pages', async () => {
     const { root, handle } = await start();
-    await waitFor(() => expect(navLabels(root)).toEqual(['Status', 'Namespaces', 'Approvals']));
+    await waitFor(() =>
+      expect(navLabels(root)).toEqual(['Status', 'Namespaces', 'Deployments', 'Approvals']),
+    );
     const status = Object.fromEntries(handle.plugins().map((p) => [p.id, p.status]));
     expect(status).toMatchObject({
       shell: 'active',
@@ -44,6 +46,7 @@ describe('the cordis console', () => {
       'stack-status': 'active',
       namespaces: 'active',
       approvals: 'active',
+      deployments: 'active',
       hello: 'skipped',
     });
     expect(handle.plugins().find((p) => p.id === 'hello')?.tier).toBe('third-party');
@@ -59,13 +62,13 @@ describe('the cordis console', () => {
     window.location.hash = '#/namespaces';
     window.dispatchEvent(new HashChangeEvent('hashchange'));
     await waitFor(() => expect(root.textContent).toContain('search-prod'));
-  });
+  }, 20_000); // the whole oss catalog boots here; a cold macOS runner needs over 5 s
 
   it('disabling a plugin removes its page and nav entry without a reload', async () => {
     const { root, handle } = await start();
     await waitFor(() => expect(navLabels(root)).toContain('Approvals'));
     await handle.disable('approvals');
-    await waitFor(() => expect(navLabels(root)).toEqual(['Status', 'Namespaces']));
+    await waitFor(() => expect(navLabels(root)).toEqual(['Status', 'Namespaces', 'Deployments']));
     expect(root.querySelector('.lc-chip')).toBeNull();
   });
 

@@ -23,6 +23,13 @@ allow = [
 ]
 confidence-threshold = 0.9
 unused-allowed-license = "allow"
+# The desktop agent daemon (design §50 §4.1, DD1 plan T0-4, T0-10a): the code
+# moved from the zeron fork into crates/loams-agentd* is MIT, except
+# loams-agentd-link (Apache-2.0, Loams-authored). Its new dependencies need no
+# entry beyond the list above: CC0-1.0 (notify), MPL-2.0 (nucleo-matcher) and
+# MPL-2.0+ (im, bitmaps and sized-chunks, through loro; the `+` is satisfied
+# by MPL-2.0, so no [[licenses.clarify]] is needed). `cargo deny check
+# licenses` passed on 2026-10-10 with no change here.
 
 # stringmetrics (via httpmock, dev tooling in loams-console-mock) states its
 # license only as a LICENSE file: Apache-2.0.
@@ -56,4 +63,7 @@ unknown-git = "deny"
 # tikv-client is pinned by rev to Loams's fork, branch `loam` (R1 plan rows R4
 # and F1). Resonate is pinned by rev to the fork's loam/0.10.1 (D1 plan Task
 # 1, D140).
+# The Neon fork is not allowed here: only crates/loams-wal-decoder, a
+# workspace of its own with its own deny.toml, may use it, and
+# scripts/pg2/check-decoder-deny.py fails if this lockfile names it.
 allow-git = ["https://github.com/ostrium-labs/client-rust", "https://github.com/ostrium-labs/resonate"]

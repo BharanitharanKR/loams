@@ -51,10 +51,9 @@ public struct InstanceModule: Sendable {
 
     /// Who the caller is on this instance.
     ///
-    /// **This build has no authentication yet**, so every variant refuses with
-    /// `reason = not_implemented`. That refusal is the recorded corpus's
-    /// `instance_who_am_i_*` case and is what R8's reason mapping is pinned
-    /// against.
+    /// A loopback `loams dev` with auth off admits the caller as the
+    /// `dev-loopback` principal; that answer is the recorded corpus's
+    /// `instance_who_am_i_*` case.
     public func whoAmI(options: CallOptions = .init()) async throws -> WhoAmIResponse {
         let binding = try loamsRequireBinding(module: "instance", call: "WhoAmI")
         return try await invoker.unary(

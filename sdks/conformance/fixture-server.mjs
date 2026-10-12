@@ -134,6 +134,72 @@ function expectedBody(step) {
     : Buffer.from(step.request.body, 'utf8');
 }
 
+/**
+ * Whether the request a client sent is the recorded one.
+ *
+ * Binary encodings must match byte for byte. A JSON body is compared as JSON:
+ * Go's protojson inserts whitespace that varies with the test binary on
+ * purpose (so nothing depends on its byte layout), and other JSON encoders
+ * may order or space fields differently. A framed JSON body (gRPC-Web or
+ * Connect streaming) is compared frame by frame: same flags, same JSON.
+ */
+function sameRequest(sent, expected, fam) {
+  if (sent.equals(expected)) {
+    return true;
+  }
+  const canonical = (bytes) => {
+    const text = bytes.toString('utf8').trim();
+    if (text === '') {
+      return '{}';
+    }
+    try {
+      return JSON.stringify(sortKeys(JSON.parse(text)));
+    } catch {
+      return undefined;
+    }
+  };
+  if (fam === 'json') {
+    const a = canonical(sent);
+    return a !== undefined && a === canonical(expected);
+  }
+  if (fam === 'grpc_web_json' || fam === 'connect_json') {
+    const frames = (bytes) => {
+      const out = [];
+      for (let at = 0; at + 5 <= bytes.length; ) {
+        const length = bytes.readUInt32BE(at + 1);
+        out.push([bytes[at], bytes.subarray(at + 5, at + 5 + length)]);
+        at += 5 + length;
+      }
+      return out;
+    };
+    const a = frames(sent);
+    const b = frames(expected);
+    return (
+      a.length === b.length &&
+      a.every(([flags, payload], i) => {
+        const c = canonical(payload);
+        return flags === b[i][0] && c !== undefined && c === canonical(b[i][1]);
+      })
+    );
+  }
+  return false;
+}
+
+/** A copy of a parsed JSON value with every object's keys in sorted order. */
+function sortKeys(value) {
+  if (Array.isArray(value)) {
+    return value.map(sortKeys);
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, sortKeys(value[key])]),
+    );
+  }
+  return value;
+}
+
 /** The response bytes a recorded step answered with. */
 function recordedBody(step) {
   return step.response.body === undefined
@@ -303,7 +369,7 @@ const server = createServer((request, response) => {
     // is the class of bug a recorded corpus exists to catch.
     const sent = Buffer.concat(chunks);
     const expected = expectedBody(step);
-    if (!sent.equals(expected)) {
+    if (!sameRequest(sent, expected, family(request.headers['content-type']))) {
       response.writeHead(400, { 'content-type': 'application/json' });
       response.end(
         JSON.stringify({

@@ -1,0 +1,441 @@
+#!/usr/bin/env python3
+"""The Loams Postgres pin file and every consumer generated from it (NF1 Task 2).
+
+    pins.py [--root DIR] check
+    pins.py [--root DIR] set [--from-release URL|PATH]
+    pins.py [--root DIR] rust
+
+`deploy/pins/loams-postgres-images.toml` names each image Loams runs by
+digest. The consumers repeat those references and are generated from it:
+
+- `x-neon-image` (images.storage) and `x-compute-image` (images.compute-v<default>)
+  in deploy/loams-postgres-dev/compose.yaml and deploy/loams-pg-bench/compose.yaml,
+  each still overridable by NEON_IMAGE / COMPUTE_IMAGE (PG2 R2.1; names kept, D823);
+- `PG_HEADERS_IMAGE` (images.storage) in pg2.yml, pg2-e2e.yml and loams-pg-bench.yml;
+- the image table between the `pins.py` markers in deploy/loams-postgres-dev/README.md;
+- crates/loams-postgres/src/majors.rs, once `rust` has created it.
+
+check  fails (exit 1) unless the pin file is valid and in pins.py's own layout,
+       every consumer equals it, every `mirror:` source has its audit file
+       (deploy/pins/audit/sha256-<hex>.json), and nothing outside the reference
+       places names a ghcr.io/ostrium-labs/neon-archive image (those packages
+       are private and never deployed; NF1 Task 1, controller ruling).
+set    validates the release's pin document (a TOML file in the pin file's
+       schema: a local path or an https URL, the asset Task 13 attaches to a
+       release), then rewrites the pin file and every consumer. Without
+       --from-release it re-renders them from the current pin file. A refused
+       document writes nothing.
+rust   writes crates/loams-postgres/src/majors.rs.
+
+Exit codes: 0 ok, 1 check or validation failure, 2 usage. Stdlib only.
+"""
+
+import argparse
+import re
+import subprocess
+import sys
+import tomllib
+import urllib.request
+from pathlib import Path
+
+PIN_FILE = "deploy/pins/loams-postgres-images.toml"
+AUDIT_DIR = "deploy/pins/audit"
+README = "deploy/loams-postgres-dev/README.md"
+MAJORS_RS = "crates/loams-postgres/src/majors.rs"
+COMPOSE = ("deploy/loams-postgres-dev/compose.yaml", "deploy/loams-pg-bench/compose.yaml")
+WORKFLOWS = (".github/workflows/pg2.yml", ".github/workflows/pg2-e2e.yml", ".github/workflows/loams-pg-bench.yml")
+
+HEADER = "# Written by scripts/nf1/pins.py (set); checked by pins.py (check). Do not edit by hand."
+README_BEGIN = "<!-- pins.py: begin images (generated from deploy/pins/loams-postgres-images.toml) -->"
+README_END = "<!-- pins.py: end images -->"
+
+# The neon-archive packages hold Neon's binaries with CDDL `inferno` and Neon's
+# private `subzero-core`: private for good, never deployed. Reference use only:
+# the design and plan history, the Task 1 scripts, the audits, a pin's `mirror:`
+# source (and the README's generated table, which shows it) and the README's
+# Mirror section.
+ARCHIVE = "ostrium-labs/neon-archive"
+ARCHIVE_REFERENCE_DIRS = ("docs/", "scripts/nf1/", AUDIT_DIR + "/")
+
+DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
+COMMIT = re.compile(r"[0-9a-f]{40}")
+RELEASE = re.compile(r"lp-\d{4}\.\d{2}\.\d+|mirror-[0-9a-f]{8}")
+REPOSITORY = re.compile(r"[a-z0-9.-]+(?:/[a-z0-9._-]+)+")
+IMAGE_KEY = re.compile(r"[a-z][a-z0-9-]*")  # storage, compute-v<N>, later build-tools
+FORK_SOURCE = re.compile(r"ostrium-labs/loams-postgres@[0-9a-f]{40}")
+FORK_REPOSITORY_PREFIX = "ghcr.io/ostrium-labs/loams-postgres-"
+MIRROR_SOURCE = re.compile(
+    r"mirror:(?P<repo>(?:ghcr\.io/neondatabase|ghcr\.io/ostrium-labs/neon-archive)/[a-z0-9._/-]+)@(?P<digest>sha256:[0-9a-f]{64})")
+MINOR = re.compile(r"(?P<major>\d+)\.\d+")
+IMAGE_FIELDS = ("repository", "digest", "source", "pg_minors", "pg_minor")
+MAJOR_LISTS = ("supported", "beta", "maintenance")
+
+
+class Refused(Exception):
+    pass
+
+
+# ---------------------------------------------------------------- validation
+
+def validate(pins, root):
+    """Every reason the pin document is unusable, as messages."""
+    errs = []
+    if pins.get("schema") != 1:
+        errs.append("schema must be 1")
+    unknown = set(pins) - {"schema", "fork_release", "fork_commit", "majors", "images"}
+    if unknown:
+        errs.append(f"unknown top-level keys: {sorted(unknown)}")
+    if not isinstance(pins.get("fork_release"), str) or not RELEASE.fullmatch(pins["fork_release"]):
+        errs.append("fork_release must be lp-YYYY.MM.N or mirror-<8 hex>")
+    if not isinstance(pins.get("fork_commit"), str) or not COMMIT.fullmatch(pins["fork_commit"]):
+        errs.append("fork_commit must be 40 hex characters")
+
+    majors = pins.get("majors")
+    listed = []
+    if not isinstance(majors, dict):
+        errs.append("[majors] is missing")
+        majors = {}
+    else:
+        unknown = set(majors) - set(MAJOR_LISTS) - {"default"}
+        if unknown:
+            errs.append(f"unknown [majors] keys: {sorted(unknown)}")
+        for name in MAJOR_LISTS:
+            v = majors.get(name)
+            if not isinstance(v, list) or not all(type(m) is int for m in v):
+                errs.append(f"majors.{name} must be a list of integers")
+            else:
+                listed += v
+        if len(listed) != len(set(listed)):
+            errs.append("a major is in more than one of majors.supported, beta and maintenance")
+        if type(majors.get("default")) is not int or majors.get("default") not in (majors.get("supported") or []):
+            errs.append("majors.default must be one of majors.supported")
+
+    images = pins.get("images")
+    if not isinstance(images, dict) or not images:
+        errs.append("[images] is missing")
+        return errs
+    for key, img in images.items():
+        where = f"images.{key}"
+        if not IMAGE_KEY.fullmatch(key):
+            errs.append(f"{where}: bad image key")
+        if not isinstance(img, dict):
+            errs.append(f"{where} must be a table")
+            continue
+        errs += [f"{where}: unknown key {k!r}" for k in img if k not in IMAGE_FIELDS]
+        repo, digest, source = img.get("repository"), img.get("digest"), img.get("source")
+        if not isinstance(repo, str) or not REPOSITORY.fullmatch(repo):
+            errs.append(f"{where}.repository must be a repository without tag or digest")
+            repo = ""
+        elif ARCHIVE in repo:
+            errs.append(f"{where}.repository {repo}: the neon-archive packages are never deployed")
+        if not isinstance(digest, str) or not DIGEST.fullmatch(digest):
+            errs.append(f"{where}.digest must be sha256: and 64 hex characters, got {digest!r}")
+        if not isinstance(source, str):
+            errs.append(f"{where}.source is missing")
+        elif FORK_SOURCE.fullmatch(source):
+            if not repo.startswith(FORK_REPOSITORY_PREFIX):
+                errs.append(f"{where}: a fork source needs a {FORK_REPOSITORY_PREFIX}* repository")
+        elif m := MIRROR_SOURCE.fullmatch(source):
+            if m["digest"] != digest:
+                errs.append(f"{where}.source: a mirror keeps the digest; {m['digest']} is not {digest}")
+            audit = Path(root, AUDIT_DIR, m["digest"].replace(":", "-") + ".json")
+            if not audit.is_file():
+                errs.append(f"{where}.source: no audit file {AUDIT_DIR}/{audit.name}; audit before pinning a mirror")
+        else:
+            errs.append(f"{where}.source must be ostrium-labs/loams-postgres@<40 hex> or mirror:<ghcr.io/neondatabase|neon-archive repo>@<digest>")
+        if "pg_minors" in img:
+            minors = img["pg_minors"]
+            if not isinstance(minors, dict) or not all(isinstance(v, str) and (m := MINOR.fullmatch(v)) and m["major"] == k
+                                                       for k, v in minors.items()):
+                errs.append(f"{where}.pg_minors must map \"<major>\" to \"<major>.<minor>\"")
+        if "pg_minor" in img:
+            m = MINOR.fullmatch(str(img["pg_minor"]))
+            if not (isinstance(img["pg_minor"], str) and m and key == f"compute-v{m['major']}"):
+                errs.append(f"{where}.pg_minor must be \"<N>.<minor>\" on images.compute-v<N>")
+
+    storage = images.get("storage")
+    if not isinstance(storage, dict):
+        errs.append("images.storage is missing")
+        storage = {}
+    storage_minors = storage.get("pg_minors") if isinstance(storage.get("pg_minors"), dict) else {}
+    for major in listed:
+        if str(major) not in storage_minors:
+            errs.append(f"major {major}: images.storage.pg_minors has no \"{major}\"")
+        compute = images.get(f"compute-v{major}")
+        if not isinstance(compute, dict):
+            errs.append(f"major {major}: no images.compute-v{major}")
+        elif compute.get("pg_minor") != storage_minors.get(str(major)):
+            errs.append(f"major {major}: images.compute-v{major}.pg_minor differs from images.storage.pg_minors")
+    return errs
+
+
+# ----------------------------------------------------------------- rendering
+
+def q(s):
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def image_order(images):
+    def key(k):
+        if k == "storage":
+            return (0, 0, k)
+        if m := re.fullmatch(r"compute-v(\d+)", k):
+            return (1, int(m[1]), k)
+        return (2, 0, k)
+    return sorted(images, key=key)
+
+
+def render_pins(pins):
+    mj = pins["majors"]
+    out = [HEADER, "schema = 1", f"fork_release = {q(pins['fork_release'])}", f"fork_commit = {q(pins['fork_commit'])}",
+           "", "[majors]"]
+    out += [f"{name} = [{', '.join(str(m) for m in mj[name])}]" for name in MAJOR_LISTS]
+    out.append(f"default = {mj['default']}")
+    for key in image_order(pins["images"]):
+        img = pins["images"][key]
+        out += ["", f"[images.{key}]", f"repository = {q(img['repository'])}", f"digest = {q(img['digest'])}",
+                f"source = {q(img['source'])}"]
+        if "pg_minors" in img:
+            minors = sorted(img["pg_minors"].items(), key=lambda kv: int(kv[0]))
+            out.append("pg_minors = { " + ", ".join(f"{q(k)} = {q(v)}" for k, v in minors) + " }")
+        if "pg_minor" in img:
+            out.append(f"pg_minor = {q(img['pg_minor'])}")
+    return "\n".join(out) + "\n"
+
+
+def ref(img):
+    return f"{img['repository']}@{img['digest']}"
+
+
+def consumer_lines(pins):
+    """(path, pattern of the generated line, the line) for each line consumer."""
+    storage = ref(pins["images"]["storage"])
+    compute = ref(pins["images"][f"compute-v{pins['majors']['default']}"])
+    lines = []
+    for path in COMPOSE:
+        lines.append((path, r"^x-neon-image: &neon-image \$\{NEON_IMAGE:-[^}\n]*\}$",
+                      "x-neon-image: &neon-image ${NEON_IMAGE:-" + storage + "}"))
+        lines.append((path, r"^x-compute-image: &compute-image \$\{COMPUTE_IMAGE:-[^}\n]*\}$",
+                      "x-compute-image: &compute-image ${COMPUTE_IMAGE:-" + compute + "}"))
+    for path in WORKFLOWS:
+        lines.append((path, r"^(?P<indent>[ ]+)PG_HEADERS_IMAGE: \S+$", "PG_HEADERS_IMAGE: " + storage))
+    return lines
+
+
+def render_readme_block(pins):
+    out = [README_BEGIN,
+           f"Pinned in [`{PIN_FILE}`](../pins/loams-postgres-images.toml): `fork_release` "
+           f"`{pins['fork_release']}`, `fork_commit` `{pins['fork_commit']}`.",
+           "",
+           "| Pin | Image (multi-arch index) | Source | Postgres |",
+           "|---|---|---|---|"]
+    for key in image_order(pins["images"]):
+        img = pins["images"][key]
+        if "pg_minors" in img:
+            pg = ", ".join(v for _, v in sorted(img["pg_minors"].items(), key=lambda kv: int(kv[0])))
+        else:
+            pg = img.get("pg_minor", "")
+        out.append(f"| `{key}` | `{ref(img)}` | `{img['source']}` | {pg} |")
+    mj = pins["majors"]
+    out += ["", "Postgres majors: " + "; ".join(
+        f"{name} {', '.join(str(m) for m in mj[name]) or 'none'}" for name in MAJOR_LISTS) + f"; default {mj['default']}.",
+        README_END]
+    return "\n".join(out)
+
+
+def render_rust(pins):
+    mj = pins["majors"]
+
+    def arr(v):
+        return "&[" + ", ".join(str(m) for m in v) + "]"
+    return "\n".join([
+        "//! Postgres majors Loams Postgres serves, from deploy/pins/loams-postgres-images.toml.",
+        "//!",
+        "//! Generated by `scripts/nf1/pins.py rust`; do not edit by hand.",
+        "",
+        "/// Majors new projects may use.",
+        f"pub const SUPPORTED: &[u32] = {arr(mj['supported'])};",
+        "/// Majors that need `allow_beta_major`.",
+        f"pub const BETA: &[u32] = {arr(mj['beta'])};",
+        "/// Majors kept for minors and exports only; no new projects.",
+        f"pub const MAINTENANCE: &[u32] = {arr(mj['maintenance'])};",
+        "/// The major for new projects and new desktop tenants.",
+        f"pub const DEFAULT: u32 = {mj['default']};",
+        ""])
+
+
+def generate(root, pins):
+    """{path: wanted text} for the pin file and every consumer, or Refused."""
+    wanted = {PIN_FILE: render_pins(pins)}
+    for path, pattern, line in consumer_lines(pins):
+        text = wanted.get(path)
+        if text is None:
+            text = read(root, path)
+        matches = list(re.finditer(pattern, text, re.M))
+        if len(matches) != 1:
+            raise Refused(f"{path}: expected one line matching {pattern!r}, found {len(matches)}")
+        m = matches[0]
+        indent = m.groupdict().get("indent") or ""
+        wanted[path] = text[:m.start()] + indent + line + text[m.end():]
+    text = read(root, README)
+    begin, end = text.find(README_BEGIN), text.find(README_END)
+    if begin < 0 or end < begin or text.count(README_BEGIN) != 1 or text.count(README_END) != 1:
+        raise Refused(f"{README}: expected one pins.py begin/end marker pair")
+    wanted[README] = text[:begin] + render_readme_block(pins) + text[end + len(README_END):]
+    if Path(root, MAJORS_RS).is_file():
+        wanted[MAJORS_RS] = render_rust(pins)
+    return wanted
+
+
+# --------------------------------------------------------------------- files
+
+def read(root, path):
+    p = Path(root, path)
+    if not p.is_file():
+        raise Refused(f"{path}: missing")
+    return p.read_text()
+
+
+def load_toml(text, origin):
+    try:
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        raise Refused(f"{origin}: {e}") from None
+
+
+def fetch(src):
+    """The release's pin document: an https URL (checked in main) or a local path."""
+    if src.startswith("https://"):
+        with urllib.request.urlopen(src, timeout=60) as resp:  # noqa: S310 (https only)
+            return resp.read().decode()
+    return Path(src).read_text()
+
+
+def archive_refs(root):
+    """Files outside the reference places that name a neon-archive package."""
+    root = Path(root)
+    if (root / ".git").exists():
+        r = subprocess.run(["git", "-C", str(root), "grep", "-l", "-z", "-F", ARCHIVE],
+                           capture_output=True, check=False)
+        if r.returncode not in (0, 1):
+            raise Refused(f"git grep failed: {r.stderr.decode(errors='replace').strip()}")
+        paths = [p for p in r.stdout.decode().split("\0") if p]
+    else:
+        paths = []
+        for p in sorted(root.rglob("*")):
+            if p.is_file():
+                try:
+                    if ARCHIVE in p.read_text():
+                        paths.append(p.relative_to(root).as_posix())
+                except UnicodeDecodeError:
+                    pass
+    bad = []
+    for path in paths:
+        if path.startswith(ARCHIVE_REFERENCE_DIRS) or path == PIN_FILE:
+            continue  # the pin file's repositories are checked by validate()
+        if path == README:
+            # The Mirror section, and the generated table (a pin's `mirror:` source).
+            outside = (root / path).read_text()
+            for pattern in (r"^## Mirror\n.*?(?=^## |\Z)", re.escape(README_BEGIN) + ".*?" + re.escape(README_END)):
+                outside = re.sub(pattern, "", outside, count=1, flags=re.M | re.S)
+            if ARCHIVE not in outside:
+                continue
+        bad.append(path)
+    return bad
+
+
+# ------------------------------------------------------------------ commands
+
+def cmd_check(root):
+    errs = []
+    try:
+        text = read(root, PIN_FILE)
+        pins = load_toml(text, PIN_FILE)
+    except Refused as e:
+        print(f"pins.py check: {e}", file=sys.stderr)
+        return 1
+    errs += [f"{PIN_FILE}: {e}" for e in validate(pins, root)]
+    if not errs:
+        try:
+            for path, want in generate(root, pins).items():
+                if read(root, path) != want:
+                    what = "is not in pins.py's layout (run pins.py set)" if path == PIN_FILE else \
+                        "differs from the pin file (run pins.py set)"
+                    errs.append(f"{path}: {what}")
+        except Refused as e:
+            errs.append(str(e))
+    try:
+        errs += [f"{p}: names {ARCHIVE}, whose images are never deployed (reference use only: "
+                 f"{', '.join(ARCHIVE_REFERENCE_DIRS)}, mirror: sources, the README's Mirror section)"
+                 for p in archive_refs(root)]
+    except Refused as e:
+        errs.append(str(e))
+    for e in errs:
+        print(f"pins.py check: {e}", file=sys.stderr)
+    if not errs:
+        print(f"pins.py check: ok ({PIN_FILE}, {len(COMPOSE) + len(WORKFLOWS) + 1} consumers)")
+    return 1 if errs else 0
+
+
+def cmd_set(root, src):
+    try:
+        if src is None:
+            pins = load_toml(read(root, PIN_FILE), PIN_FILE)
+        else:
+            try:
+                text = fetch(src)
+            except OSError as e:
+                raise Refused(f"{src}: {e}") from None
+            pins = load_toml(text, src)
+        errs = validate(pins, root)
+        if errs:
+            raise Refused("; ".join(errs))
+        wanted = generate(root, pins)
+    except Refused as e:
+        print(f"pins.py set: refused, nothing written: {e}", file=sys.stderr)
+        return 1
+    for path, text in wanted.items():
+        p = Path(root, path)
+        if not p.is_file() or p.read_text() != text:
+            p.write_text(text)
+            print(f"pins.py set: wrote {path}")
+    return 0
+
+
+def cmd_rust(root):
+    try:
+        pins = load_toml(read(root, PIN_FILE), PIN_FILE)
+        errs = validate(pins, root)
+        if errs:
+            raise Refused("; ".join(errs))
+    except Refused as e:
+        print(f"pins.py rust: {e}", file=sys.stderr)
+        return 1
+    p = Path(root, MAJORS_RS)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(render_rust(pins))
+    print(f"pins.py rust: wrote {MAJORS_RS}")
+    return 0
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(prog="pins.py", description=__doc__.split("\n\n")[0])
+    ap.add_argument("--root", default=str(Path(__file__).resolve().parents[2]), help="repository root")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("check")
+    s = sub.add_parser("set")
+    s.add_argument("--from-release", metavar="URL|PATH")
+    sub.add_parser("rust")
+    args = ap.parse_args(argv)
+    if args.cmd == "check":
+        return cmd_check(args.root)
+    if args.cmd == "set":
+        if args.from_release and re.match(r"[a-z][a-z0-9+.-]*://", args.from_release) \
+                and not args.from_release.startswith("https://"):
+            ap.error("--from-release: only https URLs or local paths")
+        return cmd_set(args.root, args.from_release)
+    return cmd_rust(args.root)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

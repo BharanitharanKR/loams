@@ -6,19 +6,36 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-# loams-tikv depends on tikv-client by git (R1 plan row R4), which crates.io
-# refuses.
+# loams-kv's tikv backend depends on tikv-client by git (R1 plan row R4),
+# which crates.io refuses.
 publish = false
 
 [dependencies]
+# The sync API's listener (Task 12); `http2` serves HTTP/2 cleartext beside
+# HTTP/1.1.
+axum = { workspace = true, features = ["http2"] }
 buffa.workspace = true
+# A deployment's bundle on its way to and from the bundle store (LV1 Task 6).
+bytes.workspace = true
+# The connect-rust server of the sync API, mounted on axum (Task 12).
+connectrpc = { workspace = true, features = ["axum"] }
 crc.workspace = true
 data-encoding.workspace = true
 futures.workspace = true
+# The tag of a pagination cursor (LV1 Task 4).
+hmac.workspace = true
 loams-live-proto.workspace = true
-loams-tikv.workspace = true
+# The store seam (LV1 Task 20): the embedded store always, TiKV with the
+# `tikv` feature (LV1 plan Task 23).
+loams-kv.workspace = true
+# The bundle store: a deployment's bundle at
+# `live/<app>/deployments/<id>.js` (R1 plan Ruling 10; LV1 Task 6).
+loams-store.workspace = true
 # The OS random source for document ids (rand's OsRng).
 rand.workspace = true
+# The reactive checker's seeded streams (testing::checker): ChaCha8, stable
+# across platforms and rand releases.
+rand_chacha.workspace = true
 # The idempotency key hash (design §20 §4.3).
 sha2.workspace = true
 thiserror.workspace = true
@@ -26,11 +43,31 @@ tokio.workspace = true
 # CancellationToken for the subscription manager (Task 11).
 tokio-util.workspace = true
 tracing.workspace = true
+# Deployment ids (design §45 §3.3; LV1 Task 6).
+ulid.workspace = true
+
+[features]
+# Live on TiKV: `StoreConfig::Tikv`, `LiveConfig::{on_tikv, with_tikv}` and
+# the TiKV cases of `live_test!` (LV1 plan Task 23). It pulls in the
+# git-pinned tikv-client.
+tikv = ["loams-kv/tikv"]
 
 [dev-dependencies]
-# The lost-acknowledgement tests put a FaultPlan on the handle.
-loams-tikv = { workspace = true, features = ["faults"] }
+# The generated LiveServiceClient over connect-rust's HTTP client (Task 12's
+# service tests).
+connectrpc = { workspace = true, features = ["axum", "client"] }
+loams-live-proto = { workspace = true, features = ["client"] }
+# The lost-acknowledgement tests put a FaultPlan on the store.
+loams-kv = { workspace = true, features = ["tikv", "faults"] }
+# The suites run the TiKV cases too (with LOAMS_TEST_PD).
+loams-live = { path = ".", features = ["tikv"] }
 proptest.workspace = true
+# The deploy suite loads real bundles (LV1 Task 6). A dev-dependency cycle:
+# loams-live-js depends on this crate, and the integration tests link both.
+loams-live-js.workspace = true
+# The transaction checker's Elle-style list-append checker (LV1 plan Task 2),
+# without the simulation it sits beside.
+loams-sim = { path = "../loams-sim", default-features = false }
 
 [lints]
 workspace = true

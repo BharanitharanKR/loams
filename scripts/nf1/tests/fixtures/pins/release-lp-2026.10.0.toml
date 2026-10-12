@@ -1,0 +1,24 @@
+# A release's pin asset (Task 13 attaches it to lp-YYYY.MM.N), in the pin
+# file's schema. The layout here is deliberately not pins.py's own, so `set`
+# has to re-render it.
+schema = 1
+fork_commit = "0123456789abcdef0123456789abcdef01234567"
+fork_release = "lp-2026.10.0"
+
+[images.compute-v17]
+pg_minor = "17.5"
+source = "ostrium-labs/loams-postgres@0123456789abcdef0123456789abcdef01234567"
+digest = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+repository = "ghcr.io/ostrium-labs/loams-postgres-compute-v17"
+
+[images.storage]
+repository = "ghcr.io/ostrium-labs/loams-postgres-storage"
+digest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+source = "ostrium-labs/loams-postgres@0123456789abcdef0123456789abcdef01234567"
+pg_minors = {"17" = "17.5"}
+
+[majors]
+default = 17
+supported = [ 17 ]
+beta = []
+maintenance = []

@@ -5,16 +5,25 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join } from 'node:path';
 import { after, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { loadRuntimeConfig, parseRuntimeConfig } from '../src/runtime-config.ts';
+import {
+  DEFAULT_SCOPE,
+  loadRuntimeConfig,
+  offeredModes,
+  parseRuntimeConfig,
+} from '../src/runtime-config.ts';
+import { hostedConfig } from './config.mjs';
 import { assetUrls, isJavaScript, smoke } from './smoke.mjs';
 import {
   checkBase,
+  checkVercelCsp,
+  connectSources,
   contentSecurityPolicy,
   headersFile,
   injectCsp,
   inlineScriptHashes,
   redirectsFile,
   stage,
+  TAILNET,
 } from './stage.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -34,6 +43,25 @@ const INDEX = `<!doctype html>
 </html>
 `;
 
+const CORDIS = INDEX.replace(/<script>[\s\S]*?<\/script>\n\s*/, '').replace(
+  'index-abc',
+  'cordis-abc',
+);
+const AUTH = { LOAMS_AUTH_ISSUER: 'https://auth.loams.dev', LOAMS_AUTH_CLIENT_ID: 'loams-console' };
+
+/** A console build: today's console, the cordis console, config and assets. */
+function fakeDist(dir) {
+  mkdirSync(join(dir, 'assets'), { recursive: true });
+  writeFileSync(join(dir, 'index.html'), INDEX);
+  writeFileSync(join(dir, 'cordis.html'), injectCsp(CORDIS, "connect-src 'self'"));
+  writeFileSync(join(dir, 'config.json'), '{}\n');
+  writeFileSync(join(dir, 'assets', 'index-abc.js'), 'export {};\n');
+  writeFileSync(join(dir, 'assets', 'index-abc.js.map'), '{}');
+  return dir;
+}
+
+const vercel = JSON.parse(readFileSync(join(console_, 'vercel.json'), 'utf8'));
+
 describe('wrangler.jsonc', () => {
   const text = readFileSync(join(console_, 'wrangler.jsonc'), 'utf8');
   const config = JSON.parse(text.replace(/^\s*\/\/.*$/gm, ''));
@@ -49,6 +77,133 @@ describe('wrangler.jsonc', () => {
     assert.equal(config.assets.not_found_handling, 'single-page-application');
     assert.equal(config.assets.html_handling, 'none', 'preserve exact sandbox paths and headers');
   });
+
+  test('a BYOC deploy (--env byoc) drops the console.loams.dev route for workers.dev', () => {
+    assert.deepEqual(config.env.byoc.routes, []);
+    assert.equal(config.env.byoc.workers_dev, true);
+    assert.equal(config.env.byoc.main, undefined);
+  });
+});
+
+describe('vercel.json', () => {
+  const all = vercel.headers.find((h) => h.source === '/(.*)').headers;
+  const header = (key) => all.find((h) => h.key === key)?.value;
+
+  test('builds from the workspace and publishes the staged Vercel output', () => {
+    assert.equal(vercel.framework, null);
+    assert.match(vercel.installCommand, /pnpm install --frozen-lockfile/);
+    assert.match(vercel.buildCommand, /stage\.mjs --target vercel$/);
+    assert.equal(vercel.outputDirectory, 'dist-vercel');
+  });
+
+  test('falls back to the console for unknown paths, never for assets', () => {
+    const [rule] = vercel.rewrites;
+    assert.equal(rule.destination, '/index.html');
+    const re = new RegExp(`^${rule.source.replace('(.*)', '.*')}$`);
+    assert.ok(re.test('/projects/p1'));
+    assert.ok(!re.test('/ui/assets/index-abc.js'));
+  });
+
+  test('sends a CSP without inline or eval scripts that admits the tailnet and the issuer', () => {
+    const csp = header('Content-Security-Policy');
+    assert.match(csp, /script-src 'self';/);
+    assert.doesNotMatch(csp, /unsafe-eval|script-src[^;]*unsafe-inline/);
+    assert.match(csp, /connect-src 'self' https:\/\/\*\.ts\.net https:\/\/auth\.loams\.dev;/);
+    assert.match(csp, /object-src 'none'/);
+    for (const key of [
+      'X-Content-Type-Options',
+      'Referrer-Policy',
+      'Strict-Transport-Security',
+      'X-Frame-Options',
+    ]) {
+      assert.ok(header(key), key);
+    }
+  });
+
+  test('the sandbox frame keeps its own policy and config.json is never cached', () => {
+    const frame = vercel.headers.find((h) => h.source === '/ui/sandbox/frame.html');
+    assert.match(frame.headers[0].value, /connect-src 'none'.*sandbox allow-scripts/);
+    const config = vercel.headers.find((h) => h.source === '/(ui/)?config.json');
+    assert.equal(config.headers[0].value, 'no-store');
+  });
+
+  test('the stage step refuses a config its static CSP would block', () => {
+    checkVercelCsp(vercel, connectSources(hostedConfig(AUTH)));
+    assert.throws(
+      () =>
+        checkVercelCsp(
+          vercel,
+          connectSources(hostedConfig({ ...AUTH, LOAMS_AUTH_ISSUER: 'https://id.example' })),
+        ),
+      /lacks https:\/\/id\.example/,
+    );
+  });
+});
+
+describe('hosted config', () => {
+  test('writes the engine, default mode, issuer and client id from the environment', () => {
+    assert.deepEqual(
+      hostedConfig({
+        ...AUTH,
+        LOAMS_ENGINE_URL: 'https://loams.tail1.ts.net/x',
+        LOAMS_AUTH_SCOPE: 'openid',
+      }),
+      {
+        hosted: true,
+        engineUrl: 'https://loams.tail1.ts.net',
+        // tailscale is the default mode; the client stays so oidc can be picked.
+        authMode: 'tailscale',
+        authIssuer: 'https://auth.loams.dev',
+        authClientId: 'loams-console',
+        authScope: 'openid',
+      },
+    );
+    // auth.loams.dev is the default issuer.
+    assert.deepEqual(
+      hostedConfig({ LOAMS_AUTH_MODE: 'OIDC', LOAMS_AUTH_CLIENT_ID: 'loams-console' }),
+      {
+        hosted: true,
+        authMode: 'oidc',
+        authIssuer: 'https://auth.loams.dev',
+        authClientId: 'loams-console',
+      },
+    );
+    // Without a client: tailscale and apikey only.
+    assert.deepEqual(hostedConfig({}), { hosted: true, authMode: 'tailscale' });
+    assert.deepEqual(hostedConfig({ LOAMS_AUTH_MODE: 'apikey' }), {
+      hosted: true,
+      authMode: 'apikey',
+    });
+    assert.equal(
+      hostedConfig({ LOAMS_CONSOLE_SERVER: 'https://a.example' }).engineUrl,
+      'https://a.example',
+    );
+    assert.equal(
+      hostedConfig({ ...AUTH, LOAMS_AUTH_ISSUER: 'https://id.example/realms/loams/' }).authIssuer,
+      'https://id.example/realms/loams',
+    );
+  });
+
+  test('refuses plain http off loopback, oidc without a client id, and an unknown mode', () => {
+    assert.throws(() => hostedConfig({ LOAMS_ENGINE_URL: 'http://loams.tail1.ts.net' }), /HTTPS/);
+    assert.throws(() => hostedConfig({ LOAMS_ENGINE_URL: 'not a url' }), /HTTPS/);
+    assert.equal(
+      hostedConfig({ LOAMS_ENGINE_URL: 'http://127.0.0.1:8080' }).engineUrl,
+      'http://127.0.0.1:8080',
+    );
+    assert.throws(() => hostedConfig({ LOAMS_AUTH_MODE: 'oidc' }), /LOAMS_AUTH_CLIENT_ID/);
+    assert.throws(
+      () => hostedConfig({ LOAMS_AUTH_ISSUER: 'https://a.example' }),
+      /without LOAMS_AUTH_CLIENT_ID/,
+    );
+    assert.throws(() => hostedConfig({ ...AUTH, LOAMS_AUTH_MODE: 'basic' }), /LOAMS_AUTH_MODE/);
+    // console.loams.dev requires the client, whatever the default mode.
+    assert.throws(
+      () => hostedConfig({}, { requireAuth: true }),
+      /this deploy needs LOAMS_AUTH_CLIENT_ID/,
+    );
+    assert.equal(hostedConfig(AUTH, { requireAuth: true }).authClientId, 'loams-console');
+  });
 });
 
 describe('stage', () => {
@@ -57,15 +212,22 @@ describe('stage', () => {
     assert.deepEqual(inlineScriptHashes(INDEX), [want]);
   });
 
-  test('the CSP allows the inline hash and the configured server, and nothing remote otherwise', () => {
+  test('the CSP allows the inline hash and the given sources, and nothing remote otherwise', () => {
     const csp = contentSecurityPolicy({
       scriptHashes: ["'sha256-x'"],
-      server: 'https://loams.example.com/path',
+      connect: connectSources({
+        engineUrl: 'https://loams.example.com/path',
+        authIssuer: 'https://auth.loams.dev/oidc',
+      }),
     });
     assert.match(csp, /script-src 'self' 'sha256-x'(;|$)/);
-    assert.match(csp, /connect-src 'self' https:\/\/loams\.example\.com(;|$)/);
+    assert.match(
+      csp,
+      /connect-src 'self' https:\/\/\*\.ts\.net https:\/\/loams\.example\.com https:\/\/auth\.loams\.dev(;|$)/,
+    );
     assert.doesNotMatch(csp, /unsafe-eval/);
     assert.match(contentSecurityPolicy(), /connect-src 'self'(;|$)/);
+    assert.deepEqual(connectSources(), ["'self'", TAILNET]);
   });
 
   test('hashes inline scripts with whitespace or attributes in their closing tag', () => {
@@ -94,87 +256,95 @@ describe('stage', () => {
     assert.match(h, /\/ui\/assets\/\*\n {2}Cache-Control: public, max-age=31536000, immutable/);
     assert.match(h, /\/ui\/config\.json\n {2}Cache-Control: no-store/);
     assert.match(h, /X-Content-Type-Options: nosniff/);
-    assert.equal(redirectsFile(), '/ /ui/ 302\n');
+    assert.equal(redirectsFile(), '/ui/ / 302\n/ui/index.html / 302\n');
   });
 
   const tmp = join(here, '.test-tmp');
   after(() => rmSync(tmp, { recursive: true, force: true }));
 
-  test('requires a server before altering files for a credentialed hosted deployment', () => {
-    const dist = join(tmp, 'missing-server-dist');
-    mkdirSync(dist, { recursive: true });
-    writeFileSync(join(dist, 'index.html'), INDEX);
-    writeFileSync(join(dist, 'config.json'), '{}\n');
-    const out = join(tmp, 'missing-server-out');
+  test('refuses a bad config before altering staged files', () => {
+    const dist = fakeDist(join(tmp, 'invalid-dist'));
+    const out = join(tmp, 'invalid-out');
     mkdirSync(out, { recursive: true });
     writeFileSync(join(out, 'sentinel'), 'keep');
-    assert.throws(() => stage({ dist, out, requireServer: true }), /LOAMS_CONSOLE_SERVER/);
+    for (const env of [
+      { LOAMS_ENGINE_URL: 'http://loams.example.com' },
+      { LOAMS_ENGINE_URL: 'javascript:alert(1)' },
+      { LOAMS_ENGINE_URL: 'not a url' },
+      { LOAMS_AUTH_ISSUER: 'https://auth.loams.dev' },
+      { LOAMS_AUTH_MODE: 'password' },
+    ]) {
+      assert.throws(() => stage({ dist, out, env }), /HTTPS|LOAMS_AUTH_CLIENT_ID|LOAMS_AUTH_MODE/);
+      assert.equal(readFileSync(join(out, 'sentinel'), 'utf8'), 'keep');
+    }
+    assert.throws(() => stage({ dist, out, env: {}, requireAuth: true }), /LOAMS_AUTH_CLIENT_ID/);
+    assert.throws(
+      () =>
+        stage({
+          dist,
+          out,
+          env: { ...AUTH, LOAMS_AUTH_ISSUER: 'https://id.example' },
+          target: 'vercel',
+          vercelJson: vercel,
+        }),
+      /vercel\.json/,
+    );
     assert.equal(readFileSync(join(out, 'sentinel'), 'utf8'), 'keep');
   });
 
-  test('rejects insecure or non-HTTP server configuration before altering staged files', () => {
-    const dist = join(tmp, 'invalid-dist');
-    const out = join(tmp, 'invalid-out');
-    mkdirSync(dist, { recursive: true });
-    mkdirSync(out, { recursive: true });
-    writeFileSync(join(dist, 'index.html'), INDEX);
-    writeFileSync(join(out, 'sentinel'), 'keep');
-    for (const server of ['http://loams.example.com', 'javascript:alert(1)', 'not a url']) {
-      assert.throws(() => stage({ dist, out, server }), /HTTPS/);
-      assert.equal(readFileSync(join(out, 'sentinel'), 'utf8'), 'keep');
-    }
-  });
+  test('serves the cordis console at the root with the runtime config and its CSP', () => {
+    const dist = fakeDist(join(tmp, 'dist'));
+    const out = join(tmp, 'out');
+    stage({ dist, out, env: { ...AUTH, LOAMS_ENGINE_URL: 'https://loams.tail1.ts.net/' } });
 
-  test('stages the existing cordis CSP with the configured server and opaque sandbox response', () => {
-    const dist = join(tmp, 'cordis-dist');
-    const out = join(tmp, 'cordis-out');
-    mkdirSync(dist, { recursive: true });
-    writeFileSync(join(dist, 'index.html'), INDEX);
-    writeFileSync(join(dist, 'cordis.html'), injectCsp(INDEX, "connect-src 'self'"));
-    stage({ dist, out, server: 'https://runtime.example' });
-    const cordis = readFileSync(join(out, 'ui', 'cordis.html'), 'utf8');
-    assert.match(cordis, /connect-src 'self' https:\/\/runtime\.example/);
-    assert.equal(cordis.match(/http-equiv="Content-Security-Policy"/g)?.length, 1);
+    assert.ok(existsSync(join(out, 'ui', 'assets', 'index-abc.js')));
+    const root = readFileSync(join(out, 'index.html'), 'utf8');
+    assert.equal(root, readFileSync(join(out, 'ui', 'cordis.html'), 'utf8'));
+    assert.match(root, /cordis-abc\.js/);
+    assert.equal(root.match(/http-equiv="Content-Security-Policy"/g)?.length, 1);
+    assert.match(
+      root,
+      /connect-src 'self' https:\/\/\*\.ts\.net https:\/\/loams\.tail1\.ts\.net https:\/\/auth\.loams\.dev/,
+    );
+    assert.match(root, /script-src 'self';/, 'the cordis console has no inline script');
+    const want = {
+      hosted: true,
+      engineUrl: 'https://loams.tail1.ts.net',
+      authMode: 'tailscale',
+      authIssuer: 'https://auth.loams.dev',
+      authClientId: 'loams-console',
+    };
+    assert.deepEqual(JSON.parse(readFileSync(join(out, 'config.json'), 'utf8')), want);
+    assert.deepEqual(JSON.parse(readFileSync(join(out, 'ui', 'config.json'), 'utf8')), want);
+    assert.equal(readFileSync(join(out, '.assetsignore'), 'utf8'), '*.map\n');
+    assert.ok(existsSync(join(out, '_headers')));
+    assert.equal(readFileSync(join(out, '_redirects'), 'utf8'), redirectsFile());
+
+    // The sandbox frame keeps its own response policy.
     const headers = readFileSync(join(out, '_headers'), 'utf8');
     const sandbox = headers.split('/ui/sandbox/frame.html\n')[1];
     assert.ok(sandbox, 'sandbox frame needs its own response policy');
-    assert.match(sandbox, /Content-Security-Policy: .*connect-src 'none'.*sandbox allow-scripts/);
     const frame = readFileSync(join(console_, '../../plugins/sandbox/static/frame.html'), 'utf8');
     const frameCsp = /Content-Security-Policy"\s+content="([^"]+)"/.exec(frame)?.[1];
     assert.ok(frameCsp);
     assert.ok(sandbox.includes(`Content-Security-Policy: ${frameCsp}; sandbox allow-scripts`));
+
+    // Without LOAMS_ENGINE_URL the console asks for the engine on first run.
+    stage({ dist, out, env: { LOAMS_AUTH_MODE: 'tailscale' } });
+    assert.deepEqual(JSON.parse(readFileSync(join(out, 'config.json'), 'utf8')), {
+      hosted: true,
+      authMode: 'tailscale',
+    });
   });
 
-  test('lays the build out under /ui with a root fallback page and runtime config', () => {
-    const dist = join(tmp, 'dist');
-    const out = join(tmp, 'out');
-    mkdirSync(join(dist, 'assets'), { recursive: true });
-    writeFileSync(join(dist, 'index.html'), INDEX);
-    writeFileSync(join(dist, 'config.json'), '{}\n');
-    writeFileSync(join(dist, 'assets', 'index-abc.js'), 'export {};\n');
-    writeFileSync(join(dist, 'assets', 'index-abc.js.map'), '{}');
-
-    stage({ dist, out, server: 'https://loams.example.com/' });
-
+  test('stages for Vercel without Cloudflare files or source maps', () => {
+    const dist = fakeDist(join(tmp, 'vercel-dist'));
+    const out = join(tmp, 'vercel-out');
+    stage({ dist, out, env: AUTH, target: 'vercel', vercelJson: vercel });
+    assert.ok(existsSync(join(out, 'index.html')));
+    assert.ok(!existsSync(join(out, '_headers')));
+    assert.ok(!existsSync(join(out, 'ui', 'assets', 'index-abc.js.map')));
     assert.ok(existsSync(join(out, 'ui', 'assets', 'index-abc.js')));
-    const root = readFileSync(join(out, 'index.html'), 'utf8');
-    assert.equal(root, readFileSync(join(out, 'ui', 'index.html'), 'utf8'));
-    assert.match(root, /http-equiv="Content-Security-Policy"/);
-    assert.match(root, /connect-src 'self' https:\/\/loams\.example\.com/);
-    assert.deepEqual(JSON.parse(readFileSync(join(out, 'ui', 'config.json'), 'utf8')), {
-      server: 'https://loams.example.com',
-    });
-    assert.equal(readFileSync(join(out, '.assetsignore'), 'utf8'), '*.map\n');
-    assert.equal(
-      readFileSync(join(out, 'config.json'), 'utf8'),
-      readFileSync(join(out, 'ui', 'config.json'), 'utf8'),
-    );
-    assert.ok(existsSync(join(out, '_headers')));
-    assert.ok(existsSync(join(out, '_redirects')));
-
-    // Without a server the engine's empty config stays: same origin.
-    stage({ dist, out });
-    assert.equal(readFileSync(join(out, 'ui', 'config.json'), 'utf8'), '{}\n');
   });
 });
 
@@ -189,6 +359,90 @@ describe('runtime config', () => {
     assert.deepEqual(parseRuntimeConfig({ server: 'not a url' }), {});
     assert.deepEqual(parseRuntimeConfig([]), {});
     assert.deepEqual(parseRuntimeConfig(null), {});
+  });
+
+  test('reads the hosted keys: engineUrl, the OIDC client, and the hosted marker', () => {
+    assert.deepEqual(
+      parseRuntimeConfig({
+        hosted: true,
+        engineUrl: 'https://loams.tail1.ts.net/',
+        authIssuer: 'https://auth.loams.dev/',
+        authClientId: ' loams-console ',
+      }),
+      {
+        hosted: true,
+        server: 'https://loams.tail1.ts.net',
+        authMode: 'tailscale',
+        auth: { issuer: 'https://auth.loams.dev', clientId: 'loams-console', scope: DEFAULT_SCOPE },
+      },
+    );
+    // Hosted without a mode is tailscale, the default.
+    assert.deepEqual(parseRuntimeConfig({ hosted: true }), {
+      hosted: true,
+      authMode: 'tailscale',
+    });
+    // An issuer without a client id (or over plain http off loopback) is no sign-in.
+    assert.deepEqual(parseRuntimeConfig({ authIssuer: 'https://auth.loams.dev' }), {});
+    assert.deepEqual(
+      parseRuntimeConfig({ authIssuer: 'http://auth.example', authClientId: 'c' }),
+      {},
+    );
+    // The mode is the default; the client stays in every mode, so oidc can be picked.
+    const ts = parseRuntimeConfig({
+      authMode: 'Tailscale',
+      authIssuer: 'https://auth.loams.dev',
+      authClientId: 'c',
+    });
+    assert.equal(ts.authMode, 'tailscale');
+    assert.equal(ts.auth?.clientId, 'c');
+    assert.deepEqual(offeredModes(ts), ['tailscale', 'oidc', 'apikey']);
+    assert.deepEqual(parseRuntimeConfig({ authMode: 'apikey' }), {
+      hosted: true,
+      authMode: 'apikey',
+    });
+    assert.deepEqual(offeredModes(parseRuntimeConfig({ authMode: 'apikey' })), [
+      'tailscale',
+      'apikey',
+    ]);
+    // oidc as the default without a client is a config error, never a quiet fall back.
+    assert.match(
+      parseRuntimeConfig({ hosted: true, authMode: 'oidc' }).configError,
+      /authClientId/,
+    );
+    // A hosted console sends a bearer: no plain-http engine off loopback. The
+    // engine-served console keeps its LAN http engine.
+    assert.equal(
+      parseRuntimeConfig({ authMode: 'apikey', engineUrl: 'http://10.0.0.5:8080' }).server,
+      undefined,
+    );
+    assert.equal(
+      parseRuntimeConfig({ authMode: 'apikey', engineUrl: 'http://127.0.0.1:8080' }).server,
+      'http://127.0.0.1:8080',
+    );
+    assert.equal(
+      parseRuntimeConfig({ server: 'http://10.0.0.5:8080' }).server,
+      'http://10.0.0.5:8080',
+    );
+    // An unknown mode is a config error, and keeps no OIDC client.
+    for (const authMode of ['nope', 42, '']) {
+      const bad = parseRuntimeConfig({
+        authMode,
+        authIssuer: 'https://a.example',
+        authClientId: 'c',
+      });
+      assert.equal(bad.hosted, true);
+      assert.equal(bad.authMode, undefined);
+      assert.equal(bad.auth, undefined);
+      assert.match(bad.configError, /authMode .* must be one of tailscale, oidc, apikey/);
+    }
+    assert.equal(
+      parseRuntimeConfig({
+        authIssuer: 'http://localhost:9000/application/o/loams/',
+        authClientId: 'c',
+        authScope: 'openid',
+      }).auth?.issuer,
+      'http://localhost:9000/application/o/loams',
+    );
   });
 
   test('a stalled configuration request aborts and keeps the same-origin fallback', async () => {
@@ -245,7 +499,7 @@ describe('smoke', () => {
       return new Response('export {}', { headers: { 'content-type': 'text/javascript' } });
     if (pathname.endsWith('.css') && !fallbackAssets)
       return new Response('', { headers: { 'content-type': 'text/css' } });
-    if (pathname === '/ui/config.json') return Response.json({});
+    if (pathname === '/config.json') return Response.json({ hosted: true });
     return html();
   };
 
@@ -254,9 +508,13 @@ describe('smoke', () => {
   });
 
   test('fails a hosted deploy with missing, invalid or mismatched API configuration', async () => {
-    for (const value of [{}, { server: 'not a url' }, { server: 'https://wrong.example' }]) {
+    for (const value of [
+      { hosted: true },
+      { hosted: true, engineUrl: 'not a url' },
+      { hosted: true, engineUrl: 'https://wrong.example' },
+    ]) {
       const fetcher = async (url) =>
-        new URL(url).pathname === '/ui/config.json' ? Response.json(value) : site(false)(url);
+        new URL(url).pathname === '/config.json' ? Response.json(value) : site(false)(url);
       const failures = await smoke('https://console.loams.dev', fetcher, 'https://api.example');
       assert.ok(
         failures.some((failure) => failure.includes('server origin')),
@@ -267,11 +525,73 @@ describe('smoke', () => {
 
   test('compares normalized API origins after a hosted deploy', async () => {
     const fetcher = async (url) =>
-      new URL(url).pathname === '/ui/config.json'
-        ? Response.json({ server: 'https://api.example/path' })
+      new URL(url).pathname === '/config.json'
+        ? Response.json({ hosted: true, engineUrl: 'https://api.example/path' })
         : site(false)(url);
     assert.deepEqual(
       await smoke('https://console.loams.dev', fetcher, 'https://api.example/other'),
+      [],
+    );
+  });
+
+  test('fails a deploy whose config is not the hosted console, or names another issuer', async () => {
+    const engineConfig = async (url) =>
+      new URL(url).pathname === '/config.json' ? Response.json({}) : site(false)(url);
+    const failures = await smoke('https://console.loams.dev', engineConfig);
+    assert.ok(
+      failures.some((f) => f.includes('hosted')),
+      failures.join('\n'),
+    );
+    const issuer = await smoke(
+      'https://console.loams.dev',
+      site(false),
+      undefined,
+      'https://auth.loams.dev',
+    );
+    assert.ok(
+      issuer.some((f) => f.includes('authIssuer')),
+      issuer.join('\n'),
+    );
+    // Another realm on the same host is another issuer; a trailing slash is not.
+    const realm = (authIssuer) => async (url) =>
+      new URL(url).pathname === '/config.json'
+        ? Response.json({ hosted: true, authIssuer })
+        : site(false)(url);
+    const want = 'https://id.example/realms/loams';
+    const other = await smoke(
+      'https://console.loams.dev',
+      realm('https://id.example/realms/x'),
+      undefined,
+      want,
+    );
+    assert.ok(
+      other.some((f) => f.includes('authIssuer')),
+      other.join('\n'),
+    );
+    assert.deepEqual(
+      await smoke('https://console.loams.dev', realm(`${want}/`), undefined, want),
+      [],
+    );
+  });
+
+  test('fails a deploy whose config has another sign-in mode', async () => {
+    const mode = (authMode) => async (url) =>
+      new URL(url).pathname === '/config.json'
+        ? Response.json({ hosted: true, authMode })
+        : site(false)(url);
+    const wrong = await smoke(
+      'https://console.loams.dev',
+      mode('apikey'),
+      undefined,
+      undefined,
+      'oidc',
+    );
+    assert.ok(
+      wrong.some((f) => f.includes('authMode is apikey, expected oidc')),
+      wrong.join('\n'),
+    );
+    assert.deepEqual(
+      await smoke('https://console.loams.dev', mode('oidc'), undefined, undefined, 'OIDC'),
       [],
     );
   });

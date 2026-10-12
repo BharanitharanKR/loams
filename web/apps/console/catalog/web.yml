@@ -1,0 +1,23 @@
+# The browser edition's catalog patch: the hosted console (console.loams.dev)
+# and the same build deployed on Vercel, Cloudflare or the Compose `console`
+# service (BYOC). Applied after base.yml by src/hosted/edition.ts.
+#
+# Only pages whose backend the engine actually serves are on by default; each
+# detects its package from GetInstance and says so when the engine lacks it.
+# Pages that still run on fixtures come in with demo.yml, under the console's
+# "Demo data" toggle.
+
+- id: deployments
+  disabled: true
+- insert:
+    - id: live
+      name: '@loams/plugin-live'
+      # No desktop bridge in a browser: the Live page then explains the stack in words.
+      inject: [platform, router, slots, transport]
+      config:
+        # LiveAdminService is not served yet; its page is sample data.
+        deployments: false
+    - id: graph
+      name: '@loams/plugin-graph'
+    - id: house
+      name: '@loams/plugin-house'

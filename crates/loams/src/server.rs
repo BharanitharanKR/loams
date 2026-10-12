@@ -36,7 +36,7 @@ use loams_meta::{
     HttpTransport, HttpTransportConfig, MetaClient, MetaClientConfig, MetaConfig, MetaNode, Router,
     SystemClock, Transport,
 };
-use loams_query::flight::{FlightConfig, PutTasks, serve_flight_sql_tracked};
+use loams_query::flight::{FlightConfig, PutTasks, serve_flight_sql_wrapped};
 use loams_query::flight_ingest::StreamProducer;
 use loams_query::placement::Placement;
 use loams_query::{CollectionService, ServiceConfig};
@@ -216,6 +216,9 @@ pub struct ServerConfig {
     /// Native stream gRPC listener for Dapr protocol adapters.
     #[cfg(feature = "stream-grpc")]
     pub stream_grpc: Option<SocketAddr>,
+    /// The Loams SQL gate (plan SQ1 Task 4).
+    #[cfg(feature = "sqldb")]
+    pub sqlgate: Option<crate::sqlgate::SqlgateConfig>,
     /// How Flight SQL bounds its statements and its ingest.
     pub flight: FlightConfig,
     /// CloudEvents ingest: the dedup window (design §02 §7.4).
@@ -267,12 +270,103 @@ pub struct ServerConfig {
     /// answer. Reflection publishes the schema of the API to anyone who can
     /// reach the port, so it is a development convenience, not a default.
     pub reflection: bool,
+    /// Loams Live (R1 plan Task 12, feature `live`): the `loams.live.v1` sync
+    /// API on its own loopback listener, on `dev` and `standalone`. `None`
+    /// (the default here) serves no Live API; the CLI sets it unless
+    /// `--no-live`.
+    #[cfg(feature = "live")]
+    pub live: Option<loams_live::LiveConfig>,
+    /// Loams Graph (GR1 Task 5, design §48, D741; feature `graph`): where graphs live and how
+    /// often deleted graphs are purged. Served on `dev` and `standalone` (a cluster node gets
+    /// the `graph` role in Task 12).
+    #[cfg(feature = "graph")]
+    pub graph: GraphConfig,
+    /// `[house]`: the Loams House front the main port proxies
+    /// `/loams.house.v1.*` to (HS1 Task 7, design §49 §18.1). No endpoint (the
+    /// default) answers `house_not_configured`.
+    pub house: crate::api::house_proxy::HouseProxyConfig,
+    /// Who may call the engine (`LOAMS_AUTH_MODE`, [`crate::auth`]). Off
+    /// (the default) refuses to start unless every listener is loopback.
+    /// `dev` and `standalone` only: a cluster node refuses any other mode
+    /// until MT1.
+    pub auth: crate::auth::AuthConfig,
+}
+
+/// The largest engine statement time limit (§48 §13.1's maximum statement timeout).
+#[cfg(feature = "graph")]
+const MAX_GRAPH_QUERY_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// Loams Graph's server settings (GR1 Task 5).
+#[cfg(feature = "graph")]
+#[derive(Clone, Debug)]
+pub struct GraphConfig {
+    /// Serve Loams Graph at all (`--no-graph` turns it off; its RPCs then answer
+    /// `feature_not_in_variant`).
+    pub enabled: bool,
+    /// The graph data directory: graphs live under `<data_dir>/graphs/<graph_id>/`. `None`
+    /// refuses to start unless [`GraphConfig::ephemeral`] (a served graph must be persistent:
+    /// an in-memory one fails rather than reopening after an engine panic, Task 3 review I2).
+    pub data_dir: Option<PathBuf>,
+    /// Keep graphs in memory, explicitly (`--graph-ephemeral`; dev and tests).
+    pub ephemeral: bool,
+    /// How long a deleted graph's storage is kept before it is purged.
+    pub retention_hold: Duration,
+    /// How long a superseded catalog document is kept (floor 5 minutes outside tests).
+    pub sweep_grace: Duration,
+    /// How often the purge and the catalog sweep run (config only, no flag; default 10 min;
+    /// must be greater than zero).
+    pub maintenance_every: Duration,
+    /// The cap on graph statements running at once in this process (`--graph-statement-slots`;
+    /// default twice the cores, at most 32). Past it a statement is refused with
+    /// `RESOURCE_EXHAUSTED`. It also sizes the statement pool (GR1 Task 6).
+    pub statement_slots: usize,
+    /// The cap on one namespace's graph statements at once (config only; default 64, §48
+    /// §13.2), never more than `statement_slots` less a reserve of an eighth (at least one), so
+    /// one namespace cannot take every slot. Past it a statement is refused with
+    /// `RESOURCE_EXHAUSTED`/`quota_exceeded`.
+    pub namespace_statements: usize,
+    /// The server's per-statement limits (config only; §48 §13.1's defaults, each capped at
+    /// its maximum). A graph's own `GraphLimits` apply on top (GR1 Task 6).
+    pub limits: loams_graph::limits::StatementLimits,
+    /// Grafeo's own statement time limit (`--graph-query-timeout-ms`; default 30 s, at most
+    /// 300 s). A backstop only: Grafeo checks it between pipeline chunks of a statement without
+    /// parameters, so a statement inside one long operator runs on (R0.8). It is also the
+    /// largest deadline a request may ask for (R0.8 (a), GR1 Task 6); Loams's own deadline
+    /// answers the client at the request's limit either way.
+    pub query_timeout: Duration,
+    /// How long the shutdown phase `graph` waits for running statements (config only; default
+    /// 10 s), and again for a maintenance pass in progress. A statement still running then is
+    /// detached: its graph stays open until it ends or the process exits (it runs on a
+    /// statement pool thread, which the exit does not wait for; GR1 Task 6, R6.5).
+    pub shutdown_wait: Duration,
+}
+
+#[cfg(feature = "graph")]
+impl GraphConfig {
+    /// Graphs under `data_dir`, with the default hold, grace and interval.
+    pub fn under(data_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            enabled: true,
+            data_dir: Some(data_dir.into()),
+            ephemeral: false,
+            retention_hold: loams_graph::service::admin::DEFAULT_RETENTION_HOLD,
+            sweep_grace: loams_graph::catalog::DOCUMENT_GRACE,
+            maintenance_every: Duration::from_secs(600),
+            statement_slots: loams_graph::service::admin::default_statement_slots(),
+            namespace_statements: loams_graph::limits::DEFAULT_NAMESPACE_STATEMENTS,
+            limits: loams_graph::limits::StatementLimits::DEFAULT,
+            query_timeout: loams_graph::engine::DEFAULT_QUERY_TIMEOUT,
+            shutdown_wait: loams_graph::service::admin::DEFAULT_SHUTDOWN_WAIT,
+        }
+    }
 }
 
 impl ServerConfig {
     /// The defaults, with data in `data_dir`, listening on 127.0.0.1:8080.
     pub fn new(data_dir: impl Into<PathBuf>) -> Self {
         let data_dir: PathBuf = data_dir.into();
+        #[cfg(feature = "graph")]
+        let data_dir_for_graph = data_dir.join("graph");
         Self {
             hot: HotTierConfig::new(&data_dir),
             hot_build: HotBuildConfig::new(&data_dir),
@@ -296,6 +390,8 @@ impl ServerConfig {
             flight_sql: None,
             #[cfg(feature = "stream-grpc")]
             stream_grpc: None,
+            #[cfg(feature = "sqldb")]
+            sqlgate: None,
             flight: FlightConfig::default(),
             cloudevents: crate::api::events::EventsConfig::default(),
             #[cfg(feature = "mysql-wire")]
@@ -311,6 +407,12 @@ impl ServerConfig {
             #[cfg(feature = "es")]
             es: None,
             reflection: false,
+            #[cfg(feature = "live")]
+            live: None,
+            #[cfg(feature = "graph")]
+            graph: GraphConfig::under(data_dir_for_graph),
+            house: crate::api::house_proxy::HouseProxyConfig::default(),
+            auth: crate::auth::AuthConfig::off(),
         }
     }
 
@@ -338,6 +440,22 @@ impl ServerConfig {
             }
         }
         self.validate_durable()?;
+        self.validate_auth()?;
+        #[cfg(feature = "graph")]
+        self.validate_graph()?;
+        #[cfg(feature = "live")]
+        if let Some(live) = &self.live {
+            if self.cluster.is_some() {
+                return Err(ServerError::Config(
+                    "Loams Live runs on dev and standalone only in R1; pass --no-live".to_string(),
+                ));
+            }
+            if loams_live::check_listen(live.listen).is_err() {
+                return Err(ServerError::LiveListenNotLoopback { addr: live.listen });
+            }
+            // LV1 plan Task 5: strangers' code never runs in this process.
+            loams_live::check_isolation(live).map_err(|e| ServerError::Config(e.to_string()))?;
+        }
         self.flight.validate().map_err(ServerError::Config)?;
         self.validate_backpressure()?;
         self.cloudevents.validate().map_err(ServerError::Config)?;
@@ -378,6 +496,92 @@ impl ServerConfig {
 
     #[cfg(not(feature = "durable"))]
     fn validate_durable(&self) -> Result<(), ServerError> {
+        Ok(())
+    }
+
+    /// The network listeners [`crate::auth`] guards, by flag name.
+    fn guarded_listeners(&self) -> Vec<(&'static str, SocketAddr)> {
+        let mut listeners = vec![("--listen", self.listen)];
+        if let Some(addr) = flight_addr(self) {
+            listeners.push(("--flight-sql-listen", addr));
+        }
+        #[cfg(feature = "qdrant")]
+        if let Some(qdrant) = &self.qdrant {
+            listeners.push(("--qdrant-listen", qdrant.rest_listen));
+            listeners.push(("--qdrant-grpc-listen", qdrant.grpc_listen));
+        }
+        #[cfg(feature = "es")]
+        if let Some(es) = &self.es {
+            listeners.push(("--es-listen", es.listen));
+        }
+        listeners
+    }
+
+    /// `off` only on loopback (preview contract); a cluster node keeps its
+    /// private-network routes and refuses any other mode until MT1.
+    fn validate_auth(&self) -> Result<(), ServerError> {
+        if self.cluster.is_some() {
+            if self.auth.enforced() {
+                return Err(ServerError::Config(format!(
+                    "{} is for dev and standalone; a cluster node's listeners must stay on a \
+                     private network until MT1",
+                    crate::auth::MODE_ENV
+                )));
+            }
+            return Ok(());
+        }
+        self.auth
+            .tailscale_listener()
+            .map_err(ServerError::Config)?;
+        self.auth
+            .check_listeners(&self.guarded_listeners())
+            .map_err(ServerError::Config)
+    }
+
+    /// Whether this server serves Loams Graph (GR1 Task 5): unless `--no-graph`, and not on a
+    /// cluster node, which gets the `graph` role in Task 12 (R5.2). Otherwise every graph RPC
+    /// answers `feature_not_in_variant`.
+    #[cfg(feature = "graph")]
+    #[must_use]
+    pub fn serves_graph(&self) -> bool {
+        self.graph.enabled && self.cluster.is_none()
+    }
+
+    /// Loams Graph (GR1 Task 5): graphs need a data directory unless they are explicitly
+    /// ephemeral, and with no authorizer before MT1 (D750) graph RPCs are served on a loopback
+    /// address only.
+    #[cfg(feature = "graph")]
+    fn validate_graph(&self) -> Result<(), ServerError> {
+        if !self.serves_graph() {
+            return Ok(());
+        }
+        if self.graph.data_dir.is_none() && !self.graph.ephemeral {
+            return Err(ServerError::GraphNeedsDataDir);
+        }
+        // Authenticated principals stand in for D750's authorizer until MT1:
+        // the preview engine is single-tenant, so everyone admitted is its
+        // owner.
+        if !self.listen.ip().is_loopback() && !self.auth.enforced() {
+            return Err(ServerError::GraphListenNotLoopback { addr: self.listen });
+        }
+        if self.graph.maintenance_every.is_zero() {
+            return Err(ServerError::Config(
+                "graph.maintenance_every must be greater than zero".to_string(),
+            ));
+        }
+        let max_slots = loams_graph::service::admin::MAX_STATEMENT_SLOTS;
+        if !(1..=max_slots).contains(&self.graph.statement_slots) {
+            return Err(ServerError::Config(format!(
+                "--graph-statement-slots must be between 1 and {max_slots}"
+            )));
+        }
+        if self.graph.query_timeout.is_zero() || self.graph.query_timeout > MAX_GRAPH_QUERY_TIMEOUT
+        {
+            return Err(ServerError::Config(format!(
+                "--graph-query-timeout-ms must be between 1 and {} ms",
+                MAX_GRAPH_QUERY_TIMEOUT.as_millis()
+            )));
+        }
         Ok(())
     }
 
@@ -430,6 +634,33 @@ pub enum ServerError {
     #[cfg(feature = "tikv")]
     #[error("TiKV: {0}")]
     Tikv(#[from] loams_tikv::TikvError),
+    /// Loams Graph has no data directory and graphs are not explicitly ephemeral (GR1 Task 5).
+    #[cfg(feature = "graph")]
+    #[error(
+        "Loams Graph needs a graph data directory (--graph-data-dir): a served graph must be \
+         persistent. Pass --graph-ephemeral to keep graphs in memory (development only), or \
+         --no-graph"
+    )]
+    GraphNeedsDataDir,
+    /// Graph RPCs on a non-loopback address before the authorizer exists (D750, until MT1).
+    #[cfg(feature = "graph")]
+    #[error(
+        "--listen {addr} is not a loopback address, and Loams Graph has no authorizer until the \
+         unified auth plan (D750, MT1); listen on a loopback address or pass --no-graph"
+    )]
+    GraphListenNotLoopback { addr: SocketAddr },
+    /// `--live-listen` is not a loopback address (D111, design §20 §7.1):
+    /// the Live API has no authentication in R1.
+    #[cfg(feature = "live")]
+    #[error(
+        "--live-listen {addr} is not a loopback address; the Live API has no authentication \
+         until the unified auth plan (D111)"
+    )]
+    LiveListenNotLoopback { addr: SocketAddr },
+    /// Loams Live could not start (R1 plan Task 12).
+    #[cfg(feature = "live")]
+    #[error("Loams Live: {0}")]
+    Live(loams_live::LiveError),
     #[error("cache: {0}")]
     Cache(#[from] loams_cache::CacheError),
     #[error("log: {0}")]
@@ -456,6 +687,13 @@ pub enum ServerError {
     #[cfg(feature = "stream-grpc")]
     #[error("stream gRPC listen on {addr}: {source}")]
     StreamGrpcListen {
+        addr: SocketAddr,
+        source: std::io::Error,
+    },
+    /// The Loams SQL gate could not start (plan SQ1 Task 4).
+    #[cfg(feature = "sqldb")]
+    #[error("Loams SQL gate on {addr}: {source}")]
+    SqlgateListen {
         addr: SocketAddr,
         source: std::io::Error,
     },
@@ -603,6 +841,12 @@ pub struct Server {
     /// The cluster MVCC GC loop the TiKV metastore runs.
     #[cfg(feature = "tikv")]
     tikv_gc: Option<TikvGc>,
+    /// Loams Live, when configured.
+    #[cfg(feature = "live")]
+    live: Option<LiveRuntime>,
+    /// Loams Graph, when served (GR1 Task 5).
+    #[cfg(feature = "graph")]
+    graph: Option<GraphRuntime>,
     /// The metastore as the trait object every component holds.
     meta_store: Arc<dyn MetaStore>,
     writer: LogWriter,
@@ -616,6 +860,8 @@ pub struct Server {
     hot: Option<HotTierImpl>,
     http: JoinHandle<()>,
     stop_http: oneshot::Sender<()>,
+    /// The `tailscale serve` target (`LOAMS_AUTH_MODE=tailscale`).
+    tailscale: Option<TailscaleTarget>,
     flight: Option<Flight>,
     #[cfg(feature = "mysql-wire")]
     mysql_wire: Option<crate::mysql_wire::MysqlHandle>,
@@ -623,6 +869,8 @@ pub struct Server {
     pg: Option<crate::pg::PgHandle>,
     #[cfg(feature = "stream-grpc")]
     stream_grpc: Option<StreamGrpc>,
+    #[cfg(feature = "sqldb")]
+    sqlgate: Option<crate::sqlgate::SqlgateHandle>,
     #[cfg(feature = "qdrant")]
     qdrant: Option<Qdrant>,
     /// The embedded durable server (D1).
@@ -631,6 +879,38 @@ pub struct Server {
     es: Option<Es>,
     /// Cluster mode only.
     cluster: Option<ClusterRuntime>,
+}
+
+/// The `tailscale serve` target: the main API on `LOAMS_TAILSCALE_LISTEN`,
+/// the one listener where Tailscale identity headers name the caller.
+#[derive(Debug)]
+struct TailscaleTarget {
+    addr: SocketAddr,
+    stop: CancellationToken,
+    task: JoinHandle<()>,
+}
+
+impl TailscaleTarget {
+    fn start(listener: tokio::net::TcpListener, addr: SocketAddr, app: axum::Router) -> Self {
+        let stop = CancellationToken::new();
+        let stopped = stop.clone();
+        let task = tokio::spawn(async move {
+            let serve =
+                axum::serve(listener, app).with_graceful_shutdown(stopped.cancelled_owned());
+            if let Err(err) = serve.await {
+                tracing::error!(%err, "the tailscale serve target failed");
+            }
+        });
+        Self { addr, stop, task }
+    }
+
+    async fn stop(self) {
+        self.stop.cancel();
+        let mut task = self.task;
+        if tokio::time::timeout(HTTP_GRACE, &mut task).await.is_err() {
+            task.abort();
+        }
+    }
 }
 
 /// The running cluster MVCC GC loop of a server on the TiKV metastore (R1
@@ -645,13 +925,22 @@ struct TikvGc {
 #[cfg(feature = "tikv")]
 impl TikvGc {
     /// Starts the GC loop on the metastore's handle. The loop sweeps its own
-    /// handle's commit tokens; Loams Live's handles join `sweep` when Live
-    /// runs in the process (R1 plan Task 12).
-    fn start(meta: &loams_meta_tikv::TikvMeta) -> Result<Self, ServerError> {
+    /// handle's commit tokens and those of `sweep`: Loams Live's handle when
+    /// Live runs in the process on the same cluster (R1 plan Task 12).
+    fn start(meta: &loams_meta_tikv::TikvMeta, sweep: Sweep) -> Result<Self, ServerError> {
+        Self::spawn(meta.tikv().clone(), sweep)
+    }
+
+    /// Starts the GC loop on `tikv` (its lease lives under that handle's
+    /// root), sweeping `sweep` too.
+    fn spawn(tikv: loams_tikv::Tikv, sweep: Sweep) -> Result<Self, ServerError> {
         let stop = CancellationToken::new();
         let handle = loams_tikv::GcLoop::spawn(
-            meta.tikv().clone(),
-            loams_tikv::GcConfig::default(),
+            tikv,
+            loams_tikv::GcConfig {
+                sweep,
+                ..loams_tikv::GcConfig::default()
+            },
             stop.clone(),
         )?;
         Ok(TikvGc { handle, stop })
@@ -661,6 +950,111 @@ impl TikvGc {
         self.stop.cancel();
         self.handle.stopped().await;
     }
+}
+
+/// Further TiKV handles the metastore's GC loop sweeps (Loams Live's).
+#[cfg(feature = "tikv")]
+type Sweep = Vec<loams_tikv::Tikv>;
+/// Without TiKV there is nothing to sweep.
+#[cfg(not(feature = "tikv"))]
+#[derive(Debug)]
+struct Sweep;
+
+/// Nothing beside the metastore's own handle to sweep.
+#[cfg(not(feature = "live-tikv"))]
+fn no_sweep() -> Sweep {
+    #[cfg(feature = "tikv")]
+    let sweep = Vec::new();
+    #[cfg(not(feature = "tikv"))]
+    let sweep = Sweep;
+    sweep
+}
+
+/// A running Loams Live server and, when no metastore GC loop covers its
+/// cluster, its own cluster GC loop (R1 plan Task 12).
+#[cfg(feature = "live")]
+#[derive(Debug)]
+struct LiveRuntime {
+    handle: loams_live::LiveHandle,
+    /// Live's own cluster GC loop (a TiKV store not covered by the
+    /// metastore's); the embedded store collects its own versions.
+    #[cfg(feature = "live-tikv")]
+    gc: Option<TikvGc>,
+}
+
+#[cfg(feature = "live")]
+impl LiveRuntime {
+    /// Starts Live with its function runtime: deployments' bundles in
+    /// `bundles` (the data bucket, R1 plan Ruling 10) and run by
+    /// `loams-live-js`, in process or, with `isolation = "isolated"`, in
+    /// `loams live-worker` processes of this binary (LV1 plan Task 6).
+    /// With `own_gc`, a cluster GC loop on Live's handle too (the openraft
+    /// metastore, or a TiKV metastore on another cluster).
+    #[cfg_attr(not(feature = "live-tikv"), allow(unused_variables))]
+    async fn start(
+        config: loams_live::LiveConfig,
+        bundles: Store,
+        own_gc: bool,
+    ) -> Result<Self, ServerError> {
+        let loader = loams_live_js::JsLoader::new(loams_live_js::JsConfig {
+            isolation: config.isolation,
+            ..loams_live_js::JsConfig::default()
+        })
+        .map_err(ServerError::Live)?;
+        let runtime = loams_live::deploy::Runtime {
+            bundles,
+            loader: Arc::new(loader),
+        };
+        let handle = loams_live::LiveServer::start_with(config, runtime, CancellationToken::new())
+            .await
+            .map_err(|err| match err {
+                loams_live::LiveError::NotLoopback(addr) => {
+                    ServerError::LiveListenNotLoopback { addr }
+                }
+                err => ServerError::Live(err),
+            })?;
+        // Only a TiKV store needs the cluster GC loop.
+        #[cfg(feature = "live-tikv")]
+        let gc = match handle.store().as_tikv().cloned() {
+            Some(tikv) if own_gc => match TikvGc::spawn(tikv, Vec::new()) {
+                Ok(gc) => Some(gc),
+                Err(err) => {
+                    handle.stop().await;
+                    return Err(err);
+                }
+            },
+            _ => None,
+        };
+        Ok(LiveRuntime {
+            handle,
+            #[cfg(feature = "live-tikv")]
+            gc,
+        })
+    }
+
+    async fn stop(self) {
+        self.handle.stop().await;
+        #[cfg(feature = "live-tikv")]
+        if let Some(gc) = self.gc {
+            gc.stop().await;
+        }
+    }
+}
+
+/// Whether two PD endpoint lists name one cluster (the same endpoints, in
+/// any order, with or without `http://`).
+#[cfg(feature = "live-tikv")]
+fn same_cluster(a: &[String], b: &[String]) -> bool {
+    let norm = |pd: &[String]| {
+        pd.iter()
+            .map(|p| {
+                p.trim_start_matches("http://")
+                    .trim_end_matches('/')
+                    .to_string()
+            })
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    norm(a) == norm(b)
 }
 
 /// What a cluster node keeps for its shutdown.
@@ -698,6 +1092,7 @@ struct Assembled {
     worker: Option<WorkerHandle>,
     hot: Option<HotTierImpl>,
     app: axum::Router,
+    tailscale: Option<TailscaleTarget>,
     flight: Option<Flight>,
     #[cfg(feature = "mysql-wire")]
     mysql_wire: Option<crate::mysql_wire::MysqlHandle>,
@@ -705,6 +1100,8 @@ struct Assembled {
     pg: Option<crate::pg::PgHandle>,
     #[cfg(feature = "stream-grpc")]
     stream_grpc: Option<StreamGrpc>,
+    #[cfg(feature = "sqldb")]
+    sqlgate: Option<crate::sqlgate::SqlgateHandle>,
     #[cfg(feature = "qdrant")]
     qdrant: Option<Qdrant>,
     /// Started by the caller before `assemble` and handed over here (a
@@ -712,6 +1109,125 @@ struct Assembled {
     durable: Durable,
     #[cfg(feature = "es")]
     es: Option<Es>,
+    #[cfg(feature = "graph")]
+    graph: Option<GraphRuntime>,
+}
+
+/// Loams Graph as the server runs it (GR1 Task 5): the admin service (catalog and engine) and
+/// the maintenance task that purges deleted graphs and sweeps catalog documents.
+#[cfg(feature = "graph")]
+#[derive(Debug)]
+struct GraphRuntime {
+    admin: Arc<loams_graph::service::admin::GraphAdmin>,
+    /// The graphs' own log writer (GR1 Task 11): it flushes every 2 ms or 256 KiB, the write
+    /// lane's group commit, where the collection writer waits 250 ms.
+    log: LogWriter,
+    data_dir: Option<PathBuf>,
+    stop: CancellationToken,
+    maintenance: JoinHandle<()>,
+    shutdown_wait: Duration,
+    /// Catalog sweeps the maintenance task has completed.
+    sweeps: Arc<std::sync::atomic::AtomicU64>,
+}
+
+#[cfg(feature = "graph")]
+impl GraphRuntime {
+    /// Starts the graph service: every graph is durable in Loams' log (GR1 Task 11), through a
+    /// writer of its own on log node `log_node` and the server's `reader`.
+    fn start(
+        config: &GraphConfig,
+        meta: Arc<dyn MetaStore>,
+        store: Store,
+        reader: LogReader,
+        log_node: u64,
+    ) -> Result<Self, ServerError> {
+        use loams_graph::Engine;
+        use loams_graph::catalog::GraphCatalog;
+        use loams_graph::durable::GraphLog;
+        use loams_graph::service::admin::GraphAdmin;
+        let log = LogWriter::start(meta.clone(), store.clone(), GraphLog::log_config(log_node))?;
+        let engine = match (&config.data_dir, config.ephemeral) {
+            (Some(dir), _) => Engine::with_data_dir(dir),
+            (None, _) => Engine::new(),
+        }
+        .with_query_timeout(Some(config.query_timeout))
+        .with_max_property_bytes(config.limits.max_property_bytes);
+        let graph_log = GraphLog::new(
+            meta.clone(),
+            log.clone(),
+            reader,
+            tokio::runtime::Handle::current(),
+        );
+        let admin = Arc::new(
+            GraphAdmin::new(Arc::new(engine), GraphCatalog::new(meta, store))
+                .with_log(graph_log)
+                .with_retention_hold(config.retention_hold)
+                .with_statement_slots(config.statement_slots)
+                .with_namespace_statements(config.namespace_statements)
+                .with_limits(config.limits),
+        );
+        let stop = CancellationToken::new();
+        let sweeps = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let maintenance = {
+            let (admin, stop, sweeps) = (admin.clone(), stop.clone(), sweeps.clone());
+            let (every, hold, grace) = (
+                config.maintenance_every,
+                config.retention_hold,
+                config.sweep_grace,
+            );
+            tokio::spawn(async move {
+                let mut tick = tokio::time::interval(every);
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                loop {
+                    tokio::select! {
+                        () = stop.cancelled() => return,
+                        _ = tick.tick() => {}
+                    }
+                    match admin.purge_expired(hold).await {
+                        Ok(0) => {}
+                        Ok(n) => tracing::info!(purged = n, "purged deleted graphs"),
+                        Err(err) => tracing::warn!(%err, "purging deleted graphs failed"),
+                    }
+                    match admin.sweep_documents(grace).await {
+                        Ok(_) => {
+                            sweeps.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                        Err(err) => tracing::warn!(%err, "sweeping graph catalog documents failed"),
+                    }
+                }
+            })
+        };
+        Ok(Self {
+            admin,
+            log,
+            data_dir: config.data_dir.clone(),
+            stop,
+            maintenance,
+            shutdown_wait: config.shutdown_wait,
+            sweeps,
+        })
+    }
+
+    /// Stops the maintenance task, then the admin (review fix 1, I3): new requests answer
+    /// `UNAVAILABLE`, running statements get `shutdown_wait` to end, and every graph is closed.
+    /// Each wait is bounded; a statement still running after it is detached (see
+    /// [`GraphConfig::shutdown_wait`]).
+    async fn stop(self) {
+        self.stop.cancel();
+        let mut maintenance = self.maintenance;
+        if tokio::time::timeout(self.shutdown_wait, &mut maintenance)
+            .await
+            .is_err()
+        {
+            tracing::warn!("a graph maintenance pass outlasted the shutdown wait; abandoned");
+            maintenance.abort();
+        }
+        self.admin.shutdown(self.shutdown_wait).await;
+        // After the graphs: a write still in its lane is answered before its log goes.
+        if let Err(err) = self.log.shutdown().await {
+            tracing::warn!(%err, "stopping the graph log writer");
+        }
+    }
 }
 
 /// The running Qdrant gateway (plan M1.4 Task 2).
@@ -800,6 +1316,7 @@ impl Flight {
         collections: Arc<CollectionService>,
         streams: Arc<dyn StreamProducer>,
         config: FlightConfig,
+        guard: crate::auth::AuthLayerState,
     ) -> Self {
         let stop = CancellationToken::new();
         let puts = PutTasks::new();
@@ -810,6 +1327,7 @@ impl Flight {
             config,
             stop.clone(),
             puts.clone(),
+            guard,
         ));
         Self {
             addr,
@@ -850,9 +1368,18 @@ async fn serve(
     config: FlightConfig,
     stop: CancellationToken,
     puts: PutTasks,
+    guard: crate::auth::AuthLayerState,
 ) {
-    let served =
-        serve_flight_sql_tracked(listener, collections, Some(streams), config, stop, puts).await;
+    let served = serve_flight_sql_wrapped(
+        listener,
+        collections,
+        Some(streams),
+        config,
+        stop,
+        puts,
+        |routes| guard.wrap_grpc(routes),
+    )
+    .await;
     if let Err(err) = served {
         tracing::error!(%err, "Flight SQL server failed");
     }
@@ -907,11 +1434,69 @@ impl Server {
         if config.cluster.is_some() {
             return Self::start_cluster(config).await;
         }
+        #[cfg(feature = "live")]
+        let started = Self::start_with_live(config).await;
+        #[cfg(not(feature = "live"))]
+        let started = Self::start_single(config, no_sweep()).await;
+        started
+    }
+
+    /// `dev` or `standalone` with Loams Live: Live starts first, so the
+    /// metastore's GC loop can sweep its handle when both are on one cluster
+    /// (R1 plan Task 12).
+    #[cfg(feature = "live")]
+    async fn start_with_live(config: ServerConfig) -> Result<Self, ServerError> {
+        {
+            let live = match config.live.clone() {
+                Some(live) => {
+                    #[cfg(feature = "live-tikv")]
+                    let covered = matches!(
+                        &config.meta,
+                        MetaBackend::Tikv(meta) if matches!(
+                            &live.store,
+                            loams_live::StoreConfig::Tikv(t) if same_cluster(&meta.tikv.pd, &t.pd)
+                        )
+                    );
+                    #[cfg(not(feature = "live-tikv"))]
+                    let covered = false;
+                    let bundles =
+                        Store::from_url(&bucket_url(&config)?, Vec::<(String, String)>::new())?;
+                    Some(LiveRuntime::start(live, bundles, !covered).await?)
+                }
+                None => None,
+            };
+            #[cfg(feature = "live-tikv")]
+            let sweep: Sweep = live
+                .iter()
+                .filter(|l| l.gc.is_none())
+                .filter_map(|l| l.handle.store().as_tikv().cloned())
+                .collect();
+            #[cfg(not(feature = "live-tikv"))]
+            let sweep = no_sweep();
+            match Self::start_single(config, sweep).await {
+                Ok(mut server) => {
+                    server.live = live;
+                    Ok(server)
+                }
+                Err(err) => {
+                    if let Some(live) = live {
+                        live.stop().await;
+                    }
+                    Err(err)
+                }
+            }
+        }
+    }
+
+    /// `dev` or `standalone`: the metastore, then every role.
+    async fn start_single(config: ServerConfig, sweep: Sweep) -> Result<Self, ServerError> {
         let store = Store::from_url(&bucket_url(&config)?, Vec::<(String, String)>::new())?;
         #[cfg(feature = "tikv")]
         if let MetaBackend::Tikv(tikv) = &config.meta {
-            return Self::start_on_tikv(tikv.clone(), store, config).await;
+            return Self::start_on_tikv(tikv.clone(), store, config, sweep).await;
         }
+        #[cfg(not(feature = "tikv"))]
+        let Sweep = sweep;
         let mut meta_config = MetaConfig::new(NODE_ID, config.data_dir.join("meta"), store.clone());
         meta_config.snapshot_every = config.snapshot_every;
         let node = MetaNode::start(meta_config, &Router::new()).await?;
@@ -956,9 +1541,10 @@ impl Server {
         tikv: loams_meta_tikv::TikvMetaConfig,
         store: Store,
         config: ServerConfig,
+        sweep: Sweep,
     ) -> Result<Self, ServerError> {
         let meta = loams_meta_tikv::TikvMeta::open(tikv).await?;
-        let gc = TikvGc::start(&meta)?;
+        let gc = TikvGc::start(&meta, sweep)?;
         let meta_store: Arc<dyn MetaStore> = Arc::new(meta);
         match Self::serve_single(meta_store, store, config).await {
             Ok(mut server) => {
@@ -1021,6 +1607,8 @@ impl Server {
             meta: None,
             #[cfg(feature = "tikv")]
             tikv_gc: None,
+            #[cfg(feature = "live")]
+            live: None,
             meta_store,
             writer: parts.writer,
             cache: parts.cache,
@@ -1031,6 +1619,7 @@ impl Server {
             hot: parts.hot,
             http,
             stop_http,
+            tailscale: parts.tailscale,
             flight: parts.flight,
             #[cfg(feature = "mysql-wire")]
             mysql_wire: parts.mysql_wire,
@@ -1038,11 +1627,15 @@ impl Server {
             pg: parts.pg,
             #[cfg(feature = "stream-grpc")]
             stream_grpc: parts.stream_grpc,
+            #[cfg(feature = "sqldb")]
+            sqlgate: parts.sqlgate,
             #[cfg(feature = "qdrant")]
             qdrant: parts.qdrant,
             durable,
             #[cfg(feature = "es")]
             es: parts.es,
+            #[cfg(feature = "graph")]
+            graph: parts.graph,
             cluster: None,
         };
         // The runtime after the collection service, before the listener
@@ -1117,6 +1710,8 @@ impl Server {
                     meta: Some(meta),
                     #[cfg(feature = "tikv")]
                     tikv_gc: None,
+                    #[cfg(feature = "live")]
+                    live: None,
                     meta_store,
                     writer: parts.writer,
                     cache: parts.cache,
@@ -1127,6 +1722,7 @@ impl Server {
                     hot: parts.hot,
                     http,
                     stop_http,
+                    tailscale: parts.tailscale,
                     flight: parts.flight,
                     #[cfg(feature = "mysql-wire")]
                     mysql_wire: parts.mysql_wire,
@@ -1134,11 +1730,15 @@ impl Server {
                     pg: parts.pg,
                     #[cfg(feature = "stream-grpc")]
                     stream_grpc: parts.stream_grpc,
+                    #[cfg(feature = "sqldb")]
+                    sqlgate: parts.sqlgate,
                     #[cfg(feature = "qdrant")]
                     qdrant: parts.qdrant,
                     durable: parts.durable,
                     #[cfg(feature = "es")]
                     es: parts.es,
+                    #[cfg(feature = "graph")]
+                    graph: parts.graph,
                     cluster: Some(ClusterRuntime {
                         node_id,
                         roles,
@@ -1345,11 +1945,44 @@ impl Server {
             extra_sources,
             node_info,
         } = setup;
+        // Built before anything is bound: a bad key file or OIDC setting
+        // stops the start with nothing to undo. A cluster node is not
+        // guarded (validate_auth keeps it off).
+        let auth = match config.cluster {
+            None => crate::auth::Auth::from_config(&config.auth).map_err(ServerError::Config)?,
+            Some(_) => crate::auth::Auth::off(),
+        };
+        let guard = crate::auth::AuthLayerState::new(auth.clone(), &[]);
+        let main_guard =
+            crate::auth::AuthLayerState::new(auth.clone(), crate::auth::layer::MAIN_PUBLIC_PATHS);
+        let tailscale_guard = crate::auth::AuthLayerState::tailscale_target(
+            auth,
+            crate::auth::layer::MAIN_PUBLIC_PATHS,
+        );
         // Scan plans name the Lance datasets under the bucket (Task 14 rule 8).
         config.query.lance_base_url = Some(bucket_url(config)?);
         let cache = RangeCache::new(store.clone(), config.cache.clone()).await?;
         // Flight SQL listens after the HTTP API (rule 5.3), on gateways only.
         let flight_listener = match flight_addr(config).filter(|_| roles.gateway) {
+            Some(addr) => match bind(addr).await {
+                Ok(bound) => Some(bound),
+                Err(err) => {
+                    if let Err(err) = cache.close().await {
+                        tracing::warn!(%err, "closing the cache after a failed start");
+                    }
+                    return Err(err);
+                }
+            },
+            None => None,
+        };
+        // The `tailscale serve` target, on a standalone gateway in tailscale
+        // mode only (validate_auth checked it is loopback).
+        let tailscale_addr = config
+            .auth
+            .tailscale_listener()
+            .map_err(ServerError::Config)?
+            .filter(|_| roles.gateway && config.cluster.is_none());
+        let tailscale_listener = match tailscale_addr {
             Some(addr) => match bind(addr).await {
                 Ok(bound) => Some(bound),
                 Err(err) => {
@@ -1411,6 +2044,38 @@ impl Server {
                     return Err(ServerError::StreamGrpcListen { addr, source });
                 }
             },
+            None => None,
+        };
+        // The Loams SQL gate, on gateways only (plan SQ1 Task 4).
+        #[cfg(feature = "sqldb")]
+        let sqlgate_listener = match config.sqlgate.clone().filter(|_| roles.gateway) {
+            Some(gate_config) => match crate::sqlgate::listen(&gate_config).await {
+                Ok((listener, addr)) => Some((listener, addr, gate_config)),
+                Err(source) => {
+                    if let Err(err) = cache.close().await {
+                        tracing::warn!(%err, "closing the cache after a failed start");
+                    }
+                    return Err(ServerError::SqlgateListen {
+                        addr: gate_config.listen,
+                        source,
+                    });
+                }
+            },
+            None => None,
+        };
+        #[cfg(feature = "sqldb")]
+        let sqlgate = match sqlgate_listener {
+            Some((listener, addr, gate_config)) => {
+                match crate::sqlgate::start(listener, addr, &gate_config) {
+                    Ok(handle) => Some(handle),
+                    Err(source) => {
+                        if let Err(err) = cache.close().await {
+                            tracing::warn!(%err, "closing the cache after a failed start");
+                        }
+                        return Err(ServerError::SqlgateListen { addr, source });
+                    }
+                }
+            }
             None => None,
         };
         // The Qdrant gateway's listeners, on gateways only (plan M1.4 Task
@@ -1492,12 +2157,14 @@ impl Server {
                 config.link.max_commit_delay,
             )))
             .with(collection_factory.clone());
-        worker.add_source(Arc::new(LinkApplySource::new(
+        // The API reports which links this source finds unregistered.
+        let link_apply = LinkApplySource::new(
             meta_store.clone(),
             reader.clone(),
             registry.clone(),
             config.link.clone(),
-        )));
+        );
+        worker.add_source(Arc::new(link_apply.clone()));
         worker.add_source(Arc::new(SegmenterSource::new(
             store.clone(),
             cache.clone(),
@@ -1618,7 +2285,13 @@ impl Server {
             Some((qdrant, (rest, grpc))) => {
                 let stop = CancellationToken::new();
                 let handle = loams_qdrant::QdrantGateway::new(collections.clone(), qdrant)
-                    .serve(rest, grpc, stop.clone())
+                    .serve_with(
+                        rest,
+                        grpc,
+                        stop.clone(),
+                        |router| guard.wrap(router),
+                        |routes| guard.wrap_grpc(routes),
+                    )
                     .await;
                 Some(Qdrant { handle, stop })
             }
@@ -1627,8 +2300,11 @@ impl Server {
         #[cfg(feature = "es")]
         let es = es_listener.map(|(es, listener)| {
             let stop = CancellationToken::new();
-            let handle =
-                loams_es::EsGateway::new(collections.clone(), es).serve(listener, stop.clone());
+            let handle = loams_es::EsGateway::new(collections.clone(), es).serve_with(
+                listener,
+                stop.clone(),
+                |router| guard.wrap(router),
+            );
             Es { handle, stop }
         });
         let internal = reqwest::Client::builder()
@@ -1636,12 +2312,31 @@ impl Server {
             .timeout(api::hot::OWNER_TIMEOUT)
             .build()
             .unwrap_or_default();
+        // Loams Graph on dev and standalone (a cluster node gets the `graph` role in GR1 Task 12).
+        #[cfg(feature = "graph")]
+        let graph = match config.serves_graph() {
+            true => Some(GraphRuntime::start(
+                &config.graph,
+                meta_store.clone(),
+                store.clone(),
+                reader.clone(),
+                config.log.node_id,
+            )?),
+            false => None,
+        };
+        let house = match roles.gateway {
+            true => crate::api::house_proxy::HouseProxy::start(&config.house).map_err(|err| {
+                ServerError::Config(format!("the House proxy's HTTP client: {err}"))
+            })?,
+            false => None,
+        };
         let state = AppState {
             meta: meta_store.clone(),
             writer: writer.clone(),
             reader,
             store: store.clone(),
             registry,
+            link_apply,
             collections: collections.clone(),
             hot: hot.clone(),
             placement,
@@ -1657,10 +2352,22 @@ impl Server {
             node_info,
             cloudevents: config.cloudevents,
             reflection: config.reflection,
+            #[cfg(feature = "graph")]
+            graph: graph.as_ref().map(|g| g.admin.clone()),
+            house,
         };
-        let app = match roles.gateway {
-            true => api::router(state),
-            false => api::internal_router(state),
+        let (app, tailscale) = match (roles.gateway, config.cluster.is_some()) {
+            (true, false) => {
+                let router = api::router(state);
+                // The same API behind the layer that honours Tailscale
+                // identity headers; the main port strips them.
+                let tailscale = tailscale_listener.map(|(listener, addr)| {
+                    TailscaleTarget::start(listener, addr, tailscale_guard.wrap(router.clone()))
+                });
+                (main_guard.wrap(router), tailscale)
+            }
+            (true, true) => (api::router(state), None),
+            (false, _) => (api::internal_router(state), None),
         };
         let flight = flight_listener.map(|(listener, addr)| {
             let streams: Arc<dyn StreamProducer> = Arc::new(NativeStreamProducer {
@@ -1673,6 +2380,7 @@ impl Server {
                 collections.clone(),
                 streams,
                 config.flight.clone(),
+                guard.clone(),
             )
         });
         #[cfg(feature = "stream-grpc")]
@@ -1699,6 +2407,7 @@ impl Server {
             worker,
             hot,
             app,
+            tailscale,
             flight,
             #[cfg(feature = "mysql-wire")]
             mysql_wire,
@@ -1706,17 +2415,37 @@ impl Server {
             pg,
             #[cfg(feature = "stream-grpc")]
             stream_grpc,
+            #[cfg(feature = "sqldb")]
+            sqlgate,
             #[cfg(feature = "qdrant")]
             qdrant,
             durable: Durable::none(),
             #[cfg(feature = "es")]
             es,
+            #[cfg(feature = "graph")]
+            graph,
         })
     }
 
     /// The address the HTTP API listens on.
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
+    }
+
+    /// How many scheduled graph catalog sweeps have completed, when Loams Graph is served
+    /// (GR1 Task 5, R4.9).
+    #[cfg(feature = "graph")]
+    #[must_use]
+    pub fn graph_sweeps(&self) -> Option<u64> {
+        self.graph
+            .as_ref()
+            .map(|g| g.sweeps.load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    /// The graph data directory, when Loams Graph is served with one (GR1 Task 5).
+    #[cfg(feature = "graph")]
+    pub fn graph_data_dir(&self) -> Option<&std::path::Path> {
+        self.graph.as_ref().and_then(|g| g.data_dir.as_deref())
     }
 
     /// The openraft metastore client, for embedding and tests; `None` on the
@@ -1748,6 +2477,38 @@ impl Server {
         self.collections.clone()
     }
 
+    /// The address the Loams Live sync API listens on, when it runs.
+    #[cfg(feature = "live")]
+    pub fn live_addr(&self) -> Option<SocketAddr> {
+        self.live.as_ref().map(|live| live.handle.addr)
+    }
+
+    /// Loams Live's subscription counters, when it runs; `missed_invalidations`
+    /// is `live_missed_invalidation_total` (R1 plan row T12-8).
+    #[cfg(feature = "live")]
+    pub fn live_stats(&self) -> Option<loams_live::subs::SubsStats> {
+        self.live.as_ref().map(|live| live.handle.stats())
+    }
+
+    /// Whether Loams Live's TiKV handle is swept by the metastore's GC loop
+    /// (`true`), or Live runs its own GC (`false`: its own cluster GC loop,
+    /// or the embedded store's GC), or Live is off (`None`).
+    #[cfg(feature = "live")]
+    pub fn live_swept_by_metastore_gc(&self) -> Option<bool> {
+        #[cfg(feature = "live-tikv")]
+        return self
+            .live
+            .as_ref()
+            .map(|live| live.gc.is_none() && live.handle.store().as_tikv().is_some());
+        #[cfg(not(feature = "live-tikv"))]
+        self.live.as_ref().map(|_| false)
+    }
+
+    /// The `tailscale serve` target's address, in tailscale mode.
+    pub fn tailscale_addr(&self) -> Option<SocketAddr> {
+        self.tailscale.as_ref().map(|t| t.addr)
+    }
+
     /// The address Flight SQL listens on, when it does.
     pub fn flight_sql_addr(&self) -> Option<SocketAddr> {
         self.flight.as_ref().map(|flight| flight.addr)
@@ -1763,6 +2524,12 @@ impl Server {
     #[cfg(feature = "pgwire")]
     pub fn pg_addr(&self) -> Option<SocketAddr> {
         self.pg.as_ref().map(|pg| pg.addr)
+    }
+
+    /// The Loams SQL gate's address, when configured.
+    #[cfg(feature = "sqldb")]
+    pub fn sqlgate_addr(&self) -> Option<SocketAddr> {
+        self.sqlgate.as_ref().map(|gate| gate.addr)
     }
 
     /// The native stream gRPC listener, when configured.
@@ -1800,10 +2567,10 @@ impl Server {
         &self.writer
     }
 
-    /// Stops the Qdrant and Elasticsearch gateways (waiting up to 10 s for
-    /// their requests), stops accepting requests, stops Flight SQL, stops the
-    /// durable server (D1: before anything it may call into), stops the
-    /// collection
+    /// Stops Loams Live (ending its sessions), then the Qdrant and Elasticsearch
+    /// gateways (waiting up to 10 s for their requests), stops accepting
+    /// requests, stops Flight SQL, stops the durable server (D1: before anything
+    /// it may call into), stops the collection
     /// service's tails, flushes the writer (buffered appends are
     /// acknowledged), stops the worker (releasing its task leases), stops
     /// the hot tier, closes the collection targets' PK index handles, waits
@@ -1815,7 +2582,12 @@ impl Server {
     /// metastore routes keep serving until the replica stops (Task 11
     /// rule 4).
     pub async fn shutdown(self) -> Result<(), ServerError> {
-        // The Qdrant gateway stops first, within the HTTP grace period
+        // Loams Live's sessions end first; its own GC loop, if any, with it.
+        #[cfg(feature = "live")]
+        if let Some(live) = self.live {
+            live.stop().await;
+        }
+        // Then the Qdrant gateway, within the HTTP grace period
         // (plan M1.4 Task 2 rule 3).
         shutdown_phase("qdrant");
         // The Elasticsearch gateway stops together with it (plan M1.5 Task
@@ -1865,6 +2637,9 @@ impl Server {
             }
         }
         shutdown_phase("flight");
+        if let Some(tailscale) = self.tailscale {
+            tailscale.stop().await;
+        }
         if let Some(flight) = self.flight {
             flight.stop().await;
         }
@@ -1880,10 +2655,20 @@ impl Server {
         if let Some(stream_grpc) = self.stream_grpc {
             stream_grpc.stop().await;
         }
+        #[cfg(feature = "sqldb")]
+        if let Some(sqlgate) = self.sqlgate {
+            sqlgate.stop().await;
+        }
         // D1 (T0-6, X8): after Flight (and, in cluster mode, after
         // `late.close()`), before the collection service: the runtime first,
         // then the server (phases `durable_runtime`, `durable`).
         self.durable.stop().await;
+        // Loams Graph closes its graphs (flushing their WAL) before the rest stops.
+        #[cfg(feature = "graph")]
+        if let Some(graph) = self.graph {
+            shutdown_phase("graph");
+            graph.stop().await;
+        }
         shutdown_phase("collections");
         self.collections.shutdown().await;
         shutdown_phase("writer");

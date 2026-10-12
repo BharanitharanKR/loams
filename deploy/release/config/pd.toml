@@ -1,0 +1,6 @@
+# PD for the release compose stack. Keyspaces created at bootstrap (PD creates
+# them only on a fresh cluster): loams_meta (the engine's metastore),
+# loams_live_dev (the Live app `dev`), sql_dev (TiDB's keyspace) and
+# loams_pgwal (the Loams Postgres WAL hot tier, design §28 §6.5).
+[keyspace]
+pre-alloc = ["loams_meta", "loams_live_dev", "sql_dev", "loams_pgwal"]

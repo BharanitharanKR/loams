@@ -6,7 +6,7 @@ The crates are `loams-*` and the binary is `loams`. Packages will publish as `lo
 
 ## Ways to contribute
 
-- **Pick up an issue.** Issues labelled [`good first issue`](../../issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) are small and come with pointers and acceptance criteria. [`help wanted`](../../issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) issues are larger. Comment on an issue before you start, so that two people don't do the same work.
+- **Pick up an issue.** Issues labelled [`good first issue`](https://github.com/ostrium-labs/loams/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) are small and come with pointers and acceptance criteria. [`help wanted`](https://github.com/ostrium-labs/loams/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) issues are larger. Comment on an issue before you start, so that two people don't do the same work.
 - **Report compatibility gaps.** Point your Qdrant or Elasticsearch client, or your LangChain or LlamaIndex app, at `loams dev` and tell us what breaks.
 - **Review the design.** The architecture is written down in [`docs/design`](docs/design/README.md). Open an issue for anything that is unclear, wrong or missing.
 - **Improve the docs.** Fixes to the README, crate docs and design docs are always welcome.
@@ -23,7 +23,7 @@ The crates are `loams-*` and the binary is `loams`. Packages will publish as `lo
 
 The Multitenant BYOC Control Plane with GitOps, generic observability and quota
 enforcement are open source. Billing-grade metering, billing and commercial APIs
-belong in the private `loam-platform` repository. **Integrity** is the rule:
+belong in the private `loams-platform` repository. **Integrity** is the rule:
 "could a charge depend on this value, and could a tenant or an agent profit from
 forging it?" If so, its producer and validator belong in the private platform.
 
@@ -78,7 +78,7 @@ Some library crates also have a `failpoints` feature (`loams-log`, `loams-link`,
 
 ### Forked dependencies
 
-A few dependencies come from pinned forks under [ostrium-labs](https://github.com/ostrium-labs), because Loams needs patches that upstream has not released yet: [resonate](https://github.com/ostrium-labs/resonate) (the embedded durable-execution server), [client-rust](https://github.com/ostrium-labs/client-rust) (`tikv-client`), [neon](https://github.com/ostrium-labs/neon) and [sqlx](https://github.com/ostrium-labs/sqlx). Fixes to those go to the fork first and upstream where possible; bumping a pin is a PR of its own that updates `Cargo.toml`, `deny.toml` and [NOTICE](NOTICE) together.
+A few dependencies come from pinned forks under [ostrium-labs](https://github.com/ostrium-labs), because Loams needs patches that upstream has not released yet: [resonate](https://github.com/ostrium-labs/resonate) (the embedded durable-execution server), [client-rust](https://github.com/ostrium-labs/client-rust) (`tikv-client`), [loams-postgres](https://github.com/ostrium-labs/loams-postgres) (Loams Postgres, a hard fork of Neon) and [sqlx](https://github.com/ostrium-labs/sqlx). Fixes to those go to the fork first and upstream where possible; bumping a pin is a PR of its own that updates `Cargo.toml`, `deny.toml` and [NOTICE](NOTICE) together.
 
 ## Running the checks
 
@@ -150,7 +150,7 @@ Loams uses the [Developer Certificate of Origin](https://developercertificate.or
 git commit -s -m "log: add a WAL object encoder"
 ```
 
-This adds a `Signed-off-by: Your Name <you@example.com>` trailer, certifying that you wrote the change or otherwise have the right to submit it under the project's license. To sign off commits you already made, run `git rebase --signoff dev`.
+This adds a `Signed-off-by: Your Name <you@example.com>` trailer, certifying that you wrote the change or otherwise have the right to submit it under the project's license. To sign off commits you already made, run `git rebase --signoff dev`. If they are already on a shared branch, add a signed-off commit instead, with one line per commit in its body: `I, Your Name <you@example.com>, hereby add my Signed-off-by to this commit: <full sha>` (your author email must match the commit's).
 
 ## Code of Conduct
 

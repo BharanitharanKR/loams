@@ -1,6 +1,16 @@
 # The `ErrorInfo.reason` registry
 
-Status: **API1 Task 1** (2026-10-03). Design [§44](../design/44-unified-api-and-sdks.md) §7.4, decision **D611**; plan [API1](../plans/2026-10-02-api1-unified-connect.md).
+Status: **API1 Task 2** (2026-10-03): Task 1's registry plus `not_found`'s metadata, which `loams.collection.v1` fills from `ServiceError::NotFound`'s `kind` and `name` (`crates/loams/src/api/errors.rs` rule 3). Design [§44](../design/44-unified-api-and-sdks.md) §7.4, decision **D611**; plan [API1](../plans/2026-10-02-api1-unified-connect.md).
+
+`loams.collection.v1` adds **no** row: every RPC it serves reuses the `error`
+code the REST surface already raises as its `reason` (API1 plan ruling 1.6),
+through the one helper in `crates/loams/src/api/connect_collections.rs`.
+Three of `api::errors`'s codes are not registry rows and fold into the row
+they mean — `schema_violation` → `invalid_argument` (the offending field
+rides in `metadata`), `conflict` → `aborted` (a fenced lease or a version
+mismatch is a concurrent write that won), `timeout` → `deadline_exceeded` —
+and a code with no mapping at all is a bug in a layer that grew one, so it
+answers `internal` and is logged rather than inventing a reason.
 
 Every failed RPC carries a Connect code (`unimplemented`, `not_found`, ...) and one `loams.errors.v1.ErrorInfo` in its details. Callers branch on **`reason`**, a stable `snake_case` string, never on `code` alone and never on `message` (which may change). This page is the registry of every `reason` the server can return, so a caller can look one up instead of guessing a string.
 
@@ -31,8 +41,34 @@ The rules, in the order they bite:
 | `push_target_unknown` | not_found | UnregisterPushTarget | |
 | `not_implemented` | unimplemented | a stub handler whose service has not landed yet | |
 | `feature_not_in_variant` | unimplemented | any RPC of a catalogue package whose engine is not in this build variant (§44 §4, §30 §9) | `variant` |
+| `house_not_configured` | unimplemented | any `loams.house.v1` RPC on a server with no `[house] endpoint` (`--house-endpoint`): the main port has no Loams House front to proxy to (HS1 Task 7, §49 §18.1). A front that is configured but unreachable answers `unavailable` | |
+| `house_syntax_error` | invalid_argument | `loams.house.v1` ExecuteQuery, ExplainQuery, PreviewTable: ClickHouse's `62 SYNTAX_ERROR` — a statement that does not parse, more than one statement, or a form outside the House's surface (HS1 Task 8, §49 §18.2) | `clickhouse_code`, `clickhouse_name` |
+| `house_unknown_table` | not_found | `loams.house.v1` statements, DescribeTable, PreviewTable: ClickHouse's `60 UNKNOWN_TABLE` | `clickhouse_code`, `clickhouse_name` |
+| `house_unknown_database` | not_found | `loams.house.v1` statements and the browsing RPCs: ClickHouse's `81 UNKNOWN_DATABASE` (HS1 Task 8; §49 §18.2 lists no reason for it) | `clickhouse_code`, `clickhouse_name` |
+| `house_access_denied` | permission_denied | `loams.house.v1`: ClickHouse's `497 ACCESS_DENIED`; a read-only user's write (`164`); CancelQuery of another caller's query; `ListQueryHistory` with scope `NAMESPACE` without `house:admin` | `clickhouse_code`, `clickhouse_name` when ClickHouse raised it |
+| `house_read_only` | failed_precondition | `loams.house.v1` ExecuteQuery with `read_only` absent or true and a statement that writes or changes state: refused before it runs (ClickHouse's `164 READONLY`); the desktop asks to confirm and runs it again with `read_only = false` (§49 §18.3) | `clickhouse_code`, `clickhouse_name` |
+| `house_timeout` | deadline_exceeded | `loams.house.v1` statements: ClickHouse's `159 TIMEOUT_EXCEEDED` — past `timeout_ms` (or 300 s), or the worker killed 2 s after it | `clickhouse_code`, `clickhouse_name` |
+| `house_memory_limit` | resource_exhausted | `loams.house.v1` statements: ClickHouse's `241 MEMORY_LIMIT_EXCEEDED`, or the worker killed over its memory | `clickhouse_code`, `clickhouse_name` |
+| `house_too_many_queries` | resource_exhausted | `loams.house.v1` statements: ClickHouse's `202 TOO_MANY_SIMULTANEOUS_QUERIES` — no worker free within the acquire timeout | `clickhouse_code`, `clickhouse_name` |
+| `house_quota_exceeded` | resource_exhausted | `loams.house.v1` statements past a namespace quota (raised from HS1 Task 22, §49 §14) | `quota`, `limit` |
+| `house_disabled_function` | permission_denied | `loams.house.v1` statements: ClickHouse's `344 SUPPORT_IS_DISABLED` — a table function, function, engine, statement or `system` table the House's deny list refuses (§49 §13) | `clickhouse_code`, `clickhouse_name` |
+| `house_cancelled` | canceled | `loams.house.v1` ExecuteQuery and PreviewTable: ClickHouse's `394 QUERY_WAS_CANCELLED` — CancelQuery, or the statement's worker stopped for it | `clickhouse_code`, `clickhouse_name` |
+| `house_query_not_found` | not_found | `loams.house.v1` CancelQuery (no running query of that id) and GetQuery (no logged query of the caller's with that id) (HS1 Task 8) | `query_id` |
+| `house_query_failed` | unknown | `loams.house.v1` statements: any other error the engine raised whose ClickHouse HTTP status is not 4xx (one whose status is 4xx answers `invalid_argument`), with its ClickHouse code and name (HS1 Task 8) | `clickhouse_code`, `clickhouse_name` |
+| `project_not_found` | not_found | every `loams.postgres.v1` RPC that names a project | `project` |
+| `branch_has_children` | failed_precondition | DeleteBranch | `children` (count) |
+| `branch_protected` | failed_precondition | DeleteBranch, RestoreBranch (an agent's goes through `loams.approvals.v1` instead) | `branch` |
+| `lsn_out_of_retention` | failed_precondition | CreateBranch, RestoreBranch | `oldest_lsn`, `history_retention` |
+| `endpoint_exists_for_branch` | already_exists | CreateEndpoint (a second read-write endpoint) | `endpoint` |
+| `compute_start_failed` | unavailable | StartEndpoint, RestartEndpoint (the Operation's error) | `compute` |
+| `quota_exceeded` | resource_exhausted | any `loams.postgres.v1` create or resize past a limit (§46 §14) | `quota`, `limit` |
+| `storage_unavailable` | unavailable | any `loams.postgres.v1` RPC that needs the pageserver, `loams-wal` or the storage controller while it is down | `component` |
+| `secret_already_issued` | failed_precondition | CreateRole, ResetRolePassword, IssueConnectCredential replayed with the same `idempotency_key`: the secret is answered once, and the idempotency ledger keeps only that it was issued, never the secret | `role`; `hint`: ResetRolePassword for a new password, or IssueConnectCredential with a new key for a new credential |
+| `live_bad_cursor` | invalid_argument | `loams.live.v1` Query, Mutate and the session's queries: a function's `paginate` got a cursor that is malformed, altered, or from another app, table or index (LV1 Task 4) | |
+| `live_worker_crashed` | internal | `loams.live.v1` Query, Mutate and the session's queries: the isolated worker process running the function crashed or was killed; the call's transaction never committed, and a mutation is not retried (LV1 Task 5, design §45 §3.1). Live's own wire code is `ERROR_CODE_FUNCTION_ERROR`; `internal` is provisional until Task 19 maps Live errors to Connect codes | |
+| `live_deploy_conflict` | failed_precondition | `loams.live.v1` Deploy (LiveAdminService's Deploy and ActivateDeployment from LV1 Task 10): the deploy's `expected_active` is not the app's active deployment, because another deploy activated in between; the message names both. The deployment's record is `failed` (LV1 Task 6, design §45 §3.3) | |
 | `invalid_argument` | invalid_argument | any RPC: a malformed field, an unparseable value | `field` |
-| `not_found` | not_found | any RPC: the named resource does not exist | |
+| `not_found` | not_found | any RPC: the named resource does not exist | `kind`, `name` |
 | `already_exists` | already_exists | any RPC that creates a named resource | |
 | `permission_denied` | permission_denied | any RPC the caller's role may not make | |
 | `token_expired` | unauthenticated | a rejected access token | `hint` says whether to refresh or sign in again |
@@ -43,6 +79,10 @@ The rules, in the order they bite:
 | `deadline_exceeded` | deadline_exceeded | the caller's deadline passed | |
 | `aborted` | aborted | a concurrent write won; the caller retries | |
 | `internal` | internal | a bug; the message and `request_id` go to the log | |
+
+The `loams.postgres.v1` rows (`project_not_found` to `secret_already_issued`) are design §46 §4.1's, registered by PG2 Task 1 before `pg-control` raises them (PG2 Task 9); `reasons_registered` (`crates/loams-proto/tests/postgres.rs`) fails if one §46 §4.1 names is missing. A replayed create under a taken name with another key answers the generic `already_exists`, and a `RestartEndpoint` with `promote` while the branch's read-write endpoint runs the generic `failed_precondition` (PG2 Task 1 ruling R1.8).
+
+`live_bad_cursor` is LV1 Task 4's, `live_worker_crashed` LV1 Task 5's and `live_deploy_conflict` LV1 Task 6's: `loams_live::LiveError::reason` names them, and they reach the wire when Live moves onto the main Connect port (LV1 Task 12) and their errors are mapped there (Task 19).
 
 The generic rows (`invalid_argument` and below) are the code-to-class mapping of D611's error hierarchy: they are what an SDK turns into its own `InvalidArgument`, `NotFound`, ... types. They carry no Loams-specific semantics, so they were already the native REST API's `error` values (`crates/loams/src/api/errors.rs`) and become the RPC `reason` unchanged. The rows above them are the specific causes AP0 registered; the specific causes API1 Tasks 2–8 add are appended as their services land, and `unavailable_service_reports_reason` covers the variant case.
 

@@ -1,10 +1,25 @@
+![Loams — Your data. Your bucket.](docs/assets/loams-banner.svg)
+
 # Loams
 
 **One bucket, every index: hybrid retrieval on object storage, with reactive data and durable agent runs beside it.**
 
 Loams is an open-source, AI-native data platform built in Rust. It stores retrieval data in *your* object-storage bucket (RustFS, S3, GCS, Azure Blob or a local directory) in open formats: Lance and Tantivy today, Apache Iceberg next. Metadata lives in an embedded Raft metastore or in TiKV, and durable-execution state in SQLite (TiKV support is in progress). Retrieval compute is stateless and holds only caches, so it scales independently and can be replaced at any time.
 
-> **Early and moving fast.** Loams has no stable release yet, and APIs, formats and flags change without notice. The crates are `loams-*` and the binary is `loams`; nothing is published yet. The design is public in [`docs/design`](docs/design/README.md).
+> **Preview.** Loams' first release, v0.1.0-preview.1, is a preview: container images on `ghcr.io/ostrium-labs` (tagged `0.1.0-preview.1` and the rolling `:preview`) that you run yourself with Docker Compose, over your own Tailscale tailnet, with the hosted console at `console.loams.dev`. It is not production ready, and APIs, formats and flags can change between previews. The crates are `loams-*` and the binary is `loams`; no crate or package is published to a registry yet. Start with [Running the preview](docs/release/preview.md); the design is public in [`docs/design`](docs/design/README.md).
+
+[Documentation](docs/README.md) · [Website](https://loams.dev) · [API reference](https://loams.dev/api-docs) · [Contributing](CONTRIBUTING.md)
+
+## Start here
+
+| Your goal | Entry point |
+|---|---|
+| Run the preview stack | [Running the preview](docs/release/preview.md): Docker Compose, locally or on your VMs, over your Tailscale tailnet |
+| Build and run the engine | [Quick start](#quick-start) and [platform build guides](docs/build-from-source/README.md) |
+| Understand the system | [Architecture](#architecture) and [design documents](docs/design/README.md) |
+| Use a client | [API surfaces](#api-surfaces) and [SDKs](sdks/README.md) |
+| Work on desktop, mobile, web, or plugins | [Monorepo guide](docs/monorepo.md) |
+| Help ship Loams | [Contributing](CONTRIBUTING.md) and [implementation plans](docs/plans/README.md) |
 
 ## Why Loams
 
@@ -35,36 +50,62 @@ Read the [pitch](docs/design/00-pitch.md) and the [architecture](docs/design/01-
 
 ## Features
 
-Statuses reflect the `main` branch. **Available** means it is built and tested in CI, not that it is production ready.
+Loams' first release, **v0.1.0-preview.1** (2026-10-12), is a preview: you run the whole stack yourself with Docker Compose, locally or on your own VMs over your own Tailscale tailnet, and use the hosted console at `https://console.loams.dev`. See [Running the preview](docs/release/preview.md).
+
+**Preview** means it ships in the v0.1.0-preview.1 images and is built and tested in CI, but it is not production ready: APIs, formats and flags can still change between previews. **In progress** and **Planned** do not ship in v0.1.0-preview.1. Statuses describe the code on `dev`; check the source ref you deploy.
 
 | Feature | What you get | Status |
 |---|---|---|
-| Collections | Documents with a schema, stored as Lance (vectors, columns) plus Tantivy (full text) under one manifest; upserts and deletes by id | Available |
-| Hybrid retrieval | Vector kNN, BM25 and filters fused with RRF in one query; SQL table functions `vector_search`, `text_search` and `rrf` | Available |
-| Native REST API | Namespaces, streams, collections, links, hybrid query and SQL | Available |
-| Arrow Flight SQL | SQL and Arrow results for any language with an ADBC or Flight SQL driver | Available |
-| Qdrant API | Qdrant REST and gRPC, tested with `qdrant-client` 1.15 and 1.19 | Available |
-| Elasticsearch subset | Document APIs, `_bulk`, `_search` with the core Query DSL, `knn`, hybrid and RRF, tested with `elasticsearch-py` 8.19 | Available |
-| Streams and links | Partitioned streams with a native produce and fetch API; links apply streams to targets exactly once | Available |
-| Hot tier | HNSW vector artifacts and pinned text splits in RAM and NVMe, with delta indexes for fresh writes | Available |
-| Pinned scans | Read a collection's pinned Lance version directly with pylance, Ray, Polars or PyTorch | Available |
-| Cluster mode | `loams cluster` with roles, rendezvous placement, read forwarding and write backpressure | Available |
-| TiKV metastore | The catalog, leases and timestamp oracle on TiKV (`--meta tikv://…`, cargo feature `tikv`) | Available (opt-in) |
-| Loams Durable | An embedded Resonate server: durable promises and tasks on SQLite (cargo feature `durable`) | Available (opt-in) |
+| Collections | Documents with a schema, stored as Lance (vectors, columns) plus Tantivy (full text) under one manifest; upserts and deletes by id | Preview |
+| Hybrid retrieval | Vector kNN, BM25 and filters fused with RRF in one query; SQL table functions `vector_search`, `text_search` and `rrf` | Preview |
+| Native REST API | Namespaces, streams, collections, links, hybrid query and SQL | Preview |
+| Arrow Flight SQL | SQL and Arrow results for any language with an ADBC or Flight SQL driver | Preview |
+| Qdrant API | Qdrant REST and gRPC, tested with `qdrant-client` 1.15 and 1.19 | Preview |
+| Elasticsearch subset | Document APIs, `_bulk`, `_search` with the core Query DSL, `knn`, hybrid and RRF, tested with `elasticsearch-py` 8.19 | Preview |
+| Streams and links | Partitioned streams with a native produce and fetch API; links apply streams to targets exactly once | Preview |
+| Hot tier | HNSW vector artifacts and pinned text splits in RAM and NVMe, with delta indexes for fresh writes | Preview |
+| Pinned scans | Read a collection's pinned Lance version directly with pylance, Ray, Polars or PyTorch | Preview |
+| Cluster mode | `loams cluster` with roles, rendezvous placement, read forwarding and write backpressure | Preview |
+| TiKV metastore | The catalog, leases and timestamp oracle on TiKV (`--meta tikv://…`, cargo feature `tikv`) | Preview |
+| Loams Durable | An embedded Resonate server: durable promises and tasks on SQLite (cargo feature `durable`) | Preview |
 | Durable store on TiKV | Durable execution state on TiKV for clusters | In progress |
-| Loams Live | A reactive document database on TiKV: transactions, indexes, live queries and a TypeScript SDK | In progress |
-| Postgres and MySQL wire | SQL over the Postgres and MySQL wire protocols | In progress |
-| Streaming gRPC API | Idempotent produce and streaming subscribe over gRPC | In progress |
-| Web console | The Loams console and its design system, built against a mock of the console API | In progress |
+| Loams Live | A reactive document database: transactions, indexes, live queries and a TypeScript SDK, on an embedded store or on TiKV (`live-tikv`) | Preview. Cross-node pickup can take up to 60 s; the deploy flow (versioned deployments) is in progress |
+| Loams Graph | `loams.graph.v1` on the main port, GQL on Grafeo (cargo feature `graph`) | Preview. Writes reach the Loams log before they are acknowledged (GR1 Task 11), but crash recovery (Task 14) is not done: keep a copy of graph data you cannot recreate |
+| Loams House | ClickHouse-compatible analytics on chDB in `loams-fabric`, with `loams.house.v1` proxied by the engine | Preview. Not wired to the engine in this release (`--profile house` exists, the engine answers `house_not_configured`). Results over one block in JSON, CSVWithNames, Parquet or Arrow are malformed over the ClickHouse HTTP interface until a pending fix; `loams.house.v1` is not affected |
+| Loams SQL | MySQL-compatible SQL on a patched TiDB (`v8.5.8-loams.1`) over TiKV | Preview |
+| Loams Postgres | A fork of Neon whose storage lives on the bucket; the compose stack runs its storage and computes | Preview. The control plane runs (PG2 Tasks 1 to 9), but computes and endpoints are not provisioned through it yet |
+| Postgres and MySQL wire | SQL over the Postgres and MySQL wire protocols, over collections | Preview |
+| Streaming gRPC API | Idempotent produce and streaming subscribe over gRPC | Preview |
+| Web console | The React console, hosted at `console.loams.dev`. Your own Vercel or Cloudflare deployment is coming soon | Preview. Several pages still use mocked clients; House and Analytics are not wired to the engine |
+| Engine auth | Tailscale identity (default), OIDC (JWTs checked against the issuer's JWKS), hashed API keys, or loopback-only (`LOAMS_AUTH_MODE`) | Preview |
+| Self-hosting with Docker Compose | The whole stack in `deploy/release/compose.yaml`, reachable only over your Tailscale tailnet, locally or on your VMs with `byoc/install.sh` over SSH | Preview. Headscale is coming soon |
 | Graph expansion | GraphRAG expansion of 1 to 2 hops, planned together with the retrieval query | Planned |
 | Iceberg analytics | Iceberg tables through a REST catalog, readable by DuckDB, Spark, Trino and ClickHouse | Planned |
 | Kafka wire and OTLP | Kafka clients and OpenTelemetry logs ingest into streams | Planned |
-| Auth and tenancy | API keys, authorization, tenant quotas and a namespace router | Planned |
-| Python SDK and MCP | A native Python client, `to_arrow()` and `to_polars()`, and an MCP server | Planned |
+| Authorization and tenancy | Roles, per-namespace authorization, tenant quotas and a namespace router | Planned |
+| Native SDKs | Multi-language clients, generated API bindings, and shared runtime conformance fixtures; packages are not a stable published release | In progress |
+| MCP and analytics helpers | Agent tools and convenience integrations such as `to_arrow()` and `to_polars()` | Planned |
 | Loams Functions | A CPU-time serverless runtime on workerd, wasmtime and gVisor, with a Rust Dapr-style API | Planned |
 | Loams Jobs | Celery, BullMQ v6, PySpark (through Sail) and Flink SQL (through RisingWave) jobs run durably on Loams | Planned |
-| Loams Postgres | A fork of Neon whose WAL lives on TiKV and the bucket | Planned |
 | Self-hosting with GitOps | A Helm chart, a Kubernetes operator and Argo CD layouts | Planned |
+
+## Monorepo applications
+
+This repository also contains [Loams Desktop](apps/desktop-electron/README.md) with its agent daemon ([`crates/loams-agentd`](docs/design/50-loams-desktop-daemon.md)),
+[native Android/iOS apps](apps/mobile/README.md), and [plugin services and dashboard](plugins/README.md).
+Nx coordinates Cargo, Gradle, Xcode/SwiftPM, Go, and the root pnpm workspace; it does not replace those build tools.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm projects
+pnpm build
+pnpm test
+```
+
+The default JavaScript checks do not require native toolchains. Build native apps separately with
+`pnpm build:desktop`, `pnpm build:android`, or `pnpm build:ios` on a supported host.
+See [the monorepo guide](docs/monorepo.md) for prerequisites, commands, migration provenance,
+contract ownership, and current validation limits. Scoped licenses remain beside imported components.
 
 ## Quick start
 
@@ -212,7 +253,8 @@ Each gateway documents where it differs from the original in its crate's module 
 | [`loams-meta`](crates/loams-meta) | The embedded metastore on Raft: namespaces, streams, the sequencer, leases and pointers |
 | [`loams-meta-tikv`](crates/loams-meta-tikv) | The metastore on TiKV |
 | [`loams-meta-conformance`](crates/loams-meta-conformance) | A backend-agnostic conformance suite for the metastore (test only) |
-| [`loams-tikv`](crates/loams-tikv) | The TiKV client layer: transactions, the tuple codec, the timestamp oracle and keyspace bootstrap |
+| [`loams-tikv`](crates/loams-tikv) | The TiKV client layer: transactions, the timestamp oracle, keyspace bootstrap and the cluster GC loop |
+| [`loams-tuple`](crates/loams-tuple) | The order-preserving tuple codec of index keys, shared by `loams-kv` and `loams-tikv` |
 | [`loams-log`](crates/loams-log) | The internal log: WAL objects, segments, the write and fetch paths, and retention |
 | [`loams-worker`](crates/loams-worker) | Lease-fenced background tasks with priorities and fair share |
 | [`loams-link`](crates/loams-link) | Links: exactly-once apply of streams into targets |
@@ -226,10 +268,11 @@ Each gateway documents where it differs from the original in its crate's module 
 | [`loams-qdrant`](crates/loams-qdrant) | The Qdrant-compatible REST and gRPC gateway |
 | [`loams-es`](crates/loams-es) | The Elasticsearch-compatible REST gateway |
 | [`loams-durable`](crates/loams-durable) | Loams Durable: the Resonate server embedded in process |
+| [`loams-kv`](crates/loams-kv) | Loams Live's store seam: transactions, snapshots and timestamps over an embedded backend or TiKV |
 | [`loams-live`](crates/loams-live) | Loams Live: the reactive document database on TiKV |
 | [`loams-live-proto`](crates/loams-live-proto) | Loams Live's `loams.live.v1` protos and generated service code |
 | [`loams-sim`](crates/loams-sim) | Seeded cluster simulation and a linearizability checker (test only) |
-| [`loams-console-mock`](crates/loams-console-mock) | A mock of the console API with seed data |
+| [`loams-console-mock`](crates/loams-console-mock) | The console API's contract and seed data, served over REST by `loams-apps-mock` |
 
 Other directories:
 
@@ -255,12 +298,12 @@ In order: hybrid retrieval hardened for production (auth, quotas, telemetry, mul
 Contributions of every size are welcome: bug reports, compatibility reports from your Qdrant or Elasticsearch client, docs fixes, tests and code.
 
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) for the dev setup, tests and the PR flow.
-- Look for issues labelled [`good first issue`](../../issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) or [`help wanted`](../../issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22).
+- Look for issues labelled [`good first issue`](https://github.com/ostrium-labs/loams/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) or [`help wanted`](https://github.com/ostrium-labs/loams/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22).
 - For anything that changes a format, a protocol or a design decision, open an issue first.
 
 ## Community
 
-- **Questions and ideas:** [GitHub Discussions](https://github.com/ostrium-labs/loams/discussions). **Bugs and RFCs:** [GitHub issues](../../issues).
+- **Questions and ideas:** [GitHub Discussions](https://github.com/ostrium-labs/loams/discussions). **Bugs and RFCs:** [GitHub issues](https://github.com/ostrium-labs/loams/issues).
 - **Security issues:** please report them privately, as described in [SECURITY.md](SECURITY.md).
 - **Conduct:** everyone who takes part agrees to the [Code of Conduct](CODE_OF_CONDUCT.md).
 - **Governance and maintainers:** [GOVERNANCE.md](GOVERNANCE.md) and [MAINTAINERS.md](MAINTAINERS.md).
@@ -274,7 +317,7 @@ Contributions of every size are welcome: bug reports, compatibility reports from
 
 ## Built on
 
-Loams builds on great open-source work, including [DataFusion](https://datafusion.apache.org), [Lance](https://github.com/lancedb/lance), [Tantivy](https://github.com/quickwit-oss/tantivy), [Quickwit](https://github.com/quickwit-oss/quickwit), [qdrant-edge](https://github.com/qdrant/qdrant), [SlateDB](https://slatedb.io), [openraft](https://github.com/databendlabs/openraft), [TiKV](https://tikv.org) and [Resonate](https://github.com/resonatehq/resonate). Where Loams needs patches before upstream ships them, it uses pinned forks under [ostrium-labs](https://github.com/ostrium-labs): [resonate](https://github.com/ostrium-labs/resonate), [client-rust](https://github.com/ostrium-labs/client-rust), [neon](https://github.com/ostrium-labs/neon) and [sqlx](https://github.com/ostrium-labs/sqlx). Attributions are in [NOTICE](NOTICE).
+Loams builds on great open-source work, including [DataFusion](https://datafusion.apache.org), [Lance](https://github.com/lancedb/lance), [Tantivy](https://github.com/quickwit-oss/tantivy), [Quickwit](https://github.com/quickwit-oss/quickwit), [qdrant-edge](https://github.com/qdrant/qdrant), [SlateDB](https://slatedb.io), [openraft](https://github.com/databendlabs/openraft), [TiKV](https://tikv.org) and [Resonate](https://github.com/resonatehq/resonate). Where Loams needs patches before upstream ships them, it uses pinned forks under [ostrium-labs](https://github.com/ostrium-labs): [resonate](https://github.com/ostrium-labs/resonate), [client-rust](https://github.com/ostrium-labs/client-rust), [loams-postgres](https://github.com/ostrium-labs/loams-postgres) (Loams Postgres, a hard fork of Neon) and [sqlx](https://github.com/ostrium-labs/sqlx). Attributions are in [NOTICE](NOTICE).
 
 ## License
 

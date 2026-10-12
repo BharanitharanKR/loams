@@ -98,11 +98,12 @@ const RPCS = [
     name: 'instance_who_am_i',
     path: '/loams.instance.v1.InstanceService/WhoAmI',
     about:
-      'A structured-reason error: `unimplemented` carrying an ErrorInfo whose ' +
-      'reason is `not_implemented`, because this build has no authentication ' +
-      'yet. An SDK branches on the reason, never on the message.',
-    reason: 'not_implemented',
-    pinnedBy: ['R8'],
+      'A successful authenticated unary call: the principal the auth layer ' +
+      'admitted. `loams dev` with auth off admits a loopback caller as the ' +
+      '`dev-loopback` principal (#436), so this answers rather than refusing. ' +
+      '`not_implemented` is recorded from the apps mock instead.',
+    reason: null,
+    pinnedBy: ['R9'],
   },
   {
     name: 'live_query',
@@ -1698,6 +1699,255 @@ const UNPRODUCIBLE_REASONS = [
     reason: 'internal',
     code: 'internal',
     why: 'A bug. A recording of one would pin a bug that ought to be fixed.',
+    standIn: null,
+  },
+  {
+    reason: 'house_not_configured',
+    code: 'unimplemented',
+    why:
+      '`loams dev` raises it on any `loams.house.v1` RPC when it has no ' +
+      '`[house] endpoint`, but the recorder does not call `loams.house.v1` yet, ' +
+      'so the corpus has no recording of it (HS1 Task 7 adds the RPC; a fixture ' +
+      'is the follow-up).',
+    standIn: null,
+  },
+  {
+    reason: 'house_syntax_error',
+    code: 'invalid_argument',
+    why:
+      'The corpus records `loams.instance.v1`, the devices, approvals and Live ' +
+      'catalogue RPCs against `loams dev` and the apps mock; neither is started ' +
+      'with a Loams House front, so no `loams.house.v1` statement runs. ' +
+      'Recording the ClickHouse-mapped reasons needs a front in the conformance ' +
+      'run (HS1).',
+    standIn: null,
+  },
+  {
+    reason: 'house_unknown_table',
+    code: 'not_found',
+    why:
+      'The corpus records `loams.instance.v1`, the devices, approvals and Live ' +
+      'catalogue RPCs against `loams dev` and the apps mock; neither is started ' +
+      'with a Loams House front, so no `loams.house.v1` statement runs. ' +
+      'Recording the ClickHouse-mapped reasons needs a front in the conformance ' +
+      'run (HS1).',
+    standIn: null,
+  },
+  {
+    reason: 'house_unknown_database',
+    code: 'not_found',
+    why:
+      'The corpus records `loams.instance.v1`, the devices, approvals and Live ' +
+      'catalogue RPCs against `loams dev` and the apps mock; neither is started ' +
+      'with a Loams House front, so no `loams.house.v1` statement runs. ' +
+      'Recording the ClickHouse-mapped reasons needs a front in the conformance ' +
+      'run (HS1).',
+    standIn: null,
+  },
+  {
+    reason: 'house_access_denied',
+    code: 'permission_denied',
+    why:
+      'The corpus records `loams.instance.v1`, the devices, approvals and Live ' +
+      'catalogue RPCs against `loams dev` and the apps mock; neither is started ' +
+      'with a Loams House front, so no `loams.house.v1` statement runs. ' +
+      'Recording the ClickHouse-mapped reasons needs a front in the conformance ' +
+      'run (HS1).',
+    standIn: null,
+  },
+  {
+    reason: 'house_read_only',
+    code: 'failed_precondition',
+    why:
+      'The corpus records `loams.instance.v1`, the devices, approvals and Live ' +
+      'catalogue RPCs against `loams dev` and the apps mock; neither is started ' +
+      'with a Loams House front, so no `loams.house.v1` statement runs. ' +
+      'Recording the ClickHouse-mapped reasons needs a front in the conformance ' +
+      'run (HS1).',
+    standIn: null,
+  },
+  {
+    reason: 'house_timeout',
+    code: 'deadline_exceeded',
+    why:
+      'The corpus records `loams.instance.v1`, the devices, approvals and Live ' +
+      'catalogue RPCs against `loams dev` and the apps mock; neither is started ' +
+      'with a Loams House front, so no `loams.house.v1` statement runs. ' +
+      'Recording the ClickHouse-mapped reasons needs a front in the conformance ' +
+      'run (HS1).',
+    standIn: null,
+  },
+  {
+    reason: 'house_memory_limit',
+    code: 'resource_exhausted',
+    why:
+      'The corpus records `loams.instance.v1`, the devices, approvals and Live ' +
+      'catalogue RPCs against `loams dev` and the apps mock; neither is started ' +
+      'with a Loams House front, so no `loams.house.v1` statement runs. ' +
+      'Recording the ClickHouse-mapped reasons needs a front in the conformance ' +
+      'run (HS1).',
+    standIn: null,
+  },
+  {
+    reason: 'house_too_many_queries',
+    code: 'resource_exhausted',
+    why:
+      'The corpus records `loams.instance.v1`, the devices, approvals and Live ' +
+      'catalogue RPCs against `loams dev` and the apps mock; neither is started ' +
+      'with a Loams House front, so no `loams.house.v1` statement runs. ' +
+      'Recording the ClickHouse-mapped reasons needs a front in the conformance ' +
+      'run (HS1).',
+    standIn: null,
+  },
+  {
+    reason: 'house_quota_exceeded',
+    code: 'resource_exhausted',
+    why:
+      'The corpus records `loams.instance.v1`, the devices, approvals and Live ' +
+      'catalogue RPCs against `loams dev` and the apps mock; neither is started ' +
+      'with a Loams House front, so no `loams.house.v1` statement runs. ' +
+      'Recording the ClickHouse-mapped reasons needs a front in the conformance ' +
+      'run (HS1).',
+    standIn: null,
+  },
+  {
+    reason: 'house_disabled_function',
+    code: 'permission_denied',
+    why:
+      'The corpus records `loams.instance.v1`, the devices, approvals and Live ' +
+      'catalogue RPCs against `loams dev` and the apps mock; neither is started ' +
+      'with a Loams House front, so no `loams.house.v1` statement runs. ' +
+      'Recording the ClickHouse-mapped reasons needs a front in the conformance ' +
+      'run (HS1).',
+    standIn: null,
+  },
+  {
+    reason: 'house_cancelled',
+    code: 'canceled',
+    why:
+      'The corpus records `loams.instance.v1`, the devices, approvals and Live ' +
+      'catalogue RPCs against `loams dev` and the apps mock; neither is started ' +
+      'with a Loams House front, so no `loams.house.v1` statement runs. ' +
+      'Recording the ClickHouse-mapped reasons needs a front in the conformance ' +
+      'run (HS1).',
+    standIn: null,
+  },
+  {
+    reason: 'house_query_not_found',
+    code: 'not_found',
+    why:
+      'The corpus records `loams.instance.v1`, the devices, approvals and Live ' +
+      'catalogue RPCs against `loams dev` and the apps mock; neither is started ' +
+      'with a Loams House front, so no `loams.house.v1` statement runs. ' +
+      'Recording the ClickHouse-mapped reasons needs a front in the conformance ' +
+      'run (HS1).',
+    standIn: null,
+  },
+  {
+    reason: 'house_query_failed',
+    code: 'unknown',
+    why:
+      'The corpus records `loams.instance.v1`, the devices, approvals and Live ' +
+      'catalogue RPCs against `loams dev` and the apps mock; neither is started ' +
+      'with a Loams House front, so no `loams.house.v1` statement runs. ' +
+      'Recording the ClickHouse-mapped reasons needs a front in the conformance ' +
+      'run (HS1).',
+    standIn: null,
+  },
+  {
+    reason: 'project_not_found',
+    code: 'not_found',
+    why:
+      '`loams.postgres.v1` is served by the Postgres control plane (design ' +
+      '§46), which neither conformance server runs.',
+    standIn: null,
+  },
+  {
+    reason: 'branch_has_children',
+    code: 'failed_precondition',
+    why:
+      '`loams.postgres.v1` is served by the Postgres control plane (design ' +
+      '§46), which neither conformance server runs.',
+    standIn: null,
+  },
+  {
+    reason: 'branch_protected',
+    code: 'failed_precondition',
+    why:
+      '`loams.postgres.v1` is served by the Postgres control plane (design ' +
+      '§46), which neither conformance server runs.',
+    standIn: null,
+  },
+  {
+    reason: 'lsn_out_of_retention',
+    code: 'failed_precondition',
+    why:
+      '`loams.postgres.v1` is served by the Postgres control plane (design ' +
+      '§46), which neither conformance server runs.',
+    standIn: null,
+  },
+  {
+    reason: 'endpoint_exists_for_branch',
+    code: 'already_exists',
+    why:
+      '`loams.postgres.v1` is served by the Postgres control plane (design ' +
+      '§46), which neither conformance server runs.',
+    standIn: null,
+  },
+  {
+    reason: 'compute_start_failed',
+    code: 'unavailable',
+    why:
+      '`loams.postgres.v1` is served by the Postgres control plane (design ' +
+      '§46), which neither conformance server runs.',
+    standIn: null,
+  },
+  {
+    reason: 'quota_exceeded',
+    code: 'resource_exhausted',
+    why:
+      '`loams.postgres.v1` is served by the Postgres control plane (design ' +
+      '§46), which neither conformance server runs.',
+    standIn: null,
+  },
+  {
+    reason: 'storage_unavailable',
+    code: 'unavailable',
+    why:
+      '`loams.postgres.v1` is served by the Postgres control plane (design ' +
+      '§46), which neither conformance server runs.',
+    standIn: null,
+  },
+  {
+    reason: 'secret_already_issued',
+    code: 'failed_precondition',
+    why:
+      '`loams.postgres.v1` is served by the Postgres control plane (design ' +
+      '§46), which neither conformance server runs.',
+    standIn: null,
+  },
+  {
+    reason: 'live_bad_cursor',
+    code: 'invalid_argument',
+    why:
+      'Needs a deployed Live function that paginates; the recorder deploys no ' +
+      'bundle, so no `paginate` call runs (LV1 Task 4).',
+    standIn: null,
+  },
+  {
+    reason: 'live_worker_crashed',
+    code: 'internal',
+    why:
+      'Needs an isolated Live worker to crash or be killed mid-call; neither ' +
+      'conformance server runs one (LV1 Task 5).',
+    standIn: null,
+  },
+  {
+    reason: 'live_deploy_conflict',
+    code: 'failed_precondition',
+    why:
+      'Needs two deploys racing on one app\'s `expected_active`; the recorder ' +
+      'deploys nothing (LV1 Task 6).',
     standIn: null,
   },
 ];

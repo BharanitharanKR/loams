@@ -11,10 +11,25 @@
 
 mod collections;
 pub mod connect;
+mod connect_collections;
+mod connect_documents;
+mod connect_errors;
+mod connect_hot;
+mod connect_idempotency;
+mod connect_messages;
+#[cfg(feature = "postgres")]
+pub(crate) mod connect_postgres;
+mod connect_query;
+mod connect_query_filters;
+mod connect_query_ir;
 mod errors;
 pub mod events;
+mod graph;
 pub mod hot;
+pub mod house_proxy;
 pub mod internal;
+#[cfg(feature = "postgres")]
+mod postgres_messages;
 mod query;
 mod sql;
 pub mod streams;
@@ -34,10 +49,12 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use bytes::Bytes;
 use loams_collection::ConsistencyToken;
-use loams_common::meta::{Consistency, MetaStore, Retention, StreamState, TargetRef, WalClass};
+use loams_common::meta::{
+    Consistency, Link, MetaStore, Retention, StreamState, TargetRef, WalClass,
+};
 use loams_common::{NamespaceId, StreamId};
 use loams_hot::{ForwardStats, HotTierImpl, Roles};
-use loams_link::{COUNTER_KIND, CounterTable, TargetRegistry};
+use loams_link::{COUNTER_KIND, CounterTable, LinkApplySource, TargetRegistry};
 use loams_log::{FetchRequest, LogReader, LogWriter, Record};
 use loams_query::hot::HotLayer;
 use loams_query::placement::Placement;
@@ -84,6 +101,9 @@ pub struct AppState {
     pub store: Store,
     /// The link targets, by kind: describes every registered link kind.
     pub registry: TargetRegistry,
+    /// The worker's link-apply source (the same one, cloned): which links
+    /// have a target kind with no factory (AP1e Task 19, D672).
+    pub link_apply: LinkApplySource,
     /// Collections, documents, queries and SQL (plan M1.2).
     pub collections: Arc<CollectionService>,
     /// This node's hot tier; `None` with `--hot off` (plan M1.3 Task 8).
@@ -111,6 +131,14 @@ pub struct AppState {
     /// turns it on). It publishes the schema of the API to anyone who can
     /// reach the port, so it is not on by default.
     pub reflection: bool,
+    /// Loams Graph's admin and data plane (GR1 Task 5, feature `graph`); `None` when it is not
+    /// served (`--no-graph`, or a cluster node before GR1 Task 12).
+    #[cfg(feature = "graph")]
+    pub graph: Option<std::sync::Arc<loams_graph::service::admin::GraphAdmin>>,
+    /// The `loams.house.v1` proxy to a `loams-fabric house` front (HS1 Task 7,
+    /// design §49 §18.1); `None` when no `[house] endpoint` is configured, and
+    /// then the package answers `house_not_configured`.
+    pub house: Option<Arc<house_proxy::HouseProxy>>,
 }
 
 /// What a query node needs to run forwarded reads (plan M1.3 Task 11).
@@ -123,20 +151,60 @@ pub struct ForwardedReads {
 
 /// The API's routes, inside `HotLayer` (the `Loams-Hot` switch, with the
 /// service's `hot_default` for requests without it), and the internal hot
-/// routes outside it. The Connect RPCs of [`connect`] share the port and are
-/// merged last, after `HotLayer`: a Connect call carries its own consistency
-/// and pinning in the request message (design §44 §7.4), not in the headers
-/// the layer reads.
+/// routes outside it. The Connect RPCs of [`connect`] share the port.
+///
+/// ## Both surfaces are inside the hot layer, and how
+///
+/// The connect router gets its **own** `HotLayer`, applied in
+/// [`connect::routes`] rather than by merging it here, together with
+/// [`connect_hot`]'s Connect-shaped refusal in front of it. That is not the
+/// ordering this function used to document, so the reason is worth stating:
+///
+/// - It used to say the connect routes are merged **after** `HotLayer` because
+///   "a Connect call carries its own consistency and pinning in the request
+///   message (design §44 §7.4), not in the headers the layer reads". The
+///   concern was real; it is now resolved rather than preserved by accident.
+///   `HotLayer` reads exactly one header — `loams-hot` — and writes exactly one
+///   response header, `loams-hot-used`. It never reads
+///   `loams-consistency-token` and never rewrites a request message.
+///   Consistency is resolved inside each handler by [`read_consistency`], from
+///   the message's own `consistency` field **and** that header, with the same
+///   precedence the REST route uses — so a Connect call's consistency is still
+///   the one its body states, and layering the RPC path does not change that.
+///   The hot switch is a transport-level "may this read use a hot structure",
+///   which has no message-level meaning, the same reason
+///   `loams-backpressure` stays a header on the document RPCs.
+/// - The refusal could not simply be merged: `HotLayer` answers an unusable
+///   header with the bare `invalid_argument` JSON body the REST routes use, and
+///   that is not a Connect error. Its `grpc_content_type` recognises gRPC and
+///   gRPC-Web but neither of the Connect protocol's content types
+///   (`application/json`, `application/proto`), and `application/json` is also
+///   the REST content type, so one layer over both routers cannot tell an RPC
+///   from a REST call. [`connect_hot`] is applied to the connect router alone,
+///   where every request is an RPC: it answers Connect's two content types with a
+///   Connect error carrying the registry reason, and lets gRPC, gRPC-Web and
+///   everything else fall through to `HotLayer` unchanged.
+///
+/// The REST router below keeps its own `HotLayer` and its own bare-JSON refusal.
+/// Both layers are built with the same `hot_default`, so a request that names no
+/// `Loams-Hot` behaves the same whichever surface it arrives on.
 pub fn router(state: AppState) -> Router {
     let internal = internal::routes().with_state(state.clone());
-    let connect = connect::routes(&state);
-    let hot_layer = HotLayer::new(state.collections.config().hot_default);
+    // The connect router brings its own hot layer (see the note above), so it is
+    // merged outside the one below rather than inside it.
+    let hot_default = state.collections.config().hot_default;
+    let connect = connect::routes(&state, hot_default);
+    let hot_layer = HotLayer::new(hot_default);
+    let house = state.house.clone();
     let collection = "/v1/namespaces/{ns}/collections/{c}";
-    Router::new()
+    let routes = Router::new()
         .route("/health", get(health))
         .route("/ready", get(ready))
         .route("/v1/namespaces", post(create_namespace))
-        .route("/v1/namespaces/{ns}/streams", post(create_stream))
+        .route(
+            "/v1/namespaces/{ns}/streams",
+            post(create_stream).get(list_streams),
+        )
         .route("/v1/namespaces/{ns}/streams/{stream}", get(describe_stream))
         .route(
             "/v1/namespaces/{ns}/streams/{stream}/partitions/{partition}/records",
@@ -150,7 +218,10 @@ pub fn router(state: AppState) -> Router {
             "/v1/namespaces/{ns}/streams/{stream}/partitions/{partition}/events",
             get(events::fetch_events),
         )
-        .route("/v1/namespaces/{ns}/links", post(create_link))
+        .route(
+            "/v1/namespaces/{ns}/links",
+            post(create_link).get(list_links),
+        )
         .route("/v1/namespaces/{ns}/links/{link}", get(describe_link))
         .route(
             "/v1/namespaces/{ns}/collections",
@@ -200,7 +271,10 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
         .layer(hot_layer)
         .merge(internal)
-        .merge(connect)
+        .merge(connect);
+    // Outermost: `/loams.house.v1.*` goes to the House front before any route,
+    // fallback, body limit or hot layer sees it (`house_proxy`).
+    house_proxy::layer(routes, house)
 }
 
 /// The routes of a node without the `gateway` role (plan M1.3 Task 11):
@@ -249,7 +323,13 @@ fn with_token(mut response: Response, token: &ConsistencyToken) -> Response {
 /// request header turns a `strong`, `eventual` or absent body consistency
 /// into `AtLeast(header)`, merges into an `at_least` one, and loses to a
 /// `pinned` one.
-fn read_consistency(
+///
+/// `pub(super)` because the Connect handlers read the same header of the same
+/// request (design §44 §7.4): `loams-backpressure` and
+/// `loams-consistency-token` are the two request headers that survive the move
+/// to RPCs, and both are read by this one function so the two surfaces cannot
+/// disagree about what a header means.
+pub(super) fn read_consistency(
     headers: &HeaderMap,
     body: Option<ReadConsistency>,
 ) -> Result<ReadConsistency, ApiError> {
@@ -355,6 +435,36 @@ async fn create_stream(
         )
         .await?;
     Ok((StatusCode::CREATED, axum::Json(json!({ "id": id.0 }))).into_response())
+}
+
+/// `GET /v1/namespaces/{ns}/streams` (AP1e Task 19, D672): the namespace's
+/// streams, sorted by name, each with its partition count and, when either
+/// limit is set, its retention. Implicit collection streams are listed too.
+async fn list_streams(
+    State(state): State<AppState>,
+    ns: Result<Path<String>, PathRejection>,
+) -> ApiResult {
+    let Path(ns) = ns?;
+    let namespace = namespace_id(&*state.meta, &ns).await?;
+    let mut streams = state
+        .meta
+        .streams(Consistency::Local, Some(namespace))
+        .await?;
+    streams.sort_by(|a, b| a.name.cmp(&b.name));
+    let streams: Vec<Value> = streams
+        .into_iter()
+        .map(|stream| {
+            let mut body = json!({ "name": stream.name, "partitions": stream.partitions });
+            if stream.retention != Retention::default() {
+                body["retention"] = json!({
+                    "max_age_ms": stream.retention.max_age_ms,
+                    "max_bytes": stream.retention.max_bytes,
+                });
+            }
+            body
+        })
+        .collect();
+    Ok(axum::Json(json!({ "streams": streams })).into_response())
 }
 
 async fn describe_stream(
@@ -592,6 +702,59 @@ async fn create_link(
     Ok((StatusCode::CREATED, axum::Json(json!({ "id": id.0 }))).into_response())
 }
 
+/// A link's status: `unregistered` when no factory is registered for its
+/// target kind, so nothing applies it, else `running`.
+///
+/// [`LinkApplySource::unregistered`] is as of the worker's last poll, so a
+/// link created since then is also checked against the registry the worker
+/// was built from.
+fn link_status(state: &AppState, link: &Link) -> &'static str {
+    let unregistered = state.link_apply.unregistered().contains_key(&link.id)
+        || state.registry.get(&link.target.kind).is_none();
+    if unregistered {
+        "unregistered"
+    } else {
+        "running"
+    }
+}
+
+/// `GET /v1/namespaces/{ns}/links` (AP1e Task 19, D672): the namespace's
+/// links, sorted by name, each with its source stream's name, its target and
+/// its status ([`link_status`]).
+async fn list_links(
+    State(state): State<AppState>,
+    ns: Result<Path<String>, PathRejection>,
+) -> ApiResult {
+    let Path(ns) = ns?;
+    let namespace = namespace_id(&*state.meta, &ns).await?;
+    // A listing: the links and their sources' names need not come from one
+    // state. A link whose source is gone is listed without one.
+    let sources: HashMap<StreamId, String> = state
+        .meta
+        .streams(Consistency::Local, Some(namespace))
+        .await?
+        .into_iter()
+        .map(|stream| (stream.id, stream.name))
+        .collect();
+    let mut links = state
+        .meta
+        .links(Consistency::Local, Some(namespace))
+        .await?;
+    links.sort_by(|a, b| a.name.cmp(&b.name));
+    let links: Vec<Value> = links
+        .iter()
+        .map(|link| {
+            json!({
+                "name": link.name,
+                "source": sources.get(&link.source),
+                "target": { "kind": link.target.kind, "name": link.target.name },
+                "status": link_status(&state, link),
+            })
+        })
+        .collect();
+    Ok(axum::Json(json!({ "links": links })).into_response())
+}
+
 async fn describe_link(
     State(state): State<AppState>,
     path: Result<Path<(String, String)>, PathRejection>,
@@ -608,21 +771,39 @@ async fn describe_link(
         .ok_or_else(not_found)?;
     let source = state
         .meta
-        .stream(Consistency::Local, link.source)
+        .stream_state(Consistency::Local, link.source)
         .await?
-        .map(|st| st.name)
         .ok_or_else(not_found)?;
+    let high_watermarks: Vec<u64> = source
+        .partitions
+        .iter()
+        .map(|bounds| bounds.as_ref().map_or(0, |b| b.high_watermark))
+        .collect();
     let mut body = json!({
         "id": link.id.0,
         "name": link.name,
-        "source": source,
+        "source": source.stream.name,
         "target": { "kind": link.target.kind, "name": link.target.name },
         "options": link.options,
+        "status": link_status(&state, &link),
     });
     let applied_json = |applied: &std::collections::BTreeMap<u32, u64>| -> Value {
         applied
             .iter()
             .map(|(partition, offset)| json!({ "partition": partition, "offset": offset }))
+            .collect()
+    };
+    // Per source partition, the records between the high watermark and the
+    // applied offset (a partition never applied counts from 0). The high
+    // watermarks are read before the applied offsets, so the lag is never
+    // overstated by records produced in between; it may be understated.
+    let lag_json = |applied: &std::collections::BTreeMap<u32, u64>| -> Value {
+        (0u32..)
+            .zip(&high_watermarks)
+            .map(|(partition, hwm)| {
+                let applied = applied.get(&partition).copied().unwrap_or(0);
+                json!({ "partition": partition, "records": hwm.saturating_sub(applied) })
+            })
             .collect()
     };
     if link.target.kind == COUNTER_KIND {
@@ -631,12 +812,17 @@ async fn describe_link(
         let snapshot = table.snapshot().await?;
         body["version"] = json!(snapshot.version);
         body["applied"] = applied_json(&snapshot.applied);
+        body["lag"] = lag_json(&snapshot.applied);
         body["counters"] = json!(snapshot.counters);
         body["skipped"] = json!(snapshot.skipped);
     } else if let Some(factory) = state.registry.get(&link.target.kind) {
         let loaded = factory.open(&state.meta, &link)?.load().await?;
         body["version"] = json!(loaded.version);
         body["applied"] = applied_json(&loaded.applied);
+        body["lag"] = lag_json(&loaded.applied);
+    } else {
+        // Nothing applies a link of an unregistered kind.
+        body["lag"] = lag_json(&std::collections::BTreeMap::new());
     }
     Ok(axum::Json(body).into_response())
 }

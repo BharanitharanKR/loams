@@ -2,7 +2,32 @@
 //! [§32](../../../design/32-loams-flow-fabric-house.md) §8, served over the
 //! ClickHouse HTTP interface.
 //!
-//! **Task 3 owns errors only.** [`errors`] is the whole crate so far: the error
+//! # The HTTP interface (HS1 Task 3)
+//!
+//! [`http::serve`] answers ClickHouse's HTTP protocol on loopback (FL2 Task 2's
+//! contract) and runs every statement on the [`WorkerPool`]: [`auth`] for the
+//! development users, [`compress`] for request and response bodies, [`config`]
+//! for the knobs.
+//!
+//! # `loams.house.v1` (HS1 Task 8)
+//!
+//! The same listener serves the House's Connect API ([`api`], design §49 §18):
+//! queries streamed as Arrow IPC or JSON rows, the table browser, query history
+//! and pipes. Its statements pass the checks the HTTP interface's do, from the
+//! same functions ([`gate`]).
+//!
+//! # The front links no libchdb (HS1 Task 2, D761)
+//!
+//! chDB runs in `loams-house-worker` processes. This crate supervises them —
+//! [`watchdog`] starts, kills and watches one; [`admission`] keeps the
+//! [`WorkerPool`] — and talks to them in `hsw1` frames (`loams-house-ipc`). Engine
+//! errors arrive already taken apart, as `loams_house_ipc::EngineError`. Workers
+//! seal themselves (L3, HS1 Task 6); [`sandbox`] is the front's half: their
+//! forwarder's far end and their cgroups. Only the
+//! `inproc-worker` feature (development, the desktop) brings libchdb into this
+//! crate's graph; `no_libchdb_in_front` checks the default one.
+//!
+//! **FL2 Task 3 owned errors only.** [`errors`] was the whole crate then: the error
 //! a client sees — ClickHouse's code, its name, its HTTP status and its own
 //! rendering of the exception text — plus the two rules that make an error look
 //! like a ClickHouse error to a driver. The HTTP layer (`http.rs`, `auth.rs`,
@@ -27,8 +52,9 @@
 //! A statement chDB ran fails with **chDB's** code and name, not one of
 //! [`errors::CODES`]'s: §32 §8.8's "errors from chDB pass through unchanged". The
 //! House parses nothing twice — `loams_chdb::ChdbError` already takes the pinned
-//! library's exception text apart (that parser is measured, with the real captured
-//! strings, in `loams-chdb/src/error.rs`) and this crate only renders the parts.
+//! library's exception text apart in the worker (that parser is measured, with the
+//! real captured strings, in `loams-chdb/src/error.rs`), the `hsw1` `Error` frame
+//! carries the parts, and this crate only renders them.
 //! [`errors::HouseError`] is the union of the two origins, so the transport answers
 //! one type and never has to know which raised it.
 //!
@@ -43,6 +69,29 @@
 //!
 //! Names: Loams, `loams-*` (owner rulings, 2026-10-01).
 
+pub mod admission;
+pub mod api;
+pub mod auth;
+pub mod classify;
+pub mod compress;
+pub mod config;
+pub mod deny;
 pub mod errors;
+#[cfg(feature = "test-hooks")]
+pub mod fuzz;
+pub mod gate;
+pub mod http;
+pub mod request;
+pub mod sandbox;
+pub mod session;
+pub mod settings;
+pub mod watchdog;
 
+pub use admission::{Collected, Event, Outcome, PoolConfig, PoolStats, WorkerLease, WorkerPool};
+pub use config::{CatalogSpec, HouseConfig, HouseFile, UserMap, WorkersMode};
 pub use errors::{CODES, ChError, HouseError, MidStreamBody};
+pub use http::{HouseHandle, serve, serve_with_catalog};
+pub use sandbox::{CgroupLimits, SandboxMode, WorkerCgroups};
+#[cfg(feature = "inproc-worker")]
+pub use watchdog::InprocWorker;
+pub use watchdog::{ExitReason, KillHandle, Launcher, ProcessLauncher};

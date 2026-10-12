@@ -1,0 +1,866 @@
+//! Running one statement for `loams.house.v1` (HS1 Task 8): the front's checks,
+//! a worker, the header, and the frames a result streams as ([`super`]'s docs say
+//! what each step is for).
+
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use connectrpc::{ConnectError, ErrorCode};
+use loams_house_ipc::{Execute, InputSpec, Limits, Progress, QueryClass};
+use loams_house_proto::loams::house::v1 as pb;
+use loams_house_proto::loams::house::v1::__buffa::oneof::{
+    execute_query_response, preview_table_response, result_batch,
+};
+
+use super::frames::{self, ArrowFramer, Caps, Column, Framer, JsonFramer};
+use super::{
+    DRAIN_BUDGET, EXPLAIN_MAX_BYTES, HouseApi, KILL_GRACE, MAX_TIMEOUT_MS, invalid,
+    read_only_refusal, read_only_user_refusal, refuse, to_connect,
+};
+use crate::admission::{Event, Outcome, WorkerLease, WorkerPool};
+use crate::classify::{Classified, Expect, Stmt, check_text, classify};
+use crate::config::UserMap;
+use crate::deny;
+use crate::errors::{ChError, HouseError};
+use crate::gate;
+use crate::request;
+use crate::watchdog::{Deadline, ExitReason, KillHandle};
+
+// ---------------------------------------------------------------------------
+// Running queries
+// ---------------------------------------------------------------------------
+
+/// The API's running queries, by id, for `CancelQuery`.
+#[derive(Debug, Default)]
+pub(super) struct Running {
+    queries: Mutex<HashMap<String, RunningQuery>>,
+}
+
+#[derive(Debug)]
+struct RunningQuery {
+    user: String,
+    namespace: u64,
+    /// The current statement's handle, once it has started.
+    kill: Option<KillHandle>,
+    /// Asked to stop: killed when it starts, if it had not yet.
+    cancelled: bool,
+}
+
+/// A running query's entry; dropping it removes the entry.
+#[derive(Debug)]
+struct RunningGuard {
+    running: Arc<Running>,
+    query_id: String,
+}
+
+impl Running {
+    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, RunningQuery>> {
+        self.queries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn register(
+        self: &Arc<Self>,
+        query_id: &str,
+        user: &UserMap,
+    ) -> Result<RunningGuard, ConnectError> {
+        let mut queries = self.lock();
+        if queries.contains_key(query_id) {
+            return Err(invalid(
+                "query_id",
+                format!("Query with id = {query_id} is already running"),
+            ));
+        }
+        queries.insert(
+            query_id.to_string(),
+            RunningQuery {
+                user: user.user.clone(),
+                namespace: user.namespace,
+                kill: None,
+                cancelled: false,
+            },
+        );
+        Ok(RunningGuard {
+            running: Arc::clone(self),
+            query_id: query_id.to_string(),
+        })
+    }
+
+    pub(super) fn cancel(&self, query_id: &str, user: &UserMap) -> Result<(), ConnectError> {
+        let mut queries = self.lock();
+        let Some(query) = queries.get_mut(query_id) else {
+            return Err(refuse(
+                ErrorCode::NotFound,
+                "house_query_not_found",
+                format!("No running query has the id {query_id}"),
+                &[("query_id", query_id.to_string())],
+            ));
+        };
+        // Until HS1 Task 20's `house:admin` scope, a caller cancels only its own.
+        if query.user != user.user || query.namespace != user.namespace {
+            return Err(refuse(
+                ErrorCode::PermissionDenied,
+                "house_access_denied",
+                format!("Query {query_id} is not yours to cancel"),
+                &[("query_id", query_id.to_string())],
+            ));
+        }
+        query.cancelled = true;
+        if let Some(kill) = &query.kill {
+            let _ = kill.kill(ExitReason::Cancel);
+        }
+        Ok(())
+    }
+}
+
+impl RunningGuard {
+    /// Whether the query was cancelled before it got this far.
+    fn cancelled(&self) -> bool {
+        self.running
+            .lock()
+            .get(&self.query_id)
+            .is_some_and(|q| q.cancelled)
+    }
+
+    /// The statement started: later cancels kill it, and an earlier one does now.
+    fn started(&self, kill: Option<KillHandle>) {
+        let mut queries = self.running.lock();
+        if let Some(query) = queries.get_mut(&self.query_id) {
+            if query.cancelled
+                && let Some(kill) = &kill
+            {
+                let _ = kill.kill(ExitReason::Cancel);
+            }
+            query.kill = kill;
+        }
+    }
+}
+
+impl Drop for RunningGuard {
+    fn drop(&mut self) {
+        self.running.lock().remove(&self.query_id);
+    }
+}
+
+fn cancelled_error(query_id: &str) -> HouseError {
+    ExitReason::Cancel.client_error(query_id, None)
+}
+
+// ---------------------------------------------------------------------------
+// Statements
+// ---------------------------------------------------------------------------
+
+/// How a statement's output comes back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Output {
+    /// `ARROW_IPC` frames.
+    Arrow,
+    /// `JSON_ROWS` frames.
+    Json,
+    /// The whole output, collected (`ExplainQuery`).
+    Collect,
+}
+
+/// A statement as the API asks for it.
+#[derive(Debug)]
+pub(super) struct Statement {
+    pub(super) sql: String,
+    pub(super) database: String,
+    pub(super) settings: Vec<(String, String)>,
+    pub(super) params: Vec<(String, String)>,
+    pub(super) output: Output,
+    pub(super) caps: Caps,
+    pub(super) timeout_ms: u32,
+    pub(super) query_id: String,
+    pub(super) read_only: bool,
+    /// `ExplainQuery`: the `EXPLAIN` form to run the query under.
+    pub(super) explain: Option<&'static str>,
+}
+
+/// A statement that passed the front's checks and holds a worker.
+#[derive(Debug)]
+struct Started {
+    /// `None` for a statement the front answered itself (`SET`, `USE`).
+    lease: Option<WorkerLease>,
+    header: Option<Vec<Column>>,
+    framer: Framer,
+    running: RunningGuard,
+    deadline: Option<Deadline>,
+    started: Instant,
+}
+
+pub(super) fn sorted<'a>(
+    map: impl IntoIterator<Item = (&'a String, &'a String)>,
+) -> Vec<(String, String)> {
+    let mut pairs: Vec<(String, String)> = map
+        .into_iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    pairs.sort();
+    pairs
+}
+
+/// One `Execute` of a statement: its id, parameters and settings.
+fn execute(
+    st: &Statement,
+    settings: &[(String, String)],
+    sql: String,
+    format: &str,
+    limits: Limits,
+) -> Execute {
+    Execute {
+        query_id: st.query_id.clone(),
+        session: None,
+        settings: settings.to_vec(),
+        views: Vec::new(),
+        sql,
+        format: format.to_string(),
+        params: st.params.clone(),
+        limits,
+        input: None,
+        output: loams_house_ipc::Output::Blocks,
+    }
+}
+
+/// Runs a header step (`DESCRIBE`, or one row of names and types) on the
+/// statement's worker and collects its output, at most [`EXPLAIN_MAX_BYTES`]:
+/// `CancelQuery` and the statement's deadline reach it as they reach the statement.
+async fn header_step(
+    lease: &mut WorkerLease,
+    execute: Execute,
+    running: &RunningGuard,
+    deadline_at: tokio::time::Instant,
+) -> Result<Vec<u8>, HouseError> {
+    let query_id = execute.query_id.clone();
+    lease.start(execute).await?;
+    let kill = lease.kill_handle();
+    let _deadline = kill
+        .as_ref()
+        .map(|kill| kill.kill_at(deadline_at, ExitReason::Timeout));
+    running.started(kill.clone());
+    let mut out = Vec::new();
+    loop {
+        match lease.next_event().await? {
+            Event::Chunk(chunk) => {
+                if out.len() + chunk.bytes.len() > EXPLAIN_MAX_BYTES {
+                    if let Some(kill) = &kill {
+                        let _ = kill.kill(ExitReason::Cancel);
+                    }
+                    return Err(HouseError::from(ChError::bad_arguments(format!(
+                        "query {query_id}: the result's header is larger than \
+                         {EXPLAIN_MAX_BYTES} bytes"
+                    ))));
+                }
+                out.extend_from_slice(&chunk.bytes);
+            }
+            Event::Progress(_) => {}
+            Event::Done(_) => return Ok(out),
+        }
+    }
+}
+
+impl HouseApi {
+    /// Checks a statement, takes a worker, analyses it, and starts it.
+    async fn start(&self, user: &UserMap, st: Statement) -> Result<Started, ConnectError> {
+        let config = &self.config;
+        if st.sql.trim().is_empty() {
+            return Err(invalid("sql", "sql is empty"));
+        }
+        if st.sql.len() > config.max_query_size {
+            return Err(to_connect(&HouseError::from(ChError::syntax_error(
+                format!(
+                    "Max query size exceeded: the statement is longer than {} bytes",
+                    config.max_query_size
+                ),
+            ))));
+        }
+        if !st.database.is_empty() && st.database != "default" {
+            return Err(to_connect(&HouseError::from(ChError::unknown_database(
+                format!("Database {} does not exist", st.database),
+            ))));
+        }
+        let known = self.pool.known_settings();
+        for (name, value) in &st.settings {
+            crate::settings::check(name, value, &config.session_limits, &known)
+                .map_err(|err| to_connect(&err))?;
+        }
+        let read_only = st.read_only || user.readonly;
+        let refuse_write = || {
+            if user.readonly {
+                read_only_user_refusal(&user.user)
+            } else {
+                read_only_refusal()
+            }
+        };
+
+        // What the statement is (the HTTP interface's `prepare`, without a body).
+        let plan = request::plan(st.sql.as_bytes(), false);
+        let classified = match &plan.input {
+            Some(spec) => {
+                check_text(&spec.insert).map_err(|err| to_connect(&err))?;
+                Classified::Known {
+                    stmt: Stmt::Insert(crate::classify::InsertStmt {
+                        text: spec.insert.clone(),
+                        format: Some(spec.format.clone()),
+                        table: None,
+                    }),
+                    format: None,
+                }
+            }
+            None => classify(&plan.sql).map_err(|err| to_connect(&err))?,
+        };
+        let trailing_format = match &classified {
+            Classified::Known { format, .. } | Classified::Unparsed { format, .. } => {
+                format.is_some()
+            }
+        };
+        if plan.input.is_none() && (trailing_format || plan.format.is_some()) {
+            return Err(invalid(
+                "sql",
+                "the result format is the request's `format`: drop the FORMAT clause",
+            ));
+        }
+        let (expect, unparsed, is_read, is_query) = match &classified {
+            Classified::Known { stmt, .. } => {
+                if st.explain.is_some() && !matches!(stmt, Stmt::Query { .. }) {
+                    return Err(invalid(
+                        "sql",
+                        "ExplainQuery takes a query (SELECT, WITH or a parenthesised query)",
+                    ));
+                }
+                if read_only && !stmt.is_read() {
+                    return Err(refuse_write());
+                }
+                match gate::front_answer(stmt, None, &config.session_limits, &known) {
+                    Some(Ok(())) => {
+                        // `SET` and `USE` keep nothing without a session: an empty
+                        // result, as in ClickHouse.
+                        let running = self.running.register(&st.query_id, user)?;
+                        return Ok(Started {
+                            lease: None,
+                            header: Some(Vec::new()),
+                            framer: Framer::Json(JsonFramer::new(st.caps, false)),
+                            running,
+                            deadline: None,
+                            started: Instant::now(),
+                        });
+                    }
+                    Some(Err(err)) => return Err(to_connect(&err)),
+                    None => {}
+                }
+                (
+                    stmt.expect().unwrap_or(Expect::Read),
+                    None,
+                    stmt.is_read(),
+                    matches!(stmt, Stmt::Query { .. }),
+                )
+            }
+            Classified::Unparsed { message, .. } => {
+                if st.explain.is_some() {
+                    return Err(invalid(
+                        "sql",
+                        "ExplainQuery takes a query (SELECT, WITH or a parenthesised query)",
+                    ));
+                }
+                (Expect::Read, Some(message.clone()), true, false)
+            }
+        };
+
+        let sql = gate::statement_text(&plan.sql, &user.user);
+        let input = plan.input.map(|spec| InputSpec {
+            insert: deny::rewrite_host_functions(&spec.insert, &gate::host_values(&user.user)),
+            format: spec.format,
+        });
+        let running = self.running.register(&st.query_id, user)?;
+        let started = Instant::now();
+
+        let mut lease = self
+            .pool
+            .acquire(&user.namespace.to_string())
+            .await
+            .map_err(|err| to_connect(&err))?;
+
+        // ClickHouse's class and the deny list, on exactly the text chDB parses.
+        let parsed_text = match &input {
+            Some(spec) => format!("{} FORMAT {}", spec.insert, spec.format),
+            None => sql.clone(),
+        };
+        let analysis = match lease.analyze(&parsed_text, &st.params).await {
+            Ok(analysis) => analysis,
+            Err(err) => {
+                self.pool.release(lease, Outcome::Completed);
+                return Err(to_connect(&deny::as_setting_refusal(err)));
+            }
+        };
+        let admitted = gate::admit(&analysis, &parsed_text, expect, false, unparsed.as_deref())
+            .map_err(|err| to_connect(&err))
+            .and_then(|()| {
+                if read_only && analysis.classification.class != QueryClass::ReadOnly {
+                    Err(refuse_write())
+                } else {
+                    Ok(())
+                }
+            });
+        if let Err(err) = admitted {
+            self.pool.release(lease, Outcome::Completed);
+            return Err(err);
+        }
+        if running.cancelled() {
+            self.pool.release(lease, Outcome::Completed);
+            return Err(to_connect(&cancelled_error(&st.query_id)));
+        }
+
+        let limit_ms = if st.timeout_ms == 0 {
+            MAX_TIMEOUT_MS
+        } else {
+            st.timeout_ms
+        };
+        let deadline_at =
+            tokio::time::Instant::now() + Duration::from_millis(u64::from(limit_ms)) + KILL_GRACE;
+        let mut settings: Vec<(String, String)> = st
+            .settings
+            .iter()
+            .filter(|(k, _)| !crate::settings::is_loams(k))
+            .cloned()
+            .collect();
+        let limits = Limits {
+            max_execution_time_ms: (st.timeout_ms > 0).then_some(u64::from(st.timeout_ms)),
+            max_result_rows: (is_read && st.output != Output::Collect)
+                .then_some(st.caps.max_rows.saturating_add(1)),
+            ..Limits::default()
+        };
+        if limits.max_result_rows.is_some() {
+            settings.push(("result_overflow_mode".to_string(), "break".to_string()));
+        }
+
+        // The header, when the output will not carry it (see the module's docs).
+        let mut header = None;
+        if st.output == Output::Arrow && is_read {
+            let pre = if is_query {
+                execute(
+                    &st,
+                    &settings,
+                    format!("DESCRIBE TABLE (\n{sql}\n) SETTINGS describe_compact_output = 1"),
+                    "JSONCompactEachRow",
+                    Limits {
+                        max_execution_time_ms: limits.max_execution_time_ms,
+                        ..Limits::default()
+                    },
+                )
+            } else {
+                execute(
+                    &st,
+                    &settings,
+                    sql.clone(),
+                    "JSONCompactEachRowWithNamesAndTypes",
+                    Limits {
+                        max_result_rows: Some(1),
+                        ..limits
+                    },
+                )
+            };
+            // Cancellable and under the statement's deadline, like the statement.
+            let described = header_step(&mut lease, pre, &running, deadline_at).await;
+            match described.and_then(|out| frames::header_from_json(&out, !is_query)) {
+                Ok(columns) => header = Some(columns),
+                Err(err) => {
+                    self.pool.release(lease, Outcome::Completed);
+                    return Err(to_connect(&err));
+                }
+            }
+        } else if !is_read {
+            header = Some(Vec::new());
+        }
+
+        let (text, format, framer) = match st.output {
+            Output::Arrow => {
+                settings.push((
+                    "output_format_arrow_compression_method".to_string(),
+                    "none".to_string(),
+                ));
+                (sql, "ArrowStream", Framer::Arrow(ArrowFramer::new(st.caps)))
+            }
+            Output::Json if is_read => (
+                sql,
+                "JSONCompactEachRowWithNamesAndTypes",
+                Framer::Json(JsonFramer::new(st.caps, true)),
+            ),
+            Output::Json => (
+                sql,
+                "JSONCompactEachRow",
+                Framer::Json(JsonFramer::new(st.caps, false)),
+            ),
+            Output::Collect => (
+                match st.explain {
+                    Some(kind) => format!("EXPLAIN {kind}\n{sql}"),
+                    None => sql,
+                },
+                "TabSeparatedRaw",
+                Framer::Json(JsonFramer::new(st.caps, false)),
+            ),
+        };
+        let mut main = execute(
+            &st,
+            &settings,
+            if input.is_some() { String::new() } else { text },
+            format,
+            limits,
+        );
+        main.input = input;
+        let has_input = main.input.is_some();
+        if let Err(err) = lease.start(main).await {
+            self.pool.release(lease, Outcome::Completed);
+            return Err(to_connect(&err));
+        }
+        let kill = lease.kill_handle();
+        let deadline = kill
+            .as_ref()
+            .map(|kill| kill.kill_at(deadline_at, ExitReason::Timeout));
+        running.started(kill);
+        if has_input {
+            let sent = async {
+                if !plan.first_data.is_empty() {
+                    lease
+                        .send_input(bytes::Bytes::from(plan.first_data.clone()))
+                        .await?;
+                }
+                lease.end_input().await
+            }
+            .await;
+            if let Err(err) = sent {
+                self.pool.kill(lease, ExitReason::Cancel);
+                return Err(to_connect(&err));
+            }
+        }
+        Ok(Started {
+            lease: Some(lease),
+            header,
+            framer,
+            running,
+            deadline,
+            started,
+        })
+    }
+
+    /// A statement's frames, as a stream.
+    pub(super) async fn frames(
+        &self,
+        user: &UserMap,
+        st: Statement,
+    ) -> Result<
+        impl futures::Stream<Item = Result<Frame, ConnectError>> + Send + 'static,
+        ConnectError,
+    > {
+        let query_id = st.query_id.clone();
+        let format = st.output;
+        let started = self.start(user, st).await?;
+        let run = Run::new(self.pool.clone(), started, query_id, format);
+        Ok(futures::stream::unfold(run, |mut run| async move {
+            run.next().await.map(|frame| (frame, run))
+        }))
+    }
+
+    /// A statement's whole output (`ExplainQuery`), at most [`EXPLAIN_MAX_BYTES`].
+    pub(super) async fn collect(
+        &self,
+        user: &UserMap,
+        st: Statement,
+    ) -> Result<Vec<u8>, ConnectError> {
+        let query_id = st.query_id.clone();
+        let Started {
+            lease,
+            running,
+            deadline,
+            ..
+        } = self.start(user, st).await?;
+        let Some(mut lease) = lease else {
+            return Ok(Vec::new());
+        };
+        let mut out = Vec::new();
+        let result = loop {
+            match lease.next_event().await {
+                Ok(Event::Chunk(chunk)) => {
+                    if out.len() + chunk.bytes.len() > EXPLAIN_MAX_BYTES {
+                        self.pool.kill(lease, ExitReason::Cancel);
+                        return Err(to_connect(&HouseError::from(ChError::bad_arguments(
+                            format!(
+                                "query {query_id}: the answer is larger than {EXPLAIN_MAX_BYTES} bytes"
+                            ),
+                        ))));
+                    }
+                    out.extend_from_slice(&chunk.bytes);
+                }
+                Ok(Event::Progress(_)) => {}
+                Ok(Event::Done(_)) => break Ok(out),
+                Err(err) => break Err(to_connect(&err)),
+            }
+        };
+        self.pool.release(lease, Outcome::Completed);
+        drop((running, deadline));
+        result
+    }
+}
+
+/// One frame of a result, before it is an `ExecuteQueryResponse` or a
+/// `PreviewTableResponse`.
+#[derive(Debug, Clone)]
+pub(super) enum Frame {
+    Header(pb::ResultHeader),
+    Batch(pb::ResultBatch),
+    Progress(pb::QueryProgress),
+    Summary(pb::QuerySummary),
+}
+
+impl From<Frame> for pb::ExecuteQueryResponse {
+    fn from(frame: Frame) -> Self {
+        use execute_query_response::Frame as F;
+        let frame = match frame {
+            Frame::Header(v) => F::Header(Box::new(v)),
+            Frame::Batch(v) => F::Batch(Box::new(v)),
+            Frame::Progress(v) => F::Progress(Box::new(v)),
+            Frame::Summary(v) => F::Summary(Box::new(v)),
+        };
+        Self {
+            frame: Some(frame),
+            ..Default::default()
+        }
+    }
+}
+
+impl From<Frame> for pb::PreviewTableResponse {
+    fn from(frame: Frame) -> Self {
+        use preview_table_response::Frame as F;
+        let frame = match frame {
+            Frame::Header(v) => F::Header(Box::new(v)),
+            Frame::Batch(v) => F::Batch(Box::new(v)),
+            Frame::Progress(v) => F::Progress(Box::new(v)),
+            Frame::Summary(v) => F::Summary(Box::new(v)),
+        };
+        Self {
+            frame: Some(frame),
+            ..Default::default()
+        }
+    }
+}
+
+/// A started statement, read into frames.
+#[derive(Debug)]
+struct Run {
+    pool: WorkerPool,
+    lease: Option<WorkerLease>,
+    framer: Framer,
+    header: Option<Vec<Column>>,
+    header_sent: bool,
+    queue: VecDeque<Frame>,
+    query_id: String,
+    format: pb::ResultFormat,
+    started: Instant,
+    last: Progress,
+    drained: u64,
+    /// The next chunk opens an engine block (the last one did not say `continued`).
+    block_start: bool,
+    failed: Option<ConnectError>,
+    done: bool,
+    _running: RunningGuard,
+    _deadline: Option<Deadline>,
+}
+
+impl Run {
+    fn new(pool: WorkerPool, started: Started, query_id: String, output: Output) -> Self {
+        let Started {
+            lease,
+            header,
+            framer,
+            running,
+            deadline,
+            started,
+        } = started;
+        let front_only = lease.is_none();
+        let mut run = Self {
+            pool,
+            lease,
+            framer,
+            header,
+            header_sent: false,
+            queue: VecDeque::new(),
+            query_id,
+            format: match output {
+                Output::Arrow => pb::ResultFormat::RESULT_FORMAT_ARROW_IPC,
+                _ => pb::ResultFormat::RESULT_FORMAT_JSON_ROWS,
+            },
+            started,
+            last: Progress::default(),
+            drained: 0,
+            block_start: true,
+            failed: None,
+            done: false,
+            _running: running,
+            _deadline: deadline,
+        };
+        run.send_header_if_known();
+        if front_only {
+            run.finish(Vec::new());
+        }
+        run
+    }
+
+    async fn next(&mut self) -> Option<Result<Frame, ConnectError>> {
+        loop {
+            if let Some(frame) = self.queue.pop_front() {
+                return Some(Ok(frame));
+            }
+            if let Some(err) = self.failed.take() {
+                self.done = true;
+                return Some(Err(err));
+            }
+            if self.done {
+                return None;
+            }
+            self.step().await;
+        }
+    }
+
+    fn send_header_if_known(&mut self) {
+        if self.header_sent {
+            return;
+        }
+        if let Some(columns) = self.framer.take_header() {
+            self.header = Some(columns);
+        }
+        let Some(columns) = self.header.take() else {
+            return;
+        };
+        self.header_sent = true;
+        self.queue.push_back(Frame::Header(pb::ResultHeader {
+            columns: columns
+                .into_iter()
+                .map(|c| pb::ResultColumn {
+                    name: c.name,
+                    clickhouse_type: c.clickhouse_type,
+                    ..Default::default()
+                })
+                .collect(),
+            query_id: self.query_id.clone(),
+            format: self.format.into(),
+            ..Default::default()
+        }));
+    }
+
+    fn batches(&mut self, batches: Vec<frames::Batch>) {
+        let arrow = matches!(self.framer, Framer::Arrow(_));
+        for batch in batches {
+            let data = if arrow {
+                result_batch::Data::ArrowIpc(batch.bytes)
+            } else {
+                result_batch::Data::RowsJson(batch.bytes)
+            };
+            self.queue.push_back(Frame::Batch(pb::ResultBatch {
+                data: Some(data),
+                rows: batch.rows,
+                ..Default::default()
+            }));
+        }
+    }
+
+    /// The statement ended well (or was cut): the rest, then the summary.
+    fn finish(&mut self, rest: Vec<frames::Batch>) {
+        if !self.header_sent {
+            self.header.get_or_insert_with(Vec::new);
+            self.send_header_if_known();
+        }
+        self.batches(rest);
+        self.queue.push_back(Frame::Summary(pb::QuerySummary {
+            result_rows: self.framer.rows(),
+            result_bytes: self.framer.bytes(),
+            read_rows: self.last.rows_read,
+            read_bytes: self.last.bytes_read,
+            written_rows: self.last.written_rows,
+            elapsed_ms: u64::try_from(self.started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            truncated: self.framer.truncated(),
+            query_id: self.query_id.clone(),
+            ..Default::default()
+        }));
+        self.done = true;
+    }
+
+    fn fail(&mut self, err: &HouseError) {
+        self.failed = Some(to_connect(err));
+    }
+
+    async fn step(&mut self) {
+        let Some(lease) = self.lease.as_mut() else {
+            self.done = true;
+            return;
+        };
+        match lease.next_event().await {
+            Ok(Event::Chunk(chunk)) => {
+                if self.framer.truncated() {
+                    // Past the cap: drained, and stopped past the budget.
+                    self.drained += chunk.bytes.len() as u64;
+                    if self.drained > DRAIN_BUDGET
+                        && let Some(lease) = self.lease.take()
+                    {
+                        self.pool.kill(lease, ExitReason::Cancel);
+                        let rest = self.framer.finish().unwrap_or_default();
+                        self.finish(rest);
+                    }
+                    return;
+                }
+                let block_start = std::mem::replace(&mut self.block_start, !chunk.continued);
+                match self.framer.push(&chunk.bytes, block_start) {
+                    Ok(batches) => {
+                        self.send_header_if_known();
+                        if !self.header_sent && !self.framer.header_pending() {
+                            self.header.get_or_insert_with(Vec::new);
+                            self.send_header_if_known();
+                        }
+                        self.batches(batches);
+                    }
+                    Err(err) => {
+                        if let Some(lease) = self.lease.take() {
+                            self.pool.kill(lease, ExitReason::Cancel);
+                        }
+                        self.fail(&err);
+                    }
+                }
+            }
+            Ok(Event::Progress(progress)) => {
+                self.last = progress;
+                if self.header_sent {
+                    self.queue.push_back(Frame::Progress(pb::QueryProgress {
+                        read_rows: progress.rows_read,
+                        read_bytes: progress.bytes_read,
+                        total_rows_to_read: 0,
+                        elapsed_ms: progress.elapsed_ns / 1_000_000,
+                        ..Default::default()
+                    }));
+                }
+            }
+            Ok(Event::Done(stats)) => {
+                self.last = stats;
+                if let Some(lease) = self.lease.take() {
+                    self.pool.release(lease, Outcome::Completed);
+                }
+                match self.framer.finish() {
+                    Ok(rest) => self.finish(rest),
+                    Err(err) => self.fail(&err),
+                }
+            }
+            Err(err) => {
+                if let Some(lease) = self.lease.take() {
+                    self.pool.release(lease, Outcome::Completed);
+                }
+                if self.framer.truncated() {
+                    // The client has every row it asked for; what failed after the
+                    // cut (a drained block, a `throw` overflow mode) is not its.
+                    let rest = self.framer.finish().unwrap_or_default();
+                    self.finish(rest);
+                } else {
+                    self.fail(&err);
+                }
+            }
+        }
+    }
+}

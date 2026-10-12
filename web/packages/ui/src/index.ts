@@ -15,6 +15,7 @@ export {
   type Tokens,
 } from './canvas';
 export { Card } from './card';
+export { ComingSoon, isNotServed } from './coming-soon';
 export { cx } from './cx';
 export { Empty } from './empty';
 export { Checkbox, Field, Input, Select, Textarea } from './field';

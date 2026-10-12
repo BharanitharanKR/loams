@@ -22,19 +22,24 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
+from loams.live.v1 import live_pb2 as loams_dot_live_dot_v1_dot_live__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1bloams/live/v1/catalog.proto\x12\rloams.live.v1\"\x9d\x01\n\x08TableDef\x12\x16\n\x06\x66ormat\x18\x01 \x01(\rR\x06\x66ormat\x12\x0e\n\x02id\x18\x02 \x01(\rR\x02id\x12\x12\n\x04name\x18\x03 \x01(\tR\x04name\x12\x31\n\x07indexes\x18\x04 \x03(\x0b\x32\x17.loams.live.v1.IndexDefR\x07indexes\x12\"\n\rnext_index_id\x18\x05 \x01(\rR\x0bnextIndexId\"F\n\x08IndexDef\x12\x0e\n\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n\x06\x66ields\x18\x03 \x03(\tR\x06\x66ields\"G\n\x06\x41ppDef\x12\x16\n\x06\x66ormat\x18\x01 \x01(\rR\x06\x66ormat\x12%\n\x0ejournal_shards\x18\x02 \x01(\rR\rjournalShardsb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1bloams/live/v1/catalog.proto\x12\rloams.live.v1\x1a\x18loams/live/v1/live.proto\"\x9d\x01\n\x08TableDef\x12\x16\n\x06\x66ormat\x18\x01 \x01(\rR\x06\x66ormat\x12\x0e\n\x02id\x18\x02 \x01(\rR\x02id\x12\x12\n\x04name\x18\x03 \x01(\tR\x04name\x12\x31\n\x07indexes\x18\x04 \x03(\x0b\x32\x17.loams.live.v1.IndexDefR\x07indexes\x12\"\n\rnext_index_id\x18\x05 \x01(\rR\x0bnextIndexId\"F\n\x08IndexDef\x12\x0e\n\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n\x06\x66ields\x18\x03 \x03(\tR\x06\x66ields\"G\n\x06\x41ppDef\x12\x16\n\x06\x66ormat\x18\x01 \x01(\rR\x06\x66ormat\x12%\n\x0ejournal_shards\x18\x02 \x01(\rR\rjournalShards\"\xe0\x02\n\x10\x44\x65ploymentRecord\x12\x16\n\x06\x66ormat\x18\x01 \x01(\rR\x06\x66ormat\x12\x0e\n\x02id\x18\x02 \x01(\x0cR\x02id\x12#\n\rbundle_sha256\x18\x03 \x01(\x0cR\x0c\x62undleSha256\x12-\n\x06schema\x18\x04 \x01(\x0b\x32\x15.loams.live.v1.SchemaR\x06schema\x12\"\n\rcreated_at_ms\x18\x05 \x01(\x04R\x0b\x63reatedAtMs\x12\x1d\n\ncreated_by\x18\x06 \x01(\tR\tcreatedBy\x12\x18\n\x07message\x18\x07 \x01(\tR\x07message\x12\x16\n\x06parent\x18\x08 \x01(\x0cR\x06parent\x12\x34\n\x05state\x18\t \x01(\x0e\x32\x1e.loams.live.v1.DeploymentStateR\x05state\x12%\n\x0e\x66\x61ilure_reason\x18\n \x01(\tR\rfailureReason*\x8e\x02\n\x0f\x44\x65ploymentState\x12 \n\x1c\x44\x45PLOYMENT_STATE_UNSPECIFIED\x10\x00\x12\x1c\n\x18\x44\x45PLOYMENT_STATE_PENDING\x10\x01\x12\x1f\n\x1b\x44\x45PLOYMENT_STATE_VALIDATING\x10\x02\x12 \n\x1c\x44\x45PLOYMENT_STATE_BACKFILLING\x10\x03\x12\x1b\n\x17\x44\x45PLOYMENT_STATE_ACTIVE\x10\x04\x12\x1f\n\x1b\x44\x45PLOYMENT_STATE_SUPERSEDED\x10\x05\x12\x1b\n\x17\x44\x45PLOYMENT_STATE_FAILED\x10\x06\x12\x1d\n\x19\x44\x45PLOYMENT_STATE_DEGRADED\x10\x07\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'loams.live.v1.catalog_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_TABLEDEF']._serialized_start=47
-  _globals['_TABLEDEF']._serialized_end=204
-  _globals['_INDEXDEF']._serialized_start=206
-  _globals['_INDEXDEF']._serialized_end=276
-  _globals['_APPDEF']._serialized_start=278
-  _globals['_APPDEF']._serialized_end=349
+  _globals['_DEPLOYMENTSTATE']._serialized_start=733
+  _globals['_DEPLOYMENTSTATE']._serialized_end=1003
+  _globals['_TABLEDEF']._serialized_start=73
+  _globals['_TABLEDEF']._serialized_end=230
+  _globals['_INDEXDEF']._serialized_start=232
+  _globals['_INDEXDEF']._serialized_end=302
+  _globals['_APPDEF']._serialized_start=304
+  _globals['_APPDEF']._serialized_end=375
+  _globals['_DEPLOYMENTRECORD']._serialized_start=378
+  _globals['_DEPLOYMENTRECORD']._serialized_end=730
 # @@protoc_insertion_point(module_scope)

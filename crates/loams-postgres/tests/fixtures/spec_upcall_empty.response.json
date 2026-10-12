@@ -1,0 +1,1 @@
+{"spec":null,"status":"empty","compute_ctl_config":{"jwks":{"keys":[{"kty":"OKP","use":"sig","key_ops":["verify"],"alg":"EdDSA","kid":"pgc-0011223344556677","crv":"Ed25519","x":"11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"}]},"tls":null}}

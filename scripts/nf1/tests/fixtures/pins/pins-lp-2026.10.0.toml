@@ -1,0 +1,22 @@
+# Written by scripts/nf1/pins.py (set); checked by pins.py (check). Do not edit by hand.
+schema = 1
+fork_release = "lp-2026.10.0"
+fork_commit = "0123456789abcdef0123456789abcdef01234567"
+
+[majors]
+supported = [17]
+beta = []
+maintenance = []
+default = 17
+
+[images.storage]
+repository = "ghcr.io/ostrium-labs/loams-postgres-storage"
+digest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+source = "ostrium-labs/loams-postgres@0123456789abcdef0123456789abcdef01234567"
+pg_minors = { "17" = "17.5" }
+
+[images.compute-v17]
+repository = "ghcr.io/ostrium-labs/loams-postgres-compute-v17"
+digest = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+source = "ostrium-labs/loams-postgres@0123456789abcdef0123456789abcdef01234567"
+pg_minor = "17.5"

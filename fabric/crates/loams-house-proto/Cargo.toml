@@ -1,0 +1,39 @@
+[package]
+name = "loams-house-proto"
+description = "The loams.house.v1 protos of Loams House (design §49 §18): buffa messages, the connect-rust HouseService trait and, with the `client` feature, its client, generated at build time from the repository's proto/ tree."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+# Not published: build.rs reads the protos from the repository's root `proto/`
+# directory, which a crate archive would not contain (the reason
+# `loams-flow-proto` and the engine's `loams-proto` are unpublished too).
+publish = false
+
+[features]
+# The generated `HouseServiceClient` (connect-rust's client transport), for
+# tests that call the House front over a socket and for a Rust SDK. Off by
+# default, so the front does not pull the client stack in.
+client = ["connectrpc/client"]
+
+[dependencies]
+# The generated message types are buffa's, with the proto3 JSON mapping (Connect
+# JSON clients, such as the desktop's, send it). The engine's `loams-proto` pins
+# the same versions inline for the same reason: they are this crate's codegen
+# runtime, not a shared dependency.
+buffa = { version = "0.9.2", features = ["json"] }
+# `google.protobuf.Timestamp` (and `descriptor.proto`, which
+# `loams.options.v1` extends).
+buffa-types = { version = "0.9.2", features = ["json"] }
+# The service trait, `Router` registration and, with `client`, the client. 0.9.1
+# is the version the engine workspace locks.
+connectrpc = { workspace = true }
+# The generated JSON mapping derives serde.
+serde.workspace = true
+
+[build-dependencies]
+connectrpc-build.workspace = true
+
+[lints]
+workspace = true

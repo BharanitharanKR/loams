@@ -1,23 +1,25 @@
+![Loams — Your data. Your bucket.](../../docs/assets/loams-banner.svg)
+
 # Loams WAL vs safekeepers: the P4b benchmark
 
 The harness behind the merge gate in [§28 §7](../../docs/design/28-loams-postgres.md). It runs
 pgbench through a Neon compute whose WAL goes either to **stock safekeepers** (the baseline)
-or to **Loams's WAL service on TiKV** (the candidate), on the same host and topology. The Loams
+or to **Loams’ WAL service on TiKV** (the candidate), on the same host and topology. The Loams
 WAL replaces the safekeepers only if, for every workload:
 
 - its p99 commit latency is at or below the safekeepers' (within the baseline's run-to-run
   noise), and
 - its throughput is no worse.
 
-Derived from [`deploy/neon`](../neon) (Apache-2.0, from `neondatabase/neon` `docker-compose/`).
+Derived from [`deploy/loams-postgres-dev`](../loams-postgres-dev) (Apache-2.0, from `neondatabase/neon` `docker-compose/`).
 
 ## Topology
 
 | Tier | Baseline (`--variant safekeepers`) | Candidate (`--variant loams`) |
 |---|---|---|
-| Compute | `compute-node-v16`, `shared_buffers = 2GB`, one per run on a fresh timeline | same |
-| WAL | `safekeeper1` (`--replicas 1`) or `safekeeper1..3` (`--replicas 3`), fsync on, each on its own volume | `loams-wal --store tikv` + a TiKV playground with 1 or 3 stores ([`tikv.toml`](tikv.toml)) |
-| Pageserver feed | the safekeepers | `feeder-safekeeper`: a stock safekeeper with `--no-sync` that `loams-wal` streams committed WAL to, off the commit path |
+| Compute | `compute-node-v17` (pinned by digest in `compose.yaml`), `shared_buffers = 2GB`, one per run on a fresh timeline | same |
+| WAL | `safekeeper1` (`--replicas 1`) or `safekeeper1..3` (`--replicas 3`), fsync on, each on its own volume | `loams-wal-interpreted --store tikv` + a TiKV playground with 1 or 3 stores ([`tikv.toml`](tikv.toml)) |
+| Pageserver feed | the safekeepers | `loams-wal` itself: the pageserver finds it through the storage broker and reads the interpreted protocol from it, in process (PG2 Tasks 31 and 32) |
 | Storage | pageserver, storage broker, RustFS | same |
 | Client | pgbench inside the compute container | same |
 
@@ -26,10 +28,10 @@ Derived from [`deploy/neon`](../neon) (Apache-2.0, from `neondatabase/neon` `doc
 loopback only). Everything uses host networking, so the compute reaches containers and host processes the
 same way.
 
-The **feeder** exists because the pageserver only ingests Neon's *interpreted* WAL protocol,
-which the WAL service does not speak yet (§28 Q112; see `crates/loams-safekeeper/src/feeder.rs`).
-The feeder safekeeper stands in for that decoder. It adds disk and CPU work to the candidate
-that the final design does not have, so it can only make the candidate look worse.
+Until PG2 Task 31, a **feeder** (a `--no-sync` stock safekeeper that `loams-wal` streamed
+committed WAL to) stood in for the interpreted sender, and the results up to 2026-10-01 include it
+(`feeder_cpu_s` in their JSON). It is gone: no stock safekeeper runs in the candidate.
+`scripts/pg2/it-pageserver-loams-wal.sh` checks that path end to end.
 
 ## Run
 
@@ -37,7 +39,11 @@ Build `loams-wal` once, with podman's socket (or Docker) and tiup available (see
 [`scripts/tikv`](../../scripts/tikv)):
 
 ```sh
-cargo build --release -p loams-safekeeper --features server,tikv --bin loams-wal
+# loams-wal with the interpreted sender: its own workspace, with Postgres headers
+scripts/pg2/pg-headers.sh ghcr.io/neondatabase/neon@sha256:ead56a7b33925ca4df9f1ee0d29f55fa25e165a3fee6a4f19055050c68e8cad0 \
+  crates/loams-wal-decoder/pg_install
+(cd crates/loams-wal-decoder && POSTGRES_INSTALL_DIR=$PWD/pg_install \
+  cargo build --release --features tikv,nvme --bin loams-wal-interpreted)
 # One run of one variant: writes bench/results/<date>-<sha>-<variant>-rf<n>-<label>.json
 scripts/loams-pg-bench/run.sh --variant safekeepers --replicas 3
 scripts/loams-pg-bench/run.sh --variant loams --replicas 3

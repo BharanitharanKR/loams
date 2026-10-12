@@ -41,7 +41,8 @@ use loams_live_proto::loams::live::v1::{
 use loams_proto::loams::errors::v1::ErrorInfo;
 use loams_proto::loams::instance::v1::{
     Edition, GetInstanceRequest, GetInstanceResponse, InstanceService, InstanceServiceExt,
-    ServiceStatus, SignInKind, SignInMethod, WhoAmIRequest, WhoAmIResponse,
+    Principal as PrincipalMsg, PrincipalKind as PrincipalKindMsg, ServiceStatus, SignInKind,
+    SignInMethod, WhoAmIRequest, WhoAmIResponse,
 };
 use ulid::Ulid;
 
@@ -55,7 +56,8 @@ use super::AppState;
 pub const VARIANT: &str = if cfg!(any(
     feature = "tikv",
     feature = "mysql-wire",
-    feature = "stream-grpc"
+    feature = "stream-grpc",
+    feature = "graph"
 )) {
     "full"
 } else {
@@ -86,15 +88,43 @@ struct Package {
 /// API1 Task 1 starts the list with the two packages whose protos exist and
 /// whose availability is decided: the one this binary serves and the one it
 /// does not. Tasks 2–8 append `loams.collection.v1`, `loams.sql.v1`,
-/// `loams.link.v1`, `loams.stream.v1`, `loams.admin.v1`, `loams.auth.v1`,
-/// and the cluster-listener-only `loams.internal.v1`, flipping each row's
-/// `available` as its handler lands. A package with no proto yet has no row,
-/// so `GetInstance.services[]` never advertises a contract that does not
-/// exist.
+/// `loams.link.v1`, `loams.stream.v1`, `loams.admin.v1`, `loams.auth.v1`, and
+/// the cluster-listener-only `loams.internal.v1`, flipping each row's
+/// `available` as its handler lands. A package with no proto yet has no row, so
+/// `GetInstance.services[]` never advertises a contract that does not exist.
+///
+/// Every package here must be one §44 enumerates; `route_map.rs` reads §44 and
+/// the protos and fails on a row that is not.
 const CATALOGUE: &[Package] = &[
     Package {
         package: "loams.instance.v1",
         services: &["loams.instance.v1.InstanceService"],
+        available: true,
+        unstable: false,
+    },
+    Package {
+        // Namespaces, collections, their schema, aliases, versions, scan plans
+        // and the hot tier (design §44 §5.1; API1 Task 2), plus documents — the
+        // atomic write, the get, the scroll, the count and the two filter
+        // writes (API1 Task 3), plus the search IR — `QueryService/Search`,
+        // §8's `Query` in the same `New protos:` sentence (API1 Task 4). One
+        // package for all of it is what §44 §7.2's
+        // module catalogue says (`loams.collections`, `loams.documents` ⇢
+        // `loams.collection.v1` `CollectionService`, `DocumentService`) and
+        // what §8's `New protos:` sentence enumerates as Namespace, Collection,
+        // Document and Query; `DocumentService` was briefly a package of its
+        // own, which no design section mentions.
+        //
+        // The REST routes this replaces stay until Task 9, so both surfaces
+        // answer today, and `WriteDocuments` is the first RPC here that needs an
+        // `idempotency_key` (plan ruling 2.4).
+        package: "loams.collection.v1",
+        services: &[
+            "loams.collection.v1.NamespaceService",
+            "loams.collection.v1.CollectionService",
+            "loams.collection.v1.DocumentService",
+            "loams.collection.v1.QueryService",
+        ],
         available: true,
         unstable: false,
     },
@@ -110,16 +140,61 @@ const CATALOGUE: &[Package] = &[
         available: false,
         unstable: true,
     },
+    Package {
+        // Loams Graph (GR1 Task 5, design §48 §8, D741): served with the `graph` cargo feature
+        // (the `full` variant) on dev and standalone; otherwise every RPC answers
+        // `feature_not_in_variant` (`super::graph`). Unstable until GR1 Task 39.
+        package: "loams.graph.v1",
+        services: &[
+            "loams.graph.v1.GraphAdminService",
+            "loams.graph.v1.GraphService",
+        ],
+        available: cfg!(feature = "graph"),
+        unstable: true,
+    },
+    Package {
+        // Loams House (HS1 Task 7, design §49 §18, D778): served by a separate
+        // `loams-fabric house` front and proxied by this port
+        // (`super::house_proxy`), so `available` here only says "this binary can
+        // proxy it": the row is available while `[house] endpoint` is configured
+        // **and** its health check passes ([`Served`]). Unstable until HS1 Task 38.
+        package: "loams.house.v1",
+        services: &["loams.house.v1.HouseService"],
+        available: true,
+        unstable: true,
+    },
 ];
 
+/// What this running server serves beyond the build's catalogue: the graph
+/// runtime, and a healthy House front behind the proxy.
+#[derive(Clone, Copy, Debug)]
+struct Served {
+    /// The graph runtime is on (not `--no-graph`, not a cluster node).
+    graph: bool,
+    /// `[house] endpoint` is configured and answered its last health check.
+    house: bool,
+}
+
+/// Whether a catalogue package is served by this running server: the build's `available`, and
+/// for `loams.graph.v1` also whether the graph runtime is on (`--no-graph`, cluster nodes), for
+/// `loams.house.v1` whether the House front is configured and healthy.
+fn is_available(entry: &Package, served: Served) -> bool {
+    entry.available
+        && match entry.package {
+            "loams.graph.v1" => served.graph,
+            super::house_proxy::PACKAGE => served.house,
+            _ => true,
+        }
+}
+
 /// The catalogue as `GetInstance.services[]`.
-fn statuses() -> Vec<ServiceStatus> {
+fn statuses(served: Served) -> Vec<ServiceStatus> {
     CATALOGUE
         .iter()
         .map(|entry| ServiceStatus {
             package: entry.package.to_owned(),
             version: "v1".to_owned(),
-            available: entry.available,
+            available: is_available(entry, served),
             services: entry
                 .services
                 .iter()
@@ -133,11 +208,17 @@ fn statuses() -> Vec<ServiceStatus> {
 
 /// The services a `grpc.health.v1` probe may ask about. The whole-process
 /// entry (the empty name) is pre-registered by `connectrpc-health` and is not
-/// repeated here.
-fn served_services() -> Vec<&'static str> {
+/// repeated here. The registration is static, so `loams.house.v1`, whose
+/// health is another process's and changes while this one runs, is never in
+/// it: the catalogue's `available` is the place to ask.
+fn served_services(graph_served: bool) -> Vec<&'static str> {
+    let served = Served {
+        graph: graph_served,
+        house: false,
+    };
     CATALOGUE
         .iter()
-        .filter(|entry| entry.available)
+        .filter(|entry| is_available(entry, served))
         .flat_map(|entry| entry.services.iter().copied())
         .collect()
 }
@@ -149,7 +230,22 @@ static INSTANCE_ID: LazyLock<String> = LazyLock::new(|| Ulid::generate().to_stri
 
 /// `loams.instance.v1.InstanceService` for the OSS server.
 #[derive(Debug)]
-struct Instance;
+struct Instance {
+    /// Whether `loams.graph.v1` is served by this running server.
+    graph_served: bool,
+    /// The House proxy, whose health decides `loams.house.v1`'s row.
+    house: Option<Arc<super::house_proxy::HouseProxy>>,
+}
+
+impl Instance {
+    /// What is served right now (the House's health changes while the server runs).
+    fn served(&self) -> Served {
+        Served {
+            graph: self.graph_served,
+            house: self.house.as_ref().is_some_and(|house| house.healthy()),
+        }
+    }
+}
 
 impl InstanceService for Instance {
     /// No credentials: an app calls this before sign-in.
@@ -158,6 +254,7 @@ impl InstanceService for Instance {
         _ctx: RequestContext,
         _request: ServiceRequest<'_, GetInstanceRequest>,
     ) -> ServiceResult<GetInstanceResponse> {
+        let served = self.served();
         Response::ok(GetInstanceResponse {
             instance_id: INSTANCE_ID.clone(),
             name: INSTANCE_NAME.to_owned(),
@@ -169,7 +266,7 @@ impl InstanceService for Instance {
             // `rpc.<service>` (AP1a Ruling 6); `services` is the long form.
             api_versions: CATALOGUE
                 .iter()
-                .filter(|entry| entry.available)
+                .filter(|entry| is_available(entry, served))
                 .map(|entry| entry.package.to_owned())
                 .collect(),
             sign_in_methods: vec![SignInMethod {
@@ -177,7 +274,7 @@ impl InstanceService for Instance {
                 display_name: "No sign-in".to_owned(),
                 ..Default::default()
             }],
-            services: statuses(),
+            services: statuses(served),
             // Empty until their plans land, not because they are off: `issuer`
             // and `jwks_uri` with the auth plan (MT), `tls_pins` and `push`
             // with the phone plans (§37 §7), `min_app_versions` with release
@@ -188,16 +285,33 @@ impl InstanceService for Instance {
         })
     }
 
-    /// There is no authentication on this port yet (design §19 §5 is the auth
-    /// plan; MT and API1 Task 7 build it), so there is no principal to
-    /// report. The refusal names the RPC and the reason so a caller can tell
-    /// it apart from a token that was rejected.
+    /// The principal the auth layer ([`crate::auth`]) admitted. Without one
+    /// (a router served without the layer) the refusal names the RPC, so a
+    /// caller can tell it apart from a token that was rejected.
     async fn who_am_i(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         _request: ServiceRequest<'_, WhoAmIRequest>,
     ) -> ServiceResult<WhoAmIResponse> {
-        Err(not_implemented("loams.instance.v1.InstanceService/WhoAmI"))
+        use crate::auth::PrincipalKind as Kind;
+        let Some(principal) = ctx.extensions().get::<crate::auth::Principal>() else {
+            return Err(not_implemented("loams.instance.v1.InstanceService/WhoAmI"));
+        };
+        let kind = match principal.kind {
+            Kind::User | Kind::Tailscale => PrincipalKindMsg::PRINCIPAL_KIND_USER,
+            Kind::ApiKey => PrincipalKindMsg::PRINCIPAL_KIND_SERVICE_ACCOUNT,
+            Kind::DevLoopback => PrincipalKindMsg::PRINCIPAL_KIND_UNSPECIFIED,
+        };
+        Response::ok(WhoAmIResponse {
+            principal: buffa::MessageField::some(PrincipalMsg {
+                id: principal.subject.clone(),
+                kind: EnumValue::Known(kind),
+                display_name: principal.display_name.clone(),
+                email: principal.email.clone().unwrap_or_default(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
     }
 }
 
@@ -259,17 +373,21 @@ impl LiveService for LiveAbsent {
 /// `metadata` that goes with it (design §44 §7.4, D611). `metadata` never
 /// holds a secret. Every reason this module raises is registered in
 /// `docs/api/reasons.md`.
-fn refuse(
+///
+/// The metadata values are **owned** because they are not always literals: an
+/// `ApiError`'s structured fields are stringified on the way in (they are
+/// numbers in the REST body), so a caller building one has to own the text.
+pub(crate) fn refuse(
     code: ErrorCode,
     reason: &str,
     message: impl Into<String>,
-    metadata: &[(&str, &str)],
+    metadata: &[(&str, String)],
 ) -> ConnectError {
     let info = ErrorInfo {
         reason: reason.to_owned(),
         metadata: metadata
             .iter()
-            .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+            .map(|(key, value)| ((*key).to_owned(), value.clone()))
             .collect(),
         ..Default::default()
     };
@@ -283,18 +401,18 @@ fn refuse(
 /// (design §44 §4, D600): `unimplemented`, the reason
 /// `feature_not_in_variant`, and the variant that was asked for, so a caller
 /// can tell "not in this build" from "not written yet" (`not_implemented`).
-fn not_in_variant(rpc: &str) -> ConnectError {
+pub(super) fn not_in_variant(rpc: &str) -> ConnectError {
     refuse(
         ErrorCode::Unimplemented,
         "feature_not_in_variant",
         format!("{rpc} is not in the {VARIANT} variant"),
-        &[("variant", VARIANT)],
+        &[("variant", VARIANT.to_owned())],
     )
 }
 
 /// What an RPC whose service exists in the protos but is not implemented by
 /// this binary yet answers (AP0's `not_implemented`).
-fn not_implemented(rpc: &str) -> ConnectError {
+pub(super) fn not_implemented(rpc: &str) -> ConnectError {
     refuse(
         ErrorCode::Unimplemented,
         "not_implemented",
@@ -303,21 +421,42 @@ fn not_implemented(rpc: &str) -> ConnectError {
     )
 }
 
-/// The reflector for `grpc.reflection.v1`, or `None` when the descriptor set
-/// `loams-proto` emitted does not parse. Reflection is a convenience, so a
-/// broken descriptor set costs reflection and nothing else: it is logged and
-/// the port still serves.
-fn reflector(state: &AppState) -> Option<connectrpc_reflection::Reflector> {
-    if !state.reflection {
-        return None;
+/// The reflection services, which list themselves (as grpc-go's do).
+const REFLECTION_SERVICES: [&str; 2] = [
+    "grpc.reflection.v1.ServerReflection",
+    "grpc.reflection.v1alpha.ServerReflection",
+];
+
+/// Installs `grpc.reflection.v1` on `rpc`. `ListServices` lists only what
+/// this process answers (PG2 R1.4): every service with a route on `rpc`
+/// (served, or a stub that refuses with a typed reason; health among them),
+/// the services in `also` that a layer outside `rpc` answers, and
+/// reflection itself. A package that is only in `loams-proto`'s descriptor
+/// set, such as one a different role serves, is never listed, though its
+/// files stay resolvable.
+///
+/// Reflection is a convenience, so a descriptor set that does not parse
+/// costs reflection and nothing else: it is logged and the port still
+/// serves.
+pub(crate) fn install_reflection(rpc: Router, also: &[&str]) -> Router {
+    let mut services: Vec<String> = Vec::new();
+    let answered = rpc
+        .methods()
+        .filter_map(|path| path.split_once('/').map(|(service, _)| service))
+        .chain(also.iter().copied())
+        .chain(REFLECTION_SERVICES);
+    for service in answered {
+        if !services.iter().any(|s| s == service) {
+            services.push(service.to_owned());
+        }
     }
     match connectrpc_reflection::Reflector::from_descriptor_set_bytes(
         loams_proto::FILE_DESCRIPTOR_SET,
     ) {
-        Ok(reflector) => Some(reflector),
+        Ok(reflector) => connectrpc_reflection::install(rpc, reflector.with_services(services)),
         Err(err) => {
             tracing::warn!(%err, "gRPC reflection is off: the descriptor set does not parse");
-            None
+            rpc
         }
     }
 }
@@ -330,14 +469,31 @@ fn reflector(state: &AppState) -> Option<connectrpc_reflection::Reflector> {
 /// remains` still expects from the paths that survive it. A Connect path is
 /// `/<package>.<Service>/<Method>` and every native path is under `/v1`,
 /// `/internal`, `/health` or `/ready`, so the two sets cannot collide.
-pub(crate) fn routes(state: &AppState) -> AxumRouter {
+pub(crate) fn routes(state: &AppState, hot_default: bool) -> AxumRouter {
+    let graph_served = super::graph::served(state);
     let mut rpc = Router::new();
-    rpc = Arc::new(Instance).register(rpc);
+    rpc = Arc::new(Instance {
+        graph_served,
+        house: state.house.clone(),
+    })
+    .register(rpc);
     rpc = Arc::new(LiveAbsent).register(rpc);
-    let (rpc, _health) = connectrpc_health::install_static(rpc, served_services());
-    let rpc = match reflector(state) {
-        Some(reflector) => connectrpc_reflection::install(rpc, reflector),
-        None => rpc,
+    rpc = super::graph::register(rpc, state);
+    rpc = super::connect_collections::register(rpc, state);
+    rpc = super::connect_documents::register(rpc, state);
+    rpc = super::connect_query::register(rpc, state);
+    let (rpc, _health) = connectrpc_health::install_static(rpc, served_services(graph_served));
+    let rpc = if state.reflection {
+        // `loams.house.v1` is answered by the House layer around these
+        // routes (`super::house_proxy`), not by a route of `rpc`.
+        let layered: Vec<&str> = CATALOGUE
+            .iter()
+            .filter(|entry| entry.package == super::house_proxy::PACKAGE)
+            .flat_map(|entry| entry.services.iter().copied())
+            .collect();
+        install_reflection(rpc, &layered)
+    } else {
+        rpc
     };
     // Before it is consumed: the paths are what the axum router keys on.
     let paths: Vec<String> = rpc.methods().map(|path| format!("/{path}")).collect();
@@ -346,5 +502,11 @@ pub(crate) fn routes(state: &AppState) -> AxumRouter {
     for path in paths {
         axum = axum.route_service(&path, service.clone());
     }
-    axum
+    // Inside `HotLayer`, and with this router's own Connect-shaped refusal of an
+    // unusable `Loams-Hot` in front of it (`super::connect_hot`). Applied here
+    // rather than by merging these routes into the router the REST routes live
+    // in, because the layer decides a refusal's shape from the content type and
+    // `application/json` is both the Connect protocol's and the REST one: inside
+    // this router there is no ambiguity, outside it there is.
+    super::connect_hot::layer(axum, hot_default)
 }

@@ -1,21 +1,38 @@
-// Stages the console build for Cloudflare Workers static assets (issue #269).
+// Stages the console build as the hosted / BYOC console, for Cloudflare Workers
+// static assets (issue #269) or Vercel:
 //
-//   node deploy/stage.mjs            # dist/ -> dist-cloudflare/
-//   LOAMS_CONSOLE_SERVER=https://loams.example.com node deploy/stage.mjs
+//   node deploy/stage.mjs                    # dist/ -> dist-cloudflare/
+//   node deploy/stage.mjs --target vercel    # dist/ -> dist-vercel/
 //
-// The build is the same one the engine embeds (base path /ui/), so it lands
-// under dist-cloudflare/ui/. The root gets a copy of index.html, which the
-// `single-page-application` fallback in wrangler.jsonc serves for unknown
-// paths, and a redirect from / to /ui/. Asset paths therefore resolve to real
-// files and come back with their own MIME type (text/javascript for .js),
-// never as the HTML fallback.
+// The runtime config comes from the environment (deploy/config.mjs:
+// LOAMS_ENGINE_URL, LOAMS_AUTH_MODE, LOAMS_AUTH_ISSUER, LOAMS_AUTH_CLIENT_ID) and lands in
+// /config.json and /ui/config.json; nothing is baked into the bundle.
+//
+// The build is the one the engine embeds (base path /ui/), so it lands under
+// <out>/ui/. The root page is the cordis console (ui/cordis.html), which the
+// SPA fallback also serves for unknown paths; it routes by hash, so the OIDC
+// redirect URI is the bare origin. Asset paths resolve to real files and come
+// back with their own MIME type, never as the HTML fallback.
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { hostedConfig } from './config.mjs';
 
 /** The base path the console is built for (vite.config.ts `base`). */
 export const BASE = '/ui/';
+/** Tailscale MagicDNS names, where `tailscale serve` publishes the engine over HTTPS. */
+export const TAILNET = 'https://*.ts.net';
+/** The page every unknown path falls back to. */
+export const ENTRY = 'cordis.html';
 
 /** The `sha256-...` CSP sources of every inline `<script>` in a page. */
 export function inlineScriptHashes(html) {
@@ -28,9 +45,19 @@ export function inlineScriptHashes(html) {
   return hashes;
 }
 
-/** The console's Content-Security-Policy: no eval, no remote code; fetches to itself and the configured server. */
-export function contentSecurityPolicy({ scriptHashes = [], server } = {}) {
-  const connect = ["'self'", ...(server ? [new URL(server).origin] : [])];
+/** Where the hosted console may fetch: itself, the tailnet, the fixed engine, the issuer. */
+export function connectSources(config = {}) {
+  const sources = ["'self'", TAILNET];
+  for (const url of [config.engineUrl, config.authIssuer]) {
+    if (!url) continue;
+    const origin = new URL(url).origin;
+    if (!sources.includes(origin)) sources.push(origin);
+  }
+  return sources;
+}
+
+/** The console's Content-Security-Policy: no eval, no remote code, fetches only to `connect`. */
+export function contentSecurityPolicy({ scriptHashes = [], connect = ["'self'"] } = {}) {
   return [
     "default-src 'self'",
     `script-src ${["'self'", ...scriptHashes].join(' ')}`,
@@ -45,7 +72,7 @@ export function contentSecurityPolicy({ scriptHashes = [], server } = {}) {
   ].join('; ');
 }
 
-/** Adds a CSP once; staging replaces the build's policy with its runtime server policy. */
+/** Adds a CSP once; staging replaces the build's policy with its runtime policy. */
 export function injectCsp(html, csp, replaceExisting = false) {
   const meta = `<meta http-equiv="Content-Security-Policy" content="${csp.replaceAll('"', '&quot;')}" />`;
   const existing = /<meta\b[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/i;
@@ -55,7 +82,7 @@ export function injectCsp(html, csp, replaceExisting = false) {
   return html.replace(charset, (m) => `${m}\n    ${meta}`);
 }
 
-/** Response headers for every path (`_headers`); the CSP rides in the page's `<meta>`. */
+/** Cloudflare `_headers` for every path; the CSP rides in each page's `<meta>`. */
 export function headersFile() {
   return `/*
   X-Content-Type-Options: nosniff
@@ -79,9 +106,9 @@ ${BASE}config.json
 `;
 }
 
-/** `_redirects`: the bare host opens the console. */
+/** Cloudflare `_redirects`: the engine-embedded console's entry has no place here. */
 export function redirectsFile() {
-  return `/ ${BASE} 302\n`;
+  return `${BASE} / 302\n${BASE}index.html / 302\n`;
 }
 
 /** Fails when the build was made for another base path (the assets would 404 into the HTML fallback). */
@@ -97,60 +124,104 @@ export function checkBase(html) {
   }
 }
 
-/** Stages `dist` into `out`. `server` is the Loams server origin for config.json, if any. */
-export function stage({ dist, out, server, requireServer = false }) {
-  if (requireServer && !server) {
-    throw new Error('LOAMS_CONSOLE_SERVER is required for the hosted console deployment');
-  }
-  if (server) {
-    let url;
-    try {
-      url = new URL(server);
-    } catch {
-      throw new Error('hosted console server must be a valid HTTPS URL');
+/** vercel.json's static CSP must admit what this deploy's config fetches. */
+export function checkVercelCsp(vercelJson, connect) {
+  // The site-wide rule; the sandbox frame's own, stricter policy overrides it on one path.
+  const policies = (vercelJson.headers ?? [])
+    .filter((h) => h.source === '/(.*)')
+    .flatMap((h) => h.headers ?? [])
+    .filter((h) => h.key.toLowerCase() === 'content-security-policy')
+    .map((h) => h.value);
+  if (policies.length === 0) throw new Error('vercel.json sets no Content-Security-Policy');
+  for (const policy of policies) {
+    const directive = policy
+      .split(';')
+      .map((d) => d.trim())
+      .find((d) => d.startsWith('connect-src '));
+    const allowed = new Set(directive?.split(/\s+/).slice(1) ?? []);
+    const missing = connect.filter((s) => !allowed.has(s));
+    if (missing.length > 0) {
+      throw new Error(
+        `vercel.json's Content-Security-Policy connect-src lacks ${missing.join(', ')}: add ` +
+          'them there (Vercel headers are static), or the browser blocks those requests',
+      );
     }
-    if (url.protocol !== 'https:') {
-      throw new Error('hosted console server must use HTTPS');
-    }
-    server = url.origin;
   }
+}
+
+function removeSourceMaps(dir) {
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) removeSourceMaps(path);
+    else if (name.endsWith('.map')) rmSync(path);
+  }
+}
+
+/**
+ * Stages `dist` into `out` for `target` ('cloudflare' or 'vercel'), with the runtime
+ * config from `env`. `vercelJson` is the parsed vercel.json (checked for the Vercel target).
+ */
+export function stage({
+  dist,
+  out,
+  env = {},
+  target = 'cloudflare',
+  requireAuth = false,
+  vercelJson,
+}) {
+  if (target !== 'cloudflare' && target !== 'vercel') throw new Error(`unknown target ${target}`);
+  // Validate everything before touching `out`.
+  const config = hostedConfig(env, { requireAuth });
+  const connect = connectSources(config);
+  if (target === 'vercel') checkVercelCsp(vercelJson ?? {}, connect);
   const index = join(dist, 'index.html');
   if (!existsSync(index)) throw new Error(`${index} is missing: run the console build first`);
   checkBase(readFileSync(index, 'utf8'));
+  if (!existsSync(join(dist, ENTRY))) throw new Error(`${join(dist, ENTRY)} is missing`);
 
   rmSync(out, { recursive: true, force: true });
   const ui = join(out, BASE.replaceAll('/', ''));
   cpSync(dist, ui, { recursive: true });
 
-  if (server) {
-    const origin = new URL(server).origin;
-    writeFileSync(join(ui, 'config.json'), `${JSON.stringify({ server: origin }, null, 2)}\n`);
-  }
+  const json = `${JSON.stringify(config, null, 2)}\n`;
+  writeFileSync(join(ui, 'config.json'), json);
+  writeFileSync(join(out, 'config.json'), json);
 
   for (const name of readdirSync(ui)) {
     if (!name.endsWith('.html')) continue;
     const file = join(ui, name);
     const html = readFileSync(file, 'utf8');
-    const csp = contentSecurityPolicy({ scriptHashes: inlineScriptHashes(html), server });
+    const csp = contentSecurityPolicy({ scriptHashes: inlineScriptHashes(html), connect });
     writeFileSync(file, injectCsp(html, csp, true));
   }
-  cpSync(join(ui, 'index.html'), join(out, 'index.html'));
-  cpSync(join(ui, 'config.json'), join(out, 'config.json'));
+  cpSync(join(ui, ENTRY), join(out, 'index.html'));
 
-  writeFileSync(join(out, '_headers'), headersFile());
-  writeFileSync(join(out, '_redirects'), redirectsFile());
-  // Source maps stay out of the public deploy.
-  writeFileSync(join(out, '.assetsignore'), '*.map\n');
+  if (target === 'cloudflare') {
+    writeFileSync(join(out, '_headers'), headersFile());
+    writeFileSync(join(out, '_redirects'), redirectsFile());
+    // Source maps stay out of the public deploy.
+    writeFileSync(join(out, '.assetsignore'), '*.map\n');
+  } else {
+    removeSourceMaps(out);
+  }
+  return config;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-  const server = process.env.LOAMS_CONSOLE_SERVER?.trim() || undefined;
-  stage({
+  const at = process.argv.indexOf('--target');
+  const target = at > 0 ? process.argv[at + 1] : 'cloudflare';
+  const config = stage({
     dist: join(root, 'dist'),
-    out: join(root, 'dist-cloudflare'),
-    server,
-    requireServer: process.argv.includes('--require-server'),
+    out: join(root, `dist-${target}`),
+    env: process.env,
+    target,
+    requireAuth: process.argv.includes('--require-auth'),
+    vercelJson:
+      target === 'vercel' ? JSON.parse(readFileSync(join(root, 'vercel.json'), 'utf8')) : undefined,
   });
-  console.log(`staged dist-cloudflare/ (server: ${server ?? 'same origin'})`);
+  console.log(
+    `staged dist-${target}/ (engine: ${config.engineUrl ?? 'chosen on first run'}, ` +
+      `issuer: ${config.authIssuer ?? 'none, API key'})`,
+  );
 }

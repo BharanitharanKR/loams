@@ -1,0 +1,78 @@
+# syntax=docker/dockerfile:1.7
+# The Loams Fabric image (ghcr.io/ostrium-labs/loams-fabric): `loams-fabric`
+# (the House front) with `loams-house-worker` beside it, the only binary that
+# links libchdb (D761). Built by build.sh from the repository root.
+#
+# libchdb is fetched here, by the same digests fabric/crates/loams-chdb-sys/
+# build.rs pins (FL2 Ruling 2), and handed to the build through LIBCHDB_DIR, so
+# the library the worker links is the one the runtime stage ships. The worker
+# finds it through its $ORIGIN/../lib rpath: /usr/local/bin -> /usr/local/lib.
+ARG RUST_IMAGE=docker.io/library/rust:1.97.1-slim-trixie
+ARG RUNTIME_IMAGE=docker.io/library/debian:trixie-slim
+
+FROM ${RUST_IMAGE} AS build
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      protobuf-compiler libprotobuf-dev pkg-config libssl-dev clang libclang-dev g++ make cmake perl git curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+ENV RUSTUP_TOOLCHAIN=1.97.1 \
+    CARGO_TERM_COLOR=never \
+    LIBCHDB_DIR=/opt/chdb
+# Keep in step with CHDB_VERSION and SHA256_* in loams-chdb-sys/build.rs.
+ARG CHDB_VERSION=26.9.0
+ARG CHDB_SHA256_X86_64=c6398bcc71dc58d12fb81548540aacd5d8248830ec81cec537f51c114670543b
+ARG CHDB_SHA256_AARCH64=070116864cde6fdb3276fb1b28702b3b002da42038bb59c99e2a1360dd7f31ed
+RUN set -eu; arch="$(uname -m)"; \
+    case "$arch" in \
+      x86_64) sum="$CHDB_SHA256_X86_64" ;; \
+      aarch64) sum="$CHDB_SHA256_AARCH64" ;; \
+      *) echo "no pinned libchdb for $arch" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL --retry 3 -o /tmp/libchdb.tar.gz \
+      "https://github.com/chdb-io/chdb-core/releases/download/v${CHDB_VERSION}/linux-${arch}-libchdb.tar.gz"; \
+    echo "$sum  /tmp/libchdb.tar.gz" | sha256sum -c -; \
+    mkdir -p /tmp/chdb "$LIBCHDB_DIR"; tar -xzf /tmp/libchdb.tar.gz -C /tmp/chdb; \
+    find /tmp/chdb -name libchdb.so -exec install -m 0644 {} "$LIBCHDB_DIR/libchdb.so" \; ; \
+    find /tmp/chdb -name chdb.h -exec install -m 0644 {} "$LIBCHDB_DIR/chdb.h" \; ; \
+    test -f "$LIBCHDB_DIR/libchdb.so"; rm -rf /tmp/chdb /tmp/libchdb.tar.gz
+WORKDIR /src
+COPY . .
+ARG CARGO_BUILD_JOBS=
+RUN --mount=type=cache,id=loams-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=loams-target-fabric,target=/src/fabric/target \
+    if [ -n "$CARGO_BUILD_JOBS" ]; then export CARGO_BUILD_JOBS; else unset CARGO_BUILD_JOBS; fi \
+ && cd fabric \
+ && cargo build --locked --release -p loams-fabric --bin loams-fabric \
+ && cargo build --locked --release -p loams-house-worker --bin loams-house-worker \
+ && install -D -m 0755 target/release/loams-fabric /out/bin/loams-fabric \
+ && install -D -m 0755 target/release/loams-house-worker /out/bin/loams-house-worker \
+ && install -D -m 0644 "$LIBCHDB_DIR/libchdb.so" /out/lib/libchdb.so
+
+FROM ${RUNTIME_IMAGE}
+ARG VERSION=dev
+ARG REVISION=unknown
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl tini \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 10001 loams \
+ && useradd --system --uid 10001 --gid loams --home-dir /var/lib/loams-house --shell /usr/sbin/nologin loams \
+ && install -d -o loams -g loams -m 0750 /var/lib/loams-house
+COPY --from=build /out/bin/ /usr/local/bin/
+COPY --from=build /out/lib/ /usr/local/lib/
+RUN ldconfig
+LABEL org.opencontainers.image.title="loams-fabric" \
+      org.opencontainers.image.description="Loams Fabric: the House front and its chDB workers (preview)" \
+      org.opencontainers.image.source="https://github.com/ostrium-labs/loams" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.licenses="Apache-2.0"
+USER 10001:10001
+WORKDIR /var/lib/loams-house
+VOLUME ["/var/lib/loams-house"]
+EXPOSE 8123
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:8123/ping || exit 1
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/loams-fabric"]
+# A container has no netns sandbox to give the workers (it would need
+# CAP_SYS_ADMIN); the container is their boundary in the preview.
+CMD ["house", "--single-node", "--data-dir", "/var/lib/loams-house", "--sandbox", "none", "--unsafe-no-sandbox"]
