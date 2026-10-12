@@ -26,7 +26,7 @@ use tokio::sync::OnceCell;
 use super::{DbLookup, Lookup, ObjectDb, OdbError, walk_closure};
 use crate::blob::{BlobId, BlobStore, read_idx, read_pack};
 use crate::format::pb;
-use crate::ids::{ObjectId, Seq};
+use crate::ids::{ObjectId, RepoId, Seq};
 use crate::limits::MAX_FORK_DEPTH;
 use crate::reflog::RefSnapshot;
 
@@ -343,6 +343,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 /// fork fall-through (plan GT1 Task 9).
 #[derive(Debug)]
 pub struct PackCacheOdb {
+    repo: RepoId,
     blobs: Arc<dyn BlobStore>,
     cache: Arc<PackCache>,
     /// Newest first.
@@ -354,13 +355,15 @@ pub struct PackCacheOdb {
 }
 
 impl PackCacheOdb {
-    /// The objects of `snapshot`'s packs in `blobs`, falling through to
-    /// `parent`, which must be the snapshot's fork parent opened at the
-    /// parent's seq (the caller opens it with the parent's blob store).
-    /// Refuses a parent the snapshot does not name, a missing one, one at
-    /// another seq (`ParentMismatch`), and a chain deeper than
-    /// `MAX_FORK_DEPTH` (`ForkTooDeep`).
+    /// The objects of repository `repo`'s `snapshot`, whose packs are in
+    /// `blobs`, falling through to `parent`, which must be the snapshot's
+    /// fork parent opened at the parent's seq (the caller opens it with the
+    /// parent's blob store). Refuses a parent the snapshot does not name, a
+    /// missing one, another repository, one at another seq
+    /// (`ParentMismatch`), and a chain deeper than `MAX_FORK_DEPTH`
+    /// (`ForkTooDeep`).
     pub async fn open(
+        repo: RepoId,
         blobs: Arc<dyn BlobStore>,
         cache: Arc<PackCache>,
         snapshot: &RefSnapshot,
@@ -370,6 +373,12 @@ impl PackCacheOdb {
         let depth = match (&snapshot.parent, &parent) {
             (None, None) => 0,
             (Some(named), Some(parent)) => {
+                if named.repo_id != parent.repo.as_str() {
+                    return Err(mismatch(format!(
+                        "the snapshot forks {}, the parent offered is {}",
+                        named.repo_id, parent.repo
+                    )));
+                }
                 if named.seq != parent.seq.0 {
                     return Err(mismatch(format!(
                         "the snapshot forks {} at seq {}, the parent offered is at seq {}",
@@ -396,6 +405,7 @@ impl PackCacheOdb {
             });
         }
         Ok(Self {
+            repo,
             blobs,
             cache,
             packs: snapshot.packs.iter().rev().cloned().collect(),
@@ -403,6 +413,11 @@ impl PackCacheOdb {
             parent,
             depth,
         })
+    }
+
+    /// The repository.
+    pub fn repo(&self) -> &RepoId {
+        &self.repo
     }
 
     /// The snapshot's seq.
@@ -551,6 +566,7 @@ impl ObjectDb for PackCacheOdb {
     async fn missing_from_closure(
         &self,
         tips: &[ObjectId],
+        known: &[ObjectId],
         extra: Option<&dyn ObjectDb>,
     ) -> Result<Vec<ObjectId>, OdbError> {
         let session = Session {
@@ -558,6 +574,12 @@ impl ObjectDb for PackCacheOdb {
             memo: Memo::default(),
         };
         let extra = extra.map(DbLookup);
-        walk_closure(&session, extra.as_ref().map(|e| e as &dyn Lookup), tips).await
+        walk_closure(
+            &session,
+            extra.as_ref().map(|e| e as &dyn Lookup),
+            tips,
+            known,
+        )
+        .await
     }
 }
