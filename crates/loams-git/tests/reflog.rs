@@ -224,6 +224,65 @@ async fn group_rejects_only_the_stale_txn() {
     assert_eq!(sizes, vec![1, 3], "the holder alone, then the three");
 }
 
+/// Two copies of one transaction in one group: the second waits for the
+/// first's segment, then replays it; and when the first's outcome is not
+/// learned, the second is never told it committed at that seq (PR #452
+/// review).
+#[tokio::test(start_paused = true)]
+async fn duplicate_key_in_one_group_waits_for_its_segment() {
+    let (faulty, store) = faulty_store();
+    let log = mem_reflog(store).await;
+    let results = in_one_group(
+        &faulty,
+        &log,
+        vec![create("dup", "main", 1), create("dup", "main", 1)],
+    )
+    .await;
+    let first = results[0].as_ref().expect("first");
+    let second = results[1].as_ref().expect("second");
+    assert!(!first.replayed);
+    assert_eq!(
+        *second,
+        Receipt {
+            replayed: true,
+            ..*first
+        }
+    );
+
+    // The group's append fails before anything is stored, every time.
+    faulty.inject(Op::PutCreate, Fault::Delay(Duration::from_millis(200)));
+    let holder = {
+        let log = log.clone();
+        tokio::spawn(async move { log.commit(create("holder2", "holder2", 998)).await })
+    };
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    for _ in 0..5 {
+        faulty.inject(Op::PutCreate, Fault::Error);
+    }
+    let copies: Vec<_> = (0..2)
+        .map(|_| {
+            let log = log.clone();
+            tokio::spawn(async move { log.commit(create("lost", "lost", 7)).await })
+        })
+        .collect();
+    holder.await.expect("join").expect("holder");
+    let mut answers = Vec::new();
+    for copy in copies {
+        answers.push(copy.await.expect("join"));
+    }
+    assert!(
+        matches!(answers[0], Err(RefError::Unavailable)),
+        "{:?}",
+        answers[0]
+    );
+    // The second copy was decided after that attempt: it committed itself.
+    let receipt = answers[1].as_ref().expect("the second copy commits");
+    assert!(!receipt.replayed);
+    let snap = log.snapshot(ReadAt::Latest).await.expect("snapshot");
+    assert_eq!(snap.seq, receipt.seq);
+    assert_eq!(snap.refs.get(&name("lost")), Some(&oid(7)));
+}
+
 #[tokio::test]
 async fn atomic_multi_ref_all_or_none() {
     let (_, store) = faulty_store();

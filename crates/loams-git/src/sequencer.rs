@@ -28,7 +28,7 @@
 //! Reads never wait for the loop: they start from the state the loop last
 //! published and read the WAL forward until a segment is missing.
 
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
@@ -46,7 +46,7 @@ use crate::clock::Clock;
 use crate::format::event::{TxnBody, TxnEvent, from_cloudevent, to_cloudevent};
 use crate::format::pb;
 use crate::format::segment::{WalBatch, WalSegment};
-use crate::ids::{NamespaceId, RepoId, Seq};
+use crate::ids::{IdemKey, NamespaceId, RepoId, Seq};
 use crate::limits::{
     HINT_EVERY, MAX_FENCE_RETRIES, MAX_GROUP_TXNS, MAX_REFS_PER_TXN, MAX_SEGMENT_BYTES,
 };
@@ -641,7 +641,17 @@ impl Sequencer {
             // finds no segment past this state (ruling T10.2).
             let mut decided: Vec<(Pending, Option<RefError>)> = Vec::new();
             let mut events = Vec::new();
+            // A key accepted earlier in this attempt is not committed yet: a
+            // second transaction under it waits for the attempt's outcome,
+            // then replays (or is refused) against committed state (PR #452
+            // review).
+            let mut in_attempt: HashSet<IdemKey> = HashSet::new();
+            let mut deferred: Vec<Pending> = Vec::new();
             for pending in group.drain(..) {
+                if in_attempt.contains(&pending.txn.key) {
+                    deferred.push(pending);
+                    continue;
+                }
                 let refusal = match next.check(&pending.txn, now) {
                     Check::Accept => None,
                     // A key the state holds was committed: the answer does
@@ -679,9 +689,11 @@ impl Sequencer {
                     body: TxnBody::RefTxn(body),
                 };
                 events.push(to_cloudevent(&event, seq));
+                in_attempt.insert(pending.txn.key.clone());
                 decided.push((pending, None));
             }
             if decided.is_empty() {
+                self.requeue(deferred);
                 return;
             }
             let outcome = if events.is_empty() {
@@ -689,6 +701,7 @@ impl Sequencer {
                 match self.wal.read_from(seq, READ_BATCH).await {
                     Ok(segments) if segments.is_empty() => {
                         answer_decided(decided, None);
+                        self.requeue(deferred);
                         return;
                     }
                     Ok(segments) => Ok(Appended::Fenced {
@@ -714,6 +727,7 @@ impl Sequencer {
                             let _ = self.events.send(GitEvent::Committed { seq, txns });
                         }
                         answer_decided(decided, Some(seq));
+                        self.requeue(deferred);
                         return;
                     }
                     other => other,
@@ -729,6 +743,7 @@ impl Sequencer {
                             RefError::State(err) => RefError::State(err.clone()),
                             _ => RefError::Unavailable,
                         });
+                        self.requeue(deferred);
                         return;
                     }
                     // Everything is decided again from scratch at the new
@@ -745,6 +760,7 @@ impl Sequencer {
                             }
                         })
                         .collect();
+                    group.extend(deferred);
                 }
                 Err(err) => {
                     // The WAL could not learn the outcome. A retry with the
@@ -754,9 +770,18 @@ impl Sequencer {
                     answer_all(decided.into_iter().map(|(p, _)| p), || {
                         RefError::Unavailable
                     });
+                    self.requeue(deferred);
                     return;
                 }
             }
+        }
+    }
+
+    /// Puts transactions deferred by an attempt back at the head of the
+    /// queue, in arrival order: they form the next group.
+    fn requeue(&mut self, deferred: Vec<Pending>) {
+        for pending in deferred.into_iter().rev() {
+            self.queue.push_front(pending);
         }
     }
 
