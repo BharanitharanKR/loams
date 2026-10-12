@@ -1868,13 +1868,26 @@ impl GraphAdmin {
         if self.is_shutting_down() {
             return 0;
         }
+        // Identities only: a graph handle held across the awaits below would keep a graph that
+        // was closed or fenced meanwhile from being dropped (PR #451 review). Each graph is looked
+        // up again right before its turn.
+        let open: Vec<(String, String, crate::GraphId)> = self
+            .engine
+            .list(None)
+            .unwrap_or_default()
+            .iter()
+            .filter(|graph| graph.is_durable())
+            .filter_map(|graph| {
+                let id = graph.id()?;
+                Some((graph.namespace().to_string(), graph.name().to_string(), id))
+            })
+            .collect();
         let mut namespaces = std::collections::HashMap::new();
         let mut done = 0;
-        for graph in self.engine.list(None).unwrap_or_default() {
-            if !graph.is_durable() || graph.is_poisoned_or_failed() || graph.is_fenced() {
-                continue;
+        for (namespace, name, id) in open {
+            if self.is_shutting_down() {
+                break;
             }
-            let namespace = graph.namespace().to_string();
             let ns = match namespaces.get(&namespace) {
                 Some(ns) => *ns,
                 None => match self.catalog.namespace_id(&namespace).await {
@@ -1889,15 +1902,23 @@ impl GraphAdmin {
                     }
                 },
             };
+            let Some(graph) = self
+                .open_graph(&namespace, &name)
+                .filter(|graph| graph.id() == Some(id))
+            else {
+                continue;
+            };
+            if graph.is_poisoned_or_failed() || graph.is_fenced() {
+                continue;
+            }
             let kinds = match checkpointer.due(&graph, ns).await {
                 Ok(kinds) if kinds.is_empty() => continue,
                 Ok(kinds) => kinds,
                 Err(err) => {
-                    tracing::warn!(%namespace, name = %graph.name(), error = %err, "checkpointing: reading the graph's manifest failed");
+                    tracing::warn!(%namespace, %name, error = %err, "checkpointing: reading the graph's manifest failed");
                     continue;
                 }
             };
-            let name = graph.name().to_string();
             match checkpointer.checkpoint(graph, ns, &kinds).await {
                 Ok(_) => done += 1,
                 Err(err) => {
