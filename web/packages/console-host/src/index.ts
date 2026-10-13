@@ -48,12 +48,27 @@ export {
 export { GuardError, guard } from './guard.js';
 export {
   type Edition,
+  MANIFEST_KEYS,
   ManifestError,
   type PluginManifest,
   pluginId,
   type Tier,
   validateManifest,
 } from './manifest.js';
+export {
+  chooseBootMode,
+  defaultMode,
+  isMode,
+  MODE_HOME,
+  MODE_KEY,
+  MODES,
+  type Mode,
+  ModeController,
+  type ModeService,
+  type ModeStorage,
+  modeOfPath,
+  readStoredMode,
+} from './mode.js';
 export {
   decideCall,
   isPermission,
