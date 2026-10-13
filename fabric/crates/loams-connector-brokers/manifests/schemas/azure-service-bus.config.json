@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loams.dev/schemas/azure-service-bus.config.json",
+  "title": "Azure Service Bus connector instance config (loams.flow/v1)",
+  "description": "One Service Bus namespace's settings over AMQP 1.0 (CN2 Task 18, OR-22, loams_connector_brokers::amqp10): a SAS connection string (`cs`) or Entra ID client credentials (`aad`), both by secret name, put on `$cbs` and renewed before they expire. Peek-lock: a delivery is completed only after the Fabric acknowledges it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [],
+  "properties": {
+    "connection_string": {
+      "description": "A SAS connection string (Endpoint=sb://…;SharedAccessKeyName=…;SharedAccessKey=…; UseDevelopmentEmulator=true for the emulator). A secret name, resolved through the namespace's secret store (D189); the value is never stored here.",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "namespace": {
+      "description": "The namespace host, <ns>.servicebus.windows.net, for Entra ID.",
+      "type": "string",
+      "minLength": 1
+    },
+    "entra": {
+      "description": "Entra ID client credentials (the client-credentials grant, scope https://servicebus.azure.net/.default).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tenant_id": {
+          "description": "The tenant.",
+          "type": "string",
+          "minLength": 1
+        },
+        "client_id": {
+          "description": "The application (client) id.",
+          "type": "string",
+          "minLength": 1
+        },
+        "client_secret": {
+          "description": "The client secret. A secret name, resolved through the namespace's secret store (D189); the value is never stored here.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "authority": {
+          "description": "The token endpoint's origin.",
+          "type": "string",
+          "minLength": 1,
+          "default": "https://login.microsoftonline.com"
+        }
+      },
+      "required": [
+        "tenant_id",
+        "client_id",
+        "client_secret"
+      ]
+    },
+    "token_ttl_s": {
+      "description": "How long a SAS token lives before it is renewed, in seconds.",
+      "type": "integer",
+      "minimum": 60,
+      "default": 3600
+    },
+    "tls": {
+      "description": "TLS settings: a CA bundle to trust instead of the webpki roots, and a client certificate for mTLS.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ca_pem": {
+          "description": "PEM CA bundle (not a secret).",
+          "type": "string",
+          "minLength": 1
+        },
+        "cert_pem": {
+          "description": "PEM client certificate chain for mTLS (not a secret).",
+          "type": "string",
+          "minLength": 1
+        },
+        "key_pem": {
+          "description": "The client's PEM private key, for mTLS. A secret name, resolved through the namespace's secret store (D189); the value is never stored here.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "source": {
+      "description": "The source: addresses to receive from.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "addresses": {
+          "description": "Addresses (queues; on Service Bus also <topic>/Subscriptions/<subscription>); one split each.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "credit": {
+          "description": "Link credit; by default the pipeline's in-flight budget.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "max_batch": {
+          "description": "Messages per batch at most (the pipeline's budget may be smaller).",
+          "type": "integer",
+          "minimum": 1,
+          "default": 1000
+        },
+        "poll_wait_ms": {
+          "description": "How long one read waits for the first message before reporting nothing.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 200
+        }
+      },
+      "required": [
+        "addresses"
+      ]
+    },
+    "sink": {
+      "description": "The sink: the address to send to.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "description": "The target address.",
+          "type": "string",
+          "minLength": 1
+        },
+        "send_timeout_ms": {
+          "description": "How long a batch waits for its outcomes.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 30000
+        }
+      },
+      "required": [
+        "address"
+      ]
+    },
+    "pipeline": {
+      "description": "The SDK's per-instance pipeline overrides (`PipelineConfig::with_overrides`): max_batch_rows, max_batch_bytes, linger_ms, max_in_flight_batches, memory_budget_bytes, checkpoint_interval_ms and retry. The broker-side window (prefetch, credit, Receive Maximum, max_ack_pending, receiver queue) is derived from them unless set.",
+      "type": "object"
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "connection_string"
+      ]
+    },
+    {
+      "required": [
+        "namespace",
+        "entra"
+      ]
+    }
+  ]
+}
