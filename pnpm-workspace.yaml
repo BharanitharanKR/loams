@@ -11,6 +11,26 @@ packages:
   - plugins/packages/*
   - apps/desktop-electron
 
+# One version of each shared UI dependency (docs/design/console-ui-stack.md).
+# Packages depend on these as `"name": "catalog:"`. Bump here, and only to a
+# release at least 14 days old.
+catalog:
+  react: 19.3.0
+  react-dom: 19.3.0
+  '@types/react': 19.3.0
+  '@types/react-dom': 19.3.0
+  lucide-react: 1.48.0
+  '@base-ui/react': 1.8.0
+  '@tanstack/react-query': 5.104.0
+  '@tanstack/react-table': 9.2.4
+  '@tanstack/react-virtual': 3.14.13
+  '@connectrpc/connect-query': 2.3.1
+  zod: 3.25.76
+  echarts: 6.1.0
+  '@xyflow/react': 12.12.0
+  tailwindcss: 4.3.3
+  '@tailwindcss/vite': 4.3.3
+
 # Keep Vite+ isolated from the console's ordinary Vite/Vitest toolchain.
 overrides:
   'vite-plus@1.0.0>vite': npm:@voidzero-dev/vite-plus-core@1.0.0

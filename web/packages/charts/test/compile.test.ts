@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ChartSpecError, compileSpec, kindForChartType, pivotRows } from '../src/compile';
-import { DARK_PALETTE, LIGHT_PALETTE, readChartTheme } from '../src/theme';
+import { readChartTheme } from '../src/theme';
 import type { ChartSpec } from '../src/types';
+import { palette, token } from './setup';
 
 type Dict = Record<string, unknown>;
 const theme = readChartTheme();
@@ -42,7 +43,7 @@ describe('compileSpec', () => {
     expect(line).toMatchObject({ type: 'line', name: 'hours', encode: { x: 'day', y: 'hours' } });
     expect((line?.lineStyle as Dict | undefined)?.width).toBe(2);
     expect(axis(option, 'xAxis').type).toBe('category');
-    expect(option.color).toEqual([...LIGHT_PALETTE]);
+    expect(option.color).toEqual(palette(':root'));
     expect(option.backgroundColor).toBe('transparent');
     expect((option.textStyle as Dict).color).toBe(theme.muted);
     expect(option.animation).toBe(true);
@@ -57,10 +58,12 @@ describe('compileSpec', () => {
   it('uses the dark steps when <html> is dark', () => {
     const root = document.createElement('div');
     root.classList.add('dark');
+    document.body.append(root);
     const dark = readChartTheme(root);
+    root.remove();
     const { option } = compileSpec(daily, dailyRows, { theme: dark });
-    expect(option.color).toEqual([...DARK_PALETTE]);
-    expect((option.textStyle as Dict).color).toBe('#a69985');
+    expect(option.color).toEqual(palette('.dark'));
+    expect((option.textStyle as Dict).color).toBe(token('.dark', '--op-muted'));
   });
 
   it('pins a temporal x axis to the live window and normalises times to numbers', () => {
