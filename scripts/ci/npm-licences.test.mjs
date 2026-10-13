@@ -186,19 +186,27 @@ test('npm_licences_allow_list_matches_deny_toml', () => {
   ]) {
     assert.ok(allow.has(id), id);
   }
-  // Owner ruling on SD1 T2-2: no npm-only additions to deny.toml's list.
+  // Owner rulings: no npm-only additions to deny.toml's list (SD1 T2-2), so BlueOak-1.0.0
+  // and Python-2.0 stay refused.
   for (const id of [
     'GPL-3.0',
     'LGPL-3.0',
     'AGPL-3.0',
     'SSPL-1.0',
     'BUSL-1.1',
-    '0BSD',
     'BlueOak-1.0.0',
     'Python-2.0',
   ]) {
     assert.ok(!allow.has(id), id);
   }
+});
+
+test('npm_licences_allows_0bsd', () => {
+  // Owner, 2026-10-13 (SD1 T2-6): 0BSD is in deny.toml's allow list, for crates and npm.
+  assert.ok(allow.has('0BSD'));
+  assert.equal(evaluateLicence('0BSD', allow).ok, true);
+  const res = runGate([['tslib', '2.3.0', '0BSD']]);
+  assert.equal(res.status, 0, res.stdout + res.stderr);
 });
 
 const installed = existsSync(join(REPO_ROOT, 'node_modules', '.pnpm'));

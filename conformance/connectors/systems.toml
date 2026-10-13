@@ -215,7 +215,13 @@ extra_targets = [{ kind = "container", compose = "sqlserver", system = "SQL Serv
 [systems.mongodb]
 systems = ["MongoDB"]
 family = "mongodb"
-services = [{ kind = "container", compose = "mongodb", system = "MongoDB" }]
+services = [
+  { kind = "container", compose = "mongodb", system = "MongoDB" },
+  # A standalone server, for the sink's narrowing to effectively once
+  # (CN2 Task 16).
+  { kind = "container", compose = "mongodb-standalone", system = "MongoDB" },
+]
+harness = "loams_connector_mongodb::conformance::MongoHarness"
 
 [systems.cassandra]
 systems = ["Apache Cassandra"]

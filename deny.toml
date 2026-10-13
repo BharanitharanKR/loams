@@ -20,6 +20,9 @@ allow = [
     "BSL-1.0",
     # libbz2-rs-sys, via datafusion-datasource
     "bzip2-1.0.6",
+    # BSD Zero Clause (tslib, via echarts in the console). Owner, 2026-10-13
+    # (SD1 ruling T2-6): allowed everywhere, for crates and npm alike.
+    "0BSD",
 ]
 confidence-threshold = 0.9
 unused-allowed-license = "allow"
