@@ -16,10 +16,16 @@
 # exactly parallel to the TypeScript template, and this file gains one `plugins:`
 # entry.
 #
-# Run `scripts/sdk/gen.sh go` once the `go` case exists there; until then, from
-# this directory:
+# The committed stubs under `sdks/go/gen/loams/` were generated with this
+# template, from the repository root, restricted to the eight packages the SDK
+# binds (the proto module now also holds packages, such as
+# `loams.collection.v1`, that have no `M` entry below and would fail):
 #
-#	go run google.golang.org/buf/cmd/buf@v1.47.2 generate --template buf.gen.go.yaml
+#	buf generate --template sdks/go/buf.gen.go.yaml \
+#	  --path proto/loams/options/v1 --path proto/loams/errors/v1 \
+#	  --path proto/loams/instance/v1 --path proto/loams/devices/v1 \
+#	  --path proto/loams/approvals/v1 --path proto/loams/operations/v1 \
+#	  --path proto/loams/notifications/v1 --path proto/loams/live/v1
 #
 # `M` maps each **proto file path** to the Go import path of its generated
 # types. It is needed because none of the protos declares `go_package`: Go's
@@ -41,7 +47,7 @@ inputs:
 plugins:
   # Remote plugins, pinned by version as D615 requires, so a regeneration does not
   # silently change the output because an upstream release did.
-  - remote: buf.build/protocolbuffers/go:v1.36.9
+  - remote: buf.build/protocolbuffers/go:v1.36.11
     out: sdks/go
     opt:
       - module=loams.dev/go
@@ -59,7 +65,7 @@ plugins:
       - Mloams/live/v1/value.proto=loams.dev/go/gen/loams/live/v1;livev1
       - Mloams/graph/v1/graph.proto=loams.dev/go/gen/loams/graph/v1;graphv1
       - Mloams/house/v1/house.proto=loams.dev/go/gen/loams/house/v1;housev1
-  - remote: buf.build/connectrpc/go:v1.19.2
+  - remote: buf.build/connectrpc/go:v1.21.0
     out: sdks/go
     opt:
       - module=loams.dev/go
