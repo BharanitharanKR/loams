@@ -17,7 +17,9 @@
 //! (environment):
 //! `NEON_PAGESERVER`, `IT_COMPOSE_NETWORK`, `IT_COMPOSE_PAGESERVER`,
 //! `IT_PAGESERVER_ID`, `IT_COMPOSE_SAFEKEEPERS`, `IT_UPCALL_HOST`,
-//! `IT_EXTRA_HOSTS`, `COMPUTE_IMAGE`.
+//! `IT_EXTRA_HOSTS`, `COMPUTE_IMAGE`. With `IT_COMPUTE_RUNNER=1` the
+//! reconciler drives the compose runtime through a compute runner over
+//! HTTP (R-REL.1), as the release stack's `pg-control` does.
 #![allow(clippy::unwrap_used)]
 
 #[macro_use]
@@ -39,7 +41,10 @@ use loams_pg_control::runtime::compose::{
     ComposeBin, ComposeConfig, ComposeRuntime, TokioCommandRunner,
 };
 use loams_pg_control::runtime::images;
+use loams_pg_control::runtime::remote::RemoteRuntime;
+use loams_pg_control::runtime::runner::{RunnerPolicy, RunnerServer};
 use loams_pg_control::runtime::{ComputeRuntime, RuntimeStatus};
+use loams_pg_control::secrets::Secret;
 use loams_pg_control::service::Clock;
 use loams_pg_control::service::endpoints::{CreateEndpoint, DeleteEndpoint, EndpointAction};
 use loams_pg_control::store::conformance::{Factory, local_factory};
@@ -347,6 +352,19 @@ async fn stack(ns: &'static str) -> Stack {
     if let Ok(image) = std::env::var("COMPUTE_IMAGE") {
         images.insert(17, image);
     }
+    let driven: Arc<dyn ComputeRuntime> = if std::env::var_os("IT_COMPUTE_RUNNER").is_some() {
+        let policy = RunnerPolicy::new(images.values().cloned()).unwrap();
+        let token = || Secret::new("it-runner-token".to_owned());
+        let server =
+            RunnerServer::bind("127.0.0.1:0".parse().unwrap(), rt.clone(), policy, token())
+                .await
+                .unwrap();
+        let url = format!("http://{}", server.local_addr());
+        tokio::spawn(server.serve(std::future::pending()));
+        Arc::new(RemoteRuntime::new(url.parse().unwrap(), token()).unwrap())
+    } else {
+        rt.clone()
+    };
     let r = Reconciler::new(
         store.clone(),
         h.neon.clone(),
@@ -354,7 +372,7 @@ async fn stack(ns: &'static str) -> Stack {
         ReconcilerConfig::new(format!("it-{ns}")),
     )
     .with_computes(Computes::new(
-        rt.clone(),
+        driven,
         Arc::new(HttpComputeCtl::new(keys.clone(), Clock::system())),
         keys.clone(),
         images,

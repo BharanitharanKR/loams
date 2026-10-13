@@ -47,6 +47,9 @@ rand.workspace = true
 # The computes' local CA and their certificates (src/runtime/certs.rs, Task
 # 10): ECDSA P-256 on ring, as loams-sqlgate uses it (0.14.10, already in the
 # lockfile).
+# The compute runner's client (src/runtime/remote.rs, R-REL.1); already a
+# dependency through loams-postgres.
+reqwest.workspace = true
 rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem", "ring"] }
 # Checking that the stored compute CA's certificate is its key's (certs.rs).
 # 0.18.1 is already in the lockfile (through rcgen).
@@ -74,8 +77,6 @@ zeroize.workspace = true
 # The conformance suite injects faults (feature `faults`).
 loams-pg-control = { path = ".", features = ["faults"] }
 proptest.workspace = true
-# The upcall tests' HTTP client.
-reqwest.workspace = true
 tempfile.workspace = true
 # The compose runtime's end-to-end test reads the image pins and runs
 # SELECT 1 through an endpoint's address (tests/it_compose.rs).

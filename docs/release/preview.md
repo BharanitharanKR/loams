@@ -383,7 +383,10 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
   self-hosted stack does not hand the engine a container runtime. In this preview the Postgres
   stack runs Neon's storage and computes from `deploy/loams-postgres-dev`, and tenants,
   timelines and computes are created by hand as its README shows. Its images are pinned to Neon's last public build until the
-  fork's own builds (NF1 Task 14).
+  fork's own builds (NF1 Task 14). From the release after 0.1.0-preview.2, `--profile
+  postgres-control` runs `pg-control` beside the stack, with the container runtime's socket
+  given only to a separate compute runner that starts nothing but the pinned compute images
+  (see [`deploy/release/README.md`](../../deploy/release/README.md#postgres-control-plane)).
 - **Loams Graph:** writes reach the Loams log before they are acknowledged and graphs recover
   from snapshots and the log after a crash (GR1 Tasks 11 to 14). It is still a preview: keep a
   copy of graph data you cannot recreate.

@@ -34,6 +34,7 @@ healthcheck.
 | `loams` | the engine, features `live,live-tikv,durable,graph,tikv,pgwire,mysql-wire,stream-grpc` |
 | `loams-fabric` | `loams-fabric house` and `loams-house-worker`, with the digest-pinned libchdb; workers sealed with `--sandbox pods` by default |
 | `loams-agentd` | the agent daemon (optional) |
+| `loams-pg-control` | `loams` with features `postgres,tikv` and the standalone `docker-compose` CLI: `pg-control` and `pg-runner` (`--profile postgres-control`; from the release after 0.1.0-preview.2) |
 
 ```sh
 deploy/release/build.sh loams                        # both platforms, local manifest list
@@ -73,6 +74,55 @@ Landlock with TCP rules on Linux 6.7 or later, and seccomp) or `netns` (adds a
 user and network namespace per worker; needs unprivileged user namespaces in the
 container, as Podman allows). chDB's access control (R-ACL.1) and the statement
 checks are always on.
+
+### Postgres control plane
+
+`--profile postgres-control` adds Loams Postgres's control plane: `pg-control`
+serves `loams.postgres.v1` on `127.0.0.1:7680` and provisions projects,
+branches, endpoints and their computes on the Postgres stack (which must be
+included), suspending computes that sit idle.
+
+```sh
+# .env: CONTAINER_SOCKET and CONTAINER_SOCKET_GID (below)
+echo '{"keys": []}' > secrets/pg-api-keys.json
+out=$(docker compose run --rm --no-deps pg-control pg-api-key \
+        --subject you@example.com --grant admin:namespace:default)
+jq '{keys: [.entry]}' <<<"$out" > secrets/pg-api-keys.json
+jq -r .api_key <<<"$out"        # shown only this once
+docker compose --profile postgres-control up -d pg-control pg-runner
+curl -sS -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+  -d '{"namespace": "default", "name": "app", "idempotency_key": "1"}' \
+  http://127.0.0.1:7680/loams.postgres.v1.PostgresService/CreateProject
+```
+
+**The container runtime's socket goes to `pg-runner` alone.** Whatever holds a
+Docker or Podman socket can do anything its owner can, so neither the engine
+nor `pg-control` gets it. `pg-runner`, the compute runner, holds it and serves
+`pg-control` only:
+
+- its network, `pg-runner`, is internal (no route out) and only `pg-control`
+  joins it; every call needs the token it writes into the `pg-runner-token`
+  volume, which `pg-control` mounts read-only;
+- it starts only the compute images pinned in
+  [`deploy/pins/loams-postgres-images.toml`](../pins/loams-postgres-images.toml),
+  never a `neon-archive` copy, from compose files it renders itself: no mounts,
+  no privileges, no host network, the compose project `loams-pg-<namespace>`,
+  on `PG_COMPUTE_NETWORK` (`loams_default`), each endpoint's port (55500 to
+  55999) published on `PG_ENDPOINT_BIND` (`127.0.0.1`);
+- it runs as uid 10001 with every capability dropped, and the socket's group
+  (`CONTAINER_SOCKET_GID`).
+
+Prefer **rootless Podman's** socket: then the runner can do at most what your
+user can. `systemctl --user enable --now podman.socket`, then in `.env`
+`CONTAINER_SOCKET=$XDG_RUNTIME_DIR/podman/podman.sock` (written out) and
+`CONTAINER_SOCKET_GID=0`. With rootful Docker, `CONTAINER_SOCKET` is
+`/var/run/docker.sock` (root on this machine) and `CONTAINER_SOCKET_GID` is the
+docker group's id (`stat -c %g /var/run/docker.sock`). Under SELinux, add
+`security_opt: [label=disable]` to `pg-runner` (a socket cannot be relabelled).
+
+The computes belong to their own compose projects: before `docker compose down`
+of the stack, suspend or delete the endpoints (or `docker compose -p
+loams-pg-<namespace> down`), or the stack's network stays in use.
 
 ### Auth
 
@@ -141,3 +191,9 @@ needs SSH and outbound internet only.
   credentials; neither is forwarded over the tailnet by default.
 - `compute1` needs `TENANT_ID` and `TIMELINE_ID` (see
   [`../loams-postgres-dev/README.md`](../loams-postgres-dev/README.md)).
+- `pg-control` (`--profile postgres-control`) keeps its records in a local file
+  (one node) and reaches the Postgres stack, its computes and `pg-runner` in
+  plain text on the compose networks; no PgDog fronts the computes yet (PG2c),
+  so clients connect to an endpoint's published port. Its image ships from
+  the release after 0.1.0-preview.2; until then build it with
+  `build.sh loams-pg-control`.

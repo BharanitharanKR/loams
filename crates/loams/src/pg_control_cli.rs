@@ -1,5 +1,7 @@
 //! `loams pg-control` and `loams pg-api-key` (PG2 Task 9): the flags of the
-//! `pg-control` role, turned into a [`PgControlConfig`].
+//! `pg-control` role, turned into a [`PgControlConfig`]; and `loams
+//! pg-runner`, the compute runner that holds the container runtime's
+//! socket for it (R-REL.1), turned into a [`PgRunnerConfig`].
 
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
@@ -8,11 +10,13 @@ use std::process::ExitCode;
 
 use loams::MetaBackend;
 use loams::pg_control::{
-    ComputesConfig, PgAuth, PgControl, PgControlConfig, PgRuntime, PgStore, read_token,
+    ComputesConfig, PgAuth, PgControl, PgControlConfig, PgRunner, PgRunnerConfig, PgRuntime,
+    PgStore, RunnerClient, read_token,
 };
 use loams_pg_control::authz::{Actor, Grant, GrantObject, KeysFile, PrincipalKind, Relation};
 use loams_pg_control::runtime::compose::CtlReach;
 use loams_pg_control::runtime::images;
+use loams_pg_control::runtime::runner::{DEFAULT_RUNNER_LISTEN, read_or_create_token};
 use url::Url;
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
@@ -50,27 +54,18 @@ pub(crate) enum AuthzArg {
     Openfga,
 }
 
+/// How the compose runtime runs computes: `pg-control`'s own, or the
+/// compute runner's.
 #[derive(Debug, clap::Args)]
-pub(crate) struct PgControlArgs {
-    /// Where the records live.
-    #[arg(long, value_enum, default_value = "local")]
-    store: StoreArg,
-    /// With --store tikv: tikv://<pd-host:port>[,<pd…>]/<keyspace>[?root=<hex>]
-    /// (the metastore's keyspace).
-    #[arg(long, value_parser = MetaBackend::parse)]
-    meta: Option<MetaBackend>,
-    /// Where computes run (and secrets live).
-    #[arg(long, value_enum, default_value = "compose")]
-    runtime: RuntimeArg,
-    /// With --runtime compose: the storage stack's network computes join
-    /// (loams-neon_default for deploy/loams-postgres-dev).
+pub(crate) struct ComposeArgs {
+    /// The storage stack's network computes join (loams-neon_default for
+    /// deploy/loams-postgres-dev, loams_default for the release stack).
     #[arg(long)]
     compose_network: Option<String>,
-    /// With --runtime compose: where the compose files live (default
-    /// <data-dir>/compose).
+    /// Where the compose files live (default <data-dir>/compose).
     #[arg(long)]
     compose_dir: Option<PathBuf>,
-    /// The upcall listener as computes reach it (default
+    /// The upcall listener as computes reach it (pg-control's default:
     /// http://host.docker.internal:<port>, or host.containers.internal under
     /// Podman); --pg-upcall-listen must be an address they reach.
     #[arg(long)]
@@ -84,9 +79,60 @@ pub(crate) struct PgControlArgs {
     /// How pg-control reaches each compute's compute_ctl.
     #[arg(long, value_enum, default_value = "host")]
     compute_ctl_reach: CtlReachArg,
+}
+
+impl ComposeArgs {
+    /// Whether a flag only the compose runtime reads was given.
+    fn any_set(&self) -> bool {
+        self.compose_network.is_some()
+            || self.compose_dir.is_some()
+            || self.compute_control_plane_uri.is_some()
+            || !self.compose_extra_host.is_empty()
+    }
+
+    fn computes(self, images: Vec<(u32, String)>) -> ComputesConfig {
+        ComputesConfig {
+            compose_bin: None,
+            compose_dir: self.compose_dir,
+            network: self.compose_network,
+            control_plane_uri: self.compute_control_plane_uri,
+            extra_hosts: self.compose_extra_host,
+            publish_ip: self.compose_publish_ip,
+            ctl_reach: match self.compute_ctl_reach {
+                CtlReachArg::Host => CtlReach::Host,
+                CtlReachArg::Network => CtlReach::Network,
+            },
+            image_overrides: images.into_iter().collect(),
+            runner: None,
+        }
+    }
+}
+
+#[derive(Debug, clap::Args)]
+pub(crate) struct PgControlArgs {
+    /// Where the records live.
+    #[arg(long, value_enum, default_value = "local")]
+    store: StoreArg,
+    /// With --store tikv: tikv://<pd-host:port>[,<pd…>]/<keyspace>[?root=<hex>]
+    /// (the metastore's keyspace).
+    #[arg(long, value_parser = MetaBackend::parse)]
+    meta: Option<MetaBackend>,
+    /// Where computes run (and secrets live).
+    #[arg(long, value_enum, default_value = "compose")]
+    runtime: RuntimeArg,
+    #[command(flatten)]
+    compose: ComposeArgs,
+    /// Drive computes through this compute runner (`loams pg-runner`)
+    /// instead of a compose command here; the compose flags are then the
+    /// runner's.
+    #[arg(long)]
+    compute_runner: Option<Url>,
+    /// With --compute-runner: the file holding the runner's token.
+    #[arg(long)]
+    compute_runner_token_file: Option<PathBuf>,
     /// `<major>=<repository>@sha256:<digest>`: the compute image of a
     /// Postgres major, over deploy/pins/loams-postgres-images.toml's
-    /// (repeated).
+    /// (repeated). A compute runner must be given the same.
     #[arg(long = "compute-image", value_parser = parse_image)]
     compute_image: Vec<(u32, String)>,
     /// With --runtime kubernetes: the namespace of the Secrets.
@@ -187,19 +233,33 @@ fn config(args: PgControlArgs) -> Result<PgControlConfig, String> {
             namespace: args.kube_namespace,
         },
     };
-    config.computes = Some(ComputesConfig {
-        compose_bin: None,
-        compose_dir: args.compose_dir,
-        network: args.compose_network,
-        control_plane_uri: args.compute_control_plane_uri,
-        extra_hosts: args.compose_extra_host,
-        publish_ip: args.compose_publish_ip,
-        ctl_reach: match args.compute_ctl_reach {
-            CtlReachArg::Host => CtlReach::Host,
-            CtlReachArg::Network => CtlReach::Network,
-        },
-        image_overrides: args.compute_image.into_iter().collect(),
-    });
+    let runner = match (args.compute_runner, args.compute_runner_token_file) {
+        (None, None) => None,
+        (Some(url), Some(token_file)) => {
+            if !matches!(config.runtime, PgRuntime::Compose) {
+                return Err("--compute-runner goes with --runtime compose".into());
+            }
+            if args.compose.any_set() {
+                return Err(
+                    "with --compute-runner, the compose flags (--compose-network, --compose-dir, \
+                     --compute-control-plane-uri, --compose-extra-host) are the runner's"
+                        .into(),
+                );
+            }
+            Some(RunnerClient {
+                url,
+                token: read_or_create_token(&token_file, false)
+                    .map_err(|e| format!("--compute-runner-token-file {e}"))?,
+            })
+        }
+        (Some(_), None) => return Err("--compute-runner needs --compute-runner-token-file".into()),
+        (None, Some(_)) => {
+            return Err("--compute-runner-token-file goes with --compute-runner".into());
+        }
+    };
+    let mut computes = args.compose.computes(args.compute_image);
+    computes.runner = runner;
+    config.computes = Some(computes);
     config.listen = args.listen;
     config.upcall_listen = args.pg_upcall_listen;
     config.auth = match (args.pg_authz, args.pg_api_keys) {
@@ -251,6 +311,66 @@ pub(crate) async fn run(args: PgControlArgs) -> ExitCode {
     super::shutdown_signal().await;
     tracing::info!("shutting down");
     control.shutdown().await;
+    ExitCode::SUCCESS
+}
+
+#[derive(Debug, clap::Args)]
+pub(crate) struct PgRunnerArgs {
+    /// Where pg-control calls the runner. Keep it on a network only
+    /// pg-control joins.
+    #[arg(long, default_value = DEFAULT_RUNNER_LISTEN)]
+    listen: SocketAddr,
+    /// The file holding the token pg-control presents
+    /// (--compute-runner-token-file).
+    #[arg(long)]
+    token_file: PathBuf,
+    /// Create --token-file (32 random bytes, mode 0600) when it is missing.
+    #[arg(long)]
+    create_token: bool,
+    /// Holds the compose files (<data-dir>/compose).
+    #[arg(long, default_value = ".loams/pg-runner")]
+    data_dir: PathBuf,
+    #[command(flatten)]
+    compose: ComposeArgs,
+    /// `<major>=<repository>@sha256:<digest>`: the compute image of a
+    /// Postgres major, over deploy/pins/loams-postgres-images.toml's
+    /// (repeated). The runner starts no other image.
+    #[arg(long = "compute-image", value_parser = parse_image)]
+    compute_image: Vec<(u32, String)>,
+}
+
+fn runner_config(args: PgRunnerArgs) -> Result<PgRunnerConfig, String> {
+    let token = read_or_create_token(&args.token_file, args.create_token)
+        .map_err(|e| format!("--token-file {e}"))?;
+    Ok(PgRunnerConfig {
+        listen: args.listen,
+        token,
+        computes: args.compose.computes(args.compute_image),
+        data_dir: args.data_dir,
+    })
+}
+
+/// `loams pg-runner`: runs until a shutdown signal.
+pub(crate) async fn run_runner(args: PgRunnerArgs) -> ExitCode {
+    let runner = match runner_config(args) {
+        Ok(config) => PgRunner::start(config).await.map_err(|e| e.to_string()),
+        Err(e) => Err(e),
+    };
+    let runner = match runner {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("loams pg-runner: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    println!(
+        "loams pg-runner listening on http://{} (images: {})",
+        runner.addr(),
+        runner.images().join(", ")
+    );
+    super::shutdown_signal().await;
+    tracing::info!("shutting down");
+    runner.shutdown().await;
     ExitCode::SUCCESS
 }
 
@@ -367,6 +487,88 @@ pub(crate) fn mint(args: &PgApiKeyArgs) -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser as _;
+
+    #[derive(clap::Parser)]
+    struct Control {
+        #[command(flatten)]
+        args: PgControlArgs,
+    }
+
+    #[derive(clap::Parser)]
+    struct Runner {
+        #[command(flatten)]
+        args: PgRunnerArgs,
+    }
+
+    /// R-REL.1: with a compute runner, the compose flags are the runner's,
+    /// and its token file must exist.
+    #[test]
+    fn a_compute_runner_takes_the_compose_flags() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let token = dir.path().join("token");
+        std::fs::write(&token, "secret\n").expect("write");
+        let token = token.display().to_string();
+        let parse = |extra: &[&str]| {
+            let mut argv = vec!["pg-control", "--compute-runner", "http://pg-runner:7691"];
+            argv.extend_from_slice(extra);
+            config(Control::try_parse_from(argv).expect("flags parse").args)
+        };
+        let ok = parse(&["--compute-runner-token-file", &token]).expect("a config");
+        let computes = ok.computes.expect("computes");
+        let runner = computes.runner.expect("a runner");
+        assert_eq!(runner.url.as_str(), "http://pg-runner:7691/");
+        assert_eq!(runner.token.expose(), "secret");
+        let e = parse(&[
+            "--compute-runner-token-file",
+            &token,
+            "--compose-network",
+            "loams_default",
+        ])
+        .expect_err("refused");
+        assert!(e.contains("are the runner's"), "{e}");
+        assert!(parse(&[]).is_err());
+        let missing = dir.path().join("missing").display().to_string();
+        assert!(parse(&["--compute-runner-token-file", &missing]).is_err());
+        let e = parse(&[
+            "--compute-runner-token-file",
+            &token,
+            "--runtime",
+            "kubernetes",
+        ])
+        .expect_err("refused");
+        assert!(e.contains("--runtime compose"), "{e}");
+    }
+
+    /// `loams pg-runner --create-token` makes the token file pg-control
+    /// then reads.
+    #[test]
+    fn the_runner_creates_its_token() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let token = dir.path().join("run").join("token");
+        let token_arg = token.display().to_string();
+        let args = |create: bool| {
+            let mut argv = vec![
+                "pg-runner",
+                "--token-file",
+                &token_arg,
+                "--compute-control-plane-uri",
+                "http://pg-control:7690",
+            ];
+            if create {
+                argv.push("--create-token");
+            }
+            Runner::try_parse_from(argv).expect("flags parse").args
+        };
+        assert!(runner_config(args(false)).is_err());
+        let made = runner_config(args(true)).expect("a config");
+        let read = read_or_create_token(&token, false).expect("the file");
+        assert_eq!(made.token.expose(), read.expose());
+        assert_eq!(
+            made.computes.control_plane_uri.as_deref(),
+            Some("http://pg-control:7690")
+        );
+    }
 
     #[test]
     fn grants_and_pools_parse() {

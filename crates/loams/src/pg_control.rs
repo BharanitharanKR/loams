@@ -13,7 +13,9 @@
 //!   components call ([`UpcallServer`]), never on the API listener;
 //! - the **reconciler** of projects, branches and endpoints
 //!   ([`Reconciler`]); with `--runtime compose` it drives computes through
-//!   the compose runtime ([`ComputesConfig`], Task 11), each compute
+//!   the compose runtime ([`ComputesConfig`], Task 11), or through a
+//!   compute runner that holds the container runtime's socket instead of
+//!   this process (`--compute-runner`, [`PgRunner`], R-REL.1), each compute
 //!   running the pinned image of its project's Postgres major, and
 //!   suspends the computes that sit idle for their endpoint's suspend
 //!   timeout (Task 12; no PgDog fronts them until PG2c, so their activity
@@ -53,7 +55,9 @@ use loams_pg_control::reconcile::{Reconciler, ReconcilerConfig};
 use loams_pg_control::runtime::compose::{
     ComposeBin, ComposeConfig, ComposeRuntime, CtlReach, TokioCommandRunner,
 };
-use loams_pg_control::runtime::images;
+use loams_pg_control::runtime::remote::RemoteRuntime;
+use loams_pg_control::runtime::runner::{RunnerPolicy, RunnerServer};
+use loams_pg_control::runtime::{ComputeRuntime, images};
 use loams_pg_control::secrets::{FileSecretStore, KeySource, Secret, SecretRef, SecretStore};
 use loams_pg_control::service::operations::OPERATION_RETENTION;
 use loams_pg_control::service::{Clock, PgService, ServiceConfig};
@@ -138,6 +142,25 @@ pub struct ComputesConfig {
     /// Compute images by Postgres major, over the pin file's
     /// ([`images::pinned`]).
     pub image_overrides: BTreeMap<u32, String>,
+    /// A compute runner to drive computes through, instead of a compose
+    /// command here (R-REL.1). The compose settings above are then the
+    /// runner's, and unused.
+    pub runner: Option<RunnerClient>,
+}
+
+/// A compute runner, as `pg-control` reaches it (`--compute-runner`).
+#[derive(Clone)]
+pub struct RunnerClient {
+    pub url: Url,
+    pub token: Secret<String>,
+}
+
+impl fmt::Debug for RunnerClient {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RunnerClient")
+            .field("url", &self.url.as_str())
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for ComputesConfig {
@@ -151,6 +174,7 @@ impl Default for ComputesConfig {
             publish_ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
             ctl_reach: CtlReach::Host,
             image_overrides: BTreeMap::new(),
+            runner: None,
         }
     }
 }
@@ -359,14 +383,26 @@ async fn open_secrets(config: &PgControlConfig) -> Result<Arc<dyn SecretStore>, 
     }
 }
 
-/// The compose runtime and what the reconciler drives computes with.
-fn computes(
-    config: &PgControlConfig,
+/// The compute images by Postgres major: the pin file's, with `overrides`.
+fn compute_images(
+    overrides: &BTreeMap<u32, String>,
+) -> Result<BTreeMap<u32, String>, PgControlError> {
+    let runtime_error = |e: &dyn fmt::Display| PgControlError::Runtime(e.to_string());
+    let mut images = images::pinned().map_err(|e| runtime_error(&e))?;
+    for (major, image) in overrides {
+        images::check_image(image).map_err(|e| runtime_error(&e))?;
+        images.insert(*major, image.clone());
+    }
+    Ok(images)
+}
+
+/// The compose runtime of `settings`, run here. Without a control-plane
+/// URI, the computes reach `upcall_addr`'s port on the host.
+fn compose_runtime(
     settings: &ComputesConfig,
-    keys: &Arc<ComputeKeys>,
-    clock: &Clock,
+    default_dir: PathBuf,
     upcall_addr: SocketAddr,
-) -> Result<Computes, PgControlError> {
+) -> Result<ComposeRuntime, PgControlError> {
     let runtime_error = |e: &dyn fmt::Display| PgControlError::Runtime(e.to_string());
     let bin = match &settings.compose_bin {
         Some(b) => b.clone(),
@@ -396,6 +432,27 @@ fn computes(
             format!("http://host.docker.internal:{}", upcall_addr.port())
         }
     };
+    let mut compose = ComposeConfig::new(
+        bin,
+        settings.compose_dir.clone().unwrap_or(default_dir),
+        control_plane_uri,
+    );
+    compose.network = settings.network.clone();
+    compose.extra_hosts = extra_hosts;
+    compose.publish_ip = settings.publish_ip;
+    compose.ctl_reach = settings.ctl_reach;
+    ComposeRuntime::open(compose, Arc::new(TokioCommandRunner)).map_err(|e| runtime_error(&e))
+}
+
+/// The compute runtime (the compose runtime here, or a compute runner) and
+/// what the reconciler drives computes with.
+fn computes(
+    config: &PgControlConfig,
+    settings: &ComputesConfig,
+    keys: &Arc<ComputeKeys>,
+    clock: &Clock,
+    upcall_addr: SocketAddr,
+) -> Result<Computes, PgControlError> {
     if upcall_addr.ip().is_loopback() {
         tracing::warn!(
             %upcall_addr,
@@ -403,27 +460,20 @@ fn computes(
              listen where they reach it (--pg-upcall-listen 0.0.0.0:7690)"
         );
     }
-    let mut compose = ComposeConfig::new(
-        bin,
-        settings
-            .compose_dir
-            .clone()
-            .unwrap_or_else(|| config.data_dir.join("compose")),
-        control_plane_uri,
-    );
-    compose.network = settings.network.clone();
-    compose.extra_hosts = extra_hosts;
-    compose.publish_ip = settings.publish_ip;
-    compose.ctl_reach = settings.ctl_reach;
-    let runtime = ComposeRuntime::open(compose, Arc::new(TokioCommandRunner))
-        .map_err(|e| runtime_error(&e))?;
-    let mut images = images::pinned().map_err(|e| runtime_error(&e))?;
-    for (major, image) in &settings.image_overrides {
-        images::check_image(image).map_err(|e| runtime_error(&e))?;
-        images.insert(*major, image.clone());
-    }
+    let runtime: Arc<dyn ComputeRuntime> = match &settings.runner {
+        Some(runner) => Arc::new(
+            RemoteRuntime::new(runner.url.clone(), runner.token.clone())
+                .map_err(|e| PgControlError::Runtime(e.to_string()))?,
+        ),
+        None => Arc::new(compose_runtime(
+            settings,
+            config.data_dir.join("compose"),
+            upcall_addr,
+        )?),
+    };
+    let images = compute_images(&settings.image_overrides)?;
     Ok(Computes::new(
-        Arc::new(runtime),
+        runtime,
         Arc::new(HttpComputeCtl::new(keys.clone(), clock.clone())),
         keys.clone(),
         images,
@@ -653,4 +703,103 @@ pub fn read_token(path: &Path) -> Result<Secret<String>, String> {
         return Err(format!("{} is empty", path.display()));
     }
     Ok(Secret::new(token.to_owned()))
+}
+
+/// How the compute runner runs (`loams pg-runner`, R-REL.1).
+#[derive(Clone, Debug)]
+pub struct PgRunnerConfig {
+    /// Where pg-control calls it.
+    pub listen: SocketAddr,
+    /// The token pg-control presents.
+    pub token: Secret<String>,
+    /// The compose runtime it runs computes with. `control_plane_uri` must
+    /// be set: the runner does not know where pg-control's upcall listener
+    /// is. `compose_dir` defaults to `<data_dir>/compose`.
+    pub computes: ComputesConfig,
+    pub data_dir: PathBuf,
+}
+
+/// A running compute runner.
+#[derive(Debug)]
+pub struct PgRunner {
+    addr: SocketAddr,
+    images: Vec<String>,
+    stop: CancellationToken,
+    task: JoinHandle<()>,
+}
+
+impl PgRunner {
+    /// Opens the compose runtime and binds the runner's listener. Its
+    /// policy runs the pin file's compute images, with the overrides.
+    ///
+    /// # Errors
+    ///
+    /// [`PgControlError::Config`] without a control-plane URI;
+    /// [`PgControlError::Runtime`] when the compose runtime or the images
+    /// are unusable; [`PgControlError::Bind`].
+    pub async fn start(config: PgRunnerConfig) -> Result<Self, PgControlError> {
+        let settings = &config.computes;
+        if settings.control_plane_uri.is_none() {
+            return Err(PgControlError::Config(
+                "loams pg-runner needs --compute-control-plane-uri: pg-control's upcall listener \
+                 as the computes reach it"
+                    .into(),
+            ));
+        }
+        std::fs::create_dir_all(&config.data_dir).map_err(|e| {
+            PgControlError::Config(format!("--data-dir {}: {e}", config.data_dir.display()))
+        })?;
+        let images = compute_images(&settings.image_overrides)?;
+        let policy = RunnerPolicy::new(images.into_values())
+            .map_err(|e| PgControlError::Runtime(e.to_string()))?;
+        // The upcall address only names a default URI, which is set.
+        let runtime = compose_runtime(
+            settings,
+            config.data_dir.join("compose"),
+            SocketAddr::from(([127, 0, 0, 1], 0)),
+        )?;
+        let server = RunnerServer::bind(
+            config.listen,
+            Arc::new(runtime),
+            policy.clone(),
+            config.token,
+        )
+        .await
+        .map_err(|source| PgControlError::Bind {
+            addr: config.listen,
+            source,
+        })?;
+        let addr = server.local_addr();
+        let stop = CancellationToken::new();
+        let token = stop.clone();
+        let task = tokio::spawn(server.serve(async move { token.cancelled().await }));
+        let images: Vec<String> = policy.images().map(str::to_owned).collect();
+        tracing::info!(%addr, ?images, "compute runner started");
+        Ok(PgRunner {
+            addr,
+            images,
+            stop,
+            task,
+        })
+    }
+
+    /// The bound address.
+    pub fn addr(&self) -> SocketAddr {
+        self.addr
+    }
+
+    /// The images computes may run.
+    pub fn images(&self) -> &[String] {
+        &self.images
+    }
+
+    /// Stops the listener once the calls in flight finish.
+    pub async fn shutdown(self) {
+        self.stop.cancel();
+        if let Err(e) = self.task.await
+            && e.is_panic()
+        {
+            tracing::error!(error = %e, "the compute runner panicked");
+        }
+    }
 }
