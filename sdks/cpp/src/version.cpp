@@ -2,6 +2,13 @@
 
 #include "loams/version.hpp"
 
+// CMakeLists.txt passes LOAMS_SDK_VERSION, the one place the version is written
+// (sdks/tools/sdk-version.py sets and checks it). A build that does not go through
+// that CMakeLists.txt still compiles, and says so in the version it reports.
+#ifndef LOAMS_SDK_VERSION
+#define LOAMS_SDK_VERSION "0.0.0-unknown"
+#endif
+
 namespace loams {
 
 const std::string& ProtoRev() {
@@ -21,12 +28,12 @@ const std::vector<std::string>& ProtoPackages() {
 }
 
 const std::string& UserAgent() {
-  static const std::string* const agent = new std::string("loams-cpp/0.1.0 (Connect over HTTP)");
+  static const std::string* const agent = new std::string("loams-cpp/" LOAMS_SDK_VERSION " (Connect over HTTP)");
   return *agent;
 }
 
 const std::string& SdkVersion() {
-  static const std::string* const version = new std::string("0.1.0");
+  static const std::string* const version = new std::string(LOAMS_SDK_VERSION);
   return *version;
 }
 
