@@ -9,6 +9,11 @@ name: Fabric
 # Jobs owned by CN2 (plan 2026-10-10-cn2-connectors):
 #   sdk-unit         — fmt, clippy and tests of `loams-connector-sdk` (Task 4)
 #                      and `loams-connector-http`'s profile engine (Task 7)
+#   connectors-p2    — each family crate's suites against real open systems,
+#                      sharded by family (Task 6's job; the `objects` shard
+#                      from Task 13: RustFS, fake-gcs-server, Azurite, SFTP)
+#   connectors-nightly — the families against real cloud accounts, on the
+#                      nightly schedule with repository secrets (OR-3)
 # Jobs FL1 owns and adds here separately: connectors-it (the ★ contract suites
 # against the `connectors` compose profile, from CN1 Tasks 3–13), and the
 # `fabric` workspace's own build/publish steps. Keep this file minimal and
@@ -23,6 +28,10 @@ on:
     # "both run weekly and on demand, not on every PR"), so they cannot be a
     # pull-request gate. Off the hour ci.yml's nightly runs on (17 2 * * *).
     - cron: "41 3 * * 1"
+    # Nightly: the connector families against real cloud accounts
+    # (connectors-nightly, CN2 OR-3, OR-23). Jobs that run on a schedule say
+    # which of the two crons they answer to.
+    - cron: "23 4 * * *"
 
 permissions:
   contents: read
@@ -51,6 +60,7 @@ jobs:
       drift: ${{ steps.filter.outputs.drift }}
       connect-routes: ${{ steps.filter.outputs.connect-routes }}
       sdk: ${{ steps.filter.outputs.sdk }}
+      objects: ${{ steps.filter.outputs.objects }}
     steps:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
@@ -97,6 +107,14 @@ jobs:
               - "fabric/Cargo.lock"
               - "fabric/crates/loams-connector-sdk/**"
               - "fabric/crates/loams-connector-http/**"
+            # The object-storage family (CN2 Task 13) and what it builds on.
+            objects:
+              - *toolchain
+              - "fabric/Cargo.toml"
+              - "fabric/Cargo.lock"
+              - "fabric/crates/loams-connector-sdk/**"
+              - "fabric/crates/loams-connector-objects/**"
+              - "conformance/connectors/fixtures/cloudflare-r2/**"
 
   # CN1 owns this job. FL1 owns the `lints_match_root` test that proves the
   # fabric workspace's lint table equals the root workspace's; it runs in FL1's
@@ -171,7 +189,7 @@ jobs:
   # is not there.
   connectors-drift:
     name: connector catalog drift (Camel, Kestra, appendix)
-    if: ${{ !cancelled() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ !cancelled() && ((github.event_name == 'schedule' && github.event.schedule == '41 3 * * 1') || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-24.04
     env:
       # A literal path under the runner's temp directory, not `runner.temp` and
@@ -251,3 +269,128 @@ jobs:
       # connect/routes/**/*.yaml, and `rendered_routes_are_valid_yaml_dsl`.
       - name: not implemented yet (CN1 Task 12)
         run: echo "connect-routes is declared for CN1 Task 12 and is switched off"
+
+  # CN2 Task 6 owns this job and its compose profile (`connectors-p2`, not
+  # built yet); Task 13 adds the `objects` shard. The real open systems run
+  # as containers pinned by digest (OR-2, Global Constraints): RustFS 1.0.1
+  # (Apache-2.0), fake-gcs-server 1.56.1 (BSD-2-Clause), Azurite 3.37.0 (MIT)
+  # and atmoz/sftp (MIT). MinIO has no community image (R0.28), so its half of
+  # `rustfs_and_minio_suites` waits for the `connectors-ci-only` job to build
+  # one. The family's tests read the LOAMS_* variables below and skip the
+  # real-system half without them (tests/common/mod.rs).
+  connectors-p2:
+    name: connectors against real systems (${{ matrix.family }})
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.objects == 'true') }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        family: [objects]
+    env:
+      LOAMS_CONNECTORS_P2_STACK: "1"
+      LOAMS_RUSTFS_ENDPOINT: http://127.0.0.1:9000
+      LOAMS_RUSTFS_BUCKET: loams
+      LOAMS_RUSTFS_ACCESS_KEY: loams-ci
+      LOAMS_RUSTFS_SECRET_KEY: loams-ci-secret
+      LOAMS_FAKE_GCS_ENDPOINT: http://127.0.0.1:4443
+      LOAMS_FAKE_GCS_BUCKET: loams
+      # Azurite's documented development account and key (public, not a
+      # secret).
+      LOAMS_AZURITE_ENDPOINT: http://127.0.0.1:10000/devstoreaccount1
+      LOAMS_AZURITE_ACCOUNT: devstoreaccount1
+      LOAMS_AZURITE_CONTAINER: loams
+      LOAMS_AZURITE_ACCESS_KEY: Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==
+      LOAMS_SFTP_HOST: 127.0.0.1
+      LOAMS_SFTP_PORT: "2222"
+      LOAMS_SFTP_USER: loams
+      LOAMS_SFTP_PASSWORD: loams-ci-password
+      LOAMS_SFTP_ROOT: upload
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: start the objects systems
+        if: matrix.family == 'objects'
+        run: |
+          docker run -d --name rustfs -p 9000:9000 \
+            -e RUSTFS_ACCESS_KEY="$LOAMS_RUSTFS_ACCESS_KEY" -e RUSTFS_SECRET_KEY="$LOAMS_RUSTFS_SECRET_KEY" \
+            rustfs/rustfs@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+          docker run -d --name fake-gcs -p 4443:4443 \
+            fsouza/fake-gcs-server@sha256:797ce226d62f947c009dc40246b30cfb456b8473d8241407f9d6f2c04e4d69ef \
+            -scheme http -port 4443 -public-host 127.0.0.1:4443 -backend memory
+          docker run -d --name azurite -p 10000:10000 \
+            mcr.microsoft.com/azure-storage/azurite@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5 \
+            azurite-blob --blobHost 0.0.0.0 --loose
+          docker run -d --name sftp -p 2222:22 \
+            atmoz/sftp@sha256:7e439fabeae536fa254340724c042e11999924d906417dbb5c73602ad518813f \
+            "$LOAMS_SFTP_USER:$LOAMS_SFTP_PASSWORD:::$LOAMS_SFTP_ROOT"
+      - name: buckets, container and the SFTP host key
+        if: matrix.family == 'objects'
+        run: |
+          for i in $(seq 1 60); do
+            curl -s -o /dev/null http://127.0.0.1:9000 && curl -s -o /dev/null http://127.0.0.1:4443/storage/v1/b \
+              && curl -s -o /dev/null http://127.0.0.1:10000 && ssh-keyscan -p 2222 127.0.0.1 >/dev/null 2>&1 && break
+            sleep 2
+          done
+          AWS_ACCESS_KEY_ID="$LOAMS_RUSTFS_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$LOAMS_RUSTFS_SECRET_KEY" AWS_DEFAULT_REGION=us-east-1 \
+            aws --endpoint-url "$LOAMS_RUSTFS_ENDPOINT" s3 mb "s3://$LOAMS_RUSTFS_BUCKET"
+          curl -sSf -X POST -H 'Content-Type: application/json' \
+            -d "{\"name\":\"$LOAMS_FAKE_GCS_BUCKET\"}" "$LOAMS_FAKE_GCS_ENDPOINT/storage/v1/b?project=loams"
+          az storage container create --name "$LOAMS_AZURITE_CONTAINER" \
+            --connection-string "DefaultEndpointsProtocol=http;AccountName=$LOAMS_AZURITE_ACCOUNT;AccountKey=$LOAMS_AZURITE_ACCESS_KEY;BlobEndpoint=$LOAMS_AZURITE_ENDPOINT;"
+          echo "LOAMS_SFTP_HOST_KEY=$(ssh-keyscan -p 2222 -t ed25519 127.0.0.1 2>/dev/null | head -n1)" >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fabric -> target
+          key: connectors-p2-${{ matrix.family }}
+      - name: rustfmt
+        working-directory: fabric
+        run: cargo fmt -p loams-connector-${{ matrix.family }} --check
+      - name: clippy
+        working-directory: fabric
+        run: cargo clippy -p loams-connector-${{ matrix.family }} --all-targets --locked -- -D warnings
+      - name: tests (unit, and the suites against the systems above)
+        working-directory: fabric
+        run: cargo test -p loams-connector-${{ matrix.family }} --locked -- --nocapture
+      - name: system logs
+        if: failure()
+        run: for c in rustfs fake-gcs azurite sftp; do docker logs "$c" 2>&1 | tail -n 100 || true; done
+
+  # The families against real cloud accounts (OR-3; OR-23's `stable` needs 14
+  # green nightlies). Credentials are repository secrets; a family whose
+  # secrets are absent skips its real-account half, and a skip never counts
+  # as green.
+  connectors-nightly:
+    name: connectors against real accounts (${{ matrix.family }})
+    if: ${{ !cancelled() && ((github.event_name == 'schedule' && github.event.schedule == '23 4 * * *') || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        family: [objects]
+    env:
+      LOAMS_CONNECTORS_NIGHTLY: "1"
+      LOAMS_R2_ENDPOINT: ${{ secrets.LOAMS_R2_ENDPOINT }}
+      LOAMS_R2_BUCKET: ${{ secrets.LOAMS_R2_BUCKET }}
+      LOAMS_R2_ACCESS_KEY_ID: ${{ secrets.LOAMS_R2_ACCESS_KEY_ID }}
+      LOAMS_R2_SECRET_ACCESS_KEY: ${{ secrets.LOAMS_R2_SECRET_ACCESS_KEY }}
+      LOAMS_GCS_BUCKET: ${{ secrets.LOAMS_GCS_BUCKET }}
+      LOAMS_GCS_SERVICE_ACCOUNT_KEY: ${{ secrets.LOAMS_GCS_SERVICE_ACCOUNT_KEY }}
+      LOAMS_AZURE_ACCOUNT: ${{ secrets.LOAMS_AZURE_ACCOUNT }}
+      LOAMS_AZURE_CONTAINER: ${{ secrets.LOAMS_AZURE_CONTAINER }}
+      LOAMS_AZURE_ACCESS_KEY: ${{ secrets.LOAMS_AZURE_ACCESS_KEY }}
+      LOAMS_ADLS_ACCOUNT: ${{ secrets.LOAMS_ADLS_ACCOUNT }}
+      LOAMS_ADLS_FILESYSTEM: ${{ secrets.LOAMS_ADLS_FILESYSTEM }}
+      LOAMS_ADLS_ACCESS_KEY: ${{ secrets.LOAMS_ADLS_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fabric -> target
+          key: connectors-nightly-${{ matrix.family }}
+      - name: suites against real accounts
+        working-directory: fabric
+        run: cargo test -p loams-connector-${{ matrix.family }} --locked -- --nocapture
