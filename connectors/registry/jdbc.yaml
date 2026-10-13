@@ -12,7 +12,7 @@ apiVersion: loams.flow/v1
 kind: Connector
 id: jdbc
 name: JDBC
-specVersion: 1.0.0
+specVersion: 1.1.0
 category: protocol
 priority: P1
 starred: true
@@ -66,3 +66,5 @@ envelope:
 limits: { batch_rows: 65536, batch_bytes: 8388608 }
 conformance: [contract, roundtrip]
 docs: docs/guides/connectors/jdbc.md
+notes:
+  - "fallback-only: generic JDBC is a Java API, so the ★ stays on Camel (OR-4, OR-8); replaced_by: CN2 Task 23"

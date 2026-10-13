@@ -221,14 +221,16 @@ pub fn semantic_rules(
 
 /// Whether R-CN2-6 (OR-1, native first for P1 and P2) is an error.
 ///
-/// CN2 plan Task 1 makes it a warning until Task 2 has assigned the runtimes —
-/// the registry as built has 63 Camel and 9 OpenAPI P2 rows — and an error after.
-/// Task 2 flips this to `true` in the same change that assigns them; until then
-/// [`semantic_warnings`] reports it and [`semantic_rules`] does not.
-pub const NATIVE_FIRST_ENFORCED: bool = false;
+/// CN2 plan Task 1 made it a warning until Task 2 had assigned the runtimes (the
+/// registry then had 63 Camel and 9 OpenAPI P2 rows). CN2 Task 2 assigned them —
+/// every P1 and P2 manifest declares its directions, native by default unless a
+/// `fallback-only:` note names an OR-4 reason — and flipped this to `true`, so
+/// [`semantic_rules`] refuses and [`semantic_warnings`] is empty.
+pub const NATIVE_FIRST_ENFORCED: bool = true;
 
-/// The rules that warn rather than refuse: today only R-CN2-6, while
-/// [`NATIVE_FIRST_ENFORCED`] is `false`. A [`crate::Registry`] load collects these
+/// The rules that warn rather than refuse: only R-CN2-6, and only while
+/// [`NATIVE_FIRST_ENFORCED`] is `false`, which it has not been since CN2 Task 2.
+/// Kept so a rule can be staged as a warning again the same way. A [`crate::Registry`] load collects these
 /// per manifest and keeps them in [`crate::Registry::warnings`].
 pub fn semantic_warnings(spec: &ConnectorSpec) -> Vec<ManifestError> {
     let mut warnings = Vec::new();
@@ -439,9 +441,17 @@ fn rule_cn2_5_preview_needs_the_contract_suite(
 /// OR-4's reasons a P1 or P2 direction may run on a non-native runtime by default,
 /// as the words a `fallback-only:` note names them by, matched case-insensitively:
 /// Oracle (its client is proprietary), Salesforce CDC, JMS providers without AMQP
-/// 1.0, the generic JDBC ★ (a Java API), and the Debezium Server CDC rows that stay
-/// fallbacks of the native CDC.
-pub const OR4_FALLBACK_REASONS: &[&str] = &["oracle", "salesforce", "jms", "jdbc", "debezium"];
+/// 1.0, the generic JDBC ★ (a Java API), the Debezium Server CDC rows that stay
+/// fallbacks of the native CDC, and (CN2 Task 2) the Camel runtime row of §33 A.8,
+/// which is OR-4's fallback runtime itself rather than a connector.
+pub const OR4_FALLBACK_REASONS: &[&str] = &[
+    "oracle",
+    "salesforce",
+    "jms",
+    "jdbc",
+    "debezium",
+    "camel runtime",
+];
 
 /// The prefix of the note R-CN2-6 reads.
 pub const FALLBACK_ONLY_PREFIX: &str = "fallback-only:";
@@ -1216,9 +1226,22 @@ impl LicenceGate {
 
     /// No `[components.*]` stanza of the gate input may itself carry a refused id:
     /// a component Loams names with an AGPL or BSL id is refused however no manifest
-    /// uses it. `scripts/connectors/gen_registry.py --check` asserts the same.
+    /// uses it. `scripts/connectors/gen_registry.py --check` asserts the same,
+    /// including its D359 carve-out: a `kind = "service"` stanza is a system Loams
+    /// reaches over its API and neither ships nor links, so a refused id on one is
+    /// recorded, not refused (CN2 Task 0's R0.30 test images rely on it; CN2 R2.8).
     pub fn check_components(&self, text: &str, origin: &str) -> Result<(), LicenceError> {
+        let flat = parse_licences_toml(text).map_err(|message| LicenceError::Syntax {
+            path: origin.to_string(),
+            message,
+        })?;
         for (key, id) in Self::components(text, origin)? {
+            let kind = flat
+                .get(&format!("components.{key}.kind"))
+                .map(String::as_str);
+            if kind == Some("service") {
+                continue;
+            }
             if self.refuses(&id) {
                 return Err(LicenceError::RefusedListedComponent {
                     path: origin.to_string(),

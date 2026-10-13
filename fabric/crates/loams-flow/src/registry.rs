@@ -143,8 +143,8 @@ impl Registry {
     }
 
     /// The warnings the load found, one entry per manifest that has any, sorted by
-    /// file name: the rules that report rather than refuse, today R-CN2-6 until CN2
-    /// Task 2 makes it an error ([`crate::validate::NATIVE_FIRST_ENFORCED`]).
+    /// file name: the rules that report rather than refuse. Empty since CN2 Task 2
+    /// made R-CN2-6 an error ([`crate::validate::NATIVE_FIRST_ENFORCED`]).
     pub fn warnings(&self) -> &[ManifestErrors] {
         &self.warnings
     }

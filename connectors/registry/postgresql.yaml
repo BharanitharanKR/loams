@@ -6,11 +6,15 @@
 # streaming; §8's Direction column ("source (batch), sink (upsert)") is the
 # runtime-specific truth recorded here, and the Iggy alternative is named in the
 # comment on `runtime` below.
+# CN2 Task 2 (OR-8, OR-9): the source gains native CDC (logical replication,
+# `pgoutput`; CN2 Task 10 builds it), and CN1's alternatives become the declared
+# fallbacks: Iggy's `postgres_source` and `postgres_sink` here, and Debezium Server
+# through the `debezium-postgres` manifest.  Minor bump: capabilities widened.
 apiVersion: loams.flow/v1
 kind: Connector
 id: postgresql
 name: PostgreSQL
-specVersion: 1.0.0
+specVersion: 1.1.0
 category: relational
 priority: P1
 starred: true
@@ -19,9 +23,11 @@ runtime:
   kind: native
   ref: loams_flow::connectors::postgres
   version: "tokio-postgres 0.7 / adbc_driver_manager 0.24"
-  # Streaming sinks may instead run through Iggy's `postgres_sink` (CN1 Task 7,
-  # §33 §8 row 2); §33 §4 rule 2 records the alternative runtime in a comment
-  # rather than in a second registry entry.
+  fallback:
+    kind: iggy
+    ref: postgres                 # postgres_source and postgres_sink (CN2 R2.3)
+    directions: [source, sink]
+    replaced_by: CN2 Task 10
 licence:
   component: Apache-2.0
   dependencies:
@@ -29,12 +35,12 @@ licence:
     adbc-driver-postgres: Apache-2.0   # the Postgres ADBC driver for bulk loads (D356; licences.toml)
 capabilities:
   source:
-    streaming: false              # §33 §8: "source (batch)"
+    streaming: true               # CN2 OR-9: native CDC streams changes
     batch: true
-    cdc: false                    # external Postgres CDC is Debezium's or Iggy's job (D357)
+    cdc: true                     # CN2 OR-9: logical replication with pgoutput (Task 10)
     webhook: false
     resumable: true
-    position: the exported snapshot id or the cursor_column value
+    position: the exported snapshot id or the cursor_column value; for CDC the acknowledged commit LSN
     # §33 §6: a batch read's as-of position is the exported snapshot id (the
     # REPEATABLE READ snapshot the parallel workers share, CN1 Task 7); in
     # incremental mode it is the cursor_column high-water mark.
