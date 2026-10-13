@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loams.dev/schemas/cassandra.config.json",
+  "title": "Cassandra connector instance config (loams.flow/v1)",
+  "description": "One Apache Cassandra instance's settings (CN2 Task 14): token-range splits read with SELECT JSON and the driver's paging state as the position, and an upsert sink (INSERT … JSON … DEFAULT UNSET) idempotent by primary key. `password` is the name of a secret in the namespace's secret store (D189).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contact_points",
+    "keyspace",
+    "table"
+  ],
+  "properties": {
+    "contact_points": {
+      "description": "host[:port] of one or more nodes (port 9042 by default).",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "keyspace": {
+      "description": "The keyspace.",
+      "type": "string",
+      "minLength": 1
+    },
+    "table": {
+      "description": "The table.",
+      "type": "string",
+      "minLength": 1
+    },
+    "user": {
+      "description": "The user, for PasswordAuthenticator.",
+      "type": "string",
+      "minLength": 1
+    },
+    "password": {
+      "description": "The name of the secret holding the user's password.",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "consistency": {
+      "description": "The consistency of every read and write.",
+      "type": "string",
+      "enum": [
+        "local_quorum",
+        "quorum",
+        "one",
+        "local_one",
+        "all"
+      ],
+      "default": "local_quorum"
+    },
+    "key": {
+      "description": "Sink: the upsert key, the table's primary key columns in order (partition key, then clustering columns); read from system_schema when omitted, and refused when it differs.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "splits": {
+      "description": "Token ranges, one split each.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4096,
+      "default": 8
+    },
+    "page_size": {
+      "description": "Rows per page.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000,
+      "default": 500
+    },
+    "poll_interval_ms": {
+      "description": "Read the table again this long after the last read finished; without it the table is read once.",
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}
