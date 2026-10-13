@@ -30,31 +30,12 @@ name: PG2 e2e
 
 on:
   workflow_dispatch:
-  push:
-    branches: [dev]
-    paths:
-      # loams-postgres and what it builds on
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "crates/loams-postgres/**"
-      - "crates/loams-pg-control/**"
-      # compiled into loams-pg-control (runtime::images)
-      - "deploy/pins/loams-postgres-images.toml"
-      - "crates/loams-kv/**"
-      - "crates/loams-proto/**"
-      - "proto/**"
-      # loams-wal-interpreted and what it builds on (its own workspace)
-      - "crates/loams-wal-decoder/**"
-      - "crates/loams-safekeeper/**"
-      - "crates/loams-tikv/**"
-      - "crates/loams-tuple/**"
-      # the stacks and the scripts that drive them
-      - "deploy/loams-postgres-dev/**"
-      - "deploy/loams-pg-bench/**"
-      - "scripts/pg2/**"
-      - ".github/workflows/pg2-e2e.yml"
+  # Nightly instead of on every push to dev: the four stacks take up to 90
+  # minutes each, and the pull request that touched these paths already ran them.
+  schedule:
+    - cron: "5 3 * * *"
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       # loams-postgres and what it builds on
       - "Cargo.toml"
@@ -93,6 +74,7 @@ env:
 
 jobs:
   neon-deploy:
+    if: github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full')
     name: loams-postgres against deploy/loams-postgres-dev (it_deploy_neon)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -134,6 +116,7 @@ jobs:
         run: docker compose down -v
 
   pageserver-loams-wal:
+    if: github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full')
     name: the pageserver ingests from loams-wal (it-pageserver-loams-wal.sh)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -196,6 +179,7 @@ jobs:
           tail -n 200 "${{ runner.temp }}/it-pg/"*.log || true
 
   pg-control-deploy-neon:
+    if: github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full')
     name: pg-control against deploy/loams-postgres-dev and loams-wal (e2e_deploy_neon)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -246,6 +230,7 @@ jobs:
         run: docker compose down -v
 
   pg-control-compose-runtime:
+    if: github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full')
     name: pg-control's compose runtime and endpoint lifecycle against deploy/loams-postgres-dev (it_compose, it_endpoint)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
