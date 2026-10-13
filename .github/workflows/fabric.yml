@@ -308,6 +308,20 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # the service list is space-separated on purpose
           docker compose -f deploy/fabric/compose.yaml --profile "$PROFILE" up -d --wait --wait-timeout 600 ${{ steps.plan.outputs.services }}
+      # CN2 Task 17 (R17.7): the DuckDB target loads DuckDB's own shared
+      # library by path from an allowlist with a SHA-256 check; Loams compiles
+      # no DuckDB code. The analytics shard fetches the pinned release asset
+      # (v1.5.6, 2026-09-28, MIT), checked against GitHub's recorded digest.
+      - name: libduckdb (analytics)
+        if: steps.plan.outputs.run == 'true' && matrix.family == 'analytics'
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/libduckdb.zip" \
+            https://github.com/duckdb/duckdb/releases/download/v1.5.6/libduckdb-linux-amd64.zip
+          echo "b845005f5132a7d8180057c35e14a7626632258782f871a90861b19c1c03841b  $RUNNER_TEMP/libduckdb.zip" | sha256sum -c -
+          unzip -q -o "$RUNNER_TEMP/libduckdb.zip" libduckdb.so -d "$RUNNER_TEMP/duckdb"
+          echo "3f4962cdd266eab2b479a5b5a4a6d063d279b2954ae814ed00385d553b747633  $RUNNER_TEMP/duckdb/libduckdb.so" | sha256sum -c -
+          echo "LOAMS_DUCKDB_DRIVER=$RUNNER_TEMP/duckdb/libduckdb.so" >> "$GITHUB_ENV"
+          echo "LOAMS_DUCKDB_DRIVER_SHA256=3f4962cdd266eab2b479a5b5a4a6d063d279b2954ae814ed00385d553b747633" >> "$GITHUB_ENV"
       - name: suites
         if: steps.plan.outputs.run == 'true'
         working-directory: fabric
@@ -443,6 +457,9 @@ jobs:
       LOAMS_REDPANDA_SASL_PASSWORD: ${{ secrets.LOAMS_REDPANDA_SASL_PASSWORD }}
       LOAMS_REDPANDA_SASL_USERNAME: ${{ secrets.LOAMS_REDPANDA_SASL_USERNAME }}
       LOAMS_REDSHIFT_DATABASE: ${{ secrets.LOAMS_REDSHIFT_DATABASE }}
+      LOAMS_REDSHIFT_IAM_ROLE: ${{ secrets.LOAMS_REDSHIFT_IAM_ROLE }}
+      LOAMS_REDSHIFT_SINK_TABLE: ${{ secrets.LOAMS_REDSHIFT_SINK_TABLE }}
+      LOAMS_REDSHIFT_UNLOAD_URI: ${{ secrets.LOAMS_REDSHIFT_UNLOAD_URI }}
       LOAMS_REDSHIFT_WORKGROUP: ${{ secrets.LOAMS_REDSHIFT_WORKGROUP }}
       LOAMS_SALESFORCE_CLIENT_ID: ${{ secrets.LOAMS_SALESFORCE_CLIENT_ID }}
       LOAMS_SALESFORCE_CLIENT_SECRET: ${{ secrets.LOAMS_SALESFORCE_CLIENT_SECRET }}

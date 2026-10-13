@@ -152,7 +152,7 @@ source = "https://crates.io/crates/mysql_async"
 name = "object_store"
 spdx = "Apache-2.0"
 kind = "library"
-used_by = ["s3"]
+used_by = ["s3", "delta-lake", "redshift"]
 source = "https://crates.io/crates/object_store"
 
 [components.iceberg-rust]
@@ -162,11 +162,30 @@ kind = "library"
 used_by = ["iceberg"]
 source = "https://crates.io/crates/iceberg"
 
+[components.deltalake]
+name = "deltalake (deltalake-core)"
+spdx = "Apache-2.0"
+kind = "library"
+# Delta Lake in both directions (OR-18; CN2 R0.14, Task 17): deltalake-core 1.1.0 without its
+# datafusion feature, in loams-connector-lakehouse only (OR-6).
+used_by = ["delta-lake"]
+source = "https://crates.io/crates/deltalake-core"
+
+[components.buoyant_kernel]
+name = "buoyant_kernel (delta_kernel)"
+spdx = "Apache-2.0"
+kind = "library"
+# deltalake 1.1.0 depends on the Delta kernel under this package name (`package =
+# "buoyant_kernel"`, 0.28, published by a delta-rs maintainer), with its default engine
+# `buoyant_kernel_engine` (CN2 R0.14 asks for this stanza when Task 17 links it).
+used_by = ["delta-lake"]
+source = "https://crates.io/crates/buoyant_kernel"
+
 [components.parquet]
 name = "parquet"
 spdx = "Apache-2.0"
 kind = "library"
-used_by = ["parquet", "iceberg", "s3"]
+used_by = ["parquet", "iceberg", "s3", "delta-lake", "redshift", "databricks"]
 source = "https://crates.io/crates/parquet"
 
 [components.arrow]
@@ -376,6 +395,16 @@ spdx = "Apache-2.0"
 kind = "driver"
 used_by = ["adbc", "duckdb"]
 source = "https://github.com/apache/arrow-adbc/tree/main/driver/duckdb"
+
+[components.libduckdb]
+name = "DuckDB (libduckdb)"
+spdx = "MIT"
+kind = "driver"
+# DuckDB's ADBC driver is DuckDB's own shared library (entry point `duckdb_adbc_init`), the
+# `libduckdb` release asset. The `duckdb` target loads it by path from the runtime's allowlist
+# with a SHA-256 check (CN1 Ruling 9; CN2 R17.7); Loams compiles no DuckDB code.
+used_by = ["duckdb"]
+source = "https://github.com/duckdb/duckdb"
 
 [components.adbc-driver-flightsql]
 name = "ADBC Flight SQL driver"

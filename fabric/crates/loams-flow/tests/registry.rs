@@ -843,10 +843,14 @@ fn licence_gate_refuses_flagged() {
     // GR1 Task 1 (D741) added the sixth, `grafeo-storage` (Apache-2.0), which 0.5.43 links and
     // the 2026-10-04 reading missed; `crates/loams-graph/tests/licences.rs` now checks the
     // Grafeo stanzas against the lockfiles.
+    // CN2 Task 17 added three: `deltalake` and `buoyant_kernel` (the Delta kernel deltalake
+    // links, CN2 R0.14), both Apache-2.0 libraries, and `libduckdb` (MIT), the DuckDB
+    // target's driver, loaded from the runtime's allowlist (CN2 R17.7).
     assert_eq!(
         components.len(),
-        48,
-        "D359 records 42 components after CN1 Task 15, plus D634's six Grafeo crates"
+        51,
+        "D359 records 42 components after CN1 Task 15, plus D634's six Grafeo crates and CN2 \
+         Task 17's three"
     );
     gate.check_components(&text, "connectors/licences.toml")
         .unwrap_or_else(|error| panic!("no component may be refused: {error}"));
