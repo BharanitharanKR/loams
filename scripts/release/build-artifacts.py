@@ -560,7 +560,9 @@ def command_macos_tar(args) -> int:
             f"build-artifacts: {console} has no index.html, so it is not a console build"
         )
     # The commit's time, as the Linux packages use; 0 (1970) when not given.
-    mtime = int(datetime.fromisoformat(args.mtime).timestamp()) if getattr(args, "mtime", None) else 0
+    # fromisoformat takes a "Z" suffix only from Python 3.11 on.
+    raw = getattr(args, "mtime", None)
+    mtime = int(datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()) if raw else 0
     top = f"loams-{args.version}-macos-{args.arch}"
     name = f"{top}.tar.gz"
     target = out / name

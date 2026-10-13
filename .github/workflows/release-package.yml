@@ -550,7 +550,8 @@ jobs:
   notes:
     name: release notes
     needs: [guard, linux, windows, macos]
-    if: needs.guard.outputs.dry_run != 'true'
+    # Also after a failed build: whatever was attached still needs its signature status.
+    if: ${{ always() && needs.guard.result == 'success' && needs.guard.outputs.dry_run != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -562,8 +563,12 @@ jobs:
           LINUX_SUMMARY: ${{ needs.linux.outputs.summary }}
           WINDOWS_ASSETS: ${{ needs.windows.outputs.assets }}
           VERSION: ${{ needs.guard.outputs.version }}
+          # No checkout in this job, so gh needs the repository named.
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          # The macOS rows come from what is actually attached, not from the matrix.
+          mac_assets=$(gh release view "$TAG" --json assets -q '.assets[].name' | grep -E '^loams-.*-macos-.*\.tar\.gz$' || true)
           {
             echo
             echo "## Linux packages, the Windows zip and the macOS tarballs"
@@ -600,8 +605,12 @@ jobs:
             echo
             echo "| File | Signature |"
             echo "|---|---|"
-            for arch in arm64 x86_64; do
-              echo "| \`loams-$VERSION-macos-$arch.tar.gz\` | **ad-hoc only** (no Developer ID, not notarized) |"
+            if [ -z "$mac_assets" ]; then
+              echo "| (none: the macOS build failed) | |"
+            fi
+            printf '%s\n' "$mac_assets" | while read -r name; do
+              [ -n "$name" ] || continue
+              echo "| \`$name\` | **ad-hoc only** (no Developer ID, not notarized) |"
             done
             echo
             echo "> The binary carries an ad-hoc signature, which Apple Silicon needs to run it at all, but no"
