@@ -45,7 +45,7 @@ export {
   parseCatalog,
   parsePatch,
 } from './catalog.js';
-export { GuardError, guard } from './guard.js';
+export { GuardError, guard, injectsAgentd } from './guard.js';
 export {
   type Edition,
   MANIFEST_KEYS,

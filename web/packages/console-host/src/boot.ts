@@ -18,7 +18,7 @@ import { instance } from '@loams/proto';
 import { SlotRegistry } from '@loams/slots';
 import { ActionRegistry, type Admission } from './actions.js';
 import { type CatalogEntry, CatalogError } from './catalog.js';
-import { guard } from './guard.js';
+import { guard, injectsAgentd } from './guard.js';
 import { type PluginManifest, type Tier, validateManifest } from './manifest.js';
 import {
   chooseBootMode,
@@ -392,6 +392,12 @@ export async function boot(options: BootOptions): Promise<ConsoleHandle> {
       continue;
     }
     if (record.tier === 'third-party') {
+      const agentd = injectsAgentd(entry.inject ?? manifest.inject);
+      if (agentd.length > 0) {
+        record.status = 'failed';
+        record.reason = `third-party plugins never get ${agentd.join(', ')}`;
+        continue;
+      }
       record.scriptUrl = options.sandboxScripts?.[entry.name];
       record.granted = (options.grant?.(manifest) ?? []).filter((p) =>
         manifest.permissions.includes(p),

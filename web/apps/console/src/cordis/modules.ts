@@ -12,6 +12,7 @@ import namespacesPkg from '@loams/plugin-namespaces/package.json';
 import rpcPkg from '@loams/plugin-rpc/package.json';
 import shellPkg from '@loams/plugin-shell/package.json';
 import stackStatusPkg from '@loams/plugin-stack-status/package.json';
+import studioPkg from '@loams/plugin-studio/package.json';
 
 export const modules: ModuleTable = {
   '@loams/plugin-shell': () => import('@loams/plugin-shell'),
@@ -21,6 +22,7 @@ export const modules: ModuleTable = {
   '@loams/plugin-namespaces': () => import('@loams/plugin-namespaces'),
   '@loams/plugin-approvals': () => import('@loams/plugin-approvals'),
   '@loams/plugin-deployments': () => import('@loams/plugin-deployments'),
+  '@loams/plugin-studio': () => import('@loams/plugin-studio'),
 };
 
 export const manifests: unknown[] = [
@@ -31,6 +33,7 @@ export const manifests: unknown[] = [
   namespacesPkg,
   approvalsPkg,
   deploymentsPkg,
+  studioPkg,
   helloPkg,
 ];
 

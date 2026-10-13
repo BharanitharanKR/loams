@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import pkg from '../package.json';
 import { createDataClient, toDocumentId } from '../src/client.js';
-import { DataRoute } from '../src/index.js';
+import plugin, { DataRoute } from '../src/index.js';
 import { parseNdjson } from '../src/ingest-parse.js';
 import { DocumentsTab } from '../src/pages/collection.js';
 import { CollectionsPage } from '../src/pages/collections.js';
@@ -209,6 +209,43 @@ describe('data studio', () => {
     expect(
       (screen.getByRole('button', { name: 'Start ingest' }) as HTMLButtonElement).disabled,
     ).toBe(true);
+  });
+
+  it('data_studio_renamed_label_only', () => {
+    // Q812: "Data explorer" is the visible name; the route, page ids and plugin id stay.
+    const pages: { id: string; path: string; title: string }[] = [];
+    const nav: { plugin: string; meta?: Record<string, unknown> }[] = [];
+    const ctx = {
+      router: {
+        page: (spec: (typeof pages)[number]) => {
+          pages.push(spec);
+          return () => {};
+        },
+        navigate() {},
+      },
+      slots: {
+        register: (spec: (typeof nav)[number]) => {
+          nav.push(spec);
+          return () => {};
+        },
+      },
+      transport: {},
+      platform: { fetch: noFetch, baseUrl: 'loams-app://console' },
+      flags: {},
+      effect: (fn: () => unknown) => fn(),
+    };
+    plugin.apply(ctx as never, {});
+    expect(nav).toEqual([
+      expect.objectContaining({
+        plugin: 'data-studio',
+        meta: expect.objectContaining({ id: 'data', label: 'Data explorer', href: '/data' }),
+      }),
+    ]);
+    expect(pages.find((p) => p.id === 'data')).toMatchObject({
+      path: '/data',
+      title: 'Data explorer',
+    });
+    expect(pages.find((p) => p.id === 'data-ns')).toMatchObject({ path: '/data/:ns' });
   });
 
   it('manifest_is_valid', () => {

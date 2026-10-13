@@ -58,6 +58,7 @@ const api: LoamsDesktopApi = {
 		clipboardWrite: (text) => invoke(CH.shellClipboard, text),
 		onNavigate: (cb) => subscribe(CH.shellNavigate, cb),
 		takePendingNavigation: () => invoke(CH.shellPendingNav),
+		pickFolder: (title) => invoke(CH.shellPickFolder, title),
 		setBadge: (count) => invoke(CH.shellBadge, count),
 	},
 	update: {
@@ -127,6 +128,11 @@ const api: LoamsDesktopApi = {
 		background: {
 			get: () => invoke(CH.agentdBackgroundGet),
 			set: (v) => invoke(CH.agentdBackgroundSet, v),
+		},
+		repos: {
+			list: () => invoke(CH.agentdRepos),
+			add: (path) => invoke(CH.agentdAddRepo, path),
+			clone: (url) => invoke(CH.agentdCloneRepo, url),
 		},
 	},
 };

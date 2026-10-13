@@ -55,7 +55,9 @@
           "operations:cancel",
           "notifications:read",
           "ui:notifications",
-          "ui:clipboard-write"
+          "ui:clipboard-write",
+          "agentd:use",
+          "agentd:git-write"
         ]
       }
     },

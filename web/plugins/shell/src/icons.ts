@@ -20,6 +20,7 @@ import {
   Settings,
   Shapes,
   ShieldCheck,
+  SquareTerminal,
   Table2,
   Waypoints,
   Workflow,
@@ -51,6 +52,7 @@ const ICONS: Record<string, LucideIcon> = {
   chart: ChartColumn,
   analytics: ChartColumn,
   plugin: Puzzle,
+  studio: SquareTerminal,
 };
 
 export const ICON_NAMES = Object.keys(ICONS);
