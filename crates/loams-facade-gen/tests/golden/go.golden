@@ -274,6 +274,22 @@ var Modules = []ModuleBinding{
 		},
 	},
 	{
+		Name:     "live.admin",
+		Summary:  "Live administration: deploy, roll back, index status and function logs.",
+		Service:  "loams.live.v1.LiveAdminService",
+		Package:  "loams.live.v1",
+		Unstable: true,
+		Derived:  false,
+		Calls: []CallBinding{
+			{Module: "live.admin", Name: "ActivateDeployment", ProtoName: "activateDeployment", Method: "ActivateDeployment", RPC: "loams.live.v1.LiveAdminService/ActivateDeployment", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "live.admin", Name: "Deploy", ProtoName: "deploy", Method: "Deploy", RPC: "loams.live.v1.LiveAdminService/Deploy", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "live.admin", Name: "GetDeployment", ProtoName: "getDeployment", Method: "GetDeployment", RPC: "loams.live.v1.LiveAdminService/GetDeployment", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "live.admin", Name: "GetIndexStatus", ProtoName: "getIndexStatus", Method: "GetIndexStatus", RPC: "loams.live.v1.LiveAdminService/GetIndexStatus", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "live.admin", Name: "ListDeployments", ProtoName: "listDeployments", Method: "ListDeployments", RPC: "loams.live.v1.LiveAdminService/ListDeployments", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "deployments", NextPageToken: "next_page_token"}},
+			{Module: "live.admin", Name: "TailLogs", ProtoName: "tailLogs", Method: "TailLogs", RPC: "loams.live.v1.LiveAdminService/TailLogs", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingServer, Pagination: nil},
+		},
+	},
+	{
 		Name:     "tables",
 		Summary:  "",
 		Service:  "loams.live.v1.LiveService",
@@ -281,7 +297,6 @@ var Modules = []ModuleBinding{
 		Unstable: true,
 		Derived:  true,
 		Calls: []CallBinding{
-			{Module: "tables", Name: "Deploy", ProtoName: "deploy", Method: "Deploy", RPC: "loams.live.v1.LiveService/Deploy", Service: "loams.live.v1.LiveService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
 			{Module: "tables", Name: "Mutate", ProtoName: "mutate", Method: "Mutate", RPC: "loams.live.v1.LiveService/Mutate", Service: "loams.live.v1.LiveService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
 			{Module: "tables", Name: "Query", ProtoName: "query", Method: "Query", RPC: "loams.live.v1.LiveService/Query", Service: "loams.live.v1.LiveService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
 		},
@@ -322,6 +337,31 @@ type LiveModule interface {
 	Watch(ctx context.Context, req *connect.Request[livev1.WatchRequest], opts *CallOptions) (*connect.ServerStreamForClient[livev1.Transition], error)
 }
 
+// LiveAdminModule is loams.live.admin — Live administration: deploy, roll back, index status and function logs.
+//
+// It wraps loams.live.v1.LiveAdminService. Its wire contract may still change, so buf breaking skips it and an SDK marks it experimental (§44 §10.3).
+type LiveAdminModule interface {
+	// Module is the SDK module, as it appears on loams.live.admin.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable reports that the package's wire contract may still change.
+	Unstable() bool
+
+	// ActivateDeployment calls loams.live.v1.LiveAdminService/ActivateDeployment, retried: manual.
+	ActivateDeployment(ctx context.Context, req *connect.Request[livev1.ActivateDeploymentRequest], opts *CallOptions) (*connect.Response[livev1.ActivateDeploymentResponse], error)
+	// Deploy calls loams.live.v1.LiveAdminService/Deploy, retried: manual.
+	Deploy(ctx context.Context, req *connect.Request[livev1.DeployRequest], opts *CallOptions) (*connect.Response[livev1.DeployResponse], error)
+	// GetDeployment calls loams.live.v1.LiveAdminService/GetDeployment, retried: safe.
+	GetDeployment(ctx context.Context, req *connect.Request[livev1.GetDeploymentRequest], opts *CallOptions) (*connect.Response[livev1.GetDeploymentResponse], error)
+	// GetIndexStatus calls loams.live.v1.LiveAdminService/GetIndexStatus, retried: safe.
+	GetIndexStatus(ctx context.Context, req *connect.Request[livev1.GetIndexStatusRequest], opts *CallOptions) (*connect.Response[livev1.GetIndexStatusResponse], error)
+	// ListDeployments calls loams.live.v1.LiveAdminService/ListDeployments, retried: safe. AIP-158: page with Deployments and follow NextPageToken through loams.Paginate.
+	ListDeployments(ctx context.Context, req *connect.Request[livev1.ListDeploymentsRequest], opts *CallOptions) (*connect.Response[livev1.ListDeploymentsResponse], error)
+	// TailLogs calls loams.live.v1.LiveAdminService/TailLogs, retried: manual.
+	TailLogs(ctx context.Context, req *connect.Request[livev1.TailLogsRequest], opts *CallOptions) (*connect.ServerStreamForClient[livev1.TailLogsResponse], error)
+}
+
 // TablesModule is a second facade name for the same RPCs, exposed as loams.tables.
 //
 // It wraps loams.live.v1.LiveService. Its wire contract may still change, so buf breaking skips it and an SDK marks it experimental (§44 §10.3).
@@ -333,8 +373,6 @@ type TablesModule interface {
 	// Unstable reports that the package's wire contract may still change.
 	Unstable() bool
 
-	// Deploy calls loams.live.v1.LiveService/Deploy, retried: manual.
-	Deploy(ctx context.Context, req *connect.Request[livev1.DeployRequest], opts *CallOptions) (*connect.Response[livev1.DeployResponse], error)
 	// Mutate calls loams.live.v1.LiveService/Mutate, retried: manual.
 	Mutate(ctx context.Context, req *connect.Request[livev1.MutateRequest], opts *CallOptions) (*connect.Response[livev1.MutateResponse], error)
 	// Query calls loams.live.v1.LiveService/Query, retried: manual.
@@ -348,6 +386,9 @@ func NewServiceClient(name string, httpClient connect.HTTPClient, baseURL string
 	switch name {
 	case "loams.instance.v1.InstanceService":
 		return instancev1connect.NewInstanceServiceClient(httpClient, baseURL, opts...)
+
+	case "loams.live.v1.LiveAdminService":
+		return livev1connect.NewLiveAdminServiceClient(httpClient, baseURL, opts...)
 
 	case "loams.live.v1.LiveService":
 		return livev1connect.NewLiveServiceClient(httpClient, baseURL, opts...)

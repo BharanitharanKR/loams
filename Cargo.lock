@@ -8120,6 +8120,7 @@ dependencies = [
  "buffa",
  "bytes",
  "connectrpc",
+ "connectrpc-reflection",
  "crc",
  "data-encoding",
  "futures",

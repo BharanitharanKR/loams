@@ -157,6 +157,21 @@ pub struct DeploymentRecord {
     /// one this deployment replaced, once active.
     pub parent: Option<Ulid>,
     pub state: DeploymentState,
+    /// The functions its bundle exports, by path (LV1 plan Task 10); empty
+    /// for a record written before Task 10.
+    pub functions: Vec<FunctionInfo>,
+}
+
+/// A function a deployment exports, as its bundle declares it (design §45
+/// §3.4): what `LiveAdminService.GetDeployment` shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionInfo {
+    /// `module:export`.
+    pub path: String,
+    pub kind: FnKind,
+    pub visibility: Visibility,
+    /// The arguments' validator; `None`: any arguments.
+    pub args: Option<crate::validate::Validator>,
 }
 
 /// Where a deployment is in its life.
@@ -269,6 +284,12 @@ pub trait LoadedBundle: Send + Sync {
     /// once five of them crashed within a minute (design §45 §3.1).
     fn degraded(&self) -> Option<watch::Receiver<bool>> {
         None
+    }
+
+    /// The functions it exports, in any order (LV1 plan Task 10). A
+    /// deployment's record keeps them, sorted by path.
+    fn functions(&self) -> Vec<FunctionInfo> {
+        Vec::new()
     }
 }
 
@@ -710,6 +731,8 @@ pub async fn deploy(
         .await?;
     let id = app.next_id();
     let sha: [u8; 32] = Sha256::digest(&req.bundle).into();
+    let mut functions = loaded.functions();
+    functions.sort_by(|a, b| a.path.cmp(&b.path));
     let mut record = DeploymentRecord {
         id,
         bundle_sha256: sha,
@@ -719,6 +742,7 @@ pub async fn deploy(
         message: req.message.clone(),
         parent: req.expected_active,
         state: DeploymentState::Pending,
+        functions,
     };
     if req.dry_run {
         let mut snap = latest_snapshot(engine.runner.store()).await?;
@@ -1190,6 +1214,15 @@ fn still_pending(id: Ulid) -> LiveError {
     LiveError::FailedPrecondition(format!(
         "deployment {id} is pending: its deploy has not finished"
     ))
+}
+
+/// Deployment `id` of `app`, read now; [`LiveError::NotFound`] when the app
+/// has no such deployment (or retention deleted it).
+pub async fn get_deployment(app: &AppEngine, id: Ulid) -> Result<DeploymentRecord, LiveError> {
+    let mut snap = latest_snapshot(app.inner.runner.store()).await?;
+    read_record(&mut snap, app.app_keys(), id)
+        .await?
+        .ok_or_else(|| LiveError::NotFound(format!("deployment {id} does not exist")))
 }
 
 /// The app's deployments, newest first, a page at a time.
@@ -1726,7 +1759,8 @@ impl DeploymentState {
         }
     }
 
-    fn to_proto(&self) -> pb::DeploymentState {
+    /// The wire state.
+    pub fn to_proto(&self) -> pb::DeploymentState {
         match self {
             DeploymentState::Pending => pb::DeploymentState::DEPLOYMENT_STATE_PENDING,
             DeploymentState::Validating => pb::DeploymentState::DEPLOYMENT_STATE_VALIDATING,
@@ -1759,6 +1793,7 @@ impl DeploymentRecord {
                 DeploymentState::Failed { reason } => reason.clone(),
                 _ => String::new(),
             },
+            functions: self.functions.iter().map(FunctionInfo::to_proto).collect(),
             ..Default::default()
         }
     }
@@ -1813,6 +1848,12 @@ impl DeploymentRecord {
                 Some(ulid_of(&p.parent, "deployment record parent")?)
             },
             state,
+            functions: p
+                .functions
+                .iter()
+                .map(FunctionInfo::from_proto)
+                .collect::<Result<_, _>>()
+                .map_err(|e| LiveError::Corrupt(format!("deployment record: {e}")))?,
         })
     }
 
@@ -1824,6 +1865,56 @@ impl DeploymentRecord {
         let p = pb::DeploymentRecord::decode_from_slice(bytes)
             .map_err(|e| LiveError::Corrupt(format!("deployment record: {e}")))?;
         DeploymentRecord::from_proto(p)
+    }
+}
+
+impl FunctionInfo {
+    /// The wire form (`loams.live.v1.FunctionInfo`).
+    pub fn to_proto(&self) -> pb::FunctionInfo {
+        pb::FunctionInfo {
+            path: self.path.clone(),
+            kind: match self.kind {
+                FnKind::Query => pb::FunctionKind::FUNCTION_KIND_QUERY,
+                FnKind::Mutation => pb::FunctionKind::FUNCTION_KIND_MUTATION,
+            }
+            .into(),
+            visibility: match self.visibility {
+                Visibility::Public => pb::FunctionVisibility::FUNCTION_VISIBILITY_PUBLIC,
+                Visibility::Internal => pb::FunctionVisibility::FUNCTION_VISIBILITY_INTERNAL,
+            }
+            .into(),
+            args: self
+                .args
+                .as_ref()
+                .map(|v| buffa::MessageField::some(v.to_proto()))
+                .unwrap_or_default(),
+            ..Default::default()
+        }
+    }
+
+    /// The function of its wire form; an unknown kind or visibility, or an
+    /// invalid validator, is [`LiveError::InvalidArgument`].
+    pub fn from_proto(p: &pb::FunctionInfo) -> Result<Self, LiveError> {
+        let kind = match p.kind.as_known() {
+            Some(pb::FunctionKind::FUNCTION_KIND_QUERY) => FnKind::Query,
+            Some(pb::FunctionKind::FUNCTION_KIND_MUTATION) => FnKind::Mutation,
+            _ => return Err(LiveError::invalid(format!("{}: no function kind", p.path))),
+        };
+        let visibility = match p.visibility.as_known() {
+            Some(pb::FunctionVisibility::FUNCTION_VISIBILITY_PUBLIC) => Visibility::Public,
+            Some(pb::FunctionVisibility::FUNCTION_VISIBILITY_INTERNAL) => Visibility::Internal,
+            _ => return Err(LiveError::invalid(format!("{}: no visibility", p.path))),
+        };
+        Ok(FunctionInfo {
+            path: p.path.clone(),
+            kind,
+            visibility,
+            args: p
+                .args
+                .as_option()
+                .map(crate::validate::Validator::from_proto)
+                .transpose()?,
+        })
     }
 }
 
@@ -1841,6 +1932,22 @@ mod tests {
             message: "first".into(),
             parent: Some(Ulid::from_parts(1_600_000_000_000, 1)),
             state,
+            functions: vec![
+                FunctionInfo {
+                    path: "notes:add".into(),
+                    kind: FnKind::Mutation,
+                    visibility: Visibility::Public,
+                    args: Some(crate::validate::Validator::Object(
+                        [("body".to_string(), crate::validate::Validator::String)].into(),
+                    )),
+                },
+                FunctionInfo {
+                    path: "notes:count".into(),
+                    kind: FnKind::Query,
+                    visibility: Visibility::Internal,
+                    args: None,
+                },
+            ],
         }
     }
 

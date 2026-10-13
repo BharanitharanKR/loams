@@ -989,12 +989,15 @@ impl LiveRuntime {
     /// `loams-live-js`, in process or, with `isolation = "isolated"`, in
     /// `loams live-worker` processes of this binary (LV1 plan Task 6).
     /// With `own_gc`, a cluster GC loop on Live's handle too (the openraft
-    /// metastore, or a TiKV metastore on another cluster).
+    /// metastore, or a TiKV metastore on another cluster). The listener
+    /// sits behind `auth`, the engine's authentication layer (LV1 plan Task
+    /// 10), which names the caller for the admin service.
     #[cfg_attr(not(feature = "live-tikv"), allow(unused_variables))]
     async fn start(
         config: loams_live::LiveConfig,
         bundles: Store,
         own_gc: bool,
+        auth: Arc<crate::auth::Auth>,
     ) -> Result<Self, ServerError> {
         let loader = loams_live_js::JsLoader::new(loams_live_js::JsConfig {
             isolation: config.isolation,
@@ -1005,14 +1008,21 @@ impl LiveRuntime {
             bundles,
             loader: Arc::new(loader),
         };
-        let handle = loams_live::LiveServer::start_with(config, runtime, CancellationToken::new())
-            .await
-            .map_err(|err| match err {
-                loams_live::LiveError::NotLoopback(addr) => {
-                    ServerError::LiveListenNotLoopback { addr }
-                }
-                err => ServerError::Live(err),
-            })?;
+        let layer = crate::auth::AuthLayerState::new(auth, &[]);
+        let guard: loams_live::service::Guard = Arc::new(move |router: axum::Router| {
+            layer.wrap(router.layer(axum::middleware::from_fn(live_caller)))
+        });
+        let handle = loams_live::LiveServer::start_guarded(
+            config,
+            runtime,
+            Some(guard),
+            CancellationToken::new(),
+        )
+        .await
+        .map_err(|err| match err {
+            loams_live::LiveError::NotLoopback(addr) => ServerError::LiveListenNotLoopback { addr },
+            err => ServerError::Live(err),
+        })?;
         // Only a TiKV store needs the cluster GC loop.
         #[cfg(feature = "live-tikv")]
         let gc = match handle.store().as_tikv().cloned() {
@@ -1039,6 +1049,22 @@ impl LiveRuntime {
             gc.stop().await;
         }
     }
+}
+
+/// Names the principal the authentication layer admitted for Loams Live's
+/// admin service (LV1 plan Task 10): its id, never its credential.
+#[cfg(feature = "live")]
+async fn live_caller(
+    mut request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    if let Some(principal) = request.extensions().get::<crate::auth::Principal>() {
+        let caller = loams_live::admin::Caller {
+            id: principal.subject.clone(),
+        };
+        request.extensions_mut().insert(caller);
+    }
+    next.run(request).await
 }
 
 /// Whether two PD endpoint lists name one cluster (the same endpoints, in
@@ -1080,6 +1106,10 @@ struct NodeSetup {
     forward_stats: Arc<ForwardStats>,
     extra_sources: Vec<Arc<dyn TaskSource>>,
     node_info: Option<Arc<dyn NodeInfo>>,
+    /// The authentication the start already built (for Loams Live's
+    /// listener, LV1 plan Task 10), so the node's surfaces share it; built
+    /// from the config when `None`.
+    auth: Option<Arc<crate::auth::Auth>>,
 }
 
 /// Everything [`Server::assemble`] started, and the node's router.
@@ -1437,7 +1467,7 @@ impl Server {
         #[cfg(feature = "live")]
         let started = Self::start_with_live(config).await;
         #[cfg(not(feature = "live"))]
-        let started = Self::start_single(config, no_sweep()).await;
+        let started = Self::start_single(config, no_sweep(), None).await;
         started
     }
 
@@ -1447,6 +1477,9 @@ impl Server {
     #[cfg(feature = "live")]
     async fn start_with_live(config: ServerConfig) -> Result<Self, ServerError> {
         {
+            // Built once, before anything is bound: Live's listener and the
+            // node's surfaces share it (LV1 plan Task 10).
+            let auth = crate::auth::Auth::from_config(&config.auth).map_err(ServerError::Config)?;
             let live = match config.live.clone() {
                 Some(live) => {
                     #[cfg(feature = "live-tikv")]
@@ -1461,7 +1494,7 @@ impl Server {
                     let covered = false;
                     let bundles =
                         Store::from_url(&bucket_url(&config)?, Vec::<(String, String)>::new())?;
-                    Some(LiveRuntime::start(live, bundles, !covered).await?)
+                    Some(LiveRuntime::start(live, bundles, !covered, auth.clone()).await?)
                 }
                 None => None,
             };
@@ -1473,7 +1506,7 @@ impl Server {
                 .collect();
             #[cfg(not(feature = "live-tikv"))]
             let sweep = no_sweep();
-            match Self::start_single(config, sweep).await {
+            match Self::start_single(config, sweep, Some(auth)).await {
                 Ok(mut server) => {
                     server.live = live;
                     Ok(server)
@@ -1489,18 +1522,22 @@ impl Server {
     }
 
     /// `dev` or `standalone`: the metastore, then every role.
-    async fn start_single(config: ServerConfig, sweep: Sweep) -> Result<Self, ServerError> {
+    async fn start_single(
+        config: ServerConfig,
+        sweep: Sweep,
+        auth: Option<Arc<crate::auth::Auth>>,
+    ) -> Result<Self, ServerError> {
         let store = Store::from_url(&bucket_url(&config)?, Vec::<(String, String)>::new())?;
         #[cfg(feature = "tikv")]
         if let MetaBackend::Tikv(tikv) = &config.meta {
-            return Self::start_on_tikv(tikv.clone(), store, config, sweep).await;
+            return Self::start_on_tikv(tikv.clone(), store, config, sweep, auth).await;
         }
         #[cfg(not(feature = "tikv"))]
         let Sweep = sweep;
         let mut meta_config = MetaConfig::new(NODE_ID, config.data_dir.join("meta"), store.clone());
         meta_config.snapshot_every = config.snapshot_every;
         let node = MetaNode::start(meta_config, &Router::new()).await?;
-        match Self::start_on(node.clone(), store, config).await {
+        match Self::start_on(node.clone(), store, config, auth).await {
             Ok(server) => Ok(server),
             Err(err) => {
                 if let Err(shutdown) = node.shutdown().await {
@@ -1516,6 +1553,7 @@ impl Server {
         node: MetaNode,
         store: Store,
         config: ServerConfig,
+        auth: Option<Arc<crate::auth::Auth>>,
     ) -> Result<Self, ServerError> {
         // A no-op once the node is initialized, so restarts keep their state.
         node.initialize([NODE_ID]).await?;
@@ -1527,7 +1565,7 @@ impl Server {
             MetaClientConfig::default(),
         );
         let meta_store: Arc<dyn MetaStore> = meta.clone().into();
-        let mut server = Self::serve_single(meta_store, store, config).await?;
+        let mut server = Self::serve_single(meta_store, store, config, auth).await?;
         server.node = Some(node);
         server.meta = Some(meta);
         Ok(server)
@@ -1542,11 +1580,12 @@ impl Server {
         store: Store,
         config: ServerConfig,
         sweep: Sweep,
+        auth: Option<Arc<crate::auth::Auth>>,
     ) -> Result<Self, ServerError> {
         let meta = loams_meta_tikv::TikvMeta::open(tikv).await?;
         let gc = TikvGc::start(&meta, sweep)?;
         let meta_store: Arc<dyn MetaStore> = Arc::new(meta);
-        match Self::serve_single(meta_store, store, config).await {
+        match Self::serve_single(meta_store, store, config, auth).await {
             Ok(mut server) => {
                 server.tikv_gc = Some(gc);
                 Ok(server)
@@ -1564,6 +1603,7 @@ impl Server {
         meta_store: Arc<dyn MetaStore>,
         store: Store,
         mut config: ServerConfig,
+        auth: Option<Arc<crate::auth::Auth>>,
     ) -> Result<Self, ServerError> {
         let (listener, local_addr) = bind(config.listen).await?;
         // After the leader, before the collection service (row T0-6).
@@ -1577,6 +1617,7 @@ impl Server {
             forward_stats: Arc::new(ForwardStats::default()),
             extra_sources: Vec::new(),
             node_info: None,
+            auth,
         };
         let parts = match Self::assemble(&mut config, store, setup).await {
             Ok(parts) => parts,
@@ -1904,6 +1945,7 @@ impl Server {
                 node: node.clone(),
                 join_changed,
             })),
+            auth: None,
         };
         // After the leader, before the collection service (row T0-6).
         let durable = match Durable::start(config, node_id).await {
@@ -1944,13 +1986,17 @@ impl Server {
             forward_stats,
             extra_sources,
             node_info,
+            auth,
         } = setup;
         // Built before anything is bound: a bad key file or OIDC setting
         // stops the start with nothing to undo. A cluster node is not
         // guarded (validate_auth keeps it off).
-        let auth = match config.cluster {
-            None => crate::auth::Auth::from_config(&config.auth).map_err(ServerError::Config)?,
-            Some(_) => crate::auth::Auth::off(),
+        let auth = match (auth, &config.cluster) {
+            (Some(auth), None) => auth,
+            (None, None) => {
+                crate::auth::Auth::from_config(&config.auth).map_err(ServerError::Config)?
+            }
+            (_, Some(_)) => crate::auth::Auth::off(),
         };
         let guard = crate::auth::AuthLayerState::new(auth.clone(), &[]);
         let main_guard =

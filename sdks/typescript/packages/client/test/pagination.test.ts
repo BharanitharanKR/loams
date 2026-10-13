@@ -6,13 +6,11 @@
 // which two fields page (the generated `pagination` comes from
 // `FacadeOptions.pagination`).
 //
-// **No RPC is paged yet.** `loams.collection.v1.ListCollections` arrives with
-// API1 Task 2, so the conformance half of this test waits for the corpus rather
-// than inventing a fixture the server cannot answer. What is pinned now is the
-// SDK's half — the token threading, the stop condition, and what happens when a
-// binding is not paged — against a stub fetch shaped exactly like a paged
-// response. When the RPC lands, `a_paged_call_from_the_corpus_yields_every_item`
-// starts doing the end-to-end half instead of skipping.
+// The first generated paged RPC is `loams.live.v1.LiveAdminService/
+// ListDeployments` (LV1 Task 10): `a_paged_call_from_the_corpus_yields_every_item`
+// drives the iterator with its generated binding. The rest pins the SDK's half
+// — the token threading, the stop condition, and what happens when a binding is
+// not paged — against a stub fetch shaped exactly like a paged response.
 
 import { describe, expect, it } from 'vitest';
 import { MODULES, type CallBinding } from '../src/gen/facade.js';
@@ -156,21 +154,43 @@ describe('typescript_pagination_iterator', () => {
   });
 
   it('a_paged_call_from_the_corpus_yields_every_item', async () => {
-    // Skipped until API1 Task 2 lands `ListCollections`: there is nothing to
-    // call, and a fixture for an RPC the server does not serve would be a test
-    // of the stub rather than of the SDK. The runtime half above is the same
-    // function the generated binding would drive.
+    // The first generated paged call is `live.admin.listDeployments` (LV1
+    // Task 10). Its binding, as the generator wrote it, drives the same
+    // iterator over a stub shaped like `ListDeploymentsResponse`.
     const paged = MODULES.flatMap((module) => module.calls).find(
       (call) => call.pagination !== null,
     );
-    expect(paged, 'no generated call is paged yet').toBeUndefined();
-
-    // The facade's own entry point resolves a module and call name to a
-    // binding, which is what a generated `listAll` alias would be built from.
+    expect(paged?.rpc).toBe('loams.live.v1.LiveAdminService/ListDeployments');
+    expect(paged?.pagination).toEqual({
+      items: 'deployments',
+      nextPageToken: 'nextPageToken',
+    });
     const loams = new Loams({ endpoint: 'http://127.0.0.1:1' });
-    expect(() => loams.binding('collections', 'listCollections')).toThrow(
-      /no generated call/,
-    );
+    const binding = loams.binding('live.admin', 'listDeployments');
+    expect(binding).toEqual(paged);
+    type Deployments = { deployments: { id: string }[]; nextPageToken: string };
+    const pages: Deployments[] = [
+      { deployments: [{ id: 'd3' }, { id: 'd2' }], nextPageToken: 'd2' },
+      { deployments: [{ id: 'd1' }], nextPageToken: '' },
+    ];
+    const tokens: unknown[] = [];
+    const fetch = async (request: Record<string, unknown>) => {
+      tokens.push(request.pageToken);
+      return pages[tokens.length - 1] as Deployments;
+    };
+    const ids: string[] = [];
+    for await (const d of paginate<Record<string, unknown>, Deployments, { id: string }>(
+      binding,
+      fetch,
+      {},
+    )) {
+      ids.push(d.id);
+    }
+    expect(ids).toEqual(['d3', 'd2', 'd1']);
+    expect(tokens).toEqual([undefined, 'd2']);
+
+    // A call that is not generated is refused by name.
+    expect(() => loams.binding('collections', 'listCollections')).toThrow(/no generated call/);
     expect(loams.binding('instance', 'getInstance').retry).toBe('safe');
   });
 });

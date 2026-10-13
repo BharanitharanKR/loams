@@ -3,12 +3,13 @@
 //! process or in sandboxed workers as [`JsConfig::isolation`] says, and the
 //! loaded [`Bundle`] then serves the deployment's functions. A bundle on
 //! isolated workers hands its degraded signal to the deployment, which
-//! records it.
+//! records it, and its functions' metadata to the deployment's record (LV1
+//! plan Task 10).
 
 use std::sync::Arc;
 
 use futures::future::BoxFuture;
-use loams_live::deploy::{BundleLoader, LoadedBundle};
+use loams_live::deploy::{BundleLoader, FunctionInfo, LoadedBundle};
 use loams_live::{Function, Isolation, LiveError};
 use tokio::sync::watch;
 
@@ -85,5 +86,17 @@ impl LoadedBundle for Bundle {
 
     fn degraded(&self) -> Option<watch::Receiver<bool>> {
         self.workers().map(|w| w.degraded_signal())
+    }
+
+    fn functions(&self) -> Vec<FunctionInfo> {
+        Bundle::functions(self)
+            .into_iter()
+            .map(|m| FunctionInfo {
+                path: m.path,
+                kind: m.kind,
+                visibility: m.visibility,
+                args: m.args,
+            })
+            .collect()
     }
 }

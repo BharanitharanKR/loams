@@ -34,8 +34,11 @@ use connectrpc::{
     ServiceResult, ServiceStream,
 };
 use loams_live_proto::loams::live::v1::{
-    DeployRequest, DeployResponse, LiveService, LiveServiceExt, ModifyQuerySetRequest,
-    ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition,
+    ActivateDeploymentRequest, ActivateDeploymentResponse, DeployRequest, DeployResponse,
+    GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse,
+    ListDeploymentsRequest, ListDeploymentsResponse, LiveAdminService, LiveAdminServiceExt,
+    LiveService, LiveServiceExt, ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest,
+    MutateResponse, QueryRequest, QueryResponse, TailLogsRequest, TailLogsResponse, Transition,
     WatchRequest,
 };
 use loams_proto::loams::errors::v1::ErrorInfo;
@@ -135,8 +138,13 @@ const CATALOGUE: &[Package] = &[
         // feature; until then the package is listed, advertised as
         // unavailable, and every one of its RPCs refuses with
         // `feature_not_in_variant` (see `LiveAbsent`).
+        // LV1 Task 10 adds `LiveAdminService` (§45 §6.3, D689), refused here
+        // the same way (`LiveAdminAbsent`) until Task 12 serves both.
         package: "loams.live.v1",
-        services: &["loams.live.v1.LiveService"],
+        services: &[
+            "loams.live.v1.LiveService",
+            "loams.live.v1.LiveAdminService",
+        ],
         available: false,
         unstable: true,
     },
@@ -358,13 +366,69 @@ impl LiveService for LiveAbsent {
     ) -> ServiceResult<MutateResponse> {
         Err(not_in_variant("loams.live.v1.LiveService/Mutate"))
     }
+}
 
+/// `loams.live.v1.LiveAdminService` (LV1 plan Task 10) as the main port
+/// answers it, as [`LiveAbsent`] does `LiveService`: the Live listener
+/// serves it, and LV1 Task 12 moves it here.
+#[derive(Debug)]
+struct LiveAdminAbsent;
+
+impl LiveAdminService for LiveAdminAbsent {
     async fn deploy(
         &self,
         _ctx: RequestContext,
         _request: ServiceRequest<'_, DeployRequest>,
     ) -> ServiceResult<DeployResponse> {
-        Err(not_in_variant("loams.live.v1.LiveService/Deploy"))
+        Err(not_in_variant("loams.live.v1.LiveAdminService/Deploy"))
+    }
+
+    async fn list_deployments(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, ListDeploymentsRequest>,
+    ) -> ServiceResult<ListDeploymentsResponse> {
+        Err(not_in_variant(
+            "loams.live.v1.LiveAdminService/ListDeployments",
+        ))
+    }
+
+    async fn get_deployment(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, GetDeploymentRequest>,
+    ) -> ServiceResult<GetDeploymentResponse> {
+        Err(not_in_variant(
+            "loams.live.v1.LiveAdminService/GetDeployment",
+        ))
+    }
+
+    async fn activate_deployment(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, ActivateDeploymentRequest>,
+    ) -> ServiceResult<ActivateDeploymentResponse> {
+        Err(not_in_variant(
+            "loams.live.v1.LiveAdminService/ActivateDeployment",
+        ))
+    }
+
+    async fn get_index_status(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, GetIndexStatusRequest>,
+    ) -> ServiceResult<GetIndexStatusResponse> {
+        Err(not_in_variant(
+            "loams.live.v1.LiveAdminService/GetIndexStatus",
+        ))
+    }
+
+    async fn tail_logs(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, TailLogsRequest>,
+    ) -> ServiceResult<ServiceStream<TailLogsResponse>> {
+        Err(not_in_variant("loams.live.v1.LiveAdminService/TailLogs"))
     }
 }
 
@@ -478,6 +542,7 @@ pub(crate) fn routes(state: &AppState, hot_default: bool) -> AxumRouter {
     })
     .register(rpc);
     rpc = Arc::new(LiveAbsent).register(rpc);
+    rpc = Arc::new(LiveAdminAbsent).register(rpc);
     rpc = super::graph::register(rpc, state);
     rpc = super::connect_collections::register(rpc, state);
     rpc = super::connect_documents::register(rpc, state);
