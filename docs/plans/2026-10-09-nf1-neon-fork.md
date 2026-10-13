@@ -1593,3 +1593,32 @@ Fork PR ostrium-labs/loams-postgres#10 (branch `loams/nf1-sign`, LP-0012) merged
    Two mutations (accepting any branch; ignoring CDDL) each made the suite fail.
 5. **`nf1-pins.yml`.** The `checks` job installs cosign v3.0.6 (`sigstore/cosign-installer` v4.1.2) and oras (`setup-oras` v2.0.1), then runs `verify-pins.sh` and `test_verify_pins.sh`. These are steps in the existing job, not a separate `verify` job, to keep to one runner slot, as its comment asks.
 6. **Not run against real images:** no fork image is signed until Actions are enabled (owner). The Fulcio `job_workflow_ref` claim the plan asks to confirm (that a reusable workflow's certificate names `loams-sign.yml`) is checked on the first release.
+
+### Task 13 rulings (2026-10-13, at `dev` `88a3770a`)
+
+Fork PR ostrium-labs/loams-postgres#11 (branch `loams/nf1-release`, LP-0013) merged into `main` as `de63e7e4`. CodeRabbit left 3 comments, all fixed: release documents are validated before any registry write, the month must be 01–12, and compute digests for unpinned majors are refused.
+
+1. **`loams-release.yml`.** Triggers: `workflow_dispatch` (inputs `kind` = `full|storage|compute`, `version`) and `workflow_call` (for Task 18). It runs on `main` only. The steps:
+   - `check-tag` refuses a malformed or existing version;
+   - **the gate:** `loams-hygiene`, `loams-patches` and `loams-dco` as reusable workflows, until Task 16's `loams-gate.yml` adds G1–G3;
+   - the builds: `loams-build-storage.yml` and `loams-build-compute.yml` with `build-tag` = the version;
+   - `tag-images` resolves the digests without writing anything, refuses an image release tag that already exists, and writes the pin document and the notes. A refused document stops the release before any registry write. Only then does it tag the images `lp-YYYY.MM.N` (storage) and `<pgminor>-lp-YYYY.MM.N` (compute; a beta major gets `<pgminor>-beta-lp-…`);
+   - `loams-sign.yml` per image, as a matrix; compute images also get their sources;
+   - the annotated tag and the GitHub Release, with the notes and the pin document `loams-postgres-images.toml` as an asset, taken from `tag-images`' artifact;
+   - the pin PR.
+
+   The three check workflows gain `workflow_call` and put the caller's name in their concurrency group, so a push to `main` cannot cancel a release's gate.
+2. **`kind`.** `storage` releases the storage image, `compute` every pinned major's compute image, and `full` both. A compute minor release is `full`, because the storage image carries the WAL-redo Postgres (§51 §5.6). A partial release keeps Loams' other pins, and `pin-doc` refuses one that would leave a major's storage and compute minors apart (`pins.py check` would fail on it).
+3. **`release-notes.py`** (stdlib):
+   - `check-tag` (month 01–12) and `previous` (the newest earlier `lp-` tag).
+   - `pin-doc`: Loams' current pin file with the released images replaced, `source = "ostrium-labs/loams-postgres@<commit>"`, and minors from `vendor/revisions.json`; compute digests for a major Loams does not pin are refused. Documents generated for a `full` and a `storage` release passed Loams' `pins.py` `validate()` unchanged.
+   - `notes`: the digests (built here, or "unchanged" and their source); the Postgres majors, minors and status; the extension versions, from `compute/loams-extensions.toml` once Task 20 writes it (until then the notes say so); the `LP-` rows added and dropped since the previous release, from `LOAMS_PATCHES.md` at both tags.
+
+   Tests: `test_release.py`, 10 tests, including `release_tag_immutable`, `notes_list_digests_and_patches` and `pin_pr_matches_release`.
+4. **The pin PR** uses `LOAMS_BOT_TOKEN` (the `loams-postgres-bot` App, Q733).
+   - Steps: a shallow clone of Loams `dev`, `pins.py set --from-release <the release asset's https URL>`, `pins.py check`, then a commit as the bot with a matching `Signed-off-by`, branch `bot/pins-<version>`, and a PR into `dev`.
+   - The body repeats the pin document, so the PR and the release can be compared digest by digest.
+   - Without the token the job prints the `pins.py set` command to run by hand.
+5. **Cadence.** Weekly on Tuesdays: in a month's first week, if no `lp-YYYY.MM.*` tag exists yet, the job opens one issue on `ostrium-labs/loams` (issues are off on the fork). It needs the bot token.
+6. **`docs/loams/release.md`**: the cadence table, cutting a release, what it needs, and verifying with `verify-pins.sh`.
+7. **Not run:** a real release needs Actions, package publishing and the bot token (owner). Task 14 cuts the first one.
