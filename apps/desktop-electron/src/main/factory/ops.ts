@@ -82,7 +82,52 @@ const issueDto = (i: Rec) => ({
 	state: str(i["state"]) ?? str(i["status"]),
 	url: str(i["html_url"]) ?? str(i["permalink"]),
 	updatedAt: str(i["updated_at"]) ?? str(i["updatedAt"]),
+	// A pull request's head branch: Studio's thread toolbar finds a branch's PR by it.
+	head: str(rec(i["head"])["ref"]),
 });
+
+/** A stack trace longer than this is cut (Studio's "Fix this error" draft, SD1 Task 27). */
+const MAX_STACK = 4000;
+const MAX_FRAMES = 40;
+
+/**
+ * The exception of a Sentry-format event (GlitchTip's `entries`) as plain text: the
+ * innermost frame first, like a JavaScript or Python trace read top-down.
+ */
+function stackOf(event: Rec): string | undefined {
+	const exc = arr(event["entries"]).find((e) => e["type"] === "exception");
+	const values = arr(rec(exc?.["data"])["values"]);
+	if (values.length === 0) return undefined;
+	const lines: string[] = [];
+	for (const v of values.reverse()) {
+		const head = [str(v["type"]), str(v["value"])].filter(Boolean).join(": ");
+		if (head) lines.push(head);
+		const frames = arr(rec(v["stacktrace"])["frames"])
+			.reverse()
+			.slice(0, MAX_FRAMES);
+		for (const f of frames) {
+			const file =
+				str(f["filename"]) ?? str(f["module"]) ?? str(f["absPath"]) ?? "?";
+			const line = num(f["lineNo"]) ?? num(f["lineno"]);
+			const fn = str(f["function"]) ?? "?";
+			lines.push(`  at ${fn} (${file}${line === undefined ? "" : `:${line}`})`);
+		}
+	}
+	const text = lines.join("\n");
+	return text ? text.slice(0, MAX_STACK) : undefined;
+}
+
+/** An event's release: `release` (a string or `{ version }`), else its `release` tag. */
+function releaseOf(event: Rec): string | undefined {
+	const r = event["release"];
+	const direct = str(r) ?? str(rec(r)["version"]);
+	if (direct) return direct;
+	for (const t of arr(event["tags"])) {
+		if (t["key"] === "release") return str(t["value"]);
+		if (str(t["release"])) return str(t["release"]);
+	}
+	return undefined;
+}
 
 export const OPS: Record<FactoryAppId, Record<string, Op>> = {
 	forgejo: {
@@ -270,6 +315,18 @@ export const OPS: Record<FactoryAppId, Record<string, Op>> = {
 						lastSeen: str(i["lastSeen"]),
 						permalink: str(i["permalink"]),
 					})),
+		},
+		// "Fix this error" in Studio (§53 §5.9): the latest event's stack and release.
+		latestEvent: {
+			params: z.object({ issueId: z.string().regex(/^[0-9]{1,20}$/) }).strict(),
+			run: async (a, p: { issueId: string }) => {
+				const e = rec(await call(a, "latestIssueEvent", p.issueId));
+				return {
+					release: releaseOf(e),
+					culprit: str(e["culprit"]),
+					stack: stackOf(e),
+				};
+			},
 		},
 		health: health(async (a) => {
 			// `auth` is null when the route answered without a usable token.

@@ -16,6 +16,8 @@ export interface ForgejoIssue {
   state?: string;
   url?: string;
   updatedAt?: string;
+  /** A pull request's head branch (`type: "pulls"` only). */
+  head?: string;
 }
 export interface ZulipStream {
   id?: number;

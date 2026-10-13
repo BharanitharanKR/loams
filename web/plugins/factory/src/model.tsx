@@ -49,7 +49,7 @@ export function HealthPill({ health }: { health: FactoryHealth }) {
   return <StatusTag status={HEALTH[health].status}>{HEALTH[health].label}</StatusTag>;
 }
 
-export const configureHref = (app: FactoryAppId) => `#/factory/${app}/configure`;
+export const configureHref = (app: FactoryAppId) => `#/studio/factory/${app}/configure`;
 
 export type Query<T> =
   | { state: 'loading' }

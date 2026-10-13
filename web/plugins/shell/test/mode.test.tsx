@@ -141,6 +141,29 @@ describe('nav by mode', () => {
     expect(labels('studio').sort()).toEqual(['Agent', 'Inbox']);
   });
 
+  it('studio_groups_keep_their_order', () => {
+    // The factory's group can register before Studio's own (§53 §5.9, SD1 Task 27).
+    const slots = new SlotRegistry();
+    const add = (plugin: string, label: string, href: string, group: string) =>
+      slots.register(
+        {
+          name: 'shell.nav.section',
+          plugin,
+          order: 0,
+          meta: { id: label, label, href, group, mode: 'studio' },
+        },
+        () => null,
+      );
+    add('factory', 'Software Factory', '/studio/factory', 'Factory');
+    add('studio', 'Home', '/studio', 'Studio');
+    const modes = modeService();
+    const groups = navSections(slots.entries('shell.nav.section'), [], {
+      mode: 'studio',
+      modesOf: (id: string) => modes.modesOf(id),
+    }).map(([g]) => g);
+    expect(groups).toEqual(['Studio', 'Factory']);
+  });
+
   it('a legacy page under /studio is Studio`s', () => {
     const slots = new SlotRegistry();
     slots.register(

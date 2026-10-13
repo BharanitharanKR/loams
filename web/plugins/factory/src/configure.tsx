@@ -11,7 +11,7 @@ const originOf = (u: string): string => {
   }
 };
 
-/** `/factory/:app/configure`: a form generated from the app's credential fields. */
+/** `/studio/factory/:app/configure`: a form generated from the app's credential fields. */
 export function ConfigurePage({
   desktop,
   app,
@@ -102,7 +102,7 @@ export function ConfigurePage({
         title={`Configure ${info.label}`}
         subtitle="Credentials are encrypted on this computer and never shown again."
         actions={
-          <Button variant="quiet" size="sm" onClick={() => navigate('/factory')}>
+          <Button variant="quiet" size="sm" onClick={() => navigate('/studio/factory')}>
             Back to Software Factory
           </Button>
         }
@@ -186,7 +186,7 @@ export function ConfigurePage({
                   variant="quiet"
                   disabled={busy}
                   onClick={() => {
-                    void desktop.factory.remove(app).then(() => navigate('/factory'));
+                    void desktop.factory.remove(app).then(() => navigate('/studio/factory'));
                   }}
                 >
                   Remove credentials

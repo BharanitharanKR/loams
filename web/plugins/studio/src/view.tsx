@@ -3,6 +3,7 @@
 
 import { Empty, Tabs } from '@loams/ui';
 import type { StudioAgentd } from './agentd.js';
+import type { StudioFactory } from './factory.js';
 import { Home, ProjectPage } from './home/Home.js';
 import { NotConnected } from './home/states.js';
 import { StudioLayout } from './layout/StudioLayout.js';
@@ -10,6 +11,8 @@ import { ProjectsSidebar } from './projects/ProjectsSidebar.js';
 import { useProjects, useReach } from './projects/queries.js';
 import { PANELS, type Panel, type StudioRoute, studioHref } from './routes.js';
 import { SettingsPage } from './settings/Settings.js';
+import { FactoryGroup } from './sidebar/Factory.js';
+import { DraftCard } from './thread/FactoryLinks.js';
 
 const PANEL_LABEL: Record<Panel, string> = {
   diff: 'Diff',
@@ -72,7 +75,12 @@ function Title({ agentd, route }: { agentd: StudioAgentd; route: StudioRoute }) 
 function Body({ agentd, route }: { agentd: StudioAgentd; route: StudioRoute }) {
   switch (route.kind) {
     case 'home':
-      return <Home agentd={agentd} />;
+      return (
+        <>
+          {route.draft && <DraftCard draft={route.draft} />}
+          <Home agentd={agentd} />
+        </>
+      );
     case 'project':
       return <ProjectPage agentd={agentd} projectId={route.projectId} />;
     case 'thread':
@@ -99,10 +107,13 @@ function Body({ agentd, route }: { agentd: StudioAgentd; route: StudioRoute }) {
 
 export function StudioView({
   agentd,
+  factory,
   route,
   navigate,
 }: {
   agentd: StudioAgentd;
+  /** The software factory (§53 §5.9): the desktop's bridge; none on the web until SF1. */
+  factory?: StudioFactory;
   route: StudioRoute;
   navigate: (to: string) => void;
 }) {
@@ -116,7 +127,9 @@ export function StudioView({
         <ProjectsSidebar
           agentd={agentd}
           activeProject={route.kind === 'project' ? route.projectId : undefined}
-        />
+        >
+          {factory && <FactoryGroup factory={factory} />}
+        </ProjectsSidebar>
       }
       panel={thread && connected ? <ThreadPanel route={thread} navigate={navigate} /> : undefined}
       drawer={
