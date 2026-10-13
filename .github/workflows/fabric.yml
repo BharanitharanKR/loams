@@ -336,6 +336,10 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # the service list is space-separated on purpose
           docker compose -f deploy/fabric/compose.yaml --profile "$PROFILE" up -d --wait --wait-timeout 600 ${{ steps.plan.outputs.services }}
+      # CN2 Task 13: buckets, the Azurite container and the SFTP host key.
+      - name: objects endpoints and buckets
+        if: steps.plan.outputs.run == 'true' && matrix.family == 'objects'
+        run: scripts/connectors/objects_stack.sh
       - name: suites
         if: steps.plan.outputs.run == 'true'
         working-directory: fabric
@@ -492,6 +496,16 @@ jobs:
       LOAMS_ZENDESK_SUBDOMAIN: ${{ secrets.LOAMS_ZENDESK_SUBDOMAIN }}
       LOAMS_ZENDESK_TOKEN: ${{ secrets.LOAMS_ZENDESK_TOKEN }}
       LOAMS_ZENDESK_USER: ${{ secrets.LOAMS_ZENDESK_USER }}
+      # CN2 Task 13: the objects family's nightly suites read these names, and
+      # run only when LOAMS_CONNECTORS_NIGHTLY is set.
+      LOAMS_ADLS_ACCESS_KEY: ${{ secrets.LOAMS_ADLS_ACCESS_KEY }}
+      LOAMS_ADLS_FILESYSTEM: ${{ secrets.LOAMS_ADLS_FILESYSTEM }}
+      LOAMS_AZURE_ACCESS_KEY: ${{ secrets.LOAMS_AZURE_ACCESS_KEY }}
+      LOAMS_AZURE_ACCOUNT: ${{ secrets.LOAMS_AZURE_ACCOUNT }}
+      LOAMS_AZURE_CONTAINER: ${{ secrets.LOAMS_AZURE_CONTAINER }}
+      LOAMS_GCS_SERVICE_ACCOUNT_KEY: ${{ secrets.LOAMS_GCS_SERVICE_ACCOUNT_KEY }}
+      LOAMS_R2_ENDPOINT: ${{ secrets.LOAMS_R2_ENDPOINT }}
+      LOAMS_CONNECTORS_NIGHTLY: "1"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -528,6 +542,9 @@ jobs:
             docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only \
               up -d --wait --wait-timeout 900 $services
           fi
+      - name: objects endpoints and buckets
+        if: steps.plan.outputs.run == 'true' && matrix.family == 'objects'
+        run: scripts/connectors/objects_stack.sh
       - name: suites
         if: steps.plan.outputs.run == 'true'
         working-directory: fabric
