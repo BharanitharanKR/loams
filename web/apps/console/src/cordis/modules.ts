@@ -17,6 +17,7 @@ import projectsPkg from '@loams/plugin-projects/package.json';
 import rpcPkg from '@loams/plugin-rpc/package.json';
 import shellPkg from '@loams/plugin-shell/package.json';
 import stackStatusPkg from '@loams/plugin-stack-status/package.json';
+import studioPkg from '@loams/plugin-studio/package.json';
 
 export const modules: ModuleTable = {
   '@loams/plugin-shell': () => import('@loams/plugin-shell'),
@@ -32,6 +33,7 @@ export const modules: ModuleTable = {
   '@loams/plugin-projects': () => import('@loams/plugin-projects'),
   '@loams/plugin-agents': () => import('@loams/plugin-agents'),
   '@loams/plugin-audit': () => import('@loams/plugin-audit'),
+  '@loams/plugin-studio': () => import('@loams/plugin-studio'),
 };
 
 export const manifests: unknown[] = [
@@ -47,6 +49,7 @@ export const manifests: unknown[] = [
   projectsPkg,
   agentsPkg,
   auditPkg,
+  studioPkg,
   helloPkg,
 ];
 

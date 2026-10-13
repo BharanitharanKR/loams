@@ -338,7 +338,53 @@ const A18: [&str; 3] = ["forgejo", "itsplane", "zulip"];
 /// So the rule below, which once read "a hand-written manifest that is neither ★ nor one of
 /// A.18's three would be a generated stub's id", would now fail on Grafeo — correctly enough
 /// to notice, which is why the id is named rather than the rule loosened.
-const HAND_WRITTEN_UNSTARRED_P2: [&str; 1] = ["grafeo"];
+///
+/// CN2's family rows joined it in the registry follow-up: each family task built its P2
+/// connectors and left the manifest to CN2 Task 2, and the follow-up replaced the generated
+/// stubs with them (`gen_registry.py`'s `HAND_WRITTEN_FAMILY_ROWS`). Hand-written, unstarred
+/// and still `planned` until their suites are green in CI (OR-23).
+const HAND_WRITTEN_UNSTARRED_P2: [&str; 32] = [
+    "grafeo",
+    // The kafka family (R9.7).
+    "azure-event-hubs",
+    "redpanda",
+    // The postgres family (R10.9).
+    "aurora",
+    "cockroachdb",
+    "pgvector",
+    // The objects family (R13.1).
+    "adls-gen2",
+    "azure-blob",
+    "cloudflare-r2",
+    "gcs",
+    "minio-rustfs",
+    "sftp",
+    // The kv family (R14.1).
+    "cassandra",
+    "dynamodb",
+    "dynamodb-streams",
+    "redis-streams",
+    "valkey",
+    // The search family (R15.5).
+    "opensearch",
+    "qdrant",
+    // The mongodb family (R16.12).
+    "mongodb",
+    // The brokers family (R18.1).
+    "activemq-jms",
+    "azure-service-bus",
+    "mqtt",
+    "nats",
+    "pulsar",
+    "rabbitmq-amqp",
+    "websocket",
+    // The cloud family (R19.6).
+    "aws-sns",
+    "aws-sqs",
+    "azure-event-grid",
+    "eventbridge",
+    "google-pub-sub",
+];
 
 /// Ruling 11's row count, after D628 added A.18's three to the précis' 200, D634 added
 /// §33 A.3's Grafeo row and CN2 OR-13 split A.7's Debezium SQL Server / Oracle row.
@@ -891,12 +937,14 @@ fn licence_gate_refuses_flagged() {
     // the 2026-10-04 reading missed; `crates/loams-graph/tests/licences.rs` now checks the
     // Grafeo stanzas against the lockfiles. CN2 Task 0 (R0.30) added a stanza for every
     // protocol crate and test image its spike found, 74 more, which CN2 Task 3's gate
-    // reclassifies; CN2 Task 2 recorded the new total here (CN2 ruling R2.8).
+    // reclassifies; CN2 Task 2 recorded the new total here (CN2 ruling R2.8). CN2 Task 17
+    // added two: `buoyant_kernel` (the Delta kernel deltalake links, R0.14) and `libduckdb`
+    // (MIT), the DuckDB target's driver, loaded from the runtime's allowlist (R17.7).
     assert_eq!(
         components.len(),
-        122,
-        "D359 records 42 components after CN1 Task 15, D634's six Grafeo crates and CN2 \
-         Task 0's 74 crates and images"
+        124,
+        "D359 records 42 components after CN1 Task 15, D634's six Grafeo crates, CN2 \
+         Task 0's 74 crates and images and CN2 Task 17's two"
     );
     gate.check_components(&text, "connectors/licences.toml")
         .unwrap_or_else(|error| panic!("no component may be refused: {error}"));

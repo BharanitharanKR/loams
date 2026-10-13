@@ -86,6 +86,21 @@ pub(crate) async fn replay(
     }
 }
 
+/// The repository's current state without a sequencer (§36 §4.6, "`Latest`
+/// elsewhere"): the latest checkpoint, then every segment after it until
+/// one is missing. Writes nothing, so a reader with read-only credentials
+/// can call it (the serverless helper's `list` and `fetch`, plan GT1 Task
+/// 51). `NotFound` when the repository has no checkpoint.
+pub async fn latest_state(wal: &dyn WalStore) -> Result<RepoState, RefError> {
+    let checkpoint = wal
+        .latest_checkpoint(Seq(u64::MAX))
+        .await?
+        .ok_or(RefError::NotFound)?;
+    let mut state = RepoState::from_checkpoint(checkpoint)?;
+    replay(wal, &mut state, None).await?;
+    Ok(state)
+}
+
 /// The state after `seq`: the latest checkpoint at or below it, replayed to
 /// it. `Invalid` when the log does not hold that state (not committed yet,
 /// or no longer retained), `NotFound` when the repository has no

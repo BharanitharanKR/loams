@@ -1133,3 +1133,26 @@ button.lc-hosted-engine {
   display: grid;
   gap: 6px;
 }
+
+/* Modes (design §53 §4): the Console | Studio switcher, and Studio's full-bleed page. */
+
+.lc-mode {
+  flex-shrink: 0;
+}
+@media (max-width: 640px) {
+  .lc-mode span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+.lc-shell[data-mode="studio"] .lc-main {
+  max-width: none;
+  padding: 0;
+}
+.lc-shell[data-mode="studio"] .lc-main > * {
+  animation: none;
+}

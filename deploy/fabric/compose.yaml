@@ -407,7 +407,23 @@ services:
         - mongosh
         - --quiet
         - --eval
-        - "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]}).ok }"
+        # Healthy only once the member is the writable primary, so `up --wait`
+        # means the suites can write (CN2 Task 16).
+        - "try { rs.status() } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]}) }; if (!db.hello().isWritablePrimary) { quit(1) }"
+      interval: 2s
+      retries: 60
+
+  # The same image as a standalone server (no replica set, so no
+  # transactions and no change streams): the sink's narrowing to effectively
+  # once (CN2 Task 16, mongodb_standalone_narrows_to_effectively_once).
+  mongodb-standalone:
+    image: mongo:8.0.30@sha256:4a0f30875898413139bec44c73c02a05fed172578de65b644dcdcee143ae7306
+    profiles: [connectors-ci-only]
+    labels: { io.loams.licence: "SSPL-1.0", io.loams.ci-service: "true" }
+    command: ["--bind_ip_all"]
+    ports: ["27018:27017"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "if (db.adminCommand('ping').ok !== 1) { quit(1) }"]
       interval: 2s
       retries: 60
 

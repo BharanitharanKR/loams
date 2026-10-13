@@ -1,6 +1,6 @@
 # The hosted auth service (auth.loams.dev)
 
-For the v0.1.0-preview.1 release, Ostrium hosts two things: the console and this
+For the v0.1.0 preview releases, Ostrium hosts two things: the console and this
 auth service. Everything else runs on the user's machines, reached over their own
 tailnet. This directory deploys the auth service. It is
 [Authentik](https://goauthentik.io) 2026.8.3, open-source edition, behind Caddy.

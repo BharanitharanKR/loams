@@ -51,5 +51,6 @@ export {
   TooltipProvider,
   useToast,
 } from './overlay';
+export { Segmented, type SegmentedOption } from './segmented';
 export { Badge, type Status, StatusTag } from './status';
 export { type Column, Primary, Table } from './table';

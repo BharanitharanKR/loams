@@ -13,6 +13,10 @@
 //!   lands late is refused (R11.8's race).
 //! * A graph's stream has the reserved name `_graph.<gr_id>`, and GR1 Task 11's `graph.<gr_id>`
 //!   moves to it on open; a purge drops it.
+//! * Consistency tokens and followers (GR1 Task 15, §48 §7.2): a read with a write's token sees
+//!   the write on any node (D76), an `eventual` read is served by a follower without a hop, a
+//!   `strong` read and every write go to the owner, and a token read that cannot be satisfied in
+//!   time is `UNAVAILABLE`/`consistency_wait_timeout`.
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
@@ -27,6 +31,7 @@ use loams_common::meta::{
 };
 use loams_graph::catalog::{GraphCatalog, NewGraph};
 use loams_graph::changeset::{GraphRecord, decode};
+use loams_graph::consistency::Consistency as ReadConsistency;
 use loams_graph::durable::{ConsistencyToken, GraphLog, GroupCommit};
 use loams_graph::owner::{
     FixedMembership, ForwardFuture, ForwardMethod, Forwarder, GraphNode, OwnerConfig, Ownership,
@@ -47,6 +52,8 @@ use tempfile::TempDir;
 #[derive(Debug, Default)]
 struct InProcess {
     nodes: Mutex<HashMap<u64, GraphAdmin>>,
+    /// Calls forwarded so far, reachable or not.
+    forwards: std::sync::atomic::AtomicUsize,
 }
 
 impl InProcess {
@@ -56,6 +63,10 @@ impl InProcess {
 
     fn reconnect(&self, node_id: u64, admin: GraphAdmin) {
         self.nodes.lock().expect("lock").insert(node_id, admin);
+    }
+
+    fn forwards(&self) -> usize {
+        self.forwards.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 
@@ -67,6 +78,8 @@ impl Forwarder for InProcess {
         request: Bytes,
         _timeout: Duration,
     ) -> ForwardFuture {
+        self.forwards
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let admin = self.nodes.lock().expect("lock").get(&to.node_id).cloned();
         Box::pin(async move {
             match admin {
@@ -379,14 +392,26 @@ async fn two_nodes_one_writer() {
             .admin
             .clone();
         tasks.push(tokio::spawn(async move {
-            admin
-                .execute(request(
-                    "kg",
-                    &format!("INSERT (:N {{k: {i}, v: 'w{i}'}})"),
-                    &format!("w{i}"),
-                ))
-                .await
-                .expect("a write through either node")
+            // Sixteen at once can pass the namespace's statement cap (an
+            // eighth of the process slots is kept back, so a small runner
+            // admits fewer): the refusal says retry, and the key makes it safe.
+            let mut attempt = 0;
+            loop {
+                match admin
+                    .execute(request(
+                        "kg",
+                        &format!("INSERT (:N {{k: {i}, v: 'w{i}'}})"),
+                        &format!("w{i}"),
+                    ))
+                    .await
+                {
+                    Err(err) if err.code == ErrorCode::ResourceExhausted && attempt < 100 => {
+                        attempt += 1;
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                    other => break other.expect("a write through either node"),
+                }
+            }
         }));
     }
     let mut offsets = Vec::new();
@@ -890,5 +915,379 @@ async fn a_purge_drops_the_graphs_stream_under_the_maintenance_lease() {
             .await
             .expect("maintain again"),
         0
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// GR1 Task 15: consistency tokens and followers (§48 §7.2)
+// ---------------------------------------------------------------------------------------------
+
+async fn create_replicated(admin: &GraphAdmin, name: &str, replicas: u32) {
+    admin
+        .create_graph(pb::CreateGraphRequest {
+            namespace: "acme".to_string(),
+            name: name.to_string(),
+            replicas,
+            ..Default::default()
+        })
+        .await
+        .expect("create");
+}
+
+fn eventual() -> pb::Consistency {
+    ReadConsistency::Eventual.to_proto()
+}
+
+fn at_least(token: ConsistencyToken) -> pb::Consistency {
+    ReadConsistency::AtLeast(token).to_proto()
+}
+
+fn read_at(graph: &str, statement: &str, consistency: pb::Consistency) -> pb::ExecuteRequest {
+    pb::ExecuteRequest {
+        consistency: consistency.into(),
+        ..request(graph, statement, "")
+    }
+}
+
+/// `k → v` of every `:N` node and the answer's token, read through `admin` at `consistency`.
+async fn values_at(
+    admin: &GraphAdmin,
+    graph: &str,
+    consistency: pb::Consistency,
+) -> (BTreeMap<i64, String>, ConsistencyToken) {
+    let response = admin
+        .execute(read_at(graph, "MATCH (n:N) RETURN n.k, n.v", consistency))
+        .await
+        .unwrap_or_else(|err| panic!("a read: {err:?}"));
+    let values = response
+        .rows
+        .as_option()
+        .expect("rows")
+        .rows
+        .iter()
+        .map(|row| match (&row.values[0].kind, &row.values[1].kind) {
+            (Some(Kind::Int64(k)), Some(Kind::String(v))) => (*k, v.clone()),
+            other => panic!("{other:?}"),
+        })
+        .collect();
+    (values, token(&response))
+}
+
+/// Whether `admin`'s node has a follower of the graph open.
+fn follows(admin: &GraphAdmin, graph: &str) -> bool {
+    admin
+        .followers()
+        .expect("followers")
+        .engine()
+        .list(Some("acme"))
+        .expect("list")
+        .iter()
+        .any(|g| g.name() == graph)
+}
+
+fn kv(pairs: &[(i64, &str)]) -> BTreeMap<i64, String> {
+    pairs.iter().map(|(k, v)| (*k, (*v).to_string())).collect()
+}
+
+/// D76's case: a client writes through the owner, then reads on another node with the write's
+/// token, and sees the write. On a graph with a follower there the read waits for the follower to
+/// apply it and never leaves the node; on a graph with none it goes to the owner.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn token_read_on_other_node_sees_write() {
+    let cluster = Cluster::start(2, OwnerConfig::default()).await;
+    create_replicated(&cluster.node(1).admin, "kg", 1).await;
+    let graph = cluster.graph_id("kg").await;
+    let owner = cluster.preferred(graph);
+    let other = 3 - owner;
+    run(
+        &cluster.node(owner).admin,
+        "kg",
+        "INSERT (:N {k: 1, v: 'a'})",
+    )
+    .await;
+    // The follower opens on its node's first read, from the stream.
+    let (seen, _) = values_at(&cluster.node(other).admin, "kg", eventual()).await;
+    assert_eq!(seen, kv(&[(1, "a")]));
+    assert!(follows(&cluster.node(other).admin, "kg"));
+    assert!(
+        !is_open(&cluster.node(other).admin, "kg"),
+        "it does not own it"
+    );
+
+    let forwards = cluster.forwarder.forwards();
+    let written = run(
+        &cluster.node(owner).admin,
+        "kg",
+        "INSERT (:N {k: 2, v: 'b'})",
+    )
+    .await;
+    let (seen, read) = values_at(&cluster.node(other).admin, "kg", at_least(token(&written))).await;
+    assert_eq!(seen, kv(&[(1, "a"), (2, "b")]));
+    assert!(read.offset >= token(&written).offset, "{read:?}");
+    assert_eq!(
+        cluster.forwarder.forwards(),
+        forwards,
+        "the follower served it"
+    );
+
+    // A graph with no follower: the token read goes to the owner, which sees the write too.
+    create_replicated(&cluster.node(1).admin, "solo", 0).await;
+    let solo = cluster.graph_id("solo").await;
+    let solo_owner = cluster.preferred(solo);
+    let solo_other = 3 - solo_owner;
+    let written = run(
+        &cluster.node(solo_owner).admin,
+        "solo",
+        "INSERT (:N {k: 7, v: 'z'})",
+    )
+    .await;
+    let forwards = cluster.forwarder.forwards();
+    let (seen, _) = values_at(
+        &cluster.node(solo_other).admin,
+        "solo",
+        at_least(token(&written)),
+    )
+    .await;
+    assert_eq!(seen, kv(&[(7, "z")]));
+    assert_eq!(cluster.forwarder.forwards(), forwards + 1);
+    assert!(!follows(&cluster.node(solo_other).admin, "solo"));
+}
+
+/// A token read while the graph's owner is cut off and its lease has not moved yet: the follower
+/// serves it, with the write, without the owner. Once the lease moves and the other node owns the
+/// graph, the same token still reads the write, now from the owner's engine.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn token_read_during_owner_move_sees_write() {
+    let cluster = Cluster::start(2, SHORT).await;
+    create_replicated(&cluster.node(1).admin, "kg", 1).await;
+    let graph = cluster.graph_id("kg").await;
+    let old = cluster.preferred(graph);
+    let new = 3 - old;
+    let written = run(
+        &cluster.node(old).admin,
+        "kg",
+        "INSERT (:N {k: 1, v: 'kept'})",
+    )
+    .await;
+
+    // The owner is cut off: it renews nothing, nobody reaches it, and the other node sees only
+    // itself.
+    cluster.node(old).ownership.pause_renewals(true);
+    let _cut = cluster.forwarder.cut_off(old).expect("connected");
+    cluster
+        .node(new)
+        .membership
+        .set(vec![cluster.node(new).me.clone()]);
+    let (seen, _) = values_at(&cluster.node(new).admin, "kg", at_least(token(&written))).await;
+    assert_eq!(seen, kv(&[(1, "kept")]));
+    assert!(follows(&cluster.node(new).admin, "kg"));
+    let lease = cluster
+        .meta
+        .lease(Consistency::Linearizable, &owner_lease_key(graph))
+        .await
+        .expect("read")
+        .expect("a lease");
+    assert_eq!(
+        lease.owner.as_deref(),
+        Some(cluster.node(old).me.lease_owner().as_str()),
+        "read while the old owner still held the lease"
+    );
+
+    // The lease runs out; the other node takes the graph on its next write, and its follower
+    // goes. The old token still reads the write.
+    wait_out_the_lease(&cluster, graph).await;
+    let moved = run(
+        &cluster.node(new).admin,
+        "kg",
+        "INSERT (:N {k: 2, v: 'new'})",
+    )
+    .await;
+    assert_eq!(token(&moved).offset, token(&written).offset + 1);
+    assert!(cluster.node(new).ownership.held(graph).is_some());
+    let (seen, _) = values_at(&cluster.node(new).admin, "kg", at_least(token(&written))).await;
+    assert_eq!(seen, kv(&[(1, "kept"), (2, "new")]));
+    assert!(
+        !follows(&cluster.node(new).admin, "kg"),
+        "the owner serves it now"
+    );
+}
+
+/// A token no replica reaches in time is `UNAVAILABLE`/`consistency_wait_timeout`, after the wait,
+/// on a follower and on the owner. A token that names another stream, or is not a token, is
+/// refused at once.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn token_wait_times_out_with_reason() {
+    let cluster = Cluster::start(2, OwnerConfig::default()).await;
+    create_replicated(&cluster.node(1).admin, "kg", 1).await;
+    let graph = cluster.graph_id("kg").await;
+    let owner = cluster.preferred(graph);
+    let other = 3 - owner;
+    let written = run(
+        &cluster.node(owner).admin,
+        "kg",
+        "INSERT (:N {k: 1, v: 'a'})",
+    )
+    .await;
+    let ahead = ConsistencyToken {
+        offset: token(&written).offset + 100,
+        ..token(&written)
+    };
+    let wait = Duration::from_millis(300);
+    for node in [other, owner] {
+        let admin = cluster.node(node).admin.clone().with_consistency_wait(wait);
+        // Open the replica first, so the wait is the whole of the second call.
+        values_at(&admin, "kg", eventual()).await;
+        let started = std::time::Instant::now();
+        let err = admin
+            .execute(read_at("kg", "MATCH (n:N) RETURN n.k", at_least(ahead)))
+            .await
+            .expect_err("never applied");
+        assert_eq!(err.code, ErrorCode::Unavailable, "{err:?}");
+        assert_eq!(info(&err).reason, "consistency_wait_timeout");
+        assert!(started.elapsed() >= wait, "{:?}", started.elapsed());
+    }
+    assert!(follows(&cluster.node(other).admin, "kg"));
+
+    let elsewhere = ConsistencyToken {
+        stream: StreamId(token(&written).stream.0 + 1_000),
+        ..token(&written)
+    };
+    let err = cluster
+        .node(owner)
+        .admin
+        .execute(read_at("kg", "MATCH (n:N) RETURN n.k", at_least(elsewhere)))
+        .await
+        .expect_err("another stream's token");
+    assert_eq!(err.code, ErrorCode::InvalidArgument, "{err:?}");
+    let mut bad = eventual();
+    bad.level = Some(pb::__buffa::oneof::consistency::Level::AtLeast(
+        "not-a-token".to_string(),
+    ));
+    let err = cluster
+        .node(other)
+        .admin
+        .execute(read_at("kg", "MATCH (n:N) RETURN n.k", bad))
+        .await
+        .expect_err("not a token");
+    assert_eq!(err.code, ErrorCode::InvalidArgument, "{err:?}");
+}
+
+/// An `eventual` read on a follower's node is served there, even while the follower lags: a
+/// paused tail leaves it at the older state, and its token says so. An `at_least` read with the
+/// newer token waits for the tail.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn eventual_read_served_by_follower() {
+    let cluster = Cluster::start(2, OwnerConfig::default()).await;
+    create_replicated(&cluster.node(1).admin, "kg", 1).await;
+    let graph = cluster.graph_id("kg").await;
+    let owner = cluster.preferred(graph);
+    let other = 3 - owner;
+    let first = run(
+        &cluster.node(owner).admin,
+        "kg",
+        "INSERT (:N {k: 1, v: 'a'})",
+    )
+    .await;
+    let follower_node = &cluster.node(other).admin;
+    values_at(follower_node, "kg", eventual()).await;
+    let forwards = cluster.forwarder.forwards();
+
+    follower_node.followers().expect("followers").pause(true);
+    let second = run(
+        &cluster.node(owner).admin,
+        "kg",
+        "INSERT (:N {k: 2, v: 'b'})",
+    )
+    .await;
+    let (seen, read) = values_at(follower_node, "kg", eventual()).await;
+    assert_eq!(seen, kv(&[(1, "a")]), "the lagging follower's state");
+    assert_eq!(read, token(&first));
+    // A stream and a plan are served by the follower as well.
+    let chunks: Vec<pb::ResultChunk> = {
+        use futures::StreamExt as _;
+        follower_node
+            .execute_stream(pb::ExecuteStreamRequest {
+                request: read_at("kg", "MATCH (n:N) RETURN n.k", eventual()).into(),
+                ..Default::default()
+            })
+            .await
+            .expect("a stream")
+            .map(|chunk| chunk.expect("chunk"))
+            .collect()
+            .await
+    };
+    assert_eq!(chunks.iter().map(|c| c.rows.len()).sum::<usize>(), 1);
+    assert_eq!(
+        chunks.last().map(|c| c.consistency_token.clone()),
+        Some(token(&first).to_string())
+    );
+    follower_node
+        .explain(pb::ExplainRequest {
+            namespace: "acme".to_string(),
+            graph: "kg".to_string(),
+            statement: "MATCH (n:N) RETURN n.k".to_string(),
+            consistency: eventual().into(),
+            ..Default::default()
+        })
+        .await
+        .expect("a plan");
+    assert_eq!(
+        cluster.forwarder.forwards(),
+        forwards,
+        "nothing left the node"
+    );
+
+    follower_node.followers().expect("followers").pause(false);
+    let (seen, read) = values_at(follower_node, "kg", at_least(token(&second))).await;
+    assert_eq!(seen, kv(&[(1, "a"), (2, "b")]));
+    assert_eq!(read, token(&second));
+    assert_eq!(cluster.forwarder.forwards(), forwards);
+}
+
+/// A `strong` read on a follower's node goes to the owner and sees every acknowledged write,
+/// however far the follower lags; so does a write sent with a replica consistency.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn strong_read_routed_to_owner() {
+    let cluster = Cluster::start(2, OwnerConfig::default()).await;
+    create_replicated(&cluster.node(1).admin, "kg", 1).await;
+    let graph = cluster.graph_id("kg").await;
+    let owner = cluster.preferred(graph);
+    let other = 3 - owner;
+    run(
+        &cluster.node(owner).admin,
+        "kg",
+        "INSERT (:N {k: 1, v: 'a'})",
+    )
+    .await;
+    let follower_node = &cluster.node(other).admin;
+    values_at(follower_node, "kg", eventual()).await;
+    follower_node.followers().expect("followers").pause(true);
+    let written = run(
+        &cluster.node(owner).admin,
+        "kg",
+        "INSERT (:N {k: 2, v: 'b'})",
+    )
+    .await;
+
+    let forwards = cluster.forwarder.forwards();
+    let (seen, read) = values_at(follower_node, "kg", ReadConsistency::Strong.to_proto()).await;
+    assert_eq!(seen, kv(&[(1, "a"), (2, "b")]));
+    assert_eq!(read, token(&written));
+    // The default (no consistency) is strong.
+    assert_eq!(values(follower_node, "kg").await.len(), 2);
+    assert_eq!(cluster.forwarder.forwards(), forwards + 2);
+
+    // A write is the owner's, whatever consistency it carries.
+    let wrote = follower_node
+        .execute(read_at("kg", "INSERT (:N {k: 3, v: 'c'})", eventual()))
+        .await
+        .expect("a write through the follower's node");
+    assert_eq!(token(&wrote).offset, token(&written).offset + 1);
+    assert_eq!(cluster.forwarder.forwards(), forwards + 3);
+    let (seen, _) = values_at(follower_node, "kg", eventual()).await;
+    assert_eq!(
+        seen,
+        kv(&[(1, "a")]),
+        "the paused follower never took a write"
     );
 }

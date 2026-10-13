@@ -20,7 +20,7 @@
 //!    new validators on new writes and add the new indexes `backfilling`
 //!    ([`schema::begin_backfills`]); fence the journal after it
 //!    ([`Journal::fence_after`]); then scan each
-//!    such table in a [`TableJob`](backfill::TableJob): the validations
+//!    such table in a [`TableJob`]: the validations
 //!    first, then the backfills (the record moves to `backfilling`). A
 //!    document that does not match, or whose new index entry is too large,
 //!    fails the deployment (listing up to 100 ids), and the new validators

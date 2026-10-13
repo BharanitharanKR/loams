@@ -95,4 +95,20 @@ describe('router hardening', () => {
     router.navigate('/approvals/a%2Fb');
     expect(router.current().params).toEqual({ id: 'a/b' });
   });
+
+  it('matches the path without its query, and the query joins the params', () => {
+    const slots = new SlotRegistry();
+    const source = memory('/studio/t/c_1?panel=diff&host=h%201');
+    const router = new HashRouter(slots, source);
+    router.page({ id: 'thread', path: '/studio/t/:threadId', title: 'Thread' }, () => null);
+    expect(router.current()).toEqual({
+      path: '/studio/t/c_1',
+      pageId: 'thread',
+      params: { panel: 'diff', host: 'h 1', threadId: 'c_1' },
+      query: { panel: 'diff', host: 'h 1' },
+    });
+    // A route parameter wins over a query parameter of the same name.
+    source.go('/studio/t/c_2?threadId=evil');
+    expect(router.current().params.threadId).toBe('c_2');
+  });
 });

@@ -1,0 +1,407 @@
+syntax = "proto3";
+
+// Harnesses (design §53 §6.4; plan SD1 Task 4): the agent CLIs the daemon
+// drives, their models, skills and slash commands, their updates, and the
+// agent accounts they sign in with. Installs and account logins are for the
+// desktop's loopback listener only; the remote `studio` role never gets them
+// (Q808, SD1 Task 7). See studio.proto for the package's rules.
+package loams.agentd.v1;
+
+import "loams/agentd/v1/studio.proto";
+import "loams/options/v1/options.proto";
+
+service HarnessService {
+  option (loams.options.v1.module) = {
+    name: "agentd.harness"
+    summary: "Loams Studio's harnesses: agent CLIs, models, skills, updates and accounts."
+    unstable: true
+  };
+
+  // ndjson: `ListHarnesses`.
+  rpc ListHarnesses(ListHarnessesRequest) returns (ListHarnessesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ndjson: `ListModels`.
+  rpc ListModels(ListModelsRequest) returns (ListModelsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ndjson: `ListSkills`.
+  rpc ListSkills(ListSkillsRequest) returns (ListSkillsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ndjson: `ListCommands`.
+  rpc ListCommands(ListCommandsRequest) returns (ListCommandsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Answers the fresh catalog (ndjson: `SetHarnessEnabled`).
+  rpc SetHarnessEnabled(SetHarnessEnabledRequest) returns (SetHarnessEnabledResponse);
+  // ndjson: `InstallHarness`.
+  rpc InstallHarness(InstallHarnessRequest) returns (InstallHarnessResponse);
+  // ndjson: `CancelInstall`.
+  rpc CancelInstall(CancelInstallRequest) returns (CancelInstallResponse);
+
+  // Every harness's update status, then the list again after each
+  // transition (ndjson: `WatchHarnessUpdates`).
+  rpc WatchHarnessUpdates(WatchHarnessUpdatesRequest) returns (stream WatchHarnessUpdatesResponse);
+  // ndjson: `CheckHarnessUpdates`.
+  rpc CheckHarnessUpdates(CheckHarnessUpdatesRequest) returns (CheckHarnessUpdatesResponse);
+  // ndjson: `ApplyHarnessUpdate`.
+  rpc ApplyHarnessUpdate(ApplyHarnessUpdateRequest) returns (ApplyHarnessUpdateResponse);
+  // ndjson: `CancelHarnessUpdate`.
+  rpc CancelHarnessUpdate(CancelHarnessUpdateRequest) returns (CancelHarnessUpdateResponse);
+  // ndjson: `DismissHarnessUpdate`.
+  rpc DismissHarnessUpdate(DismissHarnessUpdateRequest) returns (DismissHarnessUpdateResponse);
+
+  // ndjson: `ListAgentAccounts`.
+  rpc ListAgentAccounts(ListAgentAccountsRequest) returns (ListAgentAccountsResponse);
+  // ndjson: `ActivateAgentAccount`.
+  rpc ActivateAgentAccount(ActivateAgentAccountRequest) returns (ActivateAgentAccountResponse);
+  // ndjson: `ForgetAgentAccount`.
+  rpc ForgetAgentAccount(ForgetAgentAccountRequest) returns (ForgetAgentAccountResponse);
+  // ndjson: `StartAgentLogin`.
+  rpc StartAgentLogin(StartAgentLoginRequest) returns (StartAgentLoginResponse);
+  // ndjson: `CompleteAgentLogin`.
+  rpc CompleteAgentLogin(CompleteAgentLoginRequest) returns (CompleteAgentLoginResponse);
+  // ndjson: `PollAgentLogin`.
+  rpc PollAgentLogin(PollAgentLoginRequest) returns (PollAgentLoginResponse);
+  // ndjson: `CancelAgentLogin`.
+  rpc CancelAgentLogin(CancelAgentLoginRequest) returns (CancelAgentLoginResponse);
+}
+
+enum SteeringMode {
+  STEERING_MODE_UNSPECIFIED = 0;
+  STEERING_MODE_STEP_BOUNDARY = 1;
+  STEERING_MODE_TURN_BOUNDARY = 2;
+}
+
+message HarnessDescriptor {
+  HarnessId id = 1;
+  string name = 2;
+  bool supports_steering = 3;
+  SteeringMode steering_mode = 4;
+  repeated ReasoningLevel reasoning_levels = 5;
+  bool installed = 6;
+  bool can_install = 7;
+  optional bool enabled = 8;
+}
+
+message Model {
+  string id = 1;
+  string label = 2;
+  optional string description = 3;
+  repeated ReasoningLevel reasoning_levels = 4;
+  repeated ModelOption options = 5;
+}
+
+message ModelOption {
+  string id = 1;
+  string label = 2;
+  repeated ModelOptionChoice choices = 3;
+  string default_choice = 4;
+}
+
+message ModelOptionChoice {
+  string id = 1;
+  string label = 2;
+}
+
+message Skill {
+  string name = 1;
+  string path = 2;
+  string description = 3;
+  bool enabled = 4;
+  SkillCommand command = 5;
+}
+
+message SkillCommand {
+  string name = 1;
+  HarnessId harness = 2;
+}
+
+message SlashCommand {
+  string name = 1;
+  string description = 2;
+  optional string input_hint = 3;
+}
+
+enum HarnessInstallSource {
+  HARNESS_INSTALL_SOURCE_UNSPECIFIED = 0;
+  HARNESS_INSTALL_SOURCE_NPM = 1;
+  HARNESS_INSTALL_SOURCE_HOMEBREW = 2;
+  HARNESS_INSTALL_SOURCE_CARGO = 3;
+  HARNESS_INSTALL_SOURCE_VENDOR = 4;
+  // ndjson `managed-by-zeron`: installed and updated by Loams Desktop.
+  HARNESS_INSTALL_SOURCE_MANAGED_BY_LOAMS_DESKTOP = 5;
+  HARNESS_INSTALL_SOURCE_UNKNOWN = 6;
+}
+
+enum HarnessUpdatePhase {
+  HARNESS_UPDATE_PHASE_UNSPECIFIED = 0;
+  HARNESS_UPDATE_PHASE_DORMANT = 1;
+  HARNESS_UPDATE_PHASE_CHECKING = 2;
+  HARNESS_UPDATE_PHASE_CURRENT = 3;
+  HARNESS_UPDATE_PHASE_AVAILABLE = 4;
+  HARNESS_UPDATE_PHASE_WAITING_FOR_IDLE = 5;
+  HARNESS_UPDATE_PHASE_PREPARING = 6;
+  HARNESS_UPDATE_PHASE_DOWNLOADING = 7;
+  HARNESS_UPDATE_PHASE_INSTALLING = 8;
+  HARNESS_UPDATE_PHASE_VERIFYING = 9;
+  HARNESS_UPDATE_PHASE_UPDATED = 10;
+  HARNESS_UPDATE_PHASE_MANUAL_ACTION_REQUIRED = 11;
+  HARNESS_UPDATE_PHASE_FAILED = 12;
+}
+
+message HarnessUpdateProgress {
+  optional uint64 completed_bytes = 1;
+  optional uint64 total_bytes = 2;
+  optional string message = 3;
+}
+
+message HarnessUpdateFailure {
+  string message = 1;
+  bool retryable = 2;
+}
+
+message HarnessUpdateStatus {
+  HarnessId harness = 1;
+  optional string installed_version = 2;
+  optional string latest_version = 3;
+  optional string channel = 4;
+  HarnessInstallSource source = 5;
+  HarnessUpdatePhase phase = 6;
+  HarnessUpdateProgress progress = 7;
+  optional int64 checked_at_ms = 8;
+  HarnessUpdateFailure error = 9;
+  bool can_apply = 10;
+  optional string manual_command = 11;
+}
+
+enum AgentAuthKind {
+  AGENT_AUTH_KIND_UNSPECIFIED = 0;
+  AGENT_AUTH_KIND_OAUTH = 1;
+  AGENT_AUTH_KIND_API_KEY = 2;
+}
+
+message AgentUsageWindow {
+  string label = 1;
+  float used_fraction = 2;
+  optional int64 resets_at_ms = 3;
+}
+
+message AgentAccount {
+  string id = 1;
+  HarnessId harness = 2;
+  optional string email = 3;
+  optional string plan_label = 4;
+  bool active = 5;
+  repeated AgentUsageWindow usage_windows = 6;
+  optional int64 usage_fetched_at_ms = 7;
+  optional string usage_error = 8;
+  optional string display_name = 9;
+  optional string organization = 10;
+  optional AgentAuthKind auth_kind = 11;
+  bool switchable = 12;
+  optional int64 saved_at_ms = 13;
+  optional string provider = 14;
+}
+
+message AgentAccountWarning {
+  HarnessId harness = 1;
+  string message = 2;
+}
+
+message AgentAccountsSnapshot {
+  repeated AgentAccount accounts = 1;
+  repeated AgentAccountWarning warnings = 2;
+}
+
+enum AgentLoginMode {
+  AGENT_LOGIN_MODE_UNSPECIFIED = 0;
+  AGENT_LOGIN_MODE_PASTE_CODE = 1;
+  AGENT_LOGIN_MODE_BROWSER = 2;
+}
+
+message AgentLoginStart {
+  string login_id = 1;
+  string url = 2;
+  AgentLoginMode mode = 3;
+  optional uint32 callback_port = 4;
+}
+
+enum AgentLoginStatus {
+  AGENT_LOGIN_STATUS_UNSPECIFIED = 0;
+  AGENT_LOGIN_STATUS_PENDING = 1;
+  AGENT_LOGIN_STATUS_DONE = 2;
+  AGENT_LOGIN_STATUS_ERROR = 3;
+}
+
+message AgentLoginPoll {
+  AgentLoginStatus status = 1;
+  optional string message = 2;
+  optional string url = 3;
+  optional uint32 callback_port = 4;
+}
+
+message ListHarnessesRequest {}
+
+message ListHarnessesResponse {
+  repeated HarnessDescriptor harnesses = 1;
+}
+
+message ListModelsRequest {
+  HarnessId harness = 1;
+  // Bypass the cached catalog.
+  bool force = 2;
+}
+
+message ListModelsResponse {
+  repeated Model models = 1;
+}
+
+message ListSkillsRequest {
+  HarnessId harness = 1;
+  optional string chat_id = 2;
+  optional string space_id = 3;
+  optional string path = 4;
+}
+
+message ListSkillsResponse {
+  repeated Skill skills = 1;
+  // True when the harness has no skill catalog (ndjson's `null`).
+  bool unavailable = 2;
+}
+
+message ListCommandsRequest {
+  HarnessId harness = 1;
+  optional string chat_id = 2;
+  optional string space_id = 3;
+  optional string path = 4;
+}
+
+message ListCommandsResponse {
+  repeated SlashCommand commands = 1;
+}
+
+message SetHarnessEnabledRequest {
+  HarnessId harness = 1;
+  bool enabled = 2;
+}
+
+message SetHarnessEnabledResponse {
+  repeated HarnessDescriptor harnesses = 1;
+}
+
+message InstallHarnessRequest {
+  HarnessId harness = 1;
+}
+
+message InstallHarnessResponse {
+  repeated HarnessDescriptor harnesses = 1;
+}
+
+message CancelInstallRequest {
+  HarnessId harness = 1;
+}
+
+message CancelInstallResponse {}
+
+message WatchHarnessUpdatesRequest {}
+
+message WatchHarnessUpdatesResponse {
+  repeated HarnessUpdateStatus updates = 1;
+}
+
+message CheckHarnessUpdatesRequest {
+  // Unset checks every harness.
+  optional HarnessId harness = 1;
+}
+
+message CheckHarnessUpdatesResponse {
+  repeated HarnessUpdateStatus updates = 1;
+}
+
+message ApplyHarnessUpdateRequest {
+  HarnessId harness = 1;
+}
+
+message ApplyHarnessUpdateResponse {
+  bool ok = 1;
+  string version = 2;
+}
+
+message CancelHarnessUpdateRequest {
+  HarnessId harness = 1;
+}
+
+message CancelHarnessUpdateResponse {
+  bool cancelled = 1;
+}
+
+message DismissHarnessUpdateRequest {
+  HarnessId harness = 1;
+  optional string version = 2;
+}
+
+message DismissHarnessUpdateResponse {
+  HarnessUpdateStatus status = 1;
+}
+
+message ListAgentAccountsRequest {
+  optional bool force_usage = 1;
+}
+
+message ListAgentAccountsResponse {
+  AgentAccountsSnapshot snapshot = 1;
+}
+
+message ActivateAgentAccountRequest {
+  HarnessId harness = 1;
+  string account_id = 2;
+}
+
+message ActivateAgentAccountResponse {
+  AgentAccountsSnapshot snapshot = 1;
+}
+
+message ForgetAgentAccountRequest {
+  HarnessId harness = 1;
+  string account_id = 2;
+}
+
+message ForgetAgentAccountResponse {
+  AgentAccountsSnapshot snapshot = 1;
+}
+
+message StartAgentLoginRequest {
+  HarnessId harness = 1;
+  optional string provider = 2;
+}
+
+message StartAgentLoginResponse {
+  AgentLoginStart login = 1;
+}
+
+message CompleteAgentLoginRequest {
+  string login_id = 1;
+  string code = 2;
+}
+
+message CompleteAgentLoginResponse {
+  AgentAccountsSnapshot snapshot = 1;
+}
+
+message PollAgentLoginRequest {
+  string login_id = 1;
+}
+
+message PollAgentLoginResponse {
+  AgentLoginPoll poll = 1;
+}
+
+message CancelAgentLoginRequest {
+  string login_id = 1;
+}
+
+message CancelAgentLoginResponse {
+  bool ok = 1;
+}

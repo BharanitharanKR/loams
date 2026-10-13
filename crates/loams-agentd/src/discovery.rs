@@ -47,6 +47,7 @@ mod tests {
             port: 50217,
             started_at_ms: 1,
             mode: DaemonMode::Child,
+            connect_port: Some(50218),
         }
     }
 

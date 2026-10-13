@@ -5,8 +5,15 @@
 // the right (D666). Below 960px the sidebar is a drawer. Components get props and
 // closures, never `ctx`.
 
-import type { FlagsService, SessionService } from '@loams/console-host';
-import { Slot, type SlotEntry, useSlot } from '@loams/slots';
+import {
+  type FlagsService,
+  MODE_HOME,
+  type Mode,
+  type ModeService,
+  modeOfPath,
+  type SessionService,
+} from '@loams/console-host';
+import { Slot, SlotBoundary, type SlotEntry, useSlot } from '@loams/slots';
 import {
   Avatar,
   Badge,
@@ -40,6 +47,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { iconFor } from './icons.js';
+import { ModeSwitcher, useMode, useModeShortcut } from './mode-switcher.js';
 import type { Crumb, HashRouter } from './router.js';
 
 export const DOCK_MIN = 320;
@@ -79,11 +87,34 @@ const LEGACY: Record<string, Pick<NavItem, 'group' | 'icon' | 'order'>> = {
   '/approvals': { group: 'Organisation', icon: 'approvals', order: 50 },
 };
 
+/** Which mode's nav to build: the current mode, and the modes each plugin declares. */
+export interface ModeFilter {
+  mode: Mode;
+  modesOf(pluginId: string): readonly Mode[];
+}
+
+/**
+ * Whether a slot entry shows in a mode (§53 §4.1): its `meta.mode` if it names one,
+ * else a page under `/studio` is Studio's, else its plugin's modes.
+ */
+export function inMode(
+  entry: Pick<SlotEntry, 'plugin' | 'meta'>,
+  filter: ModeFilter | undefined,
+): boolean {
+  if (!filter) return true;
+  if (entry.meta?.mode) return entry.meta.mode === filter.mode;
+  if (entry.meta?.href && modeOfPath(entry.meta.href) === 'studio') return filter.mode === 'studio';
+  return filter.modesOf(entry.plugin).includes(filter.mode);
+}
+
 /** The nav model from both slots, grouped in section order and sorted by `order`. */
 export function navSections(
-  sections: SlotEntry<'shell.nav.section'>[],
-  legacy: SlotEntry<'console.nav'>[],
+  allSections: SlotEntry<'shell.nav.section'>[],
+  allLegacy: SlotEntry<'console.nav'>[],
+  filter?: ModeFilter,
 ): [string, NavItem[]][] {
+  const sections = allSections.filter((e) => inMode(e, filter));
+  const legacy = allLegacy.filter((e) => inMode(e, filter));
   const items: NavItem[] = [];
   for (const e of sections) {
     items.push({
@@ -128,13 +159,25 @@ function useLocation(router: HashRouter) {
   return useSyncExternalStore(router.subscribe, () => router.current());
 }
 
-function Nav({ router }: { router: HashRouter }) {
+function useModeFilter(mode: ModeService | undefined): ModeFilter | undefined {
+  const current = useMode(mode);
+  return mode ? { mode: current, modesOf: (id) => mode.modesOf(id) } : undefined;
+}
+
+function Nav({ router, mode }: { router: HashRouter; mode?: ModeService }) {
   const sections = useSlot('shell.nav.section');
   const legacy = useSlot('console.nav');
   const location = useLocation(router);
+  const filter = useModeFilter(mode);
+  const model = navSections(sections, legacy, filter);
+  // Only the most specific match is current (`/studio/settings`, not also `/studio`).
+  const current = model
+    .flatMap(([, items]) => items)
+    .filter((i) => isActive(location.path, i.href))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.key;
   return (
-    <nav className="lc-nav" aria-label="Console">
-      {navSections(sections, legacy).map(([group, items]) => (
+    <nav className="lc-nav" aria-label={filter?.mode === 'studio' ? 'Studio' : 'Console'}>
+      {model.map(([group, items]) => (
         <div
           key={group}
           className="lc-nav-group"
@@ -148,7 +191,7 @@ function Nav({ router }: { router: HashRouter }) {
                 <li key={item.key}>
                   <a
                     href={`#${item.href}`}
-                    aria-current={isActive(location.path, item.href) ? 'page' : undefined}
+                    aria-current={item.key === current ? 'page' : undefined}
                   >
                     <Icon aria-hidden="true" size={16} strokeWidth={1.75} />
                     <span className="lc-nav-label">{item.label}</span>
@@ -189,16 +232,25 @@ function EnvironmentSwitcher({ session }: { session: SessionService }) {
 }
 
 /** The page's place: instance, section, page; the last crumb is the current page. */
-function Crumbs({ router, flags }: { router: HashRouter; flags?: FlagsService }) {
+function Crumbs({
+  router,
+  flags,
+  mode,
+}: {
+  router: HashRouter;
+  flags?: FlagsService;
+  mode?: ModeService;
+}) {
   const sections = useSlot('shell.nav.section');
   const legacy = useSlot('console.nav');
   const location = useLocation(router);
   const trail = useSyncExternalStore(router.subscribe, () => router.trail());
+  const filter = useModeFilter(mode);
   const title = location.pageId ? router.title() : undefined;
   if (trail && trail.length > 0) return <Trail crumbs={trail} />;
   let group: string | undefined;
   let home: { label: string; href: string } | undefined;
-  for (const [g, items] of navSections(sections, legacy)) {
+  for (const [g, items] of navSections(sections, legacy, filter)) {
     const hit = items
       .filter((i) => isActive(location.path, i.href))
       .sort((a, b) => b.href.length - a.href.length)[0];
@@ -208,11 +260,18 @@ function Crumbs({ router, flags }: { router: HashRouter; flags?: FlagsService })
     }
   }
   const crumbs: { label: string; href?: string }[] = [
-    { label: flags?.instanceName || 'Loams', href: '/' },
+    filter?.mode === 'studio'
+      ? { label: 'Studio', href: MODE_HOME.studio }
+      : { label: flags?.instanceName || 'Loams', href: '/' },
   ];
-  if (group) crumbs.push({ label: group });
-  if (home && home.href !== location.path) crumbs.push({ label: home.label, href: home.href });
-  crumbs.push({ label: title ?? home?.label ?? 'Not found' });
+  const root = crumbs[0] as { label: string; href: string };
+  // In Studio the root crumb is the mode's home, so its section and home page are not repeated.
+  if (group && group !== root.label) crumbs.push({ label: group });
+  if (home && home.href !== location.path && home.href !== root.href) {
+    crumbs.push({ label: home.label, href: home.href });
+  }
+  const last = title ?? home?.label ?? 'Not found';
+  if (location.path !== root.href || last !== root.label) crumbs.push({ label: last });
   return <Trail crumbs={crumbs} />;
 }
 
@@ -419,7 +478,39 @@ function useGate(router: HashRouter, session: SessionService) {
   return pending;
 }
 
-function Brand({ flags, onClose }: { flags?: FlagsService; onClose: () => void }) {
+/**
+ * The header's context controls (§53 §4.2): `shell.header.server` entries of the
+ * current mode. Console's are the environment's server switcher; Studio's are the
+ * project, branch and agentd host.
+ */
+function HeaderContext({ mode }: { mode?: ModeService }) {
+  const entries = useSlot('shell.header.server');
+  const filter = useModeFilter(mode);
+  return (
+    <>
+      {entries
+        .filter((e) => inMode(e, filter))
+        .map((entry) => {
+          const Entry = entry.component;
+          return (
+            <SlotBoundary key={entry.id} plugin={entry.plugin}>
+              <Entry />
+            </SlotBoundary>
+          );
+        })}
+    </>
+  );
+}
+
+function Brand({
+  flags,
+  home = '/',
+  onClose,
+}: {
+  flags?: FlagsService;
+  home?: string;
+  onClose: () => void;
+}) {
   const edition = flags?.features.desktop
     ? 'Desktop'
     : flags?.edition === 'cloud'
@@ -429,7 +520,7 @@ function Brand({ flags, onClose }: { flags?: FlagsService; onClose: () => void }
         : 'OSS';
   return (
     <div className="lc-brand">
-      <a href="#/" aria-label="Loams home" className="lc-brand-link">
+      <a href={`#${home}`} aria-label="Loams home" className="lc-brand-link">
         <Logo height={18} />
       </a>
       <Badge>{edition}</Badge>
@@ -455,12 +546,17 @@ export function Layout({
   router,
   session,
   flags,
+  mode,
 }: {
   router: HashRouter;
   session: SessionService;
   /** GetInstance's answer: the instance name, edition and version for the chrome. */
   flags?: FlagsService;
+  /** Console or Studio (§53 §4.2): filters the nav and the header, and drives the switcher. */
+  mode?: ModeService;
 }) {
+  const current = useMode(mode);
+  useModeShortcut(mode);
   const hasDock = useSlot('shell.dock.right').length > 0;
   const [dock, setDock] = useDock();
   const [dark, toggleTheme] = useTheme();
@@ -521,18 +617,18 @@ export function Layout({
   }
   return (
     <ToastProvider>
-      <div className="lc-shell">
+      <div className="lc-shell" data-mode={current}>
         {/* A plain container: the Console nav inside is the landmark; `complementary` is the agent dock. */}
         <div id="lc-side" className="lc-side" data-open={drawer || undefined}>
-          <Brand flags={flags} onClose={() => setDrawer(false)} />
+          <Brand flags={flags} home={MODE_HOME[current]} onClose={() => setDrawer(false)} />
           {/* The project switcher and the open project's pages, when a plugin serves them;
-              otherwise the session's environments. */}
+              otherwise, in Console, the session's environments. */}
           {hasContext ? (
             <Slot name="shell.nav.context" props={{}} />
           ) : (
-            <EnvironmentSwitcher session={session} />
+            current === 'console' && <EnvironmentSwitcher session={session} />
           )}
-          <Nav router={router} />
+          <Nav router={router} mode={mode} />
           <div className="lc-side-foot">
             <a href="https://loams.dev/docs" target="_blank" rel="noreferrer">
               <BookOpen size={16} aria-hidden="true" /> Documentation
@@ -560,10 +656,11 @@ export function Layout({
             >
               <MenuIcon size={18} aria-hidden="true" />
             </button>
-            <Crumbs router={router} flags={flags} />
+            <Crumbs router={router} flags={flags} mode={mode} />
             <div className="lc-header-tools">
+              {mode && <ModeSwitcher mode={mode} />}
               <div className="lc-header-start">
-                <Slot name="shell.header.server" props={{}} />
+                <HeaderContext mode={mode} />
               </div>
               <div className="lc-overlays">
                 <Slot name="shell.overlay" props={{}} />

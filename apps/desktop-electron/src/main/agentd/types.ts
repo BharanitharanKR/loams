@@ -57,6 +57,8 @@ export interface Discovery {
 	port: number;
 	startedAtMs: number;
 	mode: DaemonMode;
+	/** The `loams.agentd.v1` Connect listener's loopback port (SD1 Task 5); absent from an older daemon. */
+	connectPort?: number;
 }
 
 /** A session row as `ListSessions` returns it (the fork's surviving method). */
@@ -96,13 +98,29 @@ export class AgentdError extends Error {
 	}
 }
 
+/** `ListRepos`, `AddRepo`, `CloneRepo` (Studio's projects, §53 §5.2): a repository on the daemon's host. */
+export interface Repo {
+	path: string;
+	name: string;
+	defaultBranch: string | null;
+}
+
 /** The unary methods this client uses, with params and results (a subset of Task 9's table). */
 export interface UnaryMethods {
 	DaemonStatus: { params: Record<string, never>; result: DaemonStatus };
 	ListSessions: { params: Record<string, never>; result: SessionSummary[] };
-	AttachSession: { params: { sessionId: string }; result: { sessionId: string } };
-	Drain: { params: { reason: "stop" | "upgrade" | "quit"; timeoutMs: number }; result: null };
+	AttachSession: {
+		params: { sessionId: string };
+		result: { sessionId: string };
+	};
+	Drain: {
+		params: { reason: "stop" | "upgrade" | "quit"; timeoutMs: number };
+		result: null;
+	};
 	Shutdown: { params: Record<string, never>; result: null };
+	ListRepos: { params: Record<string, never>; result: Repo[] };
+	AddRepo: { params: { path: string }; result: Repo };
+	CloneRepo: { params: { url: string }; result: Repo };
 }
 export type UnaryMethod = keyof UnaryMethods;
 export type Params<M extends UnaryMethod> = UnaryMethods[M]["params"];

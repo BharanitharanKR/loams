@@ -21,7 +21,7 @@ gix-pack.workspace = true
 gix-zlib.workspace = true
 gix-validate.workspace = true
 # The protobuf format only: `record` would pull in loams-log (R0.4, T0-7).
-loams-cloudevents = { path = "../loams-cloudevents", version = "0.1.0-preview.1", default-features = false, features = ["protobuf"] }
+loams-cloudevents = { path = "../loams-cloudevents", version = "0.1.0-preview.2", default-features = false, features = ["protobuf"] }
 loams-common.workspace = true
 # Spill files for large blob uploads (§36 §5.3, §17).
 loams-fs.workspace = true

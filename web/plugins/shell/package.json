@@ -21,7 +21,8 @@
       "inject": [
         "slots",
         "session",
-        "flags"
+        "flags",
+        "mode"
       ],
       "provides": [
         "router"

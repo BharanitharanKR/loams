@@ -55,6 +55,7 @@
     "@loams/plugin-sql": "workspace:*",
     "@loams/plugin-stack-status": "workspace:*",
     "@loams/plugin-streams": "workspace:*",
+    "@loams/plugin-studio": "workspace:*",
     "@loams/plugin-wesql": "workspace:*",
     "@loams/proto": "workspace:*",
     "@loams/slots": "workspace:*",

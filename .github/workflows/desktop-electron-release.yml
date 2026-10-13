@@ -1,14 +1,27 @@
-name: Desktop (Electron) release
+name: Release desktop
 
 # Cuts a draft GitHub Release of Loams Desktop from a `desktop-vX.Y.Z` tag (plan AP1e Task 31;
 # D676 Linux, D677 Windows through SignPath and macOS unsigned). docs/release/desktop.md is the page a
 # maintainer reads: every secret and variable below, and how to cut a release.
 #
+# Two kinds of tag, one build:
+#   desktop-vX.Y.Z   (push) a draft "Loams Desktop X.Y.Z" release of its own, as before.
+#   vX.Y.Z(-pre)     (dispatched by release-github.yml once the product release exists, or by hand
+#                    with `--ref <tag> -f tag=<tag>`) the desktop files are attached to that product
+#                    release, stamped with its version (LOAMS_DESKTOP_VERSION), with their checksums
+#                    in DESKTOP-SHA256SUMS so they do not replace the release's own SHA256SUMS.
+#   dry_run: true    builds every platform and keeps the files as workflow artifacts; no release is
+#                    touched and the tag checks are skipped (for testing this workflow on a branch).
+#
 #   Linux    AppImage, deb, rpm, pacman for x64 and arm64. The rpm goes to SignPath (desktop-sign.yml);
 #            AppImage, deb, pacman and SHA256SUMS get detached GPG signatures (gpg-sign.sh).
 #   Windows  NSIS x64. The unpacked app is signed by SignPath BEFORE the installer is built from it,
 #            then the installer is signed too (signpath/artifact-configuration.desktop-windows.xml).
-#   macOS    dmg and zip for arm64 and x64, unsigned and not notarized; the notes carry the xattr step.
+#   macOS    dmg and zip for arm64 (macos-15) and x64 (macos-15-intel); either runner can be swapped
+#            with MACOS_ARM64_RUNNER / MACOS_X64_RUNNER, and a runner of the other architecture
+#            cross-compiles. Ad-hoc signed and not notarized unless the Apple secrets exist
+#            (MACOS_CERTIFICATE_P12_BASE64, MACOS_CERTIFICATE_PASSWORD; notarization also needs
+#            APPLE_API_KEY_P8, APPLE_API_KEY_ID, APPLE_API_ISSUER); the notes carry the xattr step.
 #
 # Signing secrets live in the protected `desktop-release` environment (docs/release/desktop.md): the
 # plan job, every SignPath call (desktop-sign.yml) and the release job run in it.
@@ -19,13 +32,23 @@ name: Desktop (Electron) release
 on:
   push:
     tags: ['desktop-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'desktop-vX.Y.Z, or a product vX.Y.Z(-pre) release to attach the desktop files to. Dispatch with --ref set to the same tag.'
+        required: true
+      dry_run:
+        description: 'Build and keep the files as workflow artifacts only; touch no release.'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
   actions: read
 
 concurrency:
-  group: desktop-release-${{ github.ref }}
+  group: desktop-release-${{ inputs.tag || github.ref }}${{ inputs.dry_run && '-dry-run' || '' }}
   cancel-in-progress: false
 
 env:
@@ -44,11 +67,16 @@ jobs:
   # branch. Then decide, once, what this run can sign: every later job reads these outputs, so the
   # file names, the signing calls and the release notes cannot disagree.
   plan:
-    name: plan
+    name: Plan
     environment: desktop-release
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      dry_run: ${{ steps.plan.outputs.dry_run }}
+      desktop_version: ${{ steps.plan.outputs.desktop_version }}
+      sign_mac: ${{ steps.plan.outputs.sign_mac }}
+      notarize_mac: ${{ steps.plan.outputs.notarize_mac }}
       version: ${{ steps.plan.outputs.version }}
       prerelease: ${{ steps.plan.outputs.prerelease }}
       sign_rpm: ${{ steps.plan.outputs.sign_rpm }}
@@ -66,9 +94,12 @@ jobs:
       - name: validate the tag and decide what is signed
         id: plan
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          DRY_RUN: ${{ inputs.dry_run == true }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           REQUIRE: ${{ vars.DESKTOP_REQUIRE_SIGNING }}
+          HAS_MAC_CERT: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 != '' && secrets.MACOS_CERTIFICATE_PASSWORD != '' }}
+          HAS_MAC_NOTARY: ${{ secrets.APPLE_API_KEY_P8 != '' && secrets.APPLE_API_KEY_ID != '' && secrets.APPLE_API_ISSUER != '' }}
           # Booleans only: the secret values are never loaded into this job's environment.
           HAS_GPG: ${{ secrets.LOAMS_GPG_PRIVATE_KEY != '' }}
           HAS_UPDATE_KEY: ${{ secrets.LOAMS_UPDATE_SIGNING_KEY != '' }}
@@ -83,14 +114,34 @@ jobs:
           UPDATE_PUBKEY: ${{ vars.LOAMS_UPDATE_PUBKEY }}
         run: |
           set -euo pipefail
-          if [[ ! "$TAG" =~ ^desktop-v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?)$ ]]; then
-            echo "::error::$TAG is not a desktop-vX.Y.Z(-pre) tag"; exit 1
+          if [[ "$TAG" =~ ^desktop-v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?)$ ]]; then
+            mode=desktop
+            version="${BASH_REMATCH[1]}"
+            desktop_version=""
+            pkg=$(node -p 'require("./apps/desktop-electron/package.json").version')
+            [ "$pkg" = "$version" ] || { echo "::error::$TAG, but apps/desktop-electron/package.json is $pkg"; exit 1; }
+          elif [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?)$ ]]; then
+            # A product release: the desktop build carries the product's version.
+            mode=product
+            version="${BASH_REMATCH[1]}"
+            desktop_version="$version"
+          else
+            echo "::error::$TAG is neither a desktop-vX.Y.Z(-pre) nor a vX.Y.Z(-pre) tag"; exit 1
           fi
-          version="${BASH_REMATCH[1]}"
-          pkg=$(node -p 'require("./apps/desktop-electron/package.json").version')
-          [ "$pkg" = "$version" ] || { echo "::error::$TAG, but apps/desktop-electron/package.json is $pkg"; exit 1; }
-          git merge-base --is-ancestor "$GITHUB_SHA" "origin/$DEFAULT_BRANCH" \
-            || { echo "::error::$TAG is not on $DEFAULT_BRANCH; refusing to release it"; exit 1; }
+          if [ "$DRY_RUN" = true ]; then
+            echo "::notice::dry run: building $GITHUB_SHA as $TAG ($mode); no release is touched"
+          else
+            tag_sha=$(git rev-parse --verify "refs/tags/$TAG^{commit}") \
+              || { echo "::error::$TAG is not a tag in this repository"; exit 1; }
+            [ "$tag_sha" = "$GITHUB_SHA" ] \
+              || { echo "::error::this run is at $GITHUB_SHA but $TAG is $tag_sha; dispatch with --ref $TAG"; exit 1; }
+            git merge-base --is-ancestor "$GITHUB_SHA" "origin/$DEFAULT_BRANCH" \
+              || { echo "::error::$TAG is not on $DEFAULT_BRANCH; refusing to release it"; exit 1; }
+          fi
+          sign_mac=false; [[ "$HAS_MAC_CERT" = true ]] && sign_mac=true
+          notarize_mac=false; [[ $sign_mac = true && "$HAS_MAC_NOTARY" = true ]] && notarize_mac=true
+          [ $sign_mac = true ] || echo "::warning::macOS is ad-hoc signed only (no MACOS_CERTIFICATE_P12_BASE64/MACOS_CERTIFICATE_PASSWORD): users clear the quarantine flag on first launch"
+          [ $sign_mac = false ] || [ $notarize_mac = true ] || echo "::warning::macOS is signed but NOT notarized (APPLE_API_KEY_P8, APPLE_API_KEY_ID, APPLE_API_ISSUER unset)"
 
           sp_common=true
           [[ "$HAS_SP_TOKEN" = true && -n "$SP_ORG" && -n "$SP_PROJECT" ]] || sp_common=false
@@ -117,6 +168,8 @@ jobs:
 
           unsigned() { [ "$1" = true ] && echo "" || echo "-unsigned"; }
           {
+            echo "mode=$mode"; echo "dry_run=$DRY_RUN"; echo "desktop_version=$desktop_version"
+            echo "sign_mac=$sign_mac"; echo "notarize_mac=$notarize_mac"
             echo "version=$version"
             echo "prerelease=$([[ "$version" == *-* ]] && echo true || echo false)"
             echo "sign_rpm=$sign_rpm"; echo "sign_win=$sign_win"; echo "gpg=$gpg"; echo "update_key=$update_key"
@@ -124,10 +177,10 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   linux:
-    name: linux (${{ matrix.arch }})
+    name: "Linux: package (${{ matrix.arch }})"
     needs: plan
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
+    timeout-minutes: 120
     strategy:
       fail-fast: true
       matrix:
@@ -137,6 +190,7 @@ jobs:
     env:
       LOAMS_SUFFIX_GPG: ${{ needs.plan.outputs.sfx_gpg }}
       LOAMS_SUFFIX_RPM: ${{ needs.plan.outputs.sfx_rpm }}
+      LOAMS_DESKTOP_VERSION: ${{ needs.plan.outputs.desktop_version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -182,7 +236,7 @@ jobs:
           overwrite: true
 
   sign-rpm:
-    name: sign rpm (${{ matrix.arch }})
+    name: "Linux: sign the rpm (${{ matrix.arch }})"
     needs: [plan, linux]
     if: needs.plan.outputs.sign_rpm == 'true'
     strategy:
@@ -195,10 +249,13 @@ jobs:
       require_signing: ${{ vars.DESKTOP_REQUIRE_SIGNING == 'true' }}
 
   windows-unpacked:
-    name: windows (unpacked app)
+    name: "Windows: package the unpacked app"
     needs: plan
     runs-on: windows-2025
-    timeout-minutes: 90
+    # A cold Windows engine build takes about an hour.
+    timeout-minutes: 150
+    env:
+      LOAMS_DESKTOP_VERSION: ${{ needs.plan.outputs.desktop_version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -236,7 +293,8 @@ jobs:
           exe=target/x86_64-pc-windows-msvc/release/loams.exe
           # smoke test: the binary starts and reports its version
           "$exe" --version
-          echo "LOAMS_BIN=$PWD/$exe" >> "$GITHUB_ENV"
+          # Node reads this path, so give it a Windows one (D:/a/...), not Git Bash's /d/a/...
+          echo "LOAMS_BIN=$(cygpath -m "$PWD/$exe")" >> "$GITHUB_ENV"
       - name: no Windows engine
         if: steps.engine.outcome != 'success'
         shell: bash
@@ -254,7 +312,7 @@ jobs:
           overwrite: true
 
   sign-win-unpacked:
-    name: sign Windows app
+    name: "Windows: sign the app"
     needs: [plan, windows-unpacked]
     if: needs.plan.outputs.sign_win == 'true'
     uses: ./.github/workflows/desktop-sign.yml
@@ -265,13 +323,15 @@ jobs:
 
   # The installer is built from the (signed) unpacked app, so it packages signed executables.
   windows-installer:
-    name: windows (NSIS installer)
+    name: "Windows: build the installer"
     needs: [plan, windows-unpacked, sign-win-unpacked]
     if: ${{ !cancelled() && needs.windows-unpacked.result == 'success' && (needs.sign-win-unpacked.result == 'success' || needs.sign-win-unpacked.result == 'skipped') }}
     runs-on: windows-2025
     timeout-minutes: 45
     outputs:
       unpacked_signed: ${{ steps.verify.outputs.signed }}
+    env:
+      LOAMS_DESKTOP_VERSION: ${{ needs.plan.outputs.desktop_version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -343,7 +403,7 @@ jobs:
           overwrite: true
 
   sign-win-installer:
-    name: sign Windows installer
+    name: "Windows: sign the installer"
     needs: [plan, windows-installer]
     if: needs.plan.outputs.sign_win == 'true' && needs.windows-installer.outputs.unpacked_signed == 'true'
     uses: ./.github/workflows/desktop-sign.yml
@@ -353,7 +413,7 @@ jobs:
       require_signing: ${{ vars.DESKTOP_REQUIRE_SIGNING == 'true' }}
 
   verify-win-installer:
-    name: verify the signed installer
+    name: "Windows: verify the installer"
     needs: [plan, sign-win-installer]
     if: needs.sign-win-installer.outputs.signed == 'true'
     runs-on: windows-2025
@@ -383,16 +443,24 @@ jobs:
           "signed=$($signed.ToString().ToLower())" >> $env:GITHUB_OUTPUT
 
   macos:
-    name: macos (${{ matrix.arch }})
+    name: "macOS: package (${{ matrix.arch }})"
     needs: plan
+    # The Apple signing secrets, when they exist, live with the others in this environment.
+    environment: desktop-release
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
+    # The Intel engine build alone takes 90+ minutes.
+    timeout-minutes: 150
     strategy:
       fail-fast: true
       matrix:
         include:
-          - { arch: arm64, runner: macos-15 }
-          - { arch: x64, runner: macos-15-intel }
+          # Runners as in desktop-electron.yml: repository variables, and a runner of the other
+          # architecture cross-compiles.
+          - { arch: arm64, runner: "${{ vars.MACOS_ARM64_RUNNER || 'macos-15' }}" }
+          - { arch: x64, runner: "${{ vars.MACOS_X64_RUNNER || 'macos-15-intel' }}" }
+    env:
+      LOAMS_DESKTOP_VERSION: ${{ needs.plan.outputs.desktop_version }}
+      LOAMS_DESKTOP_MAC_ARCH: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -409,11 +477,79 @@ jobs:
         with:
           key: desktop-release-macos-${{ matrix.arch }}
       - name: engine (live and durable)
-        run: cargo build --release -p loams --features live,durable,live-tikv,graph
-      # identity: null in electron-builder.config.cjs: no signing, no notarization (D677).
-      - name: package (unsigned)
+        run: |
+          set -euo pipefail
+          features=live,durable,live-tikv,graph
+          # A macOS build whose runner is the other architecture is a cross build (see the matrix).
+          if [ "$RUNNER_OS" = macOS ]; then
+            want=arm64; target=aarch64-apple-darwin
+            [ "$LOAMS_DESKTOP_MAC_ARCH" = x64 ] && { want=x86_64; target=x86_64-apple-darwin; }
+            [ "$(uname -m)" = "$want" ] || RUST_TARGET=$target
+            echo "RUST_TARGET=${RUST_TARGET:-}" >> "$GITHUB_ENV"
+          fi
+          if [ -n "${RUST_TARGET:-}" ]; then
+            rustup target add "$RUST_TARGET"
+            cargo build --release -p loams --features "$features" --target "$RUST_TARGET"
+            echo "LOAMS_BIN=$PWD/target/$RUST_TARGET/release/loams" >> "$GITHUB_ENV"
+          else
+            cargo build --release -p loams --features "$features"
+          fi
+      - name: engine smoke test
+        run: |
+          set -euo pipefail
+          bin="${LOAMS_BIN:-target/release/loams}"
+          file "$bin"
+          if [ "${RUST_TARGET:-}" = x86_64-apple-darwin ]; then
+            # Cross-built on Apple Silicon: run it under Rosetta, which the image may lack.
+            arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
+            arch -x86_64 "$bin" --version
+          elif [ "${RUST_TARGET:-}" = aarch64-apple-darwin ]; then
+            # Cross-built on Intel, which cannot run it: check the architecture only.
+            echo "::notice::arm64 engine cross-built on an Intel runner; not executed here"
+            [ "$(lipo -archs "$bin")" = arm64 ]
+          else
+            "$bin" --version
+          fi
+      # electron-builder.config.cjs: with CSC_LINK it signs with the Developer ID under the hardened
+      # runtime and notarizes when the APPLE_API_* variables are set; without it, an ad-hoc signature.
+      # The .p8 key is written to a file because notarytool takes a path.
+      - name: Apple notary key
+        if: needs.plan.outputs.notarize_mac == 'true'
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/apple-api-key.p8"
+          printf '%s\n' "$APPLE_API_KEY_P8" > "$key"
+          chmod 600 "$key"
+          echo "APPLE_API_KEY=$key" >> "$GITHUB_ENV"
+      - name: package (${{ needs.plan.outputs.sign_mac == 'true' && 'Developer ID' || 'ad-hoc signed' }})
+        env:
+          CSC_LINK: ${{ needs.plan.outputs.sign_mac == 'true' && secrets.MACOS_CERTIFICATE_P12_BASE64 || '' }}
+          CSC_KEY_PASSWORD: ${{ needs.plan.outputs.sign_mac == 'true' && secrets.MACOS_CERTIFICATE_PASSWORD || '' }}
+          APPLE_API_KEY_ID: ${{ needs.plan.outputs.notarize_mac == 'true' && secrets.APPLE_API_KEY_ID || '' }}
+          APPLE_API_ISSUER: ${{ needs.plan.outputs.notarize_mac == 'true' && secrets.APPLE_API_ISSUER || '' }}
         run: pnpm nx run loams-desktop-electron:package-macos --outputStyle=static
-      # Both runners write latest-mac.yml; keep the arm64 one under that name (the updater's version
+      - name: verify the signature
+        env:
+          SIGN_MAC: ${{ needs.plan.outputs.sign_mac }}
+          NOTARIZE_MAC: ${{ needs.plan.outputs.notarize_mac }}
+        run: |
+          set -euo pipefail
+          rm -f "$RUNNER_TEMP/apple-api-key.p8"
+          apps=(apps/desktop-electron/dist/mac*/*.app); app="${apps[0]}"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv "$app" 2>&1 | grep -E 'Signature|Identifier|Authority|TeamIdentifier' || true
+          lipo -archs "$app/Contents/MacOS/Loams Desktop"
+          lipo -archs "$app/Contents/Resources/bin/loams"
+          if [ "$SIGN_MAC" = true ]; then
+            codesign -dv "$app" 2>&1 | grep -q '^Authority=Developer ID Application' \
+              || { echo "::error::a Developer ID certificate was configured but the app is not signed with it"; exit 1; }
+          fi
+          if [ "$NOTARIZE_MAC" = true ]; then
+            xcrun stapler validate "$app"
+          fi
+      # Both builds write latest-mac.yml; keep the arm64 one under that name (the updater's version
       # probe) and the x64 one beside it.
       - name: keep the two manifests apart
         if: matrix.arch == 'x64'
@@ -432,10 +568,10 @@ jobs:
           overwrite: true
 
   release:
-    name: draft release
+    name: "${{ needs.plan.outputs.mode == 'product' && 'Release: attach to the product release' || 'Release: draft' }}"
     environment: desktop-release
     needs: [plan, linux, sign-rpm, windows-installer, sign-win-installer, verify-win-installer, macos]
-    if: ${{ !cancelled() && !failure() }}
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.dry_run != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -449,6 +585,9 @@ jobs:
       PLAN_UPDATE_KEY: ${{ needs.plan.outputs.update_key }}
       VERSION: ${{ needs.plan.outputs.version }}
       PRERELEASE: ${{ needs.plan.outputs.prerelease }}
+      MODE: ${{ needs.plan.outputs.mode }}
+      PLAN_SIGN_MAC: ${{ needs.plan.outputs.sign_mac }}
+      PLAN_NOTARIZE_MAC: ${{ needs.plan.outputs.notarize_mac }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -554,19 +693,25 @@ jobs:
             echo "|---|---|---|"
             echo "| Linux x64, arm64 | AppImage, deb, rpm, pacman | rpm: $(yn "$PLAN_SIGN_RPM" 'SignPath (GPG)' '**unsigned**'); AppImage, deb, pacman: $(yn "$PLAN_GPG" 'detached GPG .sig files' '**unsigned**') |"
             echo "| Windows x64 | NSIS installer | $(yn "$PLAN_SIGN_WIN" 'Authenticode, signed through SignPath' '**unsigned** (expect a SmartScreen warning)') |"
-            echo "| macOS arm64, x64 | dmg, zip | **unsigned and not notarized** |"
+            echo "| macOS arm64, x64 | dmg, zip | $(yn "$PLAN_SIGN_MAC" "Developer ID$(yn "$PLAN_NOTARIZE_MAC" ', notarized' ', **not notarized**')" '**ad-hoc signed only, not notarized**') |"
             echo
             echo "Verify downloads with \`SHA256SUMS\`$(yn "$PLAN_GPG" ' and SHA256SUMS.asc (detached GPG signature)' '; this release has no GPG signature')."
             echo
             echo "### macOS: first launch"
             echo
-            echo "The app is not signed or notarized, so macOS quarantines the download. After copying it to /Applications, run:"
+            echo "Unless the table above says notarized, macOS quarantines the download (the app carries an ad-hoc signature, which Apple Silicon requires, but no Developer ID). After copying it to /Applications, run:"
             echo
             echo '```sh'
             echo 'xattr -dr com.apple.quarantine "/Applications/Loams Desktop.app"'
             echo '```'
             echo
             echo "or right-click the app, choose Open, and confirm. macOS does not self-update: the app offers \"Download v...\" when a newer release exists."
+            if [ "$PLAN_SIGN_WIN" != true ]; then
+              echo
+              echo "### Windows: first launch"
+              echo
+              echo "The installer is unsigned, so SmartScreen shows *Windows protected your PC*: choose **More info**, then **Run anyway**. That is an unknown-publisher warning, not a malware detection."
+            fi
             echo
             echo "### Updates"
             echo
@@ -574,9 +719,44 @@ jobs:
           } > "$RUNNER_TEMP/notes.md"
           cat "$RUNNER_TEMP/notes.md"
 
+      # A product release (vX.Y.Z) already has its own SHA256SUMS (release-github.yml) and update
+      # manifests are only served from desktop-v releases, so rename the one and drop the others.
+      - name: product release layout
+        if: env.MODE == 'product'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/release"
+          rm -f latest*.yml
+          mv SHA256SUMS DESKTOP-SHA256SUMS
+          [ ! -e SHA256SUMS.asc ] || mv SHA256SUMS.asc DESKTOP-SHA256SUMS.asc
+          ls -l
+
+      # The product release is created by release-github.yml; this only adds the desktop files and a
+      # section of notes, once. A published product release is updated in place (it is a preview).
+      - name: attach to the product release
+        if: env.MODE == 'product'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null \
+            || { echo "::error::$TAG has no release yet; release-github.yml creates it"; exit 1; }
+          gh release upload "$TAG" "$RUNNER_TEMP"/release/* --clobber --repo "$GITHUB_REPOSITORY"
+          marker="## Loams Desktop"
+          body=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)
+          case "$body" in
+            *"$marker"*) echo "the release notes already have the desktop section" ;;
+            *)
+              { printf '%s\n\n%s\n\n' "$body" "$marker"; sed -e '/^### Updates/,$d' -e 's/^Verify downloads with `SHA256SUMS`/Verify the desktop downloads with `DESKTOP-SHA256SUMS`/' -e 's/SHA256SUMS\.asc/DESKTOP-SHA256SUMS.asc/' -e 's/^### /#### /' "$RUNNER_TEMP/notes.md"; } > "$RUNNER_TEMP/body.md"
+              gh release edit "$TAG" --notes-file "$RUNNER_TEMP/body.md" --repo "$GITHUB_REPOSITORY"
+              ;;
+          esac
+
       # Idempotent: a re-run for the same tag reuses its draft (files replaced, notes refreshed). A tag
       # whose release is already published is refused: published assets are not rewritten.
       - name: create or update the draft release
+        if: env.MODE == 'desktop'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}

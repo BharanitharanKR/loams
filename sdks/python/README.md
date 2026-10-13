@@ -1,11 +1,15 @@
-![Loams — Your data. Your bucket.](../../docs/assets/loams-banner.svg)
+![Loams — Your data. Your bucket.](https://raw.githubusercontent.com/ostrium-labs/loams/dev/docs/assets/loams-banner.svg)
 
 # Loams SDK for Python
+
+> **Preview.** `0.1.0a*` releases track the Loams preview server and may change
+> between previews. pip skips prereleases unless asked: `pip install --pre loams`,
+> or pin the exact version (`loams==0.1.0a2`).
 
 One `Loams` object over one Loams instance, speaking the unified Connect API.
 The module surface is generated from `proto/` by `scripts/sdk/gen.sh python`;
 the runtime below it is hand-written and obeys the contract in
-[`docs/sdk/runtime-contract.md`](../../docs/sdk/runtime-contract.md).
+[`docs/sdk/runtime-contract.md`](https://github.com/ostrium-labs/loams/blob/dev/docs/sdk/runtime-contract.md).
 
 ## Install
 

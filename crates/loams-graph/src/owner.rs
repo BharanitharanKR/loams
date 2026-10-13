@@ -153,6 +153,17 @@ pub fn rendezvous(graph: GraphId, nodes: &[GraphNode]) -> Option<&GraphNode> {
         .max_by_key(|node| (score(graph, node.node_id), std::cmp::Reverse(node.node_id)))
 }
 
+/// Every node of `nodes` in `graph`'s rendezvous order: the [`rendezvous`] choice first. The
+/// owner's place and the followers' (GR1 Task 15).
+#[must_use]
+pub fn ranked(graph: GraphId, nodes: &[GraphNode]) -> Vec<&GraphNode> {
+    let mut ranked: Vec<&GraphNode> = nodes.iter().collect();
+    ranked.sort_by_key(|node| {
+        std::cmp::Reverse((score(graph, node.node_id), std::cmp::Reverse(node.node_id)))
+    });
+    ranked
+}
+
 /// FNV-1a over the graph id and the node id, then a SplitMix64 finaliser so that close ids
 /// spread.
 fn score(graph: GraphId, node_id: u64) -> u64 {
@@ -343,6 +354,27 @@ impl Ownership {
         self.membership
             .graph_nodes()
             .iter()
+            .any(|node| node.node_id == me.node_id)
+    }
+
+    /// Whether this node runs one of `graph`'s `replicas` followers (GR1 Task 15): it is among
+    /// the first `replicas + 1` graph nodes of the graph's rendezvous order (the owner's place
+    /// and the followers'), and does not hold the graph's lease. No graph has a follower on a
+    /// node without the `graph` role, nor any when `replicas` is 0.
+    #[must_use]
+    pub fn follows(&self, graph: GraphId, replicas: u32) -> bool {
+        if replicas == 0 || self.held(graph).is_some() {
+            return false;
+        }
+        let me = self.me();
+        let nodes = self.membership.graph_nodes();
+        ranked(graph, &nodes)
+            .into_iter()
+            .take(
+                usize::try_from(replicas)
+                    .unwrap_or(usize::MAX)
+                    .saturating_add(1),
+            )
             .any(|node| node.node_id == me.node_id)
     }
 
@@ -710,6 +742,36 @@ mod tests {
             "v1;1;nope;a",
         ] {
             assert_eq!(GraphNode::from_lease_owner(bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn ranked_starts_with_the_rendezvous_choice() {
+        let nodes: Vec<GraphNode> = (1..=5)
+            .map(|node_id| GraphNode {
+                node_id,
+                incarnation: Ulid::generate(),
+                addr: format!("n{node_id}"),
+            })
+            .collect();
+        for _ in 0..64 {
+            let graph = GraphId::new();
+            let order = ranked(graph, &nodes);
+            assert_eq!(order.len(), nodes.len());
+            assert_eq!(
+                order.first().map(|n| n.node_id),
+                rendezvous(graph, &nodes).map(|n| n.node_id)
+            );
+            // The order is the score's: dropping the first node promotes the second.
+            let rest: Vec<GraphNode> = nodes
+                .iter()
+                .filter(|n| n.node_id != order[0].node_id)
+                .cloned()
+                .collect();
+            assert_eq!(
+                rendezvous(graph, &rest).map(|n| n.node_id),
+                Some(order[1].node_id)
+            );
         }
     }
 

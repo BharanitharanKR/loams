@@ -72,3 +72,7 @@ breaking:
     # `loams.repos.v1` (Loams Git, GT1 Task 12) is `unstable: true` until GT1
     # GA, which removes this line and the option.
     - proto/loams/repos
+    # `loams.agentd.v1` (Loams Studio, SD1 Task 4, design §53 §6.1) is
+    # `unstable: true` until SD1 Task 32, which removes this line; until then
+    # the daemon and its clients ship together.
+    - proto/loams/agentd

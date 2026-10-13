@@ -1,0 +1,119 @@
+# The loams-connectors chart (CN2 Task 26). Every image is pinned by digest:
+# the chart refuses to render without one (values.schema.json).
+
+image:
+  # `loams-fabric`, whose `flow` subcommand runs native connectors and
+  # renders the fallback pods (FL1 builds the binary; R26.1).
+  flow:
+    repository: ghcr.io/ostrium-labs/loams-fabric
+    digest: ""
+
+flow:
+  # The leader scales the Deployment between these bounds from the
+  # instances' memory budgets and count (Task 27 sets the budgets). An
+  # upgrade keeps the current replica count.
+  replicas:
+    min: 2
+    max: 8
+  # What one flow pod gives native connectors.
+  podBudget:
+    memoryBytes: 2147483648
+    maxInstances: 64
+  metricsPort: 9464
+  uid: 10001
+  resources:
+    requests:
+      cpu: 500m
+      memory: 3Gi
+    limits:
+      memory: 3Gi
+  # Native tasks stop gracefully: checkpoints are flushed and leases released.
+  terminationGracePeriodSeconds: 60
+  pdb:
+    maxUnavailable: 1
+
+# The Kubernetes namespace of each Loams namespace; `{ns}` is its id. The
+# same template KubeSecretStore reads instance secrets with (R25.5).
+namespaceTemplate: "loams-{ns}"
+# The Loams namespaces this fleet serves. Their Kubernetes namespaces must
+# exist; the chart puts a Role, a RoleBinding, the fallback service account
+# and the fallback pods' default NetworkPolicy in each.
+servedNamespaces: []
+
+# The cluster's own networks, denied to every instance unless a namespace
+# admin allowlists them (R25.3). Kubernetes has no portable API for the pod
+# and Service CIDRs, so they are given here.
+cluster:
+  podCidrs: []
+  serviceCidrs: []
+  # The Loams control plane's Service addresses and names.
+  controlPlane:
+    cidrs: []
+    hosts: []
+
+# The Fabric pods fallback pods send to and read from (`ingest`, Iggy).
+# An empty namespace means the release namespace.
+fabric:
+  namespace: ""
+  podLabels:
+    app.kubernetes.io/name: loams-fabric
+  ports: [8080, 8090]
+
+# The fallback runtimes (OR-4). Their pods are rendered by `flow`
+# (KubeRuntime), not by this chart; these values reach it through fleet.yaml.
+fallback:
+  # Bound to nothing, and its token is never mounted. Empty: <fullname>-fallback.
+  serviceAccount: ""
+  secretMountRoot: /var/run/loams/secrets
+  camel:
+    image:
+      repository: ghcr.io/ostrium-labs/loams-connect
+      digest: ""
+    uid: 1001
+    metricsPort: 9876
+    metricsPath: /observe/metrics
+    resources:
+      cpuRequest: 250m
+      memoryRequest: 512Mi
+      memoryLimit: 1Gi
+  debezium:
+    image:
+      repository: quay.io/debezium/server
+      digest: ""
+    uid: 185
+    metricsPort: 8080
+    metricsPath: /q/metrics
+    resources:
+      cpuRequest: 250m
+      memoryRequest: 768Mi
+      memoryLimit: 1536Mi
+    # Each CDC instance's offsets and schema history (Q350).
+    storage:
+      size: 10Gi
+      storageClass: ""
+  iggy:
+    image:
+      repository: ghcr.io/ostrium-labs/iggy-connectors
+      digest: ""
+    uid: 10001
+    metricsPort: 8081
+    metricsPath: /metrics
+    resources:
+      cpuRequest: 100m
+      memoryRequest: 128Mi
+      memoryLimit: 512Mi
+
+networkPolicy:
+  enabled: true
+
+# The Prometheus Operator scrape configuration (R24.1). The alert rules and
+# the dashboard are deploy/observability/connectors/ (Task 24).
+metrics:
+  # The namespace Prometheus scrapes from; only it may reach the metrics ports.
+  monitoringNamespace: monitoring
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+  podMonitor:
+    enabled: true
+    interval: 30s

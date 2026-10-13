@@ -16,6 +16,15 @@ export class GuardError extends Error {
   override name = 'GuardError';
 }
 
+/**
+ * The agentd injection rule (§53 §8.3, D918; SD1 Task 15): `rpc.agentd.*` and the
+ * desktop bridge reach agents, git and files on the person's machine, so only a
+ * core or first-party plugin may inject them. Returns the offending services.
+ */
+export function injectsAgentd(inject: readonly string[]): string[] {
+  return inject.filter((s) => s === 'desktop' || s.startsWith('rpc.agentd.'));
+}
+
 export function guard(ctx: Context, inject: readonly string[], pluginId: string): Context {
   const allowed = new Set(inject);
   return new Proxy(ctx, {

@@ -52,7 +52,8 @@ pub const MAIN_PUBLIC_PATHS: &[&str] = &[
 const ALLOW_METHODS: &str = "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS";
 const ALLOW_HEADERS: &str = "authorization, content-type, accept, connect-protocol-version, \
      connect-timeout-ms, connect-content-encoding, connect-accept-encoding, grpc-timeout, \
-     x-grpc-web, x-user-agent, loams-consistency-token, loams-hot, idempotency-key";
+     x-grpc-web, x-user-agent, loams-consistency-token, loams-hot, idempotency-key, \
+     loam-session-id";
 const EXPOSE_HEADERS: &str = "grpc-status, grpc-message, grpc-status-details-bin, \
      loams-consistency-token, loams-request-id, loams-auth-reason, www-authenticate, \
      retry-after";

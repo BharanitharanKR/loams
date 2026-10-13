@@ -401,7 +401,7 @@ mod tests {
         assert!(parse_image("17=ghcr.io/x/compute:latest").is_err());
         assert!(
             parse_image(&format!(
-                "17=ghcr.io/ostrium-labs/neon-archive/compute-node-v17@{digest}"
+                "17=ghcr.io/example/neon-archive/compute-node-v17@{digest}"
             ))
             .is_err()
         );

@@ -1,0 +1,316 @@
+//! Every ndjson fixture (`crates/loams-agentd-proto/fixtures`) survives the
+//! trip through `loams.agentd.v1`: JSON → Rust type → proto message → the
+//! proto's binary encoding → proto message → Rust type → the same JSON.
+//!
+//! This is what Task 6's parity suite leans on: if the mapping keeps every
+//! fixture, a value the engine answers reaches a Connect client unchanged.
+//! A fixture of a type with no mapping must be listed in `NOT_MAPPED` with
+//! its reason, so a new wire type cannot slip past.
+#![allow(clippy::unwrap_used)]
+
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+
+use buffa::Message;
+use loams_agentd_connect::map::Wire;
+use loams_agentd_proto as rs;
+use loams_agentd_proto::invocation as rs_invocation;
+use loams_agentd_proto::transcript as rs_transcript;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use serde_json::Value;
+
+type Roundtrip = fn(&Value) -> Value;
+
+/// JSON → `T` → proto → bytes → proto → `T` → JSON.
+fn message<T>(json: &Value) -> Value
+where
+    T: Wire + Serialize + DeserializeOwned,
+    T::Pb: Message,
+{
+    let value: T = serde_json::from_value(json.clone()).unwrap();
+    let bytes = value.to_pb().encode_to_vec();
+    let decoded = T::Pb::decode_from_slice(&bytes).unwrap();
+    serde_json::to_value(T::from_pb(decoded).unwrap()).unwrap()
+}
+
+/// A list newtype's items, each as [`message`].
+fn list<T>(json: &Value) -> Value
+where
+    T: Wire + Serialize + DeserializeOwned,
+    T::Pb: Message,
+{
+    Value::Array(json.as_array().unwrap().iter().map(message::<T>).collect())
+}
+
+macro_rules! table {
+    ($($name:literal => $f:expr,)*) => {
+        fn mapped() -> BTreeMap<&'static str, Roundtrip> {
+            let mut out: BTreeMap<&'static str, Roundtrip> = BTreeMap::new();
+            $(out.insert($name, $f);)*
+            out
+        }
+    };
+}
+
+table! {
+    "AddRepoParams" => |v| v.clone(),
+    "AgentAccountsSnapshot" => message::<rs::AgentAccountsSnapshot>,
+    "AgentLoginPoll" => message::<rs::AgentLoginPoll>,
+    "AgentLoginStart" => message::<rs::AgentLoginStart>,
+    "AttachmentChunk" => message::<rs::AttachmentChunk>,
+    "BeginQueueEditOutcome" => message::<rs::BeginQueueEditOutcome>,
+    "BeginQueuedMessageEditParams" => message::<rs::BeginQueuedMessageEditParams>,
+    "Chat" => message::<rs::Chat>,
+    "ChatList" => list::<rs::Chat>,
+    "CheckoutChangeRequestStatus" => message::<rs::CheckoutChangeRequestStatus>,
+    "CheckoutDiff" => message::<rs::CheckoutDiff>,
+    "CheckoutDiffList" => list::<rs::CheckoutDiff>,
+    "CheckoutFileDiffText" => message::<rs::CheckoutFileDiffText>,
+    "CompleteAgentLoginParams" => message::<rs::CompleteAgentLoginParams>,
+    "CreateWorktreeOutcome" => message::<rs::CreateWorktreeOutcome>,
+    "CreateWorktreeParams" => message::<rs::CreateWorktreeParams>,
+    "DeleteWorkspaceEntryRequest" => message::<rs::DeleteWorkspaceEntryRequest>,
+    "DeleteWorktreeParams" => message::<rs::DeleteWorktreeParams>,
+    "DismissHarnessUpdateParams" => message::<rs::DismissHarnessUpdateParams>,
+    "DriveListing" => |v| {
+        let listing: rs::DriveListing = serde_json::from_value(v.clone()).unwrap();
+        serde_json::json!({ "drives": list::<rs::DriveEntry>(&serde_json::to_value(listing.drives).unwrap()) })
+    },
+    "FileSearchMatchList" => list::<rs::FileSearchMatch>,
+    "FinishQueueEditOutcome" => message::<rs::FinishQueueEditOutcome>,
+    "FinishQueuedMessageEditParams" => message::<rs::FinishQueuedMessageEditParams>,
+    "FolderListing" => message::<rs::FolderListing>,
+    "ForkSideChatParams" => message::<rs::ForkSideChatParams>,
+    "GitHistoryPage" => message::<rs::GitHistoryPage>,
+    "HarnessCatalog" => list::<rs::HarnessDescriptor>,
+    "HarnessUpdateList" => list::<rs::HarnessUpdateStatus>,
+    "HarnessUpdateParams" => message::<rs::HarnessUpdateParams>,
+    "HarnessUpdateStatus" => message::<rs::HarnessUpdateStatus>,
+    "ListAgentAccountsParams" => message::<rs::ListAgentAccountsParams>,
+    "ListFoldersParams" => message::<rs::ListFoldersParams>,
+    "ListModelsParams" => message::<rs::ListModelsParams>,
+    "ListWorkspaceDirectoryRequest" => message::<rs::ListWorkspaceDirectoryRequest>,
+    "MessagePart" => message::<rs::MessagePart>,
+    "ModelList" => list::<rs::Model>,
+    "MoveQueuedMessageParams" => message::<rs::MoveQueuedMessageParams>,
+    "MoveWorkspaceEntryRequest" => message::<rs::MoveWorkspaceEntryRequest>,
+    "PreviewSnapshot" => message::<rs::PreviewSnapshot>,
+    "ProjectActionRun" => message::<rs::ProjectActionRun>,
+    "ProjectActionSetup" => message::<rs::ProjectActionSetup>,
+    "ProjectActionsSnapshot" => message::<rs::ProjectActionsSnapshot>,
+    "QueueMessageParams" => message::<rs::QueueMessageParams>,
+    "QueueSnapshot" => |v| {
+        let snapshot: rs::QueueSnapshot = serde_json::from_value(v.clone()).unwrap();
+        serde_json::json!({ "items": list::<rs::QueuedMessage>(&serde_json::to_value(snapshot.items).unwrap()) })
+    },
+    "ReadWorkspaceFileRequest" => message::<rs::ReadWorkspaceFileRequest>,
+    "ReadWorkspaceImageRequest" => message::<rs::ReadWorkspaceImageRequest>,
+    "RenewQueueEditOutcome" => message::<rs::RenewQueueEditOutcome>,
+    "RenewQueuedMessageEditParams" => message::<rs::RenewQueuedMessageEditParams>,
+    "Repo" => message::<rs::Repo>,
+    "RepoList" => list::<rs::Repo>,
+    "RepoRefList" => list::<rs::RepoRef>,
+    "SearchFilesParams" => message::<rs::SearchFilesParams>,
+    "SearchWorkspaceFilesRequest" => message::<rs::SearchWorkspaceFilesRequest>,
+    "SessionList" => list::<rs::Session>,
+    "SetHarnessEnabledParams" => message::<rs::SetHarnessEnabledParams>,
+    "SidebarPreferencesState" => message::<rs::SidebarPreferencesState>,
+    "SkillList" => |v| match v {
+        Value::Null => Value::Null,
+        items => list::<rs_invocation::Skill>(items),
+    },
+    "SlashCommandList" => list::<rs::SlashCommand>,
+    "SpaceList" => list::<rs::Space>,
+    "StartAgentLoginParams" => message::<rs::StartAgentLoginParams>,
+    "SwitchRefParams" => message::<rs::SwitchRefParams>,
+    "TerminalEvent" => message::<rs::TerminalEvent>,
+    "TerminalSession" => message::<rs::TerminalSession>,
+    "TitleSettings" => message::<rs::TitleSettings>,
+    "ToolCall" => message::<rs::ToolCall>,
+    "ToolOutputChunk" => message::<rs::ToolOutputChunk>,
+    "TranscriptUpdate" => message::<rs_transcript::TranscriptUpdate>,
+    "UpdateQueuedMessageParams" => message::<rs::UpdateQueuedMessageParams>,
+    "WatchCheckoutChangeRequestParams" => message::<rs::WatchCheckoutChangeRequestParams>,
+    "WatchDocMessagesParams" => message::<rs::WatchDocMessagesParams>,
+    "WatchWorkspaceFilesRequest" => message::<rs::WatchWorkspaceFilesRequest>,
+    "WorkspaceDirectoryPage" => message::<rs::WorkspaceDirectoryPage>,
+    "WorkspaceFileChanges" => message::<rs::WorkspaceFileChanges>,
+    "WorkspaceFileSearchMatchList" => list::<rs::WorkspaceFileSearchMatch>,
+    "WorkspaceFileText" => message::<rs::WorkspaceFileText>,
+    "WorkspaceGitStatusFrame" => |v| {
+        let frame: rs::WorkspaceGitStatusFrame = serde_json::from_value(v.clone()).unwrap();
+        let status = frame.status.map(|status| message::<rs::CheckoutGitStatus>(&serde_json::to_value(status).unwrap()));
+        serde_json::json!({ "status": status })
+    },
+    "WorkspaceImageChunk" => message::<rs::WorkspaceImageChunk>,
+    "WorkspaceMutationOutcome" => message::<rs::WorkspaceMutationOutcome>,
+    "WriteWorkspaceFileOutcome" => message::<rs::WriteWorkspaceFileOutcome>,
+    "WriteWorkspaceFileRequest" => message::<rs::WriteWorkspaceFileRequest>,
+}
+
+/// Fixtures whose type the Connect surface maps field by field in its
+/// handler (a params struct several RPCs share, or a one-field reply), or does
+/// not carry at all, with the reason.
+const NOT_MAPPED: &[(&str, &str)] = &[
+    (
+        "AgentAccountParams",
+        "two string/enum fields, mapped in the handler",
+    ),
+    (
+        "AgentEvent",
+        "a harness event; the transcript carries its result, not the event",
+    ),
+    (
+        "ApplyHarnessUpdateReply",
+        "two scalars, mapped in the handler",
+    ),
+    ("BranchList", "repeated string"),
+    ("CancelledReply", "one bool"),
+    ("ChangedReply", "one bool"),
+    ("ChatIdParams", "one string"),
+    ("CloneRepoParams", "one string"),
+    ("CreateRepoParams", "one string"),
+    ("DeleteProjectActionParams", "two strings"),
+    ("DiscardWorkingTreeParams", "three strings"),
+    ("DiscardWorkingTreeReply", "two scalars"),
+    ("Empty", "no fields"),
+    (
+        "EngineInfo",
+        "joined with Hello's facts into Host by GetHost",
+    ),
+    (
+        "EngineReadyReply",
+        "EngineReady is not on the Connect surface",
+    ),
+    ("FetchToolBlobParams", "three scalars"),
+    ("GetCheckoutDiffParams", "five strings"),
+    ("GetCheckoutFileDiffTextRequest", "eight strings"),
+    ("GitAvatars", "map<string, string>"),
+    (
+        "HarnessCatalogParams",
+        "shared by ListSkills and ListCommands",
+    ),
+    ("HarnessParams", "one enum, shared by five RPCs"),
+    ("Hello", "the ndjson handshake"),
+    (
+        "HelloReply",
+        "the ndjson handshake; GetHost reports its facts",
+    ),
+    ("IdReply", "one string"),
+    (
+        "ListGitHistoryParams",
+        "its limit default is applied in the handler",
+    ),
+    ("ListProjectActionsParams", "one string"),
+    ("LocalDeviceReply", "GetHost's device id"),
+    ("LoginIdParams", "one string, shared by two RPCs"),
+    (
+        "MutateParams",
+        "one Connect RPC per op, mapped in the handler",
+    ),
+    ("MutateReply", "ok, and ChangeSidebarPin's preferences"),
+    ("OkReply", "one bool"),
+    (
+        "OpenTerminalParams",
+        "four scalars, range-checked in the handler",
+    ),
+    ("QueueCommandParams", "one Connect RPC per command kind"),
+    ("QueueCommandReply", "one string"),
+    ("QueuedMessageRef", "two strings, shared by three RPCs"),
+    ("ReadAttachmentChunkParams", "two scalars"),
+    ("RemovedReply", "one bool"),
+    ("RepoPathParams", "one string, shared by three RPCs"),
+    ("ResizeTerminalParams", "three scalars"),
+    (
+        "ResolveGitAvatarsParams",
+        "its limit default is applied in the handler",
+    ),
+    ("RunProjectActionParams", "five scalars"),
+    (
+        "SearchGitHistoryParams",
+        "its limit default is applied in the handler",
+    ),
+    ("SentReply", "one bool"),
+    (
+        "SessionCommandPayload",
+        "one Connect RPC per kind (Send, Steer, Interrupt, AnswerQuestion)",
+    ),
+    ("SubscribeTerminalParams", "two scalars"),
+    ("SwitchRefReply", "one string"),
+    ("TakeProjectActionSetupParams", "two strings"),
+    ("TerminalIdParams", "one string"),
+    ("UploadChunkParams", "three scalars"),
+    ("UploadCommitParams", "two strings"),
+    ("UploadCommitReply", "one string"),
+    (
+        "UpsertProjectActionParams",
+        "the draft is mapped; the rest are strings",
+    ),
+    ("WatchPreviewsParams", "one string"),
+    ("WriteTerminalParams", "two strings"),
+];
+
+fn fixtures() -> Vec<(String, String, Value)> {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../loams-agentd-proto/fixtures");
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        let file = path.file_name().unwrap().to_string_lossy().into_owned();
+        let Some(stem) = file.strip_suffix(".json") else {
+            continue;
+        };
+        let ty = stem.split('.').next().unwrap().to_owned();
+        let value: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        out.push((file, ty, value));
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    assert!(
+        out.len() > 100,
+        "the fixtures were not found in {}",
+        dir.display()
+    );
+    out
+}
+
+#[test]
+fn every_fixture_survives_the_proto() {
+    let mapped = mapped();
+    let mut unlisted = Vec::new();
+    let mut checked = 0;
+    for (file, ty, value) in fixtures() {
+        if let Some(roundtrip) = mapped.get(ty.as_str()) {
+            assert_eq!(
+                roundtrip(&value),
+                value,
+                "{file} changes through loams.agentd.v1"
+            );
+            checked += 1;
+        } else if !NOT_MAPPED.iter().any(|(name, _)| *name == ty) {
+            unlisted.push(file);
+        }
+    }
+    assert!(
+        unlisted.is_empty(),
+        "fixtures of types neither mapped nor listed in NOT_MAPPED: {unlisted:?}"
+    );
+    assert!(checked > 60, "only {checked} fixtures were checked");
+}
+
+#[test]
+fn an_unset_required_enum_is_bad_params() {
+    use loams_agentd_connect::proto::loams::agentd::v1 as pb;
+    let request = pb::ListModelsRequest::default();
+    let error = rs::ListModelsParams::from_pb(request).unwrap_err();
+    assert!(error.0.contains("HarnessId"), "{error}");
+}
+
+#[test]
+fn an_unset_target_names_no_checkout() {
+    use loams_agentd_connect::proto::loams::agentd::v1 as pb;
+    let request =
+        rs::WatchWorkspaceFilesRequest::from_pb(pb::WatchFilesRequest::default()).unwrap();
+    assert_eq!(request.target.chat_id, None);
+    assert_eq!(request.target.space_id, None);
+    assert_eq!(request.target.checkout_path, None);
+}
