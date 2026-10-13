@@ -22,8 +22,11 @@ camel-catalog = []
 indexmap.workspace = true
 jsonschema.workspace = true
 # The connector SDK (CN2 OR-5), for the `Profile` type a `ConnectorContext`
-# carries (CN2 Task 7, plan ruling R4.4): `loams-flow` depends on the SDK, never
-# the reverse. Its own dependencies are already in fabric/Cargo.lock.
+# carries (CN2 Task 7, plan ruling R4.4), and (CN2 Task 24)
+# `metrics::InstanceMetrics` implements its `ConnectorObserver` hook, so a
+# native connector's pipeline feeds the metric families and the Q359
+# activity counters. `loams-flow` depends on the SDK, never the reverse. Its
+# own dependencies are already in fabric/Cargo.lock.
 loams-connector-sdk = { path = "../loams-connector-sdk" }
 loams-flow-proto = { path = "../loams-flow-proto" }
 # `buffa` is the generated-code runtime of `loams-flow-proto` (see that crate's
@@ -35,11 +38,6 @@ loams-flow-proto = { path = "../loams-flow-proto" }
 # crate's runtime, not a shared dependency — the split `loams-proto` makes for
 # `buffa-types`.
 buffa = "0.9.2"
-# The connector SDK (CN2 Task 4): `metrics::InstanceMetrics` implements its
-# `ConnectorObserver` hook, so a native connector's pipeline feeds the metric
-# families and the Q359 activity counters (CN2 Task 24). The dependency runs
-# this way only: the SDK never depends on `loams-flow` (R4.4).
-loams-connector-sdk = { path = "../loams-connector-sdk" }
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true

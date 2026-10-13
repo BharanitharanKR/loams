@@ -220,13 +220,31 @@ services = [{ kind = "container", compose = "valkey", system = "Valkey" }]
 
 # ---------------------------------------------------------- search, vector --
 
-[systems.opensearch]
-systems = ["OpenSearch"]
+# Elasticsearch is ★ (P1) and moves to the native search family in CN2 Task 15
+# (OR-8), so it gains its entry here with that task rather than with Task 8.
+# Its image is a `ci-service` (AGPL-3.0 / SSPL / Elastic-2.0, OR-3).
+[systems.elasticsearch]
+systems = ["Elasticsearch"]
 family = "search"
-services = [{ kind = "container", compose = "opensearch", system = "OpenSearch" }]
+services = [{ kind = "container", compose = "elasticsearch", system = "Elasticsearch" }]
 extra_targets = [
   { kind = "container", compose = "loams-collections", system = "Loams collections (Elasticsearch API)" },
 ]
+harness = "loams_connector_search::conformance::SearchHarness"
+
+[systems.opensearch]
+systems = ["OpenSearch"]
+family = "search"
+services = [
+  { kind = "container", compose = "opensearch", system = "OpenSearch" },
+  # Amazon OpenSearch Service with SigV4 (`iam`), CN2 Task 15's
+  # opensearch_sigv4_nightly.
+  { kind = "nightly", env = ["LOAMS_AMAZON_OPENSEARCH_URL", "LOAMS_AWS_ACCESS_KEY_ID", "LOAMS_AWS_SECRET_ACCESS_KEY", "LOAMS_AWS_REGION"], system = "OpenSearch" },
+]
+extra_targets = [
+  { kind = "container", compose = "loams-collections", system = "Loams collections (Elasticsearch API)" },
+]
+harness = "loams_connector_search::conformance::SearchHarness"
 
 [systems.qdrant]
 systems = ["Qdrant"]
@@ -235,6 +253,7 @@ services = [{ kind = "container", compose = "qdrant", system = "Qdrant" }]
 extra_targets = [
   { kind = "container", compose = "loams-collections", system = "Loams collections (Qdrant API)" },
 ]
+harness = "loams_connector_search::conformance::SearchHarness"
 
 [systems.pgvector]
 systems = ["pgvector"]

@@ -153,11 +153,20 @@ services:
       DISABLE_SECURITY_PLUGIN: "true"
       OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
     ports: ["9201:9200"]
+    # The search family's suites (CN2 Task 15) start once the cluster is up.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s' >/dev/null"]
+      interval: 5s
+      retries: 60
 
   qdrant:
     image: qdrant/qdrant:v1.19.1@sha256:12364fe851b9f17356fc88189fc06d1b521262e04659ec7345975b00c9246a10
     profiles: [connectors-p2]
     labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
+    # An API key, so the `auth` suite proves the `key` method and that an
+    # unauthenticated write is refused (CN2 Task 15). A fixed test value.
+    environment:
+      QDRANT__SERVICE__API_KEY: loams-test-key
     ports: ["6333:6333", "6334:6334"]
 
   trino:
@@ -350,6 +359,28 @@ services:
     profiles: [connectors-ci-only]
     labels: { io.loams.licence: "AGPL-3.0-only OR LicenseRef-RSALv2 OR SSPL-1.0", io.loams.ci-service: "true" }
     ports: ["6379:6379"]
+
+  # Elasticsearch 9.5.4 (`ci-service`, OR-3: AGPL-3.0, SSPL or Elastic-2.0, and
+  # the image's default binaries are Elastic-2.0), for the native search
+  # family (CN2 Task 15). Built 2026-09-09; 9.5.5 is under 14 days old. Single
+  # node, security on with Basic auth over plain HTTP, so the `auth` suite runs
+  # Basic and API keys.
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.5.4@sha256:82ac14f43fe701992e601f4cc81e1c0d7dbc5a2576d8cd736006452925df4026
+    profiles: [connectors-ci-only]
+    labels: { io.loams.licence: "AGPL-3.0-only OR SSPL-1.0 OR Elastic-2.0", io.loams.ci-service: "true" }
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "true"
+      xpack.security.http.ssl.enabled: "false"
+      xpack.security.transport.ssl.enabled: "false"
+      ELASTIC_PASSWORD: loams-test-secret
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports: ["9200:9200"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs -u elastic:loams-test-secret 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s' >/dev/null"]
+      interval: 5s
+      retries: 60
 
   splunk:
     image: splunk/splunk:10.4.3@sha256:cc3a3efe2509fa31f67d4aa20dde7118886babf9a0930f197ef996d513c44834
