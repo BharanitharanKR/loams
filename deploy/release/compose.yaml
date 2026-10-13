@@ -80,6 +80,9 @@ services:
   tidb:
     <<: *restart
     image: ${TIDB_IMAGE:-ghcr.io/ostrium-labs/tidb:v8.5.8-loams.1}
+    # The patched TiDB image is amd64 only: on Apple silicon and other arm64
+    # hosts Docker Desktop runs it emulated (Rosetta or QEMU).
+    platform: ${TIDB_PLATFORM:-linux/amd64}
     command:
       - --store=tikv
       - --path=pd:2379
