@@ -8,6 +8,8 @@
 
 import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import type { DeploymentState, FunctionInfo, IndexState } from "./admin_pb.js";
+import { file_loams_live_v1_admin } from "./admin_pb.js";
 import type { Schema, Validator } from "./live_pb.js";
 import { file_loams_live_v1_live } from "./live_pb.js";
 import type { Message } from "@bufbuild/protobuf";
@@ -16,7 +18,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file loams/live/v1/catalog.proto.
  */
 export const file_loams_live_v1_catalog: GenFile = /*@__PURE__*/
-  fileDesc("Chtsb2Ftcy9saXZlL3YxL2NhdGFsb2cucHJvdG8SDWxvYW1zLmxpdmUudjEi2AEKCFRhYmxlRGVmEg4KBmZvcm1hdBgBIAEoDRIKCgJpZBgCIAEoDRIMCgRuYW1lGAMgASgJEigKB2luZGV4ZXMYBCADKAsyFy5sb2Ftcy5saXZlLnYxLkluZGV4RGVmEhUKDW5leHRfaW5kZXhfaWQYBSABKA0SKwoJdmFsaWRhdG9yGAYgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3ISNAoJZW5mb3JjaW5nGAcgASgLMiEubG9hbXMubGl2ZS52MS5FbmZvcmNpbmdWYWxpZGF0b3IiVQoSRW5mb3JjaW5nVmFsaWRhdG9yEisKCXZhbGlkYXRvchgBIAEoCzIYLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yEhIKCmRlcGxveW1lbnQYAiABKAwi+gEKDlRhYmxlSm9iUmVjb3JkEg4KBmZvcm1hdBgBIAEoDRIpCgRraW5kGAIgASgOMhsubG9hbXMubGl2ZS52MS5UYWJsZUpvYktpbmQSEAoIdGFibGVfaWQYAyABKA0SEgoKZGVwbG95bWVudBgEIAEoDBINCgVvd25lchgFIAEoCRIYChBsZWFzZV9leHBpcmVzX21zGAYgASgEEhIKCmNoZWNrcG9pbnQYByABKAwSDwoHc2Nhbm5lZBgIIAEoBBIMCgRkb25lGAkgASgIEisKCGZpbmRpbmdzGAogAygLMhkubG9hbXMubGl2ZS52MS5Kb2JGaW5kaW5nIiwKCkpvYkZpbmRpbmcSDgoGZG9jX2lkGAEgASgMEg4KBmRldGFpbBgCIAEoCSJyCghJbmRleERlZhIKCgJpZBgBIAEoDRIMCgRuYW1lGAIgASgJEg4KBmZpZWxkcxgDIAMoCRIoCgVzdGF0ZRgEIAEoDjIZLmxvYW1zLmxpdmUudjEuSW5kZXhTdGF0ZRISCgpkZXBsb3ltZW50GAUgASgMIjAKBkFwcERlZhIOCgZmb3JtYXQYASABKA0SFgoOam91cm5hbF9zaGFyZHMYAiABKA0i/wEKEERlcGxveW1lbnRSZWNvcmQSDgoGZm9ybWF0GAEgASgNEgoKAmlkGAIgASgMEhUKDWJ1bmRsZV9zaGEyNTYYAyABKAwSJQoGc2NoZW1hGAQgASgLMhUubG9hbXMubGl2ZS52MS5TY2hlbWESFQoNY3JlYXRlZF9hdF9tcxgFIAEoBBISCgpjcmVhdGVkX2J5GAYgASgJEg8KB21lc3NhZ2UYByABKAkSDgoGcGFyZW50GAggASgMEi0KBXN0YXRlGAkgASgOMh4ubG9hbXMubGl2ZS52MS5EZXBsb3ltZW50U3RhdGUSFgoOZmFpbHVyZV9yZWFzb24YCiABKAkqaAoMVGFibGVKb2JLaW5kEh4KGlRBQkxFX0pPQl9LSU5EX1VOU1BFQ0lGSUVEEAASGwoXVEFCTEVfSk9CX0tJTkRfVkFMSURBVEUQARIbChdUQUJMRV9KT0JfS0lORF9CQUNLRklMTBACKncKCkluZGV4U3RhdGUSGwoXSU5ERVhfU1RBVEVfVU5TUEVDSUZJRUQQABIbChdJTkRFWF9TVEFURV9CQUNLRklMTElORxABEhUKEUlOREVYX1NUQVRFX1JFQURZEAISGAoUSU5ERVhfU1RBVEVfRFJPUFBJTkcQAyqOAgoPRGVwbG95bWVudFN0YXRlEiAKHERFUExPWU1FTlRfU1RBVEVfVU5TUEVDSUZJRUQQABIcChhERVBMT1lNRU5UX1NUQVRFX1BFTkRJTkcQARIfChtERVBMT1lNRU5UX1NUQVRFX1ZBTElEQVRJTkcQAhIgChxERVBMT1lNRU5UX1NUQVRFX0JBQ0tGSUxMSU5HEAMSGwoXREVQTE9ZTUVOVF9TVEFURV9BQ1RJVkUQBBIfChtERVBMT1lNRU5UX1NUQVRFX1NVUEVSU0VERUQQBRIbChdERVBMT1lNRU5UX1NUQVRFX0ZBSUxFRBAGEh0KGURFUExPWU1FTlRfU1RBVEVfREVHUkFERUQQB2IGcHJvdG8z", [file_loams_live_v1_live]);
+  fileDesc("Chtsb2Ftcy9saXZlL3YxL2NhdGFsb2cucHJvdG8SDWxvYW1zLmxpdmUudjEi2AEKCFRhYmxlRGVmEg4KBmZvcm1hdBgBIAEoDRIKCgJpZBgCIAEoDRIMCgRuYW1lGAMgASgJEigKB2luZGV4ZXMYBCADKAsyFy5sb2Ftcy5saXZlLnYxLkluZGV4RGVmEhUKDW5leHRfaW5kZXhfaWQYBSABKA0SKwoJdmFsaWRhdG9yGAYgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3ISNAoJZW5mb3JjaW5nGAcgASgLMiEubG9hbXMubGl2ZS52MS5FbmZvcmNpbmdWYWxpZGF0b3IiVQoSRW5mb3JjaW5nVmFsaWRhdG9yEisKCXZhbGlkYXRvchgBIAEoCzIYLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yEhIKCmRlcGxveW1lbnQYAiABKAwi+gEKDlRhYmxlSm9iUmVjb3JkEg4KBmZvcm1hdBgBIAEoDRIpCgRraW5kGAIgASgOMhsubG9hbXMubGl2ZS52MS5UYWJsZUpvYktpbmQSEAoIdGFibGVfaWQYAyABKA0SEgoKZGVwbG95bWVudBgEIAEoDBINCgVvd25lchgFIAEoCRIYChBsZWFzZV9leHBpcmVzX21zGAYgASgEEhIKCmNoZWNrcG9pbnQYByABKAwSDwoHc2Nhbm5lZBgIIAEoBBIMCgRkb25lGAkgASgIEisKCGZpbmRpbmdzGAogAygLMhkubG9hbXMubGl2ZS52MS5Kb2JGaW5kaW5nIiwKCkpvYkZpbmRpbmcSDgoGZG9jX2lkGAEgASgMEg4KBmRldGFpbBgCIAEoCSJyCghJbmRleERlZhIKCgJpZBgBIAEoDRIMCgRuYW1lGAIgASgJEg4KBmZpZWxkcxgDIAMoCRIoCgVzdGF0ZRgEIAEoDjIZLmxvYW1zLmxpdmUudjEuSW5kZXhTdGF0ZRISCgpkZXBsb3ltZW50GAUgASgMIjAKBkFwcERlZhIOCgZmb3JtYXQYASABKA0SFgoOam91cm5hbF9zaGFyZHMYAiABKA0irwIKEERlcGxveW1lbnRSZWNvcmQSDgoGZm9ybWF0GAEgASgNEgoKAmlkGAIgASgMEhUKDWJ1bmRsZV9zaGEyNTYYAyABKAwSJQoGc2NoZW1hGAQgASgLMhUubG9hbXMubGl2ZS52MS5TY2hlbWESFQoNY3JlYXRlZF9hdF9tcxgFIAEoBBISCgpjcmVhdGVkX2J5GAYgASgJEg8KB21lc3NhZ2UYByABKAkSDgoGcGFyZW50GAggASgMEi0KBXN0YXRlGAkgASgOMh4ubG9hbXMubGl2ZS52MS5EZXBsb3ltZW50U3RhdGUSFgoOZmFpbHVyZV9yZWFzb24YCiABKAkSLgoJZnVuY3Rpb25zGAsgAygLMhsubG9hbXMubGl2ZS52MS5GdW5jdGlvbkluZm8qaAoMVGFibGVKb2JLaW5kEh4KGlRBQkxFX0pPQl9LSU5EX1VOU1BFQ0lGSUVEEAASGwoXVEFCTEVfSk9CX0tJTkRfVkFMSURBVEUQARIbChdUQUJMRV9KT0JfS0lORF9CQUNLRklMTBACYgZwcm90bzM", [file_loams_live_v1_admin, file_loams_live_v1_live]);
 
 /**
  * A table: the value of its catalog record `0x01 ‖ 0x02 ‖ id:u32 BE`. The
@@ -383,6 +385,14 @@ export type DeploymentRecord = Message<"loams.live.v1.DeploymentRecord"> & {
    * @generated from field: string failure_reason = 10;
    */
   failureReason: string;
+
+  /**
+   * The functions its bundle exports (LV1 plan Task 10), by path; empty in
+   * a record written before Task 10.
+   *
+   * @generated from field: repeated loams.live.v1.FunctionInfo functions = 11;
+   */
+  functions: FunctionInfo[];
 };
 
 /**
@@ -421,116 +431,4 @@ export enum TableJobKind {
  */
 export const TableJobKindSchema: GenEnum<TableJobKind> = /*@__PURE__*/
   enumDesc(file_loams_live_v1_catalog, 0);
-
-/**
- * Where a user index is in its life (LV1 plan Task 9, design §45 §4.2).
- *
- * @generated from enum loams.live.v1.IndexState
- */
-export enum IndexState {
-  /**
-   * Ready (a record written before Task 9).
-   *
-   * @generated from enum value: INDEX_STATE_UNSPECIFIED = 0;
-   */
-  UNSPECIFIED = 0,
-
-  /**
-   * Every write maintains it and a backfill job writes the entries of the
-   * documents already there; no query reads it.
-   *
-   * @generated from enum value: INDEX_STATE_BACKFILLING = 1;
-   */
-  BACKFILLING = 1,
-
-  /**
-   * Queries read it; every write maintains it.
-   *
-   * @generated from enum value: INDEX_STATE_READY = 2;
-   */
-  READY = 2,
-
-  /**
-   * No write maintains it and no query reads it; its entries are being
-   * deleted, then the definition goes.
-   *
-   * @generated from enum value: INDEX_STATE_DROPPING = 3;
-   */
-  DROPPING = 3,
-}
-
-/**
- * Describes the enum loams.live.v1.IndexState.
- */
-export const IndexStateSchema: GenEnum<IndexState> = /*@__PURE__*/
-  enumDesc(file_loams_live_v1_catalog, 1);
-
-/**
- * Where a deployment is in its life (design §45 §3.3).
- *
- * @generated from enum loams.live.v1.DeploymentState
- */
-export enum DeploymentState {
-  /**
-   * @generated from enum value: DEPLOYMENT_STATE_UNSPECIFIED = 0;
-   */
-  UNSPECIFIED = 0,
-
-  /**
-   * Its record is written; its schema is not applied yet.
-   *
-   * @generated from enum value: DEPLOYMENT_STATE_PENDING = 1;
-   */
-  PENDING = 1,
-
-  /**
-   * A stricter validator scans existing data (LV1 plan Task 8): it is
-   * enforced on new writes, and the table's documents are checked.
-   *
-   * @generated from enum value: DEPLOYMENT_STATE_VALIDATING = 2;
-   */
-  VALIDATING = 2,
-
-  /**
-   * A new index is backfilled (LV1 plan Task 9).
-   *
-   * @generated from enum value: DEPLOYMENT_STATE_BACKFILLING = 3;
-   */
-  BACKFILLING = 3,
-
-  /**
-   * The pointer names it: new calls run its functions.
-   *
-   * @generated from enum value: DEPLOYMENT_STATE_ACTIVE = 4;
-   */
-  ACTIVE = 4,
-
-  /**
-   * A later deployment replaced it.
-   *
-   * @generated from enum value: DEPLOYMENT_STATE_SUPERSEDED = 5;
-   */
-  SUPERSEDED = 5,
-
-  /**
-   * It never became active; `failure_reason` says why.
-   *
-   * @generated from enum value: DEPLOYMENT_STATE_FAILED = 6;
-   */
-  FAILED = 6,
-
-  /**
-   * It is active, but its isolated workers crashed five times within a
-   * minute (design §45 §3.1). Calls are still served.
-   *
-   * @generated from enum value: DEPLOYMENT_STATE_DEGRADED = 7;
-   */
-  DEGRADED = 7,
-}
-
-/**
- * Describes the enum loams.live.v1.DeploymentState.
- */
-export const DeploymentStateSchema: GenEnum<DeploymentState> = /*@__PURE__*/
-  enumDesc(file_loams_live_v1_catalog, 2);
 

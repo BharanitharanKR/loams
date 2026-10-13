@@ -64,59 +64,54 @@ namespace Loams.Live.V1 {
             "Cg9pZGVtcG90ZW5jeV9rZXkYAyABKAlIAFIOaWRlbXBvdGVuY3lLZXmIAQFC",
             "EgoQX2lkZW1wb3RlbmN5X2tleSJbCg5NdXRhdGVSZXNwb25zZRIbCgljb21t",
             "aXRfdHMYASABKARSCGNvbW1pdFRzEiwKBnJlc3VsdBgCIAEoCzIULmxvYW1z",
-            "LmxpdmUudjEuVmFsdWVSBnJlc3VsdCJWCg1EZXBsb3lSZXF1ZXN0EhYKBmJ1",
-            "bmRsZRgBIAEoDFIGYnVuZGxlEi0KBnNjaGVtYRgCIAEoCzIVLmxvYW1zLmxp",
-            "dmUudjEuU2NoZW1hUgZzY2hlbWEiNQoORGVwbG95UmVzcG9uc2USIwoNZGVw",
-            "bG95bWVudF9pZBgBIAEoCVIMZGVwbG95bWVudElkIjwKBlNjaGVtYRIyCgZ0",
-            "YWJsZXMYASADKAsyGi5sb2Ftcy5saXZlLnYxLlRhYmxlU2NoZW1hUgZ0YWJs",
-            "ZXMi1wEKC1RhYmxlU2NoZW1hEhIKBG5hbWUYASABKAlSBG5hbWUSNAoHaW5k",
-            "ZXhlcxgCIAMoCzIaLmxvYW1zLmxpdmUudjEuSW5kZXhTY2hlbWFSB2luZGV4",
-            "ZXMSNgoJdmFsaWRhdG9yGAMgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0",
-            "b3JSCXZhbGlkYXRvchIwChFzY2hlbWFfdmFsaWRhdGlvbhgEIAEoCEgAUhBz",
-            "Y2hlbWFWYWxpZGF0aW9uiAEBQhQKEl9zY2hlbWFfdmFsaWRhdGlvbiI5CgtJ",
-            "bmRleFNjaGVtYRISCgRuYW1lGAEgASgJUgRuYW1lEhYKBmZpZWxkcxgCIAMo",
-            "CVIGZmllbGRzIvUCCglWYWxpZGF0b3ISQQoJcHJpbWl0aXZlGAEgASgOMiEu",
-            "bG9hbXMubGl2ZS52MS5WYWxpZGF0b3JQcmltaXRpdmVIAFIJcHJpbWl0aXZl",
-            "EjAKBWFycmF5GAIgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3JIAFIF",
-            "YXJyYXkSOAoGb2JqZWN0GAMgASgLMh4ubG9hbXMubGl2ZS52MS5WYWxpZGF0",
-            "b3JPYmplY3RIAFIGb2JqZWN0EjAKB2xpdGVyYWwYBCABKAsyFC5sb2Ftcy5s",
-            "aXZlLnYxLlZhbHVlSABSB2xpdGVyYWwSNQoFdW5pb24YBSABKAsyHS5sb2Ft",
-            "cy5saXZlLnYxLlZhbGlkYXRvclVuaW9uSABSBXVuaW9uEjYKCG9wdGlvbmFs",
-            "GAYgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3JIAFIIb3B0aW9uYWwS",
-            "EAoCaWQYByABKAlIAFICaWRCBgoEa2luZCKqAQoPVmFsaWRhdG9yT2JqZWN0",
-            "EkIKBmZpZWxkcxgBIAMoCzIqLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yT2Jq",
-            "ZWN0LkZpZWxkc0VudHJ5UgZmaWVsZHMaUwoLRmllbGRzRW50cnkSEAoDa2V5",
-            "GAEgASgJUgNrZXkSLgoFdmFsdWUYAiABKAsyGC5sb2Ftcy5saXZlLnYxLlZh",
-            "bGlkYXRvclIFdmFsdWU6AjgBIkQKDlZhbGlkYXRvclVuaW9uEjIKB21lbWJl",
-            "cnMYASADKAsyGC5sb2Ftcy5saXZlLnYxLlZhbGlkYXRvclIHbWVtYmVycyJT",
-            "CglMaXZlRXJyb3ISLAoEY29kZRgBIAEoDjIYLmxvYW1zLmxpdmUudjEuRXJy",
-            "b3JDb2RlUgRjb2RlEhgKB21lc3NhZ2UYAiABKAlSB21lc3NhZ2UqlAIKElZh",
-            "bGlkYXRvclByaW1pdGl2ZRIjCh9WQUxJREFUT1JfUFJJTUlUSVZFX1VOU1BF",
-            "Q0lGSUVEEAASHAoYVkFMSURBVE9SX1BSSU1JVElWRV9OVUxMEAESHQoZVkFM",
-            "SURBVE9SX1BSSU1JVElWRV9JTlQ2NBACEh8KG1ZBTElEQVRPUl9QUklNSVRJ",
-            "VkVfRkxPQVQ2NBADEh8KG1ZBTElEQVRPUl9QUklNSVRJVkVfQk9PTEVBThAE",
-            "Eh4KGlZBTElEQVRPUl9QUklNSVRJVkVfU1RSSU5HEAUSHQoZVkFMSURBVE9S",
-            "X1BSSU1JVElWRV9CWVRFUxAGEhsKF1ZBTElEQVRPUl9QUklNSVRJVkVfQU5Z",
-            "EAcqxQIKCUVycm9yQ29kZRIaChZFUlJPUl9DT0RFX1VOU1BFQ0lGSUVEEAAS",
-            "HwobRVJST1JfQ09ERV9JTlZBTElEX0FSR1VNRU5UEAESGAoURVJST1JfQ09E",
-            "RV9OT1RfRk9VTkQQAhIiCh5FUlJPUl9DT0RFX0ZBSUxFRF9QUkVDT05ESVRJ",
-            "T04QAxIhCh1FUlJPUl9DT0RFX1JFU09VUkNFX0VYSEFVU1RFRBAEEh0KGUVS",
-            "Uk9SX0NPREVfRlVOQ1RJT05fRVJST1IQBRIfChtFUlJPUl9DT0RFX0ZVTkNU",
-            "SU9OX1RJTUVPVVQQBhIlCiFFUlJPUl9DT0RFX0ZVTkNUSU9OX09VVF9PRl9N",
-            "RU1PUlkQBxIaChZFUlJPUl9DT0RFX1VOQVZBSUxBQkxFEAgSFwoTRVJST1Jf",
-            "Q09ERV9JTlRFUk5BTBAJMqcECgtMaXZlU2VydmljZRJOCgVXYXRjaBIbLmxv",
-            "YW1zLmxpdmUudjEuV2F0Y2hSZXF1ZXN0GhkubG9hbXMubGl2ZS52MS5UcmFu",
-            "c2l0aW9uIguStRgHEgV3YXRjaDABEnMKDk1vZGlmeVF1ZXJ5U2V0EiQubG9h",
-            "bXMubGl2ZS52MS5Nb2RpZnlRdWVyeVNldFJlcXVlc3QaJS5sb2Ftcy5saXZl",
-            "LnYxLk1vZGlmeVF1ZXJ5U2V0UmVzcG9uc2UiFJK1GBASDm1vZGlmeVF1ZXJ5",
-            "U2V0ElcKBVF1ZXJ5EhsubG9hbXMubGl2ZS52MS5RdWVyeVJlcXVlc3QaHC5s",
-            "b2Ftcy5saXZlLnYxLlF1ZXJ5UmVzcG9uc2UiE5K1GA8KBnRhYmxlcxIFcXVl",
-            "cnkSWwoGTXV0YXRlEhwubG9hbXMubGl2ZS52MS5NdXRhdGVSZXF1ZXN0Gh0u",
-            "bG9hbXMubGl2ZS52MS5NdXRhdGVSZXNwb25zZSIUkrUYEAoGdGFibGVzEgZt",
-            "dXRhdGUSWwoGRGVwbG95EhwubG9hbXMubGl2ZS52MS5EZXBsb3lSZXF1ZXN0",
-            "Gh0ubG9hbXMubGl2ZS52MS5EZXBsb3lSZXNwb25zZSIUkrUYEAoGdGFibGVz",
-            "EgZkZXBsb3kaQIq1GDwKBGxpdmUSMkxpdmUgc3luYzogd2F0Y2ggYSBxdWVy",
-            "eSBzZXQgb3ZlciBhIHNlcnZlciBzdHJlYW0uGAFiBnByb3RvMw=="));
+            "LmxpdmUudjEuVmFsdWVSBnJlc3VsdCI8CgZTY2hlbWESMgoGdGFibGVzGAEg",
+            "AygLMhoubG9hbXMubGl2ZS52MS5UYWJsZVNjaGVtYVIGdGFibGVzItcBCgtU",
+            "YWJsZVNjaGVtYRISCgRuYW1lGAEgASgJUgRuYW1lEjQKB2luZGV4ZXMYAiAD",
+            "KAsyGi5sb2Ftcy5saXZlLnYxLkluZGV4U2NoZW1hUgdpbmRleGVzEjYKCXZh",
+            "bGlkYXRvchgDIAEoCzIYLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yUgl2YWxp",
+            "ZGF0b3ISMAoRc2NoZW1hX3ZhbGlkYXRpb24YBCABKAhIAFIQc2NoZW1hVmFs",
+            "aWRhdGlvbogBAUIUChJfc2NoZW1hX3ZhbGlkYXRpb24iOQoLSW5kZXhTY2hl",
+            "bWESEgoEbmFtZRgBIAEoCVIEbmFtZRIWCgZmaWVsZHMYAiADKAlSBmZpZWxk",
+            "cyL1AgoJVmFsaWRhdG9yEkEKCXByaW1pdGl2ZRgBIAEoDjIhLmxvYW1zLmxp",
+            "dmUudjEuVmFsaWRhdG9yUHJpbWl0aXZlSABSCXByaW1pdGl2ZRIwCgVhcnJh",
+            "eRgCIAEoCzIYLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9ySABSBWFycmF5EjgK",
+            "Bm9iamVjdBgDIAEoCzIeLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yT2JqZWN0",
+            "SABSBm9iamVjdBIwCgdsaXRlcmFsGAQgASgLMhQubG9hbXMubGl2ZS52MS5W",
+            "YWx1ZUgAUgdsaXRlcmFsEjUKBXVuaW9uGAUgASgLMh0ubG9hbXMubGl2ZS52",
+            "MS5WYWxpZGF0b3JVbmlvbkgAUgV1bmlvbhI2CghvcHRpb25hbBgGIAEoCzIY",
+            "LmxvYW1zLmxpdmUudjEuVmFsaWRhdG9ySABSCG9wdGlvbmFsEhAKAmlkGAcg",
+            "ASgJSABSAmlkQgYKBGtpbmQiqgEKD1ZhbGlkYXRvck9iamVjdBJCCgZmaWVs",
+            "ZHMYASADKAsyKi5sb2Ftcy5saXZlLnYxLlZhbGlkYXRvck9iamVjdC5GaWVs",
+            "ZHNFbnRyeVIGZmllbGRzGlMKC0ZpZWxkc0VudHJ5EhAKA2tleRgBIAEoCVID",
+            "a2V5Ei4KBXZhbHVlGAIgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3JS",
+            "BXZhbHVlOgI4ASJECg5WYWxpZGF0b3JVbmlvbhIyCgdtZW1iZXJzGAEgAygL",
+            "MhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3JSB21lbWJlcnMiUwoJTGl2ZUVy",
+            "cm9yEiwKBGNvZGUYASABKA4yGC5sb2Ftcy5saXZlLnYxLkVycm9yQ29kZVIE",
+            "Y29kZRIYCgdtZXNzYWdlGAIgASgJUgdtZXNzYWdlKpQCChJWYWxpZGF0b3JQ",
+            "cmltaXRpdmUSIwofVkFMSURBVE9SX1BSSU1JVElWRV9VTlNQRUNJRklFRBAA",
+            "EhwKGFZBTElEQVRPUl9QUklNSVRJVkVfTlVMTBABEh0KGVZBTElEQVRPUl9Q",
+            "UklNSVRJVkVfSU5UNjQQAhIfChtWQUxJREFUT1JfUFJJTUlUSVZFX0ZMT0FU",
+            "NjQQAxIfChtWQUxJREFUT1JfUFJJTUlUSVZFX0JPT0xFQU4QBBIeChpWQUxJ",
+            "REFUT1JfUFJJTUlUSVZFX1NUUklORxAFEh0KGVZBTElEQVRPUl9QUklNSVRJ",
+            "VkVfQllURVMQBhIbChdWQUxJREFUT1JfUFJJTUlUSVZFX0FOWRAHKsUCCglF",
+            "cnJvckNvZGUSGgoWRVJST1JfQ09ERV9VTlNQRUNJRklFRBAAEh8KG0VSUk9S",
+            "X0NPREVfSU5WQUxJRF9BUkdVTUVOVBABEhgKFEVSUk9SX0NPREVfTk9UX0ZP",
+            "VU5EEAISIgoeRVJST1JfQ09ERV9GQUlMRURfUFJFQ09ORElUSU9OEAMSIQod",
+            "RVJST1JfQ09ERV9SRVNPVVJDRV9FWEhBVVNURUQQBBIdChlFUlJPUl9DT0RF",
+            "X0ZVTkNUSU9OX0VSUk9SEAUSHwobRVJST1JfQ09ERV9GVU5DVElPTl9USU1F",
+            "T1VUEAYSJQohRVJST1JfQ09ERV9GVU5DVElPTl9PVVRfT0ZfTUVNT1JZEAcS",
+            "GgoWRVJST1JfQ09ERV9VTkFWQUlMQUJMRRAIEhcKE0VSUk9SX0NPREVfSU5U",
+            "RVJOQUwQCTLKAwoLTGl2ZVNlcnZpY2USTgoFV2F0Y2gSGy5sb2Ftcy5saXZl",
+            "LnYxLldhdGNoUmVxdWVzdBoZLmxvYW1zLmxpdmUudjEuVHJhbnNpdGlvbiIL",
+            "krUYBxIFd2F0Y2gwARJzCg5Nb2RpZnlRdWVyeVNldBIkLmxvYW1zLmxpdmUu",
+            "djEuTW9kaWZ5UXVlcnlTZXRSZXF1ZXN0GiUubG9hbXMubGl2ZS52MS5Nb2Rp",
+            "ZnlRdWVyeVNldFJlc3BvbnNlIhSStRgQEg5tb2RpZnlRdWVyeVNldBJXCgVR",
+            "dWVyeRIbLmxvYW1zLmxpdmUudjEuUXVlcnlSZXF1ZXN0GhwubG9hbXMubGl2",
+            "ZS52MS5RdWVyeVJlc3BvbnNlIhOStRgPCgZ0YWJsZXMSBXF1ZXJ5ElsKBk11",
+            "dGF0ZRIcLmxvYW1zLmxpdmUudjEuTXV0YXRlUmVxdWVzdBodLmxvYW1zLmxp",
+            "dmUudjEuTXV0YXRlUmVzcG9uc2UiFJK1GBAKBnRhYmxlcxIGbXV0YXRlGkCK",
+            "tRg8CgRsaXZlEjJMaXZlIHN5bmM6IHdhdGNoIGEgcXVlcnkgc2V0IG92ZXIg",
+            "YSBzZXJ2ZXIgc3RyZWFtLhgBYgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Loams.Live.V1.ValueReflection.Descriptor, global::Loams.Options.V1.OptionsReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Loams.Live.V1.ValidatorPrimitive), typeof(global::Loams.Live.V1.ErrorCode), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -135,8 +130,6 @@ namespace Loams.Live.V1 {
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.QueryResponse), global::Loams.Live.V1.QueryResponse.Parser, new[]{ "Ts", "Result" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.MutateRequest), global::Loams.Live.V1.MutateRequest.Parser, new[]{ "Function", "Args", "IdempotencyKey" }, new[]{ "IdempotencyKey" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.MutateResponse), global::Loams.Live.V1.MutateResponse.Parser, new[]{ "CommitTs", "Result" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.DeployRequest), global::Loams.Live.V1.DeployRequest.Parser, new[]{ "Bundle", "Schema" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.DeployResponse), global::Loams.Live.V1.DeployResponse.Parser, new[]{ "DeploymentId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.Schema), global::Loams.Live.V1.Schema.Parser, new[]{ "Tables" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.TableSchema), global::Loams.Live.V1.TableSchema.Parser, new[]{ "Name", "Indexes", "Validator", "SchemaValidation" }, new[]{ "SchemaValidation" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.IndexSchema), global::Loams.Live.V1.IndexSchema.Parser, new[]{ "Name", "Fields" }, null, null, null, null),
@@ -4306,451 +4299,6 @@ namespace Loams.Live.V1 {
 
   }
 
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-  public sealed partial class DeployRequest : pb::IMessage<DeployRequest>
-  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      , pb::IBufferMessage
-  #endif
-  {
-    private static readonly pb::MessageParser<DeployRequest> _parser = new pb::MessageParser<DeployRequest>(() => new DeployRequest());
-    private pb::UnknownFieldSet _unknownFields;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pb::MessageParser<DeployRequest> Parser { get { return _parser; } }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pbr::MessageDescriptor Descriptor {
-      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[15]; }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    pbr::MessageDescriptor pb::IMessage.Descriptor {
-      get { return Descriptor; }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public DeployRequest() {
-      OnConstruction();
-    }
-
-    partial void OnConstruction();
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public DeployRequest(DeployRequest other) : this() {
-      bundle_ = other.bundle_;
-      schema_ = other.schema_ != null ? other.schema_.Clone() : null;
-      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public DeployRequest Clone() {
-      return new DeployRequest(this);
-    }
-
-    /// <summary>Field number for the "bundle" field.</summary>
-    public const int BundleFieldNumber = 1;
-    private pb::ByteString bundle_ = pb::ByteString.Empty;
-    /// <summary>
-    /// One ES module (§20 §6).
-    /// </summary>
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public pb::ByteString Bundle {
-      get { return bundle_; }
-      set {
-        bundle_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
-      }
-    }
-
-    /// <summary>Field number for the "schema" field.</summary>
-    public const int SchemaFieldNumber = 2;
-    private global::Loams.Live.V1.Schema schema_;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public global::Loams.Live.V1.Schema Schema {
-      get { return schema_; }
-      set {
-        schema_ = value;
-      }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override bool Equals(object other) {
-      return Equals(other as DeployRequest);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Equals(DeployRequest other) {
-      if (ReferenceEquals(other, null)) {
-        return false;
-      }
-      if (ReferenceEquals(other, this)) {
-        return true;
-      }
-      if (Bundle != other.Bundle) return false;
-      if (!object.Equals(Schema, other.Schema)) return false;
-      return Equals(_unknownFields, other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override int GetHashCode() {
-      int hash = 1;
-      if (Bundle.Length != 0) hash ^= Bundle.GetHashCode();
-      if (schema_ != null) hash ^= Schema.GetHashCode();
-      if (_unknownFields != null) {
-        hash ^= _unknownFields.GetHashCode();
-      }
-      return hash;
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override string ToString() {
-      return pb::JsonFormatter.ToDiagnosticString(this);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void WriteTo(pb::CodedOutputStream output) {
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      output.WriteRawMessage(this);
-    #else
-      if (Bundle.Length != 0) {
-        output.WriteRawTag(10);
-        output.WriteBytes(Bundle);
-      }
-      if (schema_ != null) {
-        output.WriteRawTag(18);
-        output.WriteMessage(Schema);
-      }
-      if (_unknownFields != null) {
-        _unknownFields.WriteTo(output);
-      }
-    #endif
-    }
-
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-      if (Bundle.Length != 0) {
-        output.WriteRawTag(10);
-        output.WriteBytes(Bundle);
-      }
-      if (schema_ != null) {
-        output.WriteRawTag(18);
-        output.WriteMessage(Schema);
-      }
-      if (_unknownFields != null) {
-        _unknownFields.WriteTo(ref output);
-      }
-    }
-    #endif
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public int CalculateSize() {
-      int size = 0;
-      if (Bundle.Length != 0) {
-        size += 1 + pb::CodedOutputStream.ComputeBytesSize(Bundle);
-      }
-      if (schema_ != null) {
-        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Schema);
-      }
-      if (_unknownFields != null) {
-        size += _unknownFields.CalculateSize();
-      }
-      return size;
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(DeployRequest other) {
-      if (other == null) {
-        return;
-      }
-      if (other.Bundle.Length != 0) {
-        Bundle = other.Bundle;
-      }
-      if (other.schema_ != null) {
-        if (schema_ == null) {
-          Schema = new global::Loams.Live.V1.Schema();
-        }
-        Schema.MergeFrom(other.Schema);
-      }
-      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(pb::CodedInputStream input) {
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      input.ReadRawMessage(this);
-    #else
-      uint tag;
-      while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
-          default:
-            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
-            break;
-          case 10: {
-            Bundle = input.ReadBytes();
-            break;
-          }
-          case 18: {
-            if (schema_ == null) {
-              Schema = new global::Loams.Live.V1.Schema();
-            }
-            input.ReadMessage(Schema);
-            break;
-          }
-        }
-      }
-    #endif
-    }
-
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
-      uint tag;
-      while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
-          default:
-            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
-            break;
-          case 10: {
-            Bundle = input.ReadBytes();
-            break;
-          }
-          case 18: {
-            if (schema_ == null) {
-              Schema = new global::Loams.Live.V1.Schema();
-            }
-            input.ReadMessage(Schema);
-            break;
-          }
-        }
-      }
-    }
-    #endif
-
-  }
-
-  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
-  public sealed partial class DeployResponse : pb::IMessage<DeployResponse>
-  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      , pb::IBufferMessage
-  #endif
-  {
-    private static readonly pb::MessageParser<DeployResponse> _parser = new pb::MessageParser<DeployResponse>(() => new DeployResponse());
-    private pb::UnknownFieldSet _unknownFields;
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pb::MessageParser<DeployResponse> Parser { get { return _parser; } }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public static pbr::MessageDescriptor Descriptor {
-      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[16]; }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    pbr::MessageDescriptor pb::IMessage.Descriptor {
-      get { return Descriptor; }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public DeployResponse() {
-      OnConstruction();
-    }
-
-    partial void OnConstruction();
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public DeployResponse(DeployResponse other) : this() {
-      deploymentId_ = other.deploymentId_;
-      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public DeployResponse Clone() {
-      return new DeployResponse(this);
-    }
-
-    /// <summary>Field number for the "deployment_id" field.</summary>
-    public const int DeploymentIdFieldNumber = 1;
-    private string deploymentId_ = "";
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public string DeploymentId {
-      get { return deploymentId_; }
-      set {
-        deploymentId_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
-      }
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override bool Equals(object other) {
-      return Equals(other as DeployResponse);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public bool Equals(DeployResponse other) {
-      if (ReferenceEquals(other, null)) {
-        return false;
-      }
-      if (ReferenceEquals(other, this)) {
-        return true;
-      }
-      if (DeploymentId != other.DeploymentId) return false;
-      return Equals(_unknownFields, other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override int GetHashCode() {
-      int hash = 1;
-      if (DeploymentId.Length != 0) hash ^= DeploymentId.GetHashCode();
-      if (_unknownFields != null) {
-        hash ^= _unknownFields.GetHashCode();
-      }
-      return hash;
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public override string ToString() {
-      return pb::JsonFormatter.ToDiagnosticString(this);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void WriteTo(pb::CodedOutputStream output) {
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      output.WriteRawMessage(this);
-    #else
-      if (DeploymentId.Length != 0) {
-        output.WriteRawTag(10);
-        output.WriteString(DeploymentId);
-      }
-      if (_unknownFields != null) {
-        _unknownFields.WriteTo(output);
-      }
-    #endif
-    }
-
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-      if (DeploymentId.Length != 0) {
-        output.WriteRawTag(10);
-        output.WriteString(DeploymentId);
-      }
-      if (_unknownFields != null) {
-        _unknownFields.WriteTo(ref output);
-      }
-    }
-    #endif
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public int CalculateSize() {
-      int size = 0;
-      if (DeploymentId.Length != 0) {
-        size += 1 + pb::CodedOutputStream.ComputeStringSize(DeploymentId);
-      }
-      if (_unknownFields != null) {
-        size += _unknownFields.CalculateSize();
-      }
-      return size;
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(DeployResponse other) {
-      if (other == null) {
-        return;
-      }
-      if (other.DeploymentId.Length != 0) {
-        DeploymentId = other.DeploymentId;
-      }
-      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
-    }
-
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public void MergeFrom(pb::CodedInputStream input) {
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-      input.ReadRawMessage(this);
-    #else
-      uint tag;
-      while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
-          default:
-            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
-            break;
-          case 10: {
-            DeploymentId = input.ReadString();
-            break;
-          }
-        }
-      }
-    #endif
-    }
-
-    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
-    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
-    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
-      uint tag;
-      while ((tag = input.ReadTag()) != 0) {
-      if ((tag & 7) == 4) {
-        // Abort on any end group tag.
-        return;
-      }
-      switch(tag) {
-          default:
-            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
-            break;
-          case 10: {
-            DeploymentId = input.ReadString();
-            break;
-          }
-        }
-      }
-    }
-    #endif
-
-  }
-
   /// <summary>
   /// A deployed schema: tables, their indexes and their validators.
   /// </summary>
@@ -4769,7 +4317,7 @@ namespace Loams.Live.V1 {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[17]; }
+      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[15]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -4957,7 +4505,7 @@ namespace Loams.Live.V1 {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[18]; }
+      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[16]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5293,7 +4841,7 @@ namespace Loams.Live.V1 {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[19]; }
+      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[17]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -5526,7 +5074,7 @@ namespace Loams.Live.V1 {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[20]; }
+      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[18]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -6113,7 +5661,7 @@ namespace Loams.Live.V1 {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[21]; }
+      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[19]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -6300,7 +5848,7 @@ namespace Loams.Live.V1 {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[22]; }
+      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[20]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -6494,7 +6042,7 @@ namespace Loams.Live.V1 {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[23]; }
+      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[21]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]

@@ -29,9 +29,6 @@ class LiveService(Protocol):
     async def mutate(self, request: loams_dot_live_dot_v1_dot_live__pb2.MutateRequest, ctx: RequestContext) -> loams_dot_live_dot_v1_dot_live__pb2.MutateResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
-    async def deploy(self, request: loams_dot_live_dot_v1_dot_live__pb2.DeployRequest, ctx: RequestContext) -> loams_dot_live_dot_v1_dot_live__pb2.DeployResponse:
-        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
-
 
 class LiveServiceASGIApplication(ConnectASGIApplication[LiveService]):
     def __init__(self, service: LiveService | AsyncGenerator[LiveService], *, interceptors: Iterable[Interceptor]=(), read_max_bytes: int | None = None, compressions: Iterable[Compression] | None = None) -> None:
@@ -77,16 +74,6 @@ class LiveServiceASGIApplication(ConnectASGIApplication[LiveService]):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.mutate,
-                ),
-                "/loams.live.v1.LiveService/Deploy": Endpoint.unary(
-                    method=MethodInfo(
-                        name="Deploy",
-                        service_name="loams.live.v1.LiveService",
-                        input=loams_dot_live_dot_v1_dot_live__pb2.DeployRequest,
-                        output=loams_dot_live_dot_v1_dot_live__pb2.DeployResponse,
-                        idempotency_level=IdempotencyLevel.UNKNOWN,
-                    ),
-                    function=svc.deploy,
                 ),
             },
             interceptors=interceptors,
@@ -181,26 +168,6 @@ class LiveServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
-    async def deploy(
-        self,
-        request: loams_dot_live_dot_v1_dot_live__pb2.DeployRequest,
-        *,
-        headers: Headers | Mapping[str, str] | None = None,
-        timeout_ms: int | None = None,
-    ) -> loams_dot_live_dot_v1_dot_live__pb2.DeployResponse:
-        return await self.execute_unary(
-            request=request,
-            method=MethodInfo(
-                name="Deploy",
-                service_name="loams.live.v1.LiveService",
-                input=loams_dot_live_dot_v1_dot_live__pb2.DeployRequest,
-                output=loams_dot_live_dot_v1_dot_live__pb2.DeployResponse,
-                idempotency_level=IdempotencyLevel.UNKNOWN,
-            ),
-            headers=headers,
-            timeout_ms=timeout_ms,
-        )
-
 
 class LiveServiceSync(Protocol):
     def watch(self, request: loams_dot_live_dot_v1_dot_live__pb2.WatchRequest, ctx: RequestContext) -> Iterator[loams_dot_live_dot_v1_dot_live__pb2.Transition]:
@@ -210,8 +177,6 @@ class LiveServiceSync(Protocol):
     def query(self, request: loams_dot_live_dot_v1_dot_live__pb2.QueryRequest, ctx: RequestContext) -> loams_dot_live_dot_v1_dot_live__pb2.QueryResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
     def mutate(self, request: loams_dot_live_dot_v1_dot_live__pb2.MutateRequest, ctx: RequestContext) -> loams_dot_live_dot_v1_dot_live__pb2.MutateResponse:
-        raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
-    def deploy(self, request: loams_dot_live_dot_v1_dot_live__pb2.DeployRequest, ctx: RequestContext) -> loams_dot_live_dot_v1_dot_live__pb2.DeployResponse:
         raise ConnectError(Code.UNIMPLEMENTED, "Not implemented")
 
 
@@ -258,16 +223,6 @@ class LiveServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.mutate,
-                ),
-                "/loams.live.v1.LiveService/Deploy": EndpointSync.unary(
-                    method=MethodInfo(
-                        name="Deploy",
-                        service_name="loams.live.v1.LiveService",
-                        input=loams_dot_live_dot_v1_dot_live__pb2.DeployRequest,
-                        output=loams_dot_live_dot_v1_dot_live__pb2.DeployResponse,
-                        idempotency_level=IdempotencyLevel.UNKNOWN,
-                    ),
-                    function=service.deploy,
                 ),
             },
             interceptors=interceptors,
@@ -356,26 +311,6 @@ class LiveServiceClientSync(ConnectClientSync):
                 service_name="loams.live.v1.LiveService",
                 input=loams_dot_live_dot_v1_dot_live__pb2.MutateRequest,
                 output=loams_dot_live_dot_v1_dot_live__pb2.MutateResponse,
-                idempotency_level=IdempotencyLevel.UNKNOWN,
-            ),
-            headers=headers,
-            timeout_ms=timeout_ms,
-        )
-
-    def deploy(
-        self,
-        request: loams_dot_live_dot_v1_dot_live__pb2.DeployRequest,
-        *,
-        headers: Headers | Mapping[str, str] | None = None,
-        timeout_ms: int | None = None,
-    ) -> loams_dot_live_dot_v1_dot_live__pb2.DeployResponse:
-        return self.execute_unary(
-            request=request,
-            method=MethodInfo(
-                name="Deploy",
-                service_name="loams.live.v1.LiveService",
-                input=loams_dot_live_dot_v1_dot_live__pb2.DeployRequest,
-                output=loams_dot_live_dot_v1_dot_live__pb2.DeployResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

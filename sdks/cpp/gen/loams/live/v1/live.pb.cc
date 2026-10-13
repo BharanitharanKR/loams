@@ -59,10 +59,6 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
         // ::loams::live::v1::MutateResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
-        // ::loams::live::v1::DeployRequest
-        {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
-        // ::loams::live::v1::DeployResponse
-        {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
         // ::loams::live::v1::Schema
         {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
         // ::loams::live::v1::TableSchema
@@ -589,7 +585,7 @@ constexpr auto LiveError::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[24],
+      &file_reflection_data[22],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -746,7 +742,7 @@ constexpr auto IndexSchema::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[19],
+      &file_reflection_data[17],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -793,151 +789,6 @@ const ::_pbi::ClassData* IndexSchema_get_class_data() {
   return IndexSchema_globals_.GetClassData();
 #else
   return IndexSchema_class_data_.base();
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-}
-}  // namespace
-#endif  // PROTOBUF_CUSTOM_VTABLE
-class DeployResponse::_Internal {
- public:
-  using HasBits = decltype(::std::declval<DeployResponse>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(DeployResponse, _impl_._has_bits_);
-};
-
-constexpr DeployResponse::ParseTableT_ DeployResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
-  return ParseTableT_{
-    {
-      PROTOBUF_FIELD_OFFSET(DeployResponse, _impl_._has_bits_),
-      0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
-      offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
-      offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
-      0,  // num_aux_entries
-      offsetof(ParseTableT_, field_names),  // no aux_entries
-      class_data,
-      nullptr,  // post_loop_handler
-      ::_pbi::TcParser::MpUnknownFields,  // fallback
-      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::loams::live::v1::DeployResponse>(),  // to_prefetch
-      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
-    }, {{
-      // string deployment_id = 1 [json_name = "deploymentId"];
-      {::_pbi::TcParser::FastUS1,
-       {10, 0, 0,
-        PROTOBUF_FIELD_OFFSET(DeployResponse, _impl_.deployment_id_)}},
-    }}, {{
-      65535, 65535
-    }}, {{
-      // string deployment_id = 1 [json_name = "deploymentId"];
-      {PROTOBUF_FIELD_OFFSET(DeployResponse, _impl_.deployment_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-    }},
-    // no aux_entries
-    {{
-      "\34\15\0\0\0\0\0\0"
-      "loams.live.v1.DeployResponse"
-      "deployment_id"
-    }},
-  };
-}
-
-
-inline constexpr DeployResponse::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    ::_pbi::ConstantInitialized) noexcept
-      : deployment_id_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()) {}
-
-template <typename>
-constexpr DeployResponse::DeployResponse(::_pbi::ConstantInitialized,
-                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : Super_(
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          class_data
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          ),
-      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
-}
-inline void* PROTOBUF_NONNULL DeployResponse::PlacementNew_(
-    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) DeployResponse(arena);
-}
-constexpr auto DeployResponse::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(DeployResponse), alignof(DeployResponse));
-}
-constexpr auto DeployResponse::InternalGenerateClassData_(
-    const MessageLite& prototype,
-    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
-  return ::google::protobuf::internal::ClassDataFull{
-      ::google::protobuf::internal::ClassData{
-          &prototype,
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-          &_table_.header,
-#else
-          tc_table,
-#endif
-          nullptr,  // IsInitialized
-          &DeployResponse::MergeImpl,
-          Super_::GetNewImpl<DeployResponse>(),
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          &DeployResponse::SharedDtor,
-          Super_::GetClearImpl<DeployResponse>(), &DeployResponse::ByteSizeLong,
-              &DeployResponse::_InternalSerialize,
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(DeployResponse, _impl_._cached_size_),
-          false,
-      },
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[16],
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-      &::_pbi::kDescriptorMethods,
-      &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
-      nullptr,  // tracker
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  };
-}
-struct DeployResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr DeployResponseGlobalsTypeInternal()
-      :
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-        _default(::_pbi::ConstantInitialized{},
-                 DeployResponse_class_data_.base())
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(DeployResponse::InternalGenerateClassData_(
-            _default, &DeployResponse_globals_._table.header)),
-        _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<DeployResponse>(
-            GetClassData()))
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  {
-  }
-  ~DeployResponseGlobalsTypeInternal() {}
-  union {
-    alignas(::_pbi::kMaxMessageAlignment) DeployResponse _default;
-  };
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<DeployResponse>(
-      ::std::declval<const ::_pbi::ClassData*>())) _table;
-#endif
-};
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(DeployResponseGlobalsTypeInternal, _default) ==
-              ::_pbi::MessageGlobalsBase::OffsetToDefault());
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST DeployResponseGlobalsTypeInternal DeployResponse_globals_
-        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-namespace {
-const ::_pbi::ClassData* DeployResponse_get_class_data() {
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  return DeployResponse_globals_.GetClassData();
-#else
-  return DeployResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1075,7 +926,7 @@ constexpr auto Validator::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[20],
+      &file_reflection_data[18],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -1232,7 +1083,7 @@ constexpr auto ValidatorObject::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[22],
+      &file_reflection_data[20],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -1373,7 +1224,7 @@ constexpr auto ValidatorObject_FieldsEntry_DoNotUse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[21],
+      &file_reflection_data[19],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -1523,7 +1374,7 @@ constexpr auto ValidatorUnion::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[23],
+      &file_reflection_data[21],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -2873,7 +2724,7 @@ constexpr auto TableSchema::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[18],
+      &file_reflection_data[16],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -3331,7 +3182,7 @@ constexpr auto Schema::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[17],
+      &file_reflection_data[15],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -3872,161 +3723,6 @@ const ::_pbi::ClassData* WatchRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
-class DeployRequest::_Internal {
- public:
-  using HasBits = decltype(::std::declval<DeployRequest>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_._has_bits_);
-};
-
-constexpr DeployRequest::ParseTableT_ DeployRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
-  return ParseTableT_{
-    {
-      PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_._has_bits_),
-      0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
-      offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
-      offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
-      1,  // num_aux_entries
-      offsetof(ParseTableT_, aux_entries),
-      class_data,
-      nullptr,  // post_loop_handler
-      ::_pbi::TcParser::MpUnknownFields,  // fallback
-      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::loams::live::v1::DeployRequest>(),  // to_prefetch
-      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
-    }, {{
-      // .loams.live.v1.Schema schema = 2 [json_name = "schema"];
-      {::_pbi::TcParser::FastMtS1,
-       {18, 1, 0,
-        PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_.schema_)}},
-      // bytes bundle = 1 [json_name = "bundle"];
-      {::_pbi::TcParser::FastBS1,
-       {10, 0, 0,
-        PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_.bundle_)}},
-    }}, {{
-      65535, 65535
-    }}, {{
-      // bytes bundle = 1 [json_name = "bundle"];
-      {PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_.bundle_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
-      // .loams.live.v1.Schema schema = 2 [json_name = "schema"];
-      {PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_.schema_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-    }},
-    {{
-        #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::loams::live::v1::Schema>()},
-        #else
-        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::Schema_globals_},
-        #endif
-    }},
-    {{
-    }},
-  };
-}
-
-
-inline constexpr DeployRequest::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    ::_pbi::ConstantInitialized) noexcept
-      : bundle_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        schema_{nullptr} {}
-
-template <typename>
-constexpr DeployRequest::DeployRequest(::_pbi::ConstantInitialized,
-                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : Super_(
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          class_data
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          ),
-      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
-}
-inline void* PROTOBUF_NONNULL DeployRequest::PlacementNew_(
-    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) DeployRequest(arena);
-}
-constexpr auto DeployRequest::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(DeployRequest), alignof(DeployRequest));
-}
-constexpr auto DeployRequest::InternalGenerateClassData_(
-    const MessageLite& prototype,
-    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
-  return ::google::protobuf::internal::ClassDataFull{
-      ::google::protobuf::internal::ClassData{
-          &prototype,
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-          &_table_.header,
-#else
-          tc_table,
-#endif
-          nullptr,  // IsInitialized
-          &DeployRequest::MergeImpl,
-          Super_::GetNewImpl<DeployRequest>(),
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          &DeployRequest::SharedDtor,
-          Super_::GetClearImpl<DeployRequest>(), &DeployRequest::ByteSizeLong,
-              &DeployRequest::_InternalSerialize,
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_._cached_size_),
-          false,
-      },
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[15],
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-      &::_pbi::kDescriptorMethods,
-      &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
-      nullptr,  // tracker
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  };
-}
-struct DeployRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr DeployRequestGlobalsTypeInternal()
-      :
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-        _default(::_pbi::ConstantInitialized{},
-                 DeployRequest_class_data_.base())
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(DeployRequest::InternalGenerateClassData_(
-            _default, &DeployRequest_globals_._table.header)),
-        _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<DeployRequest>(
-            GetClassData()))
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  {
-  }
-  ~DeployRequestGlobalsTypeInternal() {}
-  union {
-    alignas(::_pbi::kMaxMessageAlignment) DeployRequest _default;
-  };
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<DeployRequest>(
-      ::std::declval<const ::_pbi::ClassData*>())) _table;
-#endif
-};
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(DeployRequestGlobalsTypeInternal, _default) ==
-              ::_pbi::MessageGlobalsBase::OffsetToDefault());
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST DeployRequestGlobalsTypeInternal DeployRequest_globals_
-        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-namespace {
-const ::_pbi::ClassData* DeployRequest_get_class_data() {
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  return DeployRequest_globals_.GetClassData();
-#else
-  return DeployRequest_class_data_.base();
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-}
-}  // namespace
-#endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace v1
 }  // namespace live
 }  // namespace loams
@@ -4151,18 +3847,6 @@ const ::uint32_t
         1,
         0,
         0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeployRequest, _impl_._has_bits_),
-        5, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeployRequest, _impl_.bundle_),
-        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeployRequest, _impl_.schema_),
-        0,
-        1,
-        0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeployResponse, _impl_._has_bits_),
-        4, // hasbit index offset
-        PROTOBUF_FIELD_OFFSET(::loams::live::v1::DeployResponse, _impl_.deployment_id_),
-        0,
-        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::Schema, _impl_._has_bits_),
         4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::Schema, _impl_.tables_),
@@ -4238,16 +3922,14 @@ static const ::_pbi::MigrationSchema
         {90, sizeof(::loams::live::v1::QueryResponse)},
         {97, sizeof(::loams::live::v1::MutateRequest)},
         {106, sizeof(::loams::live::v1::MutateResponse)},
-        {113, sizeof(::loams::live::v1::DeployRequest)},
-        {120, sizeof(::loams::live::v1::DeployResponse)},
-        {125, sizeof(::loams::live::v1::Schema)},
-        {130, sizeof(::loams::live::v1::TableSchema)},
-        {141, sizeof(::loams::live::v1::IndexSchema)},
-        {148, sizeof(::loams::live::v1::Validator)},
-        {158, sizeof(::loams::live::v1::ValidatorObject_FieldsEntry_DoNotUse)},
-        {165, sizeof(::loams::live::v1::ValidatorObject)},
-        {170, sizeof(::loams::live::v1::ValidatorUnion)},
-        {175, sizeof(::loams::live::v1::LiveError)},
+        {113, sizeof(::loams::live::v1::Schema)},
+        {118, sizeof(::loams::live::v1::TableSchema)},
+        {129, sizeof(::loams::live::v1::IndexSchema)},
+        {136, sizeof(::loams::live::v1::Validator)},
+        {146, sizeof(::loams::live::v1::ValidatorObject_FieldsEntry_DoNotUse)},
+        {153, sizeof(::loams::live::v1::ValidatorObject)},
+        {158, sizeof(::loams::live::v1::ValidatorUnion)},
+        {163, sizeof(::loams::live::v1::LiveError)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4266,8 +3948,6 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::loams::live::v1::QueryResponse_globals_,
         &::loams::live::v1::MutateRequest_globals_,
         &::loams::live::v1::MutateResponse_globals_,
-        &::loams::live::v1::DeployRequest_globals_,
-        &::loams::live::v1::DeployResponse_globals_,
         &::loams::live::v1::Schema_globals_,
         &::loams::live::v1::TableSchema_globals_,
         &::loams::live::v1::IndexSchema_globals_,
@@ -4324,66 +4004,60 @@ const char descriptor_table_protodef_loams_2flive_2fv1_2flive_2eproto[] ABSL_ATT
     "ey\030\003 \001(\tH\000R\016idempotencyKey\210\001\001B\022\n\020_idempo"
     "tency_key\"[\n\016MutateResponse\022\033\n\tcommit_ts"
     "\030\001 \001(\004R\010commitTs\022,\n\006result\030\002 \001(\0132\024.loams"
-    ".live.v1.ValueR\006result\"V\n\rDeployRequest\022"
-    "\026\n\006bundle\030\001 \001(\014R\006bundle\022-\n\006schema\030\002 \001(\0132"
-    "\025.loams.live.v1.SchemaR\006schema\"5\n\016Deploy"
-    "Response\022#\n\rdeployment_id\030\001 \001(\tR\014deploym"
-    "entId\"<\n\006Schema\0222\n\006tables\030\001 \003(\0132\032.loams."
-    "live.v1.TableSchemaR\006tables\"\327\001\n\013TableSch"
-    "ema\022\022\n\004name\030\001 \001(\tR\004name\0224\n\007indexes\030\002 \003(\013"
-    "2\032.loams.live.v1.IndexSchemaR\007indexes\0226\n"
-    "\tvalidator\030\003 \001(\0132\030.loams.live.v1.Validat"
-    "orR\tvalidator\0220\n\021schema_validation\030\004 \001(\010"
-    "H\000R\020schemaValidation\210\001\001B\024\n\022_schema_valid"
-    "ation\"9\n\013IndexSchema\022\022\n\004name\030\001 \001(\tR\004name"
-    "\022\026\n\006fields\030\002 \003(\tR\006fields\"\365\002\n\tValidator\022A"
-    "\n\tprimitive\030\001 \001(\0162!.loams.live.v1.Valida"
-    "torPrimitiveH\000R\tprimitive\0220\n\005array\030\002 \001(\013"
-    "2\030.loams.live.v1.ValidatorH\000R\005array\0228\n\006o"
-    "bject\030\003 \001(\0132\036.loams.live.v1.ValidatorObj"
-    "ectH\000R\006object\0220\n\007literal\030\004 \001(\0132\024.loams.l"
-    "ive.v1.ValueH\000R\007literal\0225\n\005union\030\005 \001(\0132\035"
-    ".loams.live.v1.ValidatorUnionH\000R\005union\0226"
-    "\n\010optional\030\006 \001(\0132\030.loams.live.v1.Validat"
-    "orH\000R\010optional\022\020\n\002id\030\007 \001(\tH\000R\002idB\006\n\004kind"
-    "\"\252\001\n\017ValidatorObject\022B\n\006fields\030\001 \003(\0132*.l"
-    "oams.live.v1.ValidatorObject.FieldsEntry"
-    "R\006fields\032S\n\013FieldsEntry\022\020\n\003key\030\001 \001(\tR\003ke"
-    "y\022.\n\005value\030\002 \001(\0132\030.loams.live.v1.Validat"
-    "orR\005value:\0028\001\"D\n\016ValidatorUnion\0222\n\007membe"
-    "rs\030\001 \003(\0132\030.loams.live.v1.ValidatorR\007memb"
-    "ers\"S\n\tLiveError\022,\n\004code\030\001 \001(\0162\030.loams.l"
-    "ive.v1.ErrorCodeR\004code\022\030\n\007message\030\002 \001(\tR"
-    "\007message*\224\002\n\022ValidatorPrimitive\022#\n\037VALID"
-    "ATOR_PRIMITIVE_UNSPECIFIED\020\000\022\034\n\030VALIDATO"
-    "R_PRIMITIVE_NULL\020\001\022\035\n\031VALIDATOR_PRIMITIV"
-    "E_INT64\020\002\022\037\n\033VALIDATOR_PRIMITIVE_FLOAT64"
-    "\020\003\022\037\n\033VALIDATOR_PRIMITIVE_BOOLEAN\020\004\022\036\n\032V"
-    "ALIDATOR_PRIMITIVE_STRING\020\005\022\035\n\031VALIDATOR"
-    "_PRIMITIVE_BYTES\020\006\022\033\n\027VALIDATOR_PRIMITIV"
-    "E_ANY\020\007*\305\002\n\tErrorCode\022\032\n\026ERROR_CODE_UNSP"
-    "ECIFIED\020\000\022\037\n\033ERROR_CODE_INVALID_ARGUMENT"
-    "\020\001\022\030\n\024ERROR_CODE_NOT_FOUND\020\002\022\"\n\036ERROR_CO"
-    "DE_FAILED_PRECONDITION\020\003\022!\n\035ERROR_CODE_R"
-    "ESOURCE_EXHAUSTED\020\004\022\035\n\031ERROR_CODE_FUNCTI"
-    "ON_ERROR\020\005\022\037\n\033ERROR_CODE_FUNCTION_TIMEOU"
-    "T\020\006\022%\n!ERROR_CODE_FUNCTION_OUT_OF_MEMORY"
-    "\020\007\022\032\n\026ERROR_CODE_UNAVAILABLE\020\010\022\027\n\023ERROR_"
-    "CODE_INTERNAL\020\t2\247\004\n\013LiveService\022N\n\005Watch"
-    "\022\033.loams.live.v1.WatchRequest\032\031.loams.li"
-    "ve.v1.Transition\"\013\222\265\030\007\022\005watch0\001\022s\n\016Modif"
-    "yQuerySet\022$.loams.live.v1.ModifyQuerySet"
-    "Request\032%.loams.live.v1.ModifyQuerySetRe"
-    "sponse\"\024\222\265\030\020\022\016modifyQuerySet\022W\n\005Query\022\033."
-    "loams.live.v1.QueryRequest\032\034.loams.live."
-    "v1.QueryResponse\"\023\222\265\030\017\n\006tables\022\005query\022[\n"
-    "\006Mutate\022\034.loams.live.v1.MutateRequest\032\035."
-    "loams.live.v1.MutateResponse\"\024\222\265\030\020\n\006tabl"
-    "es\022\006mutate\022[\n\006Deploy\022\034.loams.live.v1.Dep"
-    "loyRequest\032\035.loams.live.v1.DeployRespons"
-    "e\"\024\222\265\030\020\n\006tables\022\006deploy\032@\212\265\030<\n\004live\0222Liv"
-    "e sync: watch a query set over a server "
-    "stream.\030\001b\006proto3"
+    ".live.v1.ValueR\006result\"<\n\006Schema\0222\n\006tabl"
+    "es\030\001 \003(\0132\032.loams.live.v1.TableSchemaR\006ta"
+    "bles\"\327\001\n\013TableSchema\022\022\n\004name\030\001 \001(\tR\004name"
+    "\0224\n\007indexes\030\002 \003(\0132\032.loams.live.v1.IndexS"
+    "chemaR\007indexes\0226\n\tvalidator\030\003 \001(\0132\030.loam"
+    "s.live.v1.ValidatorR\tvalidator\0220\n\021schema"
+    "_validation\030\004 \001(\010H\000R\020schemaValidation\210\001\001"
+    "B\024\n\022_schema_validation\"9\n\013IndexSchema\022\022\n"
+    "\004name\030\001 \001(\tR\004name\022\026\n\006fields\030\002 \003(\tR\006field"
+    "s\"\365\002\n\tValidator\022A\n\tprimitive\030\001 \001(\0162!.loa"
+    "ms.live.v1.ValidatorPrimitiveH\000R\tprimiti"
+    "ve\0220\n\005array\030\002 \001(\0132\030.loams.live.v1.Valida"
+    "torH\000R\005array\0228\n\006object\030\003 \001(\0132\036.loams.liv"
+    "e.v1.ValidatorObjectH\000R\006object\0220\n\007litera"
+    "l\030\004 \001(\0132\024.loams.live.v1.ValueH\000R\007literal"
+    "\0225\n\005union\030\005 \001(\0132\035.loams.live.v1.Validato"
+    "rUnionH\000R\005union\0226\n\010optional\030\006 \001(\0132\030.loam"
+    "s.live.v1.ValidatorH\000R\010optional\022\020\n\002id\030\007 "
+    "\001(\tH\000R\002idB\006\n\004kind\"\252\001\n\017ValidatorObject\022B\n"
+    "\006fields\030\001 \003(\0132*.loams.live.v1.ValidatorO"
+    "bject.FieldsEntryR\006fields\032S\n\013FieldsEntry"
+    "\022\020\n\003key\030\001 \001(\tR\003key\022.\n\005value\030\002 \001(\0132\030.loam"
+    "s.live.v1.ValidatorR\005value:\0028\001\"D\n\016Valida"
+    "torUnion\0222\n\007members\030\001 \003(\0132\030.loams.live.v"
+    "1.ValidatorR\007members\"S\n\tLiveError\022,\n\004cod"
+    "e\030\001 \001(\0162\030.loams.live.v1.ErrorCodeR\004code\022"
+    "\030\n\007message\030\002 \001(\tR\007message*\224\002\n\022ValidatorP"
+    "rimitive\022#\n\037VALIDATOR_PRIMITIVE_UNSPECIF"
+    "IED\020\000\022\034\n\030VALIDATOR_PRIMITIVE_NULL\020\001\022\035\n\031V"
+    "ALIDATOR_PRIMITIVE_INT64\020\002\022\037\n\033VALIDATOR_"
+    "PRIMITIVE_FLOAT64\020\003\022\037\n\033VALIDATOR_PRIMITI"
+    "VE_BOOLEAN\020\004\022\036\n\032VALIDATOR_PRIMITIVE_STRI"
+    "NG\020\005\022\035\n\031VALIDATOR_PRIMITIVE_BYTES\020\006\022\033\n\027V"
+    "ALIDATOR_PRIMITIVE_ANY\020\007*\305\002\n\tErrorCode\022\032"
+    "\n\026ERROR_CODE_UNSPECIFIED\020\000\022\037\n\033ERROR_CODE"
+    "_INVALID_ARGUMENT\020\001\022\030\n\024ERROR_CODE_NOT_FO"
+    "UND\020\002\022\"\n\036ERROR_CODE_FAILED_PRECONDITION\020"
+    "\003\022!\n\035ERROR_CODE_RESOURCE_EXHAUSTED\020\004\022\035\n\031"
+    "ERROR_CODE_FUNCTION_ERROR\020\005\022\037\n\033ERROR_COD"
+    "E_FUNCTION_TIMEOUT\020\006\022%\n!ERROR_CODE_FUNCT"
+    "ION_OUT_OF_MEMORY\020\007\022\032\n\026ERROR_CODE_UNAVAI"
+    "LABLE\020\010\022\027\n\023ERROR_CODE_INTERNAL\020\t2\312\003\n\013Liv"
+    "eService\022N\n\005Watch\022\033.loams.live.v1.WatchR"
+    "equest\032\031.loams.live.v1.Transition\"\013\222\265\030\007\022"
+    "\005watch0\001\022s\n\016ModifyQuerySet\022$.loams.live."
+    "v1.ModifyQuerySetRequest\032%.loams.live.v1"
+    ".ModifyQuerySetResponse\"\024\222\265\030\020\022\016modifyQue"
+    "rySet\022W\n\005Query\022\033.loams.live.v1.QueryRequ"
+    "est\032\034.loams.live.v1.QueryResponse\"\023\222\265\030\017\n"
+    "\006tables\022\005query\022[\n\006Mutate\022\034.loams.live.v1"
+    ".MutateRequest\032\035.loams.live.v1.MutateRes"
+    "ponse\"\024\222\265\030\020\n\006tables\022\006mutate\032@\212\265\030<\n\004live\022"
+    "2Live sync: watch a query set over a ser"
+    "ver stream.\030\001b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_loams_2flive_2fv1_2flive_2eproto_deps[2] = {
@@ -4394,13 +4068,13 @@ static ::absl::once_flag descriptor_table_loams_2flive_2fv1_2flive_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_loams_2flive_2fv1_2flive_2eproto = {
     false,
     false,
-    4177,
+    3941,
     descriptor_table_protodef_loams_2flive_2fv1_2flive_2eproto,
     "loams/live/v1/live.proto",
     &descriptor_table_loams_2flive_2fv1_2flive_2eproto_once,
     descriptor_table_loams_2flive_2fv1_2flive_2eproto_deps,
     2,
-    25,
+    23,
     schemas,
     file_message_globals,
     TableStruct_loams_2flive_2fv1_2flive_2eproto::offsets,
@@ -8270,459 +7944,6 @@ void MutateResponse::InternalSwap(MutateResponse* PROTOBUF_RESTRICT PROTOBUF_NON
 }
 
 ::google::protobuf::Metadata MutateResponse::GetMetadata() const {
-  return Super_::GetMetadataImpl(GetClassData()->full());
-}
-// ===================================================================
-
-DeployRequest::DeployRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : Super_(arena, DeployRequest_get_class_data()) {
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : Super_(arena) {
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  SharedCtor(arena);
-  // @@protoc_insertion_point(arena_constructor:loams.live.v1.DeployRequest)
-}
-PROTOBUF_NDEBUG_INLINE DeployRequest::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-    [[maybe_unused]] const ::loams::live::v1::DeployRequest& from_msg)
-      : _has_bits_{from._has_bits_},
-        bundle_(arena, from.bundle_) {}
-
-DeployRequest::DeployRequest(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
-    const DeployRequest& from)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : Super_(arena, DeployRequest_get_class_data()) {
-
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : Super_(arena) {
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  DeployRequest* const _this = this;
-  (void)_this;
-  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
-      from._internal_metadata_);
-  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.schema_ = (CheckHasBit(cached_has_bits, 0x00000002U))
-                 ? Super_::CopyConstruct(arena, *from._impl_.schema_)
-                 : nullptr;
-
-  // @@protoc_insertion_point(copy_constructor:loams.live.v1.DeployRequest)
-}
-PROTOBUF_NDEBUG_INLINE DeployRequest::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : bundle_(arena) {}
-
-inline void DeployRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
-  new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.schema_ = {};
-}
-DeployRequest::~DeployRequest() {
-  // @@protoc_insertion_point(destructor:loams.live.v1.DeployRequest)
-  SharedDtor(*this);
-}
-inline void DeployRequest::SharedDtor(MessageLite& self) {
-  DeployRequest& this_ = static_cast<DeployRequest&>(self);
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    this_.CheckHasBitConsistency();
-  }
-  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
-  ABSL_DCHECK(this_.GetArena() == nullptr);
-  this_._impl_.bundle_.Destroy();
-  delete this_._impl_.schema_;
-  this_._impl_.~Impl_();
-}
-
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
-    ::google::protobuf::internal::ClassDataFull DeployRequest_class_data_ =
-        DeployRequest::InternalGenerateClassData_(DeployRequest_globals_._default);
-
-PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-DeployRequest::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&DeployRequest_class_data_);
-  ::google::protobuf::internal::PrefetchToLocalCache(DeployRequest_class_data_.tc_table);
-  return DeployRequest_class_data_.base();
-}
-#else
-PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-DeployRequest::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&DeployRequest_globals_);
-  ::google::protobuf::internal::PrefetchToLocalCache(
-      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&DeployRequest_globals_));
-  return DeployRequest_globals_.GetClassData();
-}
-#endif  // !PROTOBUF_MESSAGE_GLOBALS
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_CONSTINIT
-PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const DeployRequest::ParseTableT_
-    DeployRequest::_table_ =
-        DeployRequest::InternalGenerateParseTable_(DeployRequest_class_data_.base());
-#endif  // !PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_NOINLINE void DeployRequest::Clear() {
-  auto& this_ [[maybe_unused]] = *this;
-  // @@protoc_insertion_point(message_clear_start:loams.live.v1.DeployRequest)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
-
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      this_._impl_.bundle_.ClearNonDefaultToEmpty();
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      ABSL_DCHECK(this_._impl_.schema_ != nullptr);
-      this_._impl_.schema_->Clear();
-    }
-  }
-  _impl_._has_bits_.Clear();
-  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
-}
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-::uint8_t* PROTOBUF_NONNULL DeployRequest::_InternalSerialize(
-    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
-    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
-  const DeployRequest& this_ = static_cast<const DeployRequest&>(base);
-#else   // PROTOBUF_CUSTOM_VTABLE
-::uint8_t* PROTOBUF_NONNULL DeployRequest::_InternalSerialize(
-    ::uint8_t* PROTOBUF_NONNULL target,
-    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-  const DeployRequest& this_ = *this;
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    this_.CheckHasBitConsistency();
-  }
-  // @@protoc_insertion_point(serialize_to_array_start:loams.live.v1.DeployRequest)
-  ::uint32_t cached_has_bits = 0;
-  (void)cached_has_bits;
-
-  cached_has_bits = this_._impl_._has_bits_[0];
-  // bytes bundle = 1 [json_name = "bundle"];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (!this_._internal_bundle().empty()) {
-      const ::std::string& _s = this_._internal_bundle();
-      target = stream->WriteBytesMaybeAliased(1, _s, target);
-    }
-  }
-
-  // .loams.live.v1.Schema schema = 2 [json_name = "schema"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
-        2, *this_._impl_.schema_, this_._impl_.schema_->GetCachedSize(), target,
-        stream);
-  }
-
-  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
-    target =
-        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
-            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
-  }
-  // @@protoc_insertion_point(serialize_to_array_end:loams.live.v1.DeployRequest)
-  return target;
-}
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-::size_t DeployRequest::ByteSizeLong(const MessageLite& base) {
-  const DeployRequest& this_ = static_cast<const DeployRequest&>(base);
-#else   // PROTOBUF_CUSTOM_VTABLE
-::size_t DeployRequest::ByteSizeLong() const {
-  const DeployRequest& this_ = *this;
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  // @@protoc_insertion_point(message_byte_size_start:loams.live.v1.DeployRequest)
-  ::size_t total_size = 0;
-
-  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
-
-  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    // bytes bundle = 1 [json_name = "bundle"];
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (!this_._internal_bundle().empty()) {
-        total_size += 1 + ::google::protobuf::internal::WireFormatLite::BytesSize(
-                                        this_._internal_bundle());
-      }
-    }
-    // .loams.live.v1.Schema schema = 2 [json_name = "schema"];
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      total_size += 1 +
-                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.schema_);
-    }
-  }
-  return this_.MaybeComputeUnknownFieldsSize(total_size,
-                                             &this_._impl_._cached_size_);
-}
-
-void DeployRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
-                      const ::google::protobuf::MessageLite& from_msg) {
-   auto* const _this = static_cast<DeployRequest*>(&to_msg);
-  auto& from = static_cast<const DeployRequest&>(from_msg);
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    from.CheckHasBitConsistency();
-  }
-  ::google::protobuf::Arena* arena = _this->GetArena();
-  // @@protoc_insertion_point(class_specific_merge_from_start:loams.live.v1.DeployRequest)
-  ABSL_DCHECK_NE(&from, _this);
-  ::uint32_t cached_has_bits = 0;
-  (void)cached_has_bits;
-
-  cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (!from._internal_bundle().empty()) {
-        _this->_internal_set_bundle(from._internal_bundle());
-      } else {
-        if (_this->_impl_.bundle_.IsDefault()) {
-          _this->_internal_set_bundle("");
-        }
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      ABSL_DCHECK(from._impl_.schema_ != nullptr);
-      if (_this->_impl_.schema_ == nullptr) {
-        _this->_impl_.schema_ = Super_::CopyConstruct(arena, *from._impl_.schema_);
-      } else {
-        _this->_impl_.schema_->MergeFrom(*from._impl_.schema_);
-      }
-    }
-  }
-  _this->_impl_._has_bits_[0] |= cached_has_bits;
-  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
-      from._internal_metadata_);
-}
-
-void DeployRequest::CopyFrom(const DeployRequest& from) {
-  // @@protoc_insertion_point(class_specific_copy_from_start:loams.live.v1.DeployRequest)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
-}
-
-
-void DeployRequest::InternalSwap(DeployRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
-  using ::std::swap;
-  auto* arena = GetArena();
-  ABSL_DCHECK_EQ(arena, other->GetArena());
-  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.bundle_, &other->_impl_.bundle_, arena);
-  swap(_impl_.schema_, other->_impl_.schema_);
-}
-
-::google::protobuf::Metadata DeployRequest::GetMetadata() const {
-  return Super_::GetMetadataImpl(GetClassData()->full());
-}
-// ===================================================================
-
-DeployResponse::DeployResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : Super_(arena, DeployResponse_get_class_data()) {
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : Super_(arena) {
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  SharedCtor(arena);
-  // @@protoc_insertion_point(arena_constructor:loams.live.v1.DeployResponse)
-}
-PROTOBUF_NDEBUG_INLINE DeployResponse::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-    [[maybe_unused]] const ::loams::live::v1::DeployResponse& from_msg)
-      : _has_bits_{from._has_bits_},
-        deployment_id_(arena, from.deployment_id_) {}
-
-DeployResponse::DeployResponse(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
-    const DeployResponse& from)
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-    : Super_(arena, DeployResponse_get_class_data()) {
-
-#else   // PROTOBUF_CUSTOM_VTABLE
-    : Super_(arena) {
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  DeployResponse* const _this = this;
-  (void)_this;
-  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
-      from._internal_metadata_);
-  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-
-  // @@protoc_insertion_point(copy_constructor:loams.live.v1.DeployResponse)
-}
-PROTOBUF_NDEBUG_INLINE DeployResponse::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : deployment_id_(arena) {}
-
-inline void DeployResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
-  new (&_impl_) Impl_(internal_visibility(), arena);
-}
-DeployResponse::~DeployResponse() {
-  // @@protoc_insertion_point(destructor:loams.live.v1.DeployResponse)
-  SharedDtor(*this);
-}
-inline void DeployResponse::SharedDtor(MessageLite& self) {
-  DeployResponse& this_ = static_cast<DeployResponse&>(self);
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    this_.CheckHasBitConsistency();
-  }
-  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
-  ABSL_DCHECK(this_.GetArena() == nullptr);
-  this_._impl_.deployment_id_.Destroy();
-  this_._impl_.~Impl_();
-}
-
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
-    ::google::protobuf::internal::ClassDataFull DeployResponse_class_data_ =
-        DeployResponse::InternalGenerateClassData_(DeployResponse_globals_._default);
-
-PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-DeployResponse::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&DeployResponse_class_data_);
-  ::google::protobuf::internal::PrefetchToLocalCache(DeployResponse_class_data_.tc_table);
-  return DeployResponse_class_data_.base();
-}
-#else
-PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
-DeployResponse::GetClassData() const {
-  ::google::protobuf::internal::PrefetchToLocalCache(&DeployResponse_globals_);
-  ::google::protobuf::internal::PrefetchToLocalCache(
-      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&DeployResponse_globals_));
-  return DeployResponse_globals_.GetClassData();
-}
-#endif  // !PROTOBUF_MESSAGE_GLOBALS
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_CONSTINIT
-PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const DeployResponse::ParseTableT_
-    DeployResponse::_table_ =
-        DeployResponse::InternalGenerateParseTable_(DeployResponse_class_data_.base());
-#endif  // !PROTOBUF_MESSAGE_GLOBALS
-PROTOBUF_NOINLINE void DeployResponse::Clear() {
-  auto& this_ [[maybe_unused]] = *this;
-  // @@protoc_insertion_point(message_clear_start:loams.live.v1.DeployResponse)
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
-
-  cached_has_bits = this_._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    this_._impl_.deployment_id_.ClearNonDefaultToEmpty();
-  }
-  _impl_._has_bits_.Clear();
-  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
-}
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-::uint8_t* PROTOBUF_NONNULL DeployResponse::_InternalSerialize(
-    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
-    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
-  const DeployResponse& this_ = static_cast<const DeployResponse&>(base);
-#else   // PROTOBUF_CUSTOM_VTABLE
-::uint8_t* PROTOBUF_NONNULL DeployResponse::_InternalSerialize(
-    ::uint8_t* PROTOBUF_NONNULL target,
-    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-  const DeployResponse& this_ = *this;
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    this_.CheckHasBitConsistency();
-  }
-  // @@protoc_insertion_point(serialize_to_array_start:loams.live.v1.DeployResponse)
-  ::uint32_t cached_has_bits = 0;
-  (void)cached_has_bits;
-
-  cached_has_bits = this_._impl_._has_bits_[0];
-  // string deployment_id = 1 [json_name = "deploymentId"];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (!this_._internal_deployment_id().empty()) {
-      const ::std::string& _s = this_._internal_deployment_id();
-      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "loams.live.v1.DeployResponse.deployment_id");
-      target = stream->WriteStringMaybeAliased(1, _s, target);
-    }
-  }
-
-  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
-    target =
-        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
-            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
-  }
-  // @@protoc_insertion_point(serialize_to_array_end:loams.live.v1.DeployResponse)
-  return target;
-}
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-::size_t DeployResponse::ByteSizeLong(const MessageLite& base) {
-  const DeployResponse& this_ = static_cast<const DeployResponse&>(base);
-#else   // PROTOBUF_CUSTOM_VTABLE
-::size_t DeployResponse::ByteSizeLong() const {
-  const DeployResponse& this_ = *this;
-#endif  // PROTOBUF_CUSTOM_VTABLE
-  // @@protoc_insertion_point(message_byte_size_start:loams.live.v1.DeployResponse)
-  ::size_t total_size = 0;
-
-  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
-
-   {
-    // string deployment_id = 1 [json_name = "deploymentId"];
-    cached_has_bits = this_._impl_._has_bits_[0];
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-      if (!this_._internal_deployment_id().empty()) {
-        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
-                                        this_._internal_deployment_id());
-      }
-    }
-  }
-  return this_.MaybeComputeUnknownFieldsSize(total_size,
-                                             &this_._impl_._cached_size_);
-}
-
-void DeployResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
-                      const ::google::protobuf::MessageLite& from_msg) {
-   auto* const _this = static_cast<DeployResponse*>(&to_msg);
-  auto& from = static_cast<const DeployResponse&>(from_msg);
-  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
-    from.CheckHasBitConsistency();
-  }
-  // @@protoc_insertion_point(class_specific_merge_from_start:loams.live.v1.DeployResponse)
-  ABSL_DCHECK_NE(&from, _this);
-  ::uint32_t cached_has_bits = 0;
-  (void)cached_has_bits;
-
-  cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (!from._internal_deployment_id().empty()) {
-      _this->_internal_set_deployment_id(from._internal_deployment_id());
-    } else {
-      if (_this->_impl_.deployment_id_.IsDefault()) {
-        _this->_internal_set_deployment_id("");
-      }
-    }
-  }
-  _this->_impl_._has_bits_[0] |= cached_has_bits;
-  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
-      from._internal_metadata_);
-}
-
-void DeployResponse::CopyFrom(const DeployResponse& from) {
-  // @@protoc_insertion_point(class_specific_copy_from_start:loams.live.v1.DeployResponse)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
-}
-
-
-void DeployResponse::InternalSwap(DeployResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
-  using ::std::swap;
-  auto* arena = GetArena();
-  ABSL_DCHECK_EQ(arena, other->GetArena());
-  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.deployment_id_, &other->_impl_.deployment_id_, arena);
-}
-
-::google::protobuf::Metadata DeployResponse::GetMetadata() const {
   return Super_::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

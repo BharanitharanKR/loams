@@ -31,6 +31,7 @@
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
 #include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
+#include "loams/live/v1/admin.pb.h"
 #include "loams/live/v1/live.pb.h"
 // @@protoc_insertion_point(includes)
 
@@ -49,10 +50,6 @@ extern const ::google::protobuf::internal::DescriptorTable descriptor_table_loam
 namespace loams {
 namespace live {
 namespace v1 {
-enum DeploymentState : int;
-extern const uint32_t DeploymentState_internal_data_[];
-enum IndexState : int;
-extern const uint32_t IndexState_internal_data_[];
 enum TableJobKind : int;
 extern const uint32_t TableJobKind_internal_data_[];
 class AppDef;
@@ -117,12 +114,6 @@ extern const TableJobRecordGlobalsTypeInternal TableJobRecord_globals_;
 namespace google {
 namespace protobuf {
 template <>
-internal::EnumTraitsT<::loams::live::v1::DeploymentState_internal_data_>
-    internal::EnumTraitsImpl::value<::loams::live::v1::DeploymentState>;
-template <>
-internal::EnumTraitsT<::loams::live::v1::IndexState_internal_data_>
-    internal::EnumTraitsImpl::value<::loams::live::v1::IndexState>;
-template <>
 internal::EnumTraitsT<::loams::live::v1::TableJobKind_internal_data_>
     internal::EnumTraitsImpl::value<::loams::live::v1::TableJobKind>;
 }  // namespace protobuf
@@ -170,94 +161,6 @@ template <>
 [[nodiscard]] inline bool TableJobKind_Parse(
     ::absl::string_view name, TableJobKind* PROTOBUF_NONNULL value) {
   return ::google::protobuf::internal::ParseNamedEnum<TableJobKind>(TableJobKind_descriptor(), name,
-                                           value);
-}
-enum IndexState : int {
-  INDEX_STATE_UNSPECIFIED = 0,
-  INDEX_STATE_BACKFILLING = 1,
-  INDEX_STATE_READY = 2,
-  INDEX_STATE_DROPPING = 3,
-  IndexState_INT_MIN_SENTINEL_DO_NOT_USE_ =
-      ::std::numeric_limits<::int32_t>::min(),
-  IndexState_INT_MAX_SENTINEL_DO_NOT_USE_ =
-      ::std::numeric_limits<::int32_t>::max(),
-};
-
-extern const uint32_t IndexState_internal_data_[];
-inline constexpr IndexState IndexState_MIN =
-    static_cast<IndexState>(0);
-inline constexpr IndexState IndexState_MAX =
-    static_cast<IndexState>(3);
-[[nodiscard]] inline bool IndexState_IsValid(int value) {
-  return 0 <= value && value <= 3;
-}
-inline constexpr int IndexState_ARRAYSIZE = 3 + 1;
-[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
-IndexState_descriptor();
-[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(IndexState) {
-  return IndexState_descriptor();
-}
-template <typename T>
-[[nodiscard]] const ::std::string& IndexState_Name(T value) {
-  static_assert(::std::is_same<T, IndexState>::value ||
-                    ::std::is_integral<T>::value,
-                "Incorrect type passed to IndexState_Name().");
-  return IndexState_Name(static_cast<IndexState>(value));
-}
-template <>
-[[nodiscard]] inline const ::std::string& IndexState_Name(IndexState value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<IndexState_descriptor, 0, 3>(
-      static_cast<int>(value));
-}
-[[nodiscard]] inline bool IndexState_Parse(
-    ::absl::string_view name, IndexState* PROTOBUF_NONNULL value) {
-  return ::google::protobuf::internal::ParseNamedEnum<IndexState>(IndexState_descriptor(), name,
-                                           value);
-}
-enum DeploymentState : int {
-  DEPLOYMENT_STATE_UNSPECIFIED = 0,
-  DEPLOYMENT_STATE_PENDING = 1,
-  DEPLOYMENT_STATE_VALIDATING = 2,
-  DEPLOYMENT_STATE_BACKFILLING = 3,
-  DEPLOYMENT_STATE_ACTIVE = 4,
-  DEPLOYMENT_STATE_SUPERSEDED = 5,
-  DEPLOYMENT_STATE_FAILED = 6,
-  DEPLOYMENT_STATE_DEGRADED = 7,
-  DeploymentState_INT_MIN_SENTINEL_DO_NOT_USE_ =
-      ::std::numeric_limits<::int32_t>::min(),
-  DeploymentState_INT_MAX_SENTINEL_DO_NOT_USE_ =
-      ::std::numeric_limits<::int32_t>::max(),
-};
-
-extern const uint32_t DeploymentState_internal_data_[];
-inline constexpr DeploymentState DeploymentState_MIN =
-    static_cast<DeploymentState>(0);
-inline constexpr DeploymentState DeploymentState_MAX =
-    static_cast<DeploymentState>(7);
-[[nodiscard]] inline bool DeploymentState_IsValid(int value) {
-  return 0 <= value && value <= 7;
-}
-inline constexpr int DeploymentState_ARRAYSIZE = 7 + 1;
-[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
-DeploymentState_descriptor();
-[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(DeploymentState) {
-  return DeploymentState_descriptor();
-}
-template <typename T>
-[[nodiscard]] const ::std::string& DeploymentState_Name(T value) {
-  static_assert(::std::is_same<T, DeploymentState>::value ||
-                    ::std::is_integral<T>::value,
-                "Incorrect type passed to DeploymentState_Name().");
-  return DeploymentState_Name(static_cast<DeploymentState>(value));
-}
-template <>
-[[nodiscard]] inline const ::std::string& DeploymentState_Name(DeploymentState value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<DeploymentState_descriptor, 0, 7>(
-      static_cast<int>(value));
-}
-[[nodiscard]] inline bool DeploymentState_Parse(
-    ::absl::string_view name, DeploymentState* PROTOBUF_NONNULL value) {
-  return ::google::protobuf::internal::ParseNamedEnum<DeploymentState>(DeploymentState_descriptor(), name,
                                            value);
 }
 using ::google::protobuf::internal::generated_enum::AbslParseFlag;
@@ -1982,6 +1885,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeploymentRecord final : public ::g
 
   // accessors -------------------------------------------------------
   enum : int {
+    kFunctionsFieldNumber = 11,
     kIdFieldNumber = 2,
     kBundleSha256FieldNumber = 3,
     kCreatedByFieldNumber = 6,
@@ -1993,6 +1897,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeploymentRecord final : public ::g
     kFormatFieldNumber = 1,
     kStateFieldNumber = 9,
   };
+  // repeated .loams.live.v1.FunctionInfo functions = 11 [json_name = "functions"];
+  [[nodiscard]] int functions_size() const;
+  private:
+  int _internal_functions_size() const;
+
+  public:
+  void clear_functions() ;
+  [[nodiscard]] const ::loams::live::v1::FunctionInfo& functions(int index) const;
+  [[nodiscard]] ::loams::live::v1::FunctionInfo* PROTOBUF_NONNULL mutable_functions(int index);
+  ::loams::live::v1::FunctionInfo* PROTOBUF_NONNULL add_functions();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::loams::live::v1::FunctionInfo>&
+  functions() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::loams::live::v1::FunctionInfo>* PROTOBUF_NONNULL
+  mutable_functions();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::loams::live::v1::FunctionInfo>& _internal_functions() const;
+  ::google::protobuf::RepeatedPtrField<::loams::live::v1::FunctionInfo>* PROTOBUF_NONNULL _internal_mutable_functions();
+
+  public:
   // bytes id = 2 [json_name = "id"];
   void clear_id() ;
   [[nodiscard]] const ::std::string& id() const;
@@ -2132,8 +2056,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeploymentRecord final : public ::g
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 10,
-                          1, 78,
+      ::google::protobuf::internal::TcParseTable<4, 11,
+                          2, 78,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2161,6 +2085,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeploymentRecord final : public ::g
         const DeploymentRecord& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::loams::live::v1::FunctionInfo > functions_;
     ::google::protobuf::internal::ArenaStringPtr id_;
     ::google::protobuf::internal::ArenaStringPtr bundle_sha256_;
     ::google::protobuf::internal::ArenaStringPtr created_by_;
@@ -3575,7 +3500,7 @@ inline void AppDef::_internal_set_journal_shards(::uint32_t value) {
 inline void DeploymentRecord::clear_format() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.format_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t DeploymentRecord::format() const {
   // @@protoc_insertion_point(field_get:loams.live.v1.DeploymentRecord.format)
@@ -3583,7 +3508,7 @@ inline ::uint32_t DeploymentRecord::format() const {
 }
 inline void DeploymentRecord::set_format(::uint32_t value) {
   _internal_set_format(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:loams.live.v1.DeploymentRecord.format)
 }
 inline ::uint32_t DeploymentRecord::_internal_format() const {
@@ -3599,7 +3524,7 @@ inline void DeploymentRecord::_internal_set_format(::uint32_t value) {
 inline void DeploymentRecord::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline const ::std::string& DeploymentRecord::id() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -3609,13 +3534,13 @@ inline const ::std::string& DeploymentRecord::id() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void DeploymentRecord::set_id(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   _impl_.id_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:loams.live.v1.DeploymentRecord.id)
 }
 inline ::std::string* PROTOBUF_NONNULL DeploymentRecord::mutable_id()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::std::string* _s = _internal_mutable_id();
   // @@protoc_insertion_point(field_mutable:loams.live.v1.DeploymentRecord.id)
   return _s;
@@ -3635,10 +3560,10 @@ inline ::std::string* PROTOBUF_NONNULL DeploymentRecord::_internal_mutable_id() 
 inline ::std::string* PROTOBUF_NULLABLE DeploymentRecord::release_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:loams.live.v1.DeploymentRecord.id)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   auto* released = _impl_.id_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.id_.Set("", GetArena());
@@ -3648,9 +3573,9 @@ inline ::std::string* PROTOBUF_NULLABLE DeploymentRecord::release_id() {
 inline void DeploymentRecord::set_allocated_id(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
   _impl_.id_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.id_.IsDefault()) {
@@ -3663,7 +3588,7 @@ inline void DeploymentRecord::set_allocated_id(::std::string* PROTOBUF_NULLABLE 
 inline void DeploymentRecord::clear_bundle_sha256() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.bundle_sha256_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::std::string& DeploymentRecord::bundle_sha256() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -3673,13 +3598,13 @@ inline const ::std::string& DeploymentRecord::bundle_sha256() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void DeploymentRecord::set_bundle_sha256(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   _impl_.bundle_sha256_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:loams.live.v1.DeploymentRecord.bundle_sha256)
 }
 inline ::std::string* PROTOBUF_NONNULL DeploymentRecord::mutable_bundle_sha256()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::std::string* _s = _internal_mutable_bundle_sha256();
   // @@protoc_insertion_point(field_mutable:loams.live.v1.DeploymentRecord.bundle_sha256)
   return _s;
@@ -3699,10 +3624,10 @@ inline ::std::string* PROTOBUF_NONNULL DeploymentRecord::_internal_mutable_bundl
 inline ::std::string* PROTOBUF_NULLABLE DeploymentRecord::release_bundle_sha256() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:loams.live.v1.DeploymentRecord.bundle_sha256)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   auto* released = _impl_.bundle_sha256_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.bundle_sha256_.Set("", GetArena());
@@ -3712,9 +3637,9 @@ inline ::std::string* PROTOBUF_NULLABLE DeploymentRecord::release_bundle_sha256(
 inline void DeploymentRecord::set_allocated_bundle_sha256(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   _impl_.bundle_sha256_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.bundle_sha256_.IsDefault()) {
@@ -3725,7 +3650,7 @@ inline void DeploymentRecord::set_allocated_bundle_sha256(::std::string* PROTOBU
 
 // .loams.live.v1.Schema schema = 4 [json_name = "schema"];
 inline bool DeploymentRecord::has_schema() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000040U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000080U);
   PROTOBUF_ASSUME(!value || _impl_.schema_ != nullptr);
   return value;
 }
@@ -3746,16 +3671,16 @@ inline void DeploymentRecord::unsafe_arena_set_allocated_schema(
   }
   _impl_.schema_ = reinterpret_cast<::loams::live::v1::Schema*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.live.v1.DeploymentRecord.schema)
 }
 inline ::loams::live::v1::Schema* PROTOBUF_NULLABLE DeploymentRecord::release_schema() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   ::loams::live::v1::Schema* released = _impl_.schema_;
   _impl_.schema_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -3775,7 +3700,7 @@ inline ::loams::live::v1::Schema* PROTOBUF_NULLABLE DeploymentRecord::unsafe_are
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:loams.live.v1.DeploymentRecord.schema)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   ::loams::live::v1::Schema* temp = _impl_.schema_;
   _impl_.schema_ = nullptr;
   return temp;
@@ -3790,7 +3715,7 @@ inline ::loams::live::v1::Schema* PROTOBUF_NONNULL DeploymentRecord::_internal_m
 }
 inline ::loams::live::v1::Schema* PROTOBUF_NONNULL DeploymentRecord::mutable_schema()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   ::loams::live::v1::Schema* _msg = _internal_mutable_schema();
   // @@protoc_insertion_point(field_mutable:loams.live.v1.DeploymentRecord.schema)
   return _msg;
@@ -3807,9 +3732,9 @@ inline void DeploymentRecord::set_allocated_schema(::loams::live::v1::Schema* PR
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
   }
 
   _impl_.schema_ = reinterpret_cast<::loams::live::v1::Schema*>(value);
@@ -3820,7 +3745,7 @@ inline void DeploymentRecord::set_allocated_schema(::loams::live::v1::Schema* PR
 inline void DeploymentRecord::clear_created_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t DeploymentRecord::created_at_ms() const {
   // @@protoc_insertion_point(field_get:loams.live.v1.DeploymentRecord.created_at_ms)
@@ -3828,7 +3753,7 @@ inline ::uint64_t DeploymentRecord::created_at_ms() const {
 }
 inline void DeploymentRecord::set_created_at_ms(::uint64_t value) {
   _internal_set_created_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:loams.live.v1.DeploymentRecord.created_at_ms)
 }
 inline ::uint64_t DeploymentRecord::_internal_created_at_ms() const {
@@ -3844,7 +3769,7 @@ inline void DeploymentRecord::_internal_set_created_at_ms(::uint64_t value) {
 inline void DeploymentRecord::clear_created_by() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_by_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline const ::std::string& DeploymentRecord::created_by() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -3854,13 +3779,13 @@ inline const ::std::string& DeploymentRecord::created_by() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void DeploymentRecord::set_created_by(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   _impl_.created_by_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:loams.live.v1.DeploymentRecord.created_by)
 }
 inline ::std::string* PROTOBUF_NONNULL DeploymentRecord::mutable_created_by()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::std::string* _s = _internal_mutable_created_by();
   // @@protoc_insertion_point(field_mutable:loams.live.v1.DeploymentRecord.created_by)
   return _s;
@@ -3880,10 +3805,10 @@ inline ::std::string* PROTOBUF_NONNULL DeploymentRecord::_internal_mutable_creat
 inline ::std::string* PROTOBUF_NULLABLE DeploymentRecord::release_created_by() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:loams.live.v1.DeploymentRecord.created_by)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   auto* released = _impl_.created_by_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.created_by_.Set("", GetArena());
@@ -3893,9 +3818,9 @@ inline ::std::string* PROTOBUF_NULLABLE DeploymentRecord::release_created_by() {
 inline void DeploymentRecord::set_allocated_created_by(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   _impl_.created_by_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.created_by_.IsDefault()) {
@@ -3908,7 +3833,7 @@ inline void DeploymentRecord::set_allocated_created_by(::std::string* PROTOBUF_N
 inline void DeploymentRecord::clear_message() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.message_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline const ::std::string& DeploymentRecord::message() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -3918,13 +3843,13 @@ inline const ::std::string& DeploymentRecord::message() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void DeploymentRecord::set_message(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   _impl_.message_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:loams.live.v1.DeploymentRecord.message)
 }
 inline ::std::string* PROTOBUF_NONNULL DeploymentRecord::mutable_message()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   ::std::string* _s = _internal_mutable_message();
   // @@protoc_insertion_point(field_mutable:loams.live.v1.DeploymentRecord.message)
   return _s;
@@ -3944,10 +3869,10 @@ inline ::std::string* PROTOBUF_NONNULL DeploymentRecord::_internal_mutable_messa
 inline ::std::string* PROTOBUF_NULLABLE DeploymentRecord::release_message() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:loams.live.v1.DeploymentRecord.message)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   auto* released = _impl_.message_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.message_.Set("", GetArena());
@@ -3957,9 +3882,9 @@ inline ::std::string* PROTOBUF_NULLABLE DeploymentRecord::release_message() {
 inline void DeploymentRecord::set_allocated_message(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
   }
   _impl_.message_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.message_.IsDefault()) {
@@ -3972,7 +3897,7 @@ inline void DeploymentRecord::set_allocated_message(::std::string* PROTOBUF_NULL
 inline void DeploymentRecord::clear_parent() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.parent_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline const ::std::string& DeploymentRecord::parent() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -3982,13 +3907,13 @@ inline const ::std::string& DeploymentRecord::parent() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void DeploymentRecord::set_parent(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   _impl_.parent_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:loams.live.v1.DeploymentRecord.parent)
 }
 inline ::std::string* PROTOBUF_NONNULL DeploymentRecord::mutable_parent()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   ::std::string* _s = _internal_mutable_parent();
   // @@protoc_insertion_point(field_mutable:loams.live.v1.DeploymentRecord.parent)
   return _s;
@@ -4008,10 +3933,10 @@ inline ::std::string* PROTOBUF_NONNULL DeploymentRecord::_internal_mutable_paren
 inline ::std::string* PROTOBUF_NULLABLE DeploymentRecord::release_parent() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:loams.live.v1.DeploymentRecord.parent)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000010U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   auto* released = _impl_.parent_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.parent_.Set("", GetArena());
@@ -4021,9 +3946,9 @@ inline ::std::string* PROTOBUF_NULLABLE DeploymentRecord::release_parent() {
 inline void DeploymentRecord::set_allocated_parent(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
   }
   _impl_.parent_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.parent_.IsDefault()) {
@@ -4036,7 +3961,7 @@ inline void DeploymentRecord::set_allocated_parent(::std::string* PROTOBUF_NULLA
 inline void DeploymentRecord::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::loams::live::v1::DeploymentState DeploymentRecord::state() const {
   // @@protoc_insertion_point(field_get:loams.live.v1.DeploymentRecord.state)
@@ -4044,7 +3969,7 @@ inline ::loams::live::v1::DeploymentState DeploymentRecord::state() const {
 }
 inline void DeploymentRecord::set_state(::loams::live::v1::DeploymentState value) {
   _internal_set_state(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:loams.live.v1.DeploymentRecord.state)
 }
 inline ::loams::live::v1::DeploymentState DeploymentRecord::_internal_state() const {
@@ -4060,7 +3985,7 @@ inline void DeploymentRecord::_internal_set_state(::loams::live::v1::DeploymentS
 inline void DeploymentRecord::clear_failure_reason() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.failure_reason_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline const ::std::string& DeploymentRecord::failure_reason() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -4070,13 +3995,13 @@ inline const ::std::string& DeploymentRecord::failure_reason() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void DeploymentRecord::set_failure_reason(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   _impl_.failure_reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:loams.live.v1.DeploymentRecord.failure_reason)
 }
 inline ::std::string* PROTOBUF_NONNULL DeploymentRecord::mutable_failure_reason()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   ::std::string* _s = _internal_mutable_failure_reason();
   // @@protoc_insertion_point(field_mutable:loams.live.v1.DeploymentRecord.failure_reason)
   return _s;
@@ -4096,10 +4021,10 @@ inline ::std::string* PROTOBUF_NONNULL DeploymentRecord::_internal_mutable_failu
 inline ::std::string* PROTOBUF_NULLABLE DeploymentRecord::release_failure_reason() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:loams.live.v1.DeploymentRecord.failure_reason)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000020U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000040U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   auto* released = _impl_.failure_reason_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.failure_reason_.Set("", GetArena());
@@ -4109,15 +4034,65 @@ inline ::std::string* PROTOBUF_NULLABLE DeploymentRecord::release_failure_reason
 inline void DeploymentRecord::set_allocated_failure_reason(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
   }
   _impl_.failure_reason_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.failure_reason_.IsDefault()) {
     _impl_.failure_reason_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:loams.live.v1.DeploymentRecord.failure_reason)
+}
+
+// repeated .loams.live.v1.FunctionInfo functions = 11 [json_name = "functions"];
+inline int DeploymentRecord::_internal_functions_size() const {
+  return _internal_functions().size();
+}
+inline int DeploymentRecord::functions_size() const {
+  return _internal_functions_size();
+}
+inline const ::loams::live::v1::FunctionInfo& DeploymentRecord::functions(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.DeploymentRecord.functions)
+  return _internal_functions().Get(index);
+}
+inline ::loams::live::v1::FunctionInfo* PROTOBUF_NONNULL DeploymentRecord::mutable_functions(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.DeploymentRecord.functions)
+  return _internal_mutable_functions()->Mutable(index);
+}
+inline ::loams::live::v1::FunctionInfo* PROTOBUF_NONNULL DeploymentRecord::add_functions()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::loams::live::v1::FunctionInfo* _add =
+      _internal_mutable_functions()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:loams.live.v1.DeploymentRecord.functions)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::loams::live::v1::FunctionInfo>& DeploymentRecord::functions() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:loams.live.v1.DeploymentRecord.functions)
+  return _internal_functions();
+}
+inline ::google::protobuf::RepeatedPtrField<::loams::live::v1::FunctionInfo>* PROTOBUF_NONNULL
+DeploymentRecord::mutable_functions() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:loams.live.v1.DeploymentRecord.functions)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_functions();
+}
+inline const ::google::protobuf::RepeatedPtrField<::loams::live::v1::FunctionInfo>&
+DeploymentRecord::_internal_functions() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.functions_;
+}
+inline ::google::protobuf::RepeatedPtrField<::loams::live::v1::FunctionInfo>* PROTOBUF_NONNULL
+DeploymentRecord::_internal_mutable_functions() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.functions_;
 }
 
 #ifdef __GNUC__
@@ -4138,18 +4113,6 @@ struct is_proto_enum<::loams::live::v1::TableJobKind> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::loams::live::v1::TableJobKind>() {
   return ::loams::live::v1::TableJobKind_descriptor();
-}
-template <>
-struct is_proto_enum<::loams::live::v1::IndexState> : std::true_type {};
-template <>
-inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::loams::live::v1::IndexState>() {
-  return ::loams::live::v1::IndexState_descriptor();
-}
-template <>
-struct is_proto_enum<::loams::live::v1::DeploymentState> : std::true_type {};
-template <>
-inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::loams::live::v1::DeploymentState>() {
-  return ::loams::live::v1::DeploymentState_descriptor();
 }
 
 }  // namespace protobuf

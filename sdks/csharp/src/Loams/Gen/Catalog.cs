@@ -25,59 +25,52 @@ namespace Loams.Live.V1 {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
             "Chtsb2Ftcy9saXZlL3YxL2NhdGFsb2cucHJvdG8SDWxvYW1zLmxpdmUudjEa",
-            "GGxvYW1zL2xpdmUvdjEvbGl2ZS5wcm90byKWAgoIVGFibGVEZWYSFgoGZm9y",
-            "bWF0GAEgASgNUgZmb3JtYXQSDgoCaWQYAiABKA1SAmlkEhIKBG5hbWUYAyAB",
-            "KAlSBG5hbWUSMQoHaW5kZXhlcxgEIAMoCzIXLmxvYW1zLmxpdmUudjEuSW5k",
-            "ZXhEZWZSB2luZGV4ZXMSIgoNbmV4dF9pbmRleF9pZBgFIAEoDVILbmV4dElu",
-            "ZGV4SWQSNgoJdmFsaWRhdG9yGAYgASgLMhgubG9hbXMubGl2ZS52MS5WYWxp",
-            "ZGF0b3JSCXZhbGlkYXRvchI/CgllbmZvcmNpbmcYByABKAsyIS5sb2Ftcy5s",
-            "aXZlLnYxLkVuZm9yY2luZ1ZhbGlkYXRvclIJZW5mb3JjaW5nImwKEkVuZm9y",
-            "Y2luZ1ZhbGlkYXRvchI2Cgl2YWxpZGF0b3IYASABKAsyGC5sb2Ftcy5saXZl",
-            "LnYxLlZhbGlkYXRvclIJdmFsaWRhdG9yEh4KCmRlcGxveW1lbnQYAiABKAxS",
-            "CmRlcGxveW1lbnQi2QIKDlRhYmxlSm9iUmVjb3JkEhYKBmZvcm1hdBgBIAEo",
-            "DVIGZm9ybWF0Ei8KBGtpbmQYAiABKA4yGy5sb2Ftcy5saXZlLnYxLlRhYmxl",
-            "Sm9iS2luZFIEa2luZBIZCgh0YWJsZV9pZBgDIAEoDVIHdGFibGVJZBIeCgpk",
-            "ZXBsb3ltZW50GAQgASgMUgpkZXBsb3ltZW50EhQKBW93bmVyGAUgASgJUgVv",
-            "d25lchIoChBsZWFzZV9leHBpcmVzX21zGAYgASgEUg5sZWFzZUV4cGlyZXNN",
-            "cxIeCgpjaGVja3BvaW50GAcgASgMUgpjaGVja3BvaW50EhgKB3NjYW5uZWQY",
-            "CCABKARSB3NjYW5uZWQSEgoEZG9uZRgJIAEoCFIEZG9uZRI1CghmaW5kaW5n",
-            "cxgKIAMoCzIZLmxvYW1zLmxpdmUudjEuSm9iRmluZGluZ1IIZmluZGluZ3Mi",
-            "OwoKSm9iRmluZGluZxIVCgZkb2NfaWQYASABKAxSBWRvY0lkEhYKBmRldGFp",
-            "bBgCIAEoCVIGZGV0YWlsIpcBCghJbmRleERlZhIOCgJpZBgBIAEoDVICaWQS",
-            "EgoEbmFtZRgCIAEoCVIEbmFtZRIWCgZmaWVsZHMYAyADKAlSBmZpZWxkcxIv",
-            "CgVzdGF0ZRgEIAEoDjIZLmxvYW1zLmxpdmUudjEuSW5kZXhTdGF0ZVIFc3Rh",
-            "dGUSHgoKZGVwbG95bWVudBgFIAEoDFIKZGVwbG95bWVudCJHCgZBcHBEZWYS",
-            "FgoGZm9ybWF0GAEgASgNUgZmb3JtYXQSJQoOam91cm5hbF9zaGFyZHMYAiAB",
-            "KA1SDWpvdXJuYWxTaGFyZHMi4AIKEERlcGxveW1lbnRSZWNvcmQSFgoGZm9y",
-            "bWF0GAEgASgNUgZmb3JtYXQSDgoCaWQYAiABKAxSAmlkEiMKDWJ1bmRsZV9z",
-            "aGEyNTYYAyABKAxSDGJ1bmRsZVNoYTI1NhItCgZzY2hlbWEYBCABKAsyFS5s",
-            "b2Ftcy5saXZlLnYxLlNjaGVtYVIGc2NoZW1hEiIKDWNyZWF0ZWRfYXRfbXMY",
-            "BSABKARSC2NyZWF0ZWRBdE1zEh0KCmNyZWF0ZWRfYnkYBiABKAlSCWNyZWF0",
-            "ZWRCeRIYCgdtZXNzYWdlGAcgASgJUgdtZXNzYWdlEhYKBnBhcmVudBgIIAEo",
-            "DFIGcGFyZW50EjQKBXN0YXRlGAkgASgOMh4ubG9hbXMubGl2ZS52MS5EZXBs",
-            "b3ltZW50U3RhdGVSBXN0YXRlEiUKDmZhaWx1cmVfcmVhc29uGAogASgJUg1m",
-            "YWlsdXJlUmVhc29uKmgKDFRhYmxlSm9iS2luZBIeChpUQUJMRV9KT0JfS0lO",
-            "RF9VTlNQRUNJRklFRBAAEhsKF1RBQkxFX0pPQl9LSU5EX1ZBTElEQVRFEAES",
-            "GwoXVEFCTEVfSk9CX0tJTkRfQkFDS0ZJTEwQAip3CgpJbmRleFN0YXRlEhsK",
-            "F0lOREVYX1NUQVRFX1VOU1BFQ0lGSUVEEAASGwoXSU5ERVhfU1RBVEVfQkFD",
-            "S0ZJTExJTkcQARIVChFJTkRFWF9TVEFURV9SRUFEWRACEhgKFElOREVYX1NU",
-            "QVRFX0RST1BQSU5HEAMqjgIKD0RlcGxveW1lbnRTdGF0ZRIgChxERVBMT1lN",
-            "RU5UX1NUQVRFX1VOU1BFQ0lGSUVEEAASHAoYREVQTE9ZTUVOVF9TVEFURV9Q",
-            "RU5ESU5HEAESHwobREVQTE9ZTUVOVF9TVEFURV9WQUxJREFUSU5HEAISIAoc",
-            "REVQTE9ZTUVOVF9TVEFURV9CQUNLRklMTElORxADEhsKF0RFUExPWU1FTlRf",
-            "U1RBVEVfQUNUSVZFEAQSHwobREVQTE9ZTUVOVF9TVEFURV9TVVBFUlNFREVE",
-            "EAUSGwoXREVQTE9ZTUVOVF9TVEFURV9GQUlMRUQQBhIdChlERVBMT1lNRU5U",
-            "X1NUQVRFX0RFR1JBREVEEAdiBnByb3RvMw=="));
+            "GWxvYW1zL2xpdmUvdjEvYWRtaW4ucHJvdG8aGGxvYW1zL2xpdmUvdjEvbGl2",
+            "ZS5wcm90byKWAgoIVGFibGVEZWYSFgoGZm9ybWF0GAEgASgNUgZmb3JtYXQS",
+            "DgoCaWQYAiABKA1SAmlkEhIKBG5hbWUYAyABKAlSBG5hbWUSMQoHaW5kZXhl",
+            "cxgEIAMoCzIXLmxvYW1zLmxpdmUudjEuSW5kZXhEZWZSB2luZGV4ZXMSIgoN",
+            "bmV4dF9pbmRleF9pZBgFIAEoDVILbmV4dEluZGV4SWQSNgoJdmFsaWRhdG9y",
+            "GAYgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3JSCXZhbGlkYXRvchI/",
+            "CgllbmZvcmNpbmcYByABKAsyIS5sb2Ftcy5saXZlLnYxLkVuZm9yY2luZ1Zh",
+            "bGlkYXRvclIJZW5mb3JjaW5nImwKEkVuZm9yY2luZ1ZhbGlkYXRvchI2Cgl2",
+            "YWxpZGF0b3IYASABKAsyGC5sb2Ftcy5saXZlLnYxLlZhbGlkYXRvclIJdmFs",
+            "aWRhdG9yEh4KCmRlcGxveW1lbnQYAiABKAxSCmRlcGxveW1lbnQi2QIKDlRh",
+            "YmxlSm9iUmVjb3JkEhYKBmZvcm1hdBgBIAEoDVIGZm9ybWF0Ei8KBGtpbmQY",
+            "AiABKA4yGy5sb2Ftcy5saXZlLnYxLlRhYmxlSm9iS2luZFIEa2luZBIZCgh0",
+            "YWJsZV9pZBgDIAEoDVIHdGFibGVJZBIeCgpkZXBsb3ltZW50GAQgASgMUgpk",
+            "ZXBsb3ltZW50EhQKBW93bmVyGAUgASgJUgVvd25lchIoChBsZWFzZV9leHBp",
+            "cmVzX21zGAYgASgEUg5sZWFzZUV4cGlyZXNNcxIeCgpjaGVja3BvaW50GAcg",
+            "ASgMUgpjaGVja3BvaW50EhgKB3NjYW5uZWQYCCABKARSB3NjYW5uZWQSEgoE",
+            "ZG9uZRgJIAEoCFIEZG9uZRI1CghmaW5kaW5ncxgKIAMoCzIZLmxvYW1zLmxp",
+            "dmUudjEuSm9iRmluZGluZ1IIZmluZGluZ3MiOwoKSm9iRmluZGluZxIVCgZk",
+            "b2NfaWQYASABKAxSBWRvY0lkEhYKBmRldGFpbBgCIAEoCVIGZGV0YWlsIpcB",
+            "CghJbmRleERlZhIOCgJpZBgBIAEoDVICaWQSEgoEbmFtZRgCIAEoCVIEbmFt",
+            "ZRIWCgZmaWVsZHMYAyADKAlSBmZpZWxkcxIvCgVzdGF0ZRgEIAEoDjIZLmxv",
+            "YW1zLmxpdmUudjEuSW5kZXhTdGF0ZVIFc3RhdGUSHgoKZGVwbG95bWVudBgF",
+            "IAEoDFIKZGVwbG95bWVudCJHCgZBcHBEZWYSFgoGZm9ybWF0GAEgASgNUgZm",
+            "b3JtYXQSJQoOam91cm5hbF9zaGFyZHMYAiABKA1SDWpvdXJuYWxTaGFyZHMi",
+            "mwMKEERlcGxveW1lbnRSZWNvcmQSFgoGZm9ybWF0GAEgASgNUgZmb3JtYXQS",
+            "DgoCaWQYAiABKAxSAmlkEiMKDWJ1bmRsZV9zaGEyNTYYAyABKAxSDGJ1bmRs",
+            "ZVNoYTI1NhItCgZzY2hlbWEYBCABKAsyFS5sb2Ftcy5saXZlLnYxLlNjaGVt",
+            "YVIGc2NoZW1hEiIKDWNyZWF0ZWRfYXRfbXMYBSABKARSC2NyZWF0ZWRBdE1z",
+            "Eh0KCmNyZWF0ZWRfYnkYBiABKAlSCWNyZWF0ZWRCeRIYCgdtZXNzYWdlGAcg",
+            "ASgJUgdtZXNzYWdlEhYKBnBhcmVudBgIIAEoDFIGcGFyZW50EjQKBXN0YXRl",
+            "GAkgASgOMh4ubG9hbXMubGl2ZS52MS5EZXBsb3ltZW50U3RhdGVSBXN0YXRl",
+            "EiUKDmZhaWx1cmVfcmVhc29uGAogASgJUg1mYWlsdXJlUmVhc29uEjkKCWZ1",
+            "bmN0aW9ucxgLIAMoCzIbLmxvYW1zLmxpdmUudjEuRnVuY3Rpb25JbmZvUglm",
+            "dW5jdGlvbnMqaAoMVGFibGVKb2JLaW5kEh4KGlRBQkxFX0pPQl9LSU5EX1VO",
+            "U1BFQ0lGSUVEEAASGwoXVEFCTEVfSk9CX0tJTkRfVkFMSURBVEUQARIbChdU",
+            "QUJMRV9KT0JfS0lORF9CQUNLRklMTBACYgZwcm90bzM="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
-          new pbr::FileDescriptor[] { global::Loams.Live.V1.LiveReflection.Descriptor, },
-          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Loams.Live.V1.TableJobKind), typeof(global::Loams.Live.V1.IndexState), typeof(global::Loams.Live.V1.DeploymentState), }, null, new pbr::GeneratedClrTypeInfo[] {
+          new pbr::FileDescriptor[] { global::Loams.Live.V1.AdminReflection.Descriptor, global::Loams.Live.V1.LiveReflection.Descriptor, },
+          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Loams.Live.V1.TableJobKind), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.TableDef), global::Loams.Live.V1.TableDef.Parser, new[]{ "Format", "Id", "Name", "Indexes", "NextIndexId", "Validator", "Enforcing" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.EnforcingValidator), global::Loams.Live.V1.EnforcingValidator.Parser, new[]{ "Validator", "Deployment" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.TableJobRecord), global::Loams.Live.V1.TableJobRecord.Parser, new[]{ "Format", "Kind", "TableId", "Deployment", "Owner", "LeaseExpiresMs", "Checkpoint", "Scanned", "Done", "Findings" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.JobFinding), global::Loams.Live.V1.JobFinding.Parser, new[]{ "DocId", "Detail" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.IndexDef), global::Loams.Live.V1.IndexDef.Parser, new[]{ "Id", "Name", "Fields", "State", "Deployment" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.AppDef), global::Loams.Live.V1.AppDef.Parser, new[]{ "Format", "JournalShards" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.DeploymentRecord), global::Loams.Live.V1.DeploymentRecord.Parser, new[]{ "Format", "Id", "BundleSha256", "Schema", "CreatedAtMs", "CreatedBy", "Message", "Parent", "State", "FailureReason" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.DeploymentRecord), global::Loams.Live.V1.DeploymentRecord.Parser, new[]{ "Format", "Id", "BundleSha256", "Schema", "CreatedAtMs", "CreatedBy", "Message", "Parent", "State", "FailureReason", "Functions" }, null, null, null, null)
           }));
     }
     #endregion
@@ -94,67 +87,6 @@ namespace Loams.Live.V1 {
     /// The backfill of the table's new indexes (LV1 plan Task 9).
     /// </summary>
     [pbr::OriginalName("TABLE_JOB_KIND_BACKFILL")] Backfill = 2,
-  }
-
-  /// <summary>
-  /// Where a user index is in its life (LV1 plan Task 9, design §45 §4.2).
-  /// </summary>
-  public enum IndexState {
-    /// <summary>
-    /// Ready (a record written before Task 9).
-    /// </summary>
-    [pbr::OriginalName("INDEX_STATE_UNSPECIFIED")] Unspecified = 0,
-    /// <summary>
-    /// Every write maintains it and a backfill job writes the entries of the
-    /// documents already there; no query reads it.
-    /// </summary>
-    [pbr::OriginalName("INDEX_STATE_BACKFILLING")] Backfilling = 1,
-    /// <summary>
-    /// Queries read it; every write maintains it.
-    /// </summary>
-    [pbr::OriginalName("INDEX_STATE_READY")] Ready = 2,
-    /// <summary>
-    /// No write maintains it and no query reads it; its entries are being
-    /// deleted, then the definition goes.
-    /// </summary>
-    [pbr::OriginalName("INDEX_STATE_DROPPING")] Dropping = 3,
-  }
-
-  /// <summary>
-  /// Where a deployment is in its life (design §45 §3.3).
-  /// </summary>
-  public enum DeploymentState {
-    [pbr::OriginalName("DEPLOYMENT_STATE_UNSPECIFIED")] Unspecified = 0,
-    /// <summary>
-    /// Its record is written; its schema is not applied yet.
-    /// </summary>
-    [pbr::OriginalName("DEPLOYMENT_STATE_PENDING")] Pending = 1,
-    /// <summary>
-    /// A stricter validator scans existing data (LV1 plan Task 8): it is
-    /// enforced on new writes, and the table's documents are checked.
-    /// </summary>
-    [pbr::OriginalName("DEPLOYMENT_STATE_VALIDATING")] Validating = 2,
-    /// <summary>
-    /// A new index is backfilled (LV1 plan Task 9).
-    /// </summary>
-    [pbr::OriginalName("DEPLOYMENT_STATE_BACKFILLING")] Backfilling = 3,
-    /// <summary>
-    /// The pointer names it: new calls run its functions.
-    /// </summary>
-    [pbr::OriginalName("DEPLOYMENT_STATE_ACTIVE")] Active = 4,
-    /// <summary>
-    /// A later deployment replaced it.
-    /// </summary>
-    [pbr::OriginalName("DEPLOYMENT_STATE_SUPERSEDED")] Superseded = 5,
-    /// <summary>
-    /// It never became active; `failure_reason` says why.
-    /// </summary>
-    [pbr::OriginalName("DEPLOYMENT_STATE_FAILED")] Failed = 6,
-    /// <summary>
-    /// It is active, but its isolated workers crashed five times within a
-    /// minute (design §45 §3.1). Calls are still served.
-    /// </summary>
-    [pbr::OriginalName("DEPLOYMENT_STATE_DEGRADED")] Degraded = 7,
   }
 
   #endregion
@@ -2312,6 +2244,7 @@ namespace Loams.Live.V1 {
       parent_ = other.parent_;
       state_ = other.state_;
       failureReason_ = other.failureReason_;
+      functions_ = other.functions_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -2467,6 +2400,21 @@ namespace Loams.Live.V1 {
       }
     }
 
+    /// <summary>Field number for the "functions" field.</summary>
+    public const int FunctionsFieldNumber = 11;
+    private static readonly pb::FieldCodec<global::Loams.Live.V1.FunctionInfo> _repeated_functions_codec
+        = pb::FieldCodec.ForMessage(90, global::Loams.Live.V1.FunctionInfo.Parser);
+    private readonly pbc::RepeatedField<global::Loams.Live.V1.FunctionInfo> functions_ = new pbc::RepeatedField<global::Loams.Live.V1.FunctionInfo>();
+    /// <summary>
+    /// The functions its bundle exports (LV1 plan Task 10), by path; empty in
+    /// a record written before Task 10.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Loams.Live.V1.FunctionInfo> Functions {
+      get { return functions_; }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -2492,6 +2440,7 @@ namespace Loams.Live.V1 {
       if (Parent != other.Parent) return false;
       if (State != other.State) return false;
       if (FailureReason != other.FailureReason) return false;
+      if(!functions_.Equals(other.functions_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -2509,6 +2458,7 @@ namespace Loams.Live.V1 {
       if (Parent.Length != 0) hash ^= Parent.GetHashCode();
       if (State != global::Loams.Live.V1.DeploymentState.Unspecified) hash ^= State.GetHashCode();
       if (FailureReason.Length != 0) hash ^= FailureReason.GetHashCode();
+      hash ^= functions_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -2567,6 +2517,7 @@ namespace Loams.Live.V1 {
         output.WriteRawTag(82);
         output.WriteString(FailureReason);
       }
+      functions_.WriteTo(output, _repeated_functions_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -2617,6 +2568,7 @@ namespace Loams.Live.V1 {
         output.WriteRawTag(82);
         output.WriteString(FailureReason);
       }
+      functions_.WriteTo(ref output, _repeated_functions_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -2657,6 +2609,7 @@ namespace Loams.Live.V1 {
       if (FailureReason.Length != 0) {
         size += 1 + pb::CodedOutputStream.ComputeStringSize(FailureReason);
       }
+      size += functions_.CalculateSize(_repeated_functions_codec);
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -2702,6 +2655,7 @@ namespace Loams.Live.V1 {
       if (other.FailureReason.Length != 0) {
         FailureReason = other.FailureReason;
       }
+      functions_.Add(other.functions_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -2764,6 +2718,10 @@ namespace Loams.Live.V1 {
             FailureReason = input.ReadString();
             break;
           }
+          case 90: {
+            functions_.AddEntriesFrom(input, _repeated_functions_codec);
+            break;
+          }
         }
       }
     #endif
@@ -2824,6 +2782,10 @@ namespace Loams.Live.V1 {
           }
           case 82: {
             FailureReason = input.ReadString();
+            break;
+          }
+          case 90: {
+            functions_.AddEntriesFrom(ref input, _repeated_functions_codec);
             break;
           }
         }
