@@ -82,14 +82,21 @@ export function setPath<T extends object>(root: T, path: string, value: unknown)
   let cursor = next;
   for (let i = 0; i < parts.length - 1; i += 1) {
     const part = parts[i];
+    if (isPrototypeKey(part)) throw new Error(`setPath: unsafe path segment "${part}"`);
     const existing = cursor[part];
     if (!isPlainObject(existing)) cursor[part] = {};
     cursor = cursor[part] as Record<string, unknown>;
   }
   const leaf = parts[parts.length - 1];
+  if (isPrototypeKey(leaf)) throw new Error(`setPath: unsafe path segment "${leaf}"`);
   if (value === undefined) delete cursor[leaf];
   else cursor[leaf] = value;
   return next as T;
+}
+
+/** Keys that would write through to `Object.prototype` instead of the spec. */
+function isPrototypeKey(key: string): boolean {
+  return key === "__proto__" || key === "constructor" || key === "prototype";
 }
 
 /** Deep clone through plain objects and arrays only; values are immutable. */

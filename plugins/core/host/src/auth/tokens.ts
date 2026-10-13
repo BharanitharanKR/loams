@@ -56,7 +56,9 @@ export function createServiceToken(input: CreateServiceTokenInput): CreatedServi
 /** Parse a service token off an `Authorization: Bearer ...` header. */
 export function readBearerToken(header: string | undefined): string | undefined {
   if (!header) return undefined;
-  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
+  // `\S` after `\s+` keeps the split unambiguous, so a header padded with spaces
+  // cannot make the match quadratic.
+  const match = /^Bearer\s+(\S.*)$/i.exec(header.trim());
   return match?.[1]?.trim();
 }
 
