@@ -74,7 +74,7 @@
       ]
     },
     "priority": {
-      "description": "The rollout phase, which for CN1 is also the build order: P1 is the ★ set of CN1, P2 is CN2 through stock Camel components and Iggy plugins, P3 is CN3's long tail through OpenAPI-generated connectors (§33 §8, D358).",
+      "description": "The rollout phase: P1 is the ★ set of CN1, P2 is CN2, P3 is CN3's long tail through OpenAPI-generated connectors (§33 §8, D358). CN2's owner rulings make P1 and P2 first-party native by default, with Camel, Debezium Server and Iggy plugins only as declared fallbacks (CN2 OR-1, OR-4; rule R-CN2-6).",
       "type": "string",
       "enum": ["P1", "P2", "P3"]
     },
@@ -88,7 +88,7 @@
       "enum": ["planned", "preview", "stable", "deprecated"]
     },
     "runtime": {
-      "description": "Which runtime runs this connector (design §33 §5, D354): native Rust in loams-flow, Iggy's connectors runtime, unmodified Camel in loams-connect, Debezium Server, or a native connector generated from an OpenAPI spec.",
+      "description": "Which runtime runs this connector (design §33 §5, D354): native Rust on the connector SDK, Iggy's connectors runtime, unmodified Camel in loams-connect, Debezium Server, or a native connector generated from an OpenAPI spec. kind and ref are the default for both directions; source and sink override them per direction (CN2 OR-10), profile names a target or HTTP-API profile, and fallback declares the one non-default runtime an instance may opt into (CN2 OR-4).",
       "type": "object",
       "additionalProperties": false,
       "required": ["kind", "ref"],
@@ -106,6 +106,23 @@
         "version": {
           "description": "The pinned driver or library version behind ref, free-form because it spans crates and native builds, for example \"rdkafka 0.39 / librdkafka 2.x (verify)\" (§33 §4).",
           "type": "string"
+        },
+        "source": {
+          "description": "Overrides kind and ref for the source direction (CN2 OR-10). Only on a manifest that declares capabilities.source (R-CN2-1).",
+          "$ref": "#/$defs/runtimeOverride"
+        },
+        "sink": {
+          "description": "Overrides kind and ref for the sink direction (CN2 OR-10). Only on a manifest that declares capabilities.sink (R-CN2-1).",
+          "$ref": "#/$defs/runtimeOverride"
+        },
+        "profile": {
+          "description": "A profile id under connectors/profiles/<id>.yaml: a target profile (a protocol-compatible system served by a family module, CN2 OR-2) or an HTTP-API profile (CN2 OR-11). Set only when every declared direction runs native by default, and the file must exist (R-CN2-2). null or absent when there is none.",
+          "type": ["string", "null"],
+          "pattern": "^[a-z0-9-]{1,48}$"
+        },
+        "fallback": {
+          "description": "The declared, temporary fallback runtime (CN2 OR-4): never the default, an instance opts in with runtime: fallback. Camel, Debezium or Iggy only, in declared directions, naming the task that made it a fallback or replaces it (R-CN2-8).",
+          "$ref": "#/$defs/fallback"
         }
       }
     },
@@ -205,7 +222,7 @@
               "type": "boolean"
             },
             "transactional": {
-              "description": "The sink writes inside the target system's transaction.",
+              "description": "The sink writes inside the target system's transaction and stores Loams' checkpoint atomically with the data (TransactionalSink). delivery.sink may be exactly_once only when this is true (CN2 OR-7, R-CN2-7).",
               "type": "boolean"
             },
             "upsert": {
@@ -217,23 +234,27 @@
               "type": "boolean"
             },
             "idempotent": {
-              "description": "The sink itself dedupes retries, for example Kafka's idempotent producer. CN1's semantic rules require this or transactional before delivery.sink may be exactly_once.",
+              "description": "The sink itself dedupes retries, for example Kafka's idempotent producer. With upsert, this is what lets delivery.sink be effectively_once (CN2 OR-7, R-CN2-7).",
+              "type": "boolean"
+            },
+            "reply": {
+              "description": "The sink emits one reply event per input event to a declared reply topic (CN2 OR-19: AI and function connectors). Requires a non-empty envelope.emits and a reply_topic property in the config schema (R-CN2-3). false when omitted.",
               "type": "boolean"
             }
           }
         },
         "delivery": {
-          "description": "The delivery guarantee per direction. Every runtime is at-least-once underneath (§33 §6), and the target's dedup key or primary key makes it effectively once where the target dedupes (§33 §2.2).",
+          "description": "The delivery guarantee per direction. At-least-once is the floor (§33 §6); effectively_once is declared where the target dedupes by ce_id or a natural key, or a source's ids are stable across re-reads; exactly_once only through a TransactionalSink (CN2 OR-7, R-CN2-7).",
           "type": "object",
           "additionalProperties": false,
           "required": ["source", "sink"],
           "properties": {
             "source": {
-              "description": "The source's guarantee: re-delivery after a crash is expected.",
+              "description": "The source's guarantee: re-delivery after a crash is expected. effectively_once requires envelope.stable_ids (CN2 OR-7, R-CN2-7).",
               "$ref": "#/$defs/delivery"
             },
             "sink": {
-              "description": "The sink's guarantee. exactly_once is a claim only where the external system deduplicates (§33 §2.2).",
+              "description": "The sink's guarantee. exactly_once requires sink.transactional and the exactly-once suite; effectively_once requires sink.idempotent or sink.upsert (CN2 OR-7, R-CN2-7).",
               "$ref": "#/$defs/delivery"
             }
           }
@@ -378,6 +399,10 @@
         "passthrough": {
           "description": "Input that already is a valid CloudEvent keeps its producer's type, source and id, and the connector adds only the loamsconnector and loamsinstance extensions (§33 §6). A manifest that passes events through declares this, and its contract test checks both the pass-through and the wrapped case.",
           "type": "boolean"
+        },
+        "stable_ids": {
+          "description": "The source's CloudEvents ids are stable across re-reads, so ingest's (source, id) dedup (D334) makes it effectively once (§33 §6, CN2 OR-7). false when omitted.",
+          "type": "boolean"
         }
       }
     },
@@ -404,7 +429,7 @@
       }
     },
     "conformance": {
-      "description": "The suites the connector passes (§33 §4 rule 3): contract exercises each declared capability, roundtrip sends sink → source and reads the events back, kill-restart kills the runtime mid-batch, dup-check bounds duplicates by the declared delivery, bulk runs the Arrow path at 1 M rows, cdc exercises inserts, updates, deletes, DDL and slot or binlog resume. CI fails a ★ connector whose declared capabilities have no test.",
+      "description": "The suites the connector passes (§33 §4 rule 3): contract exercises each declared capability, roundtrip sends sink → source and reads the events back, kill-restart kills the runtime mid-batch, dup-check bounds duplicates by the declared delivery, bulk runs the Arrow path at 1 M rows, cdc exercises inserts, updates, deletes, DDL and slot or binlog resume; CN2 adds schema-evolution, backpressure, exactly-once (a crash at every fault point of the two-phase write) and auth (CN2 Task 6). status preview or stable requires contract (R-CN2-5).",
       "type": "array",
       "uniqueItems": true,
       "items": {
@@ -416,8 +441,21 @@
           "kill-restart",
           "dup-check",
           "bulk",
-          "cdc"
+          "cdc",
+          "schema-evolution",
+          "backpressure",
+          "exactly-once",
+          "auth"
         ]
+      }
+    },
+    "notes": {
+      "description": "Free-form notes about the manifest (CN2 Task 1). Conventional prefixes: \"narrows: …\" for a capability a target lacks, \"fallback-only: …\" for a P1 or P2 direction whose default runtime is not native, naming one of CN2 OR-4's reasons (R-CN2-6), and \"java-deferred: …\". Empty when omitted.",
+      "type": "array",
+      "items": {
+        "description": "One note.",
+        "type": "string",
+        "minLength": 1
       }
     },
     "docs": {
@@ -427,9 +465,71 @@
   },
   "$defs": {
     "delivery": {
-      "description": "One direction's delivery guarantee (§33 §4's capabilities.delivery, D355).",
+      "description": "One direction's delivery guarantee (§33 §4's capabilities.delivery, D355; effectively_once is CN2 OR-7's, appended so the protobuf numbering keeps declaration order).",
       "type": "string",
-      "enum": ["at_most_once", "at_least_once", "exactly_once"]
+      "enum": [
+        "at_most_once",
+        "at_least_once",
+        "exactly_once",
+        "effectively_once"
+      ]
+    },
+    "direction": {
+      "description": "One direction of a connector, as capabilities names it.",
+      "type": "string",
+      "enum": ["source", "sink"]
+    },
+    "runtimeOverride": {
+      "description": "One direction's runtime, overriding runtime.kind and runtime.ref (CN2 OR-10).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": {
+          "description": "The runtime for this direction; runtime.kind's enum.",
+          "$ref": "#/properties/runtime/properties/kind"
+        },
+        "ref": {
+          "description": "What the runtime points at for this direction, with runtime.ref's per-kind meaning.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "fallback": {
+      "description": "A declared fallback runtime (CN2 OR-4).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "ref",
+        "directions",
+        "replaced_by"
+      ],
+      "properties": {
+        "kind": {
+          "description": "The fallback runtime: camel, debezium or iggy (R-CN2-8). Typed with runtime.kind's enum so the semantic rule, not the schema, names the refusal.",
+          "$ref": "#/properties/runtime/properties/kind"
+        },
+        "ref": {
+          "description": "What the fallback runtime points at, with runtime.ref's per-kind meaning.",
+          "type": "string",
+          "minLength": 1
+        },
+        "directions": {
+          "description": "The directions the fallback serves; each must be declared under capabilities (R-CN2-8).",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/direction"
+          }
+        },
+        "replaced_by": {
+          "description": "The task that made this a fallback, or \"CN2 Task 23\" for the replacement queue. Non-empty (R-CN2-8).",
+          "type": "string"
+        }
+      }
     }
   }
 }

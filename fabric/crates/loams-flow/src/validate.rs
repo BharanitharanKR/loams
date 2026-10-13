@@ -1,6 +1,6 @@
 //! What a manifest is checked against: `connectors/schema/connector.schema.json`,
-//! CN1 plan Task 1's six semantic rules, §33 §4 rule 1's refusal, and D359's
-//! licence gate.
+//! CN1 plan Task 1's six semantic rules and CN2 plan Task 1's R-CN2-1 to R-CN2-8,
+//! §33 §4 rule 1's refusal, and D359's licence gate.
 //!
 //! The order is the design's: **the JSON Schema first**, then the rules the schema
 //! cannot express. Every problem is collected rather than reported one at a time, so
@@ -23,7 +23,10 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::manifest::{ConnectorSpec, Delivery, ManifestError, ManifestErrors, Ordering, Priority};
+use crate::manifest::{
+    Choice, ConnectorSpec, Delivery, ManifestError, ManifestErrors, Ordering, Priority,
+    RuntimeKind, Status, Suite,
+};
 
 /// §33 §4 rule 1's refusal, which names the connector, the capability and the
 /// manifest version — the three things a user needs to know which manifest to look
@@ -185,8 +188,10 @@ pub fn validate_manifest_with_config_schema(
     }
 }
 
-/// CN1 plan Task 1's semantic rules, the ones `connector.schema.json` cannot
-/// express. Every problem is returned, not just the first.
+/// CN1 plan Task 1's semantic rules and CN2 plan Task 1's R-CN2-1 to R-CN2-8, the
+/// ones `connector.schema.json` cannot express. Every problem is returned, not just
+/// the first. R-CN2-6 is here only once [`NATIVE_FIRST_ENFORCED`] is `true`; until
+/// then [`semantic_warnings`] reports it.
 pub fn semantic_rules(
     spec: &ConnectorSpec,
     schema: &jsonschema::Validator,
@@ -200,7 +205,402 @@ pub fn semantic_rules(
     rule_starred_implies_p1(spec, &mut errors);
     rule_auth_enum_is_enforced(schema, value, &mut errors);
     rule_secrets_match_the_config_schema(spec, config_schema, &mut errors);
+    // CN2 plan Task 1's rules, R-CN2-1 to R-CN2-8 in its "Shared contracts".
+    rule_cn2_1_overrides_name_declared_directions(spec, &mut errors);
+    rule_cn2_2_profile_needs_native_directions(spec, &mut errors);
+    rule_cn2_3_reply_needs_an_emitted_type_and_reply_topic(spec, config_schema, &mut errors);
+    rule_cn2_4_camel_components_are_in_the_catalog(spec, &mut errors);
+    rule_cn2_5_preview_needs_the_contract_suite(spec, &mut errors);
+    if NATIVE_FIRST_ENFORCED {
+        rule_cn2_6_p1_p2_default_runtime_is_native(spec, &mut errors);
+    }
+    rule_cn2_7_delivery_claims_are_backed(spec, &mut errors);
+    rule_cn2_8_fallback_is_declared_and_temporary(spec, &mut errors);
     errors
+}
+
+/// Whether R-CN2-6 (OR-1, native first for P1 and P2) is an error.
+///
+/// CN2 plan Task 1 makes it a warning until Task 2 has assigned the runtimes —
+/// the registry as built has 63 Camel and 9 OpenAPI P2 rows — and an error after.
+/// Task 2 flips this to `true` in the same change that assigns them; until then
+/// [`semantic_warnings`] reports it and [`semantic_rules`] does not.
+pub const NATIVE_FIRST_ENFORCED: bool = false;
+
+/// The rules that warn rather than refuse: today only R-CN2-6, while
+/// [`NATIVE_FIRST_ENFORCED`] is `false`. A [`crate::Registry`] load collects these
+/// per manifest and keeps them in [`crate::Registry::warnings`].
+pub fn semantic_warnings(spec: &ConnectorSpec) -> Vec<ManifestError> {
+    let mut warnings = Vec::new();
+    if !NATIVE_FIRST_ENFORCED {
+        rule_cn2_6_p1_p2_default_runtime_is_native(spec, &mut warnings);
+    }
+    warnings
+}
+
+/// The directions a manifest declares under `capabilities`, in `Direction::ALL`'s
+/// order.
+fn declared_directions(spec: &ConnectorSpec) -> Vec<Direction> {
+    let mut directions = Vec::with_capacity(2);
+    if spec.capabilities.source.is_some() {
+        directions.push(Direction::Source);
+    }
+    if spec.capabilities.sink.is_some() {
+        directions.push(Direction::Sink);
+    }
+    directions
+}
+
+/// The manifest path of a direction's runtime: its override where there is one,
+/// `runtime` otherwise.
+fn runtime_path(spec: &ConnectorSpec, direction: Direction) -> &'static str {
+    let overridden = match direction {
+        Direction::Source => spec.runtime.source.is_some(),
+        Direction::Sink => spec.runtime.sink.is_some(),
+    };
+    match (overridden, direction) {
+        (true, Direction::Source) => "runtime.source",
+        (true, Direction::Sink) => "runtime.sink",
+        (false, _) => "runtime",
+    }
+}
+
+/// **R-CN2-1 — a direction override names a direction the manifest declares.**
+///
+/// CN2 OR-10 gives each direction its own runtime; an override for a direction the
+/// manifest does not serve would be a runtime for nothing, and a reader of the
+/// manifest would take it as a claim.
+fn rule_cn2_1_overrides_name_declared_directions(
+    spec: &ConnectorSpec,
+    errors: &mut Vec<ManifestError>,
+) {
+    let declared = declared_directions(spec);
+    for (direction, path, present) in [
+        (
+            Direction::Source,
+            "runtime.source",
+            spec.runtime.source.is_some(),
+        ),
+        (Direction::Sink, "runtime.sink", spec.runtime.sink.is_some()),
+    ] {
+        if present && !declared.contains(&direction) {
+            errors.push(ManifestError::new(
+                path,
+                format!(
+                    "{}: the runtime overrides the {direction} direction, but capabilities \
+                     declares no {direction} (R-CN2-1, CN2 OR-10)",
+                    spec.id
+                ),
+            ));
+        }
+    }
+}
+
+/// **R-CN2-2 — `profile` is set only when the direction's kind is `native`.**
+///
+/// A target or HTTP-API profile is run by a native family module (CN2 OR-2,
+/// OR-11), so every declared direction must run native by default for the profile
+/// to mean anything. That the profile exists is checked by the loader, which knows
+/// the `connectors/` root ([`crate::manifest::load_manifest_value`]); that it
+/// validates and that its `module` matches its kind is CN2 Task 7's `profile.rs`.
+fn rule_cn2_2_profile_needs_native_directions(
+    spec: &ConnectorSpec,
+    errors: &mut Vec<ManifestError>,
+) {
+    let Some(profile) = spec.runtime.profile.as_deref() else {
+        return;
+    };
+    for direction in declared_directions(spec) {
+        let Some((kind, _)) = spec.runtime.for_direction(direction, Choice::Default) else {
+            continue;
+        };
+        if kind != RuntimeKind::Native {
+            errors.push(ManifestError::new(
+                "runtime.profile",
+                format!(
+                    "{}: names the profile {profile:?}, but its {direction} direction runs on \
+                     {kind}; a profile is run by a native family module (R-CN2-2, CN2 OR-2, \
+                     OR-11)",
+                    spec.id
+                ),
+            ));
+        }
+    }
+}
+
+/// **R-CN2-3 — `sink.reply` implies a non-empty `envelope.emits` and a
+/// `reply_topic` in the config schema.**
+///
+/// A replying sink (CN2 OR-19: AI and function connectors) emits one event per
+/// input, so it emits a type, and the instance names where the replies go. The
+/// config half needs the resolved instance-config schema, which only the loader
+/// has, as CN1's rules 1 and 6 do.
+fn rule_cn2_3_reply_needs_an_emitted_type_and_reply_topic(
+    spec: &ConnectorSpec,
+    config_schema: Option<&Value>,
+    errors: &mut Vec<ManifestError>,
+) {
+    if !spec
+        .capabilities
+        .sink
+        .as_ref()
+        .is_some_and(|sink| sink.reply)
+    {
+        return;
+    }
+    if spec.envelope.emits.trim().is_empty() {
+        errors.push(ManifestError::new(
+            "capabilities.sink.reply",
+            format!(
+                "{}: the sink replies, so envelope.emits must name the reply's CloudEvents \
+                 type (R-CN2-3, CN2 OR-19)",
+                spec.id
+            ),
+        ));
+    }
+    if let Some(config) = config_schema
+        && config["properties"]["reply_topic"].is_null()
+    {
+        errors.push(ManifestError::new(
+            "capabilities.sink.reply",
+            format!(
+                "{}: the sink replies, so {} must declare a `reply_topic` property \
+                 (R-CN2-3, CN2 OR-19)",
+                spec.id, spec.config_ref.reference
+            ),
+        ));
+    }
+}
+
+/// **R-CN2-4 — a `camel` direction or fallback names a component in the vendored
+/// catalog snapshot with the matching consumer or producer.**
+///
+/// The snapshot (`connectors/vendor/camel-catalog-4.22.x.json.zst`) is CN2 Task 22's,
+/// and is not in the tree yet. Until it is, the rule is a no-op behind the
+/// `camel-catalog` feature, which is off by default; turning the feature on before
+/// Task 22 refuses every Camel direction, so nobody mistakes the no-op for a pass.
+// TODO(CN2 Task 22): read the vendored snapshot and check each Camel direction's
+// component for a consumer (source) or producer (sink).
+#[cfg(not(feature = "camel-catalog"))]
+fn rule_cn2_4_camel_components_are_in_the_catalog(
+    _spec: &ConnectorSpec,
+    _errors: &mut Vec<ManifestError>,
+) {
+}
+
+/// R-CN2-4 with the `camel-catalog` feature on, before CN2 Task 22 vendors the
+/// snapshot it reads: every Camel direction is refused, by name.
+#[cfg(feature = "camel-catalog")]
+fn rule_cn2_4_camel_components_are_in_the_catalog(
+    spec: &ConnectorSpec,
+    errors: &mut Vec<ManifestError>,
+) {
+    for direction in declared_directions(spec) {
+        for choice in [Choice::Default, Choice::Fallback] {
+            if let Some((RuntimeKind::Camel, component)) =
+                spec.runtime.for_direction(direction, choice)
+            {
+                errors.push(ManifestError::new(
+                    runtime_path(spec, direction),
+                    format!(
+                        "{}: the Camel component {component:?} ({direction}) cannot be checked: \
+                         the vendored catalog snapshot is CN2 Task 22's (R-CN2-4)",
+                        spec.id
+                    ),
+                ));
+            }
+        }
+    }
+}
+
+/// **R-CN2-5 — `status: preview` or `stable` implies `contract` in
+/// `conformance`.**
+///
+/// CN2 OR-23's status ladder: `preview` means every declared capability is green,
+/// which is the contract suite's job (D353 rule 3).
+fn rule_cn2_5_preview_needs_the_contract_suite(
+    spec: &ConnectorSpec,
+    errors: &mut Vec<ManifestError>,
+) {
+    if matches!(spec.status, Status::Preview | Status::Stable)
+        && !spec.conformance.contains(&Suite::Contract)
+    {
+        errors.push(ManifestError::new(
+            "conformance",
+            format!(
+                "{}: status is {}, which needs the contract suite in conformance (R-CN2-5, \
+                 CN2 OR-23, D353 rule 3)",
+                spec.id, spec.status
+            ),
+        ));
+    }
+}
+
+/// OR-4's reasons a P1 or P2 direction may run on a non-native runtime by default,
+/// as the words a `fallback-only:` note names them by, matched case-insensitively:
+/// Oracle (its client is proprietary), Salesforce CDC, JMS providers without AMQP
+/// 1.0, the generic JDBC ★ (a Java API), and the Debezium Server CDC rows that stay
+/// fallbacks of the native CDC.
+pub const OR4_FALLBACK_REASONS: &[&str] = &["oracle", "salesforce", "jms", "jdbc", "debezium"];
+
+/// The prefix of the note R-CN2-6 reads.
+pub const FALLBACK_ONLY_PREFIX: &str = "fallback-only:";
+
+/// Whether `spec.notes` has a `fallback-only:` note naming one of OR-4's reasons.
+fn explains_fallback_only(spec: &ConnectorSpec) -> bool {
+    spec.notes.iter().any(|note| {
+        note.trim()
+            .strip_prefix(FALLBACK_ONLY_PREFIX)
+            .is_some_and(|reason| {
+                let reason = reason.to_lowercase();
+                OR4_FALLBACK_REASONS
+                    .iter()
+                    .any(|named| reason.contains(named))
+            })
+    })
+}
+
+/// **R-CN2-6 (OR-1) — a P1 or P2 manifest's declared directions run `native` by
+/// default, unless `notes` has a `fallback-only:` entry naming one of OR-4's
+/// reasons.**
+///
+/// A warning through [`semantic_warnings`] while [`NATIVE_FIRST_ENFORCED`] is
+/// `false`, an error through [`semantic_rules`] after.
+fn rule_cn2_6_p1_p2_default_runtime_is_native(
+    spec: &ConnectorSpec,
+    findings: &mut Vec<ManifestError>,
+) {
+    if !matches!(spec.priority, Priority::P1 | Priority::P2) || explains_fallback_only(spec) {
+        return;
+    }
+    let mut reported = BTreeSet::new();
+    for direction in declared_directions(spec) {
+        let Some((kind, _)) = spec.runtime.for_direction(direction, Choice::Default) else {
+            continue;
+        };
+        let path = runtime_path(spec, direction);
+        if kind != RuntimeKind::Native && reported.insert(path) {
+            findings.push(ManifestError::new(
+                path,
+                format!(
+                    "{}: a {} manifest whose {direction} direction runs on {kind} by default; \
+                     P1 and P2 run native unless notes has a \"{FALLBACK_ONLY_PREFIX} …\" entry \
+                     naming one of OR-4's reasons (R-CN2-6, CN2 OR-1)",
+                    spec.id, spec.priority
+                ),
+            ));
+        }
+    }
+}
+
+/// **R-CN2-7 (OR-7) — delivery claims are backed.**
+///
+/// `delivery.sink: exactly_once` requires `sink.transactional` and the
+/// `exactly-once` suite: only a `TransactionalSink` stores the checkpoint atomically
+/// with the data. `effectively_once` requires `sink.idempotent` or `sink.upsert` for
+/// a sink, and `envelope.stable_ids` for a source, whose re-reads `ingest`'s
+/// `(source, id)` dedup (D334) then collapses. CN1's rule 3 (idempotent or
+/// transactional for `exactly_once`) is the weaker half of this and stays, so a
+/// manifest that breaks both is told both.
+fn rule_cn2_7_delivery_claims_are_backed(spec: &ConnectorSpec, errors: &mut Vec<ManifestError>) {
+    let sink = spec.capabilities.sink.as_ref();
+    match spec.capabilities.delivery.sink {
+        Delivery::ExactlyOnce => {
+            if !sink.is_some_and(|sink| sink.transactional) {
+                errors.push(ManifestError::new(
+                    "capabilities.delivery.sink",
+                    format!(
+                        "{}: delivery.sink is exactly_once, which needs sink.transactional: \
+                         only a TransactionalSink stores the checkpoint with the data; an \
+                         idempotent sink is effectively_once (R-CN2-7, CN2 OR-7)",
+                        spec.id
+                    ),
+                ));
+            }
+            if !spec.conformance.contains(&Suite::ExactlyOnce) {
+                errors.push(ManifestError::new(
+                    "conformance",
+                    format!(
+                        "{}: delivery.sink is exactly_once, which needs the exactly-once suite \
+                         in conformance (R-CN2-7, CN2 OR-7)",
+                        spec.id
+                    ),
+                ));
+            }
+        }
+        Delivery::EffectivelyOnce => {
+            if !sink.is_some_and(|sink| sink.idempotent || sink.upsert) {
+                errors.push(ManifestError::new(
+                    "capabilities.delivery.sink",
+                    format!(
+                        "{}: delivery.sink is effectively_once, which needs sink.idempotent or \
+                         sink.upsert: the target must dedupe by ce_id or a natural key \
+                         (R-CN2-7, CN2 OR-7)",
+                        spec.id
+                    ),
+                ));
+            }
+        }
+        Delivery::AtMostOnce | Delivery::AtLeastOnce => {}
+    }
+    if spec.capabilities.delivery.source == Delivery::EffectivelyOnce && !spec.envelope.stable_ids {
+        errors.push(ManifestError::new(
+            "capabilities.delivery.source",
+            format!(
+                "{}: delivery.source is effectively_once, which needs envelope.stable_ids: \
+                 ingest dedupes by (source, id) only when the ids survive a re-read \
+                 (R-CN2-7, CN2 OR-7, §33 §6)",
+                spec.id
+            ),
+        ));
+    }
+}
+
+/// **R-CN2-8 (OR-4) — `runtime.fallback.kind` is `camel`, `debezium` or `iggy`, its
+/// `directions` are declared, and `replaced_by` is non-empty.**
+fn rule_cn2_8_fallback_is_declared_and_temporary(
+    spec: &ConnectorSpec,
+    errors: &mut Vec<ManifestError>,
+) {
+    let Some(fallback) = spec.runtime.fallback.as_ref() else {
+        return;
+    };
+    if !matches!(
+        fallback.kind,
+        RuntimeKind::Camel | RuntimeKind::Debezium | RuntimeKind::Iggy
+    ) {
+        errors.push(ManifestError::new(
+            "runtime.fallback.kind",
+            format!(
+                "{}: the fallback runs on {}, which is not one of OR-4's fallback runtimes \
+                 (camel, debezium, iggy) (R-CN2-8)",
+                spec.id, fallback.kind
+            ),
+        ));
+    }
+    let declared = declared_directions(spec);
+    for direction in &fallback.directions {
+        if !declared.contains(direction) {
+            errors.push(ManifestError::new(
+                "runtime.fallback.directions",
+                format!(
+                    "{}: the fallback serves the {direction} direction, but capabilities \
+                     declares no {direction} (R-CN2-8)",
+                    spec.id
+                ),
+            ));
+        }
+    }
+    if fallback.replaced_by.trim().is_empty() {
+        errors.push(ManifestError::new(
+            "runtime.fallback.replaced_by",
+            format!(
+                "{}: a fallback is temporary, so replaced_by must name the task that made it \
+                 one or replaces it, for example \"CN2 Task 23\" (R-CN2-8, CN2 OR-4)",
+                spec.id
+            ),
+        ));
+    }
 }
 
 /// **Rule 1 — a sink with `upsert: true` declares a key in its config schema.**
@@ -445,14 +845,34 @@ pub fn render_errors(errors: &[ManifestError]) -> String {
         .join("\n")
 }
 
-/// Which way a route uses a connector.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// Which way a route uses a connector, and the directions a manifest's runtime
+/// overrides and fallback name (CN2 Task 1; `connector.schema.json`'s
+/// `$defs/direction`, spelled `source` and `sink`).
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Default,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[serde(rename_all = "lowercase")]
 pub enum Direction {
     /// The connector is the route's `from`.
     #[default]
     Source,
     /// The connector is the route's `to`.
     Sink,
+}
+
+impl Direction {
+    /// Both directions, in the order `$defs/direction` lists them.
+    pub const ALL: &'static [Self] = &[Self::Source, Self::Sink];
 }
 
 impl fmt::Display for Direction {
@@ -546,12 +966,13 @@ pub struct Uses {
 }
 
 /// The strength of a delivery guarantee: `at_least_once` is above `at_most_once`,
-/// and `exactly_once` is above both.
+/// `effectively_once` (CN2 OR-7) above both, and `exactly_once` above all three.
 fn delivery_strength(delivery: Delivery) -> u8 {
     match delivery {
         Delivery::AtMostOnce => 0,
         Delivery::AtLeastOnce => 1,
-        Delivery::ExactlyOnce => 2,
+        Delivery::EffectivelyOnce => 2,
+        Delivery::ExactlyOnce => 3,
     }
 }
 

@@ -40,14 +40,15 @@ pub mod registry;
 pub mod validate;
 
 pub use manifest::{
-    API_VERSION, AuthMethod, Backpressure, BulkCaps, Capabilities, Category, ConfigRef,
-    ConnectorSpec, Delivery, DeliveryCaps, EnvelopeDecl, Evolution, Format, KIND, Licence, Limits,
-    ManifestError, ManifestErrors, Ordering, Priority, ProtoError, RegistryRequirement,
-    RuntimeKind, RuntimeSpec, SchemaCaps, SinkCaps, SourceCaps, Status, Suite, load_manifest,
-    load_manifest_value, load_manifest_with_schema, pb,
+    API_VERSION, AuthMethod, Backpressure, BulkCaps, Capabilities, Category, Choice, ConfigRef,
+    ConnectorSpec, Delivery, DeliveryCaps, EnvelopeDecl, Evolution, FallbackSpec, Format, KIND,
+    Licence, Limits, ManifestError, ManifestErrors, Ordering, Priority, ProtoError,
+    RegistryRequirement, RuntimeKind, RuntimeOverride, RuntimeSpec, SchemaCaps, SinkCaps,
+    SourceCaps, Status, Suite, load_manifest, load_manifest_value, load_manifest_with_schema, pb,
 };
 pub use registry::{Filter, Registry, RegistryError};
 pub use validate::{
-    CapabilityError, Direction, LicenceError, LicenceGate, ManifestSchema, Mode, SchemaError,
-    SinkRequirement, Uses, check_use, validate_manifest, validate_manifest_with_config_schema,
+    CapabilityError, Direction, LicenceError, LicenceGate, ManifestSchema, Mode,
+    NATIVE_FIRST_ENFORCED, SchemaError, SinkRequirement, Uses, check_use, semantic_warnings,
+    validate_manifest, validate_manifest_with_config_schema,
 };
