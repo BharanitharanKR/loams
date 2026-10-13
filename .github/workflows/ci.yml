@@ -340,54 +340,27 @@ jobs:
               - "sdks/conformance/**"
             # API2 Task 19: the wave 2 and 3 SDKs that had no job. Advisory: none
             # of them is in `required.needs` (API2-Q2).
+            # On a pull request only when their own directory changes; a proto,
+            # docs or shared-fixture change reaches them on the nightly, which
+            # opens an issue on failure (runner slots, not minutes, are scarce).
             sdk-java:
               - ".github/workflows/ci.yml"
-              - "docs/api/reasons.md"
-              - "docs/sdk/**"
-              - "proto/**"
               - "sdks/java/**"
-              - "sdks/fixtures/**"
-              - "sdks/conformance/**"
             sdk-kotlin:
               - ".github/workflows/ci.yml"
-              - "docs/api/reasons.md"
-              - "docs/sdk/**"
-              - "proto/**"
               - "sdks/kotlin/**"
-              - "sdks/fixtures/**"
-              - "sdks/conformance/**"
             sdk-ruby:
               - ".github/workflows/ci.yml"
-              - "docs/api/reasons.md"
-              - "docs/sdk/**"
-              - "proto/**"
               - "sdks/ruby/**"
-              - "sdks/fixtures/**"
-              - "sdks/conformance/**"
             sdk-php:
               - ".github/workflows/ci.yml"
-              - "docs/api/reasons.md"
-              - "docs/sdk/**"
-              - "proto/**"
               - "sdks/php/**"
-              - "sdks/fixtures/**"
-              - "sdks/conformance/**"
             sdk-dart:
               - ".github/workflows/ci.yml"
-              - "docs/api/reasons.md"
-              - "docs/sdk/**"
-              - "proto/**"
               - "sdks/dart/**"
-              - "sdks/fixtures/**"
-              - "sdks/conformance/**"
             sdk-objc:
               - ".github/workflows/ci.yml"
-              - "docs/api/reasons.md"
-              - "docs/sdk/**"
-              - "proto/**"
               - "sdks/objc/**"
-              - "sdks/fixtures/**"
-              - "sdks/conformance/**"
             web:
               - *pnpm-workspace
               - ".github/workflows/ci.yml"
@@ -504,7 +477,7 @@ jobs:
         run: cargo test --workspace --doc --locked
 
   # The workspace tests compile once, on the heavy runner, into a nextest
-  # archive; three free GitHub-hosted runners then run it in partitions. One
+  # archive; two free GitHub-hosted runners then run it in partitions. One
   # Blacksmith build instead of one per partition.
   rust-build:
     name: Rust tests (build)
@@ -533,7 +506,7 @@ jobs:
           compression-level: 0
 
   rust-tests:
-    name: Rust tests (${{ matrix.partition }}/3)
+    name: Rust tests (${{ matrix.partition }}/2)
     needs: [changes, rust-build]
     if: ${{ !cancelled() && needs.rust-build.result == 'success' }}
     runs-on: ubuntu-24.04
@@ -543,7 +516,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        partition: [1, 2, 3]
+        partition: [1, 2]
     steps:
       # The archive's tests read fixtures from the source tree.
       - uses: actions/checkout@v7
@@ -563,7 +536,7 @@ jobs:
           cargo nextest run
           --archive-file "$RUNNER_TEMP/nextest.tar.zst"
           --workspace-remap .
-          --partition hash:${{ matrix.partition }}/3
+          --partition hash:${{ matrix.partition }}/2
 
   # The desktop agent daemon (design §50, DD1 Task 4). The headless guard
   # (D782) fails if a GUI, webview or audio crate enters loams-agentd's tree on
@@ -768,20 +741,6 @@ jobs:
           LOAMS_BIN: target/debug/loams
           ES_ORACLE_URL: http://127.0.0.1:9250
         run: conformance/es-client/run.sh
-
-  # The remaining light jobs (docs, TLA+, Lean, the boundary guard and the
-  # required summary) run on GitHub-hosted ubuntu-24.04, like `changes`.
-  docs:
-    name: decision log IDs
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - name: Decision ID checker self-test
-        run: scripts/docs/check-decision-ids.sh --self-test
-      - name: Unique decision and question declarations
-        run: scripts/docs/check-decision-ids.sh
 
   # RT0 Task 1 (D310): model-check the router's TLA+ specs. Pull requests run
   # the PR variants; the nightly schedule runs the larger bounds. Every result
@@ -2221,79 +2180,68 @@ jobs:
       - name: the manifests render
         working-directory: .
         run: kubectl kustomize deploy/dapr > /dev/null
-
-  no-metering:
-    name: open-core boundary (no metering)
+  # The unconditional light checks, one job (one runner slot instead of four:
+  # the org's concurrent-job limit, not minutes, is what queues pull requests).
+  # Each has no path filter on purpose; see the comment on each step group.
+  # - decision log IDs: unique decision and question declarations.
+  # - open-core boundary (no metering), and every SDK has a CI job.
+  # - Linux signing scope (issue #253): scripts/ci/signpath-artifacts.py refuses
+  #   to submit a Windows or macOS artifact to SignPath (owner ruling 2026-10-03).
+  # - Linux packaging definitions: nFPM and the apt repository layout are only
+  #   validated by these self-tests, so they run on every pull request.
+  repo-checks:
+    name: repository checks (decision IDs, no metering, signing scope, packaging)
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - name: boundary guard regression fixtures
+        with:
+          persist-credentials: false
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: Decision ID checker self-test
+        run: scripts/docs/check-decision-ids.sh --self-test
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: Unique decision and question declarations
+        run: scripts/docs/check-decision-ids.sh
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: boundary guard regression fixtures
         run: python3 scripts/ci/test-no-metering.py
-      - name: audit all tracked files and Cargo packages
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: audit all tracked files and Cargo packages
         run: scripts/ci/no-metering.sh
       # API2 Task 19's every_sdk_dir_has_a_job and only_wave1_is_required. Here
       # because this job is unconditional and light, so a new sdks/<lang>
       # without a job fails every pull request that adds it.
-      - name: every SDK has a CI job; only wave 1 is required
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: every SDK has a CI job; only wave 1 is required
         run: |
           python3 scripts/ci/check-sdk-jobs.py --self-test
           python3 scripts/ci/check-sdk-jobs.py
-
-  # The Linux signing scope (issue #253, PR: SignPath). scripts/ci/
-  # signpath-artifacts.py is what refuses to submit a Windows or macOS artifact
-  # to SignPath, and the owner's ruling of 2026-10-03 is that those platforms
-  # stay unsigned. An unconditional job with no path filter on purpose: the
-  # invariant is "no artifact outside Linux is ever submitted", so it should be
-  # checked on every pull request rather than only on ones that touch the
-  # script. The self-test is pure-python fixtures and takes about a second.
-  signing:
-    name: Linux signing scope
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - name: the SignPath artifact guard self-test
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: the SignPath artifact guard self-test
         run: python3 scripts/ci/signpath-artifacts.py --self-test
-
-  # release/nfpm.yaml and scripts/release/*.py define the .deb, the .rpm and the
-  # .pkg.tar.zst. nFPM is the only thing that validates a packager field, so a
-  # definition it rejects is invisible to every other gate here -- and the same
-  # is true of the apt repository layout, which is generated in Python. Both
-  # self-tests build real packages from fixtures and read every field back.
-  #
-  # Unconditional, no path filter, for the reason the `signing` job above gives:
-  # the invariant is "the packaging definitions are valid on every pull request",
-  # so it is checked on all of them. nFPM is installed by the repo's own pinned,
-  # SHA-256-checked script; createrepo_c is not installed, so that one repository
-  # layout is reported as skipped by the self-test rather than passing silently.
-  packaging:
-    name: Linux packaging definitions
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - name: PyYAML
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: PyYAML
         run: python3 -m pip install --quiet --disable-pip-version-check PyYAML
-      - name: nFPM
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: nFPM
         run: |
           bash scripts/release/install-nfpm.sh "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: the artifact builder self-test
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: the artifact builder self-test
         run: python3 scripts/release/build-artifacts.py --self-test
-      - name: the repository builder self-test
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: the repository builder self-test
         run: python3 scripts/release/make-repo.py --self-test
+
 
   required:
     name: CI required
     if: always()
     needs:
       - changes
-      - no-metering
-      - signing
-      - packaging
-      - docs
+      - repo-checks
       - check
       - rust-build
       - rust-tests

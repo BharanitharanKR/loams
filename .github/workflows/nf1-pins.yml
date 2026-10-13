@@ -31,43 +31,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  names:
-    name: no pre-rename names (check-names.sh)
+  # names, pins and revs in one job: one runner slot instead of three (the
+  # org's concurrent-job limit is what queues pull requests). Every step runs,
+  # so one failure does not hide another.
+  checks:
+    name: names, pins and pinned revisions
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: check-names.sh and its tests
-        run: scripts/nf1/tests/test_check_names.sh
-
-  pins:
-    name: pin file and consumers (pins.py check)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: pins.py check
-        run: python3 -I scripts/nf1/pins.py check
-      - name: test_pins.py
-        run: python3 -I scripts/nf1/tests/test_pins.py
-
-  revs:
-    name: pinned fork revisions reachable (check-pinned-revs.sh)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: check-names.sh and its tests
+        if: ${{ !cancelled() }}
+        run: scripts/nf1/tests/test_check_names.sh
+      - name: pins.py check
+        if: ${{ !cancelled() }}
+        run: python3 -I scripts/nf1/pins.py check
+      - name: test_pins.py
+        if: ${{ !cancelled() }}
+        run: python3 -I scripts/nf1/tests/test_pins.py
       - name: check-pinned-revs.sh
+        if: ${{ !cancelled() }}
         run: scripts/nf1/check-pinned-revs.sh .
       - name: test_pinned_revs.py
+        if: ${{ !cancelled() }}
         run: python3 -I scripts/nf1/tests/test_pinned_revs.py
 
   # The slow job (it compiles rust-audit-info): only when the mirror scripts,
