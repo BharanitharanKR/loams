@@ -327,6 +327,11 @@ services:
     labels: { io.loams.licence: "LicenseRef-CockroachDB-Software-License", io.loams.ci-service: "true" }
     command: ["start-single-node", "--insecure"]
     ports: ["26257:26257", "8083:8080"]
+    # Ready once SQL answers, so `up --wait` means the suites can connect.
+    healthcheck:
+      test: ["CMD", "/cockroach/cockroach", "sql", "--insecure", "-e", "SELECT 1"]
+      interval: 2s
+      retries: 60
 
   # A one-member replica set: change streams and transactions need one.
   mongodb:

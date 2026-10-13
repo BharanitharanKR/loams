@@ -168,10 +168,21 @@ family = "fallback"
 services = [{ kind = "container", compose = "oracle", system = "Oracle Database" }]
 notes = ["Oracle batch and upsert run on the Camel fallback until Task 23 (OR-4)."]
 
+# PostgreSQL is a ★ (P1) row; CN2 Task 10 builds its native connector
+# directly on the SDK (R0.2), so it gains its entry here rather than in
+# Task 8 (R10.9). The open `pgvector/pgvector` image is PostgreSQL 17 with
+# one extension, and stands for plain PostgreSQL too.
+[systems.postgresql]
+systems = ["PostgreSQL"]
+family = "postgres"
+services = [{ kind = "container", compose = "pgvector", system = "PostgreSQL" }]
+harness = "loams_connector_postgres::harness::PgHarness"
+
 [systems.cockroachdb]
 systems = ["CockroachDB"]
 family = "postgres"
 services = [{ kind = "container", compose = "cockroachdb", system = "CockroachDB" }]
+harness = "loams_connector_postgres::harness::PgHarness"
 
 [systems.aurora]
 systems = ["Amazon Aurora"]
@@ -184,6 +195,7 @@ extra_targets = [
   { kind = "container", compose = "mysql", system = "MySQL" },
 ]
 notes = ["Aurora has no image: PostgreSQL and MySQL are extra targets in PR CI, never the system under test."]
+harness = "loams_connector_postgres::harness::PgHarness"
 
 [systems.azure-sql]
 systems = ["Azure SQL Database"]
@@ -241,6 +253,7 @@ systems = ["pgvector"]
 family = "postgres"
 services = [{ kind = "container", compose = "pgvector", system = "pgvector" }]
 extra_targets = [{ kind = "container", compose = "loams-postgres", system = "Loams Postgres" }]
+harness = "loams_connector_postgres::harness::PgHarness"
 
 # -------------------------------------------------------------------- graph --
 
