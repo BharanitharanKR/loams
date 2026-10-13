@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the release artifacts: three Linux packages, or the Windows zip.
+"""Build the release artifacts: three Linux packages, the Windows zip, or a macOS tarball.
 
 The Linux formats are .deb, .rpm and .pkg.tar.zst, all from one nFPM config
 (`release/nfpm.yaml`). The Windows artifact is a zip holding `loams.exe`, the
@@ -30,6 +30,8 @@ Usage:
                               [--mtime RFC3339] [--gpg-key FILE] [--gpg-key-id ID]
     build-artifacts.py windows-zip --version 0.1.0 --binary loams.exe
                               --console DIR --out DIR
+    build-artifacts.py macos-tar --version 0.1.0 --binary loams
+                              --arch arm64|x86_64 --console DIR --out DIR
     build-artifacts.py --self-test
 
 `--nfpm PATH` overrides the nFPM binary; without it the script looks for `nfpm`
@@ -39,7 +41,9 @@ so, rather than passing quietly.
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -47,8 +51,10 @@ import stat
 import struct
 import subprocess
 import sys
+import tarfile
 import tempfile
 import zipfile
+from datetime import datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -527,6 +533,70 @@ def command_windows_zip(args) -> int:
     return 0
 
 
+# The macOS tarball's architectures, as `uname -m` names them on a Mac.
+MACOS_ARCHES = ("arm64", "x86_64")
+
+
+def command_macos_tar(args) -> int:
+    """The macOS artifact: a tarball holding `loams`, the console and the licence files.
+
+    The same content as the Windows zip, under one top-level directory so that
+    `tar -xzf` never scatters files into the current directory. The binary is
+    taken as given: the workflow strips it and ad-hoc signs it first, because
+    Apple Silicon refuses to run an arm64 binary with no signature at all, and
+    re-signing is a macOS tool's job, not this script's. The archive is
+    deterministic (sorted members, uid 0, a fixed mtime), like the Linux packages.
+    """
+    if args.arch not in MACOS_ARCHES:
+        raise SystemExit(f"build-artifacts: --arch must be one of {', '.join(MACOS_ARCHES)}")
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    binary = Path(args.binary)
+    if not binary.is_file() or binary.stat().st_size == 0:
+        raise SystemExit(f"build-artifacts: the macOS binary is missing or empty: {binary}")
+    console = Path(args.console)
+    if not (console / "index.html").is_file():
+        raise SystemExit(
+            f"build-artifacts: {console} has no index.html, so it is not a console build"
+        )
+    # The commit's time, as the Linux packages use; 0 (1970) when not given.
+    mtime = int(datetime.fromisoformat(args.mtime).timestamp()) if getattr(args, "mtime", None) else 0
+    top = f"loams-{args.version}-macos-{args.arch}"
+    name = f"{top}.tar.gz"
+    target = out / name
+    members: list[tuple[Path, str, int]] = [(binary, "loams", 0o755)]
+    for doc in DOC_FILES:
+        members.append((REPO_ROOT / doc, doc, 0o644))
+    for path in sorted(console.rglob("*")):
+        if path.is_file():
+            members.append((path, str(Path("console") / path.relative_to(console)), 0o644))
+    dirs = sorted({str(Path(member).parent) for _, member, _ in members} - {"."})
+
+    def entry(member: str, kind: bytes, mode: int, size: int = 0) -> tarfile.TarInfo:
+        info = tarfile.TarInfo(f"{top}/{member}" if member else top)
+        info.type, info.mode, info.size = kind, mode, size
+        info.uid = info.gid = 0
+        info.uname = info.gname = ""
+        info.mtime = mtime
+        return info
+
+    # gzip's own header carries a timestamp too; mtime=0 keeps the bytes stable.
+    with gzip.GzipFile(target, "wb", compresslevel=9, mtime=0) as gz, \
+            tarfile.open(fileobj=gz, mode="w", format=tarfile.PAX_FORMAT) as archive:
+        archive.addfile(entry("", tarfile.DIRTYPE, 0o755))
+        for directory in dirs:
+            archive.addfile(entry(directory, tarfile.DIRTYPE, 0o755))
+        for source, member, mode in sorted(members, key=lambda m: m[1]):
+            data = source.read_bytes()
+            archive.addfile(entry(member, tarfile.REGTYPE, mode, len(data)), io.BytesIO(data))
+    note(f"build-artifacts: {name}  {target.stat().st_size} bytes  sha256:{sha256(target)[:16]}…")
+    print(json.dumps({
+        "artifacts": [{"file": name, "sha256": sha256(target), "size": target.stat().st_size}],
+        "signed": False,
+    }, indent=2))
+    return 0
+
+
 # --------------------------------------------------------------------------
 # self-test
 # --------------------------------------------------------------------------
@@ -609,6 +679,35 @@ def self_test(gpg_key: str | None = None) -> int:
                        "console/index.html", "console/assets/app.js"):
             if member not in names:
                 failures.append(f"windows-zip: {member} is missing")
+
+        # macOS tarball
+        for arch in MACOS_ARCHES:
+            tar_args = argparse.Namespace(
+                version="9.9.9", binary=str(binary), console=str(console),
+                arch=arch, out=str(root / "mac"), mtime="2026-01-01T00:00:00Z",
+            )
+            command_macos_tar(tar_args)
+        first = root / "mac" / "loams-9.9.9-macos-arm64.tar.gz"
+        before = first.read_bytes()
+        command_macos_tar(argparse.Namespace(
+            version="9.9.9", binary=str(binary), console=str(console),
+            arch="arm64", out=str(root / "mac"), mtime="2026-01-01T00:00:00Z",
+        ))
+        if first.read_bytes() != before:
+            failures.append("macos-tar: two builds of the same input differ")
+        with tarfile.open(first) as archive:
+            tar_members = {m.name: m for m in archive.getmembers()}
+        for member in ("loams", "LICENSE", "NOTICE", "README.md",
+                       "console/index.html", "console/assets/app.js"):
+            if f"loams-9.9.9-macos-arm64/{member}" not in tar_members:
+                failures.append(f"macos-tar: {member} is missing")
+        exe = tar_members.get("loams-9.9.9-macos-arm64/loams")
+        if exe is not None and stat.S_IMODE(exe.mode) != 0o755:
+            failures.append("macos-tar: loams is not 0755")
+        if not (root / "mac" / "loams-9.9.9-macos-x86_64.tar.gz").is_file():
+            failures.append("macos-tar: no x86_64 tarball")
+        if any(not m.name.startswith("loams-9.9.9-macos-arm64") for m in tar_members.values()):
+            failures.append("macos-tar: a member escapes the top-level directory")
 
         # package names
         expected_names = {
@@ -709,6 +808,14 @@ def main(argv: list[str]) -> int:
     windows.add_argument("--console", required=True)
     windows.add_argument("--out", required=True)
 
+    macos = sub.add_parser("macos-tar", help="build the macOS tarball")
+    macos.add_argument("--version", required=True)
+    macos.add_argument("--binary", required=True, help="the loams binary, stripped and signed")
+    macos.add_argument("--arch", required=True, choices=MACOS_ARCHES)
+    macos.add_argument("--console", required=True)
+    macos.add_argument("--out", required=True)
+    macos.add_argument("--mtime", help="RFC 3339 timestamp for every member, for reproducibility")
+
     args = parser.parse_args(argv)
     if args.self_test:
         return self_test(args.gpg_key)
@@ -718,6 +825,8 @@ def main(argv: list[str]) -> int:
         return command_package(args)
     if args.command == "windows-zip":
         return command_windows_zip(args)
+    if args.command == "macos-tar":
+        return command_macos_tar(args)
     parser.print_help()
     return 2
 

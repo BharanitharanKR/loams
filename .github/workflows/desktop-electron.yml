@@ -1,7 +1,9 @@
 name: Desktop (Electron) packaging
 
-# Builds the unsigned Loams Desktop installers for each platform (plan AP1e Task 15).
-# Signing is a separate release step (SignPath for Windows, Apple credentials for macOS: D676, D677).
+# Builds the unsigned Loams Desktop installers for each platform (plan AP1e Task 15): Linux x64 and
+# arm64, Windows x64, macOS arm64 and x64. Every platform must pass; none is best-effort any more.
+# Signing is a separate release step (SignPath for Windows, Apple credentials for macOS: D676, D677);
+# the macOS builds here carry only an ad-hoc signature, which Apple Silicon needs to run the app.
 on:
   pull_request:
     paths:
@@ -31,18 +33,26 @@ jobs:
   package:
     name: package (${{ matrix.name }})
     runs-on: ${{ matrix.runner }}
-    # macOS and Windows installers are best-effort until their signing is set up.
-    continue-on-error: ${{ matrix.experimental }}
-    timeout-minutes: 90
+    # A cold Windows or macOS engine build takes about an hour on a GitHub-hosted runner.
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { name: linux-x64, runner: ubuntu-24.04, target: package-linux, experimental: false }
-          - { name: linux-arm64, runner: ubuntu-24.04-arm, target: package-linux, experimental: false }
-          - { name: windows-x64, runner: windows-2025, target: package-windows, experimental: true }
-          - { name: macos-arm64, runner: macos-15, target: package-macos, experimental: true }
-          - { name: macos-x64, runner: macos-15-intel, target: package-macos, experimental: true }
+          - { name: linux-x64, runner: ubuntu-24.04, target: package-linux }
+          - { name: linux-arm64, runner: ubuntu-24.04-arm, target: package-linux }
+          - { name: windows-x64, runner: windows-2025, target: package-windows }
+          - { name: macos-arm64, runner: macos-15, target: package-macos, mac_arch: arm64 }
+          # Cross-built on Apple Silicon: the Intel runners took over 90 minutes for the engine alone
+          # and timed out (run 38280683907). The x64 engine is smoke-tested under Rosetta.
+          - { name: macos-x64, runner: macos-15, target: package-macos, mac_arch: x64, rust_target: x86_64-apple-darwin }
+    env:
+      LOAMS_DESKTOP_MAC_ARCH: ${{ matrix.mac_arch }}
+      RUST_TARGET: ${{ matrix.rust_target }}
+      # electron-builder skips all macOS signing on a pull request unless told otherwise. This
+      # workflow holds no signing secrets, so this only enables the ad-hoc signature ("-") that
+      # Apple Silicon needs to run the app at all.
+      CSC_FOR_PULL_REQUEST: 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -83,11 +93,47 @@ jobs:
 
       # The desktop engine needs durable, live-tikv (Live on the TiKV stack, ruling T23-7) and
       # graph (the Graph page, GR1 Task 8); the default build has live (the embedded store) only.
+      # A cross build (macos-x64) goes to target/<triple>/release; LOAMS_BIN points fetch-engine.mjs at it.
       - name: engine
-        run: cargo build --release -p loams --features live,durable,live-tikv,graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          features=live,durable,live-tikv,graph
+          if [ -n "$RUST_TARGET" ]; then
+            rustup target add "$RUST_TARGET"
+            cargo build --release -p loams --features "$features" --target "$RUST_TARGET"
+            echo "LOAMS_BIN=$PWD/target/$RUST_TARGET/release/loams" >> "$GITHUB_ENV"
+          else
+            cargo build --release -p loams --features "$features"
+          fi
 
-      - name: package (unsigned)
+      - name: engine smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="${LOAMS_BIN:-target/release/loams}"
+          [ "$RUNNER_OS" = Windows ] && bin=target/release/loams.exe
+          file "$bin" || true
+          if [ "$RUST_TARGET" = x86_64-apple-darwin ]; then
+            # Rosetta is not always installed on the arm64 images.
+            arch -x86_64 /usr/bin/true 2>/dev/null || softwareupdate --install-rosetta --agree-to-license
+            arch -x86_64 "$bin" --version
+          else
+            "$bin" --version
+          fi
+
+      - name: package
         run: pnpm nx run loams-desktop-electron:${{ matrix.target }} --outputStyle=static
+
+      - name: macOS signature
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          apps=(apps/desktop-electron/dist/mac*/*.app); app="${apps[0]}"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv "$app" 2>&1 | grep -E 'Signature|Identifier|Format'
+          lipo -archs "$app/Contents/MacOS/Loams Desktop"
+          lipo -archs "$app/Contents/Resources/bin/loams"
 
       - name: smoke test (Playwright, Task 16)
         if: runner.os == 'Linux' && hashFiles('apps/desktop-electron/playwright.config.ts') != ''
