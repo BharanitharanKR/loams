@@ -16,16 +16,15 @@
 # exactly parallel to the TypeScript template, and this file gains one `plugins:`
 # entry.
 #
-# The committed stubs under `sdks/go/gen/loams/` were generated with this
-# template, from the repository root, restricted to the eight packages the SDK
-# binds (the proto module now also holds packages, such as
-# `loams.collection.v1`, that have no `M` entry below and would fail):
+# The template is the one `scripts/sdk/gen.sh go` and `scripts/sdk/drift.sh go`
+# run (`sdks/templates/go/template.env`), so the committed stubs under
+# `sdks/go/gen/loams/` are exactly its output. Its input is restricted to the
+# eight packages the SDK binds: the proto module also holds packages, such as
+# `loams.collection.v1`, that have no `M` entry below, and protoc-gen-go fails on
+# a file it cannot place. Binding a new package means adding it to `paths:` and
+# its files to both `M` lists. From the repository root:
 #
-#	buf generate --template sdks/go/buf.gen.go.yaml \
-#	  --path proto/loams/options/v1 --path proto/loams/errors/v1 \
-#	  --path proto/loams/instance/v1 --path proto/loams/devices/v1 \
-#	  --path proto/loams/approvals/v1 --path proto/loams/operations/v1 \
-#	  --path proto/loams/notifications/v1 --path proto/loams/live/v1
+#	buf generate --template sdks/go/buf.gen.go.yaml
 #
 # `M` maps each **proto file path** to the Go import path of its generated
 # types. It is needed because none of the protos declares `go_package`: Go's
@@ -41,9 +40,18 @@
 # the output directory.
 version: v2
 inputs:
-  # The whole proto module, as one image. Every file matters: the error packages
-  # and the annotations are imported by the ones a client calls.
+  # The proto module, as one image; `paths` limits what is generated, not what is
+  # read, so the imports of the bound packages still resolve.
   - directory: proto
+    paths:
+      - proto/loams/options/v1
+      - proto/loams/errors/v1
+      - proto/loams/instance/v1
+      - proto/loams/devices/v1
+      - proto/loams/approvals/v1
+      - proto/loams/operations/v1
+      - proto/loams/notifications/v1
+      - proto/loams/live/v1
 plugins:
   # Remote plugins, pinned by version as D615 requires, so a regeneration does not
   # silently change the output because an upstream release did.
@@ -83,4 +91,6 @@ plugins:
       - Mloams/live/v1/value.proto=loams.dev/go/gen/loams/live/v1;livev1
       - Mloams/graph/v1/graph.proto=loams.dev/go/gen/loams/graph/v1;graphv1
       - Mloams/house/v1/house.proto=loams.dev/go/gen/loams/house/v1;housev1
+# Not `clean: true`: `out` is the module root, and `gen/facade/` (the Q604
+# hand-written facade) and the runtime's own files live under it.
 clean: false

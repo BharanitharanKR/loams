@@ -270,11 +270,16 @@ jobs:
             # SDK2 Task 2: the Go SDK, whose module sits outside the web
             # workspace and so had no job of its own.
             sdk-go:
+              - *pnpm-workspace
               - ".github/workflows/**"
+              - "rust-toolchain*"
+              - "crates/loams-facade-gen/**"
               - "docs/api/reasons.md"
               - "docs/sdk/**"
               - "proto/**"
+              - "scripts/sdk/**"
               - "sdks/go/**"
+              - "sdks/templates/go/**"
               - "sdks/conformance/**"
             # The C++ SDK (#295). Its buf.gen.yaml pins the protoc release, so a
             # proto edit has to re-run the job even when no C++ file moved.
@@ -1408,6 +1413,30 @@ jobs:
       - name: vet the Go SDK
         working-directory: sdks/go
         run: go vet ./...
+      # The drift check below, as in sdk-rust: scripts/sdk/drift.sh builds
+      # protoc-gen-loams-facade with cargo (the toolchain comes from
+      # rust-toolchain.toml) and runs the buf CLI pinned in web's
+      # node_modules, so it needs both.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.27.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: install
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+      # The stubs under sdks/go/gen/loams are committed (the mirror repository
+      # builds from a tag), so a proto edit that moved them cannot pass with a
+      # stale tree. drift.sh regenerates with the template
+      # sdks/templates/go/template.env names, sdks/go/buf.gen.go.yaml, and
+      # fails on a diff or on a new, uncommitted stub. The hand-written
+      # gen/facade (Q604) is neither regenerated nor cleaned.
+      - name: the Go SDK's generated code is not stale
+        run: ./scripts/sdk/drift.sh go
 
   # SDK2 Task 11 (#295): the C++ SDK. protobuf 36.1.0 and libcurl 8.x are
   # preinstalled on the runner, and the pinned `buf.build/protocolbuffers/cpp`
