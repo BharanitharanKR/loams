@@ -1,0 +1,372 @@
+# The real-system test estate for Loams Flow's connectors (CN2 plan Task 6,
+# owner rulings OR-2 and OR-3). FL1 owns the rest of this file (the Fabric
+# itself and CN1's `connectors` profile for the ★ suites); CN2 adds two
+# profiles here and nothing in the default profile:
+#
+#   connectors-p2       open images (Apache, MIT, BSD, MPL, EPL, GPL, PostgreSQL)
+#   connectors-ci-only  `ci-service` images: proprietary, source-available or
+#                       under a EULA (OR-3). CI only; never in an image Loams
+#                       builds and never in the default profile.
+#
+#   docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 up -d --wait rabbitmq
+#   LOAMS_CONNECTORS_P2_STACK=1 cargo test -p loams-connector-brokers
+#
+# Every image is pinned by digest, at the newest tag of the line
+# `docs/plans/cn2-dependency-spike.md` §7 names that was pushed on or before
+# 2026-09-29 (the 14-day rule on 2026-10-13); the plan's ruling R6.6 lists
+# where that differs from the spike's tag. Each service carries its licence
+# (`io.loams.licence`, SPDX) and whether it is a `ci-service`
+# (`io.loams.ci-service`); `loams-flow-conformance`'s
+# `compose_estate_is_pinned_and_split` checks both against OR-3.
+#
+# The credentials below are fixed test values for throwaway containers on a
+# CI runner, never a secret of any real account; real accounts are reached
+# only by the scheduled `connectors-nightly` job through repository secrets.
+# Host ports are distinct so any set of services can run side by side.
+
+name: loams-fabric
+
+services:
+  # ------------------------------------------------------ connectors-p2 --
+
+  rabbitmq:
+    image: rabbitmq:4.3.5-management@sha256:57bddb6fbc3498b5d8b5a14dc6f4506073ebcf94c66ba2a7678c335faa8dd631
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "MPL-2.0", io.loams.ci-service: "false" }
+    ports: ["5672:5672", "15672:15672"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      retries: 30
+
+  artemis:
+    image: apache/artemis:2.57.0@sha256:0f32b054e1f4adc45fc64824ebb0586579ffd563ce37d75b5a10d27db19a3889
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
+    environment:
+      ARTEMIS_USER: loams
+      ARTEMIS_PASSWORD: loams-test
+    ports: ["61616:61616", "5673:5672"]
+
+  activemq:
+    image: apache/activemq:6.3.2@sha256:fb98e5b8bc1ecc67ad19b0b982c00575fa12d54866f3cde9fa5b0ec1241631c2
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
+    ports: ["61617:61616", "5674:5672"]
+
+  nats:
+    image: nats:2.15.0@sha256:cd3fcd4ecdda44e3a66728a5334af0a959bc3979b32810e033d1c547241cd0f4
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
+    command: ["-js", "-m", "8222"]
+    ports: ["4222:4222", "8222:8222"]
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0.22@sha256:199ea8ef2e35ec2b1b37e59cfd1dbae538ed4dfa4a2251a121a52215a6248a21
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "EPL-2.0 OR BSD-3-Clause", io.loams.ci-service: "false" }
+    command: ["mosquitto", "-c", "/mosquitto-no-auth.conf"]
+    ports: ["1883:1883"]
+
+  pulsar:
+    image: apachepulsar/pulsar:4.0.13@sha256:f923d4ccad4c79b5de9a2c88f47f73c8128223e8e11a95a3cbd81229c4f4dd9e
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
+    command: ["bin/pulsar", "standalone"]
+    ports: ["6650:6650", "8081:8080"]
+
+  # SQS, SNS, EventBridge, Kinesis, DynamoDB (+ Streams), Lambda and SES
+  # (D60, R0.23). Lambda runs functions in real containers, hence the socket.
+  floci:
+    image: floci/floci:2.1.0@sha256:f5aa8c18302cedb4f2385f5c4e455b3efc77fee6bf7b6e5d1712b2817ba102db
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "MIT", io.loams.ci-service: "false" }
+    ports: ["4566:4566"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # PostgreSQL 17 with pgvector, logical replication on (Task 10's CDC).
+  pgvector:
+    image: pgvector/pgvector:0.8.6-pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "PostgreSQL", io.loams.ci-service: "false" }
+    environment:
+      POSTGRES_PASSWORD: loams-test
+    command: ["postgres", "-c", "wal_level=logical", "-c", "max_replication_slots=16", "-c", "max_wal_senders=16"]
+    ports: ["5433:5432"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 2s
+      retries: 30
+
+  mysql:
+    image: mysql:8.4.10@sha256:8dbcf531a03aade657e181b9cf2f1d1803ce621a1d55610cb44cb531ab7d7db6
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "GPL-2.0-only WITH Universal-FOSS-exception-1.0", io.loams.ci-service: "false" }
+    environment:
+      MYSQL_ROOT_PASSWORD: loams-test
+    command: ["--gtid-mode=ON", "--enforce-gtid-consistency=ON", "--binlog-row-metadata=FULL"]
+    ports: ["3307:3306"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ploams-test"]
+      interval: 2s
+      retries: 60
+
+  mariadb:
+    image: mariadb:11.8.8@sha256:24e76fcec8c003a0362d0dd53f4806e7e79458d7fdeaf47437760e19496f5a9c
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "GPL-2.0-only", io.loams.ci-service: "false" }
+    environment:
+      MARIADB_ROOT_PASSWORD: loams-test
+    command: ["--log-bin=mariadb-bin", "--binlog-format=ROW", "--binlog-row-metadata=FULL", "--server-id=1"]
+    ports: ["3308:3306"]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      retries: 60
+
+  cassandra:
+    image: cassandra:5.0.8@sha256:259578bbeac315a7326c2a99e60eab86f3415e9e895207bf2a032af4de8c16b5
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
+    environment:
+      MAX_HEAP_SIZE: 1G
+      HEAP_NEWSIZE: 200M
+    ports: ["9042:9042"]
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 5s
+      retries: 60
+
+  valkey:
+    image: valkey/valkey:8.1.10@sha256:640c5e62cea04b6d6f2084232651d0cc70362d31f4f805e7be94dbed6855e8f2
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "BSD-3-Clause", io.loams.ci-service: "false" }
+    ports: ["6380:6379"]
+
+  opensearch:
+    image: opensearchproject/opensearch:3.9.0@sha256:adfa61f85025d06b4aeb562e7e74fde7e31c437039c93c3862c17e9acebd6c7c
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports: ["9201:9200"]
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.1@sha256:12364fe851b9f17356fc88189fc06d1b521262e04659ec7345975b00c9246a10
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
+    ports: ["6333:6333", "6334:6334"]
+
+  trino:
+    image: trinodb/trino:483@sha256:db58cc93e593a2706553745f276bb119c9810e69918be56ecde088ba7ccb0534
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
+    ports: ["8080:8080"]
+
+  rustfs:
+    image: rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
+    environment:
+      RUSTFS_ACCESS_KEY: loams
+      RUSTFS_SECRET_KEY: loams-test-secret
+    ports: ["9000:9000", "9001:9001"]
+
+  fake-gcs:
+    image: fsouza/fake-gcs-server:1.56.1@sha256:797ce226d62f947c009dc40246b30cfb456b8473d8241407f9d6f2c04e4d69ef
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "BSD-2-Clause", io.loams.ci-service: "false" }
+    command: ["-scheme", "http", "-port", "4443", "-public-host", "localhost:4443"]
+    ports: ["4443:4443"]
+
+  # Blob, Queue and Table; no hierarchical namespace (R0.21). Also the Event
+  # Hubs emulator's storage, hence both profiles.
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.37.0@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5
+    profiles: [connectors-p2, connectors-ci-only]
+    labels: { io.loams.licence: "MIT", io.loams.ci-service: "false" }
+    command: ["azurite", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0", "--skipApiVersionCheck"]
+    ports: ["10000:10000", "10001:10001", "10002:10002"]
+
+  # `atmoz/sftp` publishes only the moving `alpine` tag (R6.6).
+  sftp:
+    image: atmoz/sftp:alpine@sha256:7e439fabeae536fa254340724c042e11999924d906417dbb5c73602ad518813f
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "MIT", io.loams.ci-service: "false" }
+    command: ["loams:loams-test:1001::upload"]
+    ports: ["2222:22"]
+
+  neo4j:
+    image: neo4j:5.26.30-community@sha256:3388e05ee53c8313d01acdf33e63ad175af95a92226dc8551160564439ce2c8c
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "GPL-3.0-only", io.loams.ci-service: "false" }
+    environment:
+      NEO4J_AUTH: neo4j/loams-test-pass
+    ports: ["7474:7474", "7687:7687"]
+
+  prometheus:
+    image: prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--web.enable-remote-write-receiver"]
+    ports: ["9090:9090"]
+
+  # Vault's API, open licence (the `vault` manifest's system).
+  openbao:
+    image: openbao/openbao:2.7.0@sha256:71156a1c6623a5fa3f5e61b0c6a8ead0faf0df29a778339188443551995d1315
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "MPL-2.0", io.loams.ci-service: "false" }
+    command: ["server", "-dev", "-dev-root-token-id=loams-dev-root", "-dev-listen-address=0.0.0.0:8200"]
+    cap_add: [IPC_LOCK]
+    ports: ["8200:8200"]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4@sha256:82a77884f3af238beab1e7afd63b5f530e1b5c0590bd7aa60b40a40463e29b2c
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
+    command: ["start-dev"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: loams-test
+    ports: ["8180:8080"]
+
+  kestra:
+    image: kestra/kestra:v2.0.4@sha256:3db5e0110babe75bdf6d9e5f030e1df9f7da2a148c47b5197ba233f3f0d6e8f5
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
+    command: ["server", "local"]
+    ports: ["8082:8080"]
+
+  stripe-mock:
+    image: stripe/stripe-mock:v0.205.0@sha256:ff32647993847be491e68533e2881c90434fa8d5df40246ee5f7d41253422081
+    profiles: [connectors-p2]
+    labels: { io.loams.licence: "MIT", io.loams.ci-service: "false" }
+    ports: ["12111:12111", "12112:12112"]
+
+  # ------------------------------------------- connectors-ci-only (OR-3) --
+
+  redpanda:
+    image: redpandadata/redpanda:v26.2.3@sha256:9e83cfa99278f30d0133271c26bf670cd69c94ffa6ba0b42830dd0c3bd9dcfd9
+    profiles: [connectors-ci-only]
+    labels: { io.loams.licence: "BUSL-1.1", io.loams.ci-service: "true" }
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+    ports: ["19092:19092"]
+
+  # The Kafka endpoint is on 9092 (SASL PLAIN with the connection string);
+  # AMQP on 5672. No transactions (R0.19).
+  eventhubs:
+    image: mcr.microsoft.com/azure-messaging/eventhubs-emulator:2.2.1@sha256:be413f0d59541621879e6d197d73f64f3b3ac5fa45861641fdc1430252b8b44b
+    profiles: [connectors-ci-only]
+    labels: { io.loams.licence: "LicenseRef-Microsoft-Emulator-EULA", io.loams.ci-service: "true" }
+    environment:
+      ACCEPT_EULA: "Y"
+      BLOB_SERVER: azurite
+      METADATA_SERVER: azurite
+    volumes:
+      - ./emulators/eventhubs.config.json:/Eventhubs_Emulator/ConfigFiles/Config.json:ro
+    depends_on: [azurite]
+    ports: ["9093:9092", "5675:5672"]
+
+  servicebus:
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:2.0.1@sha256:5a96d893b245031740f7d46e0fe5ff282d24b78c4b7d761dd57590f3f010a9b3
+    profiles: [connectors-ci-only]
+    labels: { io.loams.licence: "LicenseRef-Microsoft-Emulator-EULA", io.loams.ci-service: "true" }
+    environment:
+      ACCEPT_EULA: "Y"
+      SQL_SERVER: servicebus-sql
+      MSSQL_SA_PASSWORD: Loams-Test-Pass-1
+    volumes:
+      - ./emulators/servicebus.config.json:/ServiceBus_Emulator/ConfigFiles/Config.json:ro
+    depends_on: [servicebus-sql]
+    ports: ["5676:5672"]
+
+  # The Service Bus emulator's own SQL Server (spike §5.3).
+  servicebus-sql:
+    image: mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04@sha256:4402d880dd4c34bfa7d8705e56a86cd6c88da80a1f6bbbe741f999e76264a090
+    profiles: [connectors-ci-only]
+    labels: { io.loams.licence: "LicenseRef-Microsoft-SQL-Server-EULA", io.loams.ci-service: "true" }
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: Loams-Test-Pass-1
+
+  # SQL Server Developer with the Agent on (CDC tables need it; Task 12).
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04@sha256:4402d880dd4c34bfa7d8705e56a86cd6c88da80a1f6bbbe741f999e76264a090
+    profiles: [connectors-ci-only]
+    labels: { io.loams.licence: "LicenseRef-Microsoft-SQL-Server-EULA", io.loams.ci-service: "true" }
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_AGENT_ENABLED: "true"
+      MSSQL_SA_PASSWORD: Loams-Test-Pass-1
+    ports: ["1433:1433"]
+
+  oracle:
+    image: gvenzl/oracle-free:23.26.3-slim@sha256:6d61d267a3b978c24c5ac1790e62e927416a0aec446bd86e4b3a1527562757bd
+    profiles: [connectors-ci-only]
+    labels: { io.loams.licence: "LicenseRef-Oracle-FUTC", io.loams.ci-service: "true" }
+    environment:
+      ORACLE_PASSWORD: loams-test
+      APP_USER: loams
+      APP_USER_PASSWORD: loams-test
+    ports: ["1521:1521"]
+
+  # Single node: no licence key, no throttling (R0.20).
+  cockroachdb:
+    image: cockroachdb/cockroach:v26.2.7@sha256:9464ae30465b887295459b98d129a76d074caeaa4c86836d369c6d2fdddd1685
+    profiles: [connectors-ci-only]
+    labels: { io.loams.licence: "LicenseRef-CockroachDB-Software-License", io.loams.ci-service: "true" }
+    command: ["start-single-node", "--insecure"]
+    ports: ["26257:26257", "8083:8080"]
+
+  # A one-member replica set: change streams and transactions need one.
+  mongodb:
+    image: mongo:8.0.30@sha256:4a0f30875898413139bec44c73c02a05fed172578de65b644dcdcee143ae7306
+    profiles: [connectors-ci-only]
+    labels: { io.loams.licence: "SSPL-1.0", io.loams.ci-service: "true" }
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports: ["27017:27017"]
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]}).ok }"
+      interval: 2s
+      retries: 60
+
+  redis:
+    image: redis:8.10.1@sha256:8a1efc5f479551822b47424ccae982026b633f28818eab0387348120a61e10e2
+    profiles: [connectors-ci-only]
+    labels: { io.loams.licence: "AGPL-3.0-only OR LicenseRef-RSALv2 OR SSPL-1.0", io.loams.ci-service: "true" }
+    ports: ["6379:6379"]
+
+  splunk:
+    image: splunk/splunk:10.4.3@sha256:cc3a3efe2509fa31f67d4aa20dde7118886babf9a0930f197ef996d513c44834
+    profiles: [connectors-ci-only]
+    labels: { io.loams.licence: "LicenseRef-Splunk-General-Terms", io.loams.ci-service: "true" }
+    environment:
+      SPLUNK_START_ARGS: --accept-license
+      SPLUNK_GENERAL_TERMS: --accept-sgt-current-at-splunk-com
+      SPLUNK_PASSWORD: Loams-Test-Pass-1
+      SPLUNK_HEC_TOKEN: 00000000-0000-4000-8000-00000000c0de
+    ports: ["8000:8000", "8088:8088", "8089:8089"]
+
+  # The Pub/Sub emulator jar has no licence statement found, so it is
+  # treated as a ci-service until verified (R0.27).
+  pubsub:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:587.0.0-emulators@sha256:8d8573471c489a409f03891d2c24d177fa531276184f7002b9a2d853d1b3ed54
+    profiles: [connectors-ci-only]
+    labels: { io.loams.licence: "LicenseRef-Google-Cloud-SDK-Emulator", io.loams.ci-service: "true" }
+    command: ["gcloud", "beta", "emulators", "pubsub", "start", "--host-port=0.0.0.0:8085", "--project=loams-test"]
+    ports: ["8085:8085"]
