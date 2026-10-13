@@ -1,9 +1,95 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/databricks.config.json",
-  "title": "Databricks instance config (placeholder)",
-  "description": "Placeholder for a Databricks instance's settings. It is filled in when this connector is built: CN2 for the P2 rows, as first-party native connectors with declared fallbacks (CN2 OR-1, OR-4), and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "Databricks connector instance config (loams.flow/v1)",
+  "description": "One Databricks SQL warehouse's settings, read by the native analytics family (`loams_connector_analytics::databricks`, CN2 Task 17) over the SQL Statement Execution API and the Files API. `token` holds a secret **name** (D189), exactly the manifest's `secrets`.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "host",
+    "warehouse_id",
+    "token"
+  ],
+  "properties": {
+    "host": {
+      "description": "The workspace, `https://<workspace>.cloud.databricks.com`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "warehouse_id": {
+      "description": "The SQL warehouse id.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9-]+$"
+    },
+    "token": {
+      "description": "A personal access token or an OAuth access token (`Authorization: Bearer`); the OAuth M2M exchange is not built (R17.8). The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "catalog": {
+      "description": "The statement's default catalog.",
+      "type": "string",
+      "minLength": 1
+    },
+    "schema": {
+      "description": "The statement's default schema.",
+      "type": "string",
+      "minLength": 1
+    },
+    "query": {
+      "description": "The source's query, read as Arrow result chunks. Give it an `ORDER BY` for an exact resume (R17.9).",
+      "type": "string",
+      "minLength": 1
+    },
+    "sink": {
+      "description": "The sink: each batch is uploaded as one Parquet file to a Unity Catalog volume (`overwrite=false`), then loaded with `COPY INTO` (`append`) or `MERGE INTO` (`merge`).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "table",
+        "volume"
+      ],
+      "properties": {
+        "table": {
+          "description": "`catalog.schema.table`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "description": "`append` (`COPY INTO`, which skips a file it already loaded) or `merge` (MERGE on `keys`: an upsert). Both are effectively once.",
+          "enum": [
+            "append",
+            "merge"
+          ],
+          "default": "append"
+        },
+        "keys": {
+          "description": "The merge keys; required for `merge`.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "volume": {
+          "description": "A volume directory, `/Volumes/<catalog>/<schema>/<volume>/<dir>`.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^/Volumes/"
+        }
+      }
+    },
+    "statement_timeout_secs": {
+      "description": "How long a statement may run before the attempt is retried, in seconds.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 3600
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }

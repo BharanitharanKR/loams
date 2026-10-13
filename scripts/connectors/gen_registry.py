@@ -396,6 +396,8 @@ HAND_WRITTEN_FAMILY_ROWS: dict[str, tuple[str, ...]] = {
         "activemq-jms", "azure-service-bus", "mqtt", "nats", "pulsar", "rabbitmq-amqp", "websocket",
     ),
     "cloud": ("aws-sns", "aws-sqs", "azure-event-grid", "eventbridge", "google-pub-sub"),  # R19.6
+    "analytics": ("databricks", "duckdb", "redshift", "trino"),  # R17.2
+    "lakehouse": ("delta-lake",),  # R17.2
 }
 HAND_WRITTEN_UNSTARRED_IDS: set[str] = (
     set(HANDWRITTEN_UNSTARRED)
@@ -698,6 +700,14 @@ STAR_FALLBACKS: dict[str, tuple[str, str, list[str], str]] = {
     "elasticsearch": ("iggy", "elasticsearch", ["source", "sink"], "CN2 Task 15"),
     "clickhouse": ("iggy", "clickhouse", ["sink"], "CN2 Task 17"),
     "iceberg": ("iggy", "iceberg", ["sink"], "CN2 Task 17"),
+}
+
+# A direction whose default runtime differs from runtime.kind/ref (CN2 OR-10): the manifest
+# writes it as runtime.source or runtime.sink, and the CSV's per-direction cell follows.
+# The ClickHouse ★'s sink is native in the analytics family (R17.2, R17.3) while its source
+# stays CN1's loams_flow::connectors::clickhouse until CN2 Task 8 moves it.
+DIRECTION_RUNTIME: dict[str, dict[str, tuple[str, str]]] = {
+    "clickhouse": {"sink": ("native", "loams_connector_analytics::clickhouse_sink")},
 }
 
 # Profiles: a manifest's `runtime.profile`, plus Aurora's MySQL engine, which the aurora
@@ -1038,10 +1048,13 @@ def build_rows(lines: list[str]) -> tuple[list[dict], list[str], list[str]]:
                 problems.append(f"{row['id']}: a {row['priority']} row with no CN2 Task 2 runtime assignment")
             if row["priority"] == "P2" and runtime == "openapi":
                 problems.append(f"{row['id']}: a P2 row on openapi (CN2 OR-1, OR-11)")
+            overrides = DIRECTION_RUNTIME.get(row["id"], {})
             if yes_no(row["source"]):
-                source_runtime = f"{runtime}:{ref}"
+                kind, target = overrides.get("source", (runtime, ref))
+                source_runtime = f"{kind}:{target}"
             if yes_no(row["sink"]):
-                sink_runtime = f"{runtime}:{ref}"
+                kind, target = overrides.get("sink", (runtime, ref))
+                sink_runtime = f"{kind}:{target}"
             entry = NATIVE_FIRST.get(row["id"], {})
             profile = entry.get("profile", "")
             fallback = render_fallback(entry.get("fallback") or STAR_FALLBACKS.get(row["id"]))

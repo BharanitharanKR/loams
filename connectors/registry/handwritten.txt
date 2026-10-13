@@ -17,8 +17,11 @@ cassandra
 clickhouse
 cloudflare-r2
 cockroachdb
+databricks
 debezium-mysql
 debezium-postgres
+delta-lake
+duckdb
 dynamodb
 dynamodb-streams
 elasticsearch
@@ -56,10 +59,12 @@ rabbitmq-amqp
 redis
 redis-streams
 redpanda
+redshift
 s3
 sftp
 snowflake
 sql-server
+trino
 valkey
 webhooks
 websocket

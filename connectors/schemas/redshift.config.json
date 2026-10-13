@@ -1,9 +1,212 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/redshift.config.json",
-  "title": "Redshift instance config (placeholder)",
-  "description": "Placeholder for a Redshift instance's settings. It is filled in when this connector is built: CN2 for the P2 rows, as first-party native connectors with declared fallbacks (CN2 OR-1, OR-4), and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "Redshift connector instance config (loams.flow/v1)",
+  "description": "One Amazon Redshift instance's settings, read by the native analytics family (`loams_connector_analytics::redshift`, CN2 Task 17) over the Redshift Data API, signed with SigV4 (R17.4). Name exactly one of `cluster_identifier` and `workgroup_name`. `auth.*` hold secret **names** (D189), exactly the manifest's `secrets`.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "region",
+    "database",
+    "auth"
+  ],
+  "properties": {
+    "region": {
+      "description": "The AWS region, `us-east-1`.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "endpoint": {
+      "description": "The Data API endpoint; `https://redshift-data.<region>.amazonaws.com` when absent (a fixture replay names its proxy here).",
+      "type": "string",
+      "minLength": 1
+    },
+    "cluster_identifier": {
+      "description": "A provisioned cluster, with `db_user` or `secret_arn`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "workgroup_name": {
+      "description": "A Serverless workgroup.",
+      "type": "string",
+      "minLength": 1
+    },
+    "database": {
+      "description": "The database.",
+      "type": "string",
+      "minLength": 1
+    },
+    "db_user": {
+      "description": "A provisioned cluster's database user (temporary credentials).",
+      "type": "string",
+      "minLength": 1
+    },
+    "secret_arn": {
+      "description": "A Secrets Manager ARN holding database credentials: an ARN, not a secret value.",
+      "type": "string",
+      "minLength": 1
+    },
+    "auth": {
+      "description": "AWS credentials, as secret names.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "access_key_id",
+        "secret_access_key"
+      ],
+      "properties": {
+        "access_key_id": {
+          "description": "The access key id. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "secret_access_key": {
+          "description": "The secret access key. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "session_token": {
+          "description": "A session token, for temporary credentials. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "s3": {
+      "description": "The bucket's endpoint and region when not AWS's own (the UNLOAD output and the sink's staging).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "description": "An S3-compatible endpoint; AWS when absent.",
+          "type": "string",
+          "minLength": 1
+        },
+        "region": {
+          "description": "The bucket's region.",
+          "type": "string",
+          "minLength": 1
+        },
+        "allow_http": {
+          "description": "Allow plain HTTP to `endpoint`: development and CI stores only.",
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "query": {
+      "description": "The source's query. Give it an `ORDER BY` for an exact resume (R17.9).",
+      "type": "string",
+      "minLength": 1
+    },
+    "unload": {
+      "description": "The bulk path: `UNLOAD` the query to this location as Parquet and read each file as Arrow. Needs `query`.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "s3_uri",
+        "iam_role"
+      ],
+      "properties": {
+        "s3_uri": {
+          "description": "`s3://bucket/prefix`.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^s3://"
+        },
+        "iam_role": {
+          "description": "The IAM role ARN Redshift assumes for this location.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^arn:aws"
+        }
+      }
+    },
+    "sink": {
+      "description": "The sink: each batch is staged as one Parquet file, then one `BatchExecuteStatement` (a transaction) copies it into a temporary table and appends or merges.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "table",
+        "staging"
+      ],
+      "properties": {
+        "table": {
+          "description": "The target table, `schema.table`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "description": "`append` (INSERT … SELECT; at least once) or `merge` (MERGE on `keys`: an upsert, effectively once).",
+          "enum": [
+            "append",
+            "merge"
+          ],
+          "default": "append"
+        },
+        "keys": {
+          "description": "The merge keys; required for `merge`.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "staging": {
+          "description": "Where each batch's Parquet file is staged for `COPY`; deleted after the load.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "s3_uri",
+            "iam_role"
+          ],
+          "properties": {
+            "s3_uri": {
+              "description": "`s3://bucket/prefix`.",
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^s3://"
+            },
+            "iam_role": {
+              "description": "The IAM role ARN Redshift assumes for this location.",
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^arn:aws"
+            }
+          }
+        }
+      }
+    },
+    "statement_timeout_secs": {
+      "description": "How long a statement may run before the attempt is retried, in seconds.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 3600
+    },
+    "lossy": {
+      "description": "Columns whose mapping loses information and is accepted (R5.1), for example a `timestamp` without a zone read as UTC.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "evolution": {
+      "description": "The schema evolution policy (see the schema-mapping guide).",
+      "enum": [
+        "additive",
+        "widen",
+        "pause"
+      ],
+      "default": "additive"
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }
