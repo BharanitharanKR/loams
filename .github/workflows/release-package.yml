@@ -508,7 +508,7 @@ jobs:
           file "$bin"
           ls -l "$bin"
           if [ "$TARGET" = x86_64-apple-darwin ]; then
-            arch -x86_64 /usr/bin/true 2>/dev/null || softwareupdate --install-rosetta --agree-to-license
+            arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
             arch -x86_64 "$bin" --version
           else
             "$bin" --version
