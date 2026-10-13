@@ -242,7 +242,7 @@ check_buf_cli() {
   version="${spec%%	*}"
   local binary="sdks/typescript/packages/client/node_modules/.bin/buf"
   [ -x "$binary" ] || return 0
-  reported="$("$binary" --version 2>/dev/null | awk '{print $2}')"
+  reported="$("$binary" --version 2>/dev/null | awk '{print $NF}')"
   [ "$reported" = "$version" ] || fail "the installed buf is $reported but $lock says $version"
 }
 
