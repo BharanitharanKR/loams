@@ -1,0 +1,50 @@
+{
+  "recorded_from": "SendGrid",
+  "synthetic": true,
+  "docs": [
+    "https://www.twilio.com/docs/sendgrid/api-reference/bounces-api/retrieve-all-bounces"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "bounces",
+    "config": {
+      "base_url": "{proxy}/v3"
+    },
+    "secrets": {
+      "token": "SG.synthetic"
+    },
+    "expect": 2
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v3/suppression/bounces?limit=500&offset=0",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": [
+            {
+              "created": 1759300000,
+              "email": "bounce1@example.test",
+              "reason": "550 5.1.1 unknown user",
+              "status": "5.1.1"
+            },
+            {
+              "created": 1759300100,
+              "email": "bounce2@example.test",
+              "reason": "552 mailbox full",
+              "status": "5.2.2"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

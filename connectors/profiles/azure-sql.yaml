@@ -11,5 +11,6 @@ profile_kind: target
 module: sqlserver
 system:
   name: Azure SQL
+  service: { nightly: [LOAMS_AZURE_SQL_URL] }
 defaults: {}
 narrows: []

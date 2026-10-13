@@ -11,5 +11,6 @@ profile_kind: target
 module: kv
 system:
   name: Valkey
+  service: { compose: valkey }
 defaults: {}
 narrows: []

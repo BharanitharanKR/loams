@@ -20,8 +20,13 @@
 //!   the sink `effectively_once` ([`HttpApiFactory::sink_delivery`]).
 //! * `rate_limit` → a token bucket, plus the headers it lists: `Retry-After` on
 //!   a 429 or 503, and `*-Remaining` / `*-Reset`.
-//! * `webhook` → [`HttpApiFactory::webhook`], for the webhooks source (CN1 Task
-//!   4's schemes, moved here in Task 8) to route with.
+//! * `webhook` → [`HttpApiFactory::webhook`], for the webhooks source to
+//!   route with; the signature schemes are [`crate::webhook`] (Task 20).
+//! * `{config.<key>}`, `{auth.<field>}` and `{item:<pointer>}` placeholders
+//!   (Task 20, [`template`]); `next_url`, `offset`, last-item and header
+//!   cursors, CSV and NDJSON listings; form and NDJSON writes, `select`,
+//!   `wrap`, `envelope`, `conflict_ok` and acknowledged writes (Splunk HEC);
+//!   `ok` for APIs that report errors in a `200` body (Slack).
 //! * `auth` → `oauth2`, `bearer`, `basic`, `header` or `aws-sigv4`, with every
 //!   credential a secret the instance config names.
 //!
@@ -32,6 +37,7 @@ mod auth;
 pub mod sigv4;
 mod sink;
 mod source;
+mod template;
 
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -43,17 +49,20 @@ use http::{Request, Response, StatusCode};
 use loams_connector_sdk::http::{HttpClient, classify_status};
 use loams_connector_sdk::{
     AuthScheme, ConnectorContext, ConnectorError, ConnectorFactory, Delivery, EnvelopeBuilder,
-    HttpMethod, HttpProfile, HttpResource, Profile, ProfileKind, Rate, RateLimit, RateLimiter,
-    SinkFactory, SourceFactory, SplitEnumerator, WebhookSpec,
+    HttpMethod, HttpProfile, HttpResource, InstanceKey, Profile, ProfileKind, Rate, RateLimit,
+    RateLimiter, SinkFactory, SourceFactory, SplitEnumerator, WebhookSpec,
 };
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use tokio::time::Instant;
 
 use self::auth::Authenticator;
 
-/// The event name of a record read from a resource:
-/// `io.loams.dev.flow.<connector>.record.v1`.
-pub const RECORD_EVENT: &str = "record";
+/// The event name of an item read from a resource:
+/// `io.loams.dev.flow.<connector>.item.v1` (Shared contracts, "Event names":
+/// SaaS and HTTP-API profiles emit `item`; a listing may name another with
+/// `event`, as Splunk's search export says `log`). R20.10.
+pub const ITEM_EVENT: &str = "item";
 
 /// A [`ConnectorFactory`] over one `http-api` profile.
 #[derive(Debug, Clone)]
@@ -128,31 +137,46 @@ impl HttpApiFactory {
             .get("resource")
             .and_then(Value::as_str)
             .ok_or_else(|| ConnectorError::fatal("config.resource names no resource"))?;
-        let resource = self.http.resources.get(name).cloned().ok_or_else(|| {
+        let resource = self.http.resources.get(name).ok_or_else(|| {
             ConnectorError::fatal(format!(
                 "config.resource {name:?} is not a resource of the profile {:?}",
                 self.profile.id
             ))
         })?;
+        // `{config.<key>}` placeholders are filled once, for the resource the
+        // instance runs (another resource may need keys this one does not).
+        let bad = |e: serde_json::Error| ConnectorError::fatal(format!("resource {name:?}: {e}"));
+        let rendered = template::render(&serde_json::to_value(resource).map_err(bad)?, &config)?;
+        let resource: HttpResource = serde_json::from_value(rendered).map_err(bad)?;
         let poll_interval = match config.get("poll_interval_ms") {
             None | Some(Value::Null) => None,
             Some(v) => Some(Duration::from_millis(v.as_u64().ok_or_else(|| {
                 ConnectorError::fatal("config.poll_interval_ms must be a positive integer")
             })?)),
         };
-        let base_url = config
-            .get("base_url")
-            .and_then(Value::as_str)
-            .unwrap_or(&self.http.base_url)
-            .trim_end_matches('/')
-            .to_string();
+        // The profile's own base URL, filled; when it can be filled, its
+        // origin is the one a next-page link may name and be rebased from.
+        let declared = template::config(&self.http.base_url, &config, false).ok();
+        let base_url = match config.get("base_url").and_then(Value::as_str) {
+            Some(b) => b.to_string(),
+            None => template::config(&self.http.base_url, &config, false)?,
+        }
+        .trim_end_matches('/')
+        .to_string();
+        let mut auth_spec = self.http.auth.clone();
+        for field in [&mut auth_spec.token_url, &mut auth_spec.region]
+            .into_iter()
+            .flatten()
+        {
+            *field = template::config(field, &config, false)?;
+        }
+        // A sandbox has its own token endpoint (Salesforce's
+        // test.salesforce.com), as it has its own `base_url`.
+        if let Some(url) = config.get("token_url").and_then(Value::as_str) {
+            auth_spec.token_url = Some(url.to_string());
+        }
         let client = loams_connector_sdk::http::client(ctx.egress.clone());
-        let auth = Authenticator::new(
-            self.http.auth.clone(),
-            &config,
-            ctx.secrets.clone(),
-            client.clone(),
-        );
+        let auth = Authenticator::new(auth_spec, &config, ctx.secrets.clone(), client.clone());
         let gate = Gate::new(&self.http);
         let mut headers = Vec::new();
         for (k, v) in &self.http.headers {
@@ -163,13 +187,24 @@ impl HttpApiFactory {
                     .map_err(|_| ConnectorError::fatal(format!("header {k} has a bad value")))?,
             ));
         }
+        let project = match config.get("projection") {
+            None | Some(Value::Null) => None,
+            Some(p) => Some(serde_json::from_value(p.clone()).map_err(|e| {
+                ConnectorError::fatal(format!("config.projection is not a projection: {e}"))
+            })?),
+        };
+        let channel = channel_id(self.id, &ctx.instance, name);
         let engine = Arc::new(Engine {
+            declared_origin: declared.as_deref().and_then(origin),
             base_url,
             headers,
             client,
             auth,
             gate,
             envelope: EnvelopeBuilder::new(self.id, &ctx.instance),
+            ok: self.http.ok.clone(),
+            project,
+            channel,
         });
         Ok((
             engine,
@@ -205,7 +240,7 @@ impl ConnectorFactory for HttpApiFactory {
     ) -> Result<Option<(Box<dyn SplitEnumerator>, Box<dyn SourceFactory>)>, ConnectorError> {
         let (engine, inst) = self.engine(ctx)?;
         let mode = match (&inst.resource.list, &inst.resource.async_job) {
-            (Some(list), _) => source::Mode::List(list.clone()),
+            (Some(list), _) => source::Mode::List(Box::new(list.clone())),
             (None, Some(job)) => source::Mode::Job(Box::new(job.clone())),
             (None, None) => return Ok(None),
         };
@@ -231,15 +266,63 @@ impl ConnectorFactory for HttpApiFactory {
     }
 }
 
+/// A stable channel id for an instance's resource, in UUID form (Splunk HEC
+/// wants a GUID): the first 16 bytes of SHA-256 over the connector, the
+/// instance and the resource.
+fn channel_id(connector: &str, instance: &InstanceKey, resource: &str) -> String {
+    let d = Sha256::digest(
+        format!(
+            "{connector}\n{}\n{}\n{resource}",
+            instance.namespace, instance.name
+        )
+        .as_bytes(),
+    );
+    let h: String = d.iter().take(16).map(|b| format!("{b:02x}")).collect();
+    format!(
+        "{}-{}-{}-{}-{}",
+        &h[0..8],
+        &h[8..12],
+        &h[12..16],
+        &h[16..20],
+        &h[20..32]
+    )
+}
+
+/// `scheme://host[:port]` of a URL.
+fn origin(url: &str) -> Option<String> {
+    let (scheme, rest) = url.split_once("://")?;
+    Some(format!("{scheme}://{}", rest.split('/').next()?))
+}
+
+/// How [`Engine::send`] treats a request.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct SendOpts<'a> {
+    /// The body's media type (default `application/json`).
+    pub content_type: Option<&'a str>,
+    /// A `409 Conflict` counts as success (the item exists).
+    pub conflict_ok: bool,
+    /// A write: an `ok: false` body is poison rather than fatal.
+    pub write: bool,
+    /// What error messages name instead of the URL (the path template, so
+    /// no resolved secret is ever in one).
+    pub label: Option<&'a str>,
+}
+
 /// What every source and sink of one instance shares: the client, the
 /// authenticator and the rate gate.
 pub(crate) struct Engine {
     base_url: String,
+    /// The origin of the profile's own `base_url`, when the instance
+    /// overrides it: a next-page URL on it is rebased onto `base_url`.
+    declared_origin: Option<String>,
     headers: Vec<(HeaderName, HeaderValue)>,
     client: HttpClient,
     auth: Authenticator,
     gate: Gate,
     envelope: EnvelopeBuilder,
+    ok: Option<String>,
+    project: Option<crate::route::Projection>,
+    channel: String,
 }
 
 impl std::fmt::Debug for Engine {
@@ -273,13 +356,57 @@ impl Engine {
         url
     }
 
-    /// Whether `url` (a `Link` header's next page) is on `base_url`'s origin.
-    pub(crate) fn same_origin(&self, url: &str) -> bool {
-        let origin = |u: &str| {
-            let (scheme, rest) = u.split_once("://")?;
-            Some(format!("{scheme}://{}", rest.split('/').next()?))
-        };
-        origin(url).is_some_and(|o| Some(o) == origin(&self.base_url))
+    /// A next-page URL (a `Link` header's, or a body's `next_url`), absolute
+    /// or relative to the origin, as the URL to fetch: it must be on
+    /// `base_url`'s origin, or on the profile's own origin when the instance
+    /// overrides `base_url` (a sandbox, or a fixture replay), in which case it
+    /// is rebased there. `None` for any other origin: never followed.
+    pub(crate) fn next_page(&self, url: &str) -> Option<String> {
+        let here = origin(&self.base_url)?;
+        if url.starts_with('/') {
+            return Some(format!("{here}{url}"));
+        }
+        let there = origin(url)?;
+        if there == here {
+            return Some(url.to_string());
+        }
+        match &self.declared_origin {
+            Some(declared) if *declared == there => Some(format!("{here}{}", &url[there.len()..])),
+            _ => None,
+        }
+    }
+
+    /// The channel id of the instance's resource (an ack protocol's).
+    pub(crate) fn channel(&self) -> &str {
+        &self.channel
+    }
+
+    /// The instance's projection (`config.projection`), if any.
+    pub(crate) fn project(&self) -> Option<&crate::route::Projection> {
+        self.project.as_ref()
+    }
+
+    /// `template` with its `{auth.<field>}` placeholders resolved through the
+    /// instance's secrets (percent-encoded in a path).
+    pub(crate) async fn with_secrets(
+        &self,
+        template: &str,
+        path: bool,
+    ) -> Result<String, ConnectorError> {
+        let fields = template::auth_fields(template);
+        if fields.is_empty() {
+            return Ok(template.to_string());
+        }
+        let mut values = std::collections::BTreeMap::new();
+        for f in fields {
+            let secret = self.auth.secret(&f).await?;
+            let text = secret
+                .expose_str()
+                .ok_or_else(|| ConnectorError::auth(format!("auth.{f} is not UTF-8")))?
+                .to_string();
+            values.insert(f, text);
+        }
+        template::auth(template, |f| values.get(f).cloned(), path)
     }
 
     /// One request through the gate, the authenticator and the egress-checked
@@ -290,6 +417,7 @@ impl Engine {
         url: &str,
         body: Option<Bytes>,
         extra: &[(HeaderName, HeaderValue)],
+        opts: SendOpts<'_>,
     ) -> Result<Response<Bytes>, ConnectorError> {
         self.gate.wait().await;
         let mut builder = Request::builder().method(method.as_str()).uri(url);
@@ -297,13 +425,20 @@ impl Engine {
             builder = builder.header(k, v);
         }
         if body.is_some() {
-            builder = builder.header(CONTENT_TYPE, "application/json");
+            builder = builder.header(
+                CONTENT_TYPE,
+                opts.content_type.unwrap_or("application/json"),
+            );
         }
+        let label = opts.label.unwrap_or(url);
         let mut req = builder
             .body(body.unwrap_or_default())
-            .map_err(|e| ConnectorError::fatal(format!("bad request to {url}: {e}")))?;
+            .map_err(|e| ConnectorError::fatal(format!("bad request to {label}: {e}")))?;
         self.auth.apply(&mut req).await?;
-        let path = req.uri().path().to_string();
+        let path = match opts.label {
+            Some(l) => l.split('?').next().unwrap_or(l).to_string(),
+            None => req.uri().path().to_string(),
+        };
         let resp = self.client.send(req).await?;
         self.gate.observe(&resp);
         let status = resp.status();
@@ -320,9 +455,14 @@ impl Engine {
             .gate
             .retry_after(&resp)
             .map(|d| d.as_secs().to_string());
+        if status == StatusCode::CONFLICT && opts.conflict_ok {
+            self.gate.succeeded();
+            return Ok(resp);
+        }
         match classify_status(status, after.as_deref()) {
             None => {
                 self.gate.succeeded();
+                self.check_ok(&resp, method, &path, opts.write)?;
                 Ok(resp)
             }
             Some(class) => Err(ConnectorError::new(
@@ -330,6 +470,51 @@ impl Engine {
                 format!("HTTP {status} from {} {path}", method.as_str()),
             )),
         }
+    }
+}
+
+impl Engine {
+    /// `ok`: a JSON body whose pointer is `false` is an error, named by the
+    /// body's `error` string (Slack's shape): an authentication error is
+    /// `Auth`, any other is poison for a write (the item goes to the DLQ) and
+    /// fatal for a read.
+    fn check_ok(
+        &self,
+        resp: &Response<Bytes>,
+        method: HttpMethod,
+        path: &str,
+        write: bool,
+    ) -> Result<(), ConnectorError> {
+        let Some(ptr) = &self.ok else {
+            return Ok(());
+        };
+        let Ok(doc) = serde_json::from_slice::<Value>(resp.body()) else {
+            return Ok(());
+        };
+        if doc.pointer(ptr) != Some(&Value::Bool(false)) {
+            return Ok(());
+        }
+        let error = doc
+            .get("error")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown_error");
+        let msg = format!("{} {path} answered {ptr} = false: {error}", method.as_str());
+        const AUTH: &[&str] = &[
+            "invalid_auth",
+            "not_authed",
+            "token_revoked",
+            "token_expired",
+            "account_inactive",
+            "missing_scope",
+            "no_permission",
+        ];
+        Err(if AUTH.contains(&error) {
+            ConnectorError::auth(msg)
+        } else if write {
+            ConnectorError::poison(msg)
+        } else {
+            ConnectorError::fatal(msg)
+        })
     }
 }
 

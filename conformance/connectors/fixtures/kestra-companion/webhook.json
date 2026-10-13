@@ -1,0 +1,41 @@
+{
+  "recorded_from": "Kestra",
+  "synthetic": true,
+  "docs": [
+    "https://kestra.io/plugins/core/tasks/http/io.kestra.plugin.core.http.request"
+  ],
+  "scenario": {
+    "direction": "webhook",
+    "scheme": "token",
+    "header": "X-Loams-Webhook-Token",
+    "secret": "synthetic-kestra-webhook-token",
+    "url": "https://hooks.loams.test/fabric/kestra/executions",
+    "now": 1759320000
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/fabric/kestra/executions",
+        "headers": {
+          "content-type": "application/json",
+          "x-loams-webhook-token": "synthetic-kestra-webhook-token"
+        },
+        "body": {
+          "text": "{\"flow\":\"loams.import\",\"execution\":\"5K1mqPDbVRrzM0oC7Tf6sE\",\"state\":\"SUCCESS\"}"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "ok": true
+          }
+        }
+      }
+    }
+  ]
+}

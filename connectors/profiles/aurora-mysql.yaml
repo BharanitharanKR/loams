@@ -11,5 +11,6 @@ profile_kind: target
 module: mysql
 system:
   name: Aurora MySQL
+  service: { nightly: [LOAMS_AURORA_MYSQL_URL] }
 defaults: {}
 narrows: []

@@ -60,3 +60,5 @@ envelope:
 limits: {}
 conformance: []
 docs: null
+notes:
+  - the HEC sink counts a batch as written only once Splunk acknowledges it as indexed (indexer acknowledgement); HEC does not deduplicate a resend, so delivery stays at_least_once (CN2 Task 20, R20.8)

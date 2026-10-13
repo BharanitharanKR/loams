@@ -30,6 +30,11 @@ pub fn reference_spec() -> ConnectorSpec {
     spec.capabilities.bulk.arrow = false;
     spec.capabilities.schema.evolution = Evolution::None;
     spec.capabilities.delivery.sink = Delivery::ExactlyOnce;
+    // Task 2 gave `postgresql` native CDC (R2.11); the reference connector
+    // has none.
+    if let Some(source) = spec.capabilities.source.as_mut() {
+        source.cdc = false;
+    }
     spec
 }
 

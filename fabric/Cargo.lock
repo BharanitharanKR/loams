@@ -2914,9 +2914,14 @@ dependencies = [
  "hyper",
  "hyper-util",
  "loams-connector-sdk",
+ "loams-flow",
+ "loams-flow-conformance",
+ "ring",
  "serde",
  "serde_json",
+ "serde_norway",
  "sha2 0.10.9",
+ "thiserror",
  "tokio",
 ]
 

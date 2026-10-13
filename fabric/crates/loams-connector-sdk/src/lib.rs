@@ -62,9 +62,9 @@ pub use pipeline::{
 };
 pub use position::{InstanceKey, Position, SplitId};
 pub use profile::{
-    AsyncJob, AuthScheme, CursorSpec, HttpAuth, HttpMethod, HttpProfile, HttpRateLimit,
-    HttpResource, JobPoll, ListOp, Profile, ProfileKind, RequestSpec, SystemRef, WebhookSpec,
-    WriteOp,
+    AckSpec, AsyncJob, AuthScheme, BodyEncoding, CursorFrom, CursorSpec, HttpAuth, HttpMethod,
+    HttpProfile, HttpRateLimit, HttpResource, JobPoll, ListOp, OffsetSpec, Profile, ProfileKind,
+    RequestSpec, ResponseFormat, SystemRef, WebhookSpec, WriteOp,
 };
 pub use ratelimit::{Rate, RateLimit, RateLimiter};
 pub use retry::{RetryDecision, RetryPolicy};

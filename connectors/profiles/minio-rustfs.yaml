@@ -11,5 +11,6 @@ profile_kind: target
 module: objects
 system:
   name: MinIO / RustFS
+  service: { compose: rustfs }
 defaults: {}
 narrows: []

@@ -448,6 +448,19 @@ fn is_secret_key(key: &str) -> bool {
     !NOT_SECRET_KEYS.contains(&k.as_str()) && SECRET_KEY_PARTS.iter().any(|p| k.contains(p))
 }
 
+/// `{auth.<field>}`: a reference to a secret the instance config names.
+fn is_secret_ref(value: &Value) -> bool {
+    value
+        .as_str()
+        .and_then(|s| s.strip_prefix("{auth."))
+        .and_then(|s| s.strip_suffix('}'))
+        .is_some_and(|f| {
+            !f.is_empty()
+                && f.bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+        })
+}
+
 /// Every place a profile holds (or could hold) a credential, by path.
 fn secret_problems(value: &Value) -> Vec<String> {
     let mut problems = Vec::new();
@@ -481,6 +494,12 @@ fn walk_keys(value: &Value, at: &str, problems: &mut Vec<String>) {
         } else {
             format!("{at}.{key}")
         };
+        // A credential-named key whose value is a secret reference
+        // (`{auth.<field>}`, resolved by the runtime) holds no credential
+        // (CN2 Task 20: PostHog's `api_key` body field).
+        if is_secret_ref(child) {
+            continue;
+        }
         // Resource names are names, not values (Vault has `tokens`).
         let is_resource_name = at == "http.resources";
         if !is_resource_name && is_secret_key(key) {
@@ -540,6 +559,19 @@ mod tests {
             "cursor",
         ] {
             assert!(!is_secret_key(key), "{key}");
+        }
+    }
+
+    /// CN2 Task 20 (R20.4): a credential-named body field may hold a secret
+    /// *reference*, never a value.
+    #[test]
+    fn secret_references_are_not_credentials() {
+        let ok = serde_json::json!({"http": {"resources": {"events": {"create": {
+            "envelope": {"api_key": "{auth.api_key}"}}}}}});
+        assert!(secret_problems(&ok).is_empty());
+        for value in ["phc_live_value", "{auth.}", "{auth.API}", "x{auth.api_key}"] {
+            let bad = serde_json::json!({"envelope": {"api_key": value}});
+            assert_eq!(secret_problems(&bad).len(), 1, "{value}");
         }
     }
 }

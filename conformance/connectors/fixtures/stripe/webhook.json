@@ -1,0 +1,41 @@
+{
+  "recorded_from": "Stripe",
+  "synthetic": true,
+  "docs": [
+    "https://docs.stripe.com/webhooks#verify-manually"
+  ],
+  "scenario": {
+    "direction": "webhook",
+    "scheme": "stripe",
+    "header": "Stripe-Signature",
+    "secret": "whsec_synthetic",
+    "url": "https://hooks.loams.test/fabric/stripe/events",
+    "now": 1759320000
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/fabric/stripe/events",
+        "headers": {
+          "content-type": "application/json",
+          "stripe-signature": "t=1759319995,v1=e683b97563b1a0ca162441ce7c3b0c31f6ae05185d5eeeef5a865cdaacc3aef9,v0=6ffbb59b2300aae63f272406069a9788598b792a944a07aba816edb039989a39"
+        },
+        "body": {
+          "text": "{\"id\":\"evt_1\",\"object\":\"event\",\"type\":\"customer.created\",\"data\":{\"object\":{\"id\":\"cus_TD4\",\"object\":\"customer\"}}}"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "ok": true
+          }
+        }
+      }
+    }
+  ]
+}

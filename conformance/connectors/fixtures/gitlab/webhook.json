@@ -1,0 +1,42 @@
+{
+  "recorded_from": "GitLab",
+  "synthetic": true,
+  "docs": [
+    "https://docs.gitlab.com/user/project/integrations/webhooks/"
+  ],
+  "scenario": {
+    "direction": "webhook",
+    "scheme": "token",
+    "header": "X-Gitlab-Token",
+    "secret": "synthetic-gitlab-webhook-token",
+    "url": "https://hooks.loams.test/fabric/gitlab/issues",
+    "now": 1759320000
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/fabric/gitlab/issues",
+        "headers": {
+          "content-type": "application/json",
+          "x-gitlab-event": "Issue Hook",
+          "x-gitlab-token": "synthetic-gitlab-webhook-token"
+        },
+        "body": {
+          "text": "{\"object_kind\":\"issue\",\"event_type\":\"issue\",\"project\":{\"id\":3},\"object_attributes\":{\"iid\":1,\"action\":\"open\"}}"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "ok": true
+          }
+        }
+      }
+    }
+  ]
+}

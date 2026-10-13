@@ -74,7 +74,7 @@ impl Authenticator {
     }
 
     /// The secret the instance config names under `auth.<field>`.
-    async fn secret(&self, field: &str) -> Result<Secret, ConnectorError> {
+    pub(crate) async fn secret(&self, field: &str) -> Result<Secret, ConnectorError> {
         let name = self.optional_ref(field).ok_or_else(|| {
             ConnectorError::auth(format!(
                 "auth.{field} names no secret in the instance config ({:?} auth)",
@@ -121,10 +121,15 @@ impl Authenticator {
             }
             AuthScheme::Basic => {
                 let user = self.secret("username").await?;
-                let pass = self.secret("password").await?;
+                // A user with no password is a valid basic credential:
+                // Segment's write key is the user and the password is empty
+                // (R20.5).
+                let pass = self.optional_secret("password").await?;
                 let mut raw = zeroizing(user.expose());
                 raw.push(b':');
-                raw.extend_from_slice(pass.expose());
+                if let Some(pass) = &pass {
+                    raw.extend_from_slice(pass.expose());
+                }
                 let encoded = base64::engine::general_purpose::STANDARD.encode(&raw);
                 raw.fill(0);
                 let header = self.header_name(Some(AUTHORIZATION))?;
