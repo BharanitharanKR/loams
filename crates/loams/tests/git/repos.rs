@@ -170,7 +170,9 @@ async fn delete_returns_operation_and_hides_repo() {
 #[tokio::test]
 async fn update_config_sets_head_and_protections() {
     let running = Running::start().await;
-    create(&running, "app", "k1").await;
+    let ns = namespace(&running, "acme").await;
+    let created = create(&running, "app", "k1").await;
+    let repo_id = created["repo"]["repoId"].as_str().expect("id").to_owned();
     let body = json!({
         "namespace": "acme",
         "name": "app",
@@ -190,8 +192,27 @@ async fn update_config_sets_head_and_protections() {
     );
     let token = answer["consistencyToken"].clone();
     // A retry replays: the same seq.
-    let again = ok(&running, "UpdateRepoConfig", body).await;
+    let again = ok(&running, "UpdateRepoConfig", body.clone()).await;
     assert_eq!(again["consistencyToken"], token);
+    // Also after another writer changed the configuration (PR #467 review): the key binds
+    // the request, not the change merged with the state it was read at.
+    let writer = second_writer(&running, ns, &repo_id).await;
+    writer
+        .commit_config(
+            IdemKey::parse("other-writer").expect("key"),
+            loams_git::format::pb::ConfigChange {
+                symrefs: vec![loams_git::format::pb::SymRef {
+                    name: "HEAD".into(),
+                    target: "refs/heads/trunk".into(),
+                }],
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("another change");
+    writer.shutdown().await;
+    let late = ok(&running, "UpdateRepoConfig", body).await;
+    assert_eq!(late["consistencyToken"], token);
     let got = ok(
         &running,
         "GetRepo",

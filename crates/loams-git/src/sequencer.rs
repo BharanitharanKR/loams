@@ -390,8 +390,12 @@ impl BucketRefLog {
     /// `ConfigChange`; GT1 Task 13). Idempotent on `key` as a ref
     /// transaction is: a retry of the same change inside the window answers
     /// the first receipt, another change under the key is
-    /// `IdempotencyMismatch` (ruling T13.2). A symbolic ref whose name or
-    /// target is not a ref name is `Invalid`.
+    /// `IdempotencyMismatch` (ruling T13.2). The change's `request_digest`
+    /// binds the key: a caller that derives the change from current state
+    /// sets it from its own request (so a retry after another change still
+    /// replays); an empty one is [`config_digest`] of the change. A symbolic
+    /// ref whose name or target is not a ref name, or a digest that is not 32
+    /// bytes, is `Invalid`.
     pub async fn commit_config(
         &self,
         key: IdemKey,
@@ -408,7 +412,15 @@ impl BucketRefLog {
                 });
             }
         }
-        change.request_digest = config_digest(&change).to_vec();
+        match change.request_digest.len() {
+            0 => change.request_digest = config_digest(&change).to_vec(),
+            32 => {}
+            n => {
+                return Err(RefError::Invalid {
+                    reason: format!("a request digest of {n} bytes"),
+                });
+            }
+        }
         let work = Work::Config {
             key,
             change,

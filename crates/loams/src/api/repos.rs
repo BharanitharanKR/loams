@@ -920,6 +920,25 @@ mod served {
                 None => IdemKey::parse(&ulid::Ulid::generate().to_string().to_lowercase())
                     .map_err(|err| invalid("idempotency_key", err.to_string()))?,
             };
+            // The key binds the request, not the change merged with the current state, so a
+            // retry after another writer's change still replays (PR #467 review).
+            let mut mask: Vec<&str> = paths.iter().map(String::as_str).collect();
+            mask.sort_unstable();
+            mask.dedup();
+            let rules: Vec<String> = req
+                .protections
+                .iter()
+                .map(|r| format!("{}\u{1}{}\u{1}{}", r.pattern, r.deny_delete, r.deny_force))
+                .collect();
+            let mut parts = vec![
+                "UpdateRepoConfig",
+                name.as_str(),
+                req.default_branch.as_str(),
+            ];
+            parts.extend(mask.iter().copied());
+            parts.push("\u{2}");
+            parts.extend(rules.iter().map(String::as_str));
+            let request_digest = digest(&parts);
             let ns = self.namespace(&req.namespace, false).await?;
             let record = self.active(ns, &name).await?;
             let (log, current) = self.read(&req.namespace, &record, "").await?;
@@ -936,7 +955,7 @@ mod served {
                     })
                     .collect(),
                 protections: protections.unwrap_or_else(|| current.protections.clone()),
-                ..Default::default()
+                request_digest: request_digest.to_vec(),
             };
             let receipt = log
                 .commit_config(key, change)
