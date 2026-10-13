@@ -312,6 +312,9 @@ jobs:
             config --format json > "$RUNNER_TEMP/compose.json"
           services=$(python3 scripts/connectors/compose_services.py \
             --profile "$PROFILE" --family "$FAMILY" --compose-json "$RUNNER_TEMP/compose.json")
+          # The ★ Apache Kafka suite (CN2 Task 9; CN1's manifest has no
+          # systems.toml entry until Task 8 ports it onto the SDK).
+          if [ "$FAMILY" = kafka ]; then services="${services:+$services }kafka"; fi
           echo "services=$services" >> "$GITHUB_OUTPUT"
           if [ -d "fabric/crates/loams-connector-$FAMILY" ] && [ -n "$services" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
@@ -345,6 +348,8 @@ jobs:
         working-directory: fabric
         env:
           LOAMS_CONNECTORS_P2_STACK: "1"
+          # The Kafka family's ★ Apache Kafka suite (CN2 Task 9).
+          LOAMS_CONNECTORS_STACK: ${{ matrix.family == 'kafka' && '1' || '' }}
         run: cargo test -p "loams-connector-$FAMILY" --locked
       - name: service logs
         if: failure() && steps.plan.outputs.run == 'true'
@@ -403,6 +408,15 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # the service list is space-separated on purpose
           docker compose -f deploy/fabric/compose.yaml --profile "$PROFILE" up -d --wait --wait-timeout 900 ${{ steps.plan.outputs.services }}
+      # The Event Hubs emulator has no health check (CN2 Task 9).
+      - name: wait for the Event Hubs emulator
+        if: steps.plan.outputs.run == 'true' && contains(steps.plan.outputs.services, 'eventhubs')
+        run: |
+          for _ in $(seq 1 90); do
+            if docker compose -f deploy/fabric/compose.yaml --profile "$PROFILE" logs eventhubs 2>&1 | grep -q "Emulator Service is Successfully Up"; then exit 0; fi
+            sleep 2
+          done
+          echo "the Event Hubs emulator did not come up"; exit 1
       - name: suites
         if: steps.plan.outputs.run == 'true'
         working-directory: fabric
@@ -455,6 +469,7 @@ jobs:
       LOAMS_EVENTGRID_ENDPOINT: ${{ secrets.LOAMS_EVENTGRID_ENDPOINT }}
       LOAMS_EVENTGRID_KEY: ${{ secrets.LOAMS_EVENTGRID_KEY }}
       LOAMS_EVENTHUBS_CONNECTION_STRING: ${{ secrets.LOAMS_EVENTHUBS_CONNECTION_STRING }}
+      LOAMS_EVENTHUBS_NAMESPACE: ${{ secrets.LOAMS_EVENTHUBS_NAMESPACE }}
       LOAMS_GCP_CREDENTIALS_JSON: ${{ secrets.LOAMS_GCP_CREDENTIALS_JSON }}
       LOAMS_GCP_PROJECT: ${{ secrets.LOAMS_GCP_PROJECT }}
       LOAMS_GCS_BUCKET: ${{ secrets.LOAMS_GCS_BUCKET }}

@@ -421,10 +421,15 @@ fn check_use_refuses_undeclared() {
         check_use(&debezium, &uses_cdc()).is_ok(),
         "debezium-postgres declares cdc"
     );
-    // Kafka's sink is idempotent but at-least-once, so `exactly_once` stays refused
-    // even though the sink dedupes: the manifest is what the route is checked against.
+    // Kafka's sink is exactly-once through its transactional mode (CN2 Task 9). The
+    // same manifest with only the idempotent producer's `effectively_once` refuses
+    // `exactly_once` even though the sink dedupes: the manifest is what the route is
+    // checked against.
     let kafka = load(connectors_root().join("registry/kafka.yaml"));
-    assert!(check_use(&kafka, &uses_exactly_once()).is_err());
+    assert!(check_use(&kafka, &uses_exactly_once()).is_ok());
+    let mut idempotent_only = kafka.clone();
+    idempotent_only.capabilities.delivery.sink = Delivery::EffectivelyOnce;
+    assert!(check_use(&idempotent_only, &uses_exactly_once()).is_err());
 }
 
 fn uses_cdc() -> Uses {
