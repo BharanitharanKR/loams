@@ -31,8 +31,9 @@ export function parseDeepLink(raw: string): { path: string } | null {
 		case "data":
 			return { path: `/data${rest.map((s) => `/${s}`).join("")}` };
 		case "factory":
+			// The factory lives in Studio (SD1 Task 27, D916): open it there directly.
 			return rest.length <= 1
-				? { path: `/factory${rest.map((s) => `/${s}`).join("")}` }
+				? { path: `/studio/factory${rest.map((s) => `/${s}`).join("")}` }
 				: null;
 		case "studio": {
 			// Loams Studio's thread and run-group links (§53 §4.4): `studio/t/<id>`, `studio/g/<id>`.

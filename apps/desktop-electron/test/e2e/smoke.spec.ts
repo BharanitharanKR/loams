@@ -335,10 +335,12 @@ test("electron smoke", async () => {
 			});
 		}
 
-		// 4. Software Factory: all eight apps start unconfigured.
+		// 4. Software Factory: all eight apps start unconfigured. The old path redirects
+		// into Studio (SD1 Task 27, D916).
 		await ev(page, () => {
 			(globalThis as unknown as PageGlobal).location.hash = "#/factory";
 		});
+		await expect.poll(() => hash(page)).toBe("#/studio/factory");
 		const tiles = page.locator("article", { hasText: "Not configured" });
 		await expect(tiles).toHaveCount(8);
 

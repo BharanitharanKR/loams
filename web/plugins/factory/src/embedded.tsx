@@ -1,4 +1,4 @@
-// `/factory/:app/app`: the app's own UI, embedded in the main window (D678).
+// `/studio/factory/:app/app`: the app's own UI, embedded in the main window (D678).
 // The page owns a placeholder element; main positions a native view over the
 // rect we report. The view hides on unmount and while any overlay is open.
 
@@ -108,7 +108,9 @@ export function EmbeddedApp({
       <div className="lc-page">
         <Empty
           title={`${label} is not configured`}
-          actions={<Button onClick={() => navigate(`/factory/${app}/configure`)}>Configure</Button>}
+          actions={
+            <Button onClick={() => navigate(`/studio/factory/${app}/configure`)}>Configure</Button>
+          }
         />
       </div>
     );
@@ -119,7 +121,7 @@ export function EmbeddedApp({
         <h1 className="m-0 mr-auto flex items-center gap-3 text-lg font-medium">
           {label} {info && <HealthPill health={info.health} />}
         </h1>
-        <Button size="sm" variant="quiet" onClick={() => navigate('/factory')}>
+        <Button size="sm" variant="quiet" onClick={() => navigate('/studio/factory')}>
           All apps
         </Button>
         <Button size="sm" variant="quiet" onClick={() => void desktop.factory.reloadEmbedded(app)}>
@@ -130,7 +132,7 @@ export function EmbeddedApp({
           variant="quiet"
           onClick={() =>
             void desktop.factory.popOut(app).then((r) => {
-              if (r.ok) navigate('/factory');
+              if (r.ok) navigate('/studio/factory');
               else setError(r.message);
             })
           }

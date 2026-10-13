@@ -1156,3 +1156,13 @@ button.lc-hosted-engine {
 .lc-shell[data-mode="studio"] .lc-main > * {
   animation: none;
 }
+/* A Console-style page shown in Studio (the factory's, SD1 Task 27) keeps the page gutter. */
+.lc-shell[data-mode="studio"] .lc-main .lc-page {
+  max-width: 1236px;
+  padding: 32px 28px 72px;
+}
+@media (max-width: 959px) {
+  .lc-shell[data-mode="studio"] .lc-main .lc-page {
+    padding: 24px 16px 56px;
+  }
+}

@@ -170,11 +170,13 @@ const PREVIEW_URLS: Partial<Record<FactoryAppId, string>> = {
   forgejo: 'https://git.demo.invalid',
   glitchtip: 'https://errors.demo.invalid',
   matomo: 'https://stats.demo.invalid',
+  plane: 'https://plan.demo.invalid',
 };
 
 /** Non-secret values the preview keeps in memory, by app. */
 const PREVIEW_FIELDS: Partial<Record<FactoryAppId, Record<string, string>>> = {
   matomo: { idSite: '1' },
+  plane: { projectKey: 'DEMO' },
 };
 
 const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
@@ -210,10 +212,35 @@ const PREVIEW_DATA: Record<string, unknown> = {
   ],
   'forgejo.version': { version: '11.0.0-demo' },
   'forgejo.issues:pulls': [
-    { id: '#14', title: 'Add demo factory panels', state: 'open', updatedAt: day(0) },
-    { id: '#12', title: 'Bump demo dependencies', state: 'open', updatedAt: day(1) },
-    { id: '#9', title: 'Fix demo flaky test', state: 'open', updatedAt: day(4) },
+    {
+      id: '#14',
+      title: 'Add demo factory panels',
+      state: 'open',
+      updatedAt: day(0),
+      head: 'demo-factory-panels',
+    },
+    {
+      id: '#12',
+      title: 'Bump demo dependencies',
+      state: 'open',
+      updatedAt: day(1),
+      head: 'demo-deps',
+    },
+    {
+      id: '#9',
+      title: 'Fix demo flaky test',
+      state: 'open',
+      updatedAt: day(4),
+      head: 'demo-flaky',
+    },
   ],
+  // Studio's "Fix this error" (SD1 Task 27): the latest event of a GlitchTip issue.
+  'glitchtip.latestEvent': {
+    release: 'demo@0.4.1',
+    culprit: 'demo/cart.ts in total',
+    stack:
+      'TypeError: demo is undefined\n  at total (demo/cart.ts:41)\n  at render (demo/app.ts:12)',
+  },
   'forgejo.issues': [
     {
       id: '#15',
@@ -223,6 +250,17 @@ const PREVIEW_DATA: Record<string, unknown> = {
     },
     { id: '#11', title: 'Demo: document the sample data', state: 'open', updatedAt: day(3) },
   ],
+  'plane.stats': { open_issues: 3, in_progress: 1, done: 8 },
+  'plane.issues': [
+    {
+      id: 'DEMO-42',
+      title: 'Demo: fix the login redirect',
+      priority: 'high',
+      updatedAt: day(0),
+    },
+    { id: 'DEMO-40', title: 'Demo: add a dark logo', priority: 'low', updatedAt: day(2) },
+    { id: 'DEMO-37', title: 'Demo: export to CSV', priority: 'medium', updatedAt: day(5) },
+  ],
   'glitchtip.organizations': [{ slug: 'demo-org', name: 'Demo Org' }],
   'glitchtip.issues': [
     {
@@ -231,6 +269,7 @@ const PREVIEW_DATA: Record<string, unknown> = {
       level: 'error',
       count: '38',
       lastSeen: day(0),
+      permalink: 'https://errors.demo.invalid/demo-org/issues/101',
     },
     { id: '102', title: 'Demo request timed out', level: 'warning', count: '12', lastSeen: day(1) },
     {

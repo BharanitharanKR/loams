@@ -2,7 +2,7 @@
   "name": "@loams/plugin-factory",
   "version": "0.1.0",
   "private": true,
-  "description": "Loams Desktop: the Software Factory hub. Configure the factory apps and read their native panels.",
+  "description": "Loams Desktop: the Software Factory hub in Loams Studio. Configure the factory apps and read their native panels.",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -18,6 +18,10 @@
       "kind": "console",
       "entry": ".",
       "tier": "first-party",
+      "modes": [
+        "console",
+        "studio"
+      ],
       "inject": [
         "desktop",
         "router",

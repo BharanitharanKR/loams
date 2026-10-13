@@ -60,6 +60,11 @@ const DOCK_STEP = 24;
 /** The nav sections, in display order. Anything else follows them. */
 export const SECTIONS = ['Data', 'Compute', 'Integrate', 'Organisation', 'Operate'] as const;
 /**
+ * Studio's nav sections, in display order (§53 §5.9): its own pages, then the
+ * software factory, which moved here from Console's Integrate section (D916).
+ */
+export const STUDIO_SECTIONS = ['Studio', 'Factory'] as const;
+/**
  * The sections about the whole instance rather than its data and services: the
  * original console's "Organization" half of the sidebar, set apart below the rest.
  */
@@ -143,9 +148,10 @@ export function navSections(
   }
   const byGroup = new Map<string, NavItem[]>();
   for (const item of items) byGroup.set(item.group, [...(byGroup.get(item.group) ?? []), item]);
+  const order: readonly string[] = [...SECTIONS, ...STUDIO_SECTIONS];
   const rank = (g: string) => {
-    const i = (SECTIONS as readonly string[]).indexOf(g);
-    return i < 0 ? SECTIONS.length : i;
+    const i = order.indexOf(g);
+    return i < 0 ? order.length : i;
   };
   return [...byGroup]
     .sort((a, b) => rank(a[0]) - rank(b[0]))

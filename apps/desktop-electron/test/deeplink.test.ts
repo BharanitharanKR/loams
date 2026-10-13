@@ -7,8 +7,8 @@ describe("deeplink_allowlist", () => {
 		["loams://open/console/servers", "/servers"],
 		["loams://open/data", "/data"],
 		["loams://open/data/ns.one/coll-2", "/data/ns.one/coll-2"],
-		["loams://open/factory", "/factory"],
-		["loams://open/factory/forgejo", "/factory/forgejo"],
+		["loams://open/factory", "/studio/factory"],
+		["loams://open/factory/forgejo", "/studio/factory/forgejo"],
 		["loams://open/servers", "/settings/servers"],
 		// No per-server route exists: a server id lands on the servers page.
 		["loams://open/servers/abc", "/settings/servers"],

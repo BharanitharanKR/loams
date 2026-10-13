@@ -9,6 +9,7 @@ import type { Context } from '@loams/cordis';
 // Brings in the `desktop` service type (a module augmentation of `Services`).
 import type {} from '@loams/platform-electron';
 import { desktopAgentd, type StudioAgentd, webAgentd } from './agentd.js';
+import { desktopFactory } from './factory.js';
 import { StudioContext } from './header.js';
 import { routeOf, STUDIO_PAGES } from './routes.js';
 import { StudioView } from './view.js';
@@ -23,8 +24,22 @@ export {
   type StudioAgentd,
   webAgentd,
 } from './agentd.js';
+export {
+  desktopFactory,
+  type FactoryApp,
+  type FactoryPull,
+  type StudioFactory,
+} from './factory.js';
 export { LAYOUT_DEFAULTS, LAYOUT_KEY, StudioLayout } from './layout/StudioLayout.js';
-export { routeOf, STUDIO_PAGES, type StudioRoute, studioHref } from './routes.js';
+export {
+  routeOf,
+  STUDIO_PAGES,
+  type StudioRoute,
+  studioHref,
+  type ThreadDraft,
+} from './routes.js';
+export { FactoryGroup } from './sidebar/Factory.js';
+export { BranchPr, DraftCard } from './thread/FactoryLinks.js';
 export { StudioView } from './view.js';
 
 const plugin: PluginModule = {
@@ -35,8 +50,11 @@ const plugin: PluginModule = {
     const router = service(ctx, 'router');
     const slots = service(ctx, 'slots');
     const platform = service(ctx, 'platform');
-    const agentd: StudioAgentd =
-      platform.kind === 'desktop' ? desktopAgentd(service(ctx, 'desktop')) : webAgentd();
+    const desktop = platform.kind === 'desktop' ? service(ctx, 'desktop') : undefined;
+    const agentd: StudioAgentd = desktop ? desktopAgentd(desktop) : webAgentd();
+    // The Factory group (SD1 Task 27): the desktop's factory bridge; on the web nothing
+    // until SF1 (D922).
+    const factory = desktop?.factory ? desktopFactory(desktop) : undefined;
     const navigate = (to: string) => router.navigate(to);
 
     for (const page of STUDIO_PAGES) {
@@ -44,7 +62,12 @@ const plugin: PluginModule = {
         router.page(
           { id: page.id, path: page.path, title: page.title, plugin: 'studio' },
           ({ params }) => (
-            <StudioView agentd={agentd} route={routeOf(page.kind, params)} navigate={navigate} />
+            <StudioView
+              agentd={agentd}
+              factory={factory}
+              route={routeOf(page.kind, params)}
+              navigate={navigate}
+            />
           ),
         ),
       );

@@ -1,11 +1,11 @@
 // Studio's sidebar (§53 §5.1–§5.2): the projects, "Add project", and Settings.
-// Threads and run groups join each project in SD1 Task 17; the Factory group in
-// Task 27. Add project opens the OS folder picker on the desktop (then `AddRepo`)
+// Threads and run groups join each project in SD1 Task 17; the Factory group
+// (sidebar/Factory.tsx, Task 27) sits below. Add project opens the OS folder picker on the desktop (then `AddRepo`)
 // and asks for a git URL on the web (`CloneRepo`).
 
 import { Button, Dialog, Field, Input } from '@loams/ui';
 import { FolderGit2, Plus, Settings } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, type ReactNode, useState } from 'react';
 import { isCloneUrl, type StudioAgentd } from '../agentd.js';
 import { studioHref } from '../routes.js';
 import { useAddProject, useProjects, useReach } from './queries.js';
@@ -79,9 +79,12 @@ export function CloneDialog({
 export function ProjectsSidebar({
   agentd,
   activeProject,
+  children,
 }: {
   agentd: StudioAgentd;
   activeProject?: string;
+  /** Groups below the projects: the Factory group (SD1 Task 27). */
+  children?: ReactNode;
 }) {
   const reach = useReach(agentd);
   const projects = useProjects(agentd);
@@ -170,6 +173,7 @@ export function ProjectsSidebar({
           </p>
         )}
       </nav>
+      {children}
       <div className="shrink-0 border-t border-rule-soft p-2">
         <a
           href={`#${studioHref({ kind: 'settings' })}`}
