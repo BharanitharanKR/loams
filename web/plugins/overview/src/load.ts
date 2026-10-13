@@ -1,7 +1,7 @@
 // What each Overview card reads. Every loader takes plain dependencies and
 // returns plain data, so the cards stay presentational and the tests simple.
 
-import { createClient, type Transport } from '@connectrpc/connect';
+import { Code, ConnectError, createClient, type Transport } from '@connectrpc/connect';
 import type { LoamsDesktopApi } from '@loams/desktop/contracts';
 import { createDurableApi, envelope } from '@loams/durable-client';
 import { collection } from '@loams/proto';
@@ -17,9 +17,14 @@ export const LAG_LINKS = 25;
 export type Load<T> =
   | { state: 'loading' }
   | { state: 'ok'; data: T }
-  | { state: 'error'; message: string };
+  | { state: 'error'; message: string; notServed?: boolean };
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** The server has no such API (a Demo or remote server): a card says so, not "unreachable". */
+export class NotServedError extends Error {
+  override name = 'NotServedError';
+}
 
 /** Runs `fn` when `key` changes; a later run (or unmount) discards an earlier answer. */
 export function useLoad<T>(
@@ -41,7 +46,9 @@ export function useLoad<T>(
     setV((cur) => (cur.state === 'ok' && sameScope ? cur : { state: 'loading' }));
     fn().then(
       (data) => live && setV({ state: 'ok', data }),
-      (e) => live && setV({ state: 'error', message: message(e) }),
+      (e) =>
+        live &&
+        setV({ state: 'error', message: message(e), notServed: e instanceof NotServedError }),
     );
     return () => {
       live = false;
@@ -60,7 +67,12 @@ export async function loadData(transport: Transport): Promise<DataSummary> {
   let count = 0;
   let pageToken = '';
   do {
-    const res = await client.listCollections({ namespace: NAMESPACE, pageSize: 100, pageToken });
+    const res = await client
+      .listCollections({ namespace: NAMESPACE, pageSize: 100, pageToken })
+      .catch((e: unknown) => {
+        if (ConnectError.from(e).code === Code.Unimplemented) throw new NotServedError(message(e));
+        throw e;
+      });
     count += res.collections.length;
     pageToken = res.nextPageToken;
   } while (pageToken);
@@ -95,6 +107,11 @@ export interface StreamsSummary {
 
 async function getJson<T>(net: Net, path: string): Promise<T> {
   const res = await net.fetch(`${net.baseUrl}${path}`, { credentials: 'include' });
+  if (res.status === 404 || res.status === 501) {
+    const body = (await res.json().catch(() => ({}))) as { code?: string };
+    if (res.status === 501 || body.code === 'unimplemented' || body.code === undefined)
+      throw new NotServedError(`HTTP ${res.status} on ${path}`);
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status} on ${path}`);
   return (await res.json()) as T;
 }
