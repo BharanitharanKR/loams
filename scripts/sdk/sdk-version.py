@@ -250,7 +250,7 @@ def main() -> int:
             for problem in problems:
                 print(f"::error::{problem}" if os.environ.get("GITHUB_ACTIONS") else problem)
             if problems:
-                print("fix: python3 sdks/tools/sdk-version.py set <version>, and commit", file=sys.stderr)
+                print("fix: python3 scripts/sdk/sdk-version.py set <version>, and commit", file=sys.stderr)
                 return 1
             print("sdk-version: every SDK manifest is at the release version")
             return 0

@@ -20,7 +20,7 @@ cmake_minimum_required(VERSION 3.20)
 project(loams-cpp VERSION 0.1.0 LANGUAGES CXX)
 
 # The SDK's release version. CMake's `project(VERSION)` is numeric only, so the
-# SemVer prerelease lives here; `sdks/tools/sdk-version.py` sets both lines and
+# SemVer prerelease lives here; `scripts/sdk/sdk-version.py` sets both lines and
 # the release workflow checks them against the tag. It is compiled into
 # `loams::SdkVersion()` and the user agent.
 set(LOAMS_SDK_VERSION "0.1.0-preview.2")

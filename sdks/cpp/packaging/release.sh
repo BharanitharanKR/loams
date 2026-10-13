@@ -28,7 +28,7 @@ trap 'rm -rf "$work"' EXIT
 
 # The manifest must already say this version; the archive is not where a version
 # gets decided.
-python3 "$repo/sdks/tools/sdk-version.py" check "$version" >/dev/null
+python3 "$repo/scripts/sdk/sdk-version.py" check "$version" >/dev/null
 
 # Everything a consumer builds from: no ctest output, no packaging helpers.
 git -C "$repo" archive --format=tar --prefix="$name/" HEAD:sdks/cpp \

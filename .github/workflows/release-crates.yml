@@ -52,11 +52,17 @@ env:
   RELEASE_BRANCH: ${{ vars.RELEASE_BRANCH || github.event.repository.default_branch }}
   # Every crate a release may upload, in dependency order. It is a declaration,
   # not a guess: publishable-crates.py fails when the manifests say otherwise.
+  #
+  # loams-proto and loams-live-proto are also uploaded by sdk-release.yml, on
+  # the release tag, because the Rust SDK (`loams`, in sdks/rust) depends on
+  # them. Whichever workflow runs second finds the version already on
+  # crates.io and skips it.
   CRATES: >-
     loams-store,loams-cache,loams-common,loams-worker,loams-log,
     loams-cloudevents,loams-link,loams-pk,loams-quickwit,loams-text,
-    loams-collection,loams-query,loams-es,loams-hnsw,loams-hot,loams-meta,
-    loams-qdrant,loams-stream-grpc
+    loams-collection,loams-query,loams-es,loams-fs,loams-git,loams-hnsw,
+    loams-hot,loams-live-proto,loams-meta,loams-proto,loams-qdrant,
+    loams-stream-grpc,loams-tuple
 
 jobs:
   # Nothing downstream runs until the tag is a published release whose commit is
@@ -203,9 +209,22 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: |
           set -euo pipefail
-          args=()
+          cargo metadata --no-deps --format-version 1 --locked > "$RUNNER_TEMP/metadata.json"
+          version_of() {
+            python3 -c 'import json,sys;print({p["name"]:p["version"] for p in json.load(open(sys.argv[1]))["packages"]}[sys.argv[2]])' \
+              "$RUNNER_TEMP/metadata.json" "$1"
+          }
+          # A crate whose version is already on crates.io is skipped, so a
+          # re-run, or a crate sdk-release.yml uploaded first, is not an error.
           IFS=',' read -ra crates <<< "$(echo "$CRATES" | tr -d '[:space:]')"
           for crate in "${crates[@]}"; do
-            args+=(-p "$crate")
+            version=$(version_of "$crate")
+            if curl -fsS -o /dev/null -A "loams-release-crates (github.com/${GITHUB_REPOSITORY})" \
+                "https://crates.io/api/v1/crates/$crate/$version"; then
+              echo "$crate $version is already on crates.io; skipped"
+              continue
+            fi
+            # cargo waits for each upload to reach the index before returning,
+            # so the next crate resolves the ones before it.
+            cargo publish --locked -p "$crate"
           done
-          cargo publish --locked "${args[@]}"

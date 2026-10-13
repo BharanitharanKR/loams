@@ -3,7 +3,7 @@
 #include "loams/version.hpp"
 
 // CMakeLists.txt passes LOAMS_SDK_VERSION, the one place the version is written
-// (sdks/tools/sdk-version.py sets and checks it). A build that does not go through
+// (scripts/sdk/sdk-version.py sets and checks it). A build that does not go through
 // that CMakeLists.txt still compiles, and says so in the version it reports.
 #ifndef LOAMS_SDK_VERSION
 #define LOAMS_SDK_VERSION "0.0.0-unknown"

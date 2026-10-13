@@ -1,0 +1,731 @@
+name: Release (SDKs)
+
+# Publishes the seven supported SDKs from one release tag, each to its own
+# registry, as a preview. The other SDKs under sdks/ (Java, Kotlin, Ruby, PHP,
+# Dart, Objective-C) are "coming soon" and are not built here.
+#
+#   SDK         Registry               Name                     Version for v0.1.0-preview.2
+#   TypeScript  npm                    @loams/live, @loams/client  0.1.0-preview.2, dist-tag `preview`
+#   Python      PyPI                   loams                    0.1.0a2 (PEP 440)
+#   Rust        crates.io              loams-proto, loams-live-proto, loams   0.1.0-preview.2
+#   C#          NuGet                  Loams                    0.1.0-preview.2
+#   Go          proxy.golang.org       loams.dev/go             tag sdks/go/v0.1.0-preview.2
+#   Swift       SwiftPM (git)          github.com/ostrium-labs/loams   the release tag itself
+#   C++         GitHub release assets  loams-cpp-<v>.tar.gz     CMake config package inside
+#
+# How a run behaves:
+#
+#   * Every run builds, tests and packages every SDK and runs each registry's own
+#     dry run (npm publish --dry-run, twine check, cargo publish --dry-run,
+#     dotnet pack, swift build, the C++ archive's install-and-find_package test).
+#     One job per SDK, so a broken SDK fails loudly on its own and the others
+#     still report.
+#   * A `v*` tag push, or a manual run with `dry_run: false`, then publishes. Each
+#     registry's publish job runs only when its repository variable
+#     `SDK_PUBLISH_<REGISTRY>` is `true` (NPM, PYPI, CRATES, NUGET, GO, CPP). The
+#     owner sets a variable after configuring that registry, so merging this file
+#     and pushing a tag publishes nothing until then, and a registry that is not
+#     ready is skipped rather than failed.
+#   * Credentials are OIDC trusted publishing wherever the registry has it (npm,
+#     PyPI, crates.io, NuGet). npm and crates.io can only trust a package that
+#     already exists, so their first upload may use a bootstrap secret
+#     (`NPM_TOKEN`, `CARGO_REGISTRY_TOKEN`) that is deleted afterwards. The
+#     owner's checklist (names, trusted-publisher fields, variables) is in the
+#     pull request that added this file.
+#   * Publishing is idempotent: a version that is already on a registry is
+#     skipped, so a run that failed half way is safe to re-dispatch.
+#
+# The version is the tag. scripts/sdk/sdk-version.py checks that every manifest
+# carries it (in each ecosystem's spelling) and that the root Cargo workspace,
+# which publishes loams-proto and loams-live-proto, does too.
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - '.github/workflows/sdk-release.yml'
+      - 'Package.swift'
+      - 'scripts/sdk/sdk-version.py'
+      - 'sdks/typescript/tools/**'
+      - 'sdks/typescript/packages/*/package.json'
+      - 'sdks/python/pyproject.toml'
+      - 'sdks/rust/Cargo.toml'
+      - 'sdks/csharp/src/Loams/Loams.csproj'
+      - 'sdks/cpp/CMakeLists.txt'
+      - 'sdks/cpp/cmake/**'
+      - 'sdks/cpp/packaging/**'
+      - 'sdks/swift/Package.swift'
+      - 'sdks/go/go.mod'
+      - 'crates/loams-proto/**'
+      - 'crates/loams-live-proto/**'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build (vX.Y.Z-pre.N). Empty: the selected ref, dry run only.'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Build and run every dry run, publish nothing.'
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-release-${{ github.event.inputs.tag || github.ref }}
+  # A publish must never be cancelled half way through.
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+
+jobs:
+  # The version, the ref to build, and whether this run may publish at all.
+  plan:
+    name: version and publish gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      ref: ${{ steps.plan.outputs.ref }}
+      sha: ${{ steps.plan.outputs.sha }}
+      tag: ${{ steps.plan.outputs.tag }}
+      publish: ${{ steps.plan.outputs.publish }}
+      semver: ${{ steps.spell.outputs.semver }}
+      pep440: ${{ steps.spell.outputs.pep440 }}
+      npm_tag: ${{ steps.spell.outputs.npm_tag }}
+      go_tag: ${{ steps.spell.outputs.go_tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: the ref, the tag and the gate
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          RELEASE_BRANCH: ${{ vars.RELEASE_BRANCH || github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          tag=""
+          publish=false
+          case "$EVENT" in
+            push)
+              [ "$REF_TYPE" = tag ] || { echo "a push run must be a tag push"; exit 1; }
+              tag="$REF_NAME"; publish=true ;;
+            workflow_dispatch)
+              tag="$INPUT_TAG"
+              if [ "$DRY_RUN" = false ]; then
+                [ -n "$tag" ] || { echo "dry_run: false needs the tag input"; exit 1; }
+                publish=true
+              fi ;;
+          esac
+          if [ -n "$tag" ]; then
+            if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+\.[0-9]+)?$ ]]; then
+              echo "$tag is not a vX.Y.Z or vX.Y.Z-label.N tag"; exit 1
+            fi
+            sha=$(git rev-parse --verify "refs/tags/$tag^{commit}") \
+              || { echo "$tag is not a tag in this repository"; exit 1; }
+            # Only a commit on the release branch may reach a registry.
+            if [ "$publish" = true ]; then
+              git fetch -q origin "$RELEASE_BRANCH"
+              git merge-base --is-ancestor "$sha" FETCH_HEAD \
+                || { echo "$tag ($sha) is not on $RELEASE_BRANCH; refusing to publish it"; exit 1; }
+            fi
+            ref="refs/tags/$tag"
+          else
+            sha=$(git rev-parse HEAD)
+            ref="$sha"
+          fi
+          {
+            echo "tag=$tag"
+            echo "ref=$ref"
+            echo "sha=$sha"
+            echo "publish=$publish"
+          } >> "$GITHUB_OUTPUT"
+          echo "ref $ref ($sha), tag '${tag:-<none>}', publish $publish"
+      - name: every manifest carries the release version
+        env:
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          python3 scripts/sdk/sdk-version.py --self-test
+          python3 scripts/sdk/sdk-version.py show
+          if [ -n "$TAG" ]; then
+            # A tag must match every manifest, the root workspace included.
+            python3 scripts/sdk/sdk-version.py check "$TAG" --strict-root
+          else
+            python3 scripts/sdk/sdk-version.py check
+          fi
+      - name: the version in each ecosystem's spelling
+        id: spell
+        env:
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          version="$TAG"
+          if [ -z "$version" ]; then
+            version=$(python3 -c 'import json;print(json.load(open("sdks/typescript/packages/client/package.json"))["version"])')
+          fi
+          python3 scripts/sdk/sdk-version.py spell "$version" --github-output
+      - name: which registries this run publishes to
+        env:
+          PUBLISH: ${{ steps.plan.outputs.publish }}
+          NPM: ${{ vars.SDK_PUBLISH_NPM }}
+          PYPI: ${{ vars.SDK_PUBLISH_PYPI }}
+          CRATES: ${{ vars.SDK_PUBLISH_CRATES }}
+          NUGET: ${{ vars.SDK_PUBLISH_NUGET }}
+          GO: ${{ vars.SDK_PUBLISH_GO }}
+          CPP: ${{ vars.SDK_PUBLISH_CPP }}
+        run: |
+          {
+            echo "### SDK release plan"
+            echo
+            echo "| Registry | Variable | Publishes in this run |"
+            echo "|---|---|---|"
+            for pair in "npm:NPM" "PyPI:PYPI" "crates.io:CRATES" "NuGet:NUGET" "Go module tag:GO" "C++ release assets:CPP"; do
+              name=${pair%%:*}; var=${pair#*:}; value=${!var:-}
+              if [ "$PUBLISH" = true ] && [ "$value" = true ]; then state=yes; else state=no; fi
+              echo "| $name | \`SDK_PUBLISH_$var\` = \`${value:-unset}\` | $state |"
+            done
+            echo "| SwiftPM | none: the release tag is the version | n/a |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------- TypeScript
+  typescript:
+    name: TypeScript (npm)
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.0
+        with:
+          version: 11.27.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: install the two packages and what they depend on
+        run: pnpm install --frozen-lockfile --filter '@loams/client...' --filter '@loams/live...'
+      - name: typecheck and test
+        working-directory: web
+        run: |
+          pnpm --filter @loams/live typecheck
+          pnpm --filter @loams/client typecheck
+          pnpm --filter @loams/client test
+      - name: stage, install the tarballs and load them in Node
+        run: node sdks/typescript/tools/pack.mjs --version "${{ needs.plan.outputs.semver }}" --smoke
+      - name: npm publish --dry-run
+        env:
+          NPM_TAG: ${{ needs.plan.outputs.npm_tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/npm"
+          for pkg in live client; do
+            (cd "sdks/typescript/packages/$pkg/build/npm" && npm publish --dry-run --tag "$NPM_TAG" && npm pack --pack-destination "$RUNNER_TEMP/npm")
+          done
+          ls -l "$RUNNER_TEMP/npm"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdk-npm
+          path: ${{ runner.temp }}/npm/*.tgz
+          if-no-files-found: error
+
+  publish-npm:
+    name: publish to npm
+    needs: [plan, typescript]
+    if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_NPM == 'true'
+    environment: npm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # npm trusted publishing and provenance.
+      id-token: write
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # Trusted publishing needs npm >= 11.5.1; Node 22 ships 10.x.
+      - name: npm with trusted publishing
+        run: npm install -g npm@11.6.2 && npm --version
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdk-npm
+          path: npm
+      - name: publish @loams/live, then @loams/client
+        env:
+          VERSION: ${{ needs.plan.outputs.semver }}
+          NPM_TAG: ${{ needs.plan.outputs.npm_tag }}
+          # Bootstrap only: npm can trust a workflow only for a package that
+          # exists, so the first upload may need a granular token. Empty once
+          # the trusted publisher is configured, and then OIDC is used.
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+            echo "::warning::publishing with the NPM_TOKEN bootstrap secret; delete it once the trusted publisher is configured"
+          fi
+          for name in live client; do
+            pkg="@loams/$name"
+            if npm view "$pkg@$VERSION" version >/dev/null 2>&1; then
+              echo "$pkg@$VERSION is already on npm; skipped"; continue
+            fi
+            npm publish "npm/loams-$name-$VERSION.tgz" --access public --tag "$NPM_TAG" --provenance
+          done
+
+  # ---------------------------------------------------------------- Python
+  python:
+    name: Python (PyPI)
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: test and typecheck
+        working-directory: sdks/python
+        run: |
+          uv sync --frozen --all-extras --dev
+          uv run pytest -q
+          uv run mypy --strict src
+      - name: build the sdist and the wheel
+        working-directory: sdks/python
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          uv build
+          ls dist
+          test -f "dist/loams-${{ needs.plan.outputs.pep440 }}-py3-none-any.whl" \
+            || { echo "the wheel is not loams-${{ needs.plan.outputs.pep440 }}"; exit 1; }
+      - name: twine check, and the wheel imports in a clean environment
+        working-directory: sdks/python
+        run: |
+          set -euo pipefail
+          uvx twine@6.2.0 check --strict dist/*
+          uv venv -q "$RUNNER_TEMP/smoke"
+          uv pip install -q --python "$RUNNER_TEMP/smoke/bin/python" dist/*.whl
+          "$RUNNER_TEMP/smoke/bin/python" -c 'import importlib.metadata as m, loams; assert loams.Loams; print("loams", m.version("loams"))'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdk-pypi
+          path: sdks/python/dist/*
+          if-no-files-found: error
+
+  publish-pypi:
+    name: publish to PyPI
+    needs: [plan, python]
+    if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_PYPI == 'true'
+    environment: pypi
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # PyPI trusted publishing, and the PEP 740 attestations it uploads.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdk-pypi
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: dist
+          skip-existing: true
+
+  # ---------------------------------------------------------------- Rust
+  rust:
+    name: Rust (crates.io)
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: |
+            . -> target
+            sdks/rust -> target
+      # loams-proto and loams-live-proto generate their code with protoc at
+      # build time, here and on every machine that builds the SDK.
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - name: the SDK's tests and lints
+        working-directory: sdks/rust
+        run: |
+          cargo test -j 4 --locked
+          cargo fmt -- --check
+          cargo clippy -j 4 --locked --all-targets -- -D warnings
+      - name: cargo publish --dry-run, loams-proto and loams-live-proto
+        run: cargo publish --dry-run --locked -j 4 -p loams-proto -p loams-live-proto
+      # The SDK is its own workspace, so cargo cannot stage the two proto crates
+      # for it the way it does inside one workspace. The patch points the
+      # packaged SDK at the sources just verified above, which are exactly what
+      # the publish job uploads first.
+      - name: cargo publish --dry-run, loams (the SDK)
+        working-directory: sdks/rust
+        run: |
+          cargo publish --dry-run --locked -j 4 \
+            --config 'patch.crates-io.loams-proto.path="../../crates/loams-proto"' \
+            --config 'patch.crates-io.loams-live-proto.path="../../crates/loams-live-proto"'
+
+  publish-crates:
+    name: publish to crates.io
+    needs: [plan, rust]
+    if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_CRATES == 'true'
+    # The same environment release-crates.yml uses; crates.io's trusted
+    # publisher names it, so a token cannot be minted outside it.
+    environment: crates-io
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      # `secrets` cannot appear in a step's `if`, so whether the bootstrap token
+      # exists is read once here.
+      HAS_BOOTSTRAP_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: |
+            . -> target
+            sdks/rust -> target
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - name: a short-lived crates.io token (trusted publishing, OIDC)
+        id: auth
+        if: env.HAS_BOOTSTRAP_TOKEN != 'true'
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+      - name: upload loams-proto, loams-live-proto, then loams
+        env:
+          # Bootstrap only: crates.io trusts a workflow only for a crate that
+          # exists. Empty once the trusted publishers are configured.
+          BOOTSTRAP: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          OIDC_TOKEN: ${{ steps.auth.outputs.token }}
+          VERSION: ${{ needs.plan.outputs.semver }}
+        run: |
+          set -euo pipefail
+          export CARGO_REGISTRY_TOKEN="${BOOTSTRAP:-$OIDC_TOKEN}"
+          if [ -n "${BOOTSTRAP:-}" ]; then
+            echo "::warning::publishing with the CARGO_REGISTRY_TOKEN bootstrap secret; delete it once the trusted publishers are configured"
+          fi
+          published() {
+            curl -fsS -o /dev/null -A "loams-sdk-release (github.com/${GITHUB_REPOSITORY})" \
+              "https://crates.io/api/v1/crates/$1/$2"
+          }
+          for crate in loams-proto loams-live-proto; do
+            if published "$crate" "$VERSION"; then echo "$crate $VERSION is already on crates.io; skipped"; continue; fi
+            cargo publish --locked -j 4 -p "$crate"
+          done
+          if published loams "$VERSION"; then
+            echo "loams $VERSION is already on crates.io; skipped"
+          else
+            # cargo waits for each upload to reach the index, so the SDK
+            # resolves the two crates published just above.
+            (cd sdks/rust && cargo publish --locked -j 4)
+          fi
+
+  # ---------------------------------------------------------------- C#
+  csharp:
+    name: C# (NuGet)
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: sdks/csharp/global.json
+      - name: build and test
+        working-directory: sdks/csharp
+        run: |
+          dotnet build Loams.sln -c Release
+          dotnet test Loams.sln -c Release --no-build
+      - name: dotnet pack
+        working-directory: sdks/csharp
+        run: |
+          set -euo pipefail
+          dotnet pack src/Loams/Loams.csproj -c Release -o "$RUNNER_TEMP/nuget" \
+            -p:ContinuousIntegrationBuild=true -p:RepositoryCommit=${{ needs.plan.outputs.sha }}
+          ls -l "$RUNNER_TEMP/nuget"
+          test -f "$RUNNER_TEMP/nuget/Loams.${{ needs.plan.outputs.semver }}.nupkg"
+      - name: a console app restores the package and builds against it
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/consumer"
+          mkdir -p "$app" && cd "$app"
+          dotnet new console -o . --framework net8.0
+          dotnet new nugetconfig
+          dotnet nuget add source "$RUNNER_TEMP/nuget" -n local --configfile nuget.config
+          dotnet add package Loams --version "${{ needs.plan.outputs.semver }}"
+          printf 'using Loams;\nvar o = new LoamsClientOptions { Endpoint = "http://127.0.0.1:8080" };\nConsole.WriteLine(o.Endpoint);\n' > Program.cs
+          dotnet run
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdk-nuget
+          path: ${{ runner.temp }}/nuget/*
+          if-no-files-found: error
+
+  publish-nuget:
+    name: publish to NuGet
+    needs: [plan, csharp]
+    if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_NUGET == 'true'
+    environment: nuget
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # NuGet trusted publishing exchanges this for a one-hour API key.
+      id-token: write
+    steps:
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdk-nuget
+          path: nuget
+      - name: a short-lived NuGet API key (trusted publishing, OIDC)
+        id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          # The nuget.org account (user or organisation profile name) that owns
+          # the trusted publishing policy. Not a secret.
+          user: ${{ vars.NUGET_USER }}
+      - name: dotnet nuget push (the .snupkg goes with it)
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          dotnet nuget push "nuget/Loams.${{ needs.plan.outputs.semver }}.nupkg" \
+            --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+  # ---------------------------------------------------------------- Go
+  go:
+    name: Go (module tag)
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          # The go-import tag names a subdirectory, which Go reads from 1.25.
+          go-version: '1.25.0'
+          cache-dependency-path: sdks/go/go.sum
+      - name: test, vet, and go.mod is tidy
+        working-directory: sdks/go
+        run: |
+          go test -count=1 ./...
+          go vet ./...
+          go mod tidy -diff
+      - name: the module is what the proxy will zip
+        working-directory: sdks/go
+        run: |
+          set -euo pipefail
+          test -f LICENSE || { echo "sdks/go has no LICENSE; pkg.go.dev will not show the module"; exit 1; }
+          # A nested go.mod would cut its directory out of the module.
+          nested=$(find . -mindepth 2 -name go.mod)
+          [ -z "$nested" ] || { echo "nested modules: $nested"; exit 1; }
+          size=$(du -sb --exclude=.git . | cut -f1)
+          [ "$size" -lt 500000000 ] || { echo "the module is over the proxy's 500 MB limit"; exit 1; }
+          echo "loams.dev/go ${{ needs.plan.outputs.go_tag }}: $size bytes"
+
+  publish-go:
+    name: tag the Go module
+    needs: [plan, go]
+    if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_GO == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      # Pushing the sdks/go/vX.Y.Z tag.
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.25.0'
+          cache: false
+      - name: push the module tag on the release commit
+        env:
+          GO_TAG: ${{ needs.plan.outputs.go_tag }}
+          SHA: ${{ needs.plan.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if existing=$(git rev-parse -q --verify "refs/tags/$GO_TAG^{commit}"); then
+            [ "$existing" = "$SHA" ] || { echo "$GO_TAG already points at $existing, not $SHA"; exit 1; }
+            echo "$GO_TAG already exists on $SHA"
+          else
+            git tag "$GO_TAG" "$SHA"
+            git push origin "refs/tags/$GO_TAG"
+          fi
+      - name: the module proxy serves it
+        env:
+          VERSION: v${{ needs.plan.outputs.semver }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          for attempt in 1 2 3 4 5; do
+            if GOPROXY=https://proxy.golang.org GOFLAGS=-mod=mod go list -m "loams.dev/go@$VERSION"; then
+              exit 0
+            fi
+            sleep 60
+          done
+          echo "::error::proxy.golang.org cannot resolve loams.dev/go@$VERSION. The tag is pushed; the usual cause is that https://loams.dev/go?go-get=1 does not serve <meta name=\"go-import\" content=\"loams.dev/go git https://github.com/ostrium-labs/loams sdks/go\">. Fix that and re-run this job."
+          exit 1
+
+  # ---------------------------------------------------------------- Swift
+  swift:
+    name: Swift (SwiftPM)
+    needs: plan
+    # Foundation's async URLSession, as ci.yml's sdk-swift job.
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - name: the SDK builds and its tests pass
+        working-directory: sdks/swift
+        run: |
+          swift --version
+          swift build
+          swift test
+      # What a consumer resolves: the repository root's manifest, at the release
+      # tag. It must build the same sources.
+      - name: the root Package.swift builds the library
+        run: |
+          swift package describe --type json > "$RUNNER_TEMP/root-package.json"
+          swift build --product Loams
+      - name: SwiftPM's version is the tag
+        if: needs.plan.outputs.tag != ''
+        run: |
+          echo "SwiftPM resolves ${{ needs.plan.outputs.tag }} as version ${{ needs.plan.outputs.semver }}:"
+          echo '  .package(url: "https://github.com/ostrium-labs/loams.git", exact: "${{ needs.plan.outputs.semver }}")'
+
+  # ---------------------------------------------------------------- C++
+  cpp:
+    name: C++ (source archive)
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - name: toolchain and dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build libcurl4-openssl-dev pkg-config
+      # The committed stubs are protobuf 36.1 gencode and only compile against
+      # the same runtime; Ubuntu's is 3.21. Same build and cache key as ci.yml.
+      - name: protobuf runtime (cache)
+        id: protobuf-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.local/protobuf
+          key: protobuf-v36.1-shared-${{ runner.os }}-${{ runner.arch }}
+      - name: protobuf runtime (build v36.1)
+        if: steps.protobuf-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          src="$RUNNER_TEMP/protobuf"
+          git clone -q --depth 1 --branch v36.1 --recurse-submodules --shallow-submodules \
+            https://github.com/protocolbuffers/protobuf.git "$src"
+          cmake -S "$src" -B "$src/build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$HOME/.local/protobuf" -DBUILD_SHARED_LIBS=ON \
+            -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_BUILD_PROTOC_BINARIES=OFF \
+            -Dprotobuf_ABSL_PROVIDER=module -DABSL_PROPAGATE_CXX_STD=ON -DCMAKE_CXX_STANDARD=17
+          cmake --build "$src/build" -j 4
+          cmake --install "$src/build"
+      - name: protobuf runtime (environment)
+        run: |
+          prefix="$HOME/.local/protobuf"
+          pc=$(dirname "$(find "$prefix" -name protobuf.pc | head -1)")
+          {
+            echo "PKG_CONFIG_PATH=$pc"
+            echo "CMAKE_PREFIX_PATH=$prefix"
+            echo "LD_LIBRARY_PATH=$(dirname "$pc")"
+          } >> "$GITHUB_ENV"
+      - name: the conformance suite
+        working-directory: sdks/cpp
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j 4
+          ctest --test-dir build --output-on-failure
+      - name: the source archive, built, installed and found with find_package
+        run: bash sdks/cpp/packaging/release.sh "${{ needs.plan.outputs.semver }}" "$RUNNER_TEMP/cpp"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdk-cpp
+          path: |
+            ${{ runner.temp }}/cpp/*.tar.gz
+            ${{ runner.temp }}/cpp/*.sha256
+          if-no-files-found: error
+
+  publish-cpp:
+    name: attach the C++ archive to the release
+    needs: [plan, cpp]
+    if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_CPP == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdk-cpp
+          path: cpp
+      # release-github.yml creates the GitHub release after the images are built,
+      # which takes a while after the tag; a release created with GITHUB_TOKEN
+      # triggers no workflow, so this waits for it rather than racing it.
+      - name: wait for the GitHub release, then upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 120); do
+            if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber cpp/*
+              exit 0
+            fi
+            sleep 60
+          done
+          echo "::error::no GitHub release for $TAG after two hours. Re-dispatch this workflow with tag $TAG and dry_run false once release-github.yml has created it."
+          exit 1

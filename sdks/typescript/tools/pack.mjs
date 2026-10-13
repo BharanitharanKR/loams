@@ -7,7 +7,8 @@
 // (`./src/index.ts`), which is right for the console and the conformance suite
 // and wrong for npm: Node does not strip types inside node_modules, and a
 // consumer's bundler should not have to compile someone else's package. So the
-// release stages each package into `packages/<name>/pack/`:
+// release stages each package into `packages/<name>/build/npm/` (a `build`
+// directory, so neither git nor the monorepo check sees the staged package.json):
 //
 //   * `src/` copied, then compiled by the package's own pinned `tsc` into
 //     `dist/` (ES2022 JavaScript plus `.d.ts`), with NodeNext resolution so the
@@ -176,7 +177,7 @@ function compile(pkgDir, stage, extraPaths) {
 
 function stagePackage(name, version, { vendor = false, paths = null } = {}) {
   const pkgDir = join(sdk, 'packages', name);
-  const stage = join(pkgDir, 'pack');
+  const stage = join(pkgDir, 'build/npm');
   rmSync(stage, { recursive: true, force: true });
   mkdirSync(stage, { recursive: true });
   cpSync(join(pkgDir, 'src'), join(stage, 'src'), { recursive: true });
@@ -186,7 +187,7 @@ function stagePackage(name, version, { vendor = false, paths = null } = {}) {
 
   const source = readJson(join(pkgDir, 'package.json'));
   if (source.version !== version) {
-    throw new Error(`${source.name} is ${source.version} in package.json, the release is ${version}: run sdks/tools/sdk-version.py set`);
+    throw new Error(`${source.name} is ${source.version} in package.json, the release is ${version}: run scripts/sdk/sdk-version.py set`);
   }
   const dependencies = {};
   for (const [dep, spec] of Object.entries(source.dependencies ?? {})) {
@@ -222,7 +223,7 @@ function stagePackage(name, version, { vendor = false, paths = null } = {}) {
 }
 
 function smoke(stages, version) {
-  const out = join(sdk, 'packages/client/pack-smoke');
+  const out = join(sdk, 'packages/client/build/smoke');
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
   const tarballs = stages.map((stage) => {
@@ -282,10 +283,10 @@ const client = stagePackage('client', version, {
   // Type-check against the staged @loams/live, which is what the client will
   // install; the emitted import stays `@loams/live/live`.
   paths: {
-    '@loams/live': ['../../live/pack/dist/index.d.ts'],
-    '@loams/live/live': ['../../live/pack/dist/live.d.ts'],
-    '@loams/live/options': ['../../live/pack/dist/gen/loams/options/v1/options_pb.d.ts'],
-    '@loams/live/value': ['../../live/pack/dist/gen/loams/live/v1/value_pb.d.ts'],
+    '@loams/live': ['../../../live/build/npm/dist/index.d.ts'],
+    '@loams/live/live': ['../../../live/build/npm/dist/live.d.ts'],
+    '@loams/live/options': ['../../../live/build/npm/dist/gen/loams/options/v1/options_pb.d.ts'],
+    '@loams/live/value': ['../../../live/build/npm/dist/gen/loams/live/v1/value_pb.d.ts'],
   },
 });
 if (runSmoke) smoke([live, client], version);
