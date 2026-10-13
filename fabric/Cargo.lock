@@ -1583,6 +1583,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "loams-connector-http"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "http",
+ "http-body-util",
+ "httpdate",
+ "hyper",
+ "hyper-util",
+ "loams-connector-sdk",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+]
+
+[[package]]
 name = "loams-connector-sdk"
 version = "0.0.1"
 dependencies = [
@@ -1625,6 +1644,7 @@ dependencies = [
  "buffa",
  "indexmap",
  "jsonschema",
+ "loams-connector-sdk",
  "loams-flow-proto",
  "semver",
  "serde",

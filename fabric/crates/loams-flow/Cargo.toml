@@ -21,6 +21,10 @@ camel-catalog = []
 [dependencies]
 indexmap.workspace = true
 jsonschema.workspace = true
+# The connector SDK (CN2 OR-5), for the `Profile` type a `ConnectorContext`
+# carries (CN2 Task 7, plan ruling R4.4): `loams-flow` depends on the SDK, never
+# the reverse. Its own dependencies are already in fabric/Cargo.lock.
+loams-connector-sdk = { path = "../loams-connector-sdk" }
 loams-flow-proto = { path = "../loams-flow-proto" }
 # `buffa` is the generated-code runtime of `loams-flow-proto` (see that crate's
 # Cargo.toml): `connectrpc-build` 0.9 emits buffa messages, and an open-enum

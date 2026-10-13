@@ -1141,9 +1141,10 @@ fn proto_and_yaml_agree() {
         let schema =
             loams_flow::validate::ManifestSchema::embedded().expect("the manifest schema compiles");
         let reloaded = if id == CN2_FIELDS_ID {
-            // The CN2 case names a profile no file under `connectors/profiles/` holds
-            // until CN2 Task 7, and has no config file of its own, so it is checked by
-            // the schema and the rules rather than by the loader.
+            // The CN2 case has no config file of its own (and claims `sink.reply`,
+            // whose `reply_topic` the Kafka config schema lacks), so it is checked by
+            // the schema and the rules rather than by the loader. Its profile,
+            // `redpanda`, exists since CN2 Task 7; `tests/profiles.rs` loads it.
             loams_flow::validate::validate_manifest(&rendered, schema.validator())
         } else {
             loams_flow::manifest::load_manifest_value(

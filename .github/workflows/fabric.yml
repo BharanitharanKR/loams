@@ -8,6 +8,7 @@ name: Fabric
 #   connect-routes   — declared, gated off until CN1 Task 12 lands
 # Jobs owned by CN2 (plan 2026-10-10-cn2-connectors):
 #   sdk-unit         — fmt, clippy and tests of `loams-connector-sdk` (Task 4)
+#                      and `loams-connector-http`'s profile engine (Task 7)
 # Jobs FL1 owns and adds here separately: connectors-it (the ★ contract suites
 # against the `connectors` compose profile, from CN1 Tasks 3–13), and the
 # `fabric` workspace's own build/publish steps. Keep this file minimal and
@@ -95,6 +96,7 @@ jobs:
               - "fabric/Cargo.toml"
               - "fabric/Cargo.lock"
               - "fabric/crates/loams-connector-sdk/**"
+              - "fabric/crates/loams-connector-http/**"
 
   # CN1 owns this job. FL1 owns the `lints_match_root` test that proves the
   # fabric workspace's lint table equals the root workspace's; it runs in FL1's
@@ -130,6 +132,10 @@ jobs:
       - name: licenses, advisories, sources
         working-directory: fabric
         run: cargo deny check
+      # CN2 Task 7: every profile under connectors/profiles/ and every manifest's
+      # runtime.profile (the same rules as loams-flow's `profile` module).
+      - name: connector profiles
+        run: python3 scripts/connectors/profiles.py --check
 
   # CN2 owns this job (plan 2026-10-10-cn2-connectors, Task 4): the connector
   # SDK alone, the crate every native connector family builds on. It needs no
@@ -149,13 +155,13 @@ jobs:
           key: sdk-unit
       - name: rustfmt
         working-directory: fabric
-        run: cargo fmt -p loams-connector-sdk --check
+        run: cargo fmt -p loams-connector-sdk -p loams-connector-http --check
       - name: clippy
         working-directory: fabric
-        run: cargo clippy -p loams-connector-sdk --all-targets --locked -- -D warnings
+        run: cargo clippy -p loams-connector-sdk -p loams-connector-http --all-targets --locked -- -D warnings
       - name: tests
         working-directory: fabric
-        run: cargo test -p loams-connector-sdk --locked
+        run: cargo test -p loams-connector-sdk -p loams-connector-http --locked
 
   # CN1 Task 2's drift checks (design §33 CN-R1): the appendix is regenerated
   # from connectors/registry/catalog.csv and diffed against the design doc, and

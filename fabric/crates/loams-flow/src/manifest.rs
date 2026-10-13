@@ -1322,8 +1322,10 @@ pub fn load_manifest_value(
 }
 
 /// R-CN2-2's half that needs the `connectors/` root: a `runtime.profile` names a
-/// file `connectors/profiles/<id>.yaml`. The schema's id pattern keeps the name a
-/// plain file name. That the profile validates is CN2 Task 7's `profile.rs`.
+/// file `connectors/profiles/<id>.yaml` (the schema's id pattern keeps the name a
+/// plain file name), the profile validates, and it fits the manifest
+/// ([`crate::profile::check_manifest_profile`]: the module rule and a note per
+/// narrowing; CN2 Task 7).
 fn check_profile_exists(
     file: &str,
     spec: &ConnectorSpec,
@@ -1334,7 +1336,18 @@ fn check_profile_exists(
     };
     let path = root.join("profiles").join(format!("{profile}.yaml"));
     if path.is_file() {
-        Ok(())
+        let loaded = crate::profile::load_profile(&path).map_err(|error| {
+            vec![ManifestError::new(
+                "runtime.profile",
+                format!("{file}: the profile {profile:?} does not load: {error} (R-CN2-2)"),
+            )]
+        })?;
+        let errors = crate::profile::check_manifest_profile(spec, &loaded);
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     } else {
         Err(vec![ManifestError::new(
             "runtime.profile",
