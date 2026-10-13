@@ -1,5 +1,5 @@
 // loams:// deep links. Pure parser; the result is a console hash-route path
-// (the cordis console uses a HashRouter, so `/servers` is `cordis.html#/servers`).
+// (the console routes by hash, so `/servers` is `/ui/#/servers`).
 
 /** Console hash routes shared by the tray and deep links, so they cannot drift. */
 export const TRAY_ROUTES = {

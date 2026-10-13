@@ -189,7 +189,7 @@ test("electron smoke", async () => {
 			BrowserWindow.getAllWindows()[0]?.getTitle(),
 		);
 		expect(title).toBe("Loams Desktop");
-		expect(page.url()).toContain("loams-app://console/ui/cordis.html");
+		expect(page.url()).toContain("loams-app://console/ui/");
 
 		// 2. The desktop opens in Loams Studio on first run (SD1 Task 3, Q801); the
 		// switcher goes to Console, whose header has the server switcher.

@@ -85,7 +85,7 @@ The hosted console is the cordis console (`cordis.html`) served at `/`. On first
 
 | Mode | Sign-in |
 |---|---|
-| `tailscale` (default) | No sign-in screen. The engine identifies the caller from the tailnet; the header shows the user `GET /api/v1/session` returns. |
+| `tailscale` (default) | No sign-in screen. The engine identifies the caller from the tailnet; the header shows the user `AuthService/GetSession` returns. |
 | `oidc` | A Loams account: Authorization Code + PKCE at `https://auth.loams.dev` with the `loams-console` client, sent as `Authorization: Bearer <token>`. Tokens stay in memory; a reload renews silently with `prompt=none`, a refresh token is used while the page lives; nothing that grants access goes to `localStorage` or `sessionStorage`. Offered when the deploy has a client. |
 | `apikey` | The connect screen requires an engine API key on every load, kept in the tab's memory only and sent as the bearer. |
 

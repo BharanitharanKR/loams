@@ -8,7 +8,7 @@ import { secureWindow } from "../src/main/security/install.electron";
 
 function fakeWindow() {
 	const wc = Object.assign(new EventEmitter(), {
-		getURL: () => "loams-app://console/ui/cordis.html",
+		getURL: () => "loams-app://console/ui/",
 		setWindowOpenHandler: vi.fn(),
 		session: {
 			setPermissionCheckHandler: vi.fn(),

@@ -45,10 +45,10 @@ export function resolveStatic(distRoot: string, url: URL): StaticResult {
 
 	const base = posix.basename(norm);
 	const ext = posix.extname(base).toLowerCase();
-	if (!ext || norm.endsWith("/")) {
-		const page = norm.startsWith("/ui/cordis") ? "cordis.html" : "index.html";
-		return { spaFallback: join(distRoot, page) };
-	}
+	// The console is index.html at /ui/ (API2 Task 10); it routes by hash, and
+	// moves an old path (the React console's routes) onto its hash route.
+	if (!ext || norm.endsWith("/"))
+		return { spaFallback: join(distRoot, "index.html") };
 	return {
 		file: join(distRoot, rel),
 		mime: MIME[ext] ?? "application/octet-stream",
@@ -57,7 +57,7 @@ export function resolveStatic(distRoot: string, url: URL): StaticResult {
 
 /**
  * The console's CSP. Must equal `CSP` in web/apps/console/vite.config.ts, which the
- * production build writes into cordis.html (a test compares the two).
+ * production build writes into index.html and cordis.html (a test compares the two).
  */
 export const CONSOLE_CSP =
 	"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +

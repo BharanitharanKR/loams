@@ -174,7 +174,7 @@ function createWindow(): BrowserWindow {
 		}
 	});
 	win.once("ready-to-show", () => win.show());
-	void win.loadURL("loams-app://console/ui/cordis.html");
+	void win.loadURL("loams-app://console/ui/");
 	return win;
 }
 

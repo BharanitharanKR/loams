@@ -2,7 +2,7 @@
 
 Status: decided (owner ruling, October 2026). Applies to the cordis console, which is
 both the web console (`web/apps/console`) and the Electron desktop's UI
-(`apps/desktop-electron` loads `cordis.html`), and to everything under `web/plugins/*`
+(`apps/desktop-electron` loads it at `/ui/`), and to everything under `web/plugins/*`
 and `web/packages/*`.
 
 These rulings settle how console UI code is written, so the page-porting and

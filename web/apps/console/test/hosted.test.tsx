@@ -286,17 +286,21 @@ describe('sign-in modes', () => {
 
   it('reads the tailnet identity from the engine session, without credentials', async () => {
     const fetcher = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) =>
-      json(200, { user: { email: 'ada@example.com', name: 'Ada' } }),
+      json(200, { session: { user: { email: 'ada@example.com', name: 'Ada' } } }),
     );
     expect(await fetchIdentity('https://loams.tail1.ts.net', fetcher)).toEqual({
       ok: true,
       user: 'ada@example.com',
     });
     const [url, init] = fetcher.mock.calls[0] ?? [];
-    expect(url).toBe('https://loams.tail1.ts.net/api/v1/session');
+    expect(url).toBe(
+      'https://loams.tail1.ts.net/loams.auth.v1.AuthService/GetSession?connect=v1&encoding=json&message=%7B%7D',
+    );
     expect(init?.credentials).toBe('omit');
     expect(
-      await fetchIdentity('https://e', async () => json(200, { user: { name: 'Ada' } })),
+      await fetchIdentity('https://e', async () =>
+        json(200, { session: { user: { name: 'Ada' } } }),
+      ),
     ).toEqual({ ok: true, user: 'Ada' });
     const refused = await fetchIdentity('https://e', async () => json(401, {}));
     expect(refused).toEqual({ ok: false, message: expect.stringMatching(/tailnet/) });
@@ -432,7 +436,9 @@ describe('sign-in modes', () => {
 
   it('tailscale: no sign-in or connect screen, the engine names the user', async () => {
     saveMode('tailscale');
-    const fetcher = vi.fn(async () => json(200, { user: { email: 'ada@example.com' } }));
+    const fetcher = vi.fn(async () =>
+      json(200, { session: { user: { email: 'ada@example.com' } } }),
+    );
     vi.stubGlobal('fetch', fetcher);
     const root = document.createElement('div');
     document.body.append(root);
@@ -443,7 +449,7 @@ describe('sign-in modes', () => {
     });
     await startHosted(config, root, start);
     expect(fetcher).toHaveBeenCalledWith(
-      'https://loams.tail1.ts.net/api/v1/session',
+      'https://loams.tail1.ts.net/loams.auth.v1.AuthService/GetSession?connect=v1&encoding=json&message=%7B%7D',
       expect.objectContaining({ credentials: 'omit' }),
     );
     expect(start).toHaveBeenCalledTimes(1);
