@@ -69,9 +69,30 @@ class ComputeStartFailedException extends LoamsException {}
 class QuotaExceededException extends LoamsException {}
 class StorageUnavailableException extends LoamsException {}
 class SecretAlreadyIssuedException extends LoamsException {}
+class RepoNotFoundException extends LoamsException {}
+class RepoAlreadyExistsException extends LoamsException {}
+class RepoDeletingException extends LoamsException {}
+class RefStaleException extends LoamsException {}
+class RefProtectedException extends LoamsException {}
+class OutOfScopeException extends LoamsException {}
+class ObjectFormatUnsupportedException extends LoamsException {}
+class ForkTooDeepException extends LoamsException {}
+class SequencerUnavailableException extends LoamsException {}
+class IdempotencyKeyReusedException extends LoamsException {}
+class WorkspaceNotFoundException extends LoamsException {}
+class WorkspaceFencedException extends LoamsException {}
+class WorkspaceReadOnlyException extends LoamsException {}
+class WorkspaceNameTakenException extends LoamsException {}
+class ObjectMissingException extends LoamsException {}
+class SecretDetectedException extends LoamsException {}
+class EnvUnsealedException extends LoamsException {}
+class EnvAccessDeniedException extends LoamsException {}
+class EnvForeignReferenceException extends LoamsException {}
 class LiveBadCursorException extends LoamsException {}
 class LiveWorkerCrashedException extends LoamsException {}
 class LiveDeployConflictException extends LoamsException {}
+class LiveSchemaViolationException extends LoamsException {}
+class LiveIndexNotReadyException extends LoamsException {}
 class TokenExpiredException extends LoamsException {}
 class UnauthenticatedException extends LoamsException {}
 class DecisionProofInvalidException extends LoamsException {}
@@ -131,9 +152,30 @@ class ErrorParser
         'quota_exceeded' => QuotaExceededException::class,
         'storage_unavailable' => StorageUnavailableException::class,
         'secret_already_issued' => SecretAlreadyIssuedException::class,
+        'repo_not_found' => RepoNotFoundException::class,
+        'repo_already_exists' => RepoAlreadyExistsException::class,
+        'repo_deleting' => RepoDeletingException::class,
+        'ref_stale' => RefStaleException::class,
+        'ref_protected' => RefProtectedException::class,
+        'out_of_scope' => OutOfScopeException::class,
+        'object_format_unsupported' => ObjectFormatUnsupportedException::class,
+        'fork_too_deep' => ForkTooDeepException::class,
+        'sequencer_unavailable' => SequencerUnavailableException::class,
+        'idempotency_key_reused' => IdempotencyKeyReusedException::class,
+        'workspace_not_found' => WorkspaceNotFoundException::class,
+        'workspace_fenced' => WorkspaceFencedException::class,
+        'workspace_read_only' => WorkspaceReadOnlyException::class,
+        'workspace_name_taken' => WorkspaceNameTakenException::class,
+        'object_missing' => ObjectMissingException::class,
+        'secret_detected' => SecretDetectedException::class,
+        'env_unsealed' => EnvUnsealedException::class,
+        'env_access_denied' => EnvAccessDeniedException::class,
+        'env_foreign_reference' => EnvForeignReferenceException::class,
         'live_bad_cursor' => LiveBadCursorException::class,
         'live_worker_crashed' => LiveWorkerCrashedException::class,
         'live_deploy_conflict' => LiveDeployConflictException::class,
+        'live_schema_violation' => LiveSchemaViolationException::class,
+        'live_index_not_ready' => LiveIndexNotReadyException::class,
         'invalid_argument' => InvalidArgumentException::class,
         'not_found' => NotFoundException::class,
         'already_exists' => AlreadyExistsException::class,

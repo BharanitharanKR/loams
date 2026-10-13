@@ -161,6 +161,63 @@ enum class Reason {
     /** `secret_already_issued` (docs/api/reasons.md). */
     SECRET_ALREADY_ISSUED,
 
+    /** `repo_not_found` (docs/api/reasons.md). */
+    REPO_NOT_FOUND,
+
+    /** `repo_already_exists` (docs/api/reasons.md). */
+    REPO_ALREADY_EXISTS,
+
+    /** `repo_deleting` (docs/api/reasons.md). */
+    REPO_DELETING,
+
+    /** `ref_stale` (docs/api/reasons.md). */
+    REF_STALE,
+
+    /** `ref_protected` (docs/api/reasons.md). */
+    REF_PROTECTED,
+
+    /** `out_of_scope` (docs/api/reasons.md). */
+    OUT_OF_SCOPE,
+
+    /** `object_format_unsupported` (docs/api/reasons.md). */
+    OBJECT_FORMAT_UNSUPPORTED,
+
+    /** `fork_too_deep` (docs/api/reasons.md). */
+    FORK_TOO_DEEP,
+
+    /** `sequencer_unavailable` (docs/api/reasons.md). */
+    SEQUENCER_UNAVAILABLE,
+
+    /** `idempotency_key_reused` (docs/api/reasons.md). */
+    IDEMPOTENCY_KEY_REUSED,
+
+    /** `workspace_not_found` (docs/api/reasons.md). */
+    WORKSPACE_NOT_FOUND,
+
+    /** `workspace_fenced` (docs/api/reasons.md). */
+    WORKSPACE_FENCED,
+
+    /** `workspace_read_only` (docs/api/reasons.md). */
+    WORKSPACE_READ_ONLY,
+
+    /** `workspace_name_taken` (docs/api/reasons.md). */
+    WORKSPACE_NAME_TAKEN,
+
+    /** `object_missing` (docs/api/reasons.md). */
+    OBJECT_MISSING,
+
+    /** `secret_detected` (docs/api/reasons.md). */
+    SECRET_DETECTED,
+
+    /** `env_unsealed` (docs/api/reasons.md). */
+    ENV_UNSEALED,
+
+    /** `env_access_denied` (docs/api/reasons.md). */
+    ENV_ACCESS_DENIED,
+
+    /** `env_foreign_reference` (docs/api/reasons.md). */
+    ENV_FOREIGN_REFERENCE,
+
     /** `live_bad_cursor` (docs/api/reasons.md). */
     LIVE_BAD_CURSOR,
 
@@ -169,6 +226,12 @@ enum class Reason {
 
     /** `live_deploy_conflict` (docs/api/reasons.md). */
     LIVE_DEPLOY_CONFLICT,
+
+    /** `live_schema_violation` (docs/api/reasons.md). */
+    LIVE_SCHEMA_VIOLATION,
+
+    /** `live_index_not_ready` (docs/api/reasons.md). */
+    LIVE_INDEX_NOT_READY,
 
     /** A malformed field or an unparseable value. */
     INVALID_ARGUMENT,
@@ -269,9 +332,30 @@ object ReasonRegistry {
         Reason.QUOTA_EXCEEDED,
         Reason.STORAGE_UNAVAILABLE,
         Reason.SECRET_ALREADY_ISSUED,
+        Reason.REPO_NOT_FOUND,
+        Reason.REPO_ALREADY_EXISTS,
+        Reason.REPO_DELETING,
+        Reason.REF_STALE,
+        Reason.REF_PROTECTED,
+        Reason.OUT_OF_SCOPE,
+        Reason.OBJECT_FORMAT_UNSUPPORTED,
+        Reason.FORK_TOO_DEEP,
+        Reason.SEQUENCER_UNAVAILABLE,
+        Reason.IDEMPOTENCY_KEY_REUSED,
+        Reason.WORKSPACE_NOT_FOUND,
+        Reason.WORKSPACE_FENCED,
+        Reason.WORKSPACE_READ_ONLY,
+        Reason.WORKSPACE_NAME_TAKEN,
+        Reason.OBJECT_MISSING,
+        Reason.SECRET_DETECTED,
+        Reason.ENV_UNSEALED,
+        Reason.ENV_ACCESS_DENIED,
+        Reason.ENV_FOREIGN_REFERENCE,
         Reason.LIVE_BAD_CURSOR,
         Reason.LIVE_WORKER_CRASHED,
         Reason.LIVE_DEPLOY_CONFLICT,
+        Reason.LIVE_SCHEMA_VIOLATION,
+        Reason.LIVE_INDEX_NOT_READY,
         Reason.INVALID_ARGUMENT,
         Reason.NOT_FOUND,
         Reason.ALREADY_EXISTS,
@@ -324,9 +408,30 @@ object ReasonRegistry {
         Reason.QUOTA_EXCEEDED to "quota_exceeded",
         Reason.STORAGE_UNAVAILABLE to "storage_unavailable",
         Reason.SECRET_ALREADY_ISSUED to "secret_already_issued",
+        Reason.REPO_NOT_FOUND to "repo_not_found",
+        Reason.REPO_ALREADY_EXISTS to "repo_already_exists",
+        Reason.REPO_DELETING to "repo_deleting",
+        Reason.REF_STALE to "ref_stale",
+        Reason.REF_PROTECTED to "ref_protected",
+        Reason.OUT_OF_SCOPE to "out_of_scope",
+        Reason.OBJECT_FORMAT_UNSUPPORTED to "object_format_unsupported",
+        Reason.FORK_TOO_DEEP to "fork_too_deep",
+        Reason.SEQUENCER_UNAVAILABLE to "sequencer_unavailable",
+        Reason.IDEMPOTENCY_KEY_REUSED to "idempotency_key_reused",
+        Reason.WORKSPACE_NOT_FOUND to "workspace_not_found",
+        Reason.WORKSPACE_FENCED to "workspace_fenced",
+        Reason.WORKSPACE_READ_ONLY to "workspace_read_only",
+        Reason.WORKSPACE_NAME_TAKEN to "workspace_name_taken",
+        Reason.OBJECT_MISSING to "object_missing",
+        Reason.SECRET_DETECTED to "secret_detected",
+        Reason.ENV_UNSEALED to "env_unsealed",
+        Reason.ENV_ACCESS_DENIED to "env_access_denied",
+        Reason.ENV_FOREIGN_REFERENCE to "env_foreign_reference",
         Reason.LIVE_BAD_CURSOR to "live_bad_cursor",
         Reason.LIVE_WORKER_CRASHED to "live_worker_crashed",
         Reason.LIVE_DEPLOY_CONFLICT to "live_deploy_conflict",
+        Reason.LIVE_SCHEMA_VIOLATION to "live_schema_violation",
+        Reason.LIVE_INDEX_NOT_READY to "live_index_not_ready",
         Reason.INVALID_ARGUMENT to "invalid_argument",
         Reason.NOT_FOUND to "not_found",
         Reason.ALREADY_EXISTS to "already_exists",
@@ -386,9 +491,30 @@ object ReasonRegistry {
         Reason.QUOTA_EXCEEDED to Code.RESOURCE_EXHAUSTED,
         Reason.STORAGE_UNAVAILABLE to Code.UNAVAILABLE,
         Reason.SECRET_ALREADY_ISSUED to Code.FAILED_PRECONDITION,
+        Reason.REPO_NOT_FOUND to Code.NOT_FOUND,
+        Reason.REPO_ALREADY_EXISTS to Code.ALREADY_EXISTS,
+        Reason.REPO_DELETING to Code.FAILED_PRECONDITION,
+        Reason.REF_STALE to Code.ABORTED,
+        Reason.REF_PROTECTED to Code.FAILED_PRECONDITION,
+        Reason.OUT_OF_SCOPE to Code.PERMISSION_DENIED,
+        Reason.OBJECT_FORMAT_UNSUPPORTED to Code.UNIMPLEMENTED,
+        Reason.FORK_TOO_DEEP to Code.FAILED_PRECONDITION,
+        Reason.SEQUENCER_UNAVAILABLE to Code.UNAVAILABLE,
+        Reason.IDEMPOTENCY_KEY_REUSED to Code.FAILED_PRECONDITION,
+        Reason.WORKSPACE_NOT_FOUND to Code.NOT_FOUND,
+        Reason.WORKSPACE_FENCED to Code.ABORTED,
+        Reason.WORKSPACE_READ_ONLY to Code.FAILED_PRECONDITION,
+        Reason.WORKSPACE_NAME_TAKEN to Code.ALREADY_EXISTS,
+        Reason.OBJECT_MISSING to Code.FAILED_PRECONDITION,
+        Reason.SECRET_DETECTED to Code.FAILED_PRECONDITION,
+        Reason.ENV_UNSEALED to Code.INVALID_ARGUMENT,
+        Reason.ENV_ACCESS_DENIED to Code.PERMISSION_DENIED,
+        Reason.ENV_FOREIGN_REFERENCE to Code.PERMISSION_DENIED,
         Reason.LIVE_BAD_CURSOR to Code.INVALID_ARGUMENT,
         Reason.LIVE_WORKER_CRASHED to Code.INTERNAL,
         Reason.LIVE_DEPLOY_CONFLICT to Code.FAILED_PRECONDITION,
+        Reason.LIVE_SCHEMA_VIOLATION to Code.INVALID_ARGUMENT,
+        Reason.LIVE_INDEX_NOT_READY to Code.FAILED_PRECONDITION,
         Reason.INVALID_ARGUMENT to Code.INVALID_ARGUMENT,
         Reason.NOT_FOUND to Code.NOT_FOUND,
         Reason.ALREADY_EXISTS to Code.ALREADY_EXISTS,
