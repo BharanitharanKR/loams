@@ -1,6 +1,6 @@
 // The audit log, live over AuditService/WatchAuditEvents (API2 Task 10).
 
-import { create } from '@bufbuild/protobuf';
+import { create, type MessageInitShape } from '@bufbuild/protobuf';
 import {
   createAdminTransport,
   SEED,
@@ -24,6 +24,9 @@ const appended = create(admin.AuditEventSchema, {
   outcome: admin.AuditOutcome.SUCCESS,
 });
 
+const msg = (init: MessageInitShape<typeof admin.WatchAuditEventsResponseSchema>) =>
+  create(admin.WatchAuditEventsResponseSchema, init);
+
 describe('@loams/plugin-audit', () => {
   it('audit_page_is_live_over_watch_audit_events', async () => {
     const watched: admin.WatchAuditEventsRequest[] = [];
@@ -35,10 +38,10 @@ describe('@loams/plugin-audit', () => {
       audit: {
         async *watchAuditEvents(req) {
           watched.push(req);
-          yield { cursor: 'a2', event: { case: 'snapshot', value: { events: SEED.events } } };
+          yield msg({ cursor: 'a2', event: { case: 'snapshot', value: { events: SEED.events } } });
           await later;
-          yield { cursor: 'a3', event: { case: 'append', value: appended } };
-          yield { cursor: 'a3', event: { case: 'heartbeat', value: {} } };
+          yield msg({ cursor: 'a3', event: { case: 'append', value: appended } });
+          yield msg({ cursor: 'a3', event: { case: 'heartbeat', value: {} } });
         },
       },
     });
@@ -58,7 +61,7 @@ describe('@loams/plugin-audit', () => {
       audit: {
         async *watchAuditEvents(req) {
           watched.push(req.project);
-          yield { cursor: 'a1', event: { case: 'snapshot', value: { events: SEED.events } } };
+          yield msg({ cursor: 'a1', event: { case: 'snapshot', value: { events: SEED.events } } });
         },
       },
     });
