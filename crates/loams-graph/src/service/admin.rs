@@ -21,6 +21,8 @@ use super::{data, engine_info, stream};
 use crate::catalog::{
     CatalogError, CatalogState, GraphCatalog, GraphLimits, GraphMeta, GraphMode, NewGraph,
 };
+use crate::consistency::{Consistency, DEFAULT_CONSISTENCY_WAIT};
+use crate::durable::ConsistencyToken;
 use crate::engine::{Closed, Engine, Graph, GraphState, OpenSpec};
 use crate::evict::{EvictPolicy, EvictReason, Evicted, Evictor, Rehydration, Resident};
 use crate::limits::{
@@ -28,6 +30,7 @@ use crate::limits::{
     StatementLimits, StatementPool, Watch, namespace_cap,
 };
 use crate::owner::{ForwardMethod, GraphNode, Ownership, Placement};
+use crate::replica::Replicas;
 use crate::snapshot::{
     CheckpointPolicy, Checkpointed, Checkpointer, ManifestStore, SnapshotKind, SnapshotSource,
 };
@@ -147,6 +150,10 @@ pub struct GraphAdmin {
     evict_policy: EvictPolicy,
     /// The graphs this node evicted and its rehydrations, shared by every clone (GR1 Task 14).
     evictor: Arc<Evictor>,
+    /// This node's followers (GR1 Task 15). Set with the log: only a durable graph has them.
+    replicas: Option<Arc<Replicas>>,
+    /// How long an `at_least` read waits for its replica (§48 §7.2; default 5 s).
+    consistency_wait: Duration,
     #[cfg(feature = "test-hooks")]
     after_open_hook: Arc<std::sync::Mutex<Option<crate::catalog::AckHook>>>,
 }
@@ -297,6 +304,8 @@ impl GraphAdmin {
             forwarded: false,
             evict_policy: EvictPolicy::default(),
             evictor: Arc::default(),
+            replicas: None,
+            consistency_wait: DEFAULT_CONSISTENCY_WAIT,
             #[cfg(feature = "test-hooks")]
             after_open_hook: Arc::default(),
         }
@@ -312,7 +321,28 @@ impl GraphAdmin {
             CheckpointPolicy::default(),
         ));
         self.log = Some(log);
+        self.replicas = Some(Arc::new(Replicas::new(&self.engine)));
         self.with_ownership(ownership)
+    }
+
+    /// The same admin with another wait for `at_least` reads (GR1 Task 15; §48 §7.2's
+    /// `consistency_wait_ms`, default 5 s). Zero answers at once.
+    #[must_use]
+    pub fn with_consistency_wait(mut self, wait: Duration) -> Self {
+        self.consistency_wait = wait;
+        self
+    }
+
+    /// How long an `at_least` read waits for its replica.
+    #[must_use]
+    pub fn consistency_wait(&self) -> Duration {
+        self.consistency_wait
+    }
+
+    /// This node's followers, when graphs are durable (GR1 Task 15).
+    #[must_use]
+    pub fn followers(&self) -> Option<&Arc<Replicas>> {
+        self.replicas.as_ref()
     }
 
     /// The same admin with another checkpoint policy (GR1 Task 13). Only after
@@ -560,18 +590,34 @@ impl GraphAdmin {
         timeout_ms: u32,
         work: impl FnOnce(&Graph, &StatementLimits) -> Result<T, ConnectError> + Send + 'static,
     ) -> Result<T, ConnectError> {
-        self.on_graph_held(namespace, name, timeout_ms, work)
+        self.on_graph_serving(namespace, name, timeout_ms, Serve::default(), work)
+            .await
+    }
+
+    /// [`GraphAdmin::on_graph`] on the engine `serve` names (GR1 Task 15).
+    async fn on_graph_serving<T: Send + 'static>(
+        &self,
+        namespace: &str,
+        name: &str,
+        timeout_ms: u32,
+        serve: Serve,
+        work: impl FnOnce(&Graph, &StatementLimits) -> Result<T, ConnectError> + Send + 'static,
+    ) -> Result<T, ConnectError> {
+        self.on_graph_held(namespace, name, timeout_ms, serve, work)
             .await
             .map(|(result, _slots)| result)
     }
 
     /// [`GraphAdmin::on_graph`], answering the statement's slots with its result, so a caller
-    /// that goes on using the result (a stream) keeps them (review fix 1, I4).
+    /// that goes on using the result (a stream) keeps them (review fix 1, I4). The statement runs
+    /// where `serve` says: the owner's engine or this node's follower, after waiting (within its
+    /// deadline) for the replica to apply `serve.at_least` (GR1 Task 15).
     async fn on_graph_held<T: Send + 'static>(
         &self,
         namespace: &str,
         name: &str,
         timeout_ms: u32,
+        serve: Serve,
         work: impl FnOnce(&Graph, &StatementLimits) -> Result<T, ConnectError> + Send + 'static,
     ) -> Result<(T, Slots), ConnectError> {
         let started = tokio::time::Instant::now();
@@ -649,10 +695,19 @@ impl GraphAdmin {
                 let cold = meta
                     .graph_id()
                     .ok()
-                    .filter(|id| admin.evictor.is_evicted(*id));
-                let graph = admin.open_meta(&meta).await?;
+                    .filter(|id| !serve.follower && admin.evictor.is_evicted(*id));
+                let graph = if serve.follower {
+                    admin.open_follower(&meta).await?
+                } else {
+                    admin.open_meta(&meta).await?
+                };
                 let opened = started.elapsed();
                 graph.touch();
+                if let Some(token) = serve.at_least {
+                    crate::consistency::wait_for(&graph, token, admin.consistency_wait)
+                        .await
+                        .map_err(map_engine)?;
+                }
                 let source = graph.recovery().map(|recovery| recovery.source);
                 let result = admin
                     .on_pool(move || {
@@ -917,18 +972,7 @@ impl GraphAdmin {
                     None => (ensured, true),
                 };
                 // A trimmed stream opens from a snapshot (GR1 Task 13).
-                let snapshots = match &self.checkpointer {
-                    Some(checkpointer) => self
-                        .catalog
-                        .namespace_id(namespace)
-                        .await
-                        .map_err(map_catalog)?
-                        .map(|namespace| SnapshotSource {
-                            manifests: checkpointer.manifests().clone(),
-                            namespace,
-                        }),
-                    None => None,
-                };
+                let snapshots = self.snapshot_source(namespace).await?;
                 Some(crate::durable::DurableSpec {
                     log: log.clone(),
                     stream,
@@ -995,6 +1039,16 @@ impl GraphAdmin {
                             name: name.to_string(),
                         }),
                     });
+                }
+                // The owner serves every read here now: a follower of the graph goes (GR1 Task
+                // 15).
+                if let Some(replicas) = &self.replicas {
+                    let (replicas, ns, nm) = (
+                        Arc::clone(replicas),
+                        namespace.to_string(),
+                        name.to_string(),
+                    );
+                    let _ = blocking(move || Ok(replicas.close(&ns, &nm))).await;
                 }
                 let engine = Arc::clone(&self.engine);
                 return self
@@ -1299,12 +1353,18 @@ impl GraphAdmin {
         req: pb::ExecuteRequest,
     ) -> Result<pb::ExecuteResponse, ConnectError> {
         let (namespace, name, timeout) = (req.namespace.clone(), req.graph.clone(), req.timeout_ms);
-        if let Some(owner) = self.owner_elsewhere(&namespace, &name).await? {
-            return self
-                .forward(&owner, ForwardMethod::Execute, &req, timeout)
-                .await;
-        }
-        self.on_graph(&namespace, &name, timeout, move |graph, limits| {
+        let consistency =
+            Consistency::from_proto(req.consistency.as_option()).map_err(map_engine)?;
+        let reads = consistency.any_replica() && self.reads(&req.statement).await;
+        let serve = match self.route(&namespace, &name, consistency, reads).await? {
+            Route::There(owner) => {
+                return self
+                    .forward(&owner, ForwardMethod::Execute, &req, timeout)
+                    .await;
+            }
+            Route::Here(serve) => serve,
+        };
+        self.on_graph_serving(&namespace, &name, timeout, serve, move |graph, limits| {
             data::execute_on(graph, req, limits)
         })
         .await
@@ -1328,7 +1388,11 @@ impl GraphAdmin {
             request.graph.clone(),
             request.timeout_ms,
         );
-        if let Some(owner) = self.owner_elsewhere(&namespace, &name).await? {
+        let consistency =
+            Consistency::from_proto(request.consistency.as_option()).map_err(map_engine)?;
+        let reads = consistency.any_replica() && self.reads(&request.statement).await;
+        let route = self.route(&namespace, &name, consistency, reads).await?;
+        if let Route::There(owner) = route {
             let body = self
                 .forward_bytes(
                     &owner,
@@ -1340,16 +1404,22 @@ impl GraphAdmin {
             let chunks = decode_chunks(&body)?;
             return Ok(Box::pin(futures::stream::iter(chunks.into_iter().map(Ok))));
         }
+        let serve = match route {
+            Route::Here(serve) => serve,
+            Route::There(_) => Serve::default(),
+        };
         let max_rows = (request.max_rows > 0).then_some(request.max_rows as usize);
-        let ((result, max_bytes), slots) = self
-            .on_graph_held(&namespace, &name, timeout, move |graph, limits| {
+        let ((result, max_bytes, token), slots) = self
+            .on_graph_held(&namespace, &name, timeout, serve, move |graph, limits| {
                 data::run_statement(graph, &request, limits, max_rows)
-                    .map(|result| (result, limits.max_stream_bytes))
+                    .map(|result| (result, limits.max_stream_bytes, graph.consistency_token()))
             })
             .await?;
         // The stream keeps the statement's slots until it ends or is dropped (I4).
         Ok(Box::pin(futures::stream::iter(
-            stream::Chunks::new(result, req.chunk_rows, max_bytes).holding(slots),
+            stream::Chunks::new(result, req.chunk_rows, max_bytes)
+                .with_token(token)
+                .holding(slots),
         )))
     }
 
@@ -1381,15 +1451,218 @@ impl GraphAdmin {
     /// As [`data::explain`].
     pub async fn explain(&self, req: pb::ExplainRequest) -> Result<pb::Plan, ConnectError> {
         let (namespace, name, timeout) = (req.namespace.clone(), req.graph.clone(), req.timeout_ms);
-        if let Some(owner) = self.owner_elsewhere(&namespace, &name).await? {
-            return self
-                .forward(&owner, ForwardMethod::Explain, &req, timeout)
-                .await;
-        }
-        self.on_graph(&namespace, &name, timeout, move |graph, limits| {
+        let consistency =
+            Consistency::from_proto(req.consistency.as_option()).map_err(map_engine)?;
+        // An EXPLAIN only plans; a PROFILE runs the statement, so it must read.
+        let reads = consistency.any_replica() && (!req.profile || self.reads(&req.statement).await);
+        let serve = match self.route(&namespace, &name, consistency, reads).await? {
+            Route::There(owner) => {
+                return self
+                    .forward(&owner, ForwardMethod::Explain, &req, timeout)
+                    .await;
+            }
+            Route::Here(serve) => serve,
+        };
+        self.on_graph_serving(&namespace, &name, timeout, serve, move |graph, limits| {
             data::explain_on(graph, req, limits)
         })
         .await
+    }
+
+    /// Whether `statement` only reads, as the server's gate classifies it: only a read may be
+    /// served by a follower (GR1 Task 15). A statement the gate refuses goes to the owner, which
+    /// answers the refusal. The gate parses the statement, so it runs off the async runtime.
+    async fn reads(&self, statement: &str) -> bool {
+        let (statement, limits) = (statement.to_string(), self.limits);
+        blocking(move || {
+            Ok(
+                crate::classify::gate_verdict(&statement, pb::QueryLanguage::Gql, &limits)
+                    .is_ok_and(|verdict| verdict.access == crate::Access::Read),
+            )
+        })
+        .await
+        .unwrap_or(false)
+    }
+
+    /// Where a data-plane call on `namespace/name` runs (GR1 Task 15; §48 §7.2).
+    ///
+    /// * A `strong` call, and any call that writes (`reads` false), is the owner's: here, or
+    ///   forwarded ([`GraphAdmin::owner_elsewhere`]).
+    /// * An `eventual` or `at_least` read is served by this node's follower when this node runs
+    ///   one of the graph's followers ([`Ownership::follows`]) and the graph is durable (its
+    ///   stream is recorded); otherwise by the owner, here or there. A forwarded read is served
+    ///   by a follower here too: a follower never forwards. An `at_least` read waits for its
+    ///   token on whichever replica serves it.
+    async fn route(
+        &self,
+        namespace: &str,
+        name: &str,
+        consistency: Consistency,
+        reads: bool,
+    ) -> Result<Route, ConnectError> {
+        let at_least = consistency.token().filter(|_| reads);
+        let Some(ownership) = self.ownership.as_ref().filter(|_| self.log.is_some()) else {
+            return Ok(Route::Here(Serve {
+                follower: false,
+                at_least,
+            }));
+        };
+        if self.is_shutting_down() {
+            return Err(shutting_down());
+        }
+        let meta = self
+            .catalog
+            .get_by_name(namespace, name)
+            .await
+            .map_err(map_catalog)?;
+        let id = meta.graph_id().map_err(map_catalog)?;
+        if consistency.any_replica()
+            && reads
+            && self.replicas.is_some()
+            && meta.stream.is_some()
+            && !meta.is_deleting()
+            && ownership.follows(id, meta.replicas)
+        {
+            return Ok(Route::Here(Serve {
+                follower: true,
+                at_least,
+            }));
+        }
+        Ok(match self.owner_of(ownership, namespace, name, id).await? {
+            Some(owner) => Route::There(owner),
+            None => Route::Here(Serve {
+                follower: false,
+                at_least,
+            }),
+        })
+    }
+
+    /// Opens this node's follower of catalog graph `meta`, or answers the one open (GR1 Task
+    /// 15): in memory, from the manifest's newest usable snapshot and the stream after it (or
+    /// the whole stream), with no lease, and tailed from then on.
+    async fn open_follower(&self, meta: &GraphMeta) -> Result<Arc<Graph>, ConnectError> {
+        let (namespace, name) = (meta.namespace.as_str(), meta.name.as_str());
+        let (Some(replicas), Some(log)) = (self.replicas.clone(), self.log.clone()) else {
+            return Err(refuse(
+                ErrorCode::Unavailable,
+                "graph_reloading",
+                "this node runs no graph followers; retry",
+            ));
+        };
+        if meta.is_deleting() {
+            return Err(map_catalog(CatalogError::NotFound {
+                namespace: namespace.to_string(),
+                name: name.to_string(),
+            }));
+        }
+        let id = meta.graph_id().map_err(map_catalog)?;
+        let stream = meta.stream.ok_or_else(|| {
+            refuse(
+                ErrorCode::Unavailable,
+                "graph_reloading",
+                format!("graph {namespace}/{name} has not opened yet; retry"),
+            )
+        })?;
+        let durable = crate::durable::DurableSpec {
+            log: log.clone(),
+            stream,
+            adopt: false,
+            fence: None,
+            snapshots: self.snapshot_source(namespace).await?,
+        };
+        let (engine, ns, nm) = (
+            Arc::clone(replicas.engine()),
+            namespace.to_string(),
+            name.to_string(),
+        );
+        let graph = self
+            .on_pool(move || {
+                let spec = || {
+                    OpenSpec::in_memory_for(id)
+                        .follower()
+                        .durable(durable.clone())
+                };
+                let mut graph =
+                    Graph::open_or_existing(&engine, &ns, &nm, spec).map_err(map_engine)?;
+                if graph.id() != Some(id) {
+                    // The follower of an older graph of this name (deleted, then created again).
+                    drop(graph);
+                    engine.discard(&ns, &nm).map_err(map_engine)?;
+                    graph = Graph::open_or_existing(&engine, &ns, &nm, spec).map_err(map_engine)?;
+                }
+                engine.reopen_if_poisoned(graph).map_err(map_engine)
+            })
+            .await?;
+        replicas.follow(&graph, &log);
+        Ok(graph)
+    }
+
+    /// Where a graph's snapshots are read from, when graphs are snapshotted (GR1 Task 13).
+    async fn snapshot_source(
+        &self,
+        namespace: &str,
+    ) -> Result<Option<SnapshotSource>, ConnectError> {
+        let Some(checkpointer) = &self.checkpointer else {
+            return Ok(None);
+        };
+        Ok(self
+            .catalog
+            .namespace_id(namespace)
+            .await
+            .map_err(map_catalog)?
+            .map(|namespace| SnapshotSource {
+                manifests: checkpointer.manifests().clone(),
+                namespace,
+            }))
+    }
+
+    /// Closes the followers this node should no longer run (GR1 Task 15): the graph was deleted
+    /// or replaced, this node took its lease, it is placed elsewhere now (fewer `replicas`, or
+    /// nodes joined), or it was not read for the eviction policy's `idle_after`. A follower a
+    /// read holds is closed by a later pass. Answers how many it closed. Part of
+    /// [`GraphAdmin::evict_due`].
+    pub async fn retire_followers(&self) -> usize {
+        let Some(replicas) = &self.replicas else {
+            return 0;
+        };
+        let mut closed = 0;
+        for follower in replicas.followers() {
+            let (namespace, name, id, idle_for) = (
+                follower.namespace().to_string(),
+                follower.name().to_string(),
+                follower.id(),
+                follower.idle_for(),
+            );
+            drop(follower);
+            let keep = match self.catalog.get_by_name(&namespace, &name).await {
+                Ok(meta) => {
+                    meta.graph_id().ok() == id
+                        && !meta.is_deleting()
+                        && idle_for < self.evict_policy.idle_after
+                        && id.is_some_and(|id| {
+                            self.ownership
+                                .as_ref()
+                                .is_some_and(|ownership| ownership.follows(id, meta.replicas))
+                        })
+                }
+                Err(CatalogError::NotFound { .. }) => false,
+                Err(err) => {
+                    tracing::warn!(%namespace, %name, error = %err, "retiring followers: the graph's catalog record could not be read");
+                    continue;
+                }
+            };
+            if keep {
+                continue;
+            }
+            let replicas = Arc::clone(replicas);
+            if blocking(move || Ok(replicas.close(&namespace, &name)))
+                .await
+                .unwrap_or(false)
+            {
+                closed += 1;
+            }
+        }
+        closed
     }
 
     /// The node a data-plane call on `namespace/name` must go to, or `None` to serve it here
@@ -1414,6 +1687,17 @@ impl GraphAdmin {
             .await
             .map_err(map_catalog)?;
         let id = meta.graph_id().map_err(map_catalog)?;
+        self.owner_of(ownership, namespace, name, id).await
+    }
+
+    /// [`GraphAdmin::owner_elsewhere`] for graph `id`, whose catalog record the caller has read.
+    async fn owner_of(
+        &self,
+        ownership: &Arc<Ownership>,
+        namespace: &str,
+        name: &str,
+        id: crate::GraphId,
+    ) -> Result<Option<GraphNode>, ConnectError> {
         // An engine here whose owner lease moved on (an append its fence refused) is dropped,
         // and the graph placed again.
         if self
@@ -2018,6 +2302,7 @@ impl GraphAdmin {
         if self.is_shutting_down() {
             return done;
         }
+        self.retire_followers().await;
         let policy = self.evict_policy;
         let open: Vec<(String, String, crate::GraphId)> = self
             .engine
@@ -2367,6 +2652,15 @@ impl GraphAdmin {
                 }
             }
         }
+        // Followers keep nothing: they are in memory (GR1 Task 15).
+        if let Some(replicas) = &self.replicas {
+            let replicas = Arc::clone(replicas);
+            let _ = blocking(move || {
+                replicas.close_all();
+                Ok(())
+            })
+            .await;
+        }
         // Graceful: the next owner takes each lease at once instead of after its TTL (GR1 Task
         // 12, `owner_moves_on_node_leave`).
         if let Some(ownership) = &self.ownership {
@@ -2446,6 +2740,23 @@ impl Drop for Waiting {
     fn drop(&mut self) {
         self.0.abandon();
     }
+}
+
+/// Which engine of this node a statement runs on (GR1 Task 15).
+#[derive(Debug, Clone, Copy, Default)]
+struct Serve {
+    /// This node's follower, rather than the owner's engine.
+    follower: bool,
+    /// The token the replica must have applied before the statement runs.
+    at_least: Option<ConsistencyToken>,
+}
+
+/// Where a data-plane call runs ([`GraphAdmin::route`]).
+enum Route {
+    /// On the graph's owner, another node.
+    There(GraphNode),
+    /// Here.
+    Here(Serve),
 }
 
 /// A statement's process and namespace slots, freed when dropped.
