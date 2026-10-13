@@ -8,6 +8,8 @@ name: Fabric
 #   connect-routes   — declared, gated off until CN1 Task 12 lands
 # Jobs owned by CN2 (plan 2026-10-10-cn2-connectors):
 #   sdk-unit         — fmt, clippy and tests of `loams-connector-sdk` (Task 4)
+#   connectors-alerts — promtool rule tests of the connector alerts and the
+#                      metrics/activity tests that run them (Task 24)
 # Jobs FL1 owns and adds here separately: connectors-it (the ★ contract suites
 # against the `connectors` compose profile, from CN1 Tasks 3–13), and the
 # `fabric` workspace's own build/publish steps. Keep this file minimal and
@@ -50,6 +52,7 @@ jobs:
       drift: ${{ steps.filter.outputs.drift }}
       connect-routes: ${{ steps.filter.outputs.connect-routes }}
       sdk: ${{ steps.filter.outputs.sdk }}
+      alerts: ${{ steps.filter.outputs.alerts }}
     steps:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
@@ -95,6 +98,16 @@ jobs:
               - "fabric/Cargo.toml"
               - "fabric/Cargo.lock"
               - "fabric/crates/loams-connector-sdk/**"
+            # The connector alerts and dashboard (CN2 Task 24) and the code
+            # that writes the series they read.
+            alerts:
+              - *toolchain
+              - "fabric/Cargo.toml"
+              - "fabric/Cargo.lock"
+              - "fabric/crates/loams-connector-sdk/**"
+              - "fabric/crates/loams-flow/**"
+              - "deploy/observability/connectors/**"
+              - "scripts/ci/no-metering.*"
 
   # CN1 owns this job. FL1 owns the `lints_match_root` test that proves the
   # fabric workspace's lint table equals the root workspace's; it runs in FL1's
@@ -156,6 +169,50 @@ jobs:
       - name: tests
         working-directory: fabric
         run: cargo test -p loams-connector-sdk --locked
+
+  # CN2 owns this job (plan 2026-10-10-cn2-connectors, Task 24): every alert in
+  # deploy/observability/connectors/alerts.yaml must fire in a promtool rule
+  # test. promtool comes from the Prometheus 3.5.0 release (Apache-2.0, LTS,
+  # 2025-07-14), checked against its published SHA-256. The Rust test
+  # `each_alert_fires_in_a_test` runs the same rule tests through
+  # LOAMS_PROMTOOL, beside the label, activity-observer and no-metering tests.
+  connectors-alerts:
+    name: connector alerts (promtool) and activity observer
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.alerts == 'true') }}
+    runs-on: ubuntu-24.04
+    env:
+      PROMETHEUS_VERSION: "3.5.0"
+      PROMETHEUS_SHA256: e811827af26d822afb09a4f28314f61b618b12cff5369835a67f674d8b46f39a
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: promtool
+        run: |
+          dir="$RUNNER_TEMP/prometheus"
+          mkdir -p "$dir"
+          curl -sSfL --retry 3 -o "$dir/p.tgz" \
+            "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
+          echo "${PROMETHEUS_SHA256}  $dir/p.tgz" | sha256sum -c -
+          tar -xzf "$dir/p.tgz" -C "$dir" --strip-components=1 "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool"
+          echo "LOAMS_PROMTOOL=$dir/promtool" >> "$GITHUB_ENV"
+      - name: promtool check and test rules
+        run: |
+          "$LOAMS_PROMTOOL" check rules deploy/observability/connectors/alerts.yaml
+          "$LOAMS_PROMTOOL" test rules deploy/observability/connectors/alerts.test.yaml
+      - name: no-metering guard
+        run: scripts/ci/no-metering.sh
+      # loams-flow builds loams-flow-proto, which needs protoc.
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fabric -> target
+          key: connectors-alerts
+      - name: metrics and activity tests
+        working-directory: fabric
+        run: cargo test -p loams-flow --test activity --locked
 
   # CN1 Task 2's drift checks (design §33 CN-R1): the appendix is regenerated
   # from connectors/registry/catalog.csv and diffed against the design doc, and

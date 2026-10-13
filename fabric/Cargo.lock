@@ -1625,12 +1625,14 @@ dependencies = [
  "buffa",
  "indexmap",
  "jsonschema",
+ "loams-connector-sdk",
  "loams-flow-proto",
  "semver",
  "serde",
  "serde_json",
  "serde_norway",
  "thiserror",
+ "tokio",
  "tracing",
 ]
 

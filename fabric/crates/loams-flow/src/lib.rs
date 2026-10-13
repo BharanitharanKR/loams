@@ -9,6 +9,10 @@
 //!   licence gate.
 //! * [`registry`] — every manifest under `connectors/registry/`, indexed by id and by
 //!   category, with [`registry::Filter`] for the catalog page's queries.
+//! * [`metrics`] — connector metrics in the Prometheus text format, fed by the
+//!   connector SDK's observer hook and by fallback runtimes' scrapes (CN2 Task 24).
+//! * [`activity`] — the Q359 activity observer: plain per-window structs, no
+//!   wire format and no persistence (D548–D552).
 //!
 //! The YAML is the source and the protobuf form mirrors it key for key, so
 //! [`manifest::ConnectorSpec::to_proto`] and [`manifest::ConnectorSpec::from_proto`]
@@ -35,7 +39,9 @@
 //! Names: Loams, `loams-flow`, `loams.flow.v1`, `io.loams.dev.*` (owner rulings,
 //! 2026-10-01).
 
+pub mod activity;
 pub mod manifest;
+pub mod metrics;
 pub mod registry;
 pub mod validate;
 
