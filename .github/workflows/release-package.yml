@@ -1,4 +1,4 @@
-name: Release packages (Linux, Windows, macOS)
+name: Release packages
 
 # Linux packages, the Windows zip and the macOS tarballs of the `loams` binary for a
 # published release (the server stack itself ships as Linux containers; on macOS and
@@ -103,7 +103,7 @@ jobs:
   # scripts and the packaging definitions, which is what makes the artifact
   # traceable to a reviewed commit.
   guard:
-    name: release tag guard
+    name: Tag guard
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -206,7 +206,7 @@ jobs:
           echo "::warning title=No signature was produced::The Linux packages are unsigned. The .rpm is unsigned until SignPath runs; the Windows zip is unsigned by decision. Do not describe this release as signed."
 
   linux:
-    name: Linux packages (deb, rpm, pkg.tar.zst)
+    name: "Linux: packages (deb, rpm, pkg.tar.zst)"
     needs: [guard, preflight]
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -353,7 +353,7 @@ jobs:
           retention-days: 30
 
   windows:
-    name: Windows zip (unsigned)
+    name: "Windows: zip (unsigned)"
     needs: [guard]
     runs-on: windows-latest
     # A cold Windows build of the workspace takes about an hour.
@@ -455,7 +455,7 @@ jobs:
   # architecture cross-compiles (x86_64 on Apple Silicon is smoke-tested under
   # Rosetta; arm64 on Intel cannot be run there).
   macos:
-    name: macOS tarball (${{ matrix.arch }})
+    name: "macOS: tarball (${{ matrix.arch }})"
     needs: [guard]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 150
@@ -557,7 +557,7 @@ jobs:
   # interleave. The warnings here are the point: a reader who downloads a file
   # from this release must not have to guess whether it is signed.
   notes:
-    name: release notes
+    name: Release notes
     needs: [guard, linux, windows, macos]
     # Also after a failed build: whatever was attached still needs its signature status.
     if: ${{ always() && needs.guard.result == 'success' && needs.guard.outputs.dry_run != 'true' }}

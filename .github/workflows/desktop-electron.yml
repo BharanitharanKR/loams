@@ -1,9 +1,16 @@
-name: Desktop (Electron) packaging
+name: Desktop
 
 # Builds the unsigned Loams Desktop installers for each platform (plan AP1e Task 15): Linux x64 and
-# arm64, Windows x64, macOS arm64 and x64. Every platform must pass; none is best-effort any more.
+# arm64, Windows x64, macOS arm64 and x64. Every platform that runs must pass; none is best-effort.
 # Signing is a separate release step (SignPath for Windows, Apple credentials for macOS: D676, D677);
 # the macOS builds here carry only an ad-hoc signature, which Apple Silicon needs to run the app.
+#
+# What runs (the org has about 20 concurrent jobs, about 5 of them macOS; owner, 2026-10-13):
+# - pull request: Linux x64 only, unless it touches the desktop app, the desktop workflows or the
+#   packaging scripts; then all five platforms. A console (web/**) or plugin change only needs to
+#   know the console still packages and passes the Playwright smoke test.
+# - push to dev touching those desktop paths, and a manual dispatch: all five platforms.
+# - a release: desktop-electron-release.yml builds all five itself.
 on:
   pull_request:
     paths:
@@ -13,15 +20,23 @@ on:
       - 'plugins/packages/**'
       # The stacks (neon, wesql, tikv) are packaged from deploy/.
       - 'deploy/**'
-      - '.github/workflows/desktop-electron.yml'
+      - 'scripts/release/**'
+      - '.github/workflows/desktop-*.yml'
+  push:
+    branches: [dev]
+    paths:
+      - 'apps/desktop-electron/**'
+      - 'scripts/release/**'
+      - '.github/workflows/desktop-*.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: desktop-electron-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: desktop-${{ github.event.pull_request.number || github.ref }}
+  # A newer push supersedes an older one; main runs to completion.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CI: 'true'
@@ -30,25 +45,67 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Which platforms this run builds. dorny/paths-filter is MIT-licensed; pinned to v4.0.3.
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      matrix: ${{ steps.platforms.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request'
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        if: github.event_name == 'pull_request'
+        id: filter
+        with:
+          filters: |
+            desktop:
+              - "apps/desktop-electron/**"
+              - "scripts/release/**"
+              - ".github/workflows/desktop-*.yml"
+      - name: platforms
+        id: platforms
+        env:
+          # A push to dev only runs on desktop paths (see `on:`), and a dispatch asks for everything.
+          ALL: ${{ github.event_name != 'pull_request' || steps.filter.outputs.desktop == 'true' }}
+          # The runners are repository variables so either pool can be swapped when GitHub's macOS
+          # capacity runs short (on 2026-10-13 the arm64 pool queued jobs for hours). A build whose
+          # runner is the other architecture is cross-compiled: MACOS_X64_RUNNER=macos-15 builds x64
+          # on Apple Silicon (smoke-tested under Rosetta); MACOS_ARM64_RUNNER=macos-15-intel builds
+          # arm64 on Intel (not executable there). The Intel engine build takes 90+ minutes.
+          MAC_ARM64: ${{ vars.MACOS_ARM64_RUNNER || 'macos-15' }}
+          MAC_X64: ${{ vars.MACOS_X64_RUNNER || 'macos-15-intel' }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          linux_x64 = {"name": "linux-x64", "area": "Linux", "arch": "x64", "runner": "ubuntu-24.04", "target": "package-linux"}
+          rest = [
+              {"name": "linux-arm64", "area": "Linux", "arch": "arm64", "runner": "ubuntu-24.04-arm", "target": "package-linux"},
+              {"name": "windows-x64", "area": "Windows", "arch": "x64", "runner": "windows-2025", "target": "package-windows"},
+              {"name": "macos-arm64", "area": "macOS", "arch": "arm64", "runner": os.environ["MAC_ARM64"], "target": "package-macos", "mac_arch": "arm64"},
+              {"name": "macos-x64", "area": "macOS", "arch": "x64", "runner": os.environ["MAC_X64"], "target": "package-macos", "mac_arch": "x64"},
+          ]
+          include = [linux_x64] + (rest if os.environ["ALL"] == "true" else [])
+          print("matrix=" + json.dumps({"include": include}))
+          PY
+          grep '^matrix=' "$GITHUB_OUTPUT" | tail -1
+
   package:
-    name: package (${{ matrix.name }})
+    name: "${{ matrix.area }}: package (${{ matrix.arch }})"
+    needs: changes
     runs-on: ${{ matrix.runner }}
     # A cold Windows or macOS engine build takes about an hour on a GitHub-hosted runner.
     timeout-minutes: 150
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { name: linux-x64, runner: ubuntu-24.04, target: package-linux }
-          - { name: linux-arm64, runner: ubuntu-24.04-arm, target: package-linux }
-          - { name: windows-x64, runner: windows-2025, target: package-windows }
-          # The runners are repository variables so either pool can be swapped when GitHub's
-          # macOS capacity runs short (on 2026-10-13 the arm64 pool queued jobs for hours). A build
-          # whose runner is the other architecture is cross-compiled: MACOS_X64_RUNNER=macos-15 builds
-          # x64 on Apple Silicon (smoke-tested under Rosetta); MACOS_ARM64_RUNNER=macos-15-intel builds
-          # arm64 on Intel (not executable there). The Intel engine build takes 90+ minutes.
-          - { name: macos-arm64, runner: "${{ vars.MACOS_ARM64_RUNNER || 'macos-15' }}", target: package-macos, mac_arch: arm64 }
-          - { name: macos-x64, runner: "${{ vars.MACOS_X64_RUNNER || 'macos-15-intel' }}", target: package-macos, mac_arch: x64 }
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
     env:
       LOAMS_DESKTOP_MAC_ARCH: ${{ matrix.mac_arch }}
       # electron-builder skips all macOS signing on a pull request unless told otherwise. This
