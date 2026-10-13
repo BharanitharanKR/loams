@@ -25,9 +25,11 @@ import {
 } from './admin.js';
 import { toJs } from './value.js';
 
-/** One `ListDeployments` page, and at most this many pages (1 000 deployments). */
+/**
+ * One `ListDeployments` page. The engine keeps 50 deployments plus the active one and
+ * its parent (LV1 T6-7), so the history is a page or two.
+ */
 export const PAGE_SIZE = 100;
-export const MAX_PAGES = 10;
 
 /** What the page shows when the engine does not serve the admin service. */
 export const ADMIN_UNSERVED =
@@ -164,13 +166,18 @@ export function createLiveAdminApi(transport: Transport): LiveAdminApi {
     listDeployments: (signal) =>
       call(async () => {
         const all: Deployment[] = [];
+        const seen = new Set<string>();
         let pageToken = '';
-        for (let page = 0; page < MAX_PAGES; page++) {
+        do {
           const res = await client.listDeployments({ pageSize: PAGE_SIZE, pageToken }, { signal });
           all.push(...res.deployments.map(toDeployment));
           pageToken = res.nextPageToken;
-          if (!pageToken) break;
-        }
+          // A token seen before would loop forever: an engine bug, not a shorter history.
+          if (pageToken && seen.has(pageToken)) {
+            throw new Error(`The engine repeated the page token ${pageToken}.`);
+          }
+          seen.add(pageToken);
+        } while (pageToken);
         return all;
       }),
     getDeployment: (id, signal) =>

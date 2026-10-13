@@ -254,5 +254,7 @@ describe('DeploymentsPage over the engine', () => {
     const log = await screen.findByRole('log', { name: 'Function log lines' });
     expect(await within(log).findByText(/line 3/)).toBeTruthy();
     expect(await screen.findByText(/4 lines were overwritten/)).toBeTruthy();
+    // The deployment that ran a line shows without hovering.
+    expect(within(log).getAllByText(new RegExp(`deployment ${id(3).slice(-8)}`)).length).toBe(2);
   });
 });

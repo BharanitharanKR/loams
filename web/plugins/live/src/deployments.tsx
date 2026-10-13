@@ -401,9 +401,10 @@ export function LogsCard({
                 <li key={l.key} className={LEVEL_CLASS[l.level]}>
                   <span className="text-muted">{new Date(l.ts).toLocaleTimeString()}</span>{' '}
                   <span className="uppercase">{l.level}</span> <span>{l.function}</span>{' '}
-                  <span className="text-muted" title={l.deployment && `deployment ${l.deployment}`}>
-                    {l.requestId}
-                  </span>{' '}
+                  <span className="text-muted">{l.requestId}</span>{' '}
+                  {l.deployment && (
+                    <span className="text-muted">{`deployment ${shortId(l.deployment)}`} </span>
+                  )}
                   {l.line}
                   {l.truncated && <span className="text-muted"> (truncated)</span>}
                 </li>
