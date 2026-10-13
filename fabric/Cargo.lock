@@ -2983,6 +2983,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "loams-connector-search"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "http",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "loams-connector-http",
+ "loams-connector-sdk",
+ "loams-connector-search",
+ "loams-flow",
+ "loams-flow-conformance",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "loams-fabric"
 version = "0.0.1"
 dependencies = [
@@ -3010,6 +3034,7 @@ dependencies = [
  "serde_json",
  "serde_norway",
  "thiserror",
+ "tokio",
  "tracing",
 ]
 
@@ -4723,6 +4748,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1_smol"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbfa15b3dddfee50a0fff136974b3e1bde555604ba463834a7eb7deb6417705d"
+
+[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5502,6 +5533,7 @@ dependencies = [
  "getrandom 0.4.3",
  "js-sys",
  "serde_core",
+ "sha1_smol",
  "wasm-bindgen",
 ]
 

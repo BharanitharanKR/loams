@@ -1,0 +1,173 @@
+# promtool rule tests for alerts.yaml (CN2 plan Task 24, `each_alert_fires_in_a_test`).
+# Run: promtool test rules deploy/observability/connectors/alerts.test.yaml
+rule_files:
+  - alerts.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # Instance down: fires only after 5 minutes at 0.
+  - interval: 1m
+    input_series:
+      - series: 'loams_flow_connector_up{namespace="7",instance="orders",connector="postgresql",runtime="native",fallback="false",direction="source"}'
+        values: '1 1 0x12'
+      - series: 'loams_flow_connector_up{namespace="7",instance="search",connector="elasticsearch",runtime="native",fallback="false",direction="sink"}'
+        values: '1x14'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: LoamsConnectorInstanceDown
+        exp_alerts: []
+      - eval_time: 9m
+        alertname: LoamsConnectorInstanceDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: "7"
+              instance: orders
+              connector: postgresql
+              runtime: native
+              fallback: "false"
+              direction: source
+            exp_annotations:
+              summary: "Connector instance 7/orders (postgresql, source) has been down for more than 5 minutes"
+              description: "Read the instance's last_error from GetInstance; Auth and Fatal stop it until fixed, PositionLost needs a re-snapshot."
+
+  # Lag above the instance's own threshold (300 s by default; 900 s for the
+  # second instance, which therefore stays quiet at the same lag).
+  - interval: 1m
+    input_series:
+      - series: 'loams_flow_connector_lag_seconds{namespace="7",instance="orders",connector="kafka",runtime="native",fallback="false",direction="source",split="orders/0"}'
+        values: '10 400x12'
+      - series: 'loams_flow_connector_lag_seconds{namespace="7",instance="orders",connector="kafka",runtime="native",fallback="false",direction="source",split="orders/1"}'
+        values: '10x13'
+      - series: 'loams_flow_connector_lag_alert_seconds{namespace="7",instance="orders",connector="kafka",runtime="native",fallback="false",direction="source"}'
+        values: '300x13'
+      - series: 'loams_flow_connector_lag_seconds{namespace="7",instance="audit",connector="kafka",runtime="native",fallback="false",direction="source"}'
+        values: '10 400x12'
+      - series: 'loams_flow_connector_lag_alert_seconds{namespace="7",instance="audit",connector="kafka",runtime="native",fallback="false",direction="source"}'
+        values: '900x13'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: LoamsConnectorLagHigh
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: LoamsConnectorLagHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: "7"
+              instance: orders
+              connector: kafka
+              runtime: native
+              fallback: "false"
+              direction: source
+            exp_annotations:
+              summary: "Connector instance 7/orders lags by 6m 40s"
+              description: "Lag has stayed above the instance's lag_alert_seconds for 5 minutes."
+
+  # CDC position risk above 0.8 for 5 minutes.
+  - interval: 1m
+    input_series:
+      - series: 'loams_flow_cdc_position_risk_ratio{namespace="7",instance="pg-cdc",connector="postgresql",runtime="native",fallback="false",direction="source"}'
+        values: '0.5 0.9x12'
+      - series: 'loams_flow_cdc_position_risk_ratio{namespace="7",instance="my-cdc",connector="mysql",runtime="native",fallback="false",direction="source"}'
+        values: '0.5x13'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: LoamsConnectorCdcPositionAtRisk
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: LoamsConnectorCdcPositionAtRisk
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: "7"
+              instance: pg-cdc
+              connector: postgresql
+              runtime: native
+              fallback: "false"
+              direction: source
+            exp_annotations:
+              summary: "CDC position of 7/pg-cdc is at 90% of its retention"
+              description: "The upstream log is close to discarding the instance's position. Clear the lag or raise the source's retention before the position is lost."
+
+  # DLQ growth: fires while dead letters arrive, and clears once they stop.
+  - interval: 1m
+    input_series:
+      - series: 'loams_flow_connector_dlq_total{namespace="7",instance="search",connector="elasticsearch",runtime="native",fallback="false",direction="sink"}'
+        values: '0 0 0 3 3 3x30'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: LoamsConnectorDlqGrowing
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: LoamsConnectorDlqGrowing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: "7"
+              instance: search
+              connector: elasticsearch
+              runtime: native
+              fallback: "false"
+              direction: sink
+            exp_annotations:
+              summary: "Connector instance 7/search is sending events to its dead-letter topic"
+              description: "Events the connector cannot process are going to the DLQ with their errors; inspect the DLQ topic."
+      - eval_time: 30m
+        alertname: LoamsConnectorDlqGrowing
+        exp_alerts: []
+
+  # A restart loop: one restart a minute is more than 5 in 10 minutes; one
+  # every five minutes is not.
+  - interval: 1m
+    input_series:
+      - series: 'loams_flow_connector_restarts_total{namespace="7",instance="jms-in",connector="jms",runtime="camel",fallback="true",direction="source"}'
+        values: '0+1x15'
+      - series: 'loams_flow_connector_restarts_total{namespace="7",instance="orders",connector="postgresql",runtime="native",fallback="false",direction="source"}'
+        values: '0+0.2x15'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: LoamsConnectorRestartLoop
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: LoamsConnectorRestartLoop
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: "7"
+              instance: jms-in
+              connector: jms
+              runtime: camel
+              fallback: "true"
+              direction: source
+            exp_annotations:
+              summary: "Connector instance 7/jms-in restarted more than 5 times in 10 minutes"
+              description: "The runtime keeps restarting the instance; read last_error."
+
+  # Sustained backpressure: 40 s of every minute paused (0.67) for long
+  # enough fires; 20 s of every minute (0.33) never does.
+  - interval: 1m
+    input_series:
+      - series: 'loams_flow_connector_budget_wait_seconds_total{namespace="7",instance="orders",connector="kafka",runtime="native",fallback="false",direction="source"}'
+        values: '0+40x40'
+      - series: 'loams_flow_connector_budget_wait_seconds_total{namespace="7",instance="audit",connector="kafka",runtime="native",fallback="false",direction="source"}'
+        values: '0+20x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: LoamsConnectorBackpressureSustained
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: LoamsConnectorBackpressureSustained
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: "7"
+              instance: orders
+              connector: kafka
+              runtime: native
+              fallback: "false"
+              direction: source
+            exp_annotations:
+              summary: "Connector instance 7/orders has been paused by backpressure for more than half of the time for 15 minutes"
+              description: "Sources stop reading when budgets shrink to zero; the Fabric or the sink is the bottleneck."
