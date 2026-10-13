@@ -47,13 +47,16 @@ stack (`docker compose down -v`) rather than reusing preview.1 volumes. Start wi
   `byoc/install.sh`) defaults to it.
 - `loams-fabric`'s image runs its workers sealed (`--sandbox pods`) instead of
   `--sandbox none --unsafe-no-sandbox`. A worker whose sandbox cannot be put in force refuses
-  to boot (Landlock needs Linux 6.7 or later).
+  to boot and the House stops (Landlock needs Linux 6.7 or later; `netns` cannot start under
+  Docker's default seccomp profile).
 
 ### Fixed
 - The ClickHouse HTTP interface returns one document per result for any row count (HS1
   R8.4/R8.12). This fix was already in preview.1, whose notes still listed it as pending.
 
 ### Known limitations
+- **House writes:** `INSERT` into House tables arrives with HS1 Task 12; this preview serves
+  queries over the allowed table functions, lake-table DDL and reads, and `system` tables.
 - **The engine does not reach the House yet.** The engine's link to it needs TLS (HS1 Task
   20), so `loams.house.v1` and the console's House page still answer `house_not_configured`.
   Use the House directly over its tailnet URL with any ClickHouse HTTP client.

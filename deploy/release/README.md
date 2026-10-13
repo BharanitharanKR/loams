@@ -129,7 +129,8 @@ needs SSH and outbound internet only.
   namespace, so `loams.house.v1` answers `house_not_configured`; use the House's
   own tailnet URL (`--profile house`).
 - `HOUSE_SANDBOX=netns` fails under Docker's default seccomp profile (no
-  unprivileged user namespaces); keep `pods` there. On a kernel without Landlock
+  unprivileged user namespaces) and the House does not start; keep `pods` there.
+- The House takes no `INSERT` into its tables until HS1 Task 12. On a kernel without Landlock
   TCP rules (before 6.7) the workers refuse to boot.
 - Live (7710), durable (8001), and the MySQL and Postgres wire listeners of the
   engine are loopback only and are not forwarded over the tailnet.

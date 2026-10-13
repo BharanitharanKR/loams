@@ -240,8 +240,11 @@ docker compose exec house cat /var/lib/loams-house/house.key    # the password, 
 curl -u "default:$PASSWORD" https://loams-house.<tailnet>.ts.net/ --data-binary 'SELECT version()'
 ```
 
-Any ClickHouse HTTP client works the same way (port 443, TLS, user `default`). The House's
-security layers in this preview:
+Any ClickHouse HTTP client works the same way (port 443, TLS, user `default`). What it serves
+in this preview: queries over the allowed table functions (`numbers`, `values`,
+`generateRandom` and the like), lake-table DDL and reads (HS1 Tasks 10 and 11) and the
+allowed `system` tables. Writing rows into House tables (`INSERT`) arrives with HS1 Task 12.
+The House's security layers in this preview:
 
 - **chDB's access control first** (HS1 ruling R-ACL.1): the users workers run as have no
   `SOURCES` grants and a constrained settings profile, so table functions and engines that
@@ -256,8 +259,8 @@ security layers in this preview:
   profiles, Docker Desktop included. `netns` adds a user and network namespace per worker with
   only a loopback; it needs unprivileged user namespaces inside the container, which Podman
   allows by default and Docker's default seccomp profile refuses. A worker whose sandbox cannot
-  be put in force refuses to boot, and the House answers with an error rather than run it
-  unsealed.
+  be put in force refuses to boot, and the House stops rather than run it unsealed (with
+  `netns` under Docker it does not start; use `pods`).
 - **Its own network.** The `house` network has no other member, so the House cannot reach TiKV,
   TiDB, the engine or the Postgres stack, and none of them can reach it.
 
@@ -326,8 +329,8 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
   forwarded over the tailnet. Documents, transactions, indexes and live queries work.
 - **Loams House:** the engine does not reach it yet (its link needs TLS, HS1 Task 20), so
   `loams.house.v1` and the console's House page answer `house_not_configured`; use the House's
-  own tailnet URL. Its user is a single generated local key until Task 20 brings Loams
-  identities. `pods` mode needs Landlock with TCP rules (Linux 6.7 or later; Docker Desktop
+  own tailnet URL. It does not take `INSERT` into its tables yet (HS1 Task 12). Its user is a
+  single generated local key until Task 20 brings Loams identities. `pods` mode needs Landlock with TCP rules (Linux 6.7 or later; Docker Desktop
   runs its own Linux kernel): on an older kernel the workers refuse to boot.
 - **Console:** several pages (Jobs, Connectors, SQL, Git, Postgres control plane, Live
   deployments) still run against mocked clients and show demonstration data, not your stack.
