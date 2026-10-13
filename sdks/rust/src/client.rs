@@ -34,9 +34,8 @@ use connectrpc::client::{ClientConfig, ClientTransport, HttpClient, UnaryRespons
 use connectrpc::http_body::Body;
 use futures::Stream;
 use loams_live_proto::loams::live::v1::{
-    DeployRequest, DeployResponse, LiveServiceClient, ModifyQuerySetRequest,
-    ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition,
-    TransitionView, WatchRequest,
+    LiveServiceClient, ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest,
+    MutateResponse, QueryRequest, QueryResponse, Transition, TransitionView, WatchRequest,
 };
 use loams_proto::loams::instance::v1::{
     GetInstanceRequest, GetInstanceResponse, InstanceServiceClient, WhoAmIRequest, WhoAmIResponse,
@@ -644,30 +643,6 @@ where
         )
         .await
     }
-
-    /// `loams.live.v1.LiveService/Deploy`: admin, deploys a function bundle and a
-    /// schema.
-    ///
-    /// # Errors
-    ///
-    /// Returns a [`LoamsError`] with `reason = feature_not_in_variant` today.
-    pub async fn deploy(
-        &self,
-        request: DeployRequest,
-        options: CallOptionsOverrides,
-    ) -> Result<DeployResponse, LoamsError> {
-        let binding = crate::binding::binding_of("tables", "deploy").expect("generated");
-        let client = &self.client;
-        send(
-            binding,
-            request,
-            false,
-            options,
-            self.runtime,
-            |request, opts| client.deploy_with_options(request, opts),
-        )
-        .await
-    }
 }
 
 /// One unary call through the runtime, returning the owned message.
@@ -753,7 +728,11 @@ mod tests {
         assert_eq!(loams.endpoint(), "http://127.0.0.1:8080");
         assert!(loams.consistency().is_none(), "off by default (D609)");
         assert_eq!(loams.inner.runtime.max_retries, DEFAULT_MAX_RETRIES);
-        assert_eq!(loams.bindings().len(), 3, "instance, live and tables");
+        assert_eq!(
+            loams.bindings().len(),
+            4,
+            "instance, live, live.admin and tables"
+        );
     }
 
     #[test]

@@ -19,8 +19,8 @@ import type { DescService } from '@bufbuild/protobuf';
 import type { CallOptions } from '../runtime/call.js';
 import { InstanceService } from '@loams/proto/instance';
 import type { GetInstanceRequestSchema, GetInstanceResponse, WhoAmIRequestSchema, WhoAmIResponse } from '@loams/proto/instance';
-import { LiveService } from '@loams/live/live';
-import type { DeployRequestSchema, DeployResponse, ModifyQuerySetRequestSchema, ModifyQuerySetResponse, MutateRequestSchema, MutateResponse, QueryRequestSchema, QueryResponse, Transition, WatchRequestSchema } from '@loams/live/live';
+import { LiveAdminService, LiveService } from '@loams/live/live';
+import type { ActivateDeploymentRequestSchema, ActivateDeploymentResponse, DeployRequestSchema, DeployResponse, GetDeploymentRequestSchema, GetDeploymentResponse, GetIndexStatusRequestSchema, GetIndexStatusResponse, ListDeploymentsRequestSchema, ListDeploymentsResponse, ModifyQuerySetRequestSchema, ModifyQuerySetResponse, MutateRequestSchema, MutateResponse, QueryRequestSchema, QueryResponse, TailLogsRequestSchema, TailLogsResponse, Transition, WatchRequestSchema } from '@loams/live/live';
 /**
  *  `loams.instance` — What this instance is, and who the caller is on it.
  *
@@ -78,6 +78,62 @@ export interface LiveModule {
 }
 
 /**
+ *  `loams.live.admin` — Live administration: deploy, roll back, index status and function logs.
+ *
+ *  Wraps `loams.live.v1.LiveAdminService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
+ */
+export interface LiveAdminModule {
+  /** The SDK module, as it appears on `loams.live.admin`. */
+  readonly module: 'live.admin';
+  /** The service behind the module. */
+  readonly service: 'loams.live.v1.LiveAdminService';
+  /** Whether the package's wire contract may still change. */
+  readonly unstable: true;
+  /**
+   *  `loams.live.v1.LiveAdminService/ActivateDeployment`, retried: manual.
+   */
+  activateDeployment(
+    request: MessageInitShape<typeof ActivateDeploymentRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ActivateDeploymentResponse>;
+  /**
+   *  `loams.live.v1.LiveAdminService/Deploy`, retried: manual.
+   */
+  deploy(
+    request: MessageInitShape<typeof DeployRequestSchema>,
+    options?: CallOptions,
+  ): Promise<DeployResponse>;
+  /**
+   *  `loams.live.v1.LiveAdminService/GetDeployment`, retried: safe.
+   */
+  getDeployment(
+    request: MessageInitShape<typeof GetDeploymentRequestSchema>,
+    options?: CallOptions,
+  ): Promise<GetDeploymentResponse>;
+  /**
+   *  `loams.live.v1.LiveAdminService/GetIndexStatus`, retried: safe.
+   */
+  getIndexStatus(
+    request: MessageInitShape<typeof GetIndexStatusRequestSchema>,
+    options?: CallOptions,
+  ): Promise<GetIndexStatusResponse>;
+  /**
+   *  `loams.live.v1.LiveAdminService/ListDeployments`, retried: safe. AIP-158: page with `deployments` and follow `next_page_token` through `loams.paginate`.
+   */
+  listDeployments(
+    request: MessageInitShape<typeof ListDeploymentsRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListDeploymentsResponse>;
+  /**
+   *  `loams.live.v1.LiveAdminService/TailLogs`, retried: manual.
+   */
+  tailLogs(
+    request: MessageInitShape<typeof TailLogsRequestSchema>,
+    options?: CallOptions,
+  ): AsyncIterable<TailLogsResponse>;
+}
+
+/**
  *  A second facade name for the same RPCs, exposed as `loams.tables`.
  *
  *  Wraps `loams.live.v1.LiveService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
@@ -89,13 +145,6 @@ export interface TablesModule {
   readonly service: 'loams.live.v1.LiveService';
   /** Whether the package's wire contract may still change. */
   readonly unstable: true;
-  /**
-   *  `loams.live.v1.LiveService/Deploy`, retried: manual.
-   */
-  deploy(
-    request: MessageInitShape<typeof DeployRequestSchema>,
-    options?: CallOptions,
-  ): Promise<DeployResponse>;
   /**
    *  `loams.live.v1.LiveService/Mutate`, retried: manual.
    */
@@ -171,6 +220,22 @@ export const MODULES: readonly ModuleBinding[] = [
     ],
   },
   {
+    name: 'live.admin',
+    summary: 'Live administration: deploy, roll back, index status and function logs.',
+    service: 'loams.live.v1.LiveAdminService',
+    package: 'loams.live.v1',
+    unstable: true,
+    derived: false,
+    calls: [
+      { module: 'live.admin', name: 'activateDeployment', protoName: 'activateDeployment', method: 'ActivateDeployment', rpc: 'loams.live.v1.LiveAdminService/ActivateDeployment', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'live.admin', name: 'deploy', protoName: 'deploy', method: 'Deploy', rpc: 'loams.live.v1.LiveAdminService/Deploy', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'live.admin', name: 'getDeployment', protoName: 'getDeployment', method: 'GetDeployment', rpc: 'loams.live.v1.LiveAdminService/GetDeployment', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'live.admin', name: 'getIndexStatus', protoName: 'getIndexStatus', method: 'GetIndexStatus', rpc: 'loams.live.v1.LiveAdminService/GetIndexStatus', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'live.admin', name: 'listDeployments', protoName: 'listDeployments', method: 'ListDeployments', rpc: 'loams.live.v1.LiveAdminService/ListDeployments', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'safe', streaming: 'unary', pagination: { items: 'deployments', nextPageToken: 'nextPageToken' } },
+      { module: 'live.admin', name: 'tailLogs', protoName: 'tailLogs', method: 'TailLogs', rpc: 'loams.live.v1.LiveAdminService/TailLogs', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'server', pagination: null },
+    ],
+  },
+  {
     name: 'tables',
     summary: '',
     service: 'loams.live.v1.LiveService',
@@ -178,7 +243,6 @@ export const MODULES: readonly ModuleBinding[] = [
     unstable: true,
     derived: true,
     calls: [
-      { module: 'tables', name: 'deploy', protoName: 'deploy', method: 'Deploy', rpc: 'loams.live.v1.LiveService/Deploy', service: 'loams.live.v1.LiveService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
       { module: 'tables', name: 'mutate', protoName: 'mutate', method: 'Mutate', rpc: 'loams.live.v1.LiveService/Mutate', service: 'loams.live.v1.LiveService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
       { module: 'tables', name: 'query', protoName: 'query', method: 'Query', rpc: 'loams.live.v1.LiveService/Query', service: 'loams.live.v1.LiveService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
     ],
@@ -193,6 +257,7 @@ export const MODULES: readonly ModuleBinding[] = [
 */
 export const SERVICE_DESCRIPTORS: Readonly<Record<string, DescService>> = {
   'loams.instance.v1.InstanceService': InstanceService,
+  'loams.live.v1.LiveAdminService': LiveAdminService,
   'loams.live.v1.LiveService': LiveService,
 };
 
@@ -212,6 +277,7 @@ export const PROTO_PACKAGES = [
   'loams.operations.v1',
   'loams.options.v1',
   'loams.postgres.v1',
+  'loams.repos.v1',
 ] as const;
 
 /**
@@ -257,9 +323,30 @@ export const REASONS = [
   'quota_exceeded',
   'storage_unavailable',
   'secret_already_issued',
+  'repo_not_found',
+  'repo_already_exists',
+  'repo_deleting',
+  'ref_stale',
+  'ref_protected',
+  'out_of_scope',
+  'object_format_unsupported',
+  'fork_too_deep',
+  'sequencer_unavailable',
+  'idempotency_key_reused',
+  'workspace_not_found',
+  'workspace_fenced',
+  'workspace_read_only',
+  'workspace_name_taken',
+  'object_missing',
+  'secret_detected',
+  'env_unsealed',
+  'env_access_denied',
+  'env_foreign_reference',
   'live_bad_cursor',
   'live_worker_crashed',
   'live_deploy_conflict',
+  'live_schema_violation',
+  'live_index_not_ready',
   'invalid_argument',
   'not_found',
   'already_exists',
@@ -316,9 +403,30 @@ export const REASON_CODES: Readonly<Record<Reason, string>> = {
   quota_exceeded: 'resource_exhausted',
   storage_unavailable: 'unavailable',
   secret_already_issued: 'failed_precondition',
+  repo_not_found: 'not_found',
+  repo_already_exists: 'already_exists',
+  repo_deleting: 'failed_precondition',
+  ref_stale: 'aborted',
+  ref_protected: 'failed_precondition',
+  out_of_scope: 'permission_denied',
+  object_format_unsupported: 'unimplemented',
+  fork_too_deep: 'failed_precondition',
+  sequencer_unavailable: 'unavailable',
+  idempotency_key_reused: 'failed_precondition',
+  workspace_not_found: 'not_found',
+  workspace_fenced: 'aborted',
+  workspace_read_only: 'failed_precondition',
+  workspace_name_taken: 'already_exists',
+  object_missing: 'failed_precondition',
+  secret_detected: 'failed_precondition',
+  env_unsealed: 'invalid_argument',
+  env_access_denied: 'permission_denied',
+  env_foreign_reference: 'permission_denied',
   live_bad_cursor: 'invalid_argument',
   live_worker_crashed: 'internal',
   live_deploy_conflict: 'failed_precondition',
+  live_schema_violation: 'invalid_argument',
+  live_index_not_ready: 'failed_precondition',
   invalid_argument: 'invalid_argument',
   not_found: 'not_found',
   already_exists: 'already_exists',

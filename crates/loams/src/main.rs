@@ -763,11 +763,11 @@ impl Native {
 #[cfg(feature = "live")]
 #[derive(Debug, clap::Args)]
 struct LiveArgs {
-    /// Address of the Loams Live sync API; loopback only (127.0.0.0/8,
-    /// ::1, localhost), since the Live API has no authentication in R1
-    /// (D111).
-    #[arg(long, default_value = "127.0.0.1:7710", value_parser = parse_live_listen)]
-    live_listen: SocketAddr,
+    /// Deprecated: Live is served on --listen (D688). Address of Live's own
+    /// listener, which serves the same API (default 127.0.0.1:7710); loopback
+    /// only (127.0.0.0/8, ::1, localhost).
+    #[arg(long, value_parser = parse_live_listen)]
+    live_listen: Option<SocketAddr>,
     // The help names `tikv://` only in a build that has it: the desktop app
     // reads `dev --help` to tell the two apart (row T23-9).
     #[cfg_attr(
@@ -855,6 +855,11 @@ enum LiveStore {
     },
 }
 
+/// Live's own listener without `--live-listen` (R1 plan Task 12).
+#[cfg(feature = "live")]
+const LIVE_LISTEN_DEFAULT: SocketAddr =
+    SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), 7710);
+
 /// The PD the deprecated `--live-keyspace` alone implies: the dev
 /// playground's.
 #[cfg(feature = "live-tikv")]
@@ -935,7 +940,14 @@ impl LiveArgs {
         }
         let store = self.store(&config.data_dir);
         let mut live = loams_live::LiveConfig::with_store(&self.live_app, store);
-        live.listen = self.live_listen;
+        // Live's own listener stays on its default address (the desktop's
+        // proxy reaches Live there); naming it is deprecated (LV1 Task 12).
+        if self.live_listen.is_some() {
+            eprintln!(
+                "loams: warning: --live-listen is deprecated; Live is served on --listen (D688)"
+            );
+        }
+        live.listen = self.live_listen.unwrap_or(LIVE_LISTEN_DEFAULT);
         live.subs.tick_read_lag = Duration::from_millis(self.live_tick_read_lag_ms);
         live.isolation = match self.live_isolation {
             LiveIsolation::InProcess => loams_live::Isolation::InProcess,

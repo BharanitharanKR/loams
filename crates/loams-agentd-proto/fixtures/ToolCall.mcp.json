@@ -1,0 +1,8 @@
+{
+  "input": {
+    "limit": 10
+  },
+  "kind": "mcp",
+  "server": "loams-desktop",
+  "tool": "list_chats"
+}

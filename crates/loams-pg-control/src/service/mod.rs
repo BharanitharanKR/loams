@@ -31,10 +31,12 @@
 
 pub mod branches;
 pub mod databases;
+pub mod endpoints;
 mod idempotency;
 pub mod operations;
 pub mod projects;
 pub mod roles;
+pub mod watch;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -172,6 +174,8 @@ pub enum Reason {
     LsnOutOfRetention,
     StorageUnavailable,
     SecretAlreadyIssued,
+    EndpointExistsForBranch,
+    ComputeStartFailed,
     InvalidArgument,
     NotFound,
     AlreadyExists,
@@ -194,6 +198,8 @@ impl Reason {
             Reason::LsnOutOfRetention => "lsn_out_of_retention",
             Reason::StorageUnavailable => "storage_unavailable",
             Reason::SecretAlreadyIssued => "secret_already_issued",
+            Reason::EndpointExistsForBranch => "endpoint_exists_for_branch",
+            Reason::ComputeStartFailed => "compute_start_failed",
             Reason::InvalidArgument => "invalid_argument",
             Reason::NotFound => "not_found",
             Reason::AlreadyExists => "already_exists",
@@ -216,9 +222,11 @@ impl Reason {
             | Reason::LsnOutOfRetention
             | Reason::SecretAlreadyIssued
             | Reason::FailedPrecondition => "failed_precondition",
-            Reason::StorageUnavailable | Reason::Unavailable => "unavailable",
+            Reason::StorageUnavailable | Reason::Unavailable | Reason::ComputeStartFailed => {
+                "unavailable"
+            }
             Reason::InvalidArgument => "invalid_argument",
-            Reason::AlreadyExists => "already_exists",
+            Reason::AlreadyExists | Reason::EndpointExistsForBranch => "already_exists",
             Reason::PermissionDenied => "permission_denied",
             Reason::Unauthenticated => "unauthenticated",
             Reason::ResourceExhausted => "resource_exhausted",
@@ -237,6 +245,8 @@ impl Reason {
             Reason::LsnOutOfRetention,
             Reason::StorageUnavailable,
             Reason::SecretAlreadyIssued,
+            Reason::EndpointExistsForBranch,
+            Reason::ComputeStartFailed,
             Reason::InvalidArgument,
             Reason::NotFound,
             Reason::AlreadyExists,

@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loams.dev/schemas/pulsar.config.json",
+  "title": "Apache Pulsar connector instance config (loams.flow/v1)",
+  "description": "One Pulsar cluster's settings (CN2 Task 18, loams_connector_brokers::pulsar): durable subscriptions acknowledged after the Fabric, and a producer for the sink (at least once, R18.7).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "url"
+  ],
+  "properties": {
+    "url": {
+      "description": "pulsar://host:6650 or pulsar+ssl://host:6651, without credentials.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^pulsar(\\+ssl)?://[^@/]+/?$"
+    },
+    "token": {
+      "description": "A JWT for token authentication. A secret name, resolved through the namespace's secret store (D189); the value is never stored here.",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "ca_pem": {
+      "description": "PEM CA bundle for pulsar+ssl:// (not a secret).",
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "description": "The source: topics, one split each.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "topics": {
+          "description": "Topics; one split each.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "subscription": {
+          "description": "The subscription; loams-<instance> by default.",
+          "type": "string",
+          "minLength": 1
+        },
+        "subscription_type": {
+          "description": "The subscription type.",
+          "type": "string",
+          "enum": [
+            "failover",
+            "shared",
+            "key_shared"
+          ],
+          "default": "failover"
+        },
+        "initial_position": {
+          "description": "Where a new subscription starts.",
+          "type": "string",
+          "enum": [
+            "earliest",
+            "latest"
+          ],
+          "default": "earliest"
+        },
+        "receiver_queue_size": {
+          "description": "The receiver queue; by default the pipeline's in-flight budget.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_batch": {
+          "description": "Messages per batch at most (the pipeline's budget may be smaller).",
+          "type": "integer",
+          "minimum": 1,
+          "default": 1000
+        },
+        "poll_wait_ms": {
+          "description": "How long one read waits for the first message before reporting nothing.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 200
+        }
+      },
+      "required": [
+        "topics"
+      ]
+    },
+    "sink": {
+      "description": "The sink.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "topic": {
+          "description": "The topic.",
+          "type": "string",
+          "minLength": 1
+        },
+        "producer_name": {
+          "description": "The producer name; unique per sink session by default.",
+          "type": "string",
+          "minLength": 1
+        },
+        "send_timeout_ms": {
+          "description": "How long a batch waits for its send receipts.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 30000
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "pipeline": {
+      "description": "The SDK's per-instance pipeline overrides (`PipelineConfig::with_overrides`): max_batch_rows, max_batch_bytes, linger_ms, max_in_flight_batches, memory_budget_bytes, checkpoint_interval_ms and retry. The broker-side window (prefetch, credit, Receive Maximum, max_ack_pending, receiver queue) is derived from them unless set.",
+      "type": "object"
+    }
+  }
+}

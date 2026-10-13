@@ -17,6 +17,11 @@ overrides:
   'vite-plus@1.0.0>vitest': '5.0.1'
   'vitest@5.0.1>vite': npm:@voidzero-dev/vite-plus-core@1.0.0
   '@vitest/mocker@5.0.1>vite': npm:@voidzero-dev/vite-plus-core@1.0.0
+  # Security: nx 23.2.1 pins vulnerable exact versions of these. Scoped to that
+  # nx version so they lapse on the next nx bump.
+  'nx@23.2.1>axios': 1.20.0
+  'nx@23.2.1>smol-toml': 1.9.0
+  'nx@23.2.1>brace-expansion': 5.0.12
 
 allowBuilds:
   esbuild: true

@@ -46,6 +46,11 @@ impl PartialEq for LiveValue {
     }
 }
 
+/// The identity above is an equivalence (every NaN is one class, every
+/// other double its own bits), so values can be `Eq`: a validator holding a
+/// literal, and the schema holding it, compare as wholes.
+impl Eq for LiveValue {}
+
 impl LiveValue {
     /// The value of a protobuf `Value`. A `Value` (at any depth) with no kind
     /// set is [`LiveError::InvalidArgument`].

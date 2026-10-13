@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+// Loams Git: `ObjectService`, lazy object reads, workspace packs and history (§19.5, §19.8, §19.10). An empty stub until GT1
+// Task 18 fills it in; it exists so that `loams.repos.v1` is registered
+// with its four files once (GT1 Task 12), and later tasks only add messages
+// and a service. See `repos.proto` for the package's rules.
+package loams.repos.v1;

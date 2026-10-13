@@ -1,0 +1,44 @@
+# PostHog — an HTTP-API profile (CN2 OR-11, Task 20). Written from PostHog's
+# public API reference:
+#   Capture (POST /batch/, project token in the body's `api_key`):
+#     https://posthog.com/docs/api/capture
+#   Persons (personal API key as bearer, `next` URL pagination):
+#     https://posthog.com/docs/api/persons
+#   Rate limits: https://posthog.com/docs/api#rate-limiting
+# Two keys, two hosts: capture goes to the ingestion host with the project
+# token (`auth.api_key`, put in the body), reads go to the app host with a
+# personal API key (`auth.token`); an instance of `persons` sets `base_url`
+# to `https://us.posthog.com` (or the EU host). PostHog documents no
+# deduplication for capture, so `events` is at least once.
+apiVersion: loams.flow/v1
+kind: Profile
+id: posthog
+profile_kind: http-api
+module: http
+system:
+  name: PostHog
+  service: { fixture: conformance/connectors/fixtures/posthog }
+defaults: {}
+narrows: []
+http:
+  base_url: "https://us.i.posthog.com"
+  auth: { scheme: bearer }
+  resources:
+    events:
+      create:
+        method: POST
+        path: "/batch/"
+        batch: 100
+        body: "/batch"
+        envelope: { api_key: "{auth.api_key}" }
+    persons:
+      list:
+        method: GET
+        path: "/api/projects/{config.project_id}/persons/"
+        items: "/results"
+        next_url: "/next"
+        key: "/id"
+  rate_limit:
+    requests: 240
+    per_seconds: 60
+    honour_headers: ["Retry-After"]

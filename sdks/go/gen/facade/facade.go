@@ -201,8 +201,10 @@ var Modules = []ModuleBinding{
 		Calls: []CallBinding{
 			{
 				Module: "tables", Name: "Deploy", ProtoName: "deploy",
-				Method: "Deploy", RPC: livev1connect.LiveServiceName + "/Deploy",
-				Service: livev1connect.LiveServiceName, Package: "loams.live.v1",
+				// Deploy moved to LiveAdminService (LV1 Task 10); `tables`
+				// keeps the call, now routed there.
+				Method: "Deploy", RPC: livev1connect.LiveAdminServiceName + "/Deploy",
+				Service: livev1connect.LiveAdminServiceName, Package: "loams.live.v1",
 				Idempotency: None, Retry: RetryManual, Streaming: Unary,
 			},
 			{
@@ -255,5 +257,6 @@ func NewServiceClients(httpClient connect.HTTPClient, baseURL string, opts ...co
 	return map[string]any{
 		instancev1connect.InstanceServiceName: instancev1connect.NewInstanceServiceClient(httpClient, baseURL, opts...),
 		livev1connect.LiveServiceName:         livev1connect.NewLiveServiceClient(httpClient, baseURL, opts...),
+		livev1connect.LiveAdminServiceName:    livev1connect.NewLiveAdminServiceClient(httpClient, baseURL, opts...),
 	}
 }

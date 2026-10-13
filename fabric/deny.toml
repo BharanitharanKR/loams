@@ -56,16 +56,15 @@ ignore = [
     # only through sqlx-mysql, which uses it for the RSA password exchange of
     # caching_sha2_password/sha256_password on a non-TLS connection.
     { id = "RUSTSEC-2023-0071", reason = "rsa via sqlx-mysql: used only for RSA password exchange on non-TLS MySQL connections; Loams connects to TiDB over TLS or the cluster network with mysql_native_password (§21 §11.2)" },
-    # quick-xml 0.39.4 through object_store 0.13.2 (CN2 Task 17: Delta Lake's
-    # storage and Redshift's staging bucket; the same pair CN2 R13.7 ignores
-    # for Task 13), which pins `^0.39`; the fix is 0.41. object_store must stay
-    # on 0.13.2 while parquet 59 and deltalake 1.1.0 need it (CN2 R0.13). Both
-    # are denial-of-service bugs in parsing XML; object_store parses only the
-    # list and error responses of the store endpoint the instance names,
-    # behind the egress check. CN2 rulings R13.7 and R17.11; lifted when the
-    # workspace moves to arrow 60 and object_store 0.14.
-    { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.39 via object_store 0.13.2 (CN2 R0.13, R13.7, R17.11): parses only the configured object store's responses; fixed by moving to object_store 0.14 with arrow 60" },
-    { id = "RUSTSEC-2026-0195", reason = "quick-xml 0.39 via object_store 0.13.2 (CN2 R0.13, R13.7, R17.11): parses only the configured object store's responses; fixed by moving to object_store 0.14 with arrow 60" },
+    # quick-xml 0.39.4 through object_store 0.13.2 (CN2 Task 13), which pins
+    # `^0.39`; the fix is 0.41. object_store must stay on 0.13.2 while parquet
+    # 59 and deltalake 1.1.0 need it (CN2 R0.13). Both are denial-of-service
+    # bugs in parsing XML; object_store parses only the list and error
+    # responses of the store endpoint the instance names, behind the egress
+    # check. CN2 ruling R13.7; lifted when the workspace moves to arrow 60 and
+    # object_store 0.14.
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.39 via object_store 0.13.2 (CN2 R0.13, R13.7): parses only the configured object store's responses; fixed by moving to object_store 0.14 with arrow 60" },
+    { id = "RUSTSEC-2026-0195", reason = "quick-xml 0.39 via object_store 0.13.2 (CN2 R0.13, R13.7): parses only the configured object store's responses; fixed by moving to object_store 0.14 with arrow 60" },
 ]
 
 [sources]

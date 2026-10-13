@@ -1,0 +1,94 @@
+{
+  "recorded_from": "Stripe",
+  "synthetic": true,
+  "docs": [
+    "https://docs.stripe.com/api/customers/list",
+    "https://docs.stripe.com/api/pagination"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "customers",
+    "config": {
+      "base_url": "{proxy}"
+    },
+    "secrets": {
+      "token": "sk_test_synthetic"
+    },
+    "expect": 3
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v1/customers?limit=100",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "object": "list",
+            "url": "/v1/customers",
+            "has_more": true,
+            "data": [
+              {
+                "id": "cus_TA1",
+                "object": "customer",
+                "email": "ada@example.test",
+                "name": "Ada",
+                "created": 1759300000,
+                "livemode": false,
+                "metadata": {}
+              },
+              {
+                "id": "cus_TB2",
+                "object": "customer",
+                "email": "grace@example.test",
+                "name": "Grace",
+                "created": 1759300001,
+                "livemode": false,
+                "metadata": {}
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v1/customers?limit=100&starting_after=cus_TB2",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "object": "list",
+            "url": "/v1/customers",
+            "has_more": false,
+            "data": [
+              {
+                "id": "cus_TC3",
+                "object": "customer",
+                "email": "katherine@example.test",
+                "name": "Katherine",
+                "created": 1759300002,
+                "livemode": false,
+                "metadata": {}
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,6 +1,12 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DeployConflictError, type LogLine, validatorText } from '../src/admin.js';
+import {
+  DeployConflictError,
+  isSkipped,
+  type LogLine,
+  type LogsSkipped,
+  validatorText,
+} from '../src/admin.js';
 import { createMockAdminApi, defaultFixtures } from '../src/admin-mock.js';
 import { DeploymentsPage, PREVIEW_NOTICE } from '../src/deployments.js';
 
@@ -27,9 +33,10 @@ const idAt = (i: number): string => {
 const [D4, D3, D2, D1] = [idAt(0), idAt(1), idAt(2), idAt(3)];
 const short = (id: string) => id.slice(-8);
 
-async function collect(it: AsyncIterable<LogLine>, n: number): Promise<LogLine[]> {
+async function collect(it: AsyncIterable<LogLine | LogsSkipped>, n: number): Promise<LogLine[]> {
   const out: LogLine[] = [];
   for await (const l of it) {
+    if (isSkipped(l)) continue;
     out.push(l);
     if (out.length >= n) break;
   }
@@ -72,16 +79,18 @@ describe('createMockAdminApi', () => {
     await expect(api.activateDeployment(D2, D1)).rejects.toBeInstanceOf(DeployConflictError);
     const d = await api.activateDeployment(D2, D3);
     expect(d.state).toBe('active');
-    expect(d.rolledBackFrom).toBe(D3);
     const ds = await api.listDeployments();
     expect(ds.find((x) => x.id === D3)?.state).toBe('superseded');
-    const workers = await api.workerHealth();
+    const workers = (await api.workerHealth?.()) ?? [];
+    expect(workers.length).toBeGreaterThan(0);
     expect(workers.every((w) => w.deploymentId === D2 && !w.degraded)).toBe(true);
   });
 
-  it('refuses to activate a failed deployment', async () => {
+  it('activates a failed deployment, as the engine does (LV1 T7-1)', async () => {
     const api = createMockAdminApi();
-    await expect(api.activateDeployment(D4, D3)).rejects.toThrow(/failed deployment/);
+    const d = await api.activateDeployment(D4, D3);
+    expect(d.state).toBe('active');
+    expect(d.failureReason).toBeUndefined();
   });
 
   it('tails logs filtered by function, then follows', async () => {

@@ -118,7 +118,7 @@ void TablesModule::Mutate(live_v1::MutateRequest* request, live_v1::MutateRespon
 }
 
 void TablesModule::Deploy(live_v1::DeployRequest* request, live_v1::DeployResponse* response) {
-  client_->Unary(BindingFor("loams.live.v1.LiveService/Deploy"), *request, response, client_->Encoding());
+  client_->Unary(BindingFor("loams.live.v1.LiveAdminService/Deploy"), *request, response, client_->Encoding());
 }
 
 void ApprovalsModule::ListApprovals(approvals_v1::ListApprovalsRequest* request,

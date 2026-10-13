@@ -56,6 +56,8 @@ loams-durable = { workspace = true, optional = true }
 # Loams Graph (feature `graph`, GR1 Task 5).
 loams-graph = { workspace = true, optional = true }
 loams-es = { workspace = true, optional = true }
+# Loams Git's portable core (feature `git`, GT1 Task 12, design §36).
+loams-git = { workspace = true, optional = true }
 loams-hnsw.workspace = true
 loams-hot.workspace = true
 loams-link.workspace = true
@@ -129,7 +131,7 @@ live-tikv = ["live", "tikv", "loams-live/tikv"]
 # `loams pg-control` role, serving `loams.postgres.v1` and the upcalls Neon's
 # components call. Off by default: the default build links none of it. With
 # `tikv` too, `--store tikv` keeps its records on TiKV.
-postgres = ["dep:loams-pg-control", "dep:loams-postgres"]
+postgres = ["dep:loams-pg-control", "dep:loams-postgres", "dep:futures"]
 # `--runtime kubernetes`: role secrets and the signing key as Kubernetes
 # Secrets (the kube client).
 postgres-kubernetes = ["postgres", "loams-pg-control/kubernetes"]
@@ -160,6 +162,19 @@ stream-grpc = ["dep:loams-stream-grpc"]
 # `cargo tree -p loams -e normal | grep -c grafeo` = 0) and the graph RPCs answer
 # `feature_not_in_variant`.
 graph = ["dep:loams-graph"]
+# Loams Git (GT1 Task 12, design §36, §19): `loams.repos.v1` on the main port
+# (`RepoService` from GT1 Task 13), the repository sequencers and, from later
+# GT1 tasks, Smart HTTP and the git worker tasks. Off by default: without it
+# `loams` links no `loams-git` or gitoxide crate (`tests/git/main.rs`'s
+# `default_features_exclude_git`) and every `loams.repos.v1` RPC answers
+# `feature_not_in_variant`.
+git = ["dep:loams-git", "dep:futures"]
+# The sccache build cache (GT1 Tasks 68–71, design §36 §8). Reserved by GT1
+# Task 12: its crate, `loams-buildcache`, does not exist yet.
+buildcache = []
+# The crates.io mirror (GT1 Tasks 72–73, design §36 §9). Reserved by GT1 Task
+# 12: its crate, `loams-registry`, does not exist yet.
+registry = []
 # The Loams SQL gate (`--sqlgate-listen`; plan SQ1 Task 4).
 sqldb = ["dep:loams-sqlgate"]
 # Builds the multi-process cluster tests (`tests/cluster.rs`, M1.3 Task 11;

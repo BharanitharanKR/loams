@@ -6,13 +6,15 @@
 //! * No read sees a write that is not durable (I2): the write lane holds the graph's gate
 //!   exclusively from `begin_transaction` until the append is acknowledged, and every client
 //!   statement holds it shared (R9.3).
-//! * A failed append, or a commit the capture refuses (R9.8), fails every writer of its group with
+//! * A failed append, or a commit the capture refuses (R9.8; injected, see
+//!   `a_refused_capture_reloads_and_hides`), fails every writer of its group with
 //!   `graph_reloading`, and the graph is rebuilt from its stream before it serves again.
 //! * Idempotency keys answer the first result's token, across a restart (the index is rebuilt
 //!   from the stream).
 //!
 //! The append's fault injection is per [`GraphLog`] (feature `test-hooks`), so these tests need
-//! no process-wide failpoint and run in parallel.
+//! no process-wide failpoint and run in parallel. The one failpoint (`loams_graph::capture`,
+//! feature `failpoints`) names the graph it fails, so it does not touch the other tests either.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -465,10 +467,61 @@ async fn failed_append_reloads_and_hides() {
     assert_eq!(values(&admin, "kg").await.len(), 2);
 }
 
+/// A commit the capture refuses (R9.8) is never acknowledged, never logged and never seen: the
+/// graph reloads from the log. Grafeo no longer commits the dangling edge that used to provoke
+/// such a refusal (the fork's LG-0004), so the failure is injected with the
+/// `loams_graph::capture` failpoint, for this test's graph only (`cargo test -p loams-graph
+/// --features failpoints --test durability`).
+#[cfg(feature = "failpoints")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_refused_capture_reloads_and_hides() {
-    // R9.8: Grafeo commits an edge whose endpoint the same transaction `DETACH DELETE`d. The
-    // capture refuses that commit, so it is never acknowledged, never logged and never seen.
+    let fx = Fixture::start().await;
+    let admin = fx.admin_with(&fx.log());
+    create(&admin, "refused").await;
+    write(
+        &admin,
+        "refused",
+        "INSERT (:N {k: 1, v: 'a'}), (:N {k: 2, v: 'b'})",
+    )
+    .await;
+    // Not counted (`1*`): captures of other tests' graphs, running in parallel, evaluate the
+    // failpoint too and must not use it up.
+    fail::cfg("loams_graph::capture", "return(refused)").expect("cfg");
+    let err = admin
+        .execute_batch(pb::ExecuteBatchRequest {
+            namespace: "acme".to_string(),
+            graph: "refused".to_string(),
+            atomic: true,
+            statements: [
+                "MATCH (a:N {k: 1}), (b:N {k: 2}) INSERT (a)-[:E]->(b)",
+                "MATCH (a:N {k: 1}) DETACH DELETE a",
+            ]
+            .iter()
+            .map(|s| pb::Statement {
+                statement: (*s).to_string(),
+                ..Default::default()
+            })
+            .collect(),
+            ..Default::default()
+        })
+        .await
+        .expect_err("a commit the capture refuses is not acknowledged");
+    fail::remove("loams_graph::capture");
+    assert_eq!(reason(&err), "graph_reloading");
+    assert_eq!(values(&admin, "refused").await.len(), 2, "the node is back");
+    assert_eq!(
+        count(&admin, "refused", "MATCH ()-[e]->() RETURN count(e)").await,
+        0
+    );
+    let records = fx.records(fx.stream_of("refused").await).await;
+    assert_eq!(records.len(), 1, "only the insert is in the log");
+}
+
+/// The same batch with Grafeo's fix (the fork's LG-0004, R9.8): `DETACH DELETE` takes the edge the
+/// transaction itself inserted, so the commit captures cleanly and is logged, and the graph the
+/// log rebuilds is the graph the engine has.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn detach_delete_of_an_edge_inserted_in_the_batch_is_logged() {
     let fx = Fixture::start().await;
     let admin = fx.admin_with(&fx.log());
     create(&admin, "kg").await;
@@ -478,7 +531,7 @@ async fn a_refused_capture_reloads_and_hides() {
         "INSERT (:N {k: 1, v: 'a'}), (:N {k: 2, v: 'b'})",
     )
     .await;
-    let err = admin
+    admin
         .execute_batch(pb::ExecuteBatchRequest {
             namespace: "acme".to_string(),
             graph: "kg".to_string(),
@@ -496,15 +549,15 @@ async fn a_refused_capture_reloads_and_hides() {
             ..Default::default()
         })
         .await
-        .expect_err("a commit the capture refuses is not acknowledged");
-    assert_eq!(reason(&err), "graph_reloading");
-    assert_eq!(values(&admin, "kg").await.len(), 2, "the node is back");
+        .expect("committed");
+    assert_eq!(values(&admin, "kg").await.len(), 1);
     assert_eq!(
         count(&admin, "kg", "MATCH ()-[e]->() RETURN count(e)").await,
         0
     );
     let records = fx.records(fx.stream_of("kg").await).await;
-    assert_eq!(records.len(), 1, "only the insert is in the log");
+    assert_eq!(records.len(), 2, "the insert and the batch");
+    assert_eq!(replayed(&records), values(&admin, "kg").await);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

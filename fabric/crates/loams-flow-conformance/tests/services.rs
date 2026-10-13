@@ -394,12 +394,19 @@ fn services_are_unavailable_until_their_stack_is_up() {
             .unwrap_err()
             .contains("LOAMS_CONNECTORS_CI_ONLY_STACK")
     );
-    // A fixture with no recording yet is not a service.
+    // A fixture with no recording yet is not a service, and neither is one
+    // that holds only synthetic fixtures (CN2 Task 20, R20.1).
     let fx = ServiceKind::Fixture {
         dir: "conformance/connectors/fixtures/stripe",
         recorded_from: "Stripe",
     };
-    assert!(env.available(&fx).is_err());
+    let why = env.available(&fx).unwrap_err();
+    assert!(why.contains("only synthetic"), "{why}");
+    let none = ServiceKind::Fixture {
+        dir: "conformance/connectors/fixtures/openai",
+        recorded_from: "OpenAI",
+    };
+    assert!(env.available(&none).is_err());
     let night = ServiceKind::Nightly {
         env: &["LOAMS_STRIPE_API_KEY"],
         system: "Stripe",

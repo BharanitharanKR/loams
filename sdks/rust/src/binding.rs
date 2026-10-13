@@ -173,6 +173,7 @@ mod tests {
     /// moved.
     #[test]
     fn binding_class_agrees_with_idempotency() {
+        let mut promoted = Vec::new();
         for binding in every_binding() {
             assert_eq!(
                 binding.retry_class(),
@@ -180,24 +181,31 @@ mod tests {
                 "{}: the class must be the generated decision, read whole table",
                 binding.rpc
             );
-            // And, while no proto sets `retry_safe`, that decision is still the
-            // one the descriptor implies — the equivalence `dev` relied on.
+            // Without `retry_safe` the decision is the one the descriptor
+            // implies — the equivalence `dev` relied on. `retry_safe` only
+            // promotes a call to `Safe`; the read-only admin calls of
+            // `LiveAdminService` (LV1 Task 10) are the ones that set it.
             let from_descriptor = match binding.idempotency {
                 facade::Idempotency::NoSideEffects | facade::Idempotency::Idempotent => {
                     RetryClass::Safe
                 }
                 facade::Idempotency::None => RetryClass::Manual,
             };
-            assert_eq!(
-                binding.retry_class(),
-                from_descriptor,
-                "{}: a proto now sets retry_safe, so the generated decision and the \
-                 descriptor's implication differ. That is allowed and safer, but it \
-                 is a behaviour change and the test above no longer proves the \
-                 equivalence `dev` had.",
-                binding.rpc
-            );
+            if binding.retry_class() != from_descriptor {
+                assert_eq!(binding.retry_class(), RetryClass::Safe, "{}", binding.rpc);
+                promoted.push(binding.rpc);
+            }
         }
+        promoted.sort_unstable();
+        assert_eq!(
+            promoted,
+            [
+                "loams.live.v1.LiveAdminService/GetDeployment",
+                "loams.live.v1.LiveAdminService/GetIndexStatus",
+                "loams.live.v1.LiveAdminService/ListDeployments",
+            ],
+            "a proto changed which calls set retry_safe: a behaviour change"
+        );
     }
 
     #[test]
@@ -208,7 +216,7 @@ mod tests {
                 .takes_idempotency_key()
         );
         assert!(
-            !binding_of("tables", "deploy")
+            !binding_of("live.admin", "deploy")
                 .expect("generated")
                 .takes_idempotency_key()
         );
@@ -247,26 +255,24 @@ mod tests {
         }
     }
 
-    /// No call declares paging yet, and the table says so rather than staying
-    /// silent. `ListCollections` arrives with API1 Task 2; a row that claimed
-    /// pagination before the RPC existed would send a page token to an RPC that
-    /// does not read one.
+    /// Only `LiveAdminService.ListDeployments` (LV1 Task 10) declares paging,
+    /// and the table says so: a row that claimed pagination for an RPC that
+    /// does not read a page token would send one anyway.
     #[test]
-    fn no_call_is_paged_yet_and_that_is_visible() {
-        for binding in every_binding() {
-            assert!(
-                binding.pagination.is_none(),
-                "{} claims paging before the RPC exists",
-                binding.rpc
-            );
-        }
+    fn only_list_deployments_is_paged_and_that_is_visible() {
+        let paged: Vec<&str> = every_binding()
+            .into_iter()
+            .filter(|binding| binding.pagination.is_some())
+            .map(|binding| binding.rpc)
+            .collect();
+        assert_eq!(paged, ["loams.live.v1.LiveAdminService/ListDeployments"]);
     }
 
-    /// Only `Watch` streams server messages.
+    /// Only `Watch` and `TailLogs` stream server messages.
     #[test]
-    fn only_watch_is_a_server_stream() {
+    fn only_watch_and_tail_logs_are_server_streams() {
         for binding in every_binding() {
-            let expected = if binding.method == "Watch" {
+            let expected = if binding.method == "Watch" || binding.method == "TailLogs" {
                 facade::Streaming::Server
             } else {
                 facade::Streaming::Unary
@@ -295,8 +301,11 @@ mod tests {
     #[test]
     fn the_table_covers_every_generated_spec_and_nothing_more() {
         use loams_live_proto::loams::live::v1::{
-            LIVE_SERVICE_DEPLOY_SPEC, LIVE_SERVICE_MODIFY_QUERY_SET_SPEC, LIVE_SERVICE_MUTATE_SPEC,
-            LIVE_SERVICE_QUERY_SPEC, LIVE_SERVICE_WATCH_SPEC,
+            LIVE_ADMIN_SERVICE_ACTIVATE_DEPLOYMENT_SPEC, LIVE_ADMIN_SERVICE_DEPLOY_SPEC,
+            LIVE_ADMIN_SERVICE_GET_DEPLOYMENT_SPEC, LIVE_ADMIN_SERVICE_GET_INDEX_STATUS_SPEC,
+            LIVE_ADMIN_SERVICE_LIST_DEPLOYMENTS_SPEC, LIVE_ADMIN_SERVICE_TAIL_LOGS_SPEC,
+            LIVE_SERVICE_MODIFY_QUERY_SET_SPEC, LIVE_SERVICE_MUTATE_SPEC, LIVE_SERVICE_QUERY_SPEC,
+            LIVE_SERVICE_WATCH_SPEC,
         };
         use loams_proto::loams::instance::v1::{
             INSTANCE_SERVICE_GET_INSTANCE_SPEC, INSTANCE_SERVICE_WHO_AM_I_SPEC,
@@ -307,9 +316,14 @@ mod tests {
             INSTANCE_SERVICE_WHO_AM_I_SPEC,
             LIVE_SERVICE_WATCH_SPEC,
             LIVE_SERVICE_MODIFY_QUERY_SET_SPEC,
-            LIVE_SERVICE_DEPLOY_SPEC,
             LIVE_SERVICE_MUTATE_SPEC,
             LIVE_SERVICE_QUERY_SPEC,
+            LIVE_ADMIN_SERVICE_DEPLOY_SPEC,
+            LIVE_ADMIN_SERVICE_LIST_DEPLOYMENTS_SPEC,
+            LIVE_ADMIN_SERVICE_GET_DEPLOYMENT_SPEC,
+            LIVE_ADMIN_SERVICE_ACTIVATE_DEPLOYMENT_SPEC,
+            LIVE_ADMIN_SERVICE_GET_INDEX_STATUS_SPEC,
+            LIVE_ADMIN_SERVICE_TAIL_LOGS_SPEC,
         ];
         let table = every_binding();
         assert_eq!(

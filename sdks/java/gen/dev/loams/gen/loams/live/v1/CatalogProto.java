@@ -31,6 +31,21 @@ public final class CatalogProto {
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_loams_live_v1_TableDef_fieldAccessorTable;
   static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_EnforcingValidator_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_EnforcingValidator_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_TableJobRecord_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_TableJobRecord_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_JobFinding_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_JobFinding_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
     internal_static_loams_live_v1_IndexDef_descriptor;
   static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
@@ -40,6 +55,11 @@ public final class CatalogProto {
   static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_loams_live_v1_AppDef_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_DeploymentRecord_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_DeploymentRecord_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -50,42 +70,102 @@ public final class CatalogProto {
   static {
     java.lang.String[] descriptorData = {
       "\n\033loams/live/v1/catalog.proto\022\rloams.liv" +
-      "e.v1\"\235\001\n\010TableDef\022\026\n\006format\030\001 \001(\rR\006forma" +
-      "t\022\016\n\002id\030\002 \001(\rR\002id\022\022\n\004name\030\003 \001(\tR\004name\0221\n" +
-      "\007indexes\030\004 \003(\0132\027.loams.live.v1.IndexDefR" +
-      "\007indexes\022\"\n\rnext_index_id\030\005 \001(\rR\013nextInd" +
-      "exId\"F\n\010IndexDef\022\016\n\002id\030\001 \001(\rR\002id\022\022\n\004name" +
-      "\030\002 \001(\tR\004name\022\026\n\006fields\030\003 \003(\tR\006fields\"G\n\006" +
-      "AppDef\022\026\n\006format\030\001 \001(\rR\006format\022%\n\016journa" +
-      "l_shards\030\002 \001(\rR\rjournalShardsB\201\001\n\033dev.lo" +
-      "ams.gen.loams.live.v1B\014CatalogProtoP\001\242\002\003" +
-      "LLX\252\002\rLoams.Live.V1\312\002\rLoams\\Live\\V1\342\002\031Lo" +
-      "ams\\Live\\V1\\GPBMetadata\352\002\017Loams::Live::V" +
-      "1b\006proto3"
+      "e.v1\032\031loams/live/v1/admin.proto\032\030loams/l" +
+      "ive/v1/live.proto\"\226\002\n\010TableDef\022\026\n\006format" +
+      "\030\001 \001(\rR\006format\022\016\n\002id\030\002 \001(\rR\002id\022\022\n\004name\030\003" +
+      " \001(\tR\004name\0221\n\007indexes\030\004 \003(\0132\027.loams.live" +
+      ".v1.IndexDefR\007indexes\022\"\n\rnext_index_id\030\005" +
+      " \001(\rR\013nextIndexId\0226\n\tvalidator\030\006 \001(\0132\030.l" +
+      "oams.live.v1.ValidatorR\tvalidator\022?\n\tenf" +
+      "orcing\030\007 \001(\0132!.loams.live.v1.EnforcingVa" +
+      "lidatorR\tenforcing\"l\n\022EnforcingValidator" +
+      "\0226\n\tvalidator\030\001 \001(\0132\030.loams.live.v1.Vali" +
+      "datorR\tvalidator\022\036\n\ndeployment\030\002 \001(\014R\nde" +
+      "ployment\"\331\002\n\016TableJobRecord\022\026\n\006format\030\001 " +
+      "\001(\rR\006format\022/\n\004kind\030\002 \001(\0162\033.loams.live.v" +
+      "1.TableJobKindR\004kind\022\031\n\010table_id\030\003 \001(\rR\007" +
+      "tableId\022\036\n\ndeployment\030\004 \001(\014R\ndeployment\022" +
+      "\024\n\005owner\030\005 \001(\tR\005owner\022(\n\020lease_expires_m" +
+      "s\030\006 \001(\004R\016leaseExpiresMs\022\036\n\ncheckpoint\030\007 " +
+      "\001(\014R\ncheckpoint\022\030\n\007scanned\030\010 \001(\004R\007scanne" +
+      "d\022\022\n\004done\030\t \001(\010R\004done\0225\n\010findings\030\n \003(\0132" +
+      "\031.loams.live.v1.JobFindingR\010findings\";\n\n" +
+      "JobFinding\022\025\n\006doc_id\030\001 \001(\014R\005docId\022\026\n\006det" +
+      "ail\030\002 \001(\tR\006detail\"\227\001\n\010IndexDef\022\016\n\002id\030\001 \001" +
+      "(\rR\002id\022\022\n\004name\030\002 \001(\tR\004name\022\026\n\006fields\030\003 \003" +
+      "(\tR\006fields\022/\n\005state\030\004 \001(\0162\031.loams.live.v" +
+      "1.IndexStateR\005state\022\036\n\ndeployment\030\005 \001(\014R" +
+      "\ndeployment\"G\n\006AppDef\022\026\n\006format\030\001 \001(\rR\006f" +
+      "ormat\022%\n\016journal_shards\030\002 \001(\rR\rjournalSh" +
+      "ards\"\233\003\n\020DeploymentRecord\022\026\n\006format\030\001 \001(" +
+      "\rR\006format\022\016\n\002id\030\002 \001(\014R\002id\022#\n\rbundle_sha2" +
+      "56\030\003 \001(\014R\014bundleSha256\022-\n\006schema\030\004 \001(\0132\025" +
+      ".loams.live.v1.SchemaR\006schema\022\"\n\rcreated" +
+      "_at_ms\030\005 \001(\004R\013createdAtMs\022\035\n\ncreated_by\030" +
+      "\006 \001(\tR\tcreatedBy\022\030\n\007message\030\007 \001(\tR\007messa" +
+      "ge\022\026\n\006parent\030\010 \001(\014R\006parent\0224\n\005state\030\t \001(" +
+      "\0162\036.loams.live.v1.DeploymentStateR\005state" +
+      "\022%\n\016failure_reason\030\n \001(\tR\rfailureReason\022" +
+      "9\n\tfunctions\030\013 \003(\0132\033.loams.live.v1.Funct" +
+      "ionInfoR\tfunctions*h\n\014TableJobKind\022\036\n\032TA" +
+      "BLE_JOB_KIND_UNSPECIFIED\020\000\022\033\n\027TABLE_JOB_" +
+      "KIND_VALIDATE\020\001\022\033\n\027TABLE_JOB_KIND_BACKFI" +
+      "LL\020\002B\201\001\n\033dev.loams.gen.loams.live.v1B\014Ca" +
+      "talogProtoP\001\242\002\003LLX\252\002\rLoams.Live.V1\312\002\rLoa" +
+      "ms\\Live\\V1\342\002\031Loams\\Live\\V1\\GPBMetadata\352\002" +
+      "\017Loams::Live::V1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
+          dev.loams.gen.loams.live.v1.AdminProto.getDescriptor(),
+          dev.loams.gen.loams.live.v1.LiveProto.getDescriptor(),
         });
     internal_static_loams_live_v1_TableDef_descriptor =
       getDescriptor().getMessageTypes().get(0);
     internal_static_loams_live_v1_TableDef_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_TableDef_descriptor,
-        new java.lang.String[] { "Format", "Id", "Name", "Indexes", "NextIndexId", });
-    internal_static_loams_live_v1_IndexDef_descriptor =
+        new java.lang.String[] { "Format", "Id", "Name", "Indexes", "NextIndexId", "Validator", "Enforcing", });
+    internal_static_loams_live_v1_EnforcingValidator_descriptor =
       getDescriptor().getMessageTypes().get(1);
+    internal_static_loams_live_v1_EnforcingValidator_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_EnforcingValidator_descriptor,
+        new java.lang.String[] { "Validator", "Deployment", });
+    internal_static_loams_live_v1_TableJobRecord_descriptor =
+      getDescriptor().getMessageTypes().get(2);
+    internal_static_loams_live_v1_TableJobRecord_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_TableJobRecord_descriptor,
+        new java.lang.String[] { "Format", "Kind", "TableId", "Deployment", "Owner", "LeaseExpiresMs", "Checkpoint", "Scanned", "Done", "Findings", });
+    internal_static_loams_live_v1_JobFinding_descriptor =
+      getDescriptor().getMessageTypes().get(3);
+    internal_static_loams_live_v1_JobFinding_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_JobFinding_descriptor,
+        new java.lang.String[] { "DocId", "Detail", });
+    internal_static_loams_live_v1_IndexDef_descriptor =
+      getDescriptor().getMessageTypes().get(4);
     internal_static_loams_live_v1_IndexDef_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_IndexDef_descriptor,
-        new java.lang.String[] { "Id", "Name", "Fields", });
+        new java.lang.String[] { "Id", "Name", "Fields", "State", "Deployment", });
     internal_static_loams_live_v1_AppDef_descriptor =
-      getDescriptor().getMessageTypes().get(2);
+      getDescriptor().getMessageTypes().get(5);
     internal_static_loams_live_v1_AppDef_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_AppDef_descriptor,
         new java.lang.String[] { "Format", "JournalShards", });
+    internal_static_loams_live_v1_DeploymentRecord_descriptor =
+      getDescriptor().getMessageTypes().get(6);
+    internal_static_loams_live_v1_DeploymentRecord_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_DeploymentRecord_descriptor,
+        new java.lang.String[] { "Format", "Id", "BundleSha256", "Schema", "CreatedAtMs", "CreatedBy", "Message", "Parent", "State", "FailureReason", "Functions", });
     descriptor.resolveAllFeaturesImmutable();
+    dev.loams.gen.loams.live.v1.AdminProto.getDescriptor();
+    dev.loams.gen.loams.live.v1.LiveProto.getDescriptor();
   }
 
   // @@protoc_insertion_point(outer_class_scope)

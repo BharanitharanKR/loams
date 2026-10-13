@@ -24,7 +24,7 @@ use grafeo::{EdgeId, GrafeoDB, NodeId, Value};
 use loams_common::meta::LinkId;
 use loams_proto::loams::graph::v1::QueryLanguage;
 
-pub use codec::{CodecError, RECORD_VERSION, decode, encode};
+pub use codec::{CodecError, RECORD_VERSION, decode, decode_props, encode, encode_props};
 
 use crate::GraphId;
 use crate::engine::GraphError;

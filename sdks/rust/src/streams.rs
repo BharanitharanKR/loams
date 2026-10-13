@@ -395,10 +395,11 @@ mod tests {
         assert_eq!(watch.method, "Watch");
         assert_eq!(watch.module, "live");
         // D420: the API has no client stream and no bidi, so every other
-        // generated RPC today is unary — including `Watch`'s siblings.
+        // generated RPC today is unary — including `Watch`'s siblings — but
+        // `LiveAdminService.TailLogs` (LV1 Task 10), a server stream too.
         for module in facade::MODULES {
             for call in module.calls {
-                if call.method != "Watch" {
+                if call.method != "Watch" && call.method != "TailLogs" {
                     assert_eq!(call.streaming, facade::Streaming::Unary, "{}", call.rpc);
                 }
             }

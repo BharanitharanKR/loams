@@ -1,0 +1,55 @@
+# WebSocket — CN2 plan Task 18 (OR-1), loams_connector_brokers::websocket (tokio-tungstenite).
+# Staged in the brokers crate (R18.1) until Task 2 (#477) lands the registry row.
+apiVersion: loams.flow/v1
+kind: Connector
+id: websocket
+name: WebSocket
+specVersion: 0.3.0
+category: messaging
+priority: P2
+starred: false
+status: planned
+runtime:
+  kind: native
+  ref: loams_connector_brokers::websocket
+  version: "loams-connector-brokers 0.0.1 / tokio-tungstenite 0.30.0"
+licence:
+  component: Apache-2.0
+  dependencies:
+    tokio-tungstenite: MIT
+    tungstenite: Apache-2.0
+capabilities:
+  source:
+    streaming: true
+    batch: false
+    cdc: false
+    webhook: false
+    resumable: false
+    position: ""
+  sink:
+    streaming: true
+    batch: false
+    transactional: false
+    upsert: false
+    delete: false
+    idempotent: false
+  delivery: { source: at_most_once, sink: at_most_once }
+  ordering: total
+  formats: [cloudevents-structured, json, bytes]
+  schema: { registry: none, evolution: none }
+  bulk: { arrow: false, max_batch_rows: 65536 }
+  backpressure: push-rate-limited
+auth: [key, jwt]
+config:
+  $ref: schemas/websocket.config.json
+secrets: [auth.key, auth.bearer, tls.key_pem]
+envelope:
+  emits: io.loams.dev.flow.websocket.message.v1
+  consumes: "*"
+  passthrough: true
+  stable_ids: false
+limits: {}
+conformance: [contract, roundtrip, backpressure, auth]
+notes:
+  - "WebSocket has no acknowledgement and no replay: the source is not resumable and both directions are at most once (websocket_declares_not_resumable)"
+docs: docs/guides/connectors/websocket.md

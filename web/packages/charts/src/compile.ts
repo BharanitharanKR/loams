@@ -73,8 +73,8 @@ function normalizeName(chartType: string): string {
     .trim()
     .toLowerCase()
     .replace(/[_-]+/g, ' ')
-    .replace(/\s+(chart|plot)$/, '')
-    .replace(/\s+/g, ' ');
+    .replace(/\s+/g, ' ')
+    .replace(/ (chart|plot)$/, '');
 }
 
 /** The native kind for a spec's `chartType`, or undefined if this package does not draw it. */

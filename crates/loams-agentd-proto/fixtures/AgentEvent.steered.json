@@ -1,0 +1,5 @@
+{
+  "assistantMessageId": "msg-1",
+  "nextAssistantMessageId": "msg-2",
+  "type": "steered"
+}

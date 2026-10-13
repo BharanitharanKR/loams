@@ -9,6 +9,17 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class ValidatorPrimitive(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    VALIDATOR_PRIMITIVE_UNSPECIFIED: _ClassVar[ValidatorPrimitive]
+    VALIDATOR_PRIMITIVE_NULL: _ClassVar[ValidatorPrimitive]
+    VALIDATOR_PRIMITIVE_INT64: _ClassVar[ValidatorPrimitive]
+    VALIDATOR_PRIMITIVE_FLOAT64: _ClassVar[ValidatorPrimitive]
+    VALIDATOR_PRIMITIVE_BOOLEAN: _ClassVar[ValidatorPrimitive]
+    VALIDATOR_PRIMITIVE_STRING: _ClassVar[ValidatorPrimitive]
+    VALIDATOR_PRIMITIVE_BYTES: _ClassVar[ValidatorPrimitive]
+    VALIDATOR_PRIMITIVE_ANY: _ClassVar[ValidatorPrimitive]
+
 class ErrorCode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     ERROR_CODE_UNSPECIFIED: _ClassVar[ErrorCode]
@@ -21,6 +32,14 @@ class ErrorCode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     ERROR_CODE_FUNCTION_OUT_OF_MEMORY: _ClassVar[ErrorCode]
     ERROR_CODE_UNAVAILABLE: _ClassVar[ErrorCode]
     ERROR_CODE_INTERNAL: _ClassVar[ErrorCode]
+VALIDATOR_PRIMITIVE_UNSPECIFIED: ValidatorPrimitive
+VALIDATOR_PRIMITIVE_NULL: ValidatorPrimitive
+VALIDATOR_PRIMITIVE_INT64: ValidatorPrimitive
+VALIDATOR_PRIMITIVE_FLOAT64: ValidatorPrimitive
+VALIDATOR_PRIMITIVE_BOOLEAN: ValidatorPrimitive
+VALIDATOR_PRIMITIVE_STRING: ValidatorPrimitive
+VALIDATOR_PRIMITIVE_BYTES: ValidatorPrimitive
+VALIDATOR_PRIMITIVE_ANY: ValidatorPrimitive
 ERROR_CODE_UNSPECIFIED: ErrorCode
 ERROR_CODE_INVALID_ARGUMENT: ErrorCode
 ERROR_CODE_NOT_FOUND: ErrorCode
@@ -166,20 +185,6 @@ class MutateResponse(_message.Message):
     result: _value_pb2.Value
     def __init__(self, commit_ts: _Optional[int] = ..., result: _Optional[_Union[_value_pb2.Value, _Mapping]] = ...) -> None: ...
 
-class DeployRequest(_message.Message):
-    __slots__ = ("bundle", "schema")
-    BUNDLE_FIELD_NUMBER: _ClassVar[int]
-    SCHEMA_FIELD_NUMBER: _ClassVar[int]
-    bundle: bytes
-    schema: Schema
-    def __init__(self, bundle: _Optional[bytes] = ..., schema: _Optional[_Union[Schema, _Mapping]] = ...) -> None: ...
-
-class DeployResponse(_message.Message):
-    __slots__ = ("deployment_id",)
-    DEPLOYMENT_ID_FIELD_NUMBER: _ClassVar[int]
-    deployment_id: str
-    def __init__(self, deployment_id: _Optional[str] = ...) -> None: ...
-
 class Schema(_message.Message):
     __slots__ = ("tables",)
     TABLES_FIELD_NUMBER: _ClassVar[int]
@@ -187,12 +192,16 @@ class Schema(_message.Message):
     def __init__(self, tables: _Optional[_Iterable[_Union[TableSchema, _Mapping]]] = ...) -> None: ...
 
 class TableSchema(_message.Message):
-    __slots__ = ("name", "indexes")
+    __slots__ = ("name", "indexes", "validator", "schema_validation")
     NAME_FIELD_NUMBER: _ClassVar[int]
     INDEXES_FIELD_NUMBER: _ClassVar[int]
+    VALIDATOR_FIELD_NUMBER: _ClassVar[int]
+    SCHEMA_VALIDATION_FIELD_NUMBER: _ClassVar[int]
     name: str
     indexes: _containers.RepeatedCompositeFieldContainer[IndexSchema]
-    def __init__(self, name: _Optional[str] = ..., indexes: _Optional[_Iterable[_Union[IndexSchema, _Mapping]]] = ...) -> None: ...
+    validator: Validator
+    schema_validation: bool
+    def __init__(self, name: _Optional[str] = ..., indexes: _Optional[_Iterable[_Union[IndexSchema, _Mapping]]] = ..., validator: _Optional[_Union[Validator, _Mapping]] = ..., schema_validation: _Optional[bool] = ...) -> None: ...
 
 class IndexSchema(_message.Message):
     __slots__ = ("name", "fields")
@@ -201,6 +210,43 @@ class IndexSchema(_message.Message):
     name: str
     fields: _containers.RepeatedScalarFieldContainer[str]
     def __init__(self, name: _Optional[str] = ..., fields: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class Validator(_message.Message):
+    __slots__ = ("primitive", "array", "object", "literal", "union", "optional", "id")
+    PRIMITIVE_FIELD_NUMBER: _ClassVar[int]
+    ARRAY_FIELD_NUMBER: _ClassVar[int]
+    OBJECT_FIELD_NUMBER: _ClassVar[int]
+    LITERAL_FIELD_NUMBER: _ClassVar[int]
+    UNION_FIELD_NUMBER: _ClassVar[int]
+    OPTIONAL_FIELD_NUMBER: _ClassVar[int]
+    ID_FIELD_NUMBER: _ClassVar[int]
+    primitive: ValidatorPrimitive
+    array: Validator
+    object: ValidatorObject
+    literal: _value_pb2.Value
+    union: ValidatorUnion
+    optional: Validator
+    id: str
+    def __init__(self, primitive: _Optional[_Union[ValidatorPrimitive, str]] = ..., array: _Optional[_Union[Validator, _Mapping]] = ..., object: _Optional[_Union[ValidatorObject, _Mapping]] = ..., literal: _Optional[_Union[_value_pb2.Value, _Mapping]] = ..., union: _Optional[_Union[ValidatorUnion, _Mapping]] = ..., optional: _Optional[_Union[Validator, _Mapping]] = ..., id: _Optional[str] = ...) -> None: ...
+
+class ValidatorObject(_message.Message):
+    __slots__ = ("fields",)
+    class FieldsEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: Validator
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[_Union[Validator, _Mapping]] = ...) -> None: ...
+    FIELDS_FIELD_NUMBER: _ClassVar[int]
+    fields: _containers.MessageMap[str, Validator]
+    def __init__(self, fields: _Optional[_Mapping[str, Validator]] = ...) -> None: ...
+
+class ValidatorUnion(_message.Message):
+    __slots__ = ("members",)
+    MEMBERS_FIELD_NUMBER: _ClassVar[int]
+    members: _containers.RepeatedCompositeFieldContainer[Validator]
+    def __init__(self, members: _Optional[_Iterable[_Union[Validator, _Mapping]]] = ...) -> None: ...
 
 class LiveError(_message.Message):
     __slots__ = ("code", "message")

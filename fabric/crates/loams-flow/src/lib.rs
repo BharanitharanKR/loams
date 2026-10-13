@@ -16,6 +16,11 @@
 //!   connector SDK's observer hook and by fallback runtimes' scrapes (CN2 Task 24).
 //! * [`activity`] — the Q359 activity observer: plain per-window structs, no
 //!   wire format and no persistence (D548–D552).
+//! * [`egress`] — CN2 Task 25's egress guard: [`egress::EgressPolicy`] at validation and,
+//!   through the SDK's hook, after DNS at connect; the NetworkPolicy for fallback pods.
+//! * [`secrets`] — the `SecretStore`s (file for dev, Kubernetes for production), the
+//!   fallback pods' secret mounts and the fallback log filter (CN2 Task 25).
+//! * [`overlay`] — refusal of executable or file-reading content in fallback overlays.
 //!
 //! The YAML is the source and the protobuf form mirrors it key for key, so
 //! [`manifest::ConnectorSpec::to_proto`] and [`manifest::ConnectorSpec::from_proto`]
@@ -43,10 +48,13 @@
 //! 2026-10-01).
 
 pub mod activity;
+pub mod egress;
 pub mod manifest;
 pub mod metrics;
+pub mod overlay;
 pub mod profile;
 pub mod registry;
+pub mod secrets;
 pub mod validate;
 
 pub use manifest::{

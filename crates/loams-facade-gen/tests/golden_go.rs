@@ -9,8 +9,9 @@
 //! The Go import paths in the golden file are not a guess: they were produced
 //! by running `protoc-gen-go` 1.36.11 and `protoc-gen-connect-go` 1.21.0 with
 //! buf's managed-mode `go_package_prefix` of `loams.dev/go/gen`, which is what
-//! `sdks/go/buf.gen.proto.yaml` configures. `protoc-gen-connect-go` writes its
-//! stubs into a `v1connect` sub-package beside the messages, and names the
+//! the removed `sdks/go/buf.gen.proto.yaml` configured (`sdks/go/buf.gen.go.yaml`
+//! gives the same import paths with `M` options). `protoc-gen-connect-go` writes
+//! its stubs into a `v1connect` sub-package beside the messages, and names the
 //! client interface `<Service>Client`; the facade below is written to those
 //! names.
 

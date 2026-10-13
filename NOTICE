@@ -80,9 +80,12 @@ Copyright TiKV Project Authors.
 Grafeo (https://github.com/GrafeoDB/grafeo), Apache License 2.0, Copyright
 2025-2026 S.T. Grond. crates/loams-graph links the grafeo, grafeo-engine,
 grafeo-core, grafeo-adapters, grafeo-common and grafeo-storage crates at
-version 0.5.43 (crates.io), compiled into loams only with the `graph` cargo
-feature. No Grafeo source is copied. The crate archives ship no NOTICE; the
-NOTICE below is the repository's at tag v0.5.43, reproduced verbatim (indented):
+version 0.5.43, built from Loams' fork (https://github.com/ostrium-labs/grafeo,
+tag v0.5.43-loams.1: upstream v0.5.43 plus the patches listed in its
+PATCHES.md), pinned by revision in Cargo.toml and compiled into loams only
+with the `graph` cargo feature. No Grafeo source is copied into this
+repository. The NOTICE below is the fork's at that tag, reproduced verbatim
+(indented):
   Grafeo
   Copyright 2025-2026 S.T. Grond
 
@@ -90,6 +93,12 @@ NOTICE below is the repository's at tag v0.5.43, reproduced verbatim (indented):
   https://github.com/GrafeoDB/grafeo
 
   Licensed under the Apache License, Version 2.0.
+
+  This copy is the Loams fork (https://github.com/ostrium-labs/grafeo), maintained
+  by Ostrium Labs. It modifies Grafeo; every modification is listed in PATCHES.md
+  and carries a `Loams-Patch:` trailer in its commit message.
+  Modifications Copyright 2026 Ostrium Labs, licensed under the Apache License,
+  Version 2.0.
 
 Neon (https://github.com/neondatabase/neon), Apache License 2.0, Copyright
 Databricks/Neon Inc. Loams Postgres (https://github.com/ostrium-labs/loams-postgres)

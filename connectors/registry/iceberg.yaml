@@ -8,7 +8,7 @@ apiVersion: loams.flow/v1
 kind: Connector
 id: iceberg
 name: Iceberg
-specVersion: 1.0.0
+specVersion: 1.1.0
 category: lakehouse
 priority: P1
 starred: true
@@ -17,7 +17,13 @@ runtime:
   kind: native
   ref: loams_flow::connectors::iceberg
   version: "iceberg-rust 0.10"
-  # The raw-topic sink is Iggy's `iceberg_sink` with Lakekeeper (CN1 Task 9).
+  # CN2 OR-8: the raw-topic sink is native (CN2 Task 17); Iggy's `iceberg_sink` with
+  # Lakekeeper, CN1's (CN1 Task 9), is its declared fallback (OR-4).
+  fallback:
+    kind: iggy
+    ref: iceberg                  # iceberg_sink (CN2 R2.3)
+    directions: [sink]
+    replaced_by: CN2 Task 17
 licence:
   component: Apache-2.0
   dependencies:

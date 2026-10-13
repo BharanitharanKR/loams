@@ -1566,3 +1566,271 @@ The group's refusals and index replays are answered `graph_reloading` too, becau
 - **The append is bounded under the gate.** `GroupCommit.append_timeout` (default 10 s) wraps the append. Past it the answer is `LogError::CommitUnknown`, and the graph reloads as for a failed append (R11.8). A stalled log therefore stalls a graph's reads for at most the timeout (`a_stalled_append_times_out_and_reloads`).
 - **`Engine::reopen_if_poisoned` no longer replays inside the registry lock.** It removes the old graph and runs the ownership and close checks under the lock. It then reopens outside the lock, under the graph's opening latch (`Graph::open_latched`). Before this, a durable replay blocked every other graph's lookups and the async handlers that list graphs, while the replay itself needed the runtime.
 - **A statement that names `if_version` runs in the lane even when it only reads.** Before this, a non-atomic batch whose first statement was a read skipped the version check (`a_non_atomic_batch_checks_its_version_before_a_leading_read`).
+
+### Task 12 (2026-10-11, on `backend/gr1`)
+
+Controller rulings carried in: a reserved `_graph.<gr_id>` stream created by a metastore command, existing `graph.<gr_id>` streams moved to it on open; fenced appends that close R11.8's late-landing `CommitUnknown` race; purge drops the graph's stream; `idempotency_key` stays optional in preview (enforced by Task 24) and the proto says so.
+
+**R12.1 Fenced WAL commits (R0.18's metastore change).**
+- `WalCommit` gains `fences: Vec<Fence>`. A commit of an object not seen before is applied only while every fence's lease is at its epoch, checked atomically with the offset assignment; a broken one is `ApplyError::Fenced` naming its lease, and nothing changes. A retry of an object already committed answers its offsets whatever the fences say now (it was made under them).
+- `loams-meta`: the new `Command::CommitWalFenced` (appended last, so every earlier variant keeps its postcard index; an unfenced commit is still sent as `CommitWal`). Golden files `commands-gr1.12.bin` and `replies-gr1.12.bin`.
+- `loams-meta-tikv`: each partition-group transaction checks and locks every fence (`get_for_update`). A fence that breaks after an earlier group of the same call committed is answered with `earlier_unknown`, so the writer treats it as an unknown outcome, not a refusal.
+- `loams-log`: `LogWriter::append_fenced`. A flush carries the union of its appends' fences. A definite `Fenced` refusal fails only the appends made under that lease; the others go out again in the next WAL object (the refused object becomes an orphan for GC).
+- Conformance: `a_fenced_commit_wal_is_refused_once_its_lease_moves`.
+
+**R12.2 The graph stream is `_graph.<gr_id>`, created by `MetaStore::ensure_graph_stream`.**
+- One partition, standard class, default retention. The name is reserved (`_`), so no user can create or seed it. The command is idempotent and also renames a stream named `graph.<gr_id>` (Task 11's name, R11.2) in place, keeping its id and records, so a graph's catalog record (which holds the stream id) does not change.
+- `GraphAdmin` ensures the stream on every engine open and refuses (`Corrupt`) a record that names another stream. This closes R11.2's residual seeding risk for new graphs; an adopted graph (R11.5) still gets its stream at its first open.
+- `MetaStore::drop_graph_stream(ns, graph, fence)` drops either name, retiring the objects only its entries referenced; a retry answers `None`. The openraft invariants accept `_graph.` streams.
+- Conformance: `graph_streams_are_reserved_idempotent_and_migrated`, `drop_graph_stream_is_fenced_and_retires_its_objects`.
+
+**R12.3 Ownership (`src/owner.rs`).**
+- Lease `graph/<gr_id>/owner`, TTL 10 s, renewed every 3 s; owner string `v1;<node_id>;<incarnation>;<addr>`.
+- Placement: a held lease is here; a lease another node holds is there; a free one goes to the rendezvous choice (FNV-1a + SplitMix64 over the graph id and node id) among the live nodes with the `graph` role, and the choice takes it. `loams-hot`'s rendezvous was not reused: `loams-graph` does not depend on `loams-hot` (it would pull DataFusion and Lance in), and its ranking filters on the `query` role.
+- **One epoch per engine.** An engine is opened under exactly one epoch, taken fresh before it reads the stream. Every reload (a failed or unknown append, a refused capture, a panic) first gives the lease up and takes it again (`Ownership::refresh`), so a commit still in flight from the old engine is refused when it lands. This closes R11.8's race (`a_late_commit_after_a_reload_is_fenced`).
+- An append refused by its fence marks the graph fenced (`Graph::mark_fenced`): it never serves again here, the lease is forgotten and the graph placed anew. A renewal refused (`LeaseLost`), or one that cannot reach the metastore before the deadline, ends the ownership the same way (the lost hook fences and drops the engine).
+- `GraphChangeSet.lease_epoch` is now the owner's epoch.
+- A single node (`GraphAdmin::with_log`) has a one-node ownership: it owns every graph and still fences its appends.
+
+**R12.4 Forwarding (deviation in scope and transport).**
+- `GraphForward` covers every data-plane call, not only `Execute`/`ExecuteBatch`: `ExecuteStream`, `Explain` and `GetSchema` too, because only the owner opens a graph (a non-owner engine would serve stale strong reads until Task 15's followers).
+- API1 Task 8 (`loams.internal.v1`) has not landed, so per R0.16 it is `POST /internal/v1/graph/<method>` on `internal::routes()`: the request's protobuf bytes in, the response's bytes out (`200`), or the Connect error as JSON (`422`). `ExecuteStream` answers every chunk length-delimited. It moves to `loams.internal.v1` with API1 Task 8.
+- A forwarded call is never forwarded again: a node that does not own the graph answers `UNAVAILABLE`/`graph_reloading` (new `GraphError::OwnerMoved`) and the client retries.
+- The forward waits at most the statement's deadline plus 5 s (`FORWARD_SLACK`), and never past the client's own deadline.
+
+**R12.5 Server wiring (R5.2 closed).**
+- `loams_hot::Roles` gains `graph`. `Roles::all()` leaves it out (a node runs it only when named), and a peer descriptor's unknown roles are skipped (`Roles::parse_lenient`), so mixed-version clusters keep seeing every node.
+- A cluster node serves `loams.graph.v1` only with the `graph` role. Its ownership uses the node registry (`RegistryMembership`) and `HttpForwarder`. The loopback rule (D750, R5.3) still applies to every graph node until MT1, so a multi-node graph cluster runs on one host until then.
+
+**R12.6 Maintenance under a lease (Task 4 review M3).** `GraphAdmin::maintain` replaces the two calls of R5.4:
+- every node closes the open graphs the catalog no longer serves, gives their leases up, and removes the local caches of graphs the catalog does not serve (not open, untouched for 10 min: `sweep_local`);
+- the holder of `graph/maintenance` (TTL 120 s) purges expired graphs, dropping each graph's stream under that lease's fence before its record, and sweeps catalog documents. A node that cannot take the lease skips this part.
+- A deleted graph's engine on its owner closes on that owner's next pass (default 10 min); every statement is refused at once, since each reads the catalog first. Its owner lease record stays in the metastore (there is no lease delete).
+- Bucket snapshots and the manifest are Task 13's.
+
+**R12.7 A graceful leave** is `GraphAdmin::shutdown`, which now gives every lease up, so the next node takes the graph at once. There is nothing to checkpoint before Task 13: the stream is the graph.
+
+**R12.8 Tests** (`tests/ownership.rs`, 9):
+- the four planned: `two_nodes_one_writer`, `stale_owner_append_is_fenced` (the old owner's held append is refused by the metastore after another node took the lease, and the old owner then forwards), `forwarded_write_answers_owner_token` (with batch, stream, explain and schema forwarded), `owner_moves_on_node_leave`;
+- fault injection: `a_late_commit_after_a_reload_is_fenced` (a 2 s WAL put against a 300 ms append timeout), `an_unreachable_owner_is_unavailable_until_its_lease_moves`, `a_forwarded_call_is_never_forwarded_again`;
+- `graph_streams_have_the_reserved_name_and_old_ones_move_to_it`, `a_purge_drops_the_graphs_stream_under_the_maintenance_lease`;
+- plus three conformance cases (both metastores), `loams-log`'s `a_broken_fence_fails_only_its_appends_and_commits_nothing_of_them`, `loams-hot`'s `a_descriptor_with_an_unknown_role_keeps_the_known_ones`, and `owner.rs` unit tests.
+
+**R12.9 `ExecuteRequest.idempotency_key`** is documented as optional in preview and required for a writing statement from Task 24 (R11.9), in the proto and in the generated TypeScript.
+
+### Task 13 (2026-10-12, on `backend/gr1-t13`, stacked on Task 12)
+
+**R13.1 Where things live (deviation in path detail).**
+- Every bucket object of a graph is under `ns/<ns_id>/graphs/<gr_id>/` (`snapshot::graph_prefix`).
+- A snapshot's objects are under `snap/<offset>/<kind>-<ULID>/`. The plan's `<epoch>` is the durable epoch, which R9.5 made a log offset; it is zero-padded to 20 digits so listings sort. The ULID gives every checkpoint attempt its own objects, so a retry or a lost acknowledgement never overwrites anything a manifest names.
+- The manifest follows the catalog's idiom (R4.1), not a metastore value: a pointer holds at most 1 KiB, and a manifest lists every retained snapshot with its keys. It is a JSON document `manifest/<ULID>.json`, committed by a CAS of the namespace pointer `graph-manifest/<gr_id>`.
+
+**R13.2 The manifest (`src/snapshot/manifest.rs`).**
+- `GraphManifest { format, graph, snapshots, log_trim_offset }`. Each `SnapshotEntry` has `{ id, kind, offset, epoch, next_txn_seq, lease_epoch, keys, bytes, crc32c?, engine_version, created_at_ms, nodes, edges }`.
+- `offset` covers every record below it. `epoch` is Grafeo's and only informational (R9.5). `next_txn_seq` is the record counter R9.5 says the manifest carries.
+- Snapshots are kept oldest first: by offset, then time, then kind (native first), then id.
+- The CAS carries the owner lease as its fence (I5). A stale owner commits nothing (`SnapshotError::Fenced`, and the graph is then fenced here).
+- A lost CAS retries on the winner's manifest, up to 16 times with the catalog's backoff.
+- A lost acknowledgement is recognised in two ways: the pointer names the write's own document, or, on a retry after an unknown outcome, the change finds its own entry ids already in.
+- The latest `LinkApply` per link (R0.17) is not in the manifest yet. No link writes a graph before Task 18, which adds it.
+
+**R13.3 Retention (`retain`; trim rules).**
+- The **base** is the newest snapshot taken at least the PITR window ago.
+- The trim point is `min(base.offset, newest portable offset)`. It never moves back, and there is none without both a base and a portable snapshot.
+  - The base bound means every record below the trim point is older than the window, because a snapshot's time is read under the gate after its offset.
+  - The portable bound keeps the engine-upgrade fallback (§48 §6.5) replayable.
+- Every snapshot at or above the trim point is kept, so the stream is never trimmed past the oldest retained snapshot.
+- Above `max_snapshots` (default 48), the oldest are dropped, except three: the one at the trim point, the newest portable and the newest. A PITR restore then replays more log, but still finds a snapshot.
+- Outside `test-hooks` builds, the PITR window is at least the idempotency window (24 h). An open from a snapshot therefore still finds every key's record in the stream (R13.6).
+- The window is server-wide (`GraphConfig.checkpoint.pitr_window`, default 7 days). Per-namespace windows are Task 29.
+
+**R13.4 The checkpointer (`src/snapshot/checkpoint.rs`).**
+- **Take.** Under the graph's gate, held shared through `Graph::read_call`: client reads continue, the lane waits, and a panic poisons the graph. The durable offset, the next `txn_seq`, the counts and the metastore time are read first, then each snapshot is taken:
+  - Native: `backup_full` into `<graph dir>/snapshots/<ULID>/`, then a CRC-32C of the file.
+  - Portable: a copy of every node and edge.
+- **Upload.** After the gate is released. Multipart is used above 8 MiB. The staging directory is removed on every path.
+- **Commit and trim.** The manifest is committed with `retain` applied. Then `trim_partition(stream, 0, log_trim_offset, owner fence)` runs. A failed trim is logged and retried by the next checkpoint (trims are idempotent). A refused trim fences the graph.
+- **One at a time.** There is one checkpoint per graph at a time per node.
+- **When it runs:**
+  - A native snapshot is due once the graph changed since its newest snapshot, and either `interval` (15 min) passed or `log_bytes` (64 MiB, counted by the lane since the last snapshot) were appended.
+  - A portable snapshot is due when the graph has none, or once `portable_every` (7 days) passed and the graph changed.
+  - A graph held in memory (`--graph-ephemeral`, or no data directory) takes portable snapshots only, because Grafeo backs up only a database on disk (R0.12).
+  - On demand through `GraphAdmin::checkpoint(ns, name, kinds)`. That is the hook for Task 14's eviction and Task 28's engine upgrades.
+- The server checks every `checkpoint_every` (config only, default 1 min) and calls `GraphAdmin::checkpoint_due`.
+- Holding the gate during `backup_full` or the portable copy stalls writes for that long, but not reads. This is measured by Task 34's gates.
+- The portable copy is held in memory until it is uploaded, which Task 26's memory governance must count.
+
+**R13.5 The portable format (`src/snapshot/portable.rs`).**
+- `nodes/part-<n>.parquet` has columns `id` (UInt64), `labels` (List<Utf8>, sorted) and `properties` (Binary).
+- `edges/part-<n>.parquet` has columns `id`, `type`, `src`, `dst` and `properties`.
+- Rows are in id order, 65 536 per file. `manifest.json` (`loams.graph.portable` version 1) names the files, the offset, `next_txn_seq` and the counts.
+- A `properties` cell is the property map in the log record's own encoding: the version byte 1, then the map as `conformance/graph/records/v1/README.md` specifies it (`changeset::encode_props`/`decode_props`, new in the codec). So a snapshot's values are the log's values exactly, and one specification covers both.
+- Import goes through `apply_to_store`, which keeps the element ids.
+- The Parquet and Arrow crates are the workspace's 58.x. `parquet 58.4.0` was already in `Cargo.lock` through DataFusion, so no new version comes in. `loams-graph` gains `parquet`, `arrow-array`, `arrow-schema` and `crc32c`, all workspace dependencies.
+
+**R13.6 A trimmed stream opens from a snapshot (deviation: part of Task 14 pulled forward).**
+- Without this, the first trim would make a graph unopenable: R11.4 rebuilds from the whole stream and refuses a stream whose start is above 0. So when `start > 0`, `open_db` reads the manifest and picks a snapshot:
+  - the newest native snapshot whose offset is in `[start, end]`, when the graph is on disk and the snapshot's `engine_version` is this build's;
+  - otherwise the newest such portable snapshot.
+- A native snapshot is downloaded into the graph's `graph.grafeo` (size and CRC checked) before the engine opens it. A portable one is imported into the fresh engine.
+- Records from the snapshot's offset on are replayed. Records in `[start, offset)` are only read, to rebuild the idempotency keys and the `txn_seq` (`durable::Base`).
+- An untrimmed stream still opens by full replay. Task 14 makes every open start from the manifest, reuses local caches and adds eviction.
+
+**R13.7 Sweep and purge.**
+- **Sweep.** Under the maintenance lease, `GraphAdmin::maintain` sweeps every catalog graph's prefix (`ManifestStore::sweep`). It deletes snapshot objects no retained entry names, and manifest documents older than the current one by ULID. In both cases the object must have been written at least the sweep grace (the catalog's, 5-minute floor) before the current manifest document, using bucket timestamps only.
+  - A checkpoint in flight uploads after the current document, so it is never swept.
+  - A reader that finds a snapshot gone re-reads the manifest (an obligation on Tasks 14 and 29).
+- **Purge.** It deletes the graph's whole prefix before its stream and its record. A bucket failure leaves the purge for the next pass.
+  - The manifest pointer stays, like the owner lease (R12.6): the metastore cannot delete a pointer, and graph ids are never reused.
+
+**R13.8 Graceful leave.** `GraphAdmin::shutdown` still does not checkpoint before it releases leases (R12.7). The log is the graph, so a checkpoint there would only shorten the next owner's replay. Shutdown time stays bounded. Task 14's eviction checkpoints first.
+
+**R13.9 Tests** (`tests/recovery.rs`, 14):
+- The five planned:
+  - `snapshot_manifest_cas_conflict_retries`: a concurrent writer is injected between the read and the CAS.
+  - `trim_never_passes_oldest_snapshot` and `trim_never_inside_pitr_window`: proptests of 2 000 cases each over generated stream histories. The second checks that no record inside the window is below the trim point.
+  - `portable_snapshot_round_trip`: through the bucket and through the files alone.
+  - `checkpoint_concurrent_with_writes_is_consistent`: 4 writers; 3 checkpoints of both kinds taken mid-workload; each snapshot plus the records after it equals the live graph, ids included.
+- Beyond them:
+  - `a_lost_manifest_acknowledgement_is_recognised`, `a_stale_fence_commits_no_manifest`;
+  - `the_stream_is_trimmed_below_snapshots_outside_the_window_only`;
+  - `a_trimmed_graph_opens_from_its_snapshot`: on disk from the native snapshot with keys read below it, and in memory from the portable one;
+  - `checkpoints_follow_the_policy`;
+  - fault injection with `FaultyStore` and the lease: `a_failed_upload_commits_nothing_and_the_next_checkpoint_succeeds`, `a_stale_owner_commits_no_snapshot_and_trims_nothing`;
+  - `unreferenced_snapshot_objects_are_swept`, `a_purge_deletes_the_graphs_snapshots`.
+- `loams` `connect_graph` gains `graphs_are_checkpointed_on_schedule` and `zero_checkpoint_interval_refused`.
+- Unit tests: retention thinning and no trim without a portable snapshot.
+
+### Task 14 (2026-10-12, on `backend/gr1-t14`, stacked on Task 13)
+
+Controller rulings carried in: R13.6 (a trimmed stream opens from its newest usable snapshot) is built on, not redone. R9.5: replay order and idempotency use the log offset and `txn_seq`, and a replayed engine is checkpointed before its local files are trusted.
+
+**R14.1 `open(meta) -> Graph` is `recovery::open`, called by `Graph::open_db` for every durable graph (`src/recovery.rs`).** It chooses the engine's base, in this order, and takes the first that works:
+1. **The local cache** (`<data_dir>/graphs/<gr_id>/`), when a clean close stamped it (R14.2).
+2. **The newest usable snapshot the manifest names.** `snapshot::restore::candidates` (R13.6's `choose`, generalised) answers every snapshot whose offset is in `[start, end]`: native ones newest first (on disk, and `engine_version` equal to this build's), then portable ones newest first.
+   - A native snapshot is downloaded into `graph.grafeo`, with its size and CRC checked. A portable one is imported into a fresh engine.
+   - A candidate that fails to download, check, open or replay is passed over, and the next is tried.
+   - If any failed, the manifest is read again, at most twice, because a sweep may have retired what an older manifest named (R13.7's obligation).
+3. **Nothing.** The whole stream is replayed, when it starts at offset 0. This is also the fallback when the manifest cannot be read and the stream is untrimmed.
+
+A log error is fatal at every step (`UNAVAILABLE`, retry), because no other base avoids reading the log. Replay starts at the base's offset, so records the base holds are never applied again (R9.5). A graph from before the log is still adopted from its files (R11.5). `Graph::recovery()` answers `Recovery { source, from_offset, to_offset, replayed, elapsed }`, where `source` is `Adopted | Log | LocalCache | Snapshot(kind)` and `replayed` counts the records applied on top of the base.
+
+**R14.2 When local files are trusted (R9.5).**
+- A clean close leaves the stamp `cache.json` beside `graph.grafeo` (`Engine::evict` with `keep`, used by eviction and shutdown). It is written to a temporary file and renamed, then the directory is synced. It records the durable offset, the next `txn_seq`, the idempotency index, the engine version, and the database file's size and CRC-32C after the close.
+- A close is clean only when the graph is durable, on disk, nobody holds it, and it is not reloading, poisoned, fenced or failed. Grafeo's `close` writes every section (an explicit flush) and removes its sidecar WAL.
+- An open **consumes the stamp before the engine touches the files**. It trusts them only when every check holds:
+  - the graph id, the stream id and the engine version match;
+  - the stream still continues from the stamp's offset (`start ≤ offset ≤ end`);
+  - no sidecar `graph.grafeo.wal/` is present (an engine that did not close cleanly);
+  - the file's size and CRC-32C match.
+- Otherwise the directory is cleared and the graph is rebuilt.
+- So a crash, a reload after a refused append, a panic or a fence never leaves trusted files. The CRC also catches a stale stamp whose consumption did not reach the disk.
+- `local_cache_corruption_triggers_rebuild` flips bytes in the file. The CRC catches them before Grafeo reads anything, so a corrupt file never reaches the engine's parser.
+
+**R14.3 A local cache carries its idempotency index (addresses Task 13's concern 2).**
+- `durable::Base` gains `keys`. A cache's base restores the index from the stamp, so the records below its offset are **not read at all**. A rehydration costs the CRC read, the file open and the tail.
+- A snapshot base still reads `[start, offset)` for its keys, as R13.6 does.
+- Snapshots do not carry the index. Putting it in the portable format is left for Task 29's export work if a trimmed open's key scan proves slow.
+
+**R14.4 Eviction (`src/evict.rs`, `GraphAdmin::{evict_due, evict}`).**
+- `EvictPolicy { idle_after: 1 h, node_memory: None }`. A pass, run by the server on its checkpoint tick (`checkpoint_every`, 1 min), does the following:
+  1. **Deleted graphs** (Task 4 review M3). An open graph whose catalog record is gone or names another id is closed and its local directory removed, under the graph's opening latch. The cache of a graph this node evicted and that was deleted since is removed the same way. Both happen without waiting for the purge. Its owner lease is given up.
+  2. **Least recently used first**, among durable graphs open here:
+     - a graph idle for `idle_after` goes (`Idle`);
+     - while the open graphs' memory is above `node_memory`, any graph goes (`Memory`).
+     
+     The memory is Grafeo's `memory_usage` estimate, which under-counts (R0.9). Task 26 refines the measure, sets the default (70 % of the container) and refuses opens over budget.
+- **An eviction:**
+  1. Checkpoints first, unless the manifest already has a snapshot at the durable offset this node can open from (any kind on disk, portable in memory). An idle or on-demand eviction whose checkpoint fails waits for the next pass. A memory one goes on, because the log is the graph.
+  2. Closes under the opening latch, with the stamp, unless a caller holds the graph (a statement, a stream, a detached statement, a checkpoint). A held graph is skipped.
+  3. Gives the owner lease up, unless a statement opened the graph again meanwhile.
+  4. Marks the graph evicted.
+- An in-memory durable graph keeps no cache. It rehydrates from its portable snapshot.
+- A graph's last use is `Graph::touch`, called for every statement `GraphAdmin` runs. Checkpoints and maintenance do not count as use.
+- **A graph fenced during the eviction's checkpoint** (a refused manifest CAS or trim, or a lost renewal) is left to the fence path. It is not closed by the eviction, its lease is not given up, and it is not marked evicted (PR #459 review).
+- **Residual race.** An open that took the lease epoch just before an eviction released it serves until its first append, which is refused by its fence. That write answers `graph_reloading` (retryable), and the graph is placed anew. Nothing acknowledged is lost (I5).
+
+**R14.5 State and the cold gate.**
+- `GetGraph` reports `GRAPH_STATE_EVICTED` for a graph this node evicted and has not opened since (R4.5's placeholder).
+- The first statement on an evicted graph records a `Rehydration { graph, source, open, first_read }`, measured from the statement's arrival. `GraphAdmin::rehydrations()` keeps the newest 256. This is §17.2's cold gate input; Task 27 exports it as a metric.
+
+**R14.6 Shutdown stamps.** `GraphAdmin::shutdown` closes every graph through `Engine::evict(keep)`, so a restart opens each from its local cache and replays only the records written elsewhere meanwhile (`a_local_cache_replays_only_the_records_after_it`). This amends R13.8: still no checkpoint at shutdown, but a stamp, which costs one read of the file for its CRC.
+
+**R14.7 Recovery never reopens a deleted graph.** `open_catalog_graph` refuses a record that is `deleting`, whatever record a caller read (`NOT_FOUND`/`graph_not_found`). This is in addition to Task 4's re-check after the open.
+
+**R14.8 Server.**
+- `GraphConfig.evict` is config only, with no flag. `idle_after` must be greater than zero (`zero_idle_eviction_refused`).
+- The checkpoint tick runs `evict_due` after `checkpoint_due`.
+- `Server::graph_evictions()` counts evictions (`idle_graphs_are_evicted_on_schedule`).
+
+**R14.9 Tests** (`tests/recovery.rs`, 10 new; 24 in the file):
+- The five planned:
+  - `recover_equals_live`: three seeded random workloads of 120 writes, with checkpoints along the way, on disk twice and in memory once. Every local file is dropped, and the graph comes back from its newest snapshot (native or portable) plus the tail (exactly `end - newest` records replayed), equal to the live graph, ids included. It appends nothing and serves on.
+  - `replay_twice_is_identity`: each record applied twice in a row equals once. Recovery from the snapshot, then from the cache it left, twice over, gives the same graph and appends nothing.
+  - `evicted_graph_rehydrates_on_first_read`: on disk and in memory. It checks the checkpoint before eviction, `EVICTED`, the lease given up, the rehydration source, the recorded latency, and that a key written before the eviction still answers.
+  - `engine_version_mismatch_uses_portable_snapshot`.
+  - `local_cache_corruption_triggers_rebuild`: once with a snapshot (native) and once without (whole stream).
+- Beyond them:
+  - `a_stamp_that_does_not_match_its_file_is_not_trusted`: an older, valid database file under a newer stamp. Grafeo would open it, but it lacks the newer writes. The stamp's size and CRC refuse it, and the graph is rebuilt from its stream.
+  - `a_local_cache_replays_only_the_records_after_it`: a second "node" with its own data directory writes in between, and the first node's cache replays exactly `[closed_at, end)`. A key from before the cache still answers.
+  - `memory_pressure_evicts_least_recently_used_first`: a held graph stays.
+  - `eviction_releases_a_deleted_graphs_local_cache`.
+  - `a_graph_fenced_while_it_is_evicted_is_left_to_the_fence` (PR #459 review): the owner lease moves on before a memory eviction, and the eviction's checkpoint is refused and fences the graph. The graph is then not reported evicted, and the other node's lease is not touched.
+- `a_trimmed_graph_opens_from_its_snapshot` (Task 13) now drops the local files before reopening and asserts the snapshot source. Without that, its clean shutdown would leave a cache.
+- Unit tests:
+  - `evict.rs`: LRU and budget order, one rehydration per eviction;
+  - `recovery.rs`: the stamp round-trips;
+  - `idempotency.rs`: `entries` rebuild the index.
+- `loams` `connect_graph` gains `idle_graphs_are_evicted_on_schedule` and `zero_idle_eviction_refused`.
+
+### Grafeo fork (2026-10-12, on `backend/gr1-grafeo`, stacked on Task 13; landed after Task 14)
+
+Owner decision 2026-10-12: Loams builds Grafeo from its fork, `ostrium-labs/grafeo`, maintained as a patch queue (`PATCHES.md`, ids `LG-nnnn`) on `loams/v0.5.43-patches`, started at upstream `v0.5.43` (`8295a544`, the commit crates.io 0.5.43 was published from; every published source file matches). Release tag `v0.5.43-loams.1` = merge `92bc59a2` (fork PR #1). Report: `.superpowers/sdd/2026-10-08-gr1-graph-production/grafeo-fork-report.md`.
+
+**RF.1 The pin.** The four workspace `grafeo*` entries are `git` + `rev = "92bc59a2…"` (the tag's commit), with `version = "=0.5.43"` kept as a check; `grafeo-core` and `grafeo-storage` come from the same rev. `deny.toml` allows the fork's URL; `connectors/licences.toml` names it as each crate's `source`; the root NOTICE reproduces the fork's NOTICE (upstream's text plus a line for Ostrium Labs' modifications). A new fork tag is a new rev on all four lines.
+
+**RF.2 What each patch changes here.**
+- LG-0001 (commit listener) closes R9.9's eviction race and R0.5's epoch read: the lane installs `CommitEvents` on its session and captures from the events the engine hands over at commit, at the epoch it committed at (`CdcCapture::capture_events`). `capture(epoch)` (reading `changes_between`) stays for tests; `run_txn` in `capture_spike.rs` captures both ways and asserts they agree on every proptest workload. Per-group `gc` and `cdc_retention` stay: they bound the CDC log's memory.
+- LG-0002 (`query_timeout` on parameterised statements): R0.8's backstop now covers both of `run_on_session`'s paths. The split stays (plan cache and session/schema commands on `execute`; parameter binding only on `execute_with_params`). `query_timeout_stops_a_parameterised_statement` replaces the canary.
+- LG-0003 (ORDER BY relationships): R7.6 is fixed; `order_by_answers_relationships` replaces the canary. `execute_graph.json` could now take `ORDER BY a.name` (not changed here).
+- LG-0004 (`DETACH DELETE`): R9.8's dangling edge is no longer produced, and deleting an element created in the same transaction works. The capture keeps refusing a dangling edge as a guard; `a_refused_capture_reloads_and_hides` injects the refusal with the `loams_graph::capture` failpoint (graph-scoped, feature `failpoints`; CI's failpoints step runs `--test durability` too), and `detach_delete_of_an_edge_inserted_in_the_batch_is_logged` covers the fixed path. Under `temporal`, set-then-delete now commits (`temporal_set_then_delete_commits` replaces the third temporal canary).
+- LG-0005 is a design note only: snapshot isolation is not implemented, so **R9.3's gate stays**, and `viewing_epoch_hides_later_commits` / `uncommitted_writes_are_visible_to_pinned_sessions` are unchanged. Measured while writing it: an unlabelled scan (and `count(n)`) still returns a node deleted after the pin, with its properties gone, while a labelled scan does not; "count(n) ignores the pin" in R9.3 is that, not a hidden creation.
+- LG-0006 (epoch continuity): a reopened engine (WAL, `.grafeo`, snapshot import) keeps its epoch, and `GrafeoDB::sync_epoch` carries a replayed engine forward. R9.5's ruling stands: order and idempotency stay on the log offset and `txn_seq`; `replay_does_not_carry_the_engine_epoch` also shows the replay can now carry it. Using `sync_epoch` in recovery is left to Task 14.
+
+**RF.3 Workarounds kept.** The per-graph gate (R9.3), the capture's dangling-edge refusal (now a guard), `run_on_session`'s split, per-group `gc`, Task 6's Loams-side deadline and semaphore (the engine still checks the deadline between chunks only, R0.8), and the `temporal` feature staying off (R9.6: two of its three gaps remain).
+
+### Task 15 (2026-10-13, on `gr1-b2-t15`)
+
+Carried in: the per-graph gate stays (R9.3, LG-0005 ruling 2026-10-13), so a follower applies a record under its own gate, held exclusively, as the owner's lane does.
+
+**R15.1 What a follower is (`src/replica.rs`).**
+- A Grafeo engine of its own, in memory, in an `Engine` apart from the owned graphs' (`Replicas`, one per node, made with the log). Checkpoints, eviction, stamping, maintenance and the owner's open never see a follower.
+- It opens the way an owner does (`recovery::open`: the manifest's newest usable snapshot and the records after it, or the whole stream), with no lease and no fence. In memory it opens from a portable snapshot, and R13.3 keeps one at or below the trim point, so a follower can always open.
+- It never appends. `OpenSpec::follower` makes the graph read-only, so a writing statement is refused (`graph_read_only`) before it reaches the engine, whatever the router decided.
+- A follower's memory is the graph's size again on that node. Task 26 counts it.
+
+**R15.2 Placement.** A graph's followers run on the graph nodes ranked right after the owner's place in its rendezvous order (`owner::ranked`; `Ownership::follows(graph, replicas)`: among the first `replicas + 1`, and not holding the lease). `replicas = 0` (the default) has none. A follower opens on the first read routed to it and is tailed from then on. It is closed by the eviction pass (`GraphAdmin::retire_followers`, run by `evict_due`) when the graph was deleted or replaced, this node took its lease, it is no longer placed here, or it was not read for `idle_after`; by the owner's open on the same node; and by shutdown. Opening followers before their first read (warm standbys) is Task 28's.
+
+**R15.3 Routing (`GraphAdmin::route`; §48 §7.2).**
+- `strong` (the default) and every write go to the owner, here or forwarded, as in Task 12. A write that carries `eventual` or `at_least` is the owner's too, and its consistency is ignored.
+- An `eventual` or `at_least` read is served by this node's follower when this node runs one of the graph's followers, and otherwise by the owner. A forwarded read that reaches a follower's node is served there: a follower never forwards.
+- Whether a statement reads is the server gate's answer (`classify::gate_verdict` within the server's limits). A statement the gate refuses goes to the owner, which answers the refusal. `Explain` without `profile` only plans, so it may run on a follower; a `PROFILE` must read. `GetSchema` and `ExecuteBatch` stay the owner's (neither has a consistency field).
+
+**R15.4 Tokens and the wait (`src/consistency.rs`).**
+- `at_least(token)` waits on whichever replica serves it until that replica's published position reaches the token's offset, at most `consistency_wait` (`GraphConfig.consistency_wait`, config only, default 5 s; `GraphAdmin::with_consistency_wait`). Past it: `UNAVAILABLE`/`consistency_wait_timeout`. The wait runs inside the statement's deadline and holds its slots. A statement deadline shorter than the wait answers `graph_statement_timeout`.
+- A token of another stream, or one that does not parse, is `INVALID_ARGUMENT`.
+- Every `Execute`, `ExecuteBatch` and `ExecuteStream` answer carries a token: a write's own, or for a read, the serving replica's position after the statement. That position is never older than the state the read saw, so a later `at_least` read with it is monotonic.
+- The `loams-consistency-token` request header follows `loams.collection.v1`'s rule (`read_consistency`): it turns `strong`, `eventual` or none into `at_least(header)`, and merges into an `at_least` (the later offset; tokens of two streams are refused). `Execute` and `Explain` take it (and `ExecuteStream`, on its inner request). `Execute` and `ExecuteBatch` answer their token in the header as well. `ExecuteStream`'s token is in its last chunk only, since its headers go out first.
+
+**R15.5 The tail.** One task per follower long-polls the stream from the follower's position (`FOLLOW_WAIT`, 500 ms per fetch), applies the records in order under the exclusive gate, keeps the idempotency index and `txn_seq` as a replay does (`Durable::follow`, sharing `replay_record` with `Durable::open`), and then publishes the position, which wakes the waiting reads. A record that does not apply, a gap, or a stream trimmed past the follower's position marks the follower for reload, and its next read rebuilds it from a snapshot. A follower applies only records the log has committed, so it never shows a write that is not durable (I2).
+
+**R15.6 No promotion yet.** A node that takes a graph's lease closes its follower and opens the graph as owner from the stream (one epoch per engine, R12.3). Promoting a follower in place is Task 28's.
+
+**R15.7 Tests** (`tests/ownership.rs`, 5 new):
+- `token_read_on_other_node_sees_write` (D76's case): served by the follower without a forward; with `replicas = 0`, forwarded to the owner.
+- `token_read_during_owner_move_sees_write`: the owner is cut off and still holds its lease; the follower serves the token read. After the lease moves, the new owner serves it and the follower is gone.
+- `token_wait_times_out_with_reason`: on a follower and on the owner; another stream's token and a malformed one are `INVALID_ARGUMENT`.
+- `eventual_read_served_by_follower`: a paused tail leaves the follower behind, and `Execute`, `ExecuteStream` and `Explain` are still served there, each with the follower's own token. An `at_least` read with the newer token waits for the tail.
+- `strong_read_routed_to_owner`: a `strong` read (and the default) is forwarded and sees every write; a write sent with `eventual` goes to the owner.
+- `loams` `connect_graph` gains `consistency_tokens_ride_in_the_header`.
+- Unit tests: `consistency.rs` (levels, the header rule), `owner.rs` (`ranked_starts_with_the_rendezvous_choice`).

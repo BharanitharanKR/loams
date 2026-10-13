@@ -11,7 +11,7 @@ apiVersion: loams.flow/v1
 kind: Connector
 id: grafeo
 name: Grafeo
-specVersion: 0.1.0
+specVersion: 0.2.0
   # 0.x while `status: planned`: no connector code exists yet, and §33 §4 rule 4's
   # removal-or-narrowing bump is a major bump away from here, not a patch.
 category: graph
@@ -20,7 +20,7 @@ starred: false              # D634 adds a row to §33, not a name to §8's 21 (D
 status: planned
 runtime:
   kind: native
-  ref: loams_flow::connectors::graph
+  ref: loams_connector_protocols::grafeo   # CN2 Task 2: the protocols family (Task 21)
   # D634(b) is what makes `native` the only correct runtime, and it is the whole point of
   # the row. Three measured facts, all from D634 and the spike:
   #   * Camel 4.22.1 has no Grafeo component at all — `camel-catalog` 4.22.1 lists no

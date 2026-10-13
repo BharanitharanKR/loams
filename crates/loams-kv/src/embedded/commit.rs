@@ -6,8 +6,11 @@
 //! (including the versions of the commits before it in the group), gives
 //! each that passes a commit timestamp and writes its versions, all in one
 //! redb write transaction: one fsync for the group. A commit conflicts when
-//! a key it writes or locks has a version newer than its start timestamp;
-//! an insert fails when its key is present.
+//! a key it writes or locks has a version or a lock newer than its start
+//! timestamp, or when its start is below the GC safe point (GC may have
+//! dropped what it would conflict with); an insert fails when its key is
+//! present (locks skipped). A key it locks without writing gets a lock
+//! version at its commit timestamp, as TiKV's `Lock` record.
 //!
 //! **The runner** is `loams_tikv`'s, on the embedded transaction: retries
 //! with a jittered backoff, the deadline, the fault points of
@@ -24,7 +27,7 @@ use futures::future::BoxFuture;
 use redb::ReadableTable;
 use tokio::sync::oneshot;
 
-use super::mvcc::{already_exists, encode, newest, version_key};
+use super::mvcc::{already_exists, encode, encode_lock, head, version_key};
 use super::oracle::Oracle;
 use super::{Core, HIGH_WATER, Handle, ORACLE, VERSIONS};
 use crate::{Committed, Fault, FaultPoint, Ts, Txn, TxnError, TxnOptions};
@@ -38,7 +41,8 @@ pub(crate) enum Op {
     Del,
     /// The key must be absent; nothing is written.
     CheckNotExist,
-    /// Conflict detection only; nothing is written.
+    /// Conflict detection, and a lock version at the commit timestamp that
+    /// makes later committers of the key started before it conflict.
     Lock,
 }
 
@@ -156,10 +160,13 @@ impl Core {
         let write = self.db.begin_write()?;
         let mut outcomes = Vec::with_capacity(group.len());
         let mut last = None;
+        // Read under the write transaction: a GC round that moves it later
+        // deletes in write transactions after this one.
+        let safe_point = self.gc_state().safe_point;
         {
             let mut table = write.open_table(VERSIONS)?;
             for req in group {
-                match self.check(&table, req)? {
+                match self.check(&table, req, safe_point)? {
                     Err(refused) => {
                         if refused == Refused::Conflict {
                             self.counters.conflicts.inc();
@@ -176,7 +183,8 @@ impl Core {
                             let stored = match &m.op {
                                 Op::Put(v) | Op::Insert(v) => encode(Some(v)),
                                 Op::Del => encode(None),
-                                Op::CheckNotExist | Op::Lock => continue,
+                                Op::Lock => encode_lock(),
+                                Op::CheckNotExist => continue,
                             };
                             table
                                 .insert(version_key(&m.prefix, ts).as_slice(), stored.as_slice())?;
@@ -209,14 +217,22 @@ impl Core {
         Ok(outcomes)
     }
 
-    fn check<T>(&self, table: &T, req: &Request) -> Result<Result<(), Refused>, redb::Error>
+    fn check<T>(
+        &self,
+        table: &T,
+        req: &Request,
+        safe_point: Ts,
+    ) -> Result<Result<(), Refused>, redb::Error>
     where
         T: ReadableTable<&'static [u8], &'static [u8]>,
     {
         let mut present = Vec::with_capacity(req.mutations.len());
         for m in &req.mutations {
-            let latest = newest(table, &m.prefix, Ts(u64::MAX))?;
-            if latest.as_ref().is_some_and(|(ts, _)| *ts > m.check_ts) {
+            if m.check_ts < safe_point {
+                return Ok(Err(Refused::Conflict));
+            }
+            let (newest_ts, latest) = head(table, &m.prefix, Ts(u64::MAX))?;
+            if newest_ts.is_some_and(|ts| ts > m.check_ts) {
                 return Ok(Err(Refused::Conflict));
             }
             present.push(latest.is_some_and(|(_, v)| v.is_some()));

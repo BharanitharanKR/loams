@@ -1,0 +1,4 @@
+# An image that must be refused: it bakes in a ci-service and a user-supplied driver.
+FROM container-registry.oracle.com/database/free@sha256:0000000000000000000000000000000000000000000000000000000000000002 AS oracle
+FROM docker.io/library/debian:trixie-slim
+COPY drivers/ojdbc11.jar /opt/loams-connect/drivers/oracle/ojdbc11.jar

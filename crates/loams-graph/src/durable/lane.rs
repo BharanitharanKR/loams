@@ -24,6 +24,7 @@
 //! them (the gate), and none was acknowledged.
 
 use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::sync::{Mutex, PoisonError};
 use std::time::Instant;
@@ -33,7 +34,7 @@ use grafeo_engine::transaction::IsolationLevel;
 
 use super::idempotency::Outcome;
 use super::{Commit, ConsistencyToken, Durable, Isolation, WriteOptions};
-use crate::changeset::capture::CdcCapture;
+use crate::changeset::capture::{CdcCapture, CommitEvents};
 use crate::changeset::{Counters, GraphChangeSet, GraphRecord, encode};
 use crate::classify::Access;
 use crate::engine::{
@@ -258,7 +259,7 @@ impl WriteLane {
                     } else {
                         let record = GraphRecord::ChangeSet(GraphChangeSet {
                             graph: durable.graph,
-                            lease_epoch: 0,
+                            lease_epoch: durable.lease_epoch(),
                             commit_epoch,
                             txn_seq: durable.take_txn_seq(),
                             idempotency_key: key.clone(),
@@ -329,17 +330,30 @@ impl WriteLane {
             None
         } else {
             let count = records.len() as u64;
+            let bytes: u64 = records.iter().map(|record| record.len() as u64).sum();
             let now = durable.log.now_ms();
             let batch = records
                 .into_iter()
                 .map(|value| log_record(value, now))
                 .collect();
-            match durable.log.append(durable.stream, batch) {
+            match durable
+                .log
+                .append(durable.stream, batch, durable.fence.as_ref())
+            {
                 Ok(ack) if ack.last_offset.checked_sub(ack.base_offset) == Some(count - 1) => {
+                    // The checkpointer's "64 MiB of log" trigger (GR1 Task 13).
+                    durable.log_bytes.fetch_add(bytes, Ordering::AcqRel);
                     Some((ack.base_offset, ack.last_offset + 1, now))
                 }
                 Ok(ack) => {
                     tracing::error!(graph = %durable.graph, ?ack, count, "the log acknowledged another number of records than the group appended; the graph reloads");
+                    return fail(graph, answers);
+                }
+                Err(err) if super::is_fenced(&err) => {
+                    // Another node owns the graph now (I5): this engine never serves again, and
+                    // nothing of the group is in the log.
+                    tracing::warn!(graph = %durable.graph, epoch = durable.lease_epoch(), "a write group was refused: the graph's owner lease moved on; the graph is fenced here");
+                    graph.mark_fenced();
                     return fail(graph, answers);
                 }
                 Err(err) => {
@@ -482,6 +496,8 @@ fn run(
     job: &LaneJob,
 ) -> Result<(Vec<GraphResult>, crate::changeset::capture::Captured, u64), Step> {
     let mut session = graph.session_for(job.access);
+    let commit = CommitEvents::default();
+    commit.listen(&session);
     let level = match job.options.isolation {
         Isolation::Snapshot => IsolationLevel::SnapshotIsolation,
         Isolation::Serializable => IsolationLevel::Serializable,
@@ -511,11 +527,29 @@ fn run(
             other => Step::Fatal(other),
         });
     }
-    // Under the lane no other explicit transaction commits, so the current epoch is this one's
-    // (R0.5).
-    let commit_epoch = graph.db().current_epoch().as_u64();
+    // The engine hands the commit's epoch and events to the session's listener as it commits
+    // (Grafeo fork patch LG-0001): the epoch is the transaction's own (R0.5) and the events cannot
+    // have been pruned from the CDC log before the capture reads them (R9.9).
+    let (commit_epoch, events) = commit.take().ok_or_else(|| {
+        Step::Fatal(GraphError::engine(
+            "change capture: the engine reported no commit",
+        ))
+    })?;
+    // A failed capture, injected for one graph by name (`durability.rs`,
+    // `a_refused_capture_reloads_and_hides`). The engine bug that used to provoke one (R9.8) is
+    // fixed by the fork's LG-0004.
+    #[cfg(feature = "failpoints")]
+    if fail::eval("loams_graph::capture", |target| {
+        target.as_deref() == Some(graph.name())
+    })
+    .unwrap_or(false)
+    {
+        return Err(Step::Fatal(GraphError::engine(
+            "change capture: injected failure",
+        )));
+    }
     let captured = CdcCapture::new(graph.db())
-        .and_then(|capture| capture.capture(commit_epoch))
+        .and_then(|capture| capture.capture_events(events))
         .map_err(Step::Fatal)?;
     let results = results
         .into_iter()

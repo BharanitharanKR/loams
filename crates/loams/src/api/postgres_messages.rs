@@ -8,11 +8,13 @@ use buffa::MessageField;
 use buffa::enumeration::EnumValue;
 use loams_pg_control::Versioned;
 use loams_pg_control::model::{
-    BranchState, DatabaseRec, OperationRec, OperationState, ProjectRec, ProjectState, RoleRec,
-    WalService,
+    BranchState, ComputeRec, ComputeStatus, Cu, DatabaseRec, EndpointState, EndpointType,
+    OperationRec, OperationState, PoolMode, ProjectRec, ProjectState, RoleRec, WalService,
 };
 use loams_pg_control::service::ServiceError;
 use loams_pg_control::service::branches::BranchView;
+use loams_pg_control::service::endpoints::EndpointView;
+use loams_pg_control::service::watch::{ProjectSnapshot, ResourceKind, WatchEvent, WatchItem};
 use loams_postgres::Lsn;
 use loams_proto::google::protobuf::{Duration as PbDuration, FieldMask, Timestamp};
 use loams_proto::loams::operations::v1 as ops;
@@ -185,11 +187,16 @@ pub(super) fn operation_state(s: OperationState) -> ops::OperationState {
     }
 }
 
-/// An operation; `target` is `{project, branch?}` (§46 §4.1), and an
-/// error's `code` is its registered reason.
+/// An operation; `target` is `{project, branch?, endpoint?}` (§46 §4.1),
+/// and an error's `code` is its registered reason.
 pub(super) fn operation(o: &OperationRec) -> ops::Operation {
     let target = std::iter::once(("project".to_owned(), o.project_id.clone()))
         .chain(o.branch_id.iter().map(|b| ("branch".to_owned(), b.clone())))
+        .chain(
+            o.endpoint_id
+                .iter()
+                .map(|e| ("endpoint".to_owned(), e.clone())),
+        )
         .collect();
     ops::Operation {
         id: o.id.clone(),
@@ -219,6 +226,171 @@ pub(super) fn operation(o: &OperationRec) -> ops::Operation {
     }
 }
 
+/// A size from the proto's CU (`0` is unset): 0.25 steps, as quarters.
+pub(super) fn cu(value: f64, field: &str) -> Result<Option<Cu>, ServiceError> {
+    if value == 0.0 {
+        return Ok(None);
+    }
+    let quarters = value * 4.0;
+    if !quarters.is_finite()
+        || quarters < 1.0
+        || quarters > f64::from(u16::MAX)
+        || (quarters - quarters.round()).abs() > 1e-9
+    {
+        return Err(ServiceError::invalid(
+            field,
+            "a compute size is a positive multiple of 0.25 CU",
+        ));
+    }
+    // A whole number in 1..=u16::MAX, checked above.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    Ok(Some(Cu(quarters.round() as u16)))
+}
+
+fn cu_value(c: Cu) -> f64 {
+    f64::from(c.0) / 4.0
+}
+
+/// An endpoint type from the proto; unspecified is refused.
+pub(super) fn endpoint_type(
+    t: EnumValue<pb::EndpointType>,
+    field: &str,
+) -> Result<EndpointType, ServiceError> {
+    match t {
+        EnumValue::Known(pb::EndpointType::ENDPOINT_TYPE_READ_WRITE) => Ok(EndpointType::ReadWrite),
+        EnumValue::Known(pb::EndpointType::ENDPOINT_TYPE_READ_ONLY) => Ok(EndpointType::ReadOnly),
+        _ => Err(ServiceError::invalid(
+            field,
+            "the type is ENDPOINT_TYPE_READ_WRITE or ENDPOINT_TYPE_READ_ONLY",
+        )),
+    }
+}
+
+/// A pool mode from the proto; unspecified is `None` (the default).
+pub(super) fn pool_mode(
+    m: EnumValue<pb::PoolMode>,
+    field: &str,
+) -> Result<Option<PoolMode>, ServiceError> {
+    match m {
+        EnumValue::Known(pb::PoolMode::POOL_MODE_UNSPECIFIED) => Ok(None),
+        EnumValue::Known(pb::PoolMode::POOL_MODE_TRANSACTION) => Ok(Some(PoolMode::Transaction)),
+        EnumValue::Known(pb::PoolMode::POOL_MODE_SESSION) => Ok(Some(PoolMode::Session)),
+        EnumValue::Known(pb::PoolMode::POOL_MODE_STATEMENT) => Ok(Some(PoolMode::Statement)),
+        EnumValue::Unknown(_) => Err(ServiceError::invalid(field, "an unknown pool mode")),
+    }
+}
+
+/// A suspend timeout in whole seconds; `invalid_argument` past `u32`.
+pub(super) fn suspend_timeout(d: &PbDuration, field: &str) -> Result<u32, ServiceError> {
+    let d = duration(d, field)?;
+    u32::try_from(d.as_secs())
+        .map_err(|_| ServiceError::invalid(field, "a suspend timeout is at most 136 years"))
+}
+
+pub(super) fn endpoint(v: &EndpointView) -> pb::Endpoint {
+    let r = &v.endpoint.record;
+    pb::Endpoint {
+        id: r.id.clone(),
+        project_id: r.project_id.clone(),
+        branch_id: r.branch_id.clone(),
+        r#type: EnumValue::Known(match r.kind {
+            EndpointType::ReadWrite => pb::EndpointType::ENDPOINT_TYPE_READ_WRITE,
+            EndpointType::ReadOnly => pb::EndpointType::ENDPOINT_TYPE_READ_ONLY,
+        }),
+        state: EnumValue::Known(match r.state {
+            EndpointState::Idle => pb::EndpointState::ENDPOINT_STATE_IDLE,
+            EndpointState::Starting => pb::EndpointState::ENDPOINT_STATE_STARTING,
+            EndpointState::Running => pb::EndpointState::ENDPOINT_STATE_RUNNING,
+            EndpointState::Suspending => pb::EndpointState::ENDPOINT_STATE_SUSPENDING,
+            EndpointState::Suspended => pb::EndpointState::ENDPOINT_STATE_SUSPENDED,
+            EndpointState::Failed => pb::EndpointState::ENDPOINT_STATE_FAILED,
+            EndpointState::Deleting => pb::EndpointState::ENDPOINT_STATE_DELETING,
+        }),
+        min_cu: cu_value(r.min_cu),
+        max_cu: cu_value(r.max_cu),
+        suspend_timeout: MessageField::some(seconds(u64::from(r.suspend_timeout_s))),
+        pool_mode: EnumValue::Known(match r.pool_mode {
+            PoolMode::Transaction => pb::PoolMode::POOL_MODE_TRANSACTION,
+            PoolMode::Session => pb::PoolMode::POOL_MODE_SESSION,
+            PoolMode::Statement => pb::PoolMode::POOL_MODE_STATEMENT,
+        }),
+        pg_settings: r
+            .pg_settings
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
+        // The endpoint's own address until PgDog fronts it (Tasks 20, 22).
+        host: r.backend_addr.clone().unwrap_or_default(),
+        compute_id: r.compute_id.clone().unwrap_or_default(),
+        current_cu: v.compute.as_ref().map_or(0.0, |c| cu_value(c.cu)),
+        create_time: MessageField::some(timestamp(r.created_at_ms)),
+        update_time: MessageField::some(timestamp(r.updated_at_ms.max(r.created_at_ms))),
+        version: v.endpoint.version,
+        ..Default::default()
+    }
+}
+
+pub(super) fn compute(c: &ComputeRec) -> pb::Compute {
+    pb::Compute {
+        id: c.id.clone(),
+        endpoint_id: c
+            .binding
+            .as_ref()
+            .map(|b| b.endpoint_id.clone())
+            .unwrap_or_default(),
+        state: EnumValue::Known(match c.status {
+            ComputeStatus::Pending => pb::ComputeState::COMPUTE_STATE_STARTING,
+            ComputeStatus::Running => pb::ComputeState::COMPUTE_STATE_RUNNING,
+            ComputeStatus::Stopping => pb::ComputeState::COMPUTE_STATE_STOPPING,
+            ComputeStatus::Stopped => pb::ComputeState::COMPUTE_STATE_STOPPED,
+            ComputeStatus::Failed => pb::ComputeState::COMPUTE_STATE_FAILED,
+        }),
+        cu: cu_value(c.cu),
+        start_time: MessageField::some(timestamp(c.created_at_ms)),
+        update_time: MessageField::some(timestamp(c.created_at_ms)),
+        ..Default::default()
+    }
+}
+
+fn snapshot(s: &ProjectSnapshot) -> pb::ProjectSnapshot {
+    pb::ProjectSnapshot {
+        project: MessageField::some(project(&s.project)),
+        branches: s.branches.iter().map(branch).collect(),
+        endpoints: s.endpoints.iter().map(endpoint).collect(),
+        computes: s.computes.iter().map(|c| compute(&c.record)).collect(),
+        ..Default::default()
+    }
+}
+
+/// One `WatchProject` answer.
+pub(super) fn watch_item(item: &WatchItem) -> pb::WatchProjectResponse {
+    use pb::__buffa::oneof::watch_project_response::Event;
+    let event = match &item.event {
+        WatchEvent::Snapshot(s) => Event::from(snapshot(s)),
+        WatchEvent::Project(p) => Event::from(project(p)),
+        WatchEvent::Branch(b) => Event::from(branch(b)),
+        WatchEvent::Endpoint(e) => Event::from(endpoint(e)),
+        WatchEvent::Compute(c) => Event::from(compute(&c.record)),
+        WatchEvent::Removed { kind, id } => Event::from(pb::Removed {
+            kind: EnumValue::Known(match kind {
+                ResourceKind::Branch => pb::ResourceKind::RESOURCE_KIND_BRANCH,
+                ResourceKind::Endpoint => pb::ResourceKind::RESOURCE_KIND_ENDPOINT,
+                ResourceKind::Compute => pb::ResourceKind::RESOURCE_KIND_COMPUTE,
+                ResourceKind::Project => pb::ResourceKind::RESOURCE_KIND_UNSPECIFIED,
+            }),
+            id: id.clone(),
+            ..Default::default()
+        }),
+        WatchEvent::Heartbeat => Event::from(pb::Heartbeat::default()),
+    };
+    pb::WatchProjectResponse {
+        event: Some(event),
+        cursor: item.cursor.clone(),
+        snapshot_reset: item.snapshot_reset,
+        ..Default::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -233,6 +405,17 @@ mod tests {
             ..Default::default()
         };
         assert!(timestamp_ms(&before, "t").is_err());
+    }
+
+    #[test]
+    fn sizes_are_quarters_of_a_cu() {
+        assert_eq!(cu(0.0, "min_cu").expect("unset"), None);
+        assert_eq!(cu(0.25, "min_cu").expect("ok"), Some(Cu(1)));
+        assert_eq!(cu(16.0, "min_cu").expect("ok"), Some(Cu(64)));
+        for bad in [0.1, -1.0, f64::NAN, f64::INFINITY, 1e9] {
+            assert!(cu(bad, "min_cu").is_err(), "{bad}");
+        }
+        assert!((cu_value(Cu(6)) - 1.5).abs() < f64::EPSILON);
     }
 
     #[test]

@@ -833,7 +833,8 @@ pub(crate) async fn update(
 ) -> Result<(Vec<UpdateResult>, ConsistencyToken), GatewayError> {
     let info = gw.service().get_collection(&ctx.ns, &collection).await?;
     let n = operations.len();
-    let mut planned = Vec::with_capacity(n);
+    // Grown as planned rather than preallocated from the client's count.
+    let mut planned = Vec::new();
     for op in operations {
         planned.push(Box::pin(plan_operation(&gw, &ctx, &info, op)).await?);
     }

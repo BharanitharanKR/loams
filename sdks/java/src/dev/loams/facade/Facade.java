@@ -55,6 +55,9 @@ public final class Facade {
 
     public static final String LIVE_SERVICE = "loams.live.v1.LiveService";
 
+    /** {@code loams.live.v1.LiveAdminService}, where Deploy moved (LV1 Task 10). */
+    public static final String LIVE_ADMIN_SERVICE = "loams.live.v1.LiveAdminService";
+
     /** The module catalogue, ordered by module name. */
     public static final List<ModuleBinding> MODULES = modules();
 
@@ -110,7 +113,9 @@ public final class Facade {
                         true,
                         true,
                         List.of(
-                                call("tables", "Deploy", "deploy", LIVE_SERVICE,
+                                // Deploy moved to LiveAdminService (LV1 Task 10); `tables`
+                                // keeps the call, now routed there.
+                                call("tables", "Deploy", "deploy", LIVE_ADMIN_SERVICE,
                                         IdempotencyLevel.NONE, RetryClass.MANUAL,
                                         Streaming.UNARY, null, false),
                                 // `MutateRequest.idempotency_key` (live.proto). Read off

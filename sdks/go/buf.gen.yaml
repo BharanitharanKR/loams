@@ -5,7 +5,7 @@
 # dispatches through, and the reason table generated from
 # `docs/api/reasons.md`.
 #
-# The stubs are not generated here: `sdks/go/buf.gen.proto.yaml` writes them
+# The stubs are not generated here: `sdks/go/buf.gen.go.yaml` writes them
 # with the pinned remote plugins, and the facade imports their types.
 #
 # Run `scripts/sdk/gen.sh go`, which builds the plugin, substitutes the path
@@ -15,16 +15,15 @@
 # tree. CI regenerates and fails on a diff.
 #
 # The package map names each proto package's generated messages by the import
-# path buf's managed mode produces under `go_package_prefix: loams.dev/go/gen`
-# (`sdks/go/buf.gen.proto.yaml`). Those paths are not a guess: running the pinned
-# `protoc-gen-go` 1.36.11 and `protoc-gen-connect-go` 1.21.0 over `proto/` with
-# that prefix writes the messages to `loams/<package path>/v1/*.pb.go` and the
-# Connect stubs to `loams/<package path>/v1/v1connect/*.connect.go`.
+# path `sdks/go/buf.gen.go.yaml`'s `M` options give it,
+# `loams.dev/go/gen/loams/<package path>/v1`, which is where the committed stubs
+# are.
 #
 # The facade goes in its own package at the module root, not under `gen/`,
-# because `buf.gen.proto.yaml` cleans `sdks/go/gen` and a facade nested inside
-# it would be removed by every stub regeneration. The import is
-# `loams.dev/go/facade`.
+# so that no stub regeneration can touch it. The import is `loams.dev/go/facade`.
+# It is not committed yet: the SDK builds against `gen/facade/`, the Q604
+# hand-written fallback, and `scripts/sdk/drift.sh go` generates this one only
+# to check that it generates, then removes it.
 #
 # `loams.dev/go` is a vanity path (Q607). `go get` resolves it through a
 # `go-import` meta tag on `loams.dev`, which is a `loam-cloud` change; the tag

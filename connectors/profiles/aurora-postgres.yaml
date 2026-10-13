@@ -1,0 +1,21 @@
+# Amazon Aurora, PostgreSQL engine — a target profile on the native Postgres
+# family (CN2 OR-2, Task 10). Aurora speaks the Postgres wire protocol and
+# logical replication (pgoutput), so `loams-connector-postgres` serves it with
+# the same batch source, CDC source and exactly-once sink. Aurora has no image:
+# its suites run nightly against a real cluster (OR-3, OR-23); PostgreSQL in
+# compose is an extra target, never the system under test. Task 11 serves the
+# MySQL engine as `aurora-mysql`. IAM tokens (`auth: iam`) are minted per
+# connection from AWS credentials the instance names by secret; the profile
+# carries none.
+apiVersion: loams.flow/v1
+kind: Profile
+id: aurora-postgres
+profile_kind: target
+module: postgres
+system:
+  name: Amazon Aurora
+  service: { nightly: [LOAMS_AURORA_POSTGRES_URL] }
+# Aurora requires TLS for IAM logins; the RDS CA is not in the webpki roots,
+# so an instance using verify-full sets `ca_pem` to the RDS bundle.
+defaults: { sslmode: require }
+narrows: []

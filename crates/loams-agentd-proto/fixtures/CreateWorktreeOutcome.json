@@ -1,0 +1,16 @@
+{
+  "branch": "loams-desktop/fix-linker",
+  "checkoutId": "checkout-2",
+  "name": "fix-linker",
+  "path": "/home/dev/project-wt/fix-linker",
+  "repoPath": "/home/dev/project",
+  "setupAction": {
+    "actionId": "action-1",
+    "actionName": "Test",
+    "terminal": {
+      "cwd": "/home/dev/project",
+      "id": "term-1",
+      "shell": "/bin/bash"
+    }
+  }
+}

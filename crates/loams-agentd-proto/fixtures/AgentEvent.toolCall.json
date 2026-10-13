@@ -1,0 +1,8 @@
+{
+  "call": {
+    "command": "cargo build",
+    "kind": "exec"
+  },
+  "id": "call-1",
+  "type": "toolCall"
+}

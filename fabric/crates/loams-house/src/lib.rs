@@ -16,6 +16,14 @@
 //! and pipes. Its statements pass the checks the HTTP interface's do, from the
 //! same functions ([`gate`]).
 //!
+//! # Lake reads and `system` tables (HS1 Task 11)
+//!
+//! [`read`] pins every lake table a statement names to one Iceberg snapshot
+//! (or the one `loams_snapshot_id`/`loams_as_of` names) and [`views`] writes the
+//! views its worker reads them through, via `house-cache`; [`system`] replaces
+//! chDB's `system.databases`, `tables`, `columns`, `parts`, `processes` and
+//! `errors` with the namespace's own.
+//!
 //! # The front links no libchdb (HS1 Task 2, D761)
 //!
 //! chDB runs in `loams-house-worker` processes. This crate supervises them —
@@ -72,26 +80,33 @@
 pub mod admission;
 pub mod api;
 pub mod auth;
+pub mod catalog;
 pub mod classify;
 pub mod compress;
 pub mod config;
+pub mod ddl;
 pub mod deny;
 pub mod errors;
+pub mod expr;
 #[cfg(feature = "test-hooks")]
 pub mod fuzz;
 pub mod gate;
 pub mod http;
+pub mod read;
 pub mod request;
 pub mod sandbox;
 pub mod session;
 pub mod settings;
+pub mod system;
+pub mod types;
+pub mod views;
 pub mod watchdog;
 
 pub use admission::{Collected, Event, Outcome, PoolConfig, PoolStats, WorkerLease, WorkerPool};
 pub use config::{CatalogSpec, HouseConfig, HouseFile, UserMap, WorkersMode};
 pub use errors::{CODES, ChError, HouseError, MidStreamBody};
-pub use http::{HouseHandle, serve, serve_with_catalog};
-pub use sandbox::{CgroupLimits, SandboxMode, WorkerCgroups};
+pub use http::{HouseHandle, serve, serve_with_catalog, serve_with_lake};
+pub use sandbox::{CgroupLimits, Forward, ForwardSlot, ForwardTarget, SandboxMode, WorkerCgroups};
 #[cfg(feature = "inproc-worker")]
 pub use watchdog::InprocWorker;
 pub use watchdog::{ExitReason, KillHandle, Launcher, ProcessLauncher};

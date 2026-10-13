@@ -1,27 +1,59 @@
-//! The egress hook (CN2 Task 4; Task 25 fills it with `EgressPolicy`). Every
-//! family crate connects through [`crate::net::connect`] or
-//! [`crate::http::client`], which call [`EgressCheck::check_addr`] after DNS,
-//! on every address they are about to dial.
+//! The egress hook (CN2 Task 4; Task 25 fills it with `loams-flow`'s
+//! `EgressPolicy`). Every family crate connects through [`crate::net::connect`]
+//! or [`crate::http::client`], which check the host before DNS, resolve it
+//! through [`EgressCheck::resolver`] (the SDK's resolver hook), and call
+//! [`EgressCheck::check_addr`] on every address they are about to dial. A
+//! name that resolves to a forbidden address is refused at connect time, on
+//! every connection, so a DNS answer that changes between validation and use
+//! (DNS rebinding) gains nothing.
 
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
+
+use async_trait::async_trait;
 
 /// Why a connection was refused.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("egress refused: {0}")]
 pub struct EgressDenied(pub String);
 
+/// The SDK's resolver hook: how a host name becomes the addresses
+/// [`crate::net::connect`] dials. The default is the system resolver; tests
+/// and the runtime may substitute their own. An IP literal never reaches it.
+#[async_trait]
+pub trait Resolve: Send + Sync {
+    async fn resolve(&self, host: &str, port: u16) -> std::io::Result<Vec<SocketAddr>>;
+}
+
+/// The operating system's resolver (`getaddrinfo` through tokio).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SystemResolver;
+
+#[async_trait]
+impl Resolve for SystemResolver {
+    async fn resolve(&self, host: &str, port: u16) -> std::io::Result<Vec<SocketAddr>> {
+        Ok(tokio::net::lookup_host((host, port)).await?.collect())
+    }
+}
+
 pub trait EgressCheck: Send + Sync {
-    /// Before DNS: the host name a config names.
+    /// Before DNS: the host name a config, a request or a redirect names.
     fn check_host(&self, host: &str, port: u16) -> Result<(), EgressDenied> {
         let _ = (host, port);
         Ok(())
     }
     /// After DNS, at connect: the address about to be dialled.
     fn check_addr(&self, addr: &SocketAddr) -> Result<(), EgressDenied>;
+    /// The resolver [`crate::net::connect`] uses for this check's
+    /// connections (the SDK's resolver hook).
+    fn resolver(&self) -> Arc<dyn Resolve> {
+        Arc::new(SystemResolver)
+    }
 }
 
-/// Allows everything. The default until Task 25's guard; never use it for a
-/// namespace an untrusted user configures.
+/// Allows everything. For the runtime's own trusted connections (the
+/// Kubernetes API, the Fabric) and for tests; never for an instance's
+/// connections, which go through `loams-flow`'s `EgressPolicy` (Task 25).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AllowAll;
 
@@ -32,8 +64,8 @@ impl EgressCheck for AllowAll {
 }
 
 /// Refuses loopback, link-local (cloud metadata at 169.254.169.254) and
-/// unspecified addresses: the minimal guard the SDK's own tests use. Task 25's
-/// `EgressPolicy` replaces it with the full default-deny list.
+/// unspecified addresses: the minimal guard the SDK's own tests use.
+/// `loams-flow`'s `EgressPolicy` is the full default-deny list (Task 25).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DenyLocal;
 

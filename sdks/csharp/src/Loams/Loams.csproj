@@ -23,11 +23,25 @@
     <AssemblyName>Loams</AssemblyName>
     <RootNamespace>Loams</RootNamespace>
     <PackageId>Loams</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.0-preview.2</Version>
     <Description>The Loams SDK for C#: one Loams object with namespaced modules over the unified Connect API, generated from proto/.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Authors>Ostrium Labs</Authors>
     <PackageTags>loams;connect;grpc;sdk;database</PackageTags>
+    <PackageProjectUrl>https://github.com/ostrium-labs/loams/tree/dev/sdks/csharp</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/ostrium-labs/loams</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!--
+      Reproducible packages: the release workflow passes
+      `-p:ContinuousIntegrationBuild=true` so paths in the PDB are normalised, and
+      the commit goes into the nuspec (`RepositoryCommit`) from the same build.
+      The symbols ship as a .snupkg beside the .nupkg.
+    -->
+    <Deterministic>true</Deterministic>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!--
       `EnableDefaultCompileItems` stays on and the generated stubs are ordinary
@@ -51,6 +65,7 @@
 
   <ItemGroup>
     <None Include="../../LICENSE" Pack="true" PackagePath="" />
+    <None Include="../../README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 
 </Project>

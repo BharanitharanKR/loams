@@ -8,7 +8,7 @@ apiVersion: loams.flow/v1
 kind: Connector
 id: s3
 name: S3
-specVersion: 1.0.0
+specVersion: 1.1.0
 category: object-storage
 priority: P1
 starred: true
@@ -17,8 +17,13 @@ runtime:
   kind: native
   ref: loams_flow::connectors::s3
   version: "object_store 0.14"
-  # The raw-event sink may instead run through Iggy's `s3_sink` (§33 §8 row 6);
-  # CN1 Task 9 renders that config, the native writer takes Arrow batches.
+  # CN2 OR-8: the sink is native (CN2 Task 13); Iggy's `s3_sink`, CN1's raw-event
+  # sink (§33 §8 row 6), is its declared fallback (OR-4).
+  fallback:
+    kind: iggy
+    ref: s3                       # s3_sink (CN2 R2.3)
+    directions: [sink]
+    replaced_by: CN2 Task 13
 licence:
   component: Apache-2.0
   dependencies:

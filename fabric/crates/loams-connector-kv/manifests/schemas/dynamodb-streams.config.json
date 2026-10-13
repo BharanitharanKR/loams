@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loams.dev/schemas/dynamodb-streams.config.json",
+  "title": "DynamoDB Streams connector instance config (loams.flow/v1)",
+  "description": "One DynamoDB Streams instance's settings (CN2 Task 14): native CDC over a table's stream, shards as splits in lineage order. Name the stream by its ARN, or the table whose latest stream to read. The three credential fields are names of secrets in the namespace's secret store (D189).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["access_key_id", "secret_access_key"],
+  "properties": {
+    "stream_arn": { "description": "The stream's ARN.", "type": "string", "minLength": 1 },
+    "table": { "description": "The table whose LatestStreamArn to read, when `stream_arn` is not given.", "type": "string", "minLength": 3, "maxLength": 255 },
+    "region": { "description": "The AWS region.", "type": "string", "minLength": 1, "default": "us-east-1" },
+    "endpoint_url": { "description": "An endpoint other than the region's (a VPC endpoint, or an emulator in tests); used for both DynamoDB and DynamoDB Streams.", "type": "string", "minLength": 1 },
+    "access_key_id": { "description": "The name of the secret holding the access key id.", "type": "string", "minLength": 1, "writeOnly": true },
+    "secret_access_key": { "description": "The name of the secret holding the secret access key.", "type": "string", "minLength": 1, "writeOnly": true },
+    "session_token": { "description": "The name of the secret holding a session token.", "type": "string", "minLength": 1, "writeOnly": true },
+    "start": { "description": "Where a root shard with no checkpoint starts: trim_horizon (everything retained, the default) or latest. Child shards always start at their beginning.", "type": "string", "enum": ["trim_horizon", "latest"], "default": "trim_horizon" },
+    "poll_interval_ms": { "description": "The wait after an empty read of an open shard.", "type": "integer", "minimum": 1, "default": 1000 }
+  },
+  "anyOf": [{ "required": ["stream_arn"] }, { "required": ["table"] }]
+}

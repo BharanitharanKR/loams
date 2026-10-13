@@ -1,0 +1,20 @@
+# CockroachDB — a target profile on the native Postgres family (CN2 OR-2,
+# Task 10). CockroachDB speaks the Postgres wire protocol but has no logical
+# replication and no binary `COPY … TO` (R0.20): its CDC is a sinkless
+# `CREATE CHANGEFEED … WITH updated, diff, resolved, cursor` over the SQL
+# connection, and its batch reads are `SELECT … AS OF SYSTEM TIME` pages,
+# both chosen by the family when the target is CockroachDB. The sink is the
+# Postgres upsert sink with `_loams_checkpoints` in the same transaction.
+# The suite runs against real CockroachDB (CockroachDB Software License, a
+# `ci-service`, single node, OR-3), never against PostgreSQL. Changefeeds need
+# the cluster setting `kv.rangefeed.enabled`.
+apiVersion: loams.flow/v1
+kind: Profile
+id: cockroachdb
+profile_kind: target
+module: postgres
+system:
+  name: CockroachDB
+  service: { compose: cockroachdb }
+defaults: { port: 26257, database: defaultdb }
+narrows: []

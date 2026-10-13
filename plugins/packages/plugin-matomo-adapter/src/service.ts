@@ -116,8 +116,10 @@ export function matomoNumber(value: MatomoMetric | null | undefined): number | u
 
 /** Turn a formatted time string into seconds. Unparseable input returns undefined. */
 function parseMatomoDuration(text: string): number | undefined {
+  // `(?<!\d)`: a number starts only at the head of a digit run, which keeps the scan
+  // linear on a long run of digits with no unit after it.
   const pattern =
-    /(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|secs?|seconds?|m|mins?|minutes?|h|hours?|d|days?)/gi;
+    /(?<!\d)(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|secs?|seconds?|m|mins?|minutes?|h|hours?|d|days?)/gi;
   let total = 0;
   let matched = false;
   for (const match of text.matchAll(pattern)) {

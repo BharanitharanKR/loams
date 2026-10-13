@@ -529,8 +529,10 @@ impl MetaNode {
             | Command::DropCollection { now_ms, .. }
             | Command::ClaimIdempotencyKeys { now_ms, .. }
             | Command::CompleteIdempotencyKeys { now_ms, .. }
-            | Command::PruneIdempotencyKeys { now_ms, .. } => *now_ms,
-            Command::CommitWal { created_at_ms, .. } => *created_at_ms,
+            | Command::PruneIdempotencyKeys { now_ms, .. }
+            | Command::DropGraphStream { now_ms, .. } => *now_ms,
+            Command::CommitWal { created_at_ms, .. }
+            | Command::CommitWalFenced { created_at_ms, .. } => *created_at_ms,
             _ => return Ok(()),
         };
         let leader = self.inner.raft.metrics().borrow_watched().current_leader;

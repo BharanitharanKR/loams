@@ -1,0 +1,11 @@
+{
+  "change": {
+    "action": "section",
+    "change": {
+      "action": "assign",
+      "sectionId": "section-1",
+      "sessionId": "chat-1"
+    }
+  },
+  "op": "changeSidebarPin"
+}

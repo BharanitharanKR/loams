@@ -1,0 +1,86 @@
+{
+  "recorded_from": "Segment",
+  "synthetic": true,
+  "docs": [
+    "https://segment.com/docs/connections/sources/catalog/libraries/server/http-api/#batch"
+  ],
+  "scenario": {
+    "direction": "sink",
+    "resource": "batch",
+    "config": {
+      "base_url": "{proxy}/v1"
+    },
+    "secrets": {
+      "username": "synthetic-write-key"
+    },
+    "input": [
+      {
+        "type": "track",
+        "event": "Signed Up",
+        "userId": "u-1",
+        "messageId": "m-1",
+        "timestamp": "2026-10-01T12:00:00.000Z",
+        "properties": {
+          "plan": "pro"
+        }
+      },
+      {
+        "type": "track",
+        "event": "Signed Up",
+        "userId": "u-2",
+        "messageId": "m-2",
+        "timestamp": "2026-10-01T12:00:00.000Z",
+        "properties": {
+          "plan": "pro"
+        }
+      }
+    ],
+    "expect": 2
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/batch",
+        "headers": {},
+        "body": {
+          "json": {
+            "batch": [
+              {
+                "type": "track",
+                "event": "Signed Up",
+                "userId": "u-1",
+                "messageId": "m-1",
+                "timestamp": "2026-10-01T12:00:00.000Z",
+                "properties": {
+                  "plan": "pro"
+                }
+              },
+              {
+                "type": "track",
+                "event": "Signed Up",
+                "userId": "u-2",
+                "messageId": "m-2",
+                "timestamp": "2026-10-01T12:00:00.000Z",
+                "properties": {
+                  "plan": "pro"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "success": true
+          }
+        }
+      }
+    }
+  ]
+}

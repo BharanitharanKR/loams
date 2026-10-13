@@ -92,6 +92,147 @@ enum class Reason {
      */
     FEATURE_NOT_IN_VARIANT,
 
+    /** `house_not_configured` (docs/api/reasons.md). */
+    HOUSE_NOT_CONFIGURED,
+
+    /** `house_syntax_error` (docs/api/reasons.md). */
+    HOUSE_SYNTAX_ERROR,
+
+    /** `house_unknown_table` (docs/api/reasons.md). */
+    HOUSE_UNKNOWN_TABLE,
+
+    /** `house_unknown_database` (docs/api/reasons.md). */
+    HOUSE_UNKNOWN_DATABASE,
+
+    /** `house_access_denied` (docs/api/reasons.md). */
+    HOUSE_ACCESS_DENIED,
+
+    /** `house_read_only` (docs/api/reasons.md). */
+    HOUSE_READ_ONLY,
+
+    /** `house_timeout` (docs/api/reasons.md). */
+    HOUSE_TIMEOUT,
+
+    /** `house_memory_limit` (docs/api/reasons.md). */
+    HOUSE_MEMORY_LIMIT,
+
+    /** `house_too_many_queries` (docs/api/reasons.md). */
+    HOUSE_TOO_MANY_QUERIES,
+
+    /** `house_quota_exceeded` (docs/api/reasons.md). */
+    HOUSE_QUOTA_EXCEEDED,
+
+    /** `house_disabled_function` (docs/api/reasons.md). */
+    HOUSE_DISABLED_FUNCTION,
+
+    /** `house_cancelled` (docs/api/reasons.md). */
+    HOUSE_CANCELLED,
+
+    /** `house_query_not_found` (docs/api/reasons.md). */
+    HOUSE_QUERY_NOT_FOUND,
+
+    /** `house_query_failed` (docs/api/reasons.md). */
+    HOUSE_QUERY_FAILED,
+
+    /** `project_not_found` (docs/api/reasons.md). */
+    PROJECT_NOT_FOUND,
+
+    /** `branch_has_children` (docs/api/reasons.md). */
+    BRANCH_HAS_CHILDREN,
+
+    /** `branch_protected` (docs/api/reasons.md). */
+    BRANCH_PROTECTED,
+
+    /** `lsn_out_of_retention` (docs/api/reasons.md). */
+    LSN_OUT_OF_RETENTION,
+
+    /** `endpoint_exists_for_branch` (docs/api/reasons.md). */
+    ENDPOINT_EXISTS_FOR_BRANCH,
+
+    /** `compute_start_failed` (docs/api/reasons.md). */
+    COMPUTE_START_FAILED,
+
+    /** `quota_exceeded` (docs/api/reasons.md). */
+    QUOTA_EXCEEDED,
+
+    /** `storage_unavailable` (docs/api/reasons.md). */
+    STORAGE_UNAVAILABLE,
+
+    /** `secret_already_issued` (docs/api/reasons.md). */
+    SECRET_ALREADY_ISSUED,
+
+    /** `repo_not_found` (docs/api/reasons.md). */
+    REPO_NOT_FOUND,
+
+    /** `repo_already_exists` (docs/api/reasons.md). */
+    REPO_ALREADY_EXISTS,
+
+    /** `repo_deleting` (docs/api/reasons.md). */
+    REPO_DELETING,
+
+    /** `ref_stale` (docs/api/reasons.md). */
+    REF_STALE,
+
+    /** `ref_protected` (docs/api/reasons.md). */
+    REF_PROTECTED,
+
+    /** `out_of_scope` (docs/api/reasons.md). */
+    OUT_OF_SCOPE,
+
+    /** `object_format_unsupported` (docs/api/reasons.md). */
+    OBJECT_FORMAT_UNSUPPORTED,
+
+    /** `fork_too_deep` (docs/api/reasons.md). */
+    FORK_TOO_DEEP,
+
+    /** `sequencer_unavailable` (docs/api/reasons.md). */
+    SEQUENCER_UNAVAILABLE,
+
+    /** `idempotency_key_reused` (docs/api/reasons.md). */
+    IDEMPOTENCY_KEY_REUSED,
+
+    /** `workspace_not_found` (docs/api/reasons.md). */
+    WORKSPACE_NOT_FOUND,
+
+    /** `workspace_fenced` (docs/api/reasons.md). */
+    WORKSPACE_FENCED,
+
+    /** `workspace_read_only` (docs/api/reasons.md). */
+    WORKSPACE_READ_ONLY,
+
+    /** `workspace_name_taken` (docs/api/reasons.md). */
+    WORKSPACE_NAME_TAKEN,
+
+    /** `object_missing` (docs/api/reasons.md). */
+    OBJECT_MISSING,
+
+    /** `secret_detected` (docs/api/reasons.md). */
+    SECRET_DETECTED,
+
+    /** `env_unsealed` (docs/api/reasons.md). */
+    ENV_UNSEALED,
+
+    /** `env_access_denied` (docs/api/reasons.md). */
+    ENV_ACCESS_DENIED,
+
+    /** `env_foreign_reference` (docs/api/reasons.md). */
+    ENV_FOREIGN_REFERENCE,
+
+    /** `live_bad_cursor` (docs/api/reasons.md). */
+    LIVE_BAD_CURSOR,
+
+    /** `live_worker_crashed` (docs/api/reasons.md). */
+    LIVE_WORKER_CRASHED,
+
+    /** `live_deploy_conflict` (docs/api/reasons.md). */
+    LIVE_DEPLOY_CONFLICT,
+
+    /** `live_schema_violation` (docs/api/reasons.md). */
+    LIVE_SCHEMA_VIOLATION,
+
+    /** `live_index_not_ready` (docs/api/reasons.md). */
+    LIVE_INDEX_NOT_READY,
+
     /** A malformed field or an unparseable value. */
     INVALID_ARGUMENT,
 
@@ -168,6 +309,53 @@ object ReasonRegistry {
         Reason.PUSH_TARGET_UNKNOWN,
         Reason.NOT_IMPLEMENTED,
         Reason.FEATURE_NOT_IN_VARIANT,
+        Reason.HOUSE_NOT_CONFIGURED,
+        Reason.HOUSE_SYNTAX_ERROR,
+        Reason.HOUSE_UNKNOWN_TABLE,
+        Reason.HOUSE_UNKNOWN_DATABASE,
+        Reason.HOUSE_ACCESS_DENIED,
+        Reason.HOUSE_READ_ONLY,
+        Reason.HOUSE_TIMEOUT,
+        Reason.HOUSE_MEMORY_LIMIT,
+        Reason.HOUSE_TOO_MANY_QUERIES,
+        Reason.HOUSE_QUOTA_EXCEEDED,
+        Reason.HOUSE_DISABLED_FUNCTION,
+        Reason.HOUSE_CANCELLED,
+        Reason.HOUSE_QUERY_NOT_FOUND,
+        Reason.HOUSE_QUERY_FAILED,
+        Reason.PROJECT_NOT_FOUND,
+        Reason.BRANCH_HAS_CHILDREN,
+        Reason.BRANCH_PROTECTED,
+        Reason.LSN_OUT_OF_RETENTION,
+        Reason.ENDPOINT_EXISTS_FOR_BRANCH,
+        Reason.COMPUTE_START_FAILED,
+        Reason.QUOTA_EXCEEDED,
+        Reason.STORAGE_UNAVAILABLE,
+        Reason.SECRET_ALREADY_ISSUED,
+        Reason.REPO_NOT_FOUND,
+        Reason.REPO_ALREADY_EXISTS,
+        Reason.REPO_DELETING,
+        Reason.REF_STALE,
+        Reason.REF_PROTECTED,
+        Reason.OUT_OF_SCOPE,
+        Reason.OBJECT_FORMAT_UNSUPPORTED,
+        Reason.FORK_TOO_DEEP,
+        Reason.SEQUENCER_UNAVAILABLE,
+        Reason.IDEMPOTENCY_KEY_REUSED,
+        Reason.WORKSPACE_NOT_FOUND,
+        Reason.WORKSPACE_FENCED,
+        Reason.WORKSPACE_READ_ONLY,
+        Reason.WORKSPACE_NAME_TAKEN,
+        Reason.OBJECT_MISSING,
+        Reason.SECRET_DETECTED,
+        Reason.ENV_UNSEALED,
+        Reason.ENV_ACCESS_DENIED,
+        Reason.ENV_FOREIGN_REFERENCE,
+        Reason.LIVE_BAD_CURSOR,
+        Reason.LIVE_WORKER_CRASHED,
+        Reason.LIVE_DEPLOY_CONFLICT,
+        Reason.LIVE_SCHEMA_VIOLATION,
+        Reason.LIVE_INDEX_NOT_READY,
         Reason.INVALID_ARGUMENT,
         Reason.NOT_FOUND,
         Reason.ALREADY_EXISTS,
@@ -197,6 +385,53 @@ object ReasonRegistry {
         Reason.PUSH_TARGET_UNKNOWN to "push_target_unknown",
         Reason.NOT_IMPLEMENTED to "not_implemented",
         Reason.FEATURE_NOT_IN_VARIANT to "feature_not_in_variant",
+        Reason.HOUSE_NOT_CONFIGURED to "house_not_configured",
+        Reason.HOUSE_SYNTAX_ERROR to "house_syntax_error",
+        Reason.HOUSE_UNKNOWN_TABLE to "house_unknown_table",
+        Reason.HOUSE_UNKNOWN_DATABASE to "house_unknown_database",
+        Reason.HOUSE_ACCESS_DENIED to "house_access_denied",
+        Reason.HOUSE_READ_ONLY to "house_read_only",
+        Reason.HOUSE_TIMEOUT to "house_timeout",
+        Reason.HOUSE_MEMORY_LIMIT to "house_memory_limit",
+        Reason.HOUSE_TOO_MANY_QUERIES to "house_too_many_queries",
+        Reason.HOUSE_QUOTA_EXCEEDED to "house_quota_exceeded",
+        Reason.HOUSE_DISABLED_FUNCTION to "house_disabled_function",
+        Reason.HOUSE_CANCELLED to "house_cancelled",
+        Reason.HOUSE_QUERY_NOT_FOUND to "house_query_not_found",
+        Reason.HOUSE_QUERY_FAILED to "house_query_failed",
+        Reason.PROJECT_NOT_FOUND to "project_not_found",
+        Reason.BRANCH_HAS_CHILDREN to "branch_has_children",
+        Reason.BRANCH_PROTECTED to "branch_protected",
+        Reason.LSN_OUT_OF_RETENTION to "lsn_out_of_retention",
+        Reason.ENDPOINT_EXISTS_FOR_BRANCH to "endpoint_exists_for_branch",
+        Reason.COMPUTE_START_FAILED to "compute_start_failed",
+        Reason.QUOTA_EXCEEDED to "quota_exceeded",
+        Reason.STORAGE_UNAVAILABLE to "storage_unavailable",
+        Reason.SECRET_ALREADY_ISSUED to "secret_already_issued",
+        Reason.REPO_NOT_FOUND to "repo_not_found",
+        Reason.REPO_ALREADY_EXISTS to "repo_already_exists",
+        Reason.REPO_DELETING to "repo_deleting",
+        Reason.REF_STALE to "ref_stale",
+        Reason.REF_PROTECTED to "ref_protected",
+        Reason.OUT_OF_SCOPE to "out_of_scope",
+        Reason.OBJECT_FORMAT_UNSUPPORTED to "object_format_unsupported",
+        Reason.FORK_TOO_DEEP to "fork_too_deep",
+        Reason.SEQUENCER_UNAVAILABLE to "sequencer_unavailable",
+        Reason.IDEMPOTENCY_KEY_REUSED to "idempotency_key_reused",
+        Reason.WORKSPACE_NOT_FOUND to "workspace_not_found",
+        Reason.WORKSPACE_FENCED to "workspace_fenced",
+        Reason.WORKSPACE_READ_ONLY to "workspace_read_only",
+        Reason.WORKSPACE_NAME_TAKEN to "workspace_name_taken",
+        Reason.OBJECT_MISSING to "object_missing",
+        Reason.SECRET_DETECTED to "secret_detected",
+        Reason.ENV_UNSEALED to "env_unsealed",
+        Reason.ENV_ACCESS_DENIED to "env_access_denied",
+        Reason.ENV_FOREIGN_REFERENCE to "env_foreign_reference",
+        Reason.LIVE_BAD_CURSOR to "live_bad_cursor",
+        Reason.LIVE_WORKER_CRASHED to "live_worker_crashed",
+        Reason.LIVE_DEPLOY_CONFLICT to "live_deploy_conflict",
+        Reason.LIVE_SCHEMA_VIOLATION to "live_schema_violation",
+        Reason.LIVE_INDEX_NOT_READY to "live_index_not_ready",
         Reason.INVALID_ARGUMENT to "invalid_argument",
         Reason.NOT_FOUND to "not_found",
         Reason.ALREADY_EXISTS to "already_exists",
@@ -233,6 +468,53 @@ object ReasonRegistry {
         Reason.PUSH_TARGET_UNKNOWN to Code.NOT_FOUND,
         Reason.NOT_IMPLEMENTED to Code.UNIMPLEMENTED,
         Reason.FEATURE_NOT_IN_VARIANT to Code.UNIMPLEMENTED,
+        Reason.HOUSE_NOT_CONFIGURED to Code.UNIMPLEMENTED,
+        Reason.HOUSE_SYNTAX_ERROR to Code.INVALID_ARGUMENT,
+        Reason.HOUSE_UNKNOWN_TABLE to Code.NOT_FOUND,
+        Reason.HOUSE_UNKNOWN_DATABASE to Code.NOT_FOUND,
+        Reason.HOUSE_ACCESS_DENIED to Code.PERMISSION_DENIED,
+        Reason.HOUSE_READ_ONLY to Code.FAILED_PRECONDITION,
+        Reason.HOUSE_TIMEOUT to Code.DEADLINE_EXCEEDED,
+        Reason.HOUSE_MEMORY_LIMIT to Code.RESOURCE_EXHAUSTED,
+        Reason.HOUSE_TOO_MANY_QUERIES to Code.RESOURCE_EXHAUSTED,
+        Reason.HOUSE_QUOTA_EXCEEDED to Code.RESOURCE_EXHAUSTED,
+        Reason.HOUSE_DISABLED_FUNCTION to Code.PERMISSION_DENIED,
+        Reason.HOUSE_CANCELLED to Code.CANCELLED,
+        Reason.HOUSE_QUERY_NOT_FOUND to Code.NOT_FOUND,
+        Reason.HOUSE_QUERY_FAILED to Code.UNKNOWN,
+        Reason.PROJECT_NOT_FOUND to Code.NOT_FOUND,
+        Reason.BRANCH_HAS_CHILDREN to Code.FAILED_PRECONDITION,
+        Reason.BRANCH_PROTECTED to Code.FAILED_PRECONDITION,
+        Reason.LSN_OUT_OF_RETENTION to Code.FAILED_PRECONDITION,
+        Reason.ENDPOINT_EXISTS_FOR_BRANCH to Code.ALREADY_EXISTS,
+        Reason.COMPUTE_START_FAILED to Code.UNAVAILABLE,
+        Reason.QUOTA_EXCEEDED to Code.RESOURCE_EXHAUSTED,
+        Reason.STORAGE_UNAVAILABLE to Code.UNAVAILABLE,
+        Reason.SECRET_ALREADY_ISSUED to Code.FAILED_PRECONDITION,
+        Reason.REPO_NOT_FOUND to Code.NOT_FOUND,
+        Reason.REPO_ALREADY_EXISTS to Code.ALREADY_EXISTS,
+        Reason.REPO_DELETING to Code.FAILED_PRECONDITION,
+        Reason.REF_STALE to Code.ABORTED,
+        Reason.REF_PROTECTED to Code.FAILED_PRECONDITION,
+        Reason.OUT_OF_SCOPE to Code.PERMISSION_DENIED,
+        Reason.OBJECT_FORMAT_UNSUPPORTED to Code.UNIMPLEMENTED,
+        Reason.FORK_TOO_DEEP to Code.FAILED_PRECONDITION,
+        Reason.SEQUENCER_UNAVAILABLE to Code.UNAVAILABLE,
+        Reason.IDEMPOTENCY_KEY_REUSED to Code.FAILED_PRECONDITION,
+        Reason.WORKSPACE_NOT_FOUND to Code.NOT_FOUND,
+        Reason.WORKSPACE_FENCED to Code.ABORTED,
+        Reason.WORKSPACE_READ_ONLY to Code.FAILED_PRECONDITION,
+        Reason.WORKSPACE_NAME_TAKEN to Code.ALREADY_EXISTS,
+        Reason.OBJECT_MISSING to Code.FAILED_PRECONDITION,
+        Reason.SECRET_DETECTED to Code.FAILED_PRECONDITION,
+        Reason.ENV_UNSEALED to Code.INVALID_ARGUMENT,
+        Reason.ENV_ACCESS_DENIED to Code.PERMISSION_DENIED,
+        Reason.ENV_FOREIGN_REFERENCE to Code.PERMISSION_DENIED,
+        Reason.LIVE_BAD_CURSOR to Code.INVALID_ARGUMENT,
+        Reason.LIVE_WORKER_CRASHED to Code.INTERNAL,
+        Reason.LIVE_DEPLOY_CONFLICT to Code.FAILED_PRECONDITION,
+        Reason.LIVE_SCHEMA_VIOLATION to Code.INVALID_ARGUMENT,
+        Reason.LIVE_INDEX_NOT_READY to Code.FAILED_PRECONDITION,
         Reason.INVALID_ARGUMENT to Code.INVALID_ARGUMENT,
         Reason.NOT_FOUND to Code.NOT_FOUND,
         Reason.ALREADY_EXISTS to Code.ALREADY_EXISTS,
