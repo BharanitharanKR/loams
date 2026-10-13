@@ -25,14 +25,9 @@ indexmap.workspace = true
 # (2026-09-06), MIT OR Apache-2.0, no dependencies; the engine workspace
 # already pins the same version.
 ipnet = { version = "2.12.2", features = ["serde"] }
-# The SDK's `Secret`, `SecretResolver`, `EgressCheck` and HTTP client, which
-# the egress guard and the secret stores implement and use (CN2 Task 25; OR-5
-# makes loams-flow the SDK's runtime).
-loams-connector-sdk = { path = "../loams-connector-sdk" }
 # `KubeSecretStore` trusts the cluster CA only. The SDK's rustls 0.23 with
 # `ring`, already in fabric/Cargo.lock.
 rustls = { version = "0.23.27", default-features = false, features = ["ring", "std", "tls12", "logging"] }
-tokio = { workspace = true, features = ["fs", "io-util", "sync"] }
 # Zeroes the secret bytes the stores read. 1.9.0 is already in the lock.
 zeroize = "1.8"
 jsonschema.workspace = true
@@ -46,11 +41,21 @@ loams-flow-proto = { path = "../loams-flow-proto" }
 # crate's runtime, not a shared dependency — the split `loams-proto` makes for
 # `buffa-types`.
 buffa = "0.9.2"
+# The connector SDK (CN2 Task 4): `metrics::InstanceMetrics` implements its
+# `ConnectorObserver` hook, so a native connector's pipeline feeds the metric
+# families and the Q359 activity counters (CN2 Task 24); the egress guard and
+# the secret stores implement and use its `Secret`, `SecretResolver`,
+# `EgressCheck` and HTTP client (CN2 Task 25). The dependency runs this way
+# only: the SDK never depends on `loams-flow` (R4.4).
+loams-connector-sdk = { path = "../loams-connector-sdk" }
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_norway.workspace = true
 thiserror.workspace = true
+# `activity::ActivityPump::spawn`: the per-window timer (CN2 Task 24); the
+# secret stores' file reads (CN2 Task 25).
+tokio = { workspace = true, features = ["fs", "io-util", "rt", "sync", "time"] }
 tracing.workspace = true
 
 [dev-dependencies]
@@ -59,8 +64,10 @@ tracing.workspace = true
 # config schemas are compared as JSON.
 semver.workspace = true
 serde_json.workspace = true
-# CN2 Task 25's egress, redirect and secret-store tests run local servers.
-tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "net", "io-util", "fs", "sync"] }
+# Paused-clock tests of the activity window and the SDK pipeline that feeds
+# the metrics (CN2 Task 24); the egress, redirect and secret-store tests run
+# local servers (CN2 Task 25).
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "net", "io-util", "fs", "sync", "time", "test-util"] }
 
 [lints]
 workspace = true
