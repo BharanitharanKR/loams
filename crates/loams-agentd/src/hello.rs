@@ -31,8 +31,12 @@ pub const BUILD_SHA: &str = match option_env!("LOAMS_BUILD_SHA") {
 };
 
 /// The daemon's features, in `Hello` and `GetHost` (SD1 Shared contracts):
-/// `studio.v1` is the `loams.agentd.v1` Connect surface (SD1 Task 5).
-pub const FEATURES: &[&str] = &[loams_agentd_connect::FEATURE];
+/// `studio.v1` is the `loams.agentd.v1` Connect surface (SD1 Task 5),
+/// `checkpoints` the per-turn checkpoints and restore (SD1 Task 10).
+pub const FEATURES: &[&str] = &[
+    loams_agentd_connect::FEATURE,
+    loams_agentd_proto::checkpoints::FEATURE,
+];
 
 /// How long [`probe`] waits for a daemon to answer.
 const PROBE_TIMEOUT: Duration = Duration::from_secs(5);

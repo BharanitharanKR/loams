@@ -18,6 +18,9 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::chat::{BeginQueueEditOutcome, FinishQueueEditOutcome, RenewQueueEditOutcome};
+use crate::checkpoints::{
+    CheckpointList, ListCheckpointsParams, RestoreCheckpointParams, RestoreCheckpointReply,
+};
 use crate::daemon::DaemonMode;
 use crate::params::*;
 use crate::transcript::TranscriptUpdate;
@@ -72,6 +75,8 @@ pub const ERROR_REASONS: &[&str] = &[
     "keyring_unavailable",
     LIMIT_EXCEEDED,
     crate::HARNESS_UNSUPPORTED,
+    crate::checkpoints::STALE_DIFF,
+    crate::checkpoints::CHECKPOINT_MISSING,
 ];
 
 /// The MCP shim's environment, set only by the daemon when it injects the
@@ -292,6 +297,12 @@ method_table! {
     RETRY_DELIVERY = RetryDelivery: Unary(ChatIdParams -> Empty), Owner, renderer: true;
     TAKE_PROJECT_ACTION_SETUP = TakeProjectActionSetup: Unary(TakeProjectActionSetupParams -> ProjectActionSetup), Owner, renderer: true;
     FORK_SIDE_CHAT = ForkSideChat: Unary(ForkSideChatParams -> Chat), Owner, renderer: true;
+    /// A thread's per-turn restore points, oldest first (SD1 Task 10, G6).
+    LIST_CHECKPOINTS = ListCheckpoints: Unary(ListCheckpointsParams -> CheckpointList), Owner, renderer: true;
+    /// Restore the thread's checkout to a turn's `pre` checkpoint, refusing a
+    /// stale checksum; `worktree+transcript` also forks the thread at that
+    /// turn (SD1 Task 10, G7). Never in the `mcp` role.
+    RESTORE_CHECKPOINT = RestoreCheckpoint: Unary(RestoreCheckpointParams -> RestoreCheckpointReply), Owner, renderer: true;
     /// The transcript: a `reset` frame, then deltas.
     WATCH_DOC_MESSAGES = WatchDocMessages: Stream(WatchDocMessagesParams -> TranscriptUpdate), Mcp, renderer: true;
     /// Messages typed while the agent was busy, held on the chat doc.

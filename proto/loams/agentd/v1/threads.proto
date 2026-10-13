@@ -677,12 +677,17 @@ message WatchTranscriptResponse {
   TranscriptUpdate update = 1;
 }
 
-// G6: one restore point, at a turn's start or end (§53 §6.5).
+// G6: one turn's restore point (§53 §6.5). The daemon writes
+// `refs/loams/checkpoints/<chatId>/turn/<n>/{pre,post}` at the turn's start
+// and end; the restore point is the `pre`.
 message Checkpoint {
+  // The id of the user message that started the turn (its transcript entry).
   string turn_id = 1;
-  // `refs/loams/checkpoints/<chatId>/turn/<n>/{pre,post}`.
+  // The turn's `pre` ref.
   string ref = 2;
   int64 created_at_ms = 3;
+  // Paths that differ between the turn's `pre` and its end; 0 while the turn
+  // has no end yet.
   uint32 files_changed = 4;
 }
 
@@ -711,7 +716,11 @@ message RestoreCheckpointRequest {
 }
 
 message RestoreCheckpointResponse {
+  // The commit the checkout was restored to (the turn's `pre`).
   string restored_to = 1;
+  // The new thread, for CHECKPOINT_SCOPE_WORKTREE_AND_TRANSCRIPT (SD1
+  // Task 10).
+  optional string forked_chat_id = 2;
 }
 
 // G20: one turn's usage. No billing meaning (§53 §6.5).

@@ -238,9 +238,11 @@ fn every_studio_method_has_rpc() {
             .iter()
             .find(|row| format!("{}/{}", row.service, row.method) == *method)
             .unwrap();
+        // A gap stays marked until its task serves it through its ndjson twin.
         assert!(
-            matches!(row.twin, Twin::Gap { gap: declared, .. } if declared == *gap),
-            "{method} is not marked as gap {gap}"
+            matches!(row.twin, Twin::Gap { gap: declared, .. } if declared == *gap)
+                || matches!(row.twin, Twin::Method(_)),
+            "{method} is neither marked as gap {gap} nor served"
         );
     }
 }
