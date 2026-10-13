@@ -17,8 +17,9 @@
 # LOAMS_ENGINE_URL for the console. Every other service (pd, tikv, tidb,
 # agentd, the Postgres stack) is on the compose network and cannot reach the
 # engine's loopback listeners. The House is on a network of its own, with its
-# own sidecar in its namespace (`house-tailscale`, https://loams-house.<tailnet>/). The few published ports (console, headscale,
-# the Postgres stack's) are on 127.0.0.1 unless .env says otherwise.
+# own sidecar in its namespace (`house-tailscale`, https://loams-house.<tailnet>/).
+# The few published ports (console, headscale, the Postgres stack's) are on
+# 127.0.0.1 unless .env says otherwise.
 name: loams
 
 include:
