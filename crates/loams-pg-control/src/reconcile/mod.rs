@@ -31,10 +31,16 @@
 //! - **The resync's sweep** ([`resync`]) deletes role secrets no record
 //!   names (R6.1).
 //!
-//! Endpoints are not reconciled here (Task 11): a branch or project delete
-//! waits until its endpoints are gone.
+//! - **Endpoints** ([`endpoint`], Task 11), when the reconciler has
+//!   [`Computes`](endpoint::Computes) ([`Reconciler::with_computes`]): each
+//!   pass first makes the project's endpoints' computes match what the API
+//!   asked (start, suspend, restart, crash replacement, spec pushes), and
+//!   removes the endpoints of a deleting endpoint, branch or project
+//!   (R7.1's cascade). Without them a branch or project delete waits until
+//!   its endpoints are gone.
 
 pub mod branch;
+pub mod endpoint;
 mod lease;
 pub mod project;
 pub mod resync;
@@ -191,6 +197,10 @@ pub enum ReconcileError {
     Neon(NeonApiError),
     #[error("credential store: {0}")]
     Secrets(SecretError),
+    /// The compute runtime or a compute's `compute_ctl` failed in a way
+    /// that may pass (Task 11).
+    #[error("compute runtime: {0}")]
+    Runtime(String),
     /// [`Reconciler::run`] was called a second time on this reconciler.
     #[error("the reconciler is already running")]
     Running,
@@ -244,6 +254,8 @@ pub(crate) struct Ctx<S, N> {
     pub neon: N,
     pub secrets: Arc<dyn SecretStore>,
     pub config: ReconcilerConfig,
+    /// What endpoints are reconciled with (Task 11); `None`: they are not.
+    pub computes: Option<endpoint::Computes>,
     leases: Leases,
     /// The `pitr_interval` (seconds) this instance last set per project,
     /// so a changed `history_retention` reaches the tenant once.
@@ -424,11 +436,27 @@ impl<S: PgControlStore, N: NeonWrite> Reconciler<S, N> {
                 neon,
                 secrets,
                 config,
+                computes: None,
                 applied: Mutex::new(HashMap::new()),
             }),
             kicks,
             inbox: Mutex::new(Some(inbox)),
         }
+    }
+
+    /// Reconciles endpoints too, with `computes` (Task 11). Called before
+    /// [`run`](Self::run).
+    ///
+    /// # Panics
+    ///
+    /// When called after the reconciler was shared (it never is before
+    /// `run`: [`kicker`](Self::kicker) shares only the kick channel).
+    #[must_use]
+    pub fn with_computes(mut self, computes: endpoint::Computes) -> Self {
+        Arc::get_mut(&mut self.ctx)
+            .expect("with_computes is called before the reconciler runs")
+            .computes = Some(computes);
+        self
     }
 
     /// A handle that kicks this reconciler's run loop.
@@ -576,7 +604,7 @@ async fn pass<S: PgControlStore, N: NeonWrite>(
         Taken::Other(holder) => return Ok(Pass::Held { holder }),
     };
     // Read again under the lease: what the first read saw may be done.
-    let Some(snapshot) = project::Snapshot::read(ctx, namespace, project_id).await? else {
+    let Some(mut snapshot) = project::Snapshot::read(ctx, namespace, project_id).await? else {
         return Ok(Pass::Idle);
     };
     let act = Act {
@@ -584,7 +612,26 @@ async fn pass<S: PgControlStore, N: NeonWrite>(
         project_id: project_id.to_string(),
         fence,
     };
-    project::reconcile(&act, snapshot).await
+    let mut again = None;
+    if let Some(computes) = &ctx.computes
+        && !snapshot.endpoints.is_empty()
+    {
+        let out = endpoint::reconcile(&act, computes, &snapshot).await?;
+        again = out.again;
+        if out.removed {
+            // The branches and the project may go now.
+            let Some(fresh) = project::Snapshot::read(ctx, namespace, project_id).await? else {
+                return Ok(Pass::Idle);
+            };
+            snapshot = fresh;
+        }
+    }
+    let pass = project::reconcile(&act, snapshot).await?;
+    Ok(match (pass, again) {
+        (Pass::Again(a), Some(b)) => Pass::Again(a.min(b)),
+        (Pass::Done | Pass::Idle, Some(b)) => Pass::Again(b),
+        (pass, _) => pass,
+    })
 }
 
 /// Which projects the run loop is to pass over.

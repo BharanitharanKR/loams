@@ -14,6 +14,10 @@ import (
 	"context"
 
 	"connectrpc.com/connect"
+	adminv1 "loams.dev/go/gen/loams/admin/v1"
+	adminv1connect "loams.dev/go/gen/loams/admin/v1/v1connect"
+	authv1 "loams.dev/go/gen/loams/auth/v1"
+	authv1connect "loams.dev/go/gen/loams/auth/v1/v1connect"
 	instancev1 "loams.dev/go/gen/loams/instance/v1"
 	instancev1connect "loams.dev/go/gen/loams/instance/v1/v1connect"
 	livev1 "loams.dev/go/gen/loams/live/v1"
@@ -97,9 +101,30 @@ var Reasons = []Reason{
 	"quota_exceeded",
 	"storage_unavailable",
 	"secret_already_issued",
+	"repo_not_found",
+	"repo_already_exists",
+	"repo_deleting",
+	"ref_stale",
+	"ref_protected",
+	"out_of_scope",
+	"object_format_unsupported",
+	"fork_too_deep",
+	"sequencer_unavailable",
+	"idempotency_key_reused",
+	"workspace_not_found",
+	"workspace_fenced",
+	"workspace_read_only",
+	"workspace_name_taken",
+	"object_missing",
+	"secret_detected",
+	"env_unsealed",
+	"env_access_denied",
+	"env_foreign_reference",
 	"live_bad_cursor",
 	"live_worker_crashed",
 	"live_deploy_conflict",
+	"live_schema_violation",
+	"live_index_not_ready",
 	"invalid_argument",
 	"not_found",
 	"already_exists",
@@ -154,9 +179,30 @@ var ReasonCodes = map[Reason]string{
 	"quota_exceeded":             "resource_exhausted",
 	"storage_unavailable":        "unavailable",
 	"secret_already_issued":      "failed_precondition",
+	"repo_not_found":             "not_found",
+	"repo_already_exists":        "already_exists",
+	"repo_deleting":              "failed_precondition",
+	"ref_stale":                  "aborted",
+	"ref_protected":              "failed_precondition",
+	"out_of_scope":               "permission_denied",
+	"object_format_unsupported":  "unimplemented",
+	"fork_too_deep":              "failed_precondition",
+	"sequencer_unavailable":      "unavailable",
+	"idempotency_key_reused":     "failed_precondition",
+	"workspace_not_found":        "not_found",
+	"workspace_fenced":           "aborted",
+	"workspace_read_only":        "failed_precondition",
+	"workspace_name_taken":       "already_exists",
+	"object_missing":             "failed_precondition",
+	"secret_detected":            "failed_precondition",
+	"env_unsealed":               "invalid_argument",
+	"env_access_denied":          "permission_denied",
+	"env_foreign_reference":      "permission_denied",
 	"live_bad_cursor":            "invalid_argument",
 	"live_worker_crashed":        "internal",
 	"live_deploy_conflict":       "failed_precondition",
+	"live_schema_violation":      "invalid_argument",
+	"live_index_not_ready":       "failed_precondition",
 	"invalid_argument":           "invalid_argument",
 	"not_found":                  "not_found",
 	"already_exists":             "already_exists",
@@ -183,7 +229,9 @@ const FeatureNotInVariant Reason = "feature_not_in_variant"
 // GetInstance.api_versions names them.
 var ProtoPackages = []string{
 	"google.protobuf",
+	"loams.admin.v1",
 	"loams.approvals.v1",
+	"loams.auth.v1",
 	"loams.collection.v1",
 	"loams.devices.v1",
 	"loams.errors.v1",
@@ -196,6 +244,7 @@ var ProtoPackages = []string{
 	"loams.operations.v1",
 	"loams.options.v1",
 	"loams.postgres.v1",
+	"loams.repos.v1",
 }
 
 // Pagination is AIP-158 paging, named by FacadeOptions.pagination.
@@ -246,6 +295,108 @@ type ModuleBinding struct {
 // module name.
 var Modules = []ModuleBinding{
 	{
+		Name:     "admin.agents",
+		Summary:  "Agents, their tokens and trust policies, and service accounts.",
+		Service:  "loams.admin.v1.AgentService",
+		Package:  "loams.admin.v1",
+		Unstable: false,
+		Derived:  false,
+		Calls: []CallBinding{
+			{Module: "admin.agents", Name: "Create", ProtoName: "create", Method: "CreateAgent", RPC: "loams.admin.v1.AgentService/CreateAgent", Service: "loams.admin.v1.AgentService", Package: "loams.admin.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.agents", Name: "CreateServiceAccount", ProtoName: "createServiceAccount", Method: "CreateServiceAccount", RPC: "loams.admin.v1.AgentService/CreateServiceAccount", Service: "loams.admin.v1.AgentService", Package: "loams.admin.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.agents", Name: "CreateTrustPolicy", ProtoName: "createTrustPolicy", Method: "CreateTrustPolicy", RPC: "loams.admin.v1.AgentService/CreateTrustPolicy", Service: "loams.admin.v1.AgentService", Package: "loams.admin.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.agents", Name: "Get", ProtoName: "get", Method: "GetAgent", RPC: "loams.admin.v1.AgentService/GetAgent", Service: "loams.admin.v1.AgentService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.agents", Name: "List", ProtoName: "list", Method: "ListAgents", RPC: "loams.admin.v1.AgentService/ListAgents", Service: "loams.admin.v1.AgentService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "agents", NextPageToken: "next_page_token"}},
+			{Module: "admin.agents", Name: "ListServiceAccounts", ProtoName: "listServiceAccounts", Method: "ListServiceAccounts", RPC: "loams.admin.v1.AgentService/ListServiceAccounts", Service: "loams.admin.v1.AgentService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "service_accounts", NextPageToken: "next_page_token"}},
+			{Module: "admin.agents", Name: "ListTokens", ProtoName: "listTokens", Method: "ListAgentTokens", RPC: "loams.admin.v1.AgentService/ListAgentTokens", Service: "loams.admin.v1.AgentService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "tokens", NextPageToken: "next_page_token"}},
+			{Module: "admin.agents", Name: "ListTrustPolicies", ProtoName: "listTrustPolicies", Method: "ListTrustPolicies", RPC: "loams.admin.v1.AgentService/ListTrustPolicies", Service: "loams.admin.v1.AgentService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "trust_policies", NextPageToken: "next_page_token"}},
+			{Module: "admin.agents", Name: "Resume", ProtoName: "resume", Method: "ResumeAgent", RPC: "loams.admin.v1.AgentService/ResumeAgent", Service: "loams.admin.v1.AgentService", Package: "loams.admin.v1", Idempotency: IdempotencyIdempotent, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.agents", Name: "Suspend", ProtoName: "suspend", Method: "SuspendAgent", RPC: "loams.admin.v1.AgentService/SuspendAgent", Service: "loams.admin.v1.AgentService", Package: "loams.admin.v1", Idempotency: IdempotencyIdempotent, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.agents", Name: "Update", ProtoName: "update", Method: "UpdateAgent", RPC: "loams.admin.v1.AgentService/UpdateAgent", Service: "loams.admin.v1.AgentService", Package: "loams.admin.v1", Idempotency: IdempotencyIdempotent, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+		},
+	},
+	{
+		Name:     "admin.audit",
+		Summary:  "The audit log: who did what, to what, and whether it was allowed.",
+		Service:  "loams.admin.v1.AuditService",
+		Package:  "loams.admin.v1",
+		Unstable: false,
+		Derived:  false,
+		Calls: []CallBinding{
+			{Module: "admin.audit", Name: "List", ProtoName: "list", Method: "ListAuditEvents", RPC: "loams.admin.v1.AuditService/ListAuditEvents", Service: "loams.admin.v1.AuditService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "events", NextPageToken: "next_page_token"}},
+			{Module: "admin.audit", Name: "Watch", ProtoName: "watch", Method: "WatchAuditEvents", RPC: "loams.admin.v1.AuditService/WatchAuditEvents", Service: "loams.admin.v1.AuditService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingServer, Pagination: nil},
+		},
+	},
+	{
+		Name:     "admin.keys",
+		Summary:  "API keys, and revoking agent tokens.",
+		Service:  "loams.admin.v1.KeyService",
+		Package:  "loams.admin.v1",
+		Unstable: false,
+		Derived:  false,
+		Calls: []CallBinding{
+			{Module: "admin.keys", Name: "Create", ProtoName: "create", Method: "CreateKey", RPC: "loams.admin.v1.KeyService/CreateKey", Service: "loams.admin.v1.KeyService", Package: "loams.admin.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.keys", Name: "List", ProtoName: "list", Method: "ListKeys", RPC: "loams.admin.v1.KeyService/ListKeys", Service: "loams.admin.v1.KeyService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "keys", NextPageToken: "next_page_token"}},
+			{Module: "admin.keys", Name: "Revoke", ProtoName: "revoke", Method: "RevokeKey", RPC: "loams.admin.v1.KeyService/RevokeKey", Service: "loams.admin.v1.KeyService", Package: "loams.admin.v1", Idempotency: IdempotencyIdempotent, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.keys", Name: "RevokeToken", ProtoName: "revokeToken", Method: "RevokeToken", RPC: "loams.admin.v1.KeyService/RevokeToken", Service: "loams.admin.v1.KeyService", Package: "loams.admin.v1", Idempotency: IdempotencyIdempotent, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+		},
+	},
+	{
+		Name:     "admin.org",
+		Summary:  "The org: settings, members, invitations and teams.",
+		Service:  "loams.admin.v1.OrgService",
+		Package:  "loams.admin.v1",
+		Unstable: false,
+		Derived:  false,
+		Calls: []CallBinding{
+			{Module: "admin.org", Name: "AddTeamMember", ProtoName: "addTeamMember", Method: "AddTeamMember", RPC: "loams.admin.v1.OrgService/AddTeamMember", Service: "loams.admin.v1.OrgService", Package: "loams.admin.v1", Idempotency: IdempotencyIdempotent, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.org", Name: "CreateInvitation", ProtoName: "createInvitation", Method: "CreateInvitation", RPC: "loams.admin.v1.OrgService/CreateInvitation", Service: "loams.admin.v1.OrgService", Package: "loams.admin.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.org", Name: "CreateTeam", ProtoName: "createTeam", Method: "CreateTeam", RPC: "loams.admin.v1.OrgService/CreateTeam", Service: "loams.admin.v1.OrgService", Package: "loams.admin.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.org", Name: "Get", ProtoName: "get", Method: "GetOrg", RPC: "loams.admin.v1.OrgService/GetOrg", Service: "loams.admin.v1.OrgService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.org", Name: "GetTeam", ProtoName: "getTeam", Method: "GetTeam", RPC: "loams.admin.v1.OrgService/GetTeam", Service: "loams.admin.v1.OrgService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.org", Name: "ListInvitations", ProtoName: "listInvitations", Method: "ListInvitations", RPC: "loams.admin.v1.OrgService/ListInvitations", Service: "loams.admin.v1.OrgService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "invitations", NextPageToken: "next_page_token"}},
+			{Module: "admin.org", Name: "ListMembers", ProtoName: "listMembers", Method: "ListMembers", RPC: "loams.admin.v1.OrgService/ListMembers", Service: "loams.admin.v1.OrgService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "members", NextPageToken: "next_page_token"}},
+			{Module: "admin.org", Name: "ListTeams", ProtoName: "listTeams", Method: "ListTeams", RPC: "loams.admin.v1.OrgService/ListTeams", Service: "loams.admin.v1.OrgService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "teams", NextPageToken: "next_page_token"}},
+			{Module: "admin.org", Name: "RemoveMember", ProtoName: "removeMember", Method: "RemoveMember", RPC: "loams.admin.v1.OrgService/RemoveMember", Service: "loams.admin.v1.OrgService", Package: "loams.admin.v1", Idempotency: IdempotencyIdempotent, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.org", Name: "Update", ProtoName: "update", Method: "UpdateOrg", RPC: "loams.admin.v1.OrgService/UpdateOrg", Service: "loams.admin.v1.OrgService", Package: "loams.admin.v1", Idempotency: IdempotencyIdempotent, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+		},
+	},
+	{
+		Name:     "admin.projects",
+		Summary:  "Projects, project access and environments.",
+		Service:  "loams.admin.v1.ProjectService",
+		Package:  "loams.admin.v1",
+		Unstable: false,
+		Derived:  false,
+		Calls: []CallBinding{
+			{Module: "admin.projects", Name: "Create", ProtoName: "create", Method: "CreateProject", RPC: "loams.admin.v1.ProjectService/CreateProject", Service: "loams.admin.v1.ProjectService", Package: "loams.admin.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.projects", Name: "CreateEnvironment", ProtoName: "createEnvironment", Method: "CreateEnvironment", RPC: "loams.admin.v1.ProjectService/CreateEnvironment", Service: "loams.admin.v1.ProjectService", Package: "loams.admin.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.projects", Name: "Get", ProtoName: "get", Method: "GetProject", RPC: "loams.admin.v1.ProjectService/GetProject", Service: "loams.admin.v1.ProjectService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.projects", Name: "GetEnvironment", ProtoName: "getEnvironment", Method: "GetEnvironment", RPC: "loams.admin.v1.ProjectService/GetEnvironment", Service: "loams.admin.v1.ProjectService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.projects", Name: "GetEnvironmentActivity", ProtoName: "getEnvironmentActivity", Method: "GetEnvironmentActivity", RPC: "loams.admin.v1.ProjectService/GetEnvironmentActivity", Service: "loams.admin.v1.ProjectService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.projects", Name: "GrantAccess", ProtoName: "grantAccess", Method: "GrantAccess", RPC: "loams.admin.v1.ProjectService/GrantAccess", Service: "loams.admin.v1.ProjectService", Package: "loams.admin.v1", Idempotency: IdempotencyIdempotent, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "admin.projects", Name: "List", ProtoName: "list", Method: "ListProjects", RPC: "loams.admin.v1.ProjectService/ListProjects", Service: "loams.admin.v1.ProjectService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "projects", NextPageToken: "next_page_token"}},
+			{Module: "admin.projects", Name: "ListAccess", ProtoName: "listAccess", Method: "ListAccess", RPC: "loams.admin.v1.ProjectService/ListAccess", Service: "loams.admin.v1.ProjectService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "grants", NextPageToken: "next_page_token"}},
+			{Module: "admin.projects", Name: "ListEnvironments", ProtoName: "listEnvironments", Method: "ListEnvironments", RPC: "loams.admin.v1.ProjectService/ListEnvironments", Service: "loams.admin.v1.ProjectService", Package: "loams.admin.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "environments", NextPageToken: "next_page_token"}},
+		},
+	},
+	{
+		Name:     "auth",
+		Summary:  "Sign-in providers, first-run setup, sessions and OAuth consent.",
+		Service:  "loams.auth.v1.AuthService",
+		Package:  "loams.auth.v1",
+		Unstable: false,
+		Derived:  false,
+		Calls: []CallBinding{
+			{Module: "auth", Name: "CompleteSetup", ProtoName: "completeSetup", Method: "CompleteSetup", RPC: "loams.auth.v1.AuthService/CompleteSetup", Service: "loams.auth.v1.AuthService", Package: "loams.auth.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "auth", Name: "CreateSession", ProtoName: "createSession", Method: "CreateSession", RPC: "loams.auth.v1.AuthService/CreateSession", Service: "loams.auth.v1.AuthService", Package: "loams.auth.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "auth", Name: "DecideConsent", ProtoName: "decideConsent", Method: "DecideConsent", RPC: "loams.auth.v1.AuthService/DecideConsent", Service: "loams.auth.v1.AuthService", Package: "loams.auth.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "auth", Name: "DeleteSession", ProtoName: "deleteSession", Method: "DeleteSession", RPC: "loams.auth.v1.AuthService/DeleteSession", Service: "loams.auth.v1.AuthService", Package: "loams.auth.v1", Idempotency: IdempotencyIdempotent, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "auth", Name: "GetSession", ProtoName: "getSession", Method: "GetSession", RPC: "loams.auth.v1.AuthService/GetSession", Service: "loams.auth.v1.AuthService", Package: "loams.auth.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "auth", Name: "ListProviders", ProtoName: "listProviders", Method: "ListProviders", RPC: "loams.auth.v1.AuthService/ListProviders", Service: "loams.auth.v1.AuthService", Package: "loams.auth.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+		},
+	},
+	{
 		Name:     "instance",
 		Summary:  "What this instance is, and who the caller is on it.",
 		Service:  "loams.instance.v1.InstanceService",
@@ -270,6 +421,22 @@ var Modules = []ModuleBinding{
 		},
 	},
 	{
+		Name:     "live.admin",
+		Summary:  "Live administration: deploy, roll back, index status and function logs.",
+		Service:  "loams.live.v1.LiveAdminService",
+		Package:  "loams.live.v1",
+		Unstable: true,
+		Derived:  false,
+		Calls: []CallBinding{
+			{Module: "live.admin", Name: "ActivateDeployment", ProtoName: "activateDeployment", Method: "ActivateDeployment", RPC: "loams.live.v1.LiveAdminService/ActivateDeployment", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "live.admin", Name: "Deploy", ProtoName: "deploy", Method: "Deploy", RPC: "loams.live.v1.LiveAdminService/Deploy", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "live.admin", Name: "GetDeployment", ProtoName: "getDeployment", Method: "GetDeployment", RPC: "loams.live.v1.LiveAdminService/GetDeployment", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "live.admin", Name: "GetIndexStatus", ProtoName: "getIndexStatus", Method: "GetIndexStatus", RPC: "loams.live.v1.LiveAdminService/GetIndexStatus", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "live.admin", Name: "ListDeployments", ProtoName: "listDeployments", Method: "ListDeployments", RPC: "loams.live.v1.LiveAdminService/ListDeployments", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "deployments", NextPageToken: "next_page_token"}},
+			{Module: "live.admin", Name: "TailLogs", ProtoName: "tailLogs", Method: "TailLogs", RPC: "loams.live.v1.LiveAdminService/TailLogs", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingServer, Pagination: nil},
+		},
+	},
+	{
 		Name:     "tables",
 		Summary:  "",
 		Service:  "loams.live.v1.LiveService",
@@ -277,11 +444,172 @@ var Modules = []ModuleBinding{
 		Unstable: true,
 		Derived:  true,
 		Calls: []CallBinding{
-			{Module: "tables", Name: "Deploy", ProtoName: "deploy", Method: "Deploy", RPC: "loams.live.v1.LiveService/Deploy", Service: "loams.live.v1.LiveService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
 			{Module: "tables", Name: "Mutate", ProtoName: "mutate", Method: "Mutate", RPC: "loams.live.v1.LiveService/Mutate", Service: "loams.live.v1.LiveService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
 			{Module: "tables", Name: "Query", ProtoName: "query", Method: "Query", RPC: "loams.live.v1.LiveService/Query", Service: "loams.live.v1.LiveService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
 		},
 	},
+}
+
+// AdminAgentsModule is loams.admin.agents — Agents, their tokens and trust policies, and service accounts.
+//
+// It wraps loams.admin.v1.AgentService.
+type AdminAgentsModule interface {
+	// Module is the SDK module, as it appears on loams.admin.agents.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable reports that the package's wire contract may still change.
+	Unstable() bool
+
+	// Create calls loams.admin.v1.AgentService/CreateAgent, retried: manual.
+	Create(ctx context.Context, req *connect.Request[adminv1.CreateAgentRequest], opts *CallOptions) (*connect.Response[adminv1.CreateAgentResponse], error)
+	// CreateServiceAccount calls loams.admin.v1.AgentService/CreateServiceAccount, retried: manual.
+	CreateServiceAccount(ctx context.Context, req *connect.Request[adminv1.CreateServiceAccountRequest], opts *CallOptions) (*connect.Response[adminv1.CreateServiceAccountResponse], error)
+	// CreateTrustPolicy calls loams.admin.v1.AgentService/CreateTrustPolicy, retried: manual.
+	CreateTrustPolicy(ctx context.Context, req *connect.Request[adminv1.CreateTrustPolicyRequest], opts *CallOptions) (*connect.Response[adminv1.CreateTrustPolicyResponse], error)
+	// Get calls loams.admin.v1.AgentService/GetAgent, retried: safe.
+	Get(ctx context.Context, req *connect.Request[adminv1.GetAgentRequest], opts *CallOptions) (*connect.Response[adminv1.GetAgentResponse], error)
+	// List calls loams.admin.v1.AgentService/ListAgents, retried: safe. AIP-158: page with Agents and follow NextPageToken through loams.Paginate.
+	List(ctx context.Context, req *connect.Request[adminv1.ListAgentsRequest], opts *CallOptions) (*connect.Response[adminv1.ListAgentsResponse], error)
+	// ListServiceAccounts calls loams.admin.v1.AgentService/ListServiceAccounts, retried: safe. AIP-158: page with ServiceAccounts and follow NextPageToken through loams.Paginate.
+	ListServiceAccounts(ctx context.Context, req *connect.Request[adminv1.ListServiceAccountsRequest], opts *CallOptions) (*connect.Response[adminv1.ListServiceAccountsResponse], error)
+	// ListTokens calls loams.admin.v1.AgentService/ListAgentTokens, retried: safe. AIP-158: page with Tokens and follow NextPageToken through loams.Paginate.
+	ListTokens(ctx context.Context, req *connect.Request[adminv1.ListAgentTokensRequest], opts *CallOptions) (*connect.Response[adminv1.ListAgentTokensResponse], error)
+	// ListTrustPolicies calls loams.admin.v1.AgentService/ListTrustPolicies, retried: safe. AIP-158: page with TrustPolicies and follow NextPageToken through loams.Paginate.
+	ListTrustPolicies(ctx context.Context, req *connect.Request[adminv1.ListTrustPoliciesRequest], opts *CallOptions) (*connect.Response[adminv1.ListTrustPoliciesResponse], error)
+	// Resume calls loams.admin.v1.AgentService/ResumeAgent, retried: safe.
+	Resume(ctx context.Context, req *connect.Request[adminv1.ResumeAgentRequest], opts *CallOptions) (*connect.Response[adminv1.ResumeAgentResponse], error)
+	// Suspend calls loams.admin.v1.AgentService/SuspendAgent, retried: safe.
+	Suspend(ctx context.Context, req *connect.Request[adminv1.SuspendAgentRequest], opts *CallOptions) (*connect.Response[adminv1.SuspendAgentResponse], error)
+	// Update calls loams.admin.v1.AgentService/UpdateAgent, retried: safe.
+	Update(ctx context.Context, req *connect.Request[adminv1.UpdateAgentRequest], opts *CallOptions) (*connect.Response[adminv1.UpdateAgentResponse], error)
+}
+
+// AdminAuditModule is loams.admin.audit — The audit log: who did what, to what, and whether it was allowed.
+//
+// It wraps loams.admin.v1.AuditService.
+type AdminAuditModule interface {
+	// Module is the SDK module, as it appears on loams.admin.audit.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable reports that the package's wire contract may still change.
+	Unstable() bool
+
+	// List calls loams.admin.v1.AuditService/ListAuditEvents, retried: safe. AIP-158: page with Events and follow NextPageToken through loams.Paginate.
+	List(ctx context.Context, req *connect.Request[adminv1.ListAuditEventsRequest], opts *CallOptions) (*connect.Response[adminv1.ListAuditEventsResponse], error)
+	// Watch calls loams.admin.v1.AuditService/WatchAuditEvents, retried: safe.
+	Watch(ctx context.Context, req *connect.Request[adminv1.WatchAuditEventsRequest], opts *CallOptions) (*connect.ServerStreamForClient[adminv1.WatchAuditEventsResponse], error)
+}
+
+// AdminKeysModule is loams.admin.keys — API keys, and revoking agent tokens.
+//
+// It wraps loams.admin.v1.KeyService.
+type AdminKeysModule interface {
+	// Module is the SDK module, as it appears on loams.admin.keys.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable reports that the package's wire contract may still change.
+	Unstable() bool
+
+	// Create calls loams.admin.v1.KeyService/CreateKey, retried: manual.
+	Create(ctx context.Context, req *connect.Request[adminv1.CreateKeyRequest], opts *CallOptions) (*connect.Response[adminv1.CreateKeyResponse], error)
+	// List calls loams.admin.v1.KeyService/ListKeys, retried: safe. AIP-158: page with Keys and follow NextPageToken through loams.Paginate.
+	List(ctx context.Context, req *connect.Request[adminv1.ListKeysRequest], opts *CallOptions) (*connect.Response[adminv1.ListKeysResponse], error)
+	// Revoke calls loams.admin.v1.KeyService/RevokeKey, retried: safe.
+	Revoke(ctx context.Context, req *connect.Request[adminv1.RevokeKeyRequest], opts *CallOptions) (*connect.Response[adminv1.RevokeKeyResponse], error)
+	// RevokeToken calls loams.admin.v1.KeyService/RevokeToken, retried: safe.
+	RevokeToken(ctx context.Context, req *connect.Request[adminv1.RevokeTokenRequest], opts *CallOptions) (*connect.Response[adminv1.RevokeTokenResponse], error)
+}
+
+// AdminOrgModule is loams.admin.org — The org: settings, members, invitations and teams.
+//
+// It wraps loams.admin.v1.OrgService.
+type AdminOrgModule interface {
+	// Module is the SDK module, as it appears on loams.admin.org.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable reports that the package's wire contract may still change.
+	Unstable() bool
+
+	// AddTeamMember calls loams.admin.v1.OrgService/AddTeamMember, retried: safe.
+	AddTeamMember(ctx context.Context, req *connect.Request[adminv1.AddTeamMemberRequest], opts *CallOptions) (*connect.Response[adminv1.AddTeamMemberResponse], error)
+	// CreateInvitation calls loams.admin.v1.OrgService/CreateInvitation, retried: manual.
+	CreateInvitation(ctx context.Context, req *connect.Request[adminv1.CreateInvitationRequest], opts *CallOptions) (*connect.Response[adminv1.CreateInvitationResponse], error)
+	// CreateTeam calls loams.admin.v1.OrgService/CreateTeam, retried: manual.
+	CreateTeam(ctx context.Context, req *connect.Request[adminv1.CreateTeamRequest], opts *CallOptions) (*connect.Response[adminv1.CreateTeamResponse], error)
+	// Get calls loams.admin.v1.OrgService/GetOrg, retried: safe.
+	Get(ctx context.Context, req *connect.Request[adminv1.GetOrgRequest], opts *CallOptions) (*connect.Response[adminv1.GetOrgResponse], error)
+	// GetTeam calls loams.admin.v1.OrgService/GetTeam, retried: safe.
+	GetTeam(ctx context.Context, req *connect.Request[adminv1.GetTeamRequest], opts *CallOptions) (*connect.Response[adminv1.GetTeamResponse], error)
+	// ListInvitations calls loams.admin.v1.OrgService/ListInvitations, retried: safe. AIP-158: page with Invitations and follow NextPageToken through loams.Paginate.
+	ListInvitations(ctx context.Context, req *connect.Request[adminv1.ListInvitationsRequest], opts *CallOptions) (*connect.Response[adminv1.ListInvitationsResponse], error)
+	// ListMembers calls loams.admin.v1.OrgService/ListMembers, retried: safe. AIP-158: page with Members and follow NextPageToken through loams.Paginate.
+	ListMembers(ctx context.Context, req *connect.Request[adminv1.ListMembersRequest], opts *CallOptions) (*connect.Response[adminv1.ListMembersResponse], error)
+	// ListTeams calls loams.admin.v1.OrgService/ListTeams, retried: safe. AIP-158: page with Teams and follow NextPageToken through loams.Paginate.
+	ListTeams(ctx context.Context, req *connect.Request[adminv1.ListTeamsRequest], opts *CallOptions) (*connect.Response[adminv1.ListTeamsResponse], error)
+	// RemoveMember calls loams.admin.v1.OrgService/RemoveMember, retried: safe.
+	RemoveMember(ctx context.Context, req *connect.Request[adminv1.RemoveMemberRequest], opts *CallOptions) (*connect.Response[adminv1.RemoveMemberResponse], error)
+	// Update calls loams.admin.v1.OrgService/UpdateOrg, retried: safe.
+	Update(ctx context.Context, req *connect.Request[adminv1.UpdateOrgRequest], opts *CallOptions) (*connect.Response[adminv1.UpdateOrgResponse], error)
+}
+
+// AdminProjectsModule is loams.admin.projects — Projects, project access and environments.
+//
+// It wraps loams.admin.v1.ProjectService.
+type AdminProjectsModule interface {
+	// Module is the SDK module, as it appears on loams.admin.projects.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable reports that the package's wire contract may still change.
+	Unstable() bool
+
+	// Create calls loams.admin.v1.ProjectService/CreateProject, retried: manual.
+	Create(ctx context.Context, req *connect.Request[adminv1.CreateProjectRequest], opts *CallOptions) (*connect.Response[adminv1.CreateProjectResponse], error)
+	// CreateEnvironment calls loams.admin.v1.ProjectService/CreateEnvironment, retried: manual.
+	CreateEnvironment(ctx context.Context, req *connect.Request[adminv1.CreateEnvironmentRequest], opts *CallOptions) (*connect.Response[adminv1.CreateEnvironmentResponse], error)
+	// Get calls loams.admin.v1.ProjectService/GetProject, retried: safe.
+	Get(ctx context.Context, req *connect.Request[adminv1.GetProjectRequest], opts *CallOptions) (*connect.Response[adminv1.GetProjectResponse], error)
+	// GetEnvironment calls loams.admin.v1.ProjectService/GetEnvironment, retried: safe.
+	GetEnvironment(ctx context.Context, req *connect.Request[adminv1.GetEnvironmentRequest], opts *CallOptions) (*connect.Response[adminv1.GetEnvironmentResponse], error)
+	// GetEnvironmentActivity calls loams.admin.v1.ProjectService/GetEnvironmentActivity, retried: safe.
+	GetEnvironmentActivity(ctx context.Context, req *connect.Request[adminv1.GetEnvironmentActivityRequest], opts *CallOptions) (*connect.Response[adminv1.GetEnvironmentActivityResponse], error)
+	// GrantAccess calls loams.admin.v1.ProjectService/GrantAccess, retried: safe.
+	GrantAccess(ctx context.Context, req *connect.Request[adminv1.GrantAccessRequest], opts *CallOptions) (*connect.Response[adminv1.GrantAccessResponse], error)
+	// List calls loams.admin.v1.ProjectService/ListProjects, retried: safe. AIP-158: page with Projects and follow NextPageToken through loams.Paginate.
+	List(ctx context.Context, req *connect.Request[adminv1.ListProjectsRequest], opts *CallOptions) (*connect.Response[adminv1.ListProjectsResponse], error)
+	// ListAccess calls loams.admin.v1.ProjectService/ListAccess, retried: safe. AIP-158: page with Grants and follow NextPageToken through loams.Paginate.
+	ListAccess(ctx context.Context, req *connect.Request[adminv1.ListAccessRequest], opts *CallOptions) (*connect.Response[adminv1.ListAccessResponse], error)
+	// ListEnvironments calls loams.admin.v1.ProjectService/ListEnvironments, retried: safe. AIP-158: page with Environments and follow NextPageToken through loams.Paginate.
+	ListEnvironments(ctx context.Context, req *connect.Request[adminv1.ListEnvironmentsRequest], opts *CallOptions) (*connect.Response[adminv1.ListEnvironmentsResponse], error)
+}
+
+// AuthModule is loams.auth — Sign-in providers, first-run setup, sessions and OAuth consent.
+//
+// It wraps loams.auth.v1.AuthService.
+type AuthModule interface {
+	// Module is the SDK module, as it appears on loams.auth.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable reports that the package's wire contract may still change.
+	Unstable() bool
+
+	// CompleteSetup calls loams.auth.v1.AuthService/CompleteSetup, retried: manual.
+	CompleteSetup(ctx context.Context, req *connect.Request[authv1.CompleteSetupRequest], opts *CallOptions) (*connect.Response[authv1.CompleteSetupResponse], error)
+	// CreateSession calls loams.auth.v1.AuthService/CreateSession, retried: manual.
+	CreateSession(ctx context.Context, req *connect.Request[authv1.CreateSessionRequest], opts *CallOptions) (*connect.Response[authv1.CreateSessionResponse], error)
+	// DecideConsent calls loams.auth.v1.AuthService/DecideConsent, retried: manual.
+	DecideConsent(ctx context.Context, req *connect.Request[authv1.DecideConsentRequest], opts *CallOptions) (*connect.Response[authv1.DecideConsentResponse], error)
+	// DeleteSession calls loams.auth.v1.AuthService/DeleteSession, retried: safe.
+	DeleteSession(ctx context.Context, req *connect.Request[authv1.DeleteSessionRequest], opts *CallOptions) (*connect.Response[authv1.DeleteSessionResponse], error)
+	// GetSession calls loams.auth.v1.AuthService/GetSession, retried: safe.
+	GetSession(ctx context.Context, req *connect.Request[authv1.GetSessionRequest], opts *CallOptions) (*connect.Response[authv1.GetSessionResponse], error)
+	// ListProviders calls loams.auth.v1.AuthService/ListProviders, retried: safe.
+	ListProviders(ctx context.Context, req *connect.Request[authv1.ListProvidersRequest], opts *CallOptions) (*connect.Response[authv1.ListProvidersResponse], error)
 }
 
 // InstanceModule is loams.instance — What this instance is, and who the caller is on it.
@@ -318,6 +646,31 @@ type LiveModule interface {
 	Watch(ctx context.Context, req *connect.Request[livev1.WatchRequest], opts *CallOptions) (*connect.ServerStreamForClient[livev1.Transition], error)
 }
 
+// LiveAdminModule is loams.live.admin — Live administration: deploy, roll back, index status and function logs.
+//
+// It wraps loams.live.v1.LiveAdminService. Its wire contract may still change, so buf breaking skips it and an SDK marks it experimental (§44 §10.3).
+type LiveAdminModule interface {
+	// Module is the SDK module, as it appears on loams.live.admin.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable reports that the package's wire contract may still change.
+	Unstable() bool
+
+	// ActivateDeployment calls loams.live.v1.LiveAdminService/ActivateDeployment, retried: manual.
+	ActivateDeployment(ctx context.Context, req *connect.Request[livev1.ActivateDeploymentRequest], opts *CallOptions) (*connect.Response[livev1.ActivateDeploymentResponse], error)
+	// Deploy calls loams.live.v1.LiveAdminService/Deploy, retried: manual.
+	Deploy(ctx context.Context, req *connect.Request[livev1.DeployRequest], opts *CallOptions) (*connect.Response[livev1.DeployResponse], error)
+	// GetDeployment calls loams.live.v1.LiveAdminService/GetDeployment, retried: safe.
+	GetDeployment(ctx context.Context, req *connect.Request[livev1.GetDeploymentRequest], opts *CallOptions) (*connect.Response[livev1.GetDeploymentResponse], error)
+	// GetIndexStatus calls loams.live.v1.LiveAdminService/GetIndexStatus, retried: safe.
+	GetIndexStatus(ctx context.Context, req *connect.Request[livev1.GetIndexStatusRequest], opts *CallOptions) (*connect.Response[livev1.GetIndexStatusResponse], error)
+	// ListDeployments calls loams.live.v1.LiveAdminService/ListDeployments, retried: safe. AIP-158: page with Deployments and follow NextPageToken through loams.Paginate.
+	ListDeployments(ctx context.Context, req *connect.Request[livev1.ListDeploymentsRequest], opts *CallOptions) (*connect.Response[livev1.ListDeploymentsResponse], error)
+	// TailLogs calls loams.live.v1.LiveAdminService/TailLogs, retried: manual.
+	TailLogs(ctx context.Context, req *connect.Request[livev1.TailLogsRequest], opts *CallOptions) (*connect.ServerStreamForClient[livev1.TailLogsResponse], error)
+}
+
 // TablesModule is a second facade name for the same RPCs, exposed as loams.tables.
 //
 // It wraps loams.live.v1.LiveService. Its wire contract may still change, so buf breaking skips it and an SDK marks it experimental (§44 §10.3).
@@ -329,8 +682,6 @@ type TablesModule interface {
 	// Unstable reports that the package's wire contract may still change.
 	Unstable() bool
 
-	// Deploy calls loams.live.v1.LiveService/Deploy, retried: manual.
-	Deploy(ctx context.Context, req *connect.Request[livev1.DeployRequest], opts *CallOptions) (*connect.Response[livev1.DeployResponse], error)
 	// Mutate calls loams.live.v1.LiveService/Mutate, retried: manual.
 	Mutate(ctx context.Context, req *connect.Request[livev1.MutateRequest], opts *CallOptions) (*connect.Response[livev1.MutateResponse], error)
 	// Query calls loams.live.v1.LiveService/Query, retried: manual.
@@ -342,8 +693,29 @@ type TablesModule interface {
 // It returns nil for a service this SDK does not speak.
 func NewServiceClient(name string, httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) any {
 	switch name {
+	case "loams.admin.v1.AgentService":
+		return adminv1connect.NewAgentServiceClient(httpClient, baseURL, opts...)
+
+	case "loams.admin.v1.AuditService":
+		return adminv1connect.NewAuditServiceClient(httpClient, baseURL, opts...)
+
+	case "loams.admin.v1.KeyService":
+		return adminv1connect.NewKeyServiceClient(httpClient, baseURL, opts...)
+
+	case "loams.admin.v1.OrgService":
+		return adminv1connect.NewOrgServiceClient(httpClient, baseURL, opts...)
+
+	case "loams.admin.v1.ProjectService":
+		return adminv1connect.NewProjectServiceClient(httpClient, baseURL, opts...)
+
+	case "loams.auth.v1.AuthService":
+		return authv1connect.NewAuthServiceClient(httpClient, baseURL, opts...)
+
 	case "loams.instance.v1.InstanceService":
 		return instancev1connect.NewInstanceServiceClient(httpClient, baseURL, opts...)
+
+	case "loams.live.v1.LiveAdminService":
+		return livev1connect.NewLiveAdminServiceClient(httpClient, baseURL, opts...)
 
 	case "loams.live.v1.LiveService":
 		return livev1connect.NewLiveServiceClient(httpClient, baseURL, opts...)

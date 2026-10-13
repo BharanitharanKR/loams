@@ -47,8 +47,9 @@ loams-store.workspace = true
 serde.workspace = true
 base64.workspace = true
 bytes.workspace = true
-# Backoff between catalog CAS retries (review M4).
-tokio = { workspace = true, features = ["time", "rt", "sync"] }
+# Backoff between catalog CAS retries (review M4); `fs` and `io-util` stream a native snapshot
+# to and from the bucket (GR1 Task 13).
+tokio = { workspace = true, features = ["time", "rt", "sync", "fs", "io-util"] }
 # `gr_<ULID>` graph ids (shared contract `GraphId`).
 ulid.workspace = true
 # `ExecuteStream`'s chunks, as the `connectrpc::ServiceStream` the handler answers (GR1 Task 6).
@@ -57,6 +58,14 @@ futures.workspace = true
 # The durable write path (GR1 Task 11, D742): every committed write transaction is appended to
 # the graph's implicit stream through Loams' log, and a graph is rebuilt from that stream.
 loams-log.workspace = true
+# Portable snapshots (GR1 Task 13, §48 §6.4, I6): Parquet files of nodes and edges, at the
+# workspace's Arrow and Parquet version (58), never Grafeo's. Both are in `Cargo.lock` already
+# (parquet 58.4.0 through DataFusion), so no new version comes in.
+arrow-array.workspace = true
+arrow-schema.workspace = true
+parquet.workspace = true
+# The CRC-32C a native snapshot's manifest entry carries, checked when it is read back.
+crc32c.workspace = true
 
 [features]
 # `engine_panic_poisons_one_graph`: `cargo test -p loams-graph --features failpoints`.

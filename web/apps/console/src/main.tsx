@@ -52,7 +52,7 @@ const router = createBrowserRouter(
       ],
     },
   ],
-  { basename: '/ui' },
+  { basename: import.meta.env.BASE_URL.replace(/\/$/, '') || '/' },
 );
 
 // The server URL comes from config.json at runtime, never from the build.

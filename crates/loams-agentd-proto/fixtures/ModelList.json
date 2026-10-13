@@ -1,0 +1,23 @@
+[
+  {
+    "description": "Most capable",
+    "id": "gpt-5",
+    "label": "GPT-5",
+    "options": [
+      {
+        "choices": [
+          {
+            "id": "fast",
+            "label": "Fast"
+          }
+        ],
+        "defaultChoice": "fast",
+        "id": "speed",
+        "label": "Speed"
+      }
+    ],
+    "reasoningLevels": [
+      "medium"
+    ]
+  }
+]

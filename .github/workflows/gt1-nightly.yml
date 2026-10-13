@@ -1,0 +1,51 @@
+# GT1 nightly (docs/plans/2026-10-10-gt1-loams-git.md, Task 11): the
+# linearizability histories on 1024 seeds, and the bucket WAL bench in
+# memory and on RustFS. The bench's JSON lines are kept as an artifact.
+name: Git nightly
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: git-nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  loams-git-nightly:
+    name: Seeds and bench
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: gt1-loams-git
+          save-if: false
+      - name: RustFS
+        run: scripts/git/rustfs.sh start | sed -n 's/^export //p' >> "$GITHUB_ENV"
+      - name: linearizability (1024 seeds)
+        env:
+          LOAMS_GIT_LIN_SEEDS: "1024"
+        run: cargo test -p loams-git --locked --test linearizable
+      - name: store-backed suite
+        run: cargo test -p loams-git --locked --test s3
+      - name: bench
+        env:
+          LOAMS_GIT_BENCH_S3: ${{ env.LOAMS_TEST_S3_URL }}
+        run: scripts/git/bench.sh
+      - uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: git-wal-bench
+          path: bench/results/git-wal/
+      - name: stop RustFS
+        if: always()
+        run: scripts/git/rustfs.sh stop || true

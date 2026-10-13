@@ -12,7 +12,9 @@
 //! the Connect stubs to `loams/<package>/v1/v1connect/*.connect.go` (Go
 //! package `v1connect`), with `<Service>Client` as the client interface and
 //! `New<Service>Client(httpClient, baseURL, opts...)` as its constructor. That
-//! is what `sdks/go/buf.gen.proto.yaml` configures.
+//! is what the removed `sdks/go/buf.gen.proto.yaml` configured;
+//! `sdks/go/buf.gen.go.yaml`, which writes the committed stubs, gives the same
+//! import paths with `M` options.
 //!
 //! Two modules can be facade names for one service (`loams.live` and
 //! `loams.tables` are both `loams.live.v1.LiveService`), so the descriptors are

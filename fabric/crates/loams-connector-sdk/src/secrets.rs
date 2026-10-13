@@ -82,6 +82,35 @@ impl Scrubber {
         }
     }
 
+    /// Whether `text` holds any known secret: its bytes as they are, in
+    /// standard or URL-safe base64 (a `Basic` header, a Kubernetes `Secret`'s
+    /// `data`), or percent-encoded (a URL's userinfo or query). The
+    /// supervisor drops a fallback log line for which this is true (Task 25).
+    pub fn contains(&self, text: &str) -> bool {
+        use base64::Engine as _;
+        use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
+        let values = self.values.lock().unwrap_or_else(|p| p.into_inner());
+        let hay = text.as_bytes();
+        values.iter().any(|v| {
+            let raw = v.expose();
+            let forms = [
+                Zeroizing::new(raw.to_vec()),
+                Zeroizing::new(
+                    STANDARD
+                        .encode(raw)
+                        .trim_end_matches('=')
+                        .as_bytes()
+                        .to_vec(),
+                ),
+                Zeroizing::new(URL_SAFE_NO_PAD.encode(raw).into_bytes()),
+                Zeroizing::new(percent_encode(raw).into_bytes()),
+            ];
+            forms
+                .iter()
+                .any(|f| !f.is_empty() && hay.windows(f.len()).any(|w| w == f.as_slice()))
+        })
+    }
+
     /// `text` with every known secret replaced by `<redacted>`.
     pub fn scrub(&self, text: &str) -> String {
         let values = self.values.lock().unwrap_or_else(|p| p.into_inner());
@@ -95,6 +124,19 @@ impl Scrubber {
         }
         out
     }
+}
+
+/// RFC 3986 percent-encoding of everything but the unreserved characters.
+fn percent_encode(raw: &[u8]) -> String {
+    let mut out = String::with_capacity(raw.len() * 3);
+    for &b in raw {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
 }
 
 /// A resolver that records every secret it hands out in a [`Scrubber`].
@@ -172,5 +214,17 @@ mod tests {
             sc.scrub("login hunter2-pass failed"),
             "login <redacted> failed"
         );
+    }
+
+    #[test]
+    fn scrubber_finds_encoded_forms() {
+        use base64::Engine as _;
+        let sc = Scrubber::new();
+        sc.add(&Secret::new("p@ss/word+42"));
+        assert!(sc.contains("user:p@ss/word+42@host"));
+        assert!(sc.contains("postgres://u:p%40ss%2Fword%2B42@db"));
+        let b64 = base64::engine::general_purpose::STANDARD.encode("p@ss/word+42");
+        assert!(sc.contains(&format!("data: {b64}")));
+        assert!(!sc.contains("an ordinary log line"));
     }
 }

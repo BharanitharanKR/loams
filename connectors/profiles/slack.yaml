@@ -1,0 +1,41 @@
+# Slack — an HTTP-API profile (CN2 OR-11, Task 20). Written from Slack's
+# public Web API reference:
+#   conversations.history: https://docs.slack.dev/reference/methods/conversations.history
+#   chat.postMessage: https://docs.slack.dev/reference/methods/chat.postMessage
+#   Cursor pagination: https://docs.slack.dev/apis/web-api/pagination
+#   Rate limits (429 + Retry-After): https://docs.slack.dev/apis/web-api/rate-limits
+#   Request signing (v0): https://docs.slack.dev/authentication/verifying-requests-from-slack
+# Slack reports most errors as `200 {"ok": false, "error": …}`, so `ok` makes
+# such a body an error (a write's is poison, a read's fatal; R20.3). The
+# Slack → Zulip import route reads `messages`.
+apiVersion: loams.flow/v1
+kind: Profile
+id: slack
+profile_kind: http-api
+module: http
+system:
+  name: Slack
+  service: { fixture: conformance/connectors/fixtures/slack }
+defaults: {}
+narrows: []
+http:
+  base_url: "https://slack.com/api"
+  auth: { scheme: bearer }
+  ok: "/ok"
+  resources:
+    messages:
+      list:
+        method: GET
+        path: "/conversations.history"
+        items: "/messages"
+        cursor: { next: "/response_metadata/next_cursor", param: cursor }
+        key: "/ts"
+        query: { channel: "{config.channel}", limit: "200" }
+      create:
+        method: POST
+        path: "/chat.postMessage"
+  rate_limit:
+    requests: 50
+    per_seconds: 60
+    honour_headers: ["Retry-After"]
+  webhook: { scheme: slack, header: X-Slack-Signature }

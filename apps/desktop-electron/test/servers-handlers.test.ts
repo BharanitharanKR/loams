@@ -17,6 +17,9 @@ function deps() {
 	const order: string[] = [];
 	return {
 		order,
+		abortInFlight: vi.fn(async () => {
+			order.push("abort");
+		}),
 		clearCookies: vi.fn(async (_origin: string) => {
 			order.push("clear");
 		}),
@@ -37,7 +40,8 @@ describe("serverHandlers", () => {
 		d.order.length = 0;
 		d.clearCookies.mockClear();
 		expect(await h.activate("demo")).toEqual({ ok: true, value: undefined });
-		expect(d.order).toEqual(["clear", "reload"]);
+		// In-flight requests to the old server stop first, or one could store its cookies again.
+		expect(d.order).toEqual(["abort", "clear", "reload"]);
 		expect(d.clearCookies).toHaveBeenCalledWith("https://a.example");
 	});
 

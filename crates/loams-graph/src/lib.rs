@@ -25,17 +25,23 @@
 pub mod catalog;
 pub mod changeset;
 pub mod classify;
+pub mod consistency;
 pub mod durable;
 pub mod engine;
+pub mod evict;
 pub mod limits;
+pub mod owner;
+pub mod recovery;
 pub mod redact;
+pub mod replica;
 pub mod service;
+pub mod snapshot;
 pub mod value;
 
 pub use classify::Access;
 pub use engine::{
-    BatchStatement, Diagnostic, Engine, ExplainedPlan, Graph, GraphError, GraphRow, GraphState,
-    OpenSpec, PlanNode, Position, SchemaSummary,
+    BatchStatement, Closed, Diagnostic, Engine, ExplainedPlan, Graph, GraphError, GraphRow,
+    GraphState, OpenSpec, PlanNode, Position, SchemaSummary,
 };
 pub use limits::StatementLimits;
 pub use service::GraphServiceImpl;

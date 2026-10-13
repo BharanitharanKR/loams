@@ -5,7 +5,13 @@
 // HTTP/1.1 until the request body ends. So one design works on HTTP/1.1 and
 // HTTP/2, over Connect, gRPC and gRPC-Web.
 //
-// R1 has no authentication (D111): the server binds loopback only.
+// The server binds loopback only (D111) until LV1 moves Live to the main
+// port (Task 12); the listener sits behind the engine's authentication
+// layer (`LOAMS_AUTH_MODE`, off by default on loopback). Deploying and the
+// other admin calls are `LiveAdminService` (admin.proto).
+//
+// `Query` and `Mutate` answer with a `loams-request-id` header: the id their
+// function's console lines carry in `LiveAdminService.TailLogs`.
 syntax = "proto3";
 
 package loams.live.v1;
@@ -46,7 +52,7 @@ service LiveService {
   //
   // Exposed on `loams.tables`, not on `loams.live`: §44 §7.2 splits the
   // service into the session half (watch, modify) and the table half (query,
-  // mutate, deploy), and both are facade names for these RPCs.
+  // mutate), and both are facade names for these RPCs.
   rpc Query(QueryRequest) returns (QueryResponse) {
     option (loams.options.v1.facade) = { module: "tables" name: "query" };
   }
@@ -54,10 +60,8 @@ service LiveService {
   rpc Mutate(MutateRequest) returns (MutateResponse) {
     option (loams.options.v1.facade) = { module: "tables" name: "mutate" };
   }
-  // Admin: deploys a function bundle and a schema.
-  rpc Deploy(DeployRequest) returns (DeployResponse) {
-    option (loams.options.v1.facade) = { module: "tables" name: "deploy" };
-  }
+  // Deploying moved to `LiveAdminService.Deploy` (admin.proto; design §45
+  // §6.3, D689; LV1 plan Task 10).
 }
 
 // A session's state: (query-set version, identity version, ts). A client
@@ -168,17 +172,7 @@ message MutateResponse {
   Value result = 2;
 }
 
-message DeployRequest {
-  // One ES module (§20 §6).
-  bytes bundle = 1;
-  Schema schema = 2;
-}
-
-message DeployResponse {
-  string deployment_id = 1;
-}
-
-// A deployed schema: tables and their indexes (validators arrive in R2).
+// A deployed schema: tables, their indexes and their validators.
 message Schema {
   repeated TableSchema tables = 1;
 }
@@ -187,12 +181,67 @@ message TableSchema {
   string name = 1;
   // User indexes; `by_id` and `by_creation_time` are implicit.
   repeated IndexSchema indexes = 2;
+  // The validator every write to the table must match (design §45 §4.1,
+  // D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+  // own fields (not `_id` or `_creationTime`). Absent: any document.
+  Validator validator = 3;
+  // Whether a deploy that makes the validator stricter checks the table's
+  // existing documents first (absent: true). With `false` the new validator
+  // applies at once to new writes only, as Convex's `schemaValidation`.
+  optional bool schema_validation = 4;
 }
 
 message IndexSchema {
   string name = 1;
   // Up to 16 field names; `_creationTime` and `_id` are appended.
   repeated string fields = 2;
+}
+
+// A validator (design §45 §4.1, D684): the `v.*` vocabulary of
+// `loams:server`. Values match strictly: `int64` takes only an int64 and
+// `float64` only a double; an object has exactly its fields, except that an
+// `optional` field may be missing.
+message Validator {
+  // Exactly one is set; a Validator with none set is invalid.
+  oneof kind {
+    // `v.null()`, `v.int64()`, `v.float64()`, `v.boolean()`, `v.string()`,
+    // `v.bytes()` or `v.any()`.
+    ValidatorPrimitive primitive = 1;
+    // `v.array(element)`: every element matches.
+    Validator array = 2;
+    // `v.object(fields)`.
+    ValidatorObject object = 3;
+    // `v.literal(value)`: exactly this scalar (null, boolean, int64, a
+    // finite double or a string).
+    Value literal = 4;
+    // `v.union(...members)`: at least one member matches.
+    ValidatorUnion union = 5;
+    // `v.optional(inner)`: an object field that may be missing; only valid
+    // as a field of `object`.
+    Validator optional = 6;
+    // `v.id(table)`: a document id (its text form) of the named table.
+    string id = 7;
+  }
+}
+
+enum ValidatorPrimitive {
+  VALIDATOR_PRIMITIVE_UNSPECIFIED = 0;
+  VALIDATOR_PRIMITIVE_NULL = 1;
+  VALIDATOR_PRIMITIVE_INT64 = 2;
+  VALIDATOR_PRIMITIVE_FLOAT64 = 3;
+  VALIDATOR_PRIMITIVE_BOOLEAN = 4;
+  VALIDATOR_PRIMITIVE_STRING = 5;
+  VALIDATOR_PRIMITIVE_BYTES = 6;
+  VALIDATOR_PRIMITIVE_ANY = 7;
+}
+
+message ValidatorObject {
+  map<string, Validator> fields = 1;
+}
+
+message ValidatorUnion {
+  // At least one.
+  repeated Validator members = 1;
 }
 
 // An error for one query in a Transition. Call errors use the Connect error

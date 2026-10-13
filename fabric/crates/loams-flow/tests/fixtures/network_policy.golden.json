@@ -1,0 +1,74 @@
+{
+  "apiVersion": "networking.k8s.io/v1",
+  "kind": "NetworkPolicy",
+  "metadata": {
+    "name": "loams-egress-orders-cdc",
+    "namespace": "loams-7",
+    "labels": {
+      "app.kubernetes.io/managed-by": "loams-flow",
+      "app.kubernetes.io/component": "connector-egress"
+    }
+  },
+  "spec": {
+    "podSelector": {
+      "matchLabels": {
+        "loams.dev/namespace": "7",
+        "loams.dev/instance": "orders-cdc"
+      }
+    },
+    "policyTypes": ["Egress"],
+    "egress": [
+      {
+        "to": [
+          {
+            "namespaceSelector": { "matchLabels": { "kubernetes.io/metadata.name": "kube-system" } },
+            "podSelector": { "matchLabels": { "k8s-app": "kube-dns" } }
+          }
+        ],
+        "ports": [
+          { "protocol": "UDP", "port": 53 },
+          { "protocol": "TCP", "port": 53 }
+        ]
+      },
+      {
+        "to": [
+          {
+            "ipBlock": {
+              "cidr": "0.0.0.0/0",
+              "except": [
+                "0.0.0.0/8",
+                "127.0.0.0/8",
+                "169.254.0.0/16",
+                "100.100.100.200/32",
+                "168.63.129.16/32",
+                "224.0.0.0/4",
+                "255.255.255.255/32",
+                "10.244.0.0/16",
+                "10.96.0.0/12",
+                "10.0.0.10/32"
+              ]
+            }
+          },
+          {
+            "ipBlock": {
+              "cidr": "::/0",
+              "except": [
+                "::/128",
+                "::1/128",
+                "fe80::/10",
+                "fd00:ec2::254/128",
+                "ff00::/8",
+                "fd00:10:244::/56"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "to": [
+          { "ipBlock": { "cidr": "10.96.12.0/24" } }
+        ]
+      }
+    ]
+  }
+}

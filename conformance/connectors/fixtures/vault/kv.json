@@ -1,0 +1,69 @@
+{
+  "recorded_from": "OpenBao",
+  "synthetic": true,
+  "docs": [
+    "https://openbao.org/api-docs/secret/kv/kv-v2/",
+    "https://developer.hashicorp.com/vault/api-docs/secret/kv/kv-v2"
+  ],
+  "scenario": {
+    "direction": "sink",
+    "resource": "kv",
+    "config": {
+      "address": "{proxy}"
+    },
+    "secrets": {
+      "api_key": "synthetic-vault-token"
+    },
+    "input": [
+      {
+        "path": "app/db",
+        "data": {
+          "user": "app",
+          "dsn": "postgres://db.internal:5432/app"
+        }
+      }
+    ],
+    "expect": 1
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/secret/data/app/db",
+        "headers": {},
+        "body": {
+          "json": {
+            "data": {
+              "user": "app",
+              "dsn": "postgres://db.internal:5432/app"
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "request_id": "9f2a6b1c-0000-4d2e-8f3a-0123456789ab",
+            "lease_id": "",
+            "renewable": false,
+            "lease_duration": 0,
+            "data": {
+              "created_time": "2026-10-01T12:00:00.000000Z",
+              "custom_metadata": null,
+              "deletion_time": "",
+              "destroyed": false,
+              "version": 1
+            },
+            "wrap_info": null,
+            "warnings": null,
+            "auth": null
+          }
+        }
+      }
+    }
+  ]
+}

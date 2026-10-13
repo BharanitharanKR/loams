@@ -1,0 +1,42 @@
+# Kestra (companion) — an HTTP-API profile (CN2 OR-11, Task 20; Q356: no
+# Kestra plugin). A sink that triggers flows through Kestra's webhook trigger,
+# a source that lists executions, and Kestra's own outgoing webhooks (an
+# `io.kestra.plugin.core.http.Request` task with a shared token header) into
+# the webhooks source. Written from Kestra's public documentation:
+#   Webhook trigger (/api/v1/{tenant}/executions/webhook/{namespace}/{flowId}/{key}):
+#     https://kestra.io/plugins/core/trigger/io.kestra.plugin.core.trigger.webhook
+#   Executions search (page/size): https://kestra.io/docs/api-reference/open-source
+#   Basic auth: https://kestra.io/docs/configuration#basic-authentication
+#   HTTP Request task (headers): https://kestra.io/plugins/core/tasks/http/io.kestra.plugin.core.http.request
+# The webhook trigger's `key` is its only protection, so it is a secret the
+# instance names (`auth.webhook_key`), resolved into the path at send time
+# (R20.2). `tenant` defaults to `main`, the open-source edition's tenant.
+apiVersion: loams.flow/v1
+kind: Profile
+id: kestra-companion
+profile_kind: http-api
+module: http
+system:
+  name: Kestra
+  service: { compose: kestra }
+defaults:
+  tenant: main
+narrows: []
+http:
+  base_url: "{config.server_url}"
+  auth: { scheme: basic }
+  headers: { Accept: application/json }
+  resources:
+    trigger:
+      create:
+        method: POST
+        path: "/api/v1/{config.tenant}/executions/webhook/{config.namespace}/{config.flow_id}/{auth.webhook_key}"
+    executions:
+      list:
+        method: GET
+        path: "/api/v1/{config.tenant}/executions/search"
+        items: "/results"
+        offset: { param: page, limit_param: size, limit: 100, pages: true }
+        key: "/id"
+        query: { namespace: "{config.namespace}", sort: "state.startDate:asc" }
+  webhook: { scheme: token, header: X-Loams-Webhook-Token }

@@ -82,7 +82,7 @@
     },
     "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
     "path": {
-      "description": "A path joined to base_url; may carry a query string, and {id} where a job id goes.",
+      "description": "A path joined to base_url; may carry a query string, {id} where a job id goes, {config.<key>} (an instance config value), {auth.<field>} (a secret the instance names, such as Kestra's webhook key) and, in a write's path, {item:<pointer>} (a value of the item).",
       "type": "string",
       "pattern": "^/"
     },
@@ -92,9 +92,9 @@
       "required": ["base_url", "auth", "resources"],
       "properties": {
         "base_url": {
-          "description": "Scheme, host and optional path prefix; never with credentials in it.",
+          "description": "Scheme, host and optional path prefix; never with credentials in it. {config.<key>} is replaced by the instance config's value (a Zendesk subdomain, a self-hosted server's URL; CN2 Task 20).",
           "type": "string",
-          "pattern": "^https?://[^/@\\s]+(/[^@\\s]*)?$"
+          "pattern": "^(https?://[^/@\\s]+|\\{config\\.[a-z0-9_]+\\})(/[^@\\s]*)?$"
         },
         "auth": {
           "description": "How requests authenticate. Credentials are secret references in the instance config: auth.token (bearer), auth.username and auth.password (basic), auth.api_key (header), auth.client_id, auth.client_secret and auth.refresh_token (oauth2), auth.access_key_id, auth.secret_access_key and auth.session_token (aws-sigv4).",
@@ -105,10 +105,10 @@
             "scheme": { "enum": ["oauth2", "bearer", "basic", "header", "aws-sigv4"] },
             "header": { "type": "string", "pattern": "^[A-Za-z0-9-]+$" },
             "prefix": { "type": "string" },
-            "token_url": { "type": "string", "pattern": "^https?://[^@\\s]+$" },
+            "token_url": { "type": "string", "pattern": "^(https?://|\\{config\\.[a-z0-9_]+\\})[^@\\s]+$" },
             "scopes": { "type": "array", "items": { "type": "string" } },
             "service": { "type": "string", "pattern": "^[a-z0-9-]+$" },
-            "region": { "type": "string", "pattern": "^[a-z0-9-]+$" }
+            "region": { "type": "string", "pattern": "^([a-z0-9-]+|\\{config\\.[a-z0-9_]+\\})$" }
           },
           "allOf": [
             { "if": { "properties": { "scheme": { "const": "oauth2" } } }, "then": { "required": ["token_url"] } },
@@ -143,9 +143,19 @@
           "additionalProperties": false,
           "required": ["scheme", "header"],
           "properties": {
-            "scheme": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+            "scheme": {
+              "description": "The signature scheme (loams-connector-http's webhook::SCHEMES, CN2 Task 20).",
+              "enum": [
+                "hmac-sha256", "stripe", "github", "slack", "shopify", "hubspot-v3",
+                "zendesk", "twilio", "segment", "sendgrid", "token"
+              ]
+            },
             "header": { "type": "string", "pattern": "^[A-Za-z0-9-]+$" }
           }
+        },
+        "ok": {
+          "description": "JSON pointer to a boolean every JSON response carries as true; false is an error (Slack's ok; CN2 Task 20).",
+          "$ref": "#/$defs/pointer"
         }
       }
     },
@@ -199,10 +209,27 @@
         "items": { "$ref": "#/$defs/pointer" },
         "cursor": {
           "type": "object", "additionalProperties": false, "required": ["next", "param"],
-          "properties": { "next": { "$ref": "#/$defs/pointer" }, "param": { "type": "string", "minLength": 1 } }
+          "properties": {
+            "next": { "description": "A JSON pointer (from body or last_item) or a header name (from header).", "type": "string", "minLength": 1 },
+            "param": { "type": "string", "minLength": 1 },
+            "from": { "enum": ["body", "last_item", "header"] },
+            "more": { "$ref": "#/$defs/pointer" }
+          }
         },
         "key": { "$ref": "#/$defs/pointer" },
-        "query": { "type": "object", "additionalProperties": { "type": "string" } }
+        "query": { "type": "object", "additionalProperties": { "type": "string" } },
+        "next_url": { "description": "JSON pointer to the next page's URL in the body: on base_url's origin, or relative to it.", "$ref": "#/$defs/pointer" },
+        "offset": {
+          "type": "object", "additionalProperties": false, "required": ["param", "limit"],
+          "properties": {
+            "param": { "type": "string", "minLength": 1 },
+            "limit_param": { "type": "string", "minLength": 1 },
+            "limit": { "type": "integer", "minimum": 1 },
+            "pages": { "type": "boolean" }
+          }
+        },
+        "format": { "enum": ["json", "csv", "ndjson"] },
+        "event": { "description": "The event name of an item (default item).", "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
       }
     },
     "write": {
@@ -215,7 +242,28 @@
         "batch": { "type": "integer", "minimum": 1 },
         "key": { "$ref": "#/$defs/pointer" },
         "body": { "$ref": "#/$defs/pointer" },
-        "idempotency_key": { "type": "boolean" }
+        "idempotency_key": { "type": "boolean" },
+        "encoding": { "enum": ["json", "ndjson", "form"] },
+        "select": { "$ref": "#/$defs/pointer" },
+        "wrap": { "$ref": "#/$defs/pointer" },
+        "envelope": {
+          "description": "A fixed JSON body the item or batch goes into at body; string leaves may be {config.<key>} or {auth.<field>} (a secret the instance names).",
+          "type": "object"
+        },
+        "conflict_ok": { "type": "boolean" },
+        "ack": {
+          "type": "object", "additionalProperties": false,
+          "required": ["path", "id", "request", "status", "channel_header"],
+          "properties": {
+            "path": { "$ref": "#/$defs/path" },
+            "id": { "$ref": "#/$defs/pointer" },
+            "request": { "$ref": "#/$defs/pointer" },
+            "status": { "$ref": "#/$defs/pointer" },
+            "channel_header": { "type": "string", "pattern": "^[A-Za-z0-9-]+$" },
+            "interval_ms": { "type": "integer", "minimum": 1 },
+            "timeout_ms": { "type": "integer", "minimum": 1 }
+          }
+        }
       }
     }
   }

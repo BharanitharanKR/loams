@@ -135,9 +135,30 @@ pub const REASONS: &[Reason] = &[
     "quota_exceeded",
     "storage_unavailable",
     "secret_already_issued",
+    "repo_not_found",
+    "repo_already_exists",
+    "repo_deleting",
+    "ref_stale",
+    "ref_protected",
+    "out_of_scope",
+    "object_format_unsupported",
+    "fork_too_deep",
+    "sequencer_unavailable",
+    "idempotency_key_reused",
+    "workspace_not_found",
+    "workspace_fenced",
+    "workspace_read_only",
+    "workspace_name_taken",
+    "object_missing",
+    "secret_detected",
+    "env_unsealed",
+    "env_access_denied",
+    "env_foreign_reference",
     "live_bad_cursor",
     "live_worker_crashed",
     "live_deploy_conflict",
+    "live_schema_violation",
+    "live_index_not_ready",
     "invalid_argument",
     "not_found",
     "already_exists",
@@ -192,9 +213,30 @@ pub const REASON_CODES: &[(Reason, &str)] = &[
     ("quota_exceeded", "resource_exhausted"),
     ("storage_unavailable", "unavailable"),
     ("secret_already_issued", "failed_precondition"),
+    ("repo_not_found", "not_found"),
+    ("repo_already_exists", "already_exists"),
+    ("repo_deleting", "failed_precondition"),
+    ("ref_stale", "aborted"),
+    ("ref_protected", "failed_precondition"),
+    ("out_of_scope", "permission_denied"),
+    ("object_format_unsupported", "unimplemented"),
+    ("fork_too_deep", "failed_precondition"),
+    ("sequencer_unavailable", "unavailable"),
+    ("idempotency_key_reused", "failed_precondition"),
+    ("workspace_not_found", "not_found"),
+    ("workspace_fenced", "aborted"),
+    ("workspace_read_only", "failed_precondition"),
+    ("workspace_name_taken", "already_exists"),
+    ("object_missing", "failed_precondition"),
+    ("secret_detected", "failed_precondition"),
+    ("env_unsealed", "invalid_argument"),
+    ("env_access_denied", "permission_denied"),
+    ("env_foreign_reference", "permission_denied"),
     ("live_bad_cursor", "invalid_argument"),
     ("live_worker_crashed", "internal"),
     ("live_deploy_conflict", "failed_precondition"),
+    ("live_schema_violation", "invalid_argument"),
+    ("live_index_not_ready", "failed_precondition"),
     ("invalid_argument", "invalid_argument"),
     ("not_found", "not_found"),
     ("already_exists", "already_exists"),
@@ -221,7 +263,9 @@ pub const FEATURE_NOT_IN_VARIANT: Reason = "feature_not_in_variant";
 /// names them.
 pub const PROTO_PACKAGES: &[&str] = &[
     "google.protobuf",
+    "loams.admin.v1",
     "loams.approvals.v1",
+    "loams.auth.v1",
     "loams.collection.v1",
     "loams.devices.v1",
     "loams.errors.v1",
@@ -234,6 +278,7 @@ pub const PROTO_PACKAGES: &[&str] = &[
     "loams.operations.v1",
     "loams.options.v1",
     "loams.postgres.v1",
+    "loams.repos.v1",
 ];
 
 /// AIP-158 paging, named by `FacadeOptions.pagination`.
@@ -316,6 +361,108 @@ pub calls: &'static [CallBinding],
 #[rustfmt::skip]
 pub static MODULES: &[ModuleBinding] = &[
     ModuleBinding {
+        name: "admin.agents",
+        summary: "Agents, their tokens and trust policies, and service accounts.",
+        service: "loams.admin.v1.AgentService",
+        package: "loams.admin.v1",
+        unstable: false,
+        derived: false,
+        calls: &[
+            CallBinding { module: "admin.agents", name: "create", proto_name: "create", method: "CreateAgent", rpc: "loams.admin.v1.AgentService/CreateAgent", service: "loams.admin.v1.AgentService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.agents", name: "create_service_account", proto_name: "createServiceAccount", method: "CreateServiceAccount", rpc: "loams.admin.v1.AgentService/CreateServiceAccount", service: "loams.admin.v1.AgentService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.agents", name: "create_trust_policy", proto_name: "createTrustPolicy", method: "CreateTrustPolicy", rpc: "loams.admin.v1.AgentService/CreateTrustPolicy", service: "loams.admin.v1.AgentService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.agents", name: "get", proto_name: "get", method: "GetAgent", rpc: "loams.admin.v1.AgentService/GetAgent", service: "loams.admin.v1.AgentService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.agents", name: "list", proto_name: "list", method: "ListAgents", rpc: "loams.admin.v1.AgentService/ListAgents", service: "loams.admin.v1.AgentService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "agents", next_page_token: "next_page_token" }) },
+            CallBinding { module: "admin.agents", name: "list_service_accounts", proto_name: "listServiceAccounts", method: "ListServiceAccounts", rpc: "loams.admin.v1.AgentService/ListServiceAccounts", service: "loams.admin.v1.AgentService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "service_accounts", next_page_token: "next_page_token" }) },
+            CallBinding { module: "admin.agents", name: "list_tokens", proto_name: "listTokens", method: "ListAgentTokens", rpc: "loams.admin.v1.AgentService/ListAgentTokens", service: "loams.admin.v1.AgentService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "tokens", next_page_token: "next_page_token" }) },
+            CallBinding { module: "admin.agents", name: "list_trust_policies", proto_name: "listTrustPolicies", method: "ListTrustPolicies", rpc: "loams.admin.v1.AgentService/ListTrustPolicies", service: "loams.admin.v1.AgentService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "trust_policies", next_page_token: "next_page_token" }) },
+            CallBinding { module: "admin.agents", name: "resume", proto_name: "resume", method: "ResumeAgent", rpc: "loams.admin.v1.AgentService/ResumeAgent", service: "loams.admin.v1.AgentService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::Idempotent, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.agents", name: "suspend", proto_name: "suspend", method: "SuspendAgent", rpc: "loams.admin.v1.AgentService/SuspendAgent", service: "loams.admin.v1.AgentService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::Idempotent, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.agents", name: "update", proto_name: "update", method: "UpdateAgent", rpc: "loams.admin.v1.AgentService/UpdateAgent", service: "loams.admin.v1.AgentService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::Idempotent, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+        ],
+    },
+    ModuleBinding {
+        name: "admin.audit",
+        summary: "The audit log: who did what, to what, and whether it was allowed.",
+        service: "loams.admin.v1.AuditService",
+        package: "loams.admin.v1",
+        unstable: false,
+        derived: false,
+        calls: &[
+            CallBinding { module: "admin.audit", name: "list", proto_name: "list", method: "ListAuditEvents", rpc: "loams.admin.v1.AuditService/ListAuditEvents", service: "loams.admin.v1.AuditService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "events", next_page_token: "next_page_token" }) },
+            CallBinding { module: "admin.audit", name: "watch", proto_name: "watch", method: "WatchAuditEvents", rpc: "loams.admin.v1.AuditService/WatchAuditEvents", service: "loams.admin.v1.AuditService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Server, pagination: None },
+        ],
+    },
+    ModuleBinding {
+        name: "admin.keys",
+        summary: "API keys, and revoking agent tokens.",
+        service: "loams.admin.v1.KeyService",
+        package: "loams.admin.v1",
+        unstable: false,
+        derived: false,
+        calls: &[
+            CallBinding { module: "admin.keys", name: "create", proto_name: "create", method: "CreateKey", rpc: "loams.admin.v1.KeyService/CreateKey", service: "loams.admin.v1.KeyService", package: "loams.admin.v1", keyed: true, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.keys", name: "list", proto_name: "list", method: "ListKeys", rpc: "loams.admin.v1.KeyService/ListKeys", service: "loams.admin.v1.KeyService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "keys", next_page_token: "next_page_token" }) },
+            CallBinding { module: "admin.keys", name: "revoke", proto_name: "revoke", method: "RevokeKey", rpc: "loams.admin.v1.KeyService/RevokeKey", service: "loams.admin.v1.KeyService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::Idempotent, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.keys", name: "revoke_token", proto_name: "revokeToken", method: "RevokeToken", rpc: "loams.admin.v1.KeyService/RevokeToken", service: "loams.admin.v1.KeyService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::Idempotent, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+        ],
+    },
+    ModuleBinding {
+        name: "admin.org",
+        summary: "The org: settings, members, invitations and teams.",
+        service: "loams.admin.v1.OrgService",
+        package: "loams.admin.v1",
+        unstable: false,
+        derived: false,
+        calls: &[
+            CallBinding { module: "admin.org", name: "add_team_member", proto_name: "addTeamMember", method: "AddTeamMember", rpc: "loams.admin.v1.OrgService/AddTeamMember", service: "loams.admin.v1.OrgService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::Idempotent, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.org", name: "create_invitation", proto_name: "createInvitation", method: "CreateInvitation", rpc: "loams.admin.v1.OrgService/CreateInvitation", service: "loams.admin.v1.OrgService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.org", name: "create_team", proto_name: "createTeam", method: "CreateTeam", rpc: "loams.admin.v1.OrgService/CreateTeam", service: "loams.admin.v1.OrgService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.org", name: "get", proto_name: "get", method: "GetOrg", rpc: "loams.admin.v1.OrgService/GetOrg", service: "loams.admin.v1.OrgService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.org", name: "get_team", proto_name: "getTeam", method: "GetTeam", rpc: "loams.admin.v1.OrgService/GetTeam", service: "loams.admin.v1.OrgService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.org", name: "list_invitations", proto_name: "listInvitations", method: "ListInvitations", rpc: "loams.admin.v1.OrgService/ListInvitations", service: "loams.admin.v1.OrgService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "invitations", next_page_token: "next_page_token" }) },
+            CallBinding { module: "admin.org", name: "list_members", proto_name: "listMembers", method: "ListMembers", rpc: "loams.admin.v1.OrgService/ListMembers", service: "loams.admin.v1.OrgService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "members", next_page_token: "next_page_token" }) },
+            CallBinding { module: "admin.org", name: "list_teams", proto_name: "listTeams", method: "ListTeams", rpc: "loams.admin.v1.OrgService/ListTeams", service: "loams.admin.v1.OrgService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "teams", next_page_token: "next_page_token" }) },
+            CallBinding { module: "admin.org", name: "remove_member", proto_name: "removeMember", method: "RemoveMember", rpc: "loams.admin.v1.OrgService/RemoveMember", service: "loams.admin.v1.OrgService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::Idempotent, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.org", name: "update", proto_name: "update", method: "UpdateOrg", rpc: "loams.admin.v1.OrgService/UpdateOrg", service: "loams.admin.v1.OrgService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::Idempotent, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+        ],
+    },
+    ModuleBinding {
+        name: "admin.projects",
+        summary: "Projects, project access and environments.",
+        service: "loams.admin.v1.ProjectService",
+        package: "loams.admin.v1",
+        unstable: false,
+        derived: false,
+        calls: &[
+            CallBinding { module: "admin.projects", name: "create", proto_name: "create", method: "CreateProject", rpc: "loams.admin.v1.ProjectService/CreateProject", service: "loams.admin.v1.ProjectService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.projects", name: "create_environment", proto_name: "createEnvironment", method: "CreateEnvironment", rpc: "loams.admin.v1.ProjectService/CreateEnvironment", service: "loams.admin.v1.ProjectService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.projects", name: "get", proto_name: "get", method: "GetProject", rpc: "loams.admin.v1.ProjectService/GetProject", service: "loams.admin.v1.ProjectService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.projects", name: "get_environment", proto_name: "getEnvironment", method: "GetEnvironment", rpc: "loams.admin.v1.ProjectService/GetEnvironment", service: "loams.admin.v1.ProjectService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.projects", name: "get_environment_activity", proto_name: "getEnvironmentActivity", method: "GetEnvironmentActivity", rpc: "loams.admin.v1.ProjectService/GetEnvironmentActivity", service: "loams.admin.v1.ProjectService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.projects", name: "grant_access", proto_name: "grantAccess", method: "GrantAccess", rpc: "loams.admin.v1.ProjectService/GrantAccess", service: "loams.admin.v1.ProjectService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::Idempotent, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "admin.projects", name: "list", proto_name: "list", method: "ListProjects", rpc: "loams.admin.v1.ProjectService/ListProjects", service: "loams.admin.v1.ProjectService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "projects", next_page_token: "next_page_token" }) },
+            CallBinding { module: "admin.projects", name: "list_access", proto_name: "listAccess", method: "ListAccess", rpc: "loams.admin.v1.ProjectService/ListAccess", service: "loams.admin.v1.ProjectService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "grants", next_page_token: "next_page_token" }) },
+            CallBinding { module: "admin.projects", name: "list_environments", proto_name: "listEnvironments", method: "ListEnvironments", rpc: "loams.admin.v1.ProjectService/ListEnvironments", service: "loams.admin.v1.ProjectService", package: "loams.admin.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "environments", next_page_token: "next_page_token" }) },
+        ],
+    },
+    ModuleBinding {
+        name: "auth",
+        summary: "Sign-in providers, first-run setup, sessions and OAuth consent.",
+        service: "loams.auth.v1.AuthService",
+        package: "loams.auth.v1",
+        unstable: false,
+        derived: false,
+        calls: &[
+            CallBinding { module: "auth", name: "complete_setup", proto_name: "completeSetup", method: "CompleteSetup", rpc: "loams.auth.v1.AuthService/CompleteSetup", service: "loams.auth.v1.AuthService", package: "loams.auth.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "auth", name: "create_session", proto_name: "createSession", method: "CreateSession", rpc: "loams.auth.v1.AuthService/CreateSession", service: "loams.auth.v1.AuthService", package: "loams.auth.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "auth", name: "decide_consent", proto_name: "decideConsent", method: "DecideConsent", rpc: "loams.auth.v1.AuthService/DecideConsent", service: "loams.auth.v1.AuthService", package: "loams.auth.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "auth", name: "delete_session", proto_name: "deleteSession", method: "DeleteSession", rpc: "loams.auth.v1.AuthService/DeleteSession", service: "loams.auth.v1.AuthService", package: "loams.auth.v1", keyed: false, idempotency: Idempotency::Idempotent, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "auth", name: "get_session", proto_name: "getSession", method: "GetSession", rpc: "loams.auth.v1.AuthService/GetSession", service: "loams.auth.v1.AuthService", package: "loams.auth.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "auth", name: "list_providers", proto_name: "listProviders", method: "ListProviders", rpc: "loams.auth.v1.AuthService/ListProviders", service: "loams.auth.v1.AuthService", package: "loams.auth.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+        ],
+    },
+    ModuleBinding {
         name: "instance",
         summary: "What this instance is, and who the caller is on it.",
         service: "loams.instance.v1.InstanceService",
@@ -340,6 +487,22 @@ pub static MODULES: &[ModuleBinding] = &[
         ],
     },
     ModuleBinding {
+        name: "live.admin",
+        summary: "Live administration: deploy, roll back, index status and function logs.",
+        service: "loams.live.v1.LiveAdminService",
+        package: "loams.live.v1",
+        unstable: true,
+        derived: false,
+        calls: &[
+            CallBinding { module: "live.admin", name: "activate_deployment", proto_name: "activateDeployment", method: "ActivateDeployment", rpc: "loams.live.v1.LiveAdminService/ActivateDeployment", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "live.admin", name: "deploy", proto_name: "deploy", method: "Deploy", rpc: "loams.live.v1.LiveAdminService/Deploy", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "live.admin", name: "get_deployment", proto_name: "getDeployment", method: "GetDeployment", rpc: "loams.live.v1.LiveAdminService/GetDeployment", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "live.admin", name: "get_index_status", proto_name: "getIndexStatus", method: "GetIndexStatus", rpc: "loams.live.v1.LiveAdminService/GetIndexStatus", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "live.admin", name: "list_deployments", proto_name: "listDeployments", method: "ListDeployments", rpc: "loams.live.v1.LiveAdminService/ListDeployments", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "deployments", next_page_token: "next_page_token" }) },
+            CallBinding { module: "live.admin", name: "tail_logs", proto_name: "tailLogs", method: "TailLogs", rpc: "loams.live.v1.LiveAdminService/TailLogs", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Server, pagination: None },
+        ],
+    },
+    ModuleBinding {
         name: "tables",
         summary: "",
         service: "loams.live.v1.LiveService",
@@ -347,12 +510,383 @@ pub static MODULES: &[ModuleBinding] = &[
         unstable: true,
         derived: true,
         calls: &[
-            CallBinding { module: "tables", name: "deploy", proto_name: "deploy", method: "Deploy", rpc: "loams.live.v1.LiveService/Deploy", service: "loams.live.v1.LiveService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
             CallBinding { module: "tables", name: "mutate", proto_name: "mutate", method: "Mutate", rpc: "loams.live.v1.LiveService/Mutate", service: "loams.live.v1.LiveService", package: "loams.live.v1", keyed: true, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
             CallBinding { module: "tables", name: "query", proto_name: "query", method: "Query", rpc: "loams.live.v1.LiveService/Query", service: "loams.live.v1.LiveService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
         ],
     },
 ];
+
+/// `AdminAgentsModule` is `loams.admin.agents` — Agents, their tokens and trust policies, and service accounts.
+///
+/// Wraps `loams.admin.v1.AgentService`.
+#[rustfmt::skip]
+pub trait AdminAgentsModule {
+    /// The SDK module, as it appears on `loams.admin.agents`.
+    const MODULE: &'static str = "admin.agents";
+    /// The service behind the module.
+    const SERVICE: &'static str = "loams.admin.v1.AgentService";
+    /// Whether the package's wire contract may still change.
+    const UNSTABLE: bool = false;
+
+    /// `loams.admin.v1.AgentService/CreateAgent`, retried: manual.
+    fn create(
+        &self,
+        request: loams_proto::loams::admin::v1::CreateAgentRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::CreateAgentResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.AgentService/CreateServiceAccount`, retried: manual.
+    fn create_service_account(
+        &self,
+        request: loams_proto::loams::admin::v1::CreateServiceAccountRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::CreateServiceAccountResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.AgentService/CreateTrustPolicy`, retried: manual.
+    fn create_trust_policy(
+        &self,
+        request: loams_proto::loams::admin::v1::CreateTrustPolicyRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::CreateTrustPolicyResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.AgentService/GetAgent`, retried: safe.
+    fn get(
+        &self,
+        request: loams_proto::loams::admin::v1::GetAgentRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::GetAgentResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.AgentService/ListAgents`, retried: safe. AIP-158: page with `agents` and follow `next_page_token` through `loams::paginate`.
+    fn list(
+        &self,
+        request: loams_proto::loams::admin::v1::ListAgentsRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::ListAgentsResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.AgentService/ListServiceAccounts`, retried: safe. AIP-158: page with `service_accounts` and follow `next_page_token` through `loams::paginate`.
+    fn list_service_accounts(
+        &self,
+        request: loams_proto::loams::admin::v1::ListServiceAccountsRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::ListServiceAccountsResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.AgentService/ListAgentTokens`, retried: safe. AIP-158: page with `tokens` and follow `next_page_token` through `loams::paginate`.
+    fn list_tokens(
+        &self,
+        request: loams_proto::loams::admin::v1::ListAgentTokensRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::ListAgentTokensResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.AgentService/ListTrustPolicies`, retried: safe. AIP-158: page with `trust_policies` and follow `next_page_token` through `loams::paginate`.
+    fn list_trust_policies(
+        &self,
+        request: loams_proto::loams::admin::v1::ListTrustPoliciesRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::ListTrustPoliciesResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.AgentService/ResumeAgent`, retried: safe.
+    fn resume(
+        &self,
+        request: loams_proto::loams::admin::v1::ResumeAgentRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::ResumeAgentResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.AgentService/SuspendAgent`, retried: safe.
+    fn suspend(
+        &self,
+        request: loams_proto::loams::admin::v1::SuspendAgentRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::SuspendAgentResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.AgentService/UpdateAgent`, retried: safe.
+    fn update(
+        &self,
+        request: loams_proto::loams::admin::v1::UpdateAgentRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::UpdateAgentResponse, LoamsError>> + Send;
+}
+
+/// `AdminAuditModule` is `loams.admin.audit` — The audit log: who did what, to what, and whether it was allowed.
+///
+/// Wraps `loams.admin.v1.AuditService`.
+#[rustfmt::skip]
+pub trait AdminAuditModule {
+    /// The SDK module, as it appears on `loams.admin.audit`.
+    const MODULE: &'static str = "admin.audit";
+    /// The service behind the module.
+    const SERVICE: &'static str = "loams.admin.v1.AuditService";
+    /// Whether the package's wire contract may still change.
+    const UNSTABLE: bool = false;
+
+    /// `loams.admin.v1.AuditService/ListAuditEvents`, retried: safe. AIP-158: page with `events` and follow `next_page_token` through `loams::paginate`.
+    fn list(
+        &self,
+        request: loams_proto::loams::admin::v1::ListAuditEventsRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::ListAuditEventsResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.AuditService/WatchAuditEvents`, retried: safe.
+    fn watch(
+        &self,
+        request: loams_proto::loams::admin::v1::WatchAuditEventsRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<ResponseStream<loams_proto::loams::admin::v1::WatchAuditEventsResponse>, LoamsError>> + Send;
+}
+
+/// `AdminKeysModule` is `loams.admin.keys` — API keys, and revoking agent tokens.
+///
+/// Wraps `loams.admin.v1.KeyService`.
+#[rustfmt::skip]
+pub trait AdminKeysModule {
+    /// The SDK module, as it appears on `loams.admin.keys`.
+    const MODULE: &'static str = "admin.keys";
+    /// The service behind the module.
+    const SERVICE: &'static str = "loams.admin.v1.KeyService";
+    /// Whether the package's wire contract may still change.
+    const UNSTABLE: bool = false;
+
+    /// `loams.admin.v1.KeyService/CreateKey`, retried: manual.
+    fn create(
+        &self,
+        request: loams_proto::loams::admin::v1::CreateKeyRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::CreateKeyResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.KeyService/ListKeys`, retried: safe. AIP-158: page with `keys` and follow `next_page_token` through `loams::paginate`.
+    fn list(
+        &self,
+        request: loams_proto::loams::admin::v1::ListKeysRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::ListKeysResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.KeyService/RevokeKey`, retried: safe.
+    fn revoke(
+        &self,
+        request: loams_proto::loams::admin::v1::RevokeKeyRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::RevokeKeyResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.KeyService/RevokeToken`, retried: safe.
+    fn revoke_token(
+        &self,
+        request: loams_proto::loams::admin::v1::RevokeTokenRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::RevokeTokenResponse, LoamsError>> + Send;
+}
+
+/// `AdminOrgModule` is `loams.admin.org` — The org: settings, members, invitations and teams.
+///
+/// Wraps `loams.admin.v1.OrgService`.
+#[rustfmt::skip]
+pub trait AdminOrgModule {
+    /// The SDK module, as it appears on `loams.admin.org`.
+    const MODULE: &'static str = "admin.org";
+    /// The service behind the module.
+    const SERVICE: &'static str = "loams.admin.v1.OrgService";
+    /// Whether the package's wire contract may still change.
+    const UNSTABLE: bool = false;
+
+    /// `loams.admin.v1.OrgService/AddTeamMember`, retried: safe.
+    fn add_team_member(
+        &self,
+        request: loams_proto::loams::admin::v1::AddTeamMemberRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::AddTeamMemberResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.OrgService/CreateInvitation`, retried: manual.
+    fn create_invitation(
+        &self,
+        request: loams_proto::loams::admin::v1::CreateInvitationRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::CreateInvitationResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.OrgService/CreateTeam`, retried: manual.
+    fn create_team(
+        &self,
+        request: loams_proto::loams::admin::v1::CreateTeamRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::CreateTeamResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.OrgService/GetOrg`, retried: safe.
+    fn get(
+        &self,
+        request: loams_proto::loams::admin::v1::GetOrgRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::GetOrgResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.OrgService/GetTeam`, retried: safe.
+    fn get_team(
+        &self,
+        request: loams_proto::loams::admin::v1::GetTeamRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::GetTeamResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.OrgService/ListInvitations`, retried: safe. AIP-158: page with `invitations` and follow `next_page_token` through `loams::paginate`.
+    fn list_invitations(
+        &self,
+        request: loams_proto::loams::admin::v1::ListInvitationsRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::ListInvitationsResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.OrgService/ListMembers`, retried: safe. AIP-158: page with `members` and follow `next_page_token` through `loams::paginate`.
+    fn list_members(
+        &self,
+        request: loams_proto::loams::admin::v1::ListMembersRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::ListMembersResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.OrgService/ListTeams`, retried: safe. AIP-158: page with `teams` and follow `next_page_token` through `loams::paginate`.
+    fn list_teams(
+        &self,
+        request: loams_proto::loams::admin::v1::ListTeamsRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::ListTeamsResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.OrgService/RemoveMember`, retried: safe.
+    fn remove_member(
+        &self,
+        request: loams_proto::loams::admin::v1::RemoveMemberRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::RemoveMemberResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.OrgService/UpdateOrg`, retried: safe.
+    fn update(
+        &self,
+        request: loams_proto::loams::admin::v1::UpdateOrgRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::UpdateOrgResponse, LoamsError>> + Send;
+}
+
+/// `AdminProjectsModule` is `loams.admin.projects` — Projects, project access and environments.
+///
+/// Wraps `loams.admin.v1.ProjectService`.
+#[rustfmt::skip]
+pub trait AdminProjectsModule {
+    /// The SDK module, as it appears on `loams.admin.projects`.
+    const MODULE: &'static str = "admin.projects";
+    /// The service behind the module.
+    const SERVICE: &'static str = "loams.admin.v1.ProjectService";
+    /// Whether the package's wire contract may still change.
+    const UNSTABLE: bool = false;
+
+    /// `loams.admin.v1.ProjectService/CreateProject`, retried: manual.
+    fn create(
+        &self,
+        request: loams_proto::loams::admin::v1::CreateProjectRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::CreateProjectResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.ProjectService/CreateEnvironment`, retried: manual.
+    fn create_environment(
+        &self,
+        request: loams_proto::loams::admin::v1::CreateEnvironmentRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::CreateEnvironmentResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.ProjectService/GetProject`, retried: safe.
+    fn get(
+        &self,
+        request: loams_proto::loams::admin::v1::GetProjectRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::GetProjectResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.ProjectService/GetEnvironment`, retried: safe.
+    fn get_environment(
+        &self,
+        request: loams_proto::loams::admin::v1::GetEnvironmentRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::GetEnvironmentResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.ProjectService/GetEnvironmentActivity`, retried: safe.
+    fn get_environment_activity(
+        &self,
+        request: loams_proto::loams::admin::v1::GetEnvironmentActivityRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::GetEnvironmentActivityResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.ProjectService/GrantAccess`, retried: safe.
+    fn grant_access(
+        &self,
+        request: loams_proto::loams::admin::v1::GrantAccessRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::GrantAccessResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.ProjectService/ListProjects`, retried: safe. AIP-158: page with `projects` and follow `next_page_token` through `loams::paginate`.
+    fn list(
+        &self,
+        request: loams_proto::loams::admin::v1::ListProjectsRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::ListProjectsResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.ProjectService/ListAccess`, retried: safe. AIP-158: page with `grants` and follow `next_page_token` through `loams::paginate`.
+    fn list_access(
+        &self,
+        request: loams_proto::loams::admin::v1::ListAccessRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::ListAccessResponse, LoamsError>> + Send;
+
+    /// `loams.admin.v1.ProjectService/ListEnvironments`, retried: safe. AIP-158: page with `environments` and follow `next_page_token` through `loams::paginate`.
+    fn list_environments(
+        &self,
+        request: loams_proto::loams::admin::v1::ListEnvironmentsRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::admin::v1::ListEnvironmentsResponse, LoamsError>> + Send;
+}
+
+/// `AuthModule` is `loams.auth` — Sign-in providers, first-run setup, sessions and OAuth consent.
+///
+/// Wraps `loams.auth.v1.AuthService`.
+#[rustfmt::skip]
+pub trait AuthModule {
+    /// The SDK module, as it appears on `loams.auth`.
+    const MODULE: &'static str = "auth";
+    /// The service behind the module.
+    const SERVICE: &'static str = "loams.auth.v1.AuthService";
+    /// Whether the package's wire contract may still change.
+    const UNSTABLE: bool = false;
+
+    /// `loams.auth.v1.AuthService/CompleteSetup`, retried: manual.
+    fn complete_setup(
+        &self,
+        request: loams_proto::loams::auth::v1::CompleteSetupRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::auth::v1::CompleteSetupResponse, LoamsError>> + Send;
+
+    /// `loams.auth.v1.AuthService/CreateSession`, retried: manual.
+    fn create_session(
+        &self,
+        request: loams_proto::loams::auth::v1::CreateSessionRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::auth::v1::CreateSessionResponse, LoamsError>> + Send;
+
+    /// `loams.auth.v1.AuthService/DecideConsent`, retried: manual.
+    fn decide_consent(
+        &self,
+        request: loams_proto::loams::auth::v1::DecideConsentRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::auth::v1::DecideConsentResponse, LoamsError>> + Send;
+
+    /// `loams.auth.v1.AuthService/DeleteSession`, retried: safe.
+    fn delete_session(
+        &self,
+        request: loams_proto::loams::auth::v1::DeleteSessionRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::auth::v1::DeleteSessionResponse, LoamsError>> + Send;
+
+    /// `loams.auth.v1.AuthService/GetSession`, retried: safe.
+    fn get_session(
+        &self,
+        request: loams_proto::loams::auth::v1::GetSessionRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::auth::v1::GetSessionResponse, LoamsError>> + Send;
+
+    /// `loams.auth.v1.AuthService/ListProviders`, retried: safe.
+    fn list_providers(
+        &self,
+        request: loams_proto::loams::auth::v1::ListProvidersRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::auth::v1::ListProvidersResponse, LoamsError>> + Send;
+}
 
 /// `InstanceModule` is `loams.instance` — What this instance is, and who the caller is on it.
 ///
@@ -408,6 +942,61 @@ pub trait LiveModule {
     ) -> impl std::future::Future<Output = Result<ResponseStream<loams_live_proto::loams::live::v1::Transition>, LoamsError>> + Send;
 }
 
+/// `LiveAdminModule` is `loams.live.admin` — Live administration: deploy, roll back, index status and function logs.
+///
+/// Wraps `loams.live.v1.LiveAdminService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
+#[rustfmt::skip]
+pub trait LiveAdminModule {
+    /// The SDK module, as it appears on `loams.live.admin`.
+    const MODULE: &'static str = "live.admin";
+    /// The service behind the module.
+    const SERVICE: &'static str = "loams.live.v1.LiveAdminService";
+    /// Whether the package's wire contract may still change.
+    const UNSTABLE: bool = true;
+
+    /// `loams.live.v1.LiveAdminService/ActivateDeployment`, retried: manual.
+    fn activate_deployment(
+        &self,
+        request: loams_live_proto::loams::live::v1::ActivateDeploymentRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::ActivateDeploymentResponse, LoamsError>> + Send;
+
+    /// `loams.live.v1.LiveAdminService/Deploy`, retried: manual.
+    fn deploy(
+        &self,
+        request: loams_live_proto::loams::live::v1::DeployRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::DeployResponse, LoamsError>> + Send;
+
+    /// `loams.live.v1.LiveAdminService/GetDeployment`, retried: safe.
+    fn get_deployment(
+        &self,
+        request: loams_live_proto::loams::live::v1::GetDeploymentRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::GetDeploymentResponse, LoamsError>> + Send;
+
+    /// `loams.live.v1.LiveAdminService/GetIndexStatus`, retried: safe.
+    fn get_index_status(
+        &self,
+        request: loams_live_proto::loams::live::v1::GetIndexStatusRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::GetIndexStatusResponse, LoamsError>> + Send;
+
+    /// `loams.live.v1.LiveAdminService/ListDeployments`, retried: safe. AIP-158: page with `deployments` and follow `next_page_token` through `loams::paginate`.
+    fn list_deployments(
+        &self,
+        request: loams_live_proto::loams::live::v1::ListDeploymentsRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::ListDeploymentsResponse, LoamsError>> + Send;
+
+    /// `loams.live.v1.LiveAdminService/TailLogs`, retried: manual.
+    fn tail_logs(
+        &self,
+        request: loams_live_proto::loams::live::v1::TailLogsRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<ResponseStream<loams_live_proto::loams::live::v1::TailLogsResponse>, LoamsError>> + Send;
+}
+
 /// `TablesModule` is a second facade name for the same RPCs, exposed as `loams.tables`.
 ///
 /// Wraps `loams.live.v1.LiveService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
@@ -419,13 +1008,6 @@ pub trait TablesModule {
     const SERVICE: &'static str = "loams.live.v1.LiveService";
     /// Whether the package's wire contract may still change.
     const UNSTABLE: bool = true;
-
-    /// `loams.live.v1.LiveService/Deploy`, retried: manual.
-    fn deploy(
-        &self,
-        request: loams_live_proto::loams::live::v1::DeployRequest,
-        options: Option<&CallOptions>,
-    ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::DeployResponse, LoamsError>> + Send;
 
     /// `loams.live.v1.LiveService/Mutate`, retried: manual.
     fn mutate(

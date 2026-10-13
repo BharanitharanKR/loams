@@ -1,0 +1,6 @@
+{
+  "chatId": "chat-1",
+  "includeIgnored": false,
+  "limit": 20,
+  "query": "main"
+}

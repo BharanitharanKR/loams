@@ -354,7 +354,9 @@ public static class Facade
         Add("tables", "Mutate", "mutate", "loams.live.v1.LiveService", "Mutate",
             IdempotencyLevel.None, Streaming.Unary,
             "Loams.Live.V1.MutateRequest", "Loams.Live.V1.MutateResponse");
-        Add("tables", "Deploy", "deploy", "loams.live.v1.LiveService", "Deploy",
+        // Deploy moved to loams.live.v1.LiveAdminService (LV1 Task 10); `tables`
+        // keeps the call, now routed there.
+        Add("tables", "Deploy", "deploy", "loams.live.v1.LiveAdminService", "Deploy",
             IdempotencyLevel.None, Streaming.Unary,
             "Loams.Live.V1.DeployRequest", "Loams.Live.V1.DeployResponse");
 

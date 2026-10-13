@@ -6,23 +6,27 @@ D600 rule out).
 
 | Module | Version | Licence | Why it is here |
 |---|---|---|---|
-| [`connectrpc.com/connect`](https://github.com/connectrpc/connect-go) | v1.19.2 | Apache-2.0 | The Connect client (D604, D612: Go is Connect, not gRPC). It is the one library the Go SDK is built on: the protocol, the typed `*connect.Request`/`*connect.Response`, the server-stream reader, and the error decoding that makes `reason` reachable. |
-| [`google.golang.org/protobuf`](https://github.com/protocolbuffers/protobuf-go) | v1.36.9 | BSD-3-Clause | The protobuf runtime: the generated messages, `proto.Clone`, and the descriptor walk `DeclaresIdempotencyKey` uses to read `idempotency_key` off a **schema** rather than off an object (R3). A direct dependency because the SDK reads descriptors; connect-go depends on it too. |
-| [`golang.org/x/net`](https://pkg.go.dev/golang.org/x/net) | v0.33.0 | BSD-3-Clause | `http2.Transport`, for `TransportConfig.UseHTTP2` — the in-cluster caller that wants gRPC or Connect over one multiplexed connection. Optional in the sense that the default HTTP/1.1 path does not touch it. |
-| `golang.org/x/text` | v0.21.0 | BSD-3-Clause | Indirect, required by `golang.org/x/net`. Listed for the licence audit, not chosen. |
+| [`connectrpc.com/connect`](https://github.com/connectrpc/connect-go) | v1.21.0 | Apache-2.0 | The Connect client (D604, D612: Go is Connect, not gRPC). It is the one library the Go SDK is built on: the protocol, the typed `*connect.Request`/`*connect.Response`, the server-stream reader, and the error decoding that makes `reason` reachable. |
+| [`google.golang.org/protobuf`](https://github.com/protocolbuffers/protobuf-go) | v1.36.11 | BSD-3-Clause | The protobuf runtime: the generated messages, `proto.Clone`, and the descriptor walk `DeclaresIdempotencyKey` uses to read `idempotency_key` off a **schema** rather than off an object (R3). A direct dependency because the SDK reads descriptors; connect-go depends on it too. |
+| [`golang.org/x/net`](https://pkg.go.dev/golang.org/x/net) | v0.55.0 | BSD-3-Clause | `http2.Transport`, for `TransportConfig.UseHTTP2` — the in-cluster caller that wants gRPC or Connect over one multiplexed connection. Optional in the sense that the default HTTP/1.1 path does not touch it. |
+| `golang.org/x/text` | v0.37.0 | BSD-3-Clause | Indirect, required by `golang.org/x/net`. Listed for the licence audit, not chosen. |
 
-## Versions, and why they are not the latest
+## Versions
 
-Verified 2026-10-04 on go1.24.5 with `GOTOOLCHAIN=local`.
+The two generation-relevant modules match `scripts/sdk/pins.lock`, which
+`scripts/sdk/check-pins.sh` enforces: `connectrpc.com/connect` v1.21.0 and
+`google.golang.org/protobuf` v1.36.11, with `buf.gen.go.yaml` pinning the
+matching remote plugins (`protocolbuffers/go:v1.36.11`, `connectrpc/go:v1.21.0`).
+The checked-in stubs under `gen/loams/` were regenerated with those plugins, so
+`buf generate` reproduces the committed output rather than a diff.
 
-- **`connect-go` is pinned to v1.19.2, not v1.20.0 or v1.21.0.** Those require
-  `go >= 1.25.0`, and the language matrix row 3 and the plan's floor are
-  **Go >= 1.24**. A module whose `go.mod` says `go 1.25.0` cannot be consumed by
-  a 1.24 toolchain, so taking v1.20 would silently raise the floor past what the
-  design states. **Raising the floor is an owner's decision**, recorded as Q732.
-- **`golang.org/x/net` is pinned to v0.33.0.** v0.59.0 requires `go >= 1.26.0`.
-- **`protoc-gen-go` is v1.36.9**, the version the checked-in stubs were generated
-  with, so `buf generate` reproduces the committed output rather than a diff.
+- **The floor is Go 1.25.** `go.mod` says `go 1.25.0`, which connect-go v1.20.0
+  and later require; the earlier v1.19.2 pin existed only to keep a 1.24 floor
+  (Q732), and `go.mod` had already moved past it.
+- **`connect-go` v2 is not taken.** v2.0.0 (2026-10-07) is under 14 days old on
+  2026-10-13 and changes the import path; it is its own PR.
+- **`golang.org/x/net` is v0.55.0.** Later releases require a newer Go than the
+  floor.
 
 ## What is deliberately *not* a dependency
 

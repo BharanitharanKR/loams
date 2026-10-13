@@ -82,8 +82,9 @@ use tokio::task::JoinHandle;
 use tokio::time::Sleep;
 
 use crate::admission::{Event, Outcome, WorkerLease, WorkerPool};
-use crate::api::{ApiCatalog, FixtureCatalog, HouseApi};
+use crate::api::{ApiCatalog, FixtureCatalog, HouseApi, LakeCatalog};
 use crate::auth;
+use crate::catalog::Lake;
 use crate::classify::{Classified, Expect, Stmt, check_text, classify, readonly_error};
 use crate::compress::{self, Decoder, Encoder, Encoding};
 use crate::config::{self, BUFFER_SIZE_RANGE, DISPLAY_NAME, HouseConfig, SPOOL_IN_MEMORY, UserMap};
@@ -142,6 +143,8 @@ struct Shared {
     spool: Arc<SpoolBudget>,
     sessions: Arc<SessionTable>,
     api: ApiService,
+    /// The catalog of lake tables (HS1 Task 10), when the House has one.
+    lake: Option<Arc<Lake>>,
 }
 
 /// connect-rust's service for `loams.house.v1`, which has no `Debug` of its own.
@@ -156,17 +159,38 @@ impl std::fmt::Debug for ApiService {
 
 /// Serves the ClickHouse HTTP interface and `loams.house.v1` on `config.listen`,
 /// running statements on `pool`. A non-loopback address is refused (D111). The
-/// API's browsing RPCs read what this House has before HS1 Task 10's catalog
+/// API's browsing RPCs read what a House with no catalog has
 /// ([`FixtureCatalog::empty`]).
 pub async fn serve(config: HouseConfig, pool: WorkerPool) -> Result<HouseHandle, HouseError> {
     serve_with_catalog(config, pool, Arc::new(FixtureCatalog::empty())).await
 }
 
-/// [`serve`], with the API's metadata read from `catalog`.
+/// [`serve`], with the API's metadata read from `catalog` (fixtures, in tests).
 pub async fn serve_with_catalog(
     config: HouseConfig,
     pool: WorkerPool,
     catalog: Arc<dyn ApiCatalog>,
+) -> Result<HouseHandle, HouseError> {
+    serve_all(config, pool, catalog, None).await
+}
+
+/// [`serve`] with a catalog of lake tables (HS1 Task 10): DDL, `USE`, `DESCRIBE`,
+/// `SHOW CREATE` and `EXISTS` of its tables are answered from it, and so are the
+/// API's browsing RPCs.
+pub async fn serve_with_lake(
+    config: HouseConfig,
+    pool: WorkerPool,
+    lake: Arc<Lake>,
+) -> Result<HouseHandle, HouseError> {
+    let catalog = Arc::new(LakeCatalog(Arc::clone(&lake)));
+    serve_all(config, pool, catalog, Some(lake)).await
+}
+
+async fn serve_all(
+    config: HouseConfig,
+    pool: WorkerPool,
+    catalog: Arc<dyn ApiCatalog>,
+    lake: Option<Arc<Lake>>,
 ) -> Result<HouseHandle, HouseError> {
     config::check_listen(config.listen)?;
     let listen = config.listen;
@@ -202,7 +226,7 @@ pub async fn serve_with_catalog(
         }
     });
     let api = ApiService(ConnectRpcService::new(
-        HouseApi::new(config.clone(), pool.clone(), catalog).router(),
+        HouseApi::new(config.clone(), pool.clone(), catalog, lake.clone()).router(),
     ));
     let shared = Arc::new(Shared {
         spool: Arc::new(SpoolBudget::new(config.spool_budget_bytes)),
@@ -210,6 +234,7 @@ pub async fn serve_with_catalog(
         pool,
         sessions,
         api,
+        lake,
     });
     let accept = tokio::spawn(async move {
         loop {
@@ -698,6 +723,19 @@ impl Meta {
     }
 }
 
+/// An empty success (`SET`, `USE`, DDL).
+fn empty_ok(meta: &Meta) -> Response<HouseBody> {
+    meta.head(
+        StatusCode::OK,
+        content_type(&meta.format),
+        None,
+        &Progress::default(),
+        false,
+    )
+    .body(HouseBody::full(Vec::new()))
+    .unwrap_or_else(|_| fallback())
+}
+
 fn fallback() -> Response<HouseBody> {
     let mut response = Response::new(HouseBody::full(Bytes::from_static(b"internal error\n")));
     *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
@@ -831,6 +869,7 @@ async fn run(
         &mut body,
         parts.method == Method::POST,
         &known,
+        shared.lake.is_some(),
     )
     .await;
     let prepared = match prepared {
@@ -887,6 +926,90 @@ async fn run(
     };
     meta.affinity = session.as_ref().map(SessionGuard::affinity_key);
 
+    // The catalog's statements (HS1 Task 10): DDL and `USE` are answered here;
+    // `DESCRIBE`, `SHOW CREATE` and `EXISTS` of a catalog table become a read of
+    // their rows; everything else goes on.
+    let current_database = get("database")
+        .map(str::to_string)
+        .or_else(|| session.as_ref().map(|g| g.state().database.clone()))
+        .unwrap_or_else(|| "default".to_string());
+    // `SHOW TABLES`, `SHOW DATABASES`, `SHOW PROCESSLIST`: ClickHouse's own
+    // `SELECT` over the House's `system` tables (HS1 Task 11).
+    let shown = match &classified {
+        Classified::Known { stmt, format } => gate::show_answer(
+            shared.lake.as_deref(),
+            user.namespace,
+            &current_database,
+            stmt,
+        )
+        .await
+        .map(|query| query.map(|q| (q, format.clone()))),
+        Classified::Unparsed { .. } => Ok(None),
+    };
+    let (classified, sql) = match shown {
+        Ok(Some((query, format))) => (
+            Classified::Known {
+                stmt: Stmt::Query {
+                    text: query.clone(),
+                },
+                format,
+            },
+            query,
+        ),
+        Ok(None) => (classified, sql),
+        Err(err) => {
+            let close = !body.drain().await;
+            return meta.error(&err, &Progress::default(), close);
+        }
+    };
+    let (classified, sql) = if let Classified::Known { stmt, format } = &classified {
+        let answered = match &shared.lake {
+            Some(lake) if get("database").is_some() => lake
+                .require_database(user.namespace, &current_database)
+                .await
+                .map(|()| Some(lake)),
+            lake => Ok(lake.as_ref()),
+        };
+        let outcome = match answered {
+            Ok(lake) => {
+                gate::catalog_answer(
+                    lake.map(Arc::as_ref),
+                    &shared.pool,
+                    user.namespace,
+                    &current_database,
+                    stmt,
+                    &sql,
+                    session.as_ref(),
+                    &meta.query_id,
+                )
+                .await
+            }
+            Err(err) => Err(err),
+        };
+        match outcome {
+            Ok(gate::CatalogOutcome::Done) => {
+                drop(session);
+                return empty_ok(&meta);
+            }
+            Ok(gate::CatalogOutcome::Rows(query)) => (
+                Classified::Known {
+                    stmt: Stmt::Query {
+                        text: query.clone(),
+                    },
+                    format: format.clone(),
+                },
+                query,
+            ),
+            Ok(gate::CatalogOutcome::NotOurs) => (classified, sql),
+            Err(err) => {
+                let close = !body.drain().await;
+                return meta.error(&err, &Progress::default(), close);
+            }
+        }
+    } else {
+        (classified, sql)
+    };
+
     // What the front answers itself, and what runs. Every statement chDB gets is
     // gated by ClickHouse's class below (`expect`, and sqlparser's message for a
     // form it could not parse).
@@ -895,16 +1018,7 @@ async fn run(
             match gate::front_answer(&stmt, session.as_ref(), &config.session_limits, &known) {
                 Some(Ok(())) => {
                     drop(session);
-                    return meta
-                        .head(
-                            StatusCode::OK,
-                            content_type(&meta.format),
-                            None,
-                            &Progress::default(),
-                            false,
-                        )
-                        .body(HouseBody::full(Vec::new()))
-                        .unwrap_or_else(|_| fallback());
+                    return empty_ok(&meta);
                 }
                 Some(Err(err)) => {
                     let close = !body.drain().await;
@@ -964,14 +1078,18 @@ async fn run(
             expect,
             readonly,
             unparsed.as_deref(),
-        ),
+        )
+        .map(|()| analysis),
         Err(err) => Err(deny::as_setting_refusal(err)),
     };
-    if let Err(err) = decided {
-        pool.release(lease, Outcome::Completed);
-        let close = !body.drain().await;
-        return meta.error(&err, &Progress::default(), close);
-    }
+    let analysis = match decided {
+        Ok(analysis) => analysis,
+        Err(err) => {
+            pool.release(lease, Outcome::Completed);
+            let close = !body.drain().await;
+            return meta.error(&err, &Progress::default(), close);
+        }
+    };
 
     // Settings: the session's, then the request's (which win); Loams's own stay here.
     let mut settings = Vec::new();
@@ -990,12 +1108,48 @@ async fn run(
             .filter(|(k, _)| !crate::settings::is_loams(k))
             .cloned(),
     );
+    // What it reads (HS1 Task 11): its lake tables pinned and viewed, its
+    // `system` tables the House's. Loams's own settings choose the snapshot.
+    let streams_input = input.is_some();
+    let (views, sql) = if input.is_some() {
+        (Vec::new(), String::new())
+    } else {
+        let mut all: Vec<(String, String)> = session
+            .as_ref()
+            .map(|guard| guard.state().settings.pairs().to_vec())
+            .unwrap_or_default();
+        all.extend(
+            params
+                .iter()
+                .filter(|(k, _)| !k.starts_with("param_") && !NON_SETTINGS.contains(&k.as_str()))
+                .cloned(),
+        );
+        match gate::read_plan(
+            shared.lake.as_deref(),
+            user.namespace,
+            &current_database,
+            &user.user,
+            &mut lease,
+            &analysis,
+            &sql,
+            &all,
+        )
+        .await
+        {
+            Ok(plan) => (plan.views, plan.sql),
+            Err(err) => {
+                pool.release(lease, Outcome::Completed);
+                let close = !body.drain().await;
+                return meta.error(&err, &Progress::default(), close);
+            }
+        }
+    };
     let execute = Execute {
         query_id: meta.query_id.clone(),
         session: worker_session,
         settings,
-        views: Vec::new(),
-        sql: if input.is_some() { String::new() } else { sql },
+        views,
+        sql,
         format: meta.format.clone(),
         params: query_params,
         limits: Limits::default(),
@@ -1005,6 +1159,10 @@ async fn run(
         output: Output::Document {
             max_buffered_bytes: config.wait_end_of_query_max_bytes,
         },
+        // An `INSERT` whose data streams reads no table (its target is a
+        // temporary table or chDB refuses it), and its worker makes no view
+        // databases for it: the connection's database stays.
+        database: (!streams_input).then_some(current_database),
     };
     let has_input = execute.input.is_some();
     if let Err(err) = lease.start(execute).await {
@@ -1044,6 +1202,7 @@ async fn prepare(
     body: &mut RequestBody,
     post: bool,
     known: &std::collections::HashSet<String>,
+    has_lake: bool,
 ) -> Result<Prepared, HouseError> {
     let get = |name: &str| {
         params
@@ -1069,7 +1228,9 @@ async fn prepare(
             ))));
         }
     }
-    if let Some(database) = get("database").filter(|d| *d != "default") {
+    // Without a catalog only `default` exists; with one, `run` asks it (HS1 Task
+    // 10).
+    if !has_lake && let Some(database) = get("database").filter(|d| *d != "default") {
         return Err(HouseError::from(ChError::unknown_database(format!(
             "Database {database} does not exist"
         ))));

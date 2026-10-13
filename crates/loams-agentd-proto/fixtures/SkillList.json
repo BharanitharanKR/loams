@@ -1,0 +1,12 @@
+[
+  {
+    "command": {
+      "harness": "claude-code",
+      "name": "review"
+    },
+    "description": "Review a diff",
+    "enabled": true,
+    "name": "review",
+    "path": "/home/dev/.claude/skills/review/SKILL.md"
+  }
+]

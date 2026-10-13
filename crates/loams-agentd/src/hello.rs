@@ -97,15 +97,20 @@ impl RpcService for HelloService {
     }
 }
 
-/// Say `Hello` to the daemon on loopback `port` as the CLI, with the main
-/// `token` (the contents of `agentd.token`).
-pub async fn probe(port: u16, token: &str) -> Result<HelloReply, RpcError> {
-    let hello = Hello {
+/// The CLI's `Hello`.
+pub fn cli_hello() -> Hello {
+    Hello {
         client: ClientKind::Cli,
         client_version: VERSION.to_string(),
         protocol: AGENTD_PROTOCOL,
-    };
-    let params = serde_json::to_value(&hello).map_err(|e| RpcError::BadParams(e.to_string()))?;
+    }
+}
+
+/// Say `Hello` to the daemon on loopback `port` as the CLI, with the main
+/// `token` (the contents of `agentd.token`).
+pub async fn probe(port: u16, token: &str) -> Result<HelloReply, RpcError> {
+    let params =
+        serde_json::to_value(cli_hello()).map_err(|e| RpcError::BadParams(e.to_string()))?;
     tokio::time::timeout(PROBE_TIMEOUT, async {
         let client =
             loams_agentd_rpc::connect_ws_with_token(&format!("ws://127.0.0.1:{port}"), token)

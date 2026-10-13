@@ -2,10 +2,11 @@
 //! (design §50 §5.4, plan DD1 Task 6).
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// How the daemon was started: by the per-user service manager, or by Loams
 /// Desktop as its child process (§50 §5.5).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum DaemonMode {
     Service,
@@ -16,7 +17,7 @@ pub enum DaemonMode {
 /// `agentd.json`: written atomically (0600) after the RPC listener is bound,
 /// removed on a clean exit. A file whose `pid` does not hold the
 /// single-instance lock is stale and ignored.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Discovery {
     pub protocol: u32,

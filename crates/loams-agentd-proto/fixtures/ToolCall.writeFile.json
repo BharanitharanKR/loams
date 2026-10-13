@@ -1,0 +1,5 @@
+{
+  "content": "pub fn new() {}\n",
+  "kind": "writeFile",
+  "path": "src/new.rs"
+}

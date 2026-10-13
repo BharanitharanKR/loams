@@ -1,0 +1,43 @@
+{
+  "recorded_from": "Shopify",
+  "synthetic": true,
+  "docs": [
+    "https://shopify.dev/docs/apps/build/webhooks/subscribe/https#step-5-verify-the-webhook"
+  ],
+  "scenario": {
+    "direction": "webhook",
+    "scheme": "shopify",
+    "header": "X-Shopify-Hmac-Sha256",
+    "secret": "synthetic-shopify-webhook-secret",
+    "url": "https://hooks.loams.test/fabric/shopify/orders",
+    "now": 1759320000
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/fabric/shopify/orders",
+        "headers": {
+          "content-type": "application/json",
+          "x-shopify-topic": "orders/create",
+          "x-shopify-shop-domain": "loams-test.myshopify.com",
+          "x-shopify-hmac-sha256": "4caSE6aH5RuHdVXKlqM/PCzggdYmJG5XZWwXcJCjCsM="
+        },
+        "body": {
+          "text": "{\"id\":820982911946154508,\"email\":\"ada@example.test\",\"total_price\":\"19.00\",\"currency\":\"USD\",\"financial_status\":\"paid\"}"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "ok": true
+          }
+        }
+      }
+    }
+  ]
+}

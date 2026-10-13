@@ -1,5 +1,6 @@
 // @loams/live: the generated `loams.live.v1` messages and the `LiveService`
-// descriptor that `@connectrpc/connect` turns into a client (R1 plan Task 7).
+// and `LiveAdminService` descriptors that `@connectrpc/connect` turns into
+// clients (R1 plan Task 7, LV1 plan Task 10).
 //
 // Everything under ./gen is written by `buf generate` from
 // `sdks/typescript/buf.gen.live.yaml` and committed; CI regenerates and fails
@@ -11,6 +12,7 @@
 // still change, `buf breaking` skips it, and an SDK marks the modules built on
 // it experimental.
 
+export * from './gen/loams/live/v1/admin_pb.js';
 export * from './gen/loams/live/v1/live_pb.js';
 export * from './gen/loams/live/v1/value_pb.js';
 

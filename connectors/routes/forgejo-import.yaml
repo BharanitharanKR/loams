@@ -1,0 +1,41 @@
+# GitHub issues -> Forgejo issues (CN1 Task 15, D628), on native runtimes (CN2
+# Task 20, OR-11). Replaces connect/routes/templates/forgejo-import.yaml.tmpl:
+# the source is the `github` HTTP-API profile's `issues` listing, which writes
+# projected issues to the topic; the sink is the native `forgejo` connector
+# (CN1 Task 15), which reads it. FL3's route format replaces this pair.
+#
+# Projection first (D356): only the fields a Forgejo issue has. The event id is
+# the GitHub issue's content id, so the sink's `Idempotency-Key` (the event
+# id) is stable across re-reads and a re-run does not create a second issue.
+# Forgejo sends no rate-limit headers, so the sink's own concurrency is the
+# only brake. Forgejo derives a token's scope from the HTTP method, so the
+# sink's write token is a separate secret from any read token.
+apiVersion: loams.flow/v1
+kind: ImportRoute
+id: forgejo-import
+parameters: [owner, repo, forgejo_owner, forgejo_repo]
+topic: flow-import-github-forgejo
+sources:
+  - connector: github
+    config:
+      resource: issues
+      owner: "{route.owner}"
+      repo: "{route.repo}"
+      poll_interval_ms: 300000
+      auth: { token: github_token }
+      projection:
+        title: /title
+        body: /body
+        labels: /labels/*/name
+        milestone: /milestone/title
+        assignees: /assignees/*/login
+        state: /state
+        source_url: /html_url
+    secrets: [github_token]
+sink:
+  connector: forgejo
+  config:
+    owner: "{route.forgejo_owner}"
+    repo: "{route.forgejo_repo}"
+    max_concurrent_requests: 4
+  secrets: [write_token]

@@ -1,0 +1,21 @@
+{
+  "actions": [
+    {
+      "command": "cargo test",
+      "icon": "test",
+      "id": "action-1",
+      "name": "Test",
+      "runOnWorktreeCreate": true
+    }
+  ],
+  "importableActions": [
+    {
+      "command": "cargo test",
+      "icon": "test",
+      "name": "Test",
+      "runOnWorktreeCreate": false
+    }
+  ],
+  "projectFileIssue": null,
+  "spaceId": "space-1"
+}

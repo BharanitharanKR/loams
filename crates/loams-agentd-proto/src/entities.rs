@@ -5,6 +5,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::{HarnessId, ReasoningLevel, SandboxLevel};
 
@@ -27,7 +28,7 @@ pub fn validate_sidebar_pin_update(
     Ok(())
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SidebarPreferences {
     #[serde(default)]
@@ -38,7 +39,7 @@ pub struct SidebarPreferences {
 
 /// A user-named sidebar section. Archived sessions retain membership so restoring
 /// them restores their section; deleting the section never deletes sessions.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, TS)]
 pub struct SidebarSection {
     pub id: String,
     pub name: String,
@@ -50,7 +51,7 @@ pub struct SidebarSection {
 
 /// Watch payload for pins. `initialized` records known cached state, including
 /// an empty list; `synced` records receipt of an authoritative registry state.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SidebarPreferencesState {
     /// Monotonic within one engine attachment, not a cross-device order key.
@@ -72,7 +73,7 @@ impl SidebarPreferencesState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Device {
     pub id: String,
@@ -104,7 +105,7 @@ impl Device {
 /// base cwd. Folders need not be git repos: `git_detected` is stamped by the
 /// owning device (SpacesSync) and gates branch pickers / the diff sidebar on
 /// every device without an RPC.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Space {
     pub id: String,
@@ -146,7 +147,7 @@ impl Space {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatConfig {
     pub harness: HarnessId,
@@ -162,7 +163,7 @@ pub struct ChatConfig {
 /// This is deliberately separate from the live checkout snapshot: another
 /// chat may change the branch at the same checkout without changing which
 /// branch this conversation belongs to.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ConversationSourceContext {
     pub checkout_id: String,
@@ -174,7 +175,7 @@ pub struct ConversationSourceContext {
     pub observed_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Chat {
     pub id: String,
@@ -251,7 +252,7 @@ impl Chat {
 
 /// Display status for a chat row/tab: the four user-facing states plus a
 /// distinct Errored. Derived — never stored.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum ChatIndicator {
     Working,
@@ -274,7 +275,7 @@ pub fn chat_indicator(chat: &Chat, live: Option<&Session>) -> ChatIndicator {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum SessionStatus {
     Idle,
@@ -286,7 +287,7 @@ pub enum SessionStatus {
 /// Live run status for a chat — drives the Working indicator and sidebar status dots.
 /// Staleness-checked client-side against `updated_at` so a crashed backend never shows
 /// an eternal "Working".
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     /// Last successfully completed assistant turn. Retained while the next turn
@@ -301,7 +302,7 @@ pub struct Session {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Repo {
     pub path: String,
@@ -313,7 +314,7 @@ pub struct Repo {
 /// the repo's current (main-checkout) branch and whether it is materialized
 /// as a linked worktree. Drives the composer's ref picker (`current` /
 /// `worktree` tags) and the checkout-kind selector.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct RepoRef {
     pub name: String,
@@ -326,7 +327,7 @@ pub struct RepoRef {
 }
 
 /// Public Git reference attached to a commit in the history graph.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum GitHistoryRefKind {
     Branch,
@@ -334,7 +335,7 @@ pub enum GitHistoryRefKind {
     Tag,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitHistoryRef {
     pub kind: GitHistoryRefKind,
@@ -342,7 +343,7 @@ pub struct GitHistoryRef {
 }
 
 /// One topologically ordered row in the repository history graph.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitHistoryCommit {
     pub sha: String,
@@ -358,7 +359,7 @@ pub struct GitHistoryCommit {
 /// Divergence between the checked-out branch and the repository's integration
 /// branch. Counts are computed only from locally available refs; callers must
 /// fetch explicitly when they want newer remote state.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitHistoryComparison {
     /// The local remote-tracking ref used as the comparison base, e.g.
@@ -370,7 +371,7 @@ pub struct GitHistoryComparison {
     pub behind: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitHistoryPage {
     pub commits: Vec<GitHistoryCommit>,
@@ -390,7 +391,7 @@ pub struct GitHistoryPage {
     pub comparison: Option<GitHistoryComparison>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Worktree {
     pub repo_path: String,
@@ -404,7 +405,7 @@ pub struct Worktree {
     pub checkout_id: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FolderEntry {
     pub name: String,
@@ -412,7 +413,7 @@ pub struct FolderEntry {
     pub is_repo: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FolderListing {
     pub path: String,
@@ -423,7 +424,7 @@ pub struct FolderListing {
 }
 
 /// A browse root beyond home: a mounted drive/volume (or the system root).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DriveEntry {
     /// Display name (volume label / mount folder name; "System" for `/`).
@@ -432,7 +433,7 @@ pub struct DriveEntry {
     pub path: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DriveListing {
     pub drives: Vec<DriveEntry>,
@@ -441,7 +442,7 @@ pub struct DriveListing {
 /// A workspace-relative file or directory returned by `SearchFiles`.
 /// Contents deliberately never cross this boundary: mentioning a path leaves
 /// the harness to read it through its normal workspace tools when needed.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FileSearchMatch {
     pub path: String,
@@ -450,7 +451,7 @@ pub struct FileSearchMatch {
 
 /// Identifies the local checkout used by workspace file operations.
 /// Exactly one of `chat_id` and `space_id` must be present.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceTarget {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -461,7 +462,7 @@ pub struct WorkspaceTarget {
     pub checkout_path: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ListWorkspaceDirectoryRequest {
     #[serde(flatten)]
@@ -474,7 +475,7 @@ pub struct ListWorkspaceDirectoryRequest {
     pub cursor: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceDirectoryPage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -488,7 +489,7 @@ pub struct WorkspaceDirectoryPage {
     pub truncated: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -504,7 +505,7 @@ pub struct WorkspaceEntry {
     pub read_only: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceEntryKind {
     File,
@@ -512,7 +513,7 @@ pub enum WorkspaceEntryKind {
     Symlink,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchWorkspaceFilesRequest {
     #[serde(flatten)]
@@ -524,7 +525,7 @@ pub struct SearchWorkspaceFilesRequest {
     pub limit: Option<u16>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceFileSearchMatch {
     pub path: String,
@@ -533,7 +534,7 @@ pub struct WorkspaceFileSearchMatch {
     pub score: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadWorkspaceFileRequest {
     #[serde(flatten)]
@@ -545,7 +546,7 @@ pub struct ReadWorkspaceFileRequest {
 pub const MAX_WORKSPACE_IMAGE_BYTES: usize = 8 * 1024 * 1024;
 pub const WORKSPACE_IMAGE_CHUNK_BYTES: usize = 384 * 1024;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadWorkspaceImageRequest {
     #[serde(flatten)]
@@ -556,7 +557,7 @@ pub struct ReadWorkspaceImageRequest {
     pub expected_content_hash: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceImageChunk {
     pub checkout_id: String,
@@ -568,7 +569,7 @@ pub struct WorkspaceImageChunk {
     pub done: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceFileText {
     /// Identity of the checkout this snapshot was read from.
@@ -589,7 +590,7 @@ pub struct WorkspaceFileText {
     pub truncated: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceTextEncoding {
     Utf8,
@@ -598,7 +599,7 @@ pub enum WorkspaceTextEncoding {
     Unsupported,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceLineEnding {
     Lf,
@@ -607,7 +608,7 @@ pub enum WorkspaceLineEnding {
     None,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceReadOnlyReason {
     Binary,
@@ -623,7 +624,7 @@ pub enum WorkspaceReadOnlyReason {
     OutsideWorkspace,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteWorkspaceFileRequest {
     /// Must match the read snapshot, even if the chat has since changed cwd.
@@ -637,21 +638,21 @@ pub struct WriteWorkspaceFileRequest {
     pub line_ending: WorkspaceWritableLineEnding,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceWritableEncoding {
     Utf8,
     Utf8Bom,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceWritableLineEnding {
     Lf,
     Crlf,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum WriteWorkspaceFileOutcome {
     #[serde(rename_all = "camelCase")]
@@ -666,7 +667,7 @@ pub enum WriteWorkspaceFileOutcome {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceFileWriteResult {
     pub path: String,
@@ -676,7 +677,7 @@ pub struct WorkspaceFileWriteResult {
     pub modified_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceFileConflictReason {
     Changed,
@@ -685,14 +686,14 @@ pub enum WorkspaceFileConflictReason {
     NotRegularFile,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WatchWorkspaceFilesRequest {
     #[serde(flatten)]
     pub target: WorkspaceTarget,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceFileChanges {
     pub sequence: u64,
@@ -700,7 +701,7 @@ pub struct WorkspaceFileChanges {
     pub changes: Vec<WorkspaceFileChange>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceFileChange {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -711,7 +712,7 @@ pub struct WorkspaceFileChange {
     pub old_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceFileChangeKind {
     Created,
@@ -720,7 +721,7 @@ pub enum WorkspaceFileChangeKind {
     Renamed,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DiffFileSummary {
     pub path: String,
@@ -735,7 +736,7 @@ pub struct DiffFileSummary {
 }
 
 /// Git porcelain states, independent of patch size and line counts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum GitFileState {
     Unchanged,
@@ -749,7 +750,7 @@ pub enum GitFileState {
     TypeChanged,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitFileStatus {
     pub path: String,
@@ -760,7 +761,7 @@ pub struct GitFileStatus {
 
 /// Latest status only: never contains file content or a patch. `complete = false`
 /// means unavailable/partial, not clean. Revision covers only these statuses.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckoutGitStatus {
     pub checkout_id: String,
@@ -772,14 +773,14 @@ pub struct CheckoutGitStatus {
 
 /// Keep unavailable updates inside an object: the RPC envelope uses JSON null
 /// for a missing item, so a bare optional snapshot cannot signal invalidation.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceGitStatusFrame {
     pub status: Option<CheckoutGitStatus>,
 }
 
 /// Working-tree diff for a checkout — latest-only sidecar, 3MiB patch cap.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckoutDiff {
     pub checkout_id: String,
@@ -796,7 +797,7 @@ pub struct CheckoutDiff {
 }
 
 /// Provider-neutral lifecycle state for a code change request.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum ChangeRequestState {
     Open,
@@ -805,7 +806,7 @@ pub enum ChangeRequestState {
 }
 
 /// Compact provider-neutral change request metadata for checkout surfaces.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangeRequestSummary {
     pub provider: String,
@@ -821,7 +822,7 @@ pub struct ChangeRequestSummary {
 ///
 /// `change_request: None` is an authoritative successful lookup with no match;
 /// resolution failures must retain the previous successful snapshot instead.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckoutChangeRequestStatus {
     pub checkout_id: String,
@@ -832,7 +833,7 @@ pub struct CheckoutChangeRequestStatus {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GetCheckoutFileDiffTextRequest {
     pub checkout_id: String,
@@ -852,7 +853,7 @@ pub struct GetCheckoutFileDiffTextRequest {
     pub diff_checksum: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckoutFileDiffText {
     pub diff_checksum: String,
@@ -870,7 +871,7 @@ pub struct CheckoutFileDiffText {
     pub stale: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentAccount {
     pub id: String,
@@ -916,7 +917,7 @@ pub struct AgentAccount {
     pub provider: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum AgentAuthKind {
     Oauth,
@@ -924,7 +925,7 @@ pub enum AgentAuthKind {
 }
 
 /// Everything the Accounts settings page renders, rebuilt after every mutation.
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentAccountsSnapshot {
     pub accounts: Vec<AgentAccount>,
@@ -932,7 +933,7 @@ pub struct AgentAccountsSnapshot {
 }
 
 /// A per-harness detection warning (e.g. Keychain denied reading the live login).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentAccountWarning {
     pub harness: HarnessId,
@@ -941,7 +942,7 @@ pub struct AgentAccountWarning {
 
 /// `StartAgentLogin` reply: open `url`, then either paste the code back
 /// (`CompleteAgentLogin`) or poll until the browser flow lands (`PollAgentLogin`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentLoginStart {
     pub login_id: String,
@@ -955,7 +956,7 @@ pub struct AgentLoginStart {
     pub callback_port: Option<u16>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum AgentLoginMode {
     /// Claude's fallback when no loopback port could be bound: the user
@@ -966,7 +967,7 @@ pub enum AgentLoginMode {
     Browser,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentLoginPoll {
     pub status: AgentLoginStatus,
@@ -982,7 +983,7 @@ pub struct AgentLoginPoll {
     pub callback_port: Option<u16>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum AgentLoginStatus {
     Pending,
@@ -991,7 +992,7 @@ pub enum AgentLoginStatus {
 }
 
 /// CLI plan rate-limit window (accounts settings meters) — NOT app token accounting.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentUsageWindow {
     pub label: String,
@@ -1000,7 +1001,7 @@ pub struct AgentUsageWindow {
     pub resets_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProjectActionIcon {
     Play,
@@ -1011,7 +1012,7 @@ pub enum ProjectActionIcon {
     Debug,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectAction {
     pub id: String,
@@ -1021,7 +1022,7 @@ pub struct ProjectAction {
     pub run_on_worktree_create: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectActionDraft {
     pub name: String,
@@ -1031,7 +1032,7 @@ pub struct ProjectActionDraft {
     pub run_on_worktree_create: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectActionsSnapshot {
     pub space_id: String,
@@ -1040,7 +1041,7 @@ pub struct ProjectActionsSnapshot {
     pub project_file_issue: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectActionRun {
     pub action_id: String,
@@ -1050,7 +1051,7 @@ pub struct ProjectActionRun {
 
 /// Result of creating a worktree. The worktree remains flattened so this is
 /// wire-compatible with both legacy callers and legacy engine replies.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWorktreeOutcome {
     #[serde(flatten)]
@@ -1062,7 +1063,7 @@ pub struct CreateWorktreeOutcome {
 }
 
 /// An open PTY session on the owning device (`OpenTerminal` reply).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalSession {
     pub id: String,
@@ -1073,7 +1074,7 @@ pub struct TerminalSession {
 
 /// One `SubscribeTerminal` stream item. `seq` is a per-terminal monotonic counter
 /// used for replay resumption (`afterSeq`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum TerminalEvent {
     /// Output chunk; `data` is base64 (PTY output is raw bytes, not valid UTF-8).
@@ -1085,6 +1086,36 @@ pub enum TerminalEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         signal: Option<String>,
     },
+}
+
+/// One page of a stored output (`FetchToolBlob`'s reply).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolOutputChunk {
+    /// The page's text. A page never splits a UTF-8 character.
+    pub text: String,
+    /// Body offset of the page.
+    pub offset: u64,
+    /// Body bytes in the page; the next page starts at `offset + len`.
+    pub len: u64,
+    /// Body bytes stored.
+    pub total: u64,
+    /// The output was cut at the per-file cap when it was written.
+    pub truncated: bool,
+    /// This page reaches the end of the stored body.
+    pub eof: bool,
+}
+
+/// `ReadAttachmentChunk` reply.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentChunk {
+    pub name: String,
+    pub mime_type: String,
+    /// Base64 of this chunk's byte range.
+    pub data: String,
+    pub next_offset: u64,
+    pub done: bool,
 }
 
 #[cfg(test)]
@@ -1300,7 +1331,7 @@ mod tests {
 }
 
 /// Host capabilities; absent fields keep older peers read-only for mutations.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceMutationCapabilities {
     #[serde(default)]
@@ -1310,7 +1341,7 @@ pub struct WorkspaceMutationCapabilities {
 }
 
 /// Rename and move share the same no-replacement operation.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct MoveWorkspaceEntryRequest {
     #[serde(flatten)]
@@ -1323,7 +1354,7 @@ pub struct MoveWorkspaceEntryRequest {
     pub expected_kind: WorkspaceEntryKind,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteWorkspaceEntryRequest {
     #[serde(flatten)]
@@ -1337,7 +1368,7 @@ pub struct DeleteWorkspaceEntryRequest {
     pub recursive: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum WorkspaceMutationOutcome {
     #[serde(rename_all = "camelCase")]
@@ -1356,7 +1387,7 @@ pub enum WorkspaceMutationOutcome {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceMutationRejection {
     InvalidPath,

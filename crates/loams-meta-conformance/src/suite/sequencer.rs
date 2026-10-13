@@ -87,6 +87,7 @@ pub async fn commit_wal_assigns_dense_offsets_per_partition(backend: &dyn Backen
             object: "seq-dense/wal-4".to_string(),
             created_at_ms: meta.now_ms(),
             chunks: vec![chunk(missing, 0, 1, 0..10)],
+            fences: Vec::new(),
         })
         .await;
     assert!(!stale_stream.earlier_unknown);
@@ -99,6 +100,7 @@ pub async fn commit_wal_assigns_dense_offsets_per_partition(backend: &dyn Backen
             object: "seq-dense/wal-5".to_string(),
             created_at_ms: meta.now_ms(),
             chunks: vec![chunk(s, 0, 1, 0..10), chunk(s, 2, 1, 10..20)],
+            fences: Vec::new(),
         })
         .await
         .into_result();
@@ -133,6 +135,7 @@ pub async fn commit_wal_retry_returns_the_first_offsets(backend: &dyn Backend) {
             object: "seq-retry/wal-1".to_string(),
             created_at_ms: meta.now_ms(),
             chunks: vec![chunk(s, 0, 9, 0..90)],
+            fences: Vec::new(),
         })
         .await;
     assert!(!retry.earlier_unknown);
@@ -159,6 +162,7 @@ pub async fn a_wal_object_older_than_the_commit_window_is_stale(backend: &dyn Ba
             object: "seq-stale/wal-old".to_string(),
             created_at_ms: old,
             chunks: vec![chunk(s, 0, 1, 0..10)],
+            fences: Vec::new(),
         })
         .await;
     assert!(!stale.earlier_unknown);
@@ -176,6 +180,7 @@ pub async fn a_wal_object_older_than_the_commit_window_is_stale(backend: &dyn Ba
             object: "seq-stale/wal-recent".to_string(),
             created_at_ms: recent,
             chunks: vec![chunk(s, 0, 1, 0..10)],
+            fences: Vec::new(),
         })
         .await
         .into_result()

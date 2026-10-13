@@ -99,12 +99,54 @@ pub enum Reason {
     StorageUnavailable,
     /// The secret was already issued for this idempotency key and is answered once.
     SecretAlreadyIssued,
+    /// The named Loams Git repository does not exist.
+    RepoNotFound,
+    /// A Loams Git repository of that name already exists.
+    RepoAlreadyExists,
+    /// The repository was deleted and is waiting to be purged.
+    RepoDeleting,
+    /// A ref write's expected old value no longer holds.
+    RefStale,
+    /// A protection rule refuses the ref write.
+    RefProtected,
+    /// The write is outside the credential's branch prefixes or cones.
+    OutOfScope,
+    /// The repository's object format is not supported (SHA-1 only for now).
+    ObjectFormatUnsupported,
+    /// The source repository is already as many forks deep as allowed.
+    ForkTooDeep,
+    /// The repository's sequencer is shutting down, lost its lease, or could not open.
+    SequencerUnavailable,
+    /// The idempotency key was used inside its window for a different request.
+    IdempotencyKeyReused,
+    /// The named workspace does not exist.
+    WorkspaceNotFound,
+    /// Another writer appended the workspace snapshot first.
+    WorkspaceFenced,
+    /// The workspace or snapshot is read-only.
+    WorkspaceReadOnly,
+    /// The owner already has a workspace of that name.
+    WorkspaceNameTaken,
+    /// A snapshot or push names an object the repository does not have.
+    ObjectMissing,
+    /// The leak scanner found a credential outside `env/`.
+    SecretDetected,
+    /// An `env/` file holds a plaintext value.
+    EnvUnsealed,
+    /// The credential has no grant for the environment.
+    EnvAccessDenied,
+    /// A sealed `env/` reference names another repository's secret.
+    EnvForeignReference,
     /// A Live function's `paginate` got a malformed, altered or foreign cursor.
     LiveBadCursor,
     /// The isolated worker running a Live function crashed; the call never committed.
     LiveWorkerCrashed,
     /// Another Live deploy activated first, so `expected_active` no longer matches.
     LiveDeployConflict,
+    /// A write did not match its Live table's validator; the message names the table and field paths.
+    LiveSchemaViolation,
+    /// A Live function read an index a deploy is still backfilling.
+    LiveIndexNotReady,
     /// An argument is missing, malformed or out of range.
     InvalidArgument,
     /// The thing the call names does not exist.
@@ -171,9 +213,30 @@ impl Reason {
         Reason::QuotaExceeded,
         Reason::StorageUnavailable,
         Reason::SecretAlreadyIssued,
+        Reason::RepoNotFound,
+        Reason::RepoAlreadyExists,
+        Reason::RepoDeleting,
+        Reason::RefStale,
+        Reason::RefProtected,
+        Reason::OutOfScope,
+        Reason::ObjectFormatUnsupported,
+        Reason::ForkTooDeep,
+        Reason::SequencerUnavailable,
+        Reason::IdempotencyKeyReused,
+        Reason::WorkspaceNotFound,
+        Reason::WorkspaceFenced,
+        Reason::WorkspaceReadOnly,
+        Reason::WorkspaceNameTaken,
+        Reason::ObjectMissing,
+        Reason::SecretDetected,
+        Reason::EnvUnsealed,
+        Reason::EnvAccessDenied,
+        Reason::EnvForeignReference,
         Reason::LiveBadCursor,
         Reason::LiveWorkerCrashed,
         Reason::LiveDeployConflict,
+        Reason::LiveSchemaViolation,
+        Reason::LiveIndexNotReady,
         Reason::InvalidArgument,
         Reason::NotFound,
         Reason::AlreadyExists,
@@ -229,9 +292,30 @@ impl Reason {
             Reason::QuotaExceeded => "quota_exceeded",
             Reason::StorageUnavailable => "storage_unavailable",
             Reason::SecretAlreadyIssued => "secret_already_issued",
+            Reason::RepoNotFound => "repo_not_found",
+            Reason::RepoAlreadyExists => "repo_already_exists",
+            Reason::RepoDeleting => "repo_deleting",
+            Reason::RefStale => "ref_stale",
+            Reason::RefProtected => "ref_protected",
+            Reason::OutOfScope => "out_of_scope",
+            Reason::ObjectFormatUnsupported => "object_format_unsupported",
+            Reason::ForkTooDeep => "fork_too_deep",
+            Reason::SequencerUnavailable => "sequencer_unavailable",
+            Reason::IdempotencyKeyReused => "idempotency_key_reused",
+            Reason::WorkspaceNotFound => "workspace_not_found",
+            Reason::WorkspaceFenced => "workspace_fenced",
+            Reason::WorkspaceReadOnly => "workspace_read_only",
+            Reason::WorkspaceNameTaken => "workspace_name_taken",
+            Reason::ObjectMissing => "object_missing",
+            Reason::SecretDetected => "secret_detected",
+            Reason::EnvUnsealed => "env_unsealed",
+            Reason::EnvAccessDenied => "env_access_denied",
+            Reason::EnvForeignReference => "env_foreign_reference",
             Reason::LiveBadCursor => "live_bad_cursor",
             Reason::LiveWorkerCrashed => "live_worker_crashed",
             Reason::LiveDeployConflict => "live_deploy_conflict",
+            Reason::LiveSchemaViolation => "live_schema_violation",
+            Reason::LiveIndexNotReady => "live_index_not_ready",
             Reason::InvalidArgument => "invalid_argument",
             Reason::NotFound => "not_found",
             Reason::AlreadyExists => "already_exists",
@@ -274,11 +358,22 @@ impl Reason {
             | Reason::LsnOutOfRetention
             | Reason::SecretAlreadyIssued
             | Reason::LiveDeployConflict
+            | Reason::LiveIndexNotReady
+            | Reason::RepoDeleting
+            | Reason::RefProtected
+            | Reason::ForkTooDeep
+            | Reason::IdempotencyKeyReused
+            | Reason::WorkspaceReadOnly
+            | Reason::ObjectMissing
+            | Reason::SecretDetected
             | Reason::FailedPrecondition => Code::FailedPrecondition,
             Reason::RequesterCannotApprove
             | Reason::DecisionProofInvalid
             | Reason::HouseAccessDenied
             | Reason::HouseDisabledFunction
+            | Reason::OutOfScope
+            | Reason::EnvAccessDenied
+            | Reason::EnvForeignReference
             | Reason::PermissionDenied => Code::PermissionDenied,
             Reason::StepUpRequired
             | Reason::DeviceRevoked
@@ -288,27 +383,36 @@ impl Reason {
             | Reason::InvalidDecision
             | Reason::HouseSyntaxError
             | Reason::LiveBadCursor
+            | Reason::LiveSchemaViolation
+            | Reason::EnvUnsealed
             | Reason::InvalidArgument => Code::InvalidArgument,
             Reason::PushTargetUnknown
             | Reason::HouseUnknownTable
             | Reason::HouseUnknownDatabase
             | Reason::HouseQueryNotFound
             | Reason::ProjectNotFound
+            | Reason::RepoNotFound
+            | Reason::WorkspaceNotFound
             | Reason::NotFound => Code::NotFound,
-            Reason::NotImplemented | Reason::FeatureNotInVariant | Reason::HouseNotConfigured => {
-                Code::Unimplemented
-            }
-            Reason::EndpointExistsForBranch | Reason::AlreadyExists => Code::AlreadyExists,
+            Reason::NotImplemented
+            | Reason::FeatureNotInVariant
+            | Reason::ObjectFormatUnsupported
+            | Reason::HouseNotConfigured => Code::Unimplemented,
+            Reason::EndpointExistsForBranch
+            | Reason::RepoAlreadyExists
+            | Reason::WorkspaceNameTaken
+            | Reason::AlreadyExists => Code::AlreadyExists,
             Reason::HouseMemoryLimit
             | Reason::HouseTooManyQueries
             | Reason::HouseQuotaExceeded
             | Reason::QuotaExceeded
             | Reason::ResourceExhausted => Code::ResourceExhausted,
-            Reason::ComputeStartFailed | Reason::StorageUnavailable | Reason::Unavailable => {
-                Code::Unavailable
-            }
+            Reason::ComputeStartFailed
+            | Reason::StorageUnavailable
+            | Reason::SequencerUnavailable
+            | Reason::Unavailable => Code::Unavailable,
             Reason::HouseTimeout | Reason::DeadlineExceeded => Code::DeadlineExceeded,
-            Reason::Aborted => Code::Aborted,
+            Reason::RefStale | Reason::WorkspaceFenced | Reason::Aborted => Code::Aborted,
             Reason::LiveWorkerCrashed | Reason::Internal => Code::Internal,
             Reason::HouseCancelled => Code::Canceled,
             Reason::HouseQueryFailed => Code::Unknown,
@@ -355,7 +459,7 @@ mod tests {
 
     #[test]
     fn every_reason_round_trips_through_its_wire_form() {
-        assert!(Reason::ALL.len() >= 52, "the registry has 52 rows");
+        assert!(Reason::ALL.len() >= 73, "the registry has 73 rows");
         for reason in Reason::ALL {
             assert_eq!(Reason::parse(reason.as_str()), Some(*reason));
         }

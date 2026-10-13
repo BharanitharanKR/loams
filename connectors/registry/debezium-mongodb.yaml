@@ -3,21 +3,30 @@
 # and `--check` fails CI when the two disagree (CN1 Task 2: appendix_matches_csv).
 # debezium-mongodb: a planned stub with no capability detail (D353); a hand-written manifest
 # replaces it, and the generator never rewrites an id listed in handwritten.txt.
+# CN2 Task 2 declares its directions and each one's default runtime (OR-1, R-CN2-6);
+# its family task fills in the rest.
 apiVersion: loams.flow/v1
 kind: Connector
 id: debezium-mongodb
 name: Debezium-MongoDB
-specVersion: 0.1.0
+specVersion: 0.2.0
 category: cdc
 priority: P2
 starred: false
 status: planned
 runtime:
-  kind: camel
-  ref: debezium-mongodb
+  kind: debezium
+  ref: io.debezium.connector.mongodb.MongoDbConnector
 licence:
   component: Apache-2.0
 capabilities:
+  source:
+    streaming: true
+    batch: false
+    cdc: true
+    webhook: false
+    resumable: true
+    position: mongodb-resume-token
   delivery:
     source: at_least_once
     sink: at_least_once
@@ -43,3 +52,5 @@ envelope:
 limits: {}
 conformance: []
 docs: null
+notes:
+  - 'fallback-only: Debezium Server CDC, the opt-in fallback of `mongodb`''s native change streams (OR-4); replaced_by: CN2 Task 16'

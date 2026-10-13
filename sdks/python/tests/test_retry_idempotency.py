@@ -39,8 +39,8 @@ from connectrpc.code import Code
 
 from loams import AsyncLoams, Loams, UnavailableError
 from loams.instance.v1.instance_pb2 import GetInstanceRequest, GetInstanceResponse
+from loams.live.v1.admin_pb2 import DeployRequest
 from loams.live.v1.live_pb2 import (
-    DeployRequest,
     MutateRequest,
     MutateResponse,
     QueryRequest,

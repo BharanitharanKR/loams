@@ -8,6 +8,10 @@
 //! (an entry in both lists is kept, not rewritten). Index entries are the
 //! `by_creation_time` entry and one per user index; `by_id` is the document
 //! key itself. A missing indexed field is indexed as `null`.
+//!
+//! Every insert, patch (the merged document) and replace is checked against
+//! the table's validators first ([`schema::check_document`], LV1 plan
+//! Task 8).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::future::Future;
@@ -17,11 +21,11 @@ use buffa::Message;
 use loams_kv::tuple::{self, Elem};
 use loams_kv::{Pair, Snap, Txn, TxnError};
 
-use crate::catalog::TableDef;
+use crate::catalog::{IndexDef, TableDef};
 use crate::ids::{DocId, IndexId, TableId};
 use crate::keys::{AppKeys, KeyRange, key_after};
 use crate::value::{fields_from_proto, fields_to_proto};
-use crate::{Limits, LiveError, LiveValue, pb};
+use crate::{Limits, LiveError, LiveValue, pb, schema};
 
 /// A journal write record (§20 §5.3).
 pub type WriteRecord = pb::WriteRecord;
@@ -62,7 +66,7 @@ impl Doc {
         })
     }
 
-    fn decode(id: DocId, bytes: &[u8]) -> Result<Self, LiveError> {
+    pub(crate) fn decode(id: DocId, bytes: &[u8]) -> Result<Self, LiveError> {
         let record = pb::DocumentRecord::decode_from_slice(bytes)
             .map_err(|e| LiveError::Corrupt(format!("document {id}: {e}")))?;
         Doc::from_record(id, record)
@@ -210,6 +214,7 @@ pub(crate) async fn insert_sized(
     limits: &Limits,
 ) -> Result<(DocId, WriteRecord, usize), LiveError> {
     limits.check_fields(&fields)?;
+    schema::check_document(txn, app, table, &fields).await?;
     let doc = Doc {
         id: DocId::random(table.id)?,
         creation_ms: txn.start_ts().physical_ms(),
@@ -447,6 +452,7 @@ pub fn index_key_range(
             range.table.0, table.name, table.id.0
         )));
     }
+    table.readable(range.index)?;
     if range.index == IndexId::BY_ID {
         if !range.eq.is_empty() {
             return Err(LiveError::invalid(
@@ -542,7 +548,8 @@ fn bounded(
 }
 
 /// Every index entry key of `doc` in `table`: `by_creation_time`, then each
-/// user index in definition order. The tuple part of an entry above
+/// user index writes maintain (ready or backfilling, not being dropped;
+/// LV1 plan Task 9) in definition order. The tuple part of an entry above
 /// `limits.max_index_key_bytes` is refused.
 pub fn index_keys(
     app: &AppKeys,
@@ -552,35 +559,47 @@ pub fn index_keys(
 ) -> Result<Vec<Vec<u8>>, LiveError> {
     let mut keys = Vec::with_capacity(1 + table.indexes.len());
     keys.push(app.index_entry(IndexId::BY_CREATION_TIME, &[], doc.creation_ms, &doc.id));
-    let null = LiveValue::Null;
-    for index in &table.indexes {
-        let values = index
-            .fields
-            .iter()
-            .map(|f| {
-                doc.fields
-                    .get(f)
-                    .unwrap_or(&null)
-                    .index_elem()
-                    .map_err(|e| {
-                        LiveError::invalid(format!("index '{}', field '{f}': {e}", index.name))
-                    })
-            })
-            .collect::<Result<Vec<Elem<'_>>, _>>()?;
-        let key = app.index_entry(index.id, &values, doc.creation_ms, &doc.id);
-        let tuple_len = key.len() - app.index_prefix(table.id, index.id).len() - 8 - 16;
-        if tuple_len > limits.max_index_key_bytes {
-            return Err(LiveError::limit(
-                "max_index_key_bytes",
-                format!(
-                    "index '{}': the indexed values encode to {tuple_len} bytes, more than {}",
-                    index.name, limits.max_index_key_bytes
-                ),
-            ));
-        }
-        keys.push(key);
+    for index in table.indexes.iter().filter(|i| i.maintained()) {
+        keys.push(index_key(app, table, index, doc, limits)?);
     }
     Ok(keys)
+}
+
+/// The entry key of `doc` in user index `index` of `table`; refused above
+/// `limits.max_index_key_bytes`.
+pub fn index_key(
+    app: &AppKeys,
+    table: &TableDef,
+    index: &IndexDef,
+    doc: &Doc,
+    limits: &Limits,
+) -> Result<Vec<u8>, LiveError> {
+    let null = LiveValue::Null;
+    let values = index
+        .fields
+        .iter()
+        .map(|f| {
+            doc.fields
+                .get(f)
+                .unwrap_or(&null)
+                .index_elem()
+                .map_err(|e| {
+                    LiveError::invalid(format!("index '{}', field '{f}': {e}", index.name))
+                })
+        })
+        .collect::<Result<Vec<Elem<'_>>, _>>()?;
+    let key = app.index_entry(index.id, &values, doc.creation_ms, &doc.id);
+    let tuple_len = key.len() - app.index_prefix(table.id, index.id).len() - 8 - 16;
+    if tuple_len > limits.max_index_key_bytes {
+        return Err(LiveError::limit(
+            "max_index_key_bytes",
+            format!(
+                "index '{}': the indexed values encode to {tuple_len} bytes, more than {}",
+                index.name, limits.max_index_key_bytes
+            ),
+        ));
+    }
+    Ok(key)
 }
 
 async fn existing(
@@ -604,6 +623,7 @@ async fn rewrite(
     limits: &Limits,
 ) -> Result<(WriteRecord, usize), LiveError> {
     limits.check_fields(&fields)?;
+    schema::check_document(txn, app, table, &fields).await?;
     let removed = index_keys(app, table, &old, limits)?;
     let new = Doc { fields, ..old };
     let record = encode(&new, limits)?;

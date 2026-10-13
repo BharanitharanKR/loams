@@ -2,7 +2,8 @@
 //!
 //! The library holds the process model the binary runs: the daemon directory,
 //! `config.toml`, the single-instance lock, the token, discovery and `Hello`
-//! (plan DD1 Task 6), and the RPC's access control (Task 7).
+//! (plan DD1 Task 6), the RPC's access control (Task 7), and the per-user
+//! service, the runtime directory and linger (Task 8).
 
 pub mod config;
 pub mod discovery;
@@ -11,7 +12,9 @@ pub mod lock;
 pub mod owner_only;
 pub mod paths;
 pub mod roles;
+pub mod runtime_install;
 pub mod server;
+pub mod service;
 pub mod token;
 
 /// Exit code: the daemon stopped (§50 §5.1).

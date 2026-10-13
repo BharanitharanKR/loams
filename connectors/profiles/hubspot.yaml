@@ -1,0 +1,62 @@
+# HubSpot — an HTTP-API profile (CN2 OR-11, Task 20) on the http family's
+# profile engine. Written from HubSpot's public API reference:
+#   CRM objects (list, batch upsert):
+#     https://developers.hubspot.com/docs/api-reference/crm-contacts-v3/guide
+#   Private-app access tokens (bearer):
+#     https://developers.hubspot.com/docs/apps/legacy-apps/private-apps/overview
+#   Rate limits and headers:
+#     https://developers.hubspot.com/docs/developer-tooling/platform/usage-guidelines
+#   Webhook signatures (v3):
+#     https://developers.hubspot.com/docs/api/webhooks/validating-requests
+# An instance names `resource` (contacts or companies) and its token secret as
+# `auth.token`. Batch upsert keys on `id` with the input's `idProperty` (an
+# email, or a unique custom property), so a retry rewrites the same objects
+# (effectively once).
+apiVersion: loams.flow/v1
+kind: Profile
+id: hubspot
+profile_kind: http-api
+module: http
+system:
+  name: HubSpot
+  service: { fixture: conformance/connectors/fixtures/hubspot }
+defaults: {}
+narrows: []
+http:
+  base_url: "https://api.hubapi.com"
+  auth: { scheme: bearer }
+  headers: { Accept: application/json }
+  resources:
+    contacts:
+      list:
+        method: GET
+        path: "/crm/v3/objects/contacts"
+        items: "/results"
+        cursor: { next: "/paging/next/after", param: after }
+        key: "/id"
+        query: { limit: "100", archived: "false" }
+      upsert:
+        method: POST
+        path: "/crm/v3/objects/contacts/batch/upsert"
+        batch: 100
+        key: "/id"
+        body: "/inputs"
+    companies:
+      list:
+        method: GET
+        path: "/crm/v3/objects/companies"
+        items: "/results"
+        cursor: { next: "/paging/next/after", param: after }
+        key: "/id"
+        query: { limit: "100", archived: "false" }
+      upsert:
+        method: POST
+        path: "/crm/v3/objects/companies/batch/upsert"
+        batch: 100
+        key: "/id"
+        body: "/inputs"
+  rate_limit:
+    requests: 100
+    per_seconds: 10
+    honour_headers: ["Retry-After", "X-HubSpot-RateLimit-Remaining"]
+  webhook: { scheme: hubspot-v3, header: "X-HubSpot-Signature-v3" }

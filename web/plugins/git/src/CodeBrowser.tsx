@@ -303,7 +303,7 @@ function Source({ text }: { text: string }) {
   return (
     // A named, focusable region, so the scrollable contents are reachable by keyboard.
     <section
-      className="max-h-[560px] overflow-auto rounded-md border border-solid border-line p-2"
+      className="max-h-[560px] overflow-auto rounded-md border border-solid border-rule p-2"
       // biome-ignore lint/a11y/noNoninteractiveTabindex: a scroll container
       tabIndex={0}
       aria-label="File contents"

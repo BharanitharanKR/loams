@@ -15,7 +15,7 @@ statement span, put `options.headers` (the whole point of a public
 The header tests go over a real HTTP server rather than calling `call_headers`
 directly, because the interesting failures are not in the function. `dict.update`
 followed by `headers["authorization"] = ...` is obviously correct in isolation;
-what matters is that connect-python does not drop, reorder or overwrite a header
+what matters is that connectrpc does not drop, reorder or overwrite a header
 on its way out, and only a request can show that.
 """
 
@@ -122,7 +122,7 @@ def test_the_credential_is_never_in_the_query_string(server: _EchoServer) -> Non
     a proxy log and a browser history."""
     with Loams(server.url, api_key="secret-token") as client:
         client.instance.get_instance(GetInstanceRequest())
-    # The stub records headers only, so assert on what connect-python built: the
+    # The stub records headers only, so assert on what connectrpc built: the
     # request target is the RPC path with no query string.
     with Loams(server.url, api_key="secret-token") as client:
         binding = client.binding("instance", "get_instance")
@@ -173,7 +173,7 @@ def test_call_headers_omits_what_it_does_not_have() -> None:
 
 
 def test_call_headers_copies_rather_than_aliases() -> None:
-    """The result is handed to connect-python, which may keep it; a caller mutating
+    """The result is handed to connectrpc, which may keep it; a caller mutating
     their own mapping afterwards must not change a client's headers."""
     original = {"x-a": "1"}
     built = call_headers(CallOptions(headers=original), None, None)

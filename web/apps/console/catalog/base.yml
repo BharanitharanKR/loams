@@ -25,8 +25,9 @@
 - id: deployments
   name: '@loams/plugin-deployments'
 
-# A sample third-party plugin: it runs in a sandboxed frame, and only when
-# the instance sets the `console.third_party_plugins` feature (off until the
-# unified auth plan can vend attenuated tokens; the demo mock turns it on).
-- id: hello
-  name: '@loams/example-plugin-hello'
+# Loams Studio (design §53, SD1 Task 15): `modes: [studio]`, so it loads the first
+# time Studio mode is entered. In a browser Studio stays behind the instance
+# feature `studio` (start.ts) until SD1 Task 32; desktop.yml adds the bridge.
+- id: studio
+  name: '@loams/plugin-studio'
+  inject: [router, slots, mode, platform, flags]

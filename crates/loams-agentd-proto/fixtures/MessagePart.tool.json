@@ -1,0 +1,29 @@
+{
+  "call": {
+    "kind": "unknown",
+    "name": "Agent: review"
+  },
+  "diff": {
+    "newText": "fn main() {\n    run();\n}\n",
+    "oldText": "fn main() {}\n",
+    "path": "src/main.rs"
+  },
+  "diffRef": "chat-1/call-1.diff",
+  "diffStats": [
+    {
+      "additions": 2,
+      "deletions": 1,
+      "path": "src/main.rs"
+    }
+  ],
+  "id": "call-1",
+  "isError": false,
+  "kind": "tool",
+  "output": "ok",
+  "outputBytes": 2048,
+  "outputRef": "chat-1/call-1",
+  "resolved": true,
+  "subagentRef": "chat-1:sub-1",
+  "subagentStatus": "running",
+  "subagentTail": "Reading files"
+}

@@ -1,0 +1,33 @@
+{
+  "kind": "run",
+  "messageId": "msg-u1",
+  "request": {
+    "attachments": [
+      "/home/dev/.uploads/shot.png"
+    ],
+    "autoApprove": false,
+    "cwd": "/home/dev/project",
+    "harness": "claude-code",
+    "mcp": {
+      "args": [
+        "mcp"
+      ],
+      "command": "/opt/loams/loams-agentd",
+      "env": {
+        "LOAMS_AGENTD_PORT": "50217"
+      },
+      "name": "loams-desktop"
+    },
+    "model": "claude-sonnet",
+    "modelOptions": {},
+    "prompt": "Fix the build",
+    "reasoning": "high",
+    "resume": "claude-session-1",
+    "sandbox": "workspace-write",
+    "worktree": {
+      "base": "main",
+      "repoPath": "/home/dev/project",
+      "spaceId": "space-1"
+    }
+  }
+}

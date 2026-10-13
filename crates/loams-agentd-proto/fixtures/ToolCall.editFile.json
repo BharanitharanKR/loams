@@ -1,0 +1,6 @@
+{
+  "kind": "editFile",
+  "new_string": "{ run(); }",
+  "old_string": "{}",
+  "path": "src/main.rs"
+}

@@ -3,6 +3,7 @@
 //! after DNS, at connect time, so a name that resolves to a forbidden address
 //! is refused (Review Focus 9).
 
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, OnceLock};
 
 use tokio::net::TcpStream;
@@ -12,8 +13,10 @@ use tokio_rustls::client::TlsStream;
 use crate::egress::EgressCheck;
 use crate::error::ConnectorError;
 
-/// Connect to `host:port`: egress-check the host, resolve it, egress-check
-/// each address, and dial the first allowed one that answers.
+/// Connect to `host:port`: egress-check the host, resolve it through the
+/// check's resolver hook (an IP literal is not resolved), egress-check each
+/// address, and dial the first allowed one that answers. Every call resolves
+/// afresh, so each connection is checked against the answer it dials.
 pub async fn connect(
     host: &str,
     port: u16,
@@ -22,10 +25,14 @@ pub async fn connect(
     egress
         .check_host(host, port)
         .map_err(|e| ConnectorError::fatal(e.to_string()))?;
-    let addrs: Vec<_> = tokio::net::lookup_host((host, port))
-        .await
-        .map_err(|e| ConnectorError::retryable(format!("resolving {host}: {e}")))?
-        .collect();
+    let addrs: Vec<SocketAddr> = match host.parse::<IpAddr>() {
+        Ok(ip) => vec![SocketAddr::new(ip, port)],
+        Err(_) => egress
+            .resolver()
+            .resolve(host, port)
+            .await
+            .map_err(|e| ConnectorError::retryable(format!("resolving {host}: {e}")))?,
+    };
     if addrs.is_empty() {
         return Err(ConnectorError::retryable(format!(
             "{host} resolved to no address"

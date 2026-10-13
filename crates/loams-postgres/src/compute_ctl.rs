@@ -50,6 +50,35 @@ pub struct ComputeStatusResponse {
     pub tenant: Option<String>,
     pub timeline: Option<String>,
     pub error: Option<String>,
+    /// The last moment Postgres had activity that should keep the compute
+    /// from suspending, as `compute_ctl`'s monitor (`compute_tools/src/
+    /// monitor.rs`, every 500 ms) last saw it: it is now while a client
+    /// backend is not `idle` (a query running, a transaction open), a
+    /// walsender other than walproposer exists, a logical subscription's
+    /// worker runs, or autovacuum works; otherwise the latest `idle`
+    /// backend's `state_change`. It only moves forward. RFC 3339 as chrono's
+    /// `to_rfc3339` writes it (`compute_api/src/responses.rs`
+    /// `rfc3339_serialize`); `None` before any activity. Read it with
+    /// [`last_active_ms`](Self::last_active_ms).
+    #[serde(default)]
+    pub last_active: Option<String>,
+}
+
+impl ComputeStatusResponse {
+    /// [`last_active`](Self::last_active) in ms since the Unix epoch (0 for
+    /// a time before it).
+    ///
+    /// # Errors
+    ///
+    /// When `compute_ctl` sent a time that is not RFC 3339.
+    pub fn last_active_ms(&self) -> Result<Option<u64>, time::error::Parse> {
+        let Some(at) = &self.last_active else {
+            return Ok(None);
+        };
+        let at = time::OffsetDateTime::parse(at, &time::format_description::well_known::Rfc3339)?;
+        let ms = at.unix_timestamp_nanos() / 1_000_000;
+        Ok(Some(u64::try_from(ms).unwrap_or(0)))
+    }
 }
 
 /// `ComputeCtlConfig`: the keys `compute_ctl` verifies callers' JWTs with,

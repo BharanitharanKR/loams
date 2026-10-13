@@ -24,9 +24,6 @@ use loams_house::deny::{
 use loams_house::http::{HouseHandle, serve};
 use loams_house::{Outcome, PoolConfig, ProcessLauncher, WorkerPool};
 
-/// alice's namespace (`UserMap::dev("alice", …, 2, …)`), as the pool names it.
-const NAMESPACE: &str = "2";
-
 /// A House whose namespace has at most `workers` workers: a session's temporary
 /// table pins one of them, so requests outside the session need a second.
 async fn house_with(test: &str, workers: usize) -> (HouseHandle, WorkerPool) {
@@ -483,27 +480,14 @@ async fn dictionary_http_source_is_344() {
     assert_eq!(trap.connections(), 0, "nothing connected to {url}");
 }
 
-/// §32 §7.8's allowed table functions work, `merge()` over the namespace's own
-/// tables (the front's views) included, and `input()` inside an `INSERT`.
+/// §32 §7.8's allowed table functions work, and `input()` inside an `INSERT`.
+/// `merge()` over the namespace's own tables reads lake tables, whose views are
+/// made for the statement that names them (HS1 Task 11): `read.rs`'s
+/// `merge_reads_the_namespaces_lake_tables`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn allowed_table_functions_work() {
-    // One worker for the namespace, so the views below are where every request
-    // runs; the session (and its pin) comes last.
-    let (house, pool) = house_with("deny-allowed", 1).await;
+    let (house, _pool) = house_with("deny-allowed", 1).await;
     let addr = house.local_addr();
-    // The namespace's own tables: views the front writes on the control
-    // connection (as HS1 Task 11's lake reads will).
-    let mut lease = pool
-        .acquire(NAMESPACE)
-        .await
-        .expect("the namespace's worker");
-    let mut views = common::statement("SELECT 1", "TSV");
-    views.views = vec![
-        "CREATE OR REPLACE VIEW default.own_1 AS SELECT 1 AS a".to_string(),
-        "CREATE OR REPLACE VIEW default.own_2 AS SELECT 2 AS a".to_string(),
-    ];
-    lease.run(views).await.expect("views");
-    pool.release(lease, Outcome::Completed);
 
     for (sql, expected) in [
         ("SELECT sum(number) FROM numbers(4)", "6\n"),
@@ -517,12 +501,6 @@ async fn allowed_table_functions_work() {
         ("SELECT a FROM format(CSV, 'a String', 'x\n')", "x\n"),
         ("SELECT count() FROM null('a UInt8')", "0\n"),
         ("SELECT * FROM view(SELECT 7)", "7\n"),
-        ("SELECT sum(a) FROM merge('default', '^own_')", "3\n"),
-        (
-            "SELECT sum(a) FROM merge(currentDatabase(), '^own_')",
-            "3\n",
-        ),
-        ("SELECT sum(a) FROM merge('^own_')", "3\n"),
         ("SELECT * FROM (VALUES (1, 2))", "1\t2\n"),
         (
             "SELECT sum(generate_series) FROM generate_series(1, 3)",
@@ -951,6 +929,42 @@ async fn the_engine_lists_follow_chdb() {
     }
     for engine in ALLOWED_TEMPORARY_ENGINES {
         assert!(ALLOWED_ENGINES.contains(engine), "{engine}");
+    }
+}
+
+/// Every database engine chDB has is on one of the House's three lists (HS1 Task
+/// 10, the Task 5 fix round's note): `Atomic` is a House database, the denied
+/// ones read or write outside the namespace (`344`), the rest are `48`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_database_engine_lists_follow_chdb() {
+    use loams_house::deny::{
+        ALLOWED_DATABASE_ENGINES, DENIED_DATABASE_ENGINES, OTHER_DATABASE_ENGINES,
+    };
+    let (house, _pool) = house("deny-db-engines").await;
+    let addr = house.local_addr();
+    let engines = post(addr, "SELECT name FROM system.database_engines").await;
+    assert_eq!(engines.status, 200, "{}", engines.text());
+    let engines: HashSet<String> = engines.text().lines().map(str::to_string).collect();
+    let listed = |e: &str| {
+        DENIED_DATABASE_ENGINES.contains(&e)
+            || ALLOWED_DATABASE_ENGINES.contains(&e)
+            || OTHER_DATABASE_ENGINES.contains(&e)
+    };
+    let unlisted: Vec<_> = engines.iter().filter(|e| !listed(e)).collect();
+    assert!(
+        unlisted.is_empty(),
+        "database engines on no list: {unlisted:?}"
+    );
+    assert!(engines.contains("Atomic"));
+    // Without a catalog no database is made, but the engine is refused first.
+    for engine in DENIED_DATABASE_ENGINES {
+        let response = post(addr, &format!("CREATE DATABASE d ENGINE = {engine}")).await;
+        assert_eq!(
+            code(&response),
+            Some("344"),
+            "{engine}: {}",
+            response.text()
+        );
     }
 }
 

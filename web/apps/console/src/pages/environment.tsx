@@ -23,7 +23,14 @@ import {
 import { KeyRound, Lock } from 'lucide-react';
 import { useState } from 'react';
 import { useParams } from 'react-router';
-import { api, type CollectionInfo, listCollections, message, type Schemas } from '../api/client';
+import {
+  api,
+  type CollectionInfo,
+  listCollections,
+  message,
+  type Schemas,
+  serverUrl,
+} from '../api/client';
 import { useLoad } from '../api/use';
 import { LoadError, Loading, PageHead, usePageTitle } from '../page';
 import { ACTIONS } from '../parts/actions';
@@ -246,8 +253,11 @@ export function EnvironmentPage() {
           />
         </Card>
         <Card title="Connect">
-          <p>Query this environment's namespace over the native API with a token or a key:</p>
-          <Snippet>{`curl -H "Authorization: Bearer $LOAMS_TOKEN" \\\n  -X POST ${window.location.origin}/v1/namespaces/${e.namespace}/query -d @query.json`}</Snippet>
+          <p>
+            Connect with the SDK (<code>@loams/client</code>) and an API key from this environment.
+            It speaks Connect on the server's one port:
+          </p>
+          <Snippet prompt={false}>{connectSnippet(serverUrl(), e.namespace)}</Snippet>
           <p>
             Agents exchange their workload identity for a token scoped to it; see an agent's page.
           </p>
@@ -396,4 +406,19 @@ function NewKey({
       )}
     </Dialog>
   );
+}
+
+/** The SDK example on the Connect card: the configured server, this environment's namespace. */
+export function connectSnippet(server: string, namespace: string): string {
+  return [
+    "import { Loams, apiKey } from '@loams/client';",
+    '',
+    'const loams = new Loams({',
+    `  endpoint: '${server}',`,
+    '  auth: apiKey(process.env.LOAMS_API_KEY!),',
+    '});',
+    '',
+    `// This environment's data lives in the namespace ${namespace}.`,
+    'const me = await loams.instance.whoAmI({});',
+  ].join('\n');
 }

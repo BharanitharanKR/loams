@@ -155,9 +155,7 @@ async fn range(
         BY_CREATION_TIME => vec![CREATION_TIME_FIELD.to_string()],
         BY_ID => vec![ID_FIELD.to_string()],
         name => table
-            .indexes
-            .iter()
-            .find(|i| i.name == name)
+            .index_named(name)
             .map(|i| i.fields.clone())
             .unwrap_or_default(),
     };

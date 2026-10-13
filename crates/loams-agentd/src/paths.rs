@@ -6,6 +6,7 @@
 //! config.toml   agentd.json   agentd.token   agentd.lock
 //! store/        the sessions engine's data (DocsStore, journals)
 //! adapters/     managed installs of the harnesses' ACP adapters
+//! runtime/      the installed binaries: <version>/, current (DD1 Task 8)
 //! logs/         the daemon's own log (agentd.log)
 //! ```
 //!
@@ -49,10 +50,12 @@ impl Paths {
         Ok(Self { dir })
     }
 
+    /// The daemon directory.
     pub fn dir(&self) -> &Path {
         &self.dir
     }
 
+    /// `config.toml`.
     pub fn config(&self) -> PathBuf {
         self.dir.join("config.toml")
     }
@@ -83,6 +86,13 @@ impl Paths {
         self.dir.join("adapters")
     }
 
+    /// `runtime/`, the installed binaries (design §50 §5.2), unless
+    /// `[paths] runtime` puts them elsewhere (Windows, T0-7).
+    pub fn runtime(&self) -> PathBuf {
+        self.dir.join("runtime")
+    }
+
+    /// `logs/`: the daemon's `agentd.log` and a supervisor's `agentd.stdout.log`.
     pub fn logs(&self) -> PathBuf {
         self.dir.join("logs")
     }

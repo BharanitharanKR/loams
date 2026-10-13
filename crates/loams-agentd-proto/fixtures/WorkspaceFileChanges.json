@@ -1,0 +1,12 @@
+{
+  "changes": [
+    {
+      "kind": "renamed",
+      "oldPath": "src/main.rs",
+      "operationId": "op-1",
+      "path": "src/lib.rs"
+    }
+  ],
+  "resyncRequired": false,
+  "sequence": 7
+}

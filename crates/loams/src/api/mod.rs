@@ -24,13 +24,15 @@ mod connect_query_filters;
 mod connect_query_ir;
 mod errors;
 pub mod events;
-mod graph;
+pub(crate) mod graph;
 pub mod hot;
 pub mod house_proxy;
 pub mod internal;
+pub(crate) mod live;
 #[cfg(feature = "postgres")]
 mod postgres_messages;
 mod query;
+pub mod repos;
 mod sql;
 pub mod streams;
 
@@ -139,6 +141,15 @@ pub struct AppState {
     /// design §49 §18.1); `None` when no `[house] endpoint` is configured, and
     /// then the package answers `house_not_configured`.
     pub house: Option<Arc<house_proxy::HouseProxy>>,
+    /// Loams Git's `RepoService` (GT1 Task 13, feature `git`): the bucket catalog and this
+    /// node's repository sequencers; `None` when this node does not serve it.
+    #[cfg(feature = "git")]
+    pub git: Option<Arc<repos::GitRuntime>>,
+    /// Loams Live's two services (LV1 plan Task 12, feature `live`), registered on this router;
+    /// `None` when Live is off or this router may not serve it (a non-loopback main port before
+    /// LV1 Task 18), and then the package answers `feature_not_in_variant`.
+    #[cfg(feature = "live")]
+    pub live: Option<loams_live::LiveRoutes>,
 }
 
 /// What a query node needs to run forwarded reads (plan M1.3 Task 11).

@@ -21,8 +21,13 @@
 //! arguments and schemas in [`validate`]. Versioned deployments, their
 //! bundle store and their activation (LV1 Task 6) are in [`deploy`], with
 //! the [`AppEngine`] that serves an app's active deployment; the schema a
-//! deployment declares is in [`schema`].
+//! deployment declares, with its table validators (LV1 Task 8), is in
+//! [`schema`], and the leased table scans that check them in [`backfill`].
+//! The admin service, `LiveAdminService` (LV1 Task 10), is in [`admin`],
+//! and the function logs it tails in [`logs`].
 
+pub mod admin;
+pub mod backfill;
 pub mod catalog;
 mod config;
 pub mod cursor;
@@ -33,6 +38,7 @@ pub mod ids;
 pub mod journal;
 pub mod keys;
 mod limits;
+pub mod logs;
 pub mod query;
 pub mod readset;
 pub mod schema;
@@ -48,7 +54,7 @@ mod value;
 /// The `loams.live.v1` protobuf messages.
 pub use loams_live_proto::loams::live::v1 as pb;
 
-pub use catalog::{IndexDef, IndexSpec, TableDef};
+pub use catalog::{IndexDef, IndexSpec, TableDef, TableValidation};
 pub use config::{
     DEFAULT_JANITOR_INTERVAL, DEFAULT_JOURNAL_SHARDS, DEFAULT_LISTEN, Isolation, KEYSPACE_PREFIX,
     LiveConfig, Tenancy, check_isolation, check_listen, keyspace_of, store_path,
@@ -63,7 +69,7 @@ pub use limits::Limits;
 /// The store a [`LiveConfig`] names (LV1 row T20-9).
 pub use loams_kv::{Backend, EmbeddedConfig, StoreConfig};
 pub use readset::{ReadSetIndex, SubId};
-pub use service::{LiveHandle, LiveServer};
+pub use service::{LiveHandle, LiveRoutes, LiveServer};
 pub use session::{ClientState, SessionConfig, Sessions, Version};
 pub use subs::{SubKey, SubResult, SubsConfig, SubsStats, Subscriptions, Target, Tick};
 pub use txn::{

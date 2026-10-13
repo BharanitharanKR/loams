@@ -11,7 +11,7 @@ apiVersion: loams.flow/v1
 kind: Connector
 id: kafka
 name: Kafka
-specVersion: 1.0.0
+specVersion: 1.1.0
 category: messaging
 priority: P1
 starred: true
@@ -37,11 +37,11 @@ capabilities:
   sink:
     streaming: true
     batch: true
-    transactional: false           # no Kafka transaction spans the Fabric boundary; §33 §6
+    transactional: true            # CN2 Task 9: `delivery: exactly_once` writes the batch and the checkpoint (__loams_checkpoints) in one Kafka transaction (OR-7)
     upsert: false
     delete: false
     idempotent: true               # the idempotent producer: enable.idempotence=true, acks=all (CN1 Task 6)
-  delivery: { source: at_least_once, sink: at_least_once }   # §33 §6: every runtime is at-least-once
+  delivery: { source: at_least_once, sink: exactly_once }    # CN2 Task 9 (OR-7): exactly_once through the transactional sink; the default idempotent producer is effectively_once
   ordering: per_partition          # a partition's records are read in offset order (CN1 Task 6)
   formats: [cloudevents-binary, cloudevents-structured, json, avro, bytes]
     # Avro appears only at the Kafka boundary (D356), and only when a schema
@@ -64,5 +64,5 @@ envelope:
   consumes: "*"
   passthrough: true                # §33 §6: a record with valid ce_ headers keeps its type, source and id
 limits: { max_record_bytes: 16777216 }
-conformance: [contract, roundtrip, kill-restart, dup-check]
+conformance: [contract, roundtrip, kill-restart, dup-check, exactly-once]
 docs: docs/guides/connectors/kafka.md

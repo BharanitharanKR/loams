@@ -24,8 +24,9 @@ from __future__ import annotations
 from typing import Final, cast
 
 from connectrpc.code import Code
-from connectrpc.errors import ConnectError
+from connectrpc.errors import ConnectError, ErrorDetail
 from google.protobuf.any_pb2 import Any
+from protobuf.wkt import Any as WireAny
 from google.protobuf import descriptor
 from google.protobuf.message import Message
 
@@ -48,6 +49,7 @@ __all__ = [
     "UnauthenticatedError",
     "UnavailableError",
     "UnimplementedError",
+    "error_detail",
     "error_info",
     "is_loams_error",
     "to_loams_error",
@@ -255,10 +257,29 @@ def error_info(error: ConnectError) -> ErrorInfo | None:
     is a `token_expired` refusal arriving as a bare `UnauthenticatedError` with
     the reason dropped -- which silently disables the refresh-and-retry path.
     """
+    # `connectrpc` 0.10+ hands back `ErrorDetail`s: `type_name` is the type URL
+    # with one `type.googleapis.com/` removed, which `_message_name` finishes, and
+    # `message_bytes` is the `Any`'s value. Neither needs a descriptor pool.
     for detail in error.details:
-        if _message_name(detail.type_url) == _ERROR_INFO_MESSAGE:
-            return ErrorInfo.FromString(detail.value)
+        if _message_name(detail.type_name) == _ERROR_INFO_MESSAGE:
+            return ErrorInfo.FromString(detail.message_bytes)
     return None
+
+
+def error_detail(message: Message) -> ErrorDetail:
+    """A `google.protobuf` message as a `ConnectError` detail.
+
+    `connectrpc` 0.10+ packs details with its own `protobuf-py` runtime, so a
+    `google.protobuf` message (every message this SDK generates) has to arrive
+    already packed. The `Any` carries the same type URL and bytes that
+    `connect-python` 0.9.0's `pack_any` produced, so the wire is unchanged.
+    """
+    return ErrorDetail(
+        WireAny(
+            type_url=_TYPE_URL_PREFIX + message.DESCRIPTOR.full_name,
+            value=message.SerializeToString(),
+        )
+    )
 
 
 def to_loams_error(value: object, rpc: str | None = None) -> LoamsError:

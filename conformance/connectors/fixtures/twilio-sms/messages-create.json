@@ -1,0 +1,58 @@
+{
+  "recorded_from": "Twilio",
+  "synthetic": true,
+  "docs": [
+    "https://www.twilio.com/docs/messaging/api/message-resource"
+  ],
+  "scenario": {
+    "direction": "sink",
+    "resource": "messages",
+    "config": {
+      "account_sid": "AC00000000000000000000000000000000",
+      "base_url": "{proxy}/2010-04-01/Accounts/AC00000000000000000000000000000000"
+    },
+    "secrets": {
+      "username": "synthetic-twilio-sid",
+      "password": "synthetic-twilio-token"
+    },
+    "input": [
+      {
+        "To": "+15005550009",
+        "From": "+15005550006",
+        "Body": "Hello from Loams"
+      }
+    ],
+    "expect": 1
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/2010-04-01/Accounts/AC00000000000000000000000000000000/Messages.json",
+        "headers": {},
+        "body": {
+          "text": "Body=Hello%20from%20Loams&From=%2B15005550006&To=%2B15005550009"
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "sid": "SM00000000000000000000000000000004",
+            "account_sid": "AC00000000000000000000000000000000",
+            "from": "+15005550006",
+            "to": "+15005550009",
+            "body": "Hello from Loams",
+            "status": "queued",
+            "direction": "outbound-api",
+            "date_created": "Wed, 01 Oct 2026 10:00:00 +0000",
+            "uri": "/2010-04-01/Accounts/AC00000000000000000000000000000000/Messages/SM00000000000000000000000000000001.json"
+          }
+        }
+      }
+    }
+  ]
+}
