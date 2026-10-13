@@ -7,7 +7,16 @@ name: Fabric
 #   connectors-drift — the weekly network-dependent catalog drift checks
 #   connect-routes   — declared, gated off until CN1 Task 12 lands
 # Jobs owned by CN2 (plan 2026-10-10-cn2-connectors):
-#   sdk-unit         — fmt, clippy and tests of `loams-connector-sdk` (Task 4)
+#   sdk-unit           — fmt, clippy and tests of `loams-connector-sdk` (Task 4)
+#   conformance-kit    — fmt, clippy and tests of `loams-flow-conformance`
+#                        (Task 6: the suites, systems.toml, the compose estate)
+#   connectors-p2      — each family crate's suites against the open images of
+#                        deploy/fabric/compose.yaml (profile connectors-p2),
+#                        sharded by family, path-filtered per family crate
+#   connectors-ci-only — the same against the `ci-service` images (profile
+#                        connectors-ci-only; OR-3: CI only, never shipped)
+#   connectors-nightly — scheduled: the suites against real cloud and SaaS
+#                        accounts, with repository secrets (OR-3, OR-23)
 # Jobs FL1 owns and adds here separately: connectors-it (the ★ contract suites
 # against the `connectors` compose profile, from CN1 Tasks 3–13), and the
 # `fabric` workspace's own build/publish steps. Keep this file minimal and
@@ -22,6 +31,10 @@ on:
     # "both run weekly and on demand, not on every PR"), so they cannot be a
     # pull-request gate. Off the hour ci.yml's nightly runs on (17 2 * * *).
     - cron: "41 3 * * 1"
+    # Daily: connectors-nightly against real accounts (CN2 Task 6). A
+    # different cron string, so each scheduled job can tell its run apart
+    # (`github.event.schedule`).
+    - cron: "23 4 * * *"
 
 permissions:
   contents: read
@@ -50,6 +63,9 @@ jobs:
       drift: ${{ steps.filter.outputs.drift }}
       connect-routes: ${{ steps.filter.outputs.connect-routes }}
       sdk: ${{ steps.filter.outputs.sdk }}
+      conformance: ${{ steps.filter.outputs.conformance }}
+      # A JSON list of the families whose suites a pull request must run.
+      families: ${{ steps.families.outputs.list }}
     steps:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
@@ -95,6 +111,43 @@ jobs:
               - "fabric/Cargo.toml"
               - "fabric/Cargo.lock"
               - "fabric/crates/loams-connector-sdk/**"
+            # The conformance kit and the real-system estate (CN2 Task 6).
+            # Every family's suites depend on all of it.
+            conformance: &conformance
+              - *toolchain
+              - "fabric/Cargo.toml"
+              - "fabric/Cargo.lock"
+              - "fabric/crates/loams-connector-sdk/**"
+              - "fabric/crates/loams-flow/**"
+              - "fabric/crates/loams-flow-proto/**"
+              - "fabric/crates/loams-flow-conformance/**"
+              - "conformance/connectors/**"
+              - "deploy/fabric/**"
+              - "connectors/**"
+            # One filter per family crate (OR-6): a change to one family runs
+            # that family's shard only.
+            family-http: [*conformance, "fabric/crates/loams-connector-http/**"]
+            family-kafka: [*conformance, "fabric/crates/loams-connector-kafka/**"]
+            family-postgres: [*conformance, "fabric/crates/loams-connector-postgres/**"]
+            family-mysql: [*conformance, "fabric/crates/loams-connector-mysql/**"]
+            family-sqlserver: [*conformance, "fabric/crates/loams-connector-sqlserver/**"]
+            family-objects: [*conformance, "fabric/crates/loams-connector-objects/**"]
+            family-kv: [*conformance, "fabric/crates/loams-connector-kv/**"]
+            family-search: [*conformance, "fabric/crates/loams-connector-search/**"]
+            family-mongodb: [*conformance, "fabric/crates/loams-connector-mongodb/**"]
+            family-analytics: [*conformance, "fabric/crates/loams-connector-analytics/**"]
+            family-lakehouse: [*conformance, "fabric/crates/loams-connector-lakehouse/**"]
+            family-brokers: [*conformance, "fabric/crates/loams-connector-brokers/**"]
+            family-cloud: [*conformance, "fabric/crates/loams-connector-cloud/**"]
+            family-protocols: [*conformance, "fabric/crates/loams-connector-protocols/**"]
+      # The changed families, as a JSON list for the shards' matrices. A
+      # shard whose family has no service in its stack, or no crate yet,
+      # finishes at once (scripts/connectors/compose_services.py).
+      - id: families
+        env:
+          CHANGES: ${{ steps.filter.outputs.changes }}
+        run: |
+          echo "list=$(jq -c '[.[] | select(startswith("family-")) | ltrimstr("family-")]' <<<"$CHANGES")" >> "$GITHUB_OUTPUT"
 
   # CN1 owns this job. FL1 owns the `lints_match_root` test that proves the
   # fabric workspace's lint table equals the root workspace's; it runs in FL1's
@@ -172,6 +225,287 @@ jobs:
         working-directory: fabric
         run: cargo test -p loams-connector-sdk --locked
 
+  # CN2 owns this job (Task 6): the conformance kit alone — its suites run
+  # against the SDK's reference connector, and its estate tests read
+  # conformance/connectors/systems.toml, deploy/fabric/compose.yaml and this
+  # file. No services. It links `loams-flow`, hence protoc.
+  conformance-kit:
+    name: conformance kit (fmt, clippy, tests)
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.conformance == 'true') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fabric -> target
+          key: conformance-kit
+      - name: rustfmt
+        working-directory: fabric
+        run: cargo fmt -p loams-flow-conformance --check
+      - name: clippy
+        working-directory: fabric
+        run: cargo clippy -p loams-flow-conformance --all-targets --locked -- -D warnings
+      - name: tests
+        working-directory: fabric
+        run: cargo test -p loams-flow-conformance --locked
+      - name: the compose estate parses
+        run: docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only config --quiet
+
+  # CN2 Task 6: each family crate's suites against the open images of the
+  # `connectors-p2` profile, one shard per family (OR-6). On a pull request
+  # only the families it touches run; on a push and on demand, all of them.
+  # A shard whose crate does not exist yet, or whose family has no service in
+  # this stack, ends after checkout.
+  connectors-p2:
+    name: connectors-p2 (${{ matrix.family }})
+    needs: changes
+    if: ${{ !cancelled() && github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.families != '[]') }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        family: ${{ fromJSON(github.event_name == 'pull_request' && needs.changes.outputs.families || '["http","kafka","postgres","mysql","sqlserver","objects","kv","search","mongodb","analytics","lakehouse","brokers","cloud","protocols"]') }}
+    env:
+      FAMILY: ${{ matrix.family }}
+      PROFILE: connectors-p2
+    steps:
+      - uses: actions/checkout@v7
+      - name: the family's crate and services
+        id: plan
+        run: |
+          docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only \
+            config --format json > "$RUNNER_TEMP/compose.json"
+          services=$(python3 scripts/connectors/compose_services.py \
+            --profile "$PROFILE" --family "$FAMILY" --compose-json "$RUNNER_TEMP/compose.json")
+          echo "services=$services" >> "$GITHUB_OUTPUT"
+          if [ -d "fabric/crates/loams-connector-$FAMILY" ] && [ -n "$services" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "nothing to run: crate loams-connector-$FAMILY $( [ -d "fabric/crates/loams-connector-$FAMILY" ] && echo present || echo absent ), services '${services}'"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: protoc
+        if: steps.plan.outputs.run == 'true'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        if: steps.plan.outputs.run == 'true'
+        with:
+          workspaces: fabric -> target
+          key: connectors-${{ matrix.family }}
+      - name: build the family crate's tests
+        if: steps.plan.outputs.run == 'true'
+        working-directory: fabric
+        run: cargo test -p "loams-connector-$FAMILY" --locked --no-run
+      - name: up (${{ steps.plan.outputs.services }})
+        if: steps.plan.outputs.run == 'true'
+        run: |
+          # shellcheck disable=SC2086 # the service list is space-separated on purpose
+          docker compose -f deploy/fabric/compose.yaml --profile "$PROFILE" up -d --wait --wait-timeout 600 ${{ steps.plan.outputs.services }}
+      - name: suites
+        if: steps.plan.outputs.run == 'true'
+        working-directory: fabric
+        env:
+          LOAMS_CONNECTORS_P2_STACK: "1"
+        run: cargo test -p "loams-connector-$FAMILY" --locked
+      - name: service logs
+        if: failure() && steps.plan.outputs.run == 'true'
+        run: docker compose -f deploy/fabric/compose.yaml --profile "$PROFILE" logs --no-color --tail 200
+      - name: down
+        if: always() && steps.plan.outputs.run == 'true'
+        run: docker compose -f deploy/fabric/compose.yaml --profile "$PROFILE" down -v
+
+  # CN2 Task 6, OR-3: the same against the `ci-service` images (proprietary,
+  # source-available or under a EULA: Redpanda, the Azure emulators, SQL
+  # Server, Oracle Free, CockroachDB, MongoDB, Redis 8, Splunk, the Pub/Sub
+  # emulator). They run here only: never in an image Loams builds, never in
+  # the default compose profile.
+  connectors-ci-only:
+    name: connectors-ci-only (${{ matrix.family }})
+    needs: changes
+    if: ${{ !cancelled() && github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.families != '[]') }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        family: ${{ fromJSON(github.event_name == 'pull_request' && needs.changes.outputs.families || '["http","kafka","postgres","mysql","sqlserver","objects","kv","search","mongodb","analytics","lakehouse","brokers","cloud","protocols"]') }}
+    env:
+      FAMILY: ${{ matrix.family }}
+      PROFILE: connectors-ci-only
+    steps:
+      - uses: actions/checkout@v7
+      - name: the family's crate and services
+        id: plan
+        run: |
+          docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only \
+            config --format json > "$RUNNER_TEMP/compose.json"
+          services=$(python3 scripts/connectors/compose_services.py \
+            --profile "$PROFILE" --family "$FAMILY" --compose-json "$RUNNER_TEMP/compose.json")
+          echo "services=$services" >> "$GITHUB_OUTPUT"
+          if [ -d "fabric/crates/loams-connector-$FAMILY" ] && [ -n "$services" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "nothing to run: crate loams-connector-$FAMILY $( [ -d "fabric/crates/loams-connector-$FAMILY" ] && echo present || echo absent ), services '${services}'"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: protoc
+        if: steps.plan.outputs.run == 'true'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        if: steps.plan.outputs.run == 'true'
+        with:
+          workspaces: fabric -> target
+          key: connectors-${{ matrix.family }}
+      - name: build the family crate's tests
+        if: steps.plan.outputs.run == 'true'
+        working-directory: fabric
+        run: cargo test -p "loams-connector-$FAMILY" --locked --no-run
+      - name: up (${{ steps.plan.outputs.services }})
+        if: steps.plan.outputs.run == 'true'
+        run: |
+          # shellcheck disable=SC2086 # the service list is space-separated on purpose
+          docker compose -f deploy/fabric/compose.yaml --profile "$PROFILE" up -d --wait --wait-timeout 900 ${{ steps.plan.outputs.services }}
+      - name: suites
+        if: steps.plan.outputs.run == 'true'
+        working-directory: fabric
+        env:
+          LOAMS_CONNECTORS_CI_ONLY_STACK: "1"
+        run: cargo test -p "loams-connector-$FAMILY" --locked
+      - name: service logs
+        if: failure() && steps.plan.outputs.run == 'true'
+        run: docker compose -f deploy/fabric/compose.yaml --profile "$PROFILE" logs --no-color --tail 200
+      - name: down
+        if: always() && steps.plan.outputs.run == 'true'
+        run: docker compose -f deploy/fabric/compose.yaml --profile "$PROFILE" down -v
+
+  # CN2 Task 6, OR-3 and OR-23: every family's suites against real cloud and
+  # SaaS accounts, daily, with the repository secrets `systems.toml` names
+  # (`kind = "nightly"`). Both compose stacks are up as well, so a nightly is
+  # the full suite. A suite whose secrets are not configured is skipped, and a
+  # skipped suite never counts toward `stable` (14 consecutive green
+  # nightlies). `nightly_secrets_are_wired_into_the_nightly_job` keeps the env
+  # block below in step with systems.toml.
+  connectors-nightly:
+    name: connectors-nightly (${{ matrix.family }})
+    if: ${{ !cancelled() && ((github.event_name == 'schedule' && github.event.schedule == '23 4 * * *') || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        family: [http, kafka, postgres, mysql, sqlserver, objects, kv, search, mongodb, analytics, lakehouse, brokers, cloud, protocols]
+    env:
+      FAMILY: ${{ matrix.family }}
+      LOAMS_ADLS_ACCOUNT: ${{ secrets.LOAMS_ADLS_ACCOUNT }}
+      LOAMS_ADLS_KEY: ${{ secrets.LOAMS_ADLS_KEY }}
+      LOAMS_ANTHROPIC_API_KEY: ${{ secrets.LOAMS_ANTHROPIC_API_KEY }}
+      LOAMS_AURORA_MYSQL_URL: ${{ secrets.LOAMS_AURORA_MYSQL_URL }}
+      LOAMS_AURORA_POSTGRES_URL: ${{ secrets.LOAMS_AURORA_POSTGRES_URL }}
+      LOAMS_AWS_ACCESS_KEY_ID: ${{ secrets.LOAMS_AWS_ACCESS_KEY_ID }}
+      LOAMS_AWS_REGION: ${{ secrets.LOAMS_AWS_REGION }}
+      LOAMS_AWS_SECRET_ACCESS_KEY: ${{ secrets.LOAMS_AWS_SECRET_ACCESS_KEY }}
+      LOAMS_AZURE_FUNCTIONS_KEY: ${{ secrets.LOAMS_AZURE_FUNCTIONS_KEY }}
+      LOAMS_AZURE_FUNCTIONS_URL: ${{ secrets.LOAMS_AZURE_FUNCTIONS_URL }}
+      LOAMS_AZURE_SQL_URL: ${{ secrets.LOAMS_AZURE_SQL_URL }}
+      LOAMS_AZURE_STORAGE_ACCOUNT: ${{ secrets.LOAMS_AZURE_STORAGE_ACCOUNT }}
+      LOAMS_AZURE_STORAGE_KEY: ${{ secrets.LOAMS_AZURE_STORAGE_KEY }}
+      LOAMS_CLOUD_RUN_URL: ${{ secrets.LOAMS_CLOUD_RUN_URL }}
+      LOAMS_DATABRICKS_HOST: ${{ secrets.LOAMS_DATABRICKS_HOST }}
+      LOAMS_DATABRICKS_TOKEN: ${{ secrets.LOAMS_DATABRICKS_TOKEN }}
+      LOAMS_DATABRICKS_WAREHOUSE_ID: ${{ secrets.LOAMS_DATABRICKS_WAREHOUSE_ID }}
+      LOAMS_DELTA_TABLE_URI: ${{ secrets.LOAMS_DELTA_TABLE_URI }}
+      LOAMS_EVENTGRID_ENDPOINT: ${{ secrets.LOAMS_EVENTGRID_ENDPOINT }}
+      LOAMS_EVENTGRID_KEY: ${{ secrets.LOAMS_EVENTGRID_KEY }}
+      LOAMS_EVENTHUBS_CONNECTION_STRING: ${{ secrets.LOAMS_EVENTHUBS_CONNECTION_STRING }}
+      LOAMS_GCP_CREDENTIALS_JSON: ${{ secrets.LOAMS_GCP_CREDENTIALS_JSON }}
+      LOAMS_GCP_PROJECT: ${{ secrets.LOAMS_GCP_PROJECT }}
+      LOAMS_GCS_BUCKET: ${{ secrets.LOAMS_GCS_BUCKET }}
+      LOAMS_GITHUB_TOKEN: ${{ secrets.LOAMS_GITHUB_TOKEN }}
+      LOAMS_GITLAB_TOKEN: ${{ secrets.LOAMS_GITLAB_TOKEN }}
+      LOAMS_GOOGLE_WORKSPACE_CREDENTIALS_JSON: ${{ secrets.LOAMS_GOOGLE_WORKSPACE_CREDENTIALS_JSON }}
+      LOAMS_HUBSPOT_TOKEN: ${{ secrets.LOAMS_HUBSPOT_TOKEN }}
+      LOAMS_JIRA_SITE: ${{ secrets.LOAMS_JIRA_SITE }}
+      LOAMS_JIRA_TOKEN: ${{ secrets.LOAMS_JIRA_TOKEN }}
+      LOAMS_JIRA_USER: ${{ secrets.LOAMS_JIRA_USER }}
+      LOAMS_OPENAI_API_KEY: ${{ secrets.LOAMS_OPENAI_API_KEY }}
+      LOAMS_POSTHOG_API_KEY: ${{ secrets.LOAMS_POSTHOG_API_KEY }}
+      LOAMS_POSTHOG_HOST: ${{ secrets.LOAMS_POSTHOG_HOST }}
+      LOAMS_R2_ACCESS_KEY_ID: ${{ secrets.LOAMS_R2_ACCESS_KEY_ID }}
+      LOAMS_R2_ACCOUNT_ID: ${{ secrets.LOAMS_R2_ACCOUNT_ID }}
+      LOAMS_R2_BUCKET: ${{ secrets.LOAMS_R2_BUCKET }}
+      LOAMS_R2_SECRET_ACCESS_KEY: ${{ secrets.LOAMS_R2_SECRET_ACCESS_KEY }}
+      LOAMS_REDPANDA_BROKERS: ${{ secrets.LOAMS_REDPANDA_BROKERS }}
+      LOAMS_REDPANDA_SASL_PASSWORD: ${{ secrets.LOAMS_REDPANDA_SASL_PASSWORD }}
+      LOAMS_REDPANDA_SASL_USERNAME: ${{ secrets.LOAMS_REDPANDA_SASL_USERNAME }}
+      LOAMS_REDSHIFT_DATABASE: ${{ secrets.LOAMS_REDSHIFT_DATABASE }}
+      LOAMS_REDSHIFT_WORKGROUP: ${{ secrets.LOAMS_REDSHIFT_WORKGROUP }}
+      LOAMS_SALESFORCE_CLIENT_ID: ${{ secrets.LOAMS_SALESFORCE_CLIENT_ID }}
+      LOAMS_SALESFORCE_CLIENT_SECRET: ${{ secrets.LOAMS_SALESFORCE_CLIENT_SECRET }}
+      LOAMS_SALESFORCE_INSTANCE_URL: ${{ secrets.LOAMS_SALESFORCE_INSTANCE_URL }}
+      LOAMS_SEGMENT_WRITE_KEY: ${{ secrets.LOAMS_SEGMENT_WRITE_KEY }}
+      LOAMS_SENDGRID_API_KEY: ${{ secrets.LOAMS_SENDGRID_API_KEY }}
+      LOAMS_SERVICEBUS_CONNECTION_STRING: ${{ secrets.LOAMS_SERVICEBUS_CONNECTION_STRING }}
+      LOAMS_SERVICENOW_INSTANCE: ${{ secrets.LOAMS_SERVICENOW_INSTANCE }}
+      LOAMS_SERVICENOW_PASSWORD: ${{ secrets.LOAMS_SERVICENOW_PASSWORD }}
+      LOAMS_SERVICENOW_USER: ${{ secrets.LOAMS_SERVICENOW_USER }}
+      LOAMS_SHOPIFY_SHOP: ${{ secrets.LOAMS_SHOPIFY_SHOP }}
+      LOAMS_SHOPIFY_TOKEN: ${{ secrets.LOAMS_SHOPIFY_TOKEN }}
+      LOAMS_SLACK_BOT_TOKEN: ${{ secrets.LOAMS_SLACK_BOT_TOKEN }}
+      LOAMS_SLACK_SIGNING_SECRET: ${{ secrets.LOAMS_SLACK_SIGNING_SECRET }}
+      LOAMS_STRIPE_API_KEY: ${{ secrets.LOAMS_STRIPE_API_KEY }}
+      LOAMS_TWILIO_ACCOUNT_SID: ${{ secrets.LOAMS_TWILIO_ACCOUNT_SID }}
+      LOAMS_TWILIO_AUTH_TOKEN: ${{ secrets.LOAMS_TWILIO_AUTH_TOKEN }}
+      LOAMS_ZENDESK_SUBDOMAIN: ${{ secrets.LOAMS_ZENDESK_SUBDOMAIN }}
+      LOAMS_ZENDESK_TOKEN: ${{ secrets.LOAMS_ZENDESK_TOKEN }}
+      LOAMS_ZENDESK_USER: ${{ secrets.LOAMS_ZENDESK_USER }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: the family's crate and services
+        id: plan
+        run: |
+          if [ ! -d "fabric/crates/loams-connector-$FAMILY" ]; then
+            echo "nothing to run: crate loams-connector-$FAMILY absent"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only \
+            config --format json > "$RUNNER_TEMP/compose.json"
+          for p in connectors-p2 connectors-ci-only; do
+            echo "${p//-/_}=$(python3 scripts/connectors/compose_services.py \
+              --profile "$p" --family "$FAMILY" --compose-json "$RUNNER_TEMP/compose.json")" >> "$GITHUB_OUTPUT"
+          done
+          echo "run=true" >> "$GITHUB_OUTPUT"
+      - name: protoc
+        if: steps.plan.outputs.run == 'true'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        if: steps.plan.outputs.run == 'true'
+        with:
+          workspaces: fabric -> target
+          key: connectors-${{ matrix.family }}
+      - name: up
+        if: steps.plan.outputs.run == 'true'
+        run: |
+          # shellcheck disable=SC2086 # the service lists are space-separated on purpose
+          services="${{ steps.plan.outputs.connectors_p2 }} ${{ steps.plan.outputs.connectors_ci_only }}"
+          if [ -n "${services// /}" ]; then
+            docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only \
+              up -d --wait --wait-timeout 900 $services
+          fi
+      - name: suites
+        if: steps.plan.outputs.run == 'true'
+        working-directory: fabric
+        env:
+          LOAMS_CONNECTORS_P2_STACK: "1"
+          LOAMS_CONNECTORS_CI_ONLY_STACK: "1"
+        run: cargo test -p "loams-connector-$FAMILY" --locked
+      - name: down
+        if: always() && steps.plan.outputs.run == 'true'
+        run: docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only down -v
+
   # CN1 Task 2's drift checks (design §33 CN-R1): the appendix is regenerated
   # from connectors/registry/catalog.csv and diffed against the design doc, and
   # the Camel and Kestra columns are checked against those projects' own
@@ -180,7 +514,8 @@ jobs:
   # is not there.
   connectors-drift:
     name: connector catalog drift (Camel, Kestra, appendix)
-    if: ${{ !cancelled() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    # The weekly cron only; the daily one is connectors-nightly's.
+    if: ${{ !cancelled() && ((github.event_name == 'schedule' && github.event.schedule == '41 3 * * 1') || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-24.04
     env:
       # A literal path under the runner's temp directory, not `runner.temp` and
