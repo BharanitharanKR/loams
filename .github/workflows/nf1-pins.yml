@@ -7,7 +7,13 @@
 # against every consumer generated from it, the audit file of each `mirror:`
 # source, and no deployable reference to the private neon-archive packages;
 # then test_pins.py. It runs on every PR, so on every one that touches the pin
-# file or a consumer. Task 12 adds `verify`.
+# file or a consumer.
+#
+# verify (Task 12): verify-pins.sh, every pinned image Loams Postgres built is
+# signed by loams-release.yml or loams-sign.yml on the fork's main, attested
+# (provenance, SPDX SBOM with no forbidden licence) and, for a compute image,
+# carries its sources; `mirror:` pins are skipped with a notice. Then
+# test_verify_pins.sh (stub cosign, gh and oras).
 #
 # revs (Task 3): check-pinned-revs.sh, every ostrium-labs fork rev pinned by a
 # Cargo.toml here is reachable from the fork's protected branch or carries a
@@ -59,6 +65,17 @@ jobs:
       - name: test_pinned_revs.py
         if: ${{ !cancelled() }}
         run: python3 -I scripts/nf1/tests/test_pinned_revs.py
+      # cosign v3.0.6 and oras 1.3.1, for verify-pins.sh.
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        if: ${{ !cancelled() }}
+      - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2.0.1
+        if: ${{ !cancelled() }}
+      - name: verify-pins.sh
+        if: ${{ !cancelled() }}
+        run: scripts/nf1/verify-pins.sh
+      - name: test_verify_pins.sh
+        if: ${{ !cancelled() }}
+        run: scripts/nf1/tests/test_verify_pins.sh
 
   # The slow job (it compiles rust-audit-info): only when the mirror scripts,
   # the pin file or this workflow change, and always on dev and on dispatch.
