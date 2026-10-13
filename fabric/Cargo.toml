@@ -29,7 +29,14 @@ arrow = { version = "59", features = ["ffi"] }
 # crates of the same 59 line, not the `arrow` umbrella: the front needs no CSV,
 # JSON or FFI. Apache-2.0.
 arrow-array = "59"
+# The connector SDK's codecs (CN2 Task 5): offsets and validity buffers for
+# nested arrays, and the CSV and NDJSON readers and writers that decode bytes
+# straight to a `RecordBatch`. All three were already in fabric/Cargo.lock
+# through the `arrow` umbrella. Apache-2.0.
+arrow-buffer = "59"
+arrow-csv = "59"
 arrow-ipc = "59"
+arrow-json = "59"
 arrow-schema = "59"
 # `bindgen` over the pinned `chdb.h` (FL2 Ruling 1). Task 0 measured that a
 # hand-written prototype segfaults, so the bindings are generated from the
