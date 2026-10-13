@@ -31,7 +31,10 @@ use axum::response::Response;
 use base64::Engine as _;
 use http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, header};
 
-use super::{Auth, AuthError, AuthErrorKind, Credential, api_key, reason, tailscale};
+use super::{
+    Auth, AuthError, AuthErrorKind, Credential, SessionCredential, api_key, directory, reason,
+    tailscale,
+};
 
 /// The response header naming why a request was refused.
 pub const REASON_HEADER: &str = "loams-auth-reason";
@@ -39,21 +42,29 @@ pub const REASON_HEADER: &str = "loams-auth-reason";
 /// Query parameters that would carry a credential (refused: URLs are logged).
 const QUERY_CREDENTIALS: &[&str] = &["access_token", "token", "api_key", "apikey", "api-key"];
 
-/// The main port's unauthenticated paths (API2 `PUBLIC_RPCS`, plus the
-/// probes).
+/// The main port's unauthenticated paths: [`super::PUBLIC_RPCS`] plus the
+/// HTTP probes (`main_public_paths_are_the_public_rpcs_and_the_probes`).
 pub const MAIN_PUBLIC_PATHS: &[&str] = &[
     "/health",
     "/ready",
     "/grpc.health.v1.Health/Check",
     "/grpc.health.v1.Health/Watch",
     "/loams.instance.v1.InstanceService/GetInstance",
+    "/loams.auth.v1.AuthService/ListProviders",
+    "/loams.auth.v1.AuthService/CompleteSetup",
+    "/loams.auth.v1.AuthService/CreateSession",
+    "/loams.auth.v1.AuthService/DeleteSession",
 ];
+
+/// The one cookie-authenticated RPC that needs no CSRF token: it is a read,
+/// and its answer is how the console learns the token.
+const GET_SESSION: &str = "/loams.auth.v1.AuthService/GetSession";
 
 const ALLOW_METHODS: &str = "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS";
 const ALLOW_HEADERS: &str = "authorization, content-type, accept, connect-protocol-version, \
      connect-timeout-ms, connect-content-encoding, connect-accept-encoding, grpc-timeout, \
      x-grpc-web, x-user-agent, loams-consistency-token, loams-hot, idempotency-key, \
-     loam-session-id";
+     x-csrf-token, loam-session-id";
 const EXPOSE_HEADERS: &str = "grpc-status, grpc-message, grpc-status-details-bin, \
      loams-consistency-token, loams-request-id, loams-auth-reason, www-authenticate, \
      retry-after";
@@ -186,7 +197,18 @@ async fn guard(State(state): State<AuthLayerState>, mut request: Request, next: 
         };
     }
     if !state.auth.enforced() {
-        request.extensions_mut().insert(Auth::dev_loopback());
+        // Loopback only: everyone here is the developer, unless the call
+        // carries a console session that is still good, which names its
+        // person (so the console's sign-in works in `loams dev` too).
+        let principal = match request_credential(&request) {
+            Ok(credential @ Credential::Session(_)) => {
+                state.auth.authenticate(&credential).await.ok()
+            }
+            _ => None,
+        };
+        request
+            .extensions_mut()
+            .insert(principal.unwrap_or_else(Auth::dev_loopback));
         return with_cors(next.run(request).await);
     }
     if credential_in_query(request.uri().query()) {
@@ -200,7 +222,7 @@ async fn guard(State(state): State<AuthLayerState>, mut request: Request, next: 
         return with_cors(next.run(request).await);
     }
     let result = match (
-        credential(request.headers()),
+        request_credential(&request),
         &tailnet_user,
         state.auth.tailscale(),
     ) {
@@ -247,10 +269,44 @@ fn credential_in_query(query: Option<&str>) -> bool {
     })
 }
 
+/// The request's credential: [`credential`]'s headers, then the console's
+/// session cookie. A cookie-authenticated call that is not a `GET` (nor
+/// `GetSession`) must carry the session's `X-CSRF-Token`.
+pub(crate) fn request_credential(request: &Request) -> Result<Credential, AuthError> {
+    match credential(request.headers()) {
+        Err(err) if err.reason == reason::TOKEN_MISSING => {
+            let Some(token) = directory::session_cookie(request.headers()) else {
+                return Err(err);
+            };
+            let csrf = (request.method() != Method::GET && request.uri().path() != GET_SESSION)
+                .then(|| {
+                    request
+                        .headers()
+                        .get(directory::CSRF_HEADER)
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or_default()
+                        .to_owned()
+                });
+            Ok(Credential::Session(SessionCredential { token, csrf }))
+        }
+        other => other,
+    }
+}
+
 /// A bearer, Basic password, `ApiKey` or `api-key` value as a credential.
 fn classify(value: &str) -> Result<Credential, AuthError> {
     let value = value.trim();
-    if api_key::looks_like_key(value) {
+    if directory::looks_like_session(value) {
+        Ok(Credential::Session(SessionCredential {
+            token: value.to_owned(),
+            csrf: None,
+        }))
+    } else if value.starts_with(directory::SESSION_PREFIX) {
+        Err(AuthError::unauthenticated(
+            reason::TOKEN_MALFORMED,
+            "a session token is ls_<43 characters>",
+        ))
+    } else if api_key::looks_like_key(value) {
         Ok(Credential::ApiKey(value.to_owned()))
     } else if value.starts_with(api_key::PREFIX) {
         Err(AuthError::unauthenticated(
@@ -326,7 +382,9 @@ pub(crate) fn credential(headers: &HeaderMap) -> Result<Credential, AuthError> {
             .map_err(|_| malformed("the Cf-Access-Jwt-Assertion header is not text"))?;
         return match classify(value)? {
             jwt @ Credential::Jwt(_) => Ok(jwt),
-            Credential::ApiKey(_) => Err(malformed("Cf-Access-Jwt-Assertion is not a JWT")),
+            Credential::ApiKey(_) | Credential::Session(_) => {
+                Err(malformed("Cf-Access-Jwt-Assertion is not a JWT"))
+            }
         };
     }
     Err(AuthError::unauthenticated(
@@ -394,11 +452,20 @@ pub(crate) fn refuse(request: &HeaderMap, err: &AuthError) -> Response {
             AuthErrorKind::Forbidden => "permission_denied",
             AuthErrorKind::Unavailable => "unavailable",
         };
+        // The reason also rides as the `ErrorInfo` every RPC error carries
+        // (design §44 §7.4), so an SDK branches on it as on any other.
+        let info = loams_proto::loams::errors::v1::ErrorInfo {
+            reason: err.reason.to_owned(),
+            ..Default::default()
+        };
+        let value = base64::engine::general_purpose::STANDARD_NO_PAD
+            .encode(buffa::Message::encode_to_vec(&info));
         json(
             err.status(),
             &serde_json::json!({
                 "code": code,
                 "message": format!("{}: {}", err.reason, err.message),
+                "details": [{"type": "loams.errors.v1.ErrorInfo", "value": value}],
             }),
         )
     } else {
@@ -555,6 +622,54 @@ mod tests {
                 ("authorization", "Bearer a.b.c"),
                 ("authorization", "Bearer d.e.f")
             ])),
+            reason::TOKEN_MALFORMED
+        );
+    }
+
+    #[test]
+    fn main_public_paths_are_the_public_rpcs_and_the_probes() {
+        let mut expected: Vec<&str> = super::super::PUBLIC_RPCS.to_vec();
+        expected.extend(["/health", "/ready"]);
+        expected.sort_unstable();
+        let mut actual = MAIN_PUBLIC_PATHS.to_vec();
+        actual.sort_unstable();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn the_session_cookie_needs_csrf_except_on_get_session() {
+        let token = directory::new_session_token();
+        let request = |method: Method, path: &str| {
+            Request::builder()
+                .method(method)
+                .uri(path)
+                .header(header::COOKIE, format!("loams_session={token}"))
+                .body(Body::empty())
+                .unwrap()
+        };
+        let csrf_of = |r: Request| match request_credential(&r).unwrap() {
+            Credential::Session(s) => s.csrf,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(
+            csrf_of(request(Method::POST, "/loams.admin.v1.OrgService/GetOrg")),
+            Some(String::new())
+        );
+        assert_eq!(csrf_of(request(Method::POST, GET_SESSION)), None);
+        assert_eq!(
+            csrf_of(request(Method::GET, "/loams.admin.v1.OrgService/GetOrg")),
+            None
+        );
+        // A bearer session needs none, and wins over the cookie.
+        let bearer = format!("Bearer {}", directory::new_session_token());
+        assert!(matches!(
+            credential(&headers(&[("authorization", &bearer)])).unwrap(),
+            Credential::Session(SessionCredential { csrf: None, .. })
+        ));
+        assert_eq!(
+            credential(&headers(&[("authorization", "Bearer ls_short")]))
+                .unwrap_err()
+                .reason,
             reason::TOKEN_MALFORMED
         );
     }

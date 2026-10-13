@@ -7577,6 +7577,7 @@ dependencies = [
  "http",
  "http-body",
  "jsonwebtoken",
+ "loams-apps-mock",
  "loams-cache",
  "loams-cloudevents",
  "loams-collection",

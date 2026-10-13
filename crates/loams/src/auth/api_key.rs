@@ -1,5 +1,7 @@
 //! API keys (API2 Task 6): `lk_<26-char ULID>_<32 base62>`, stored only as
-//! argon2id hashes in `LOAMS_API_KEYS_FILE`.
+//! argon2id hashes: in `LOAMS_API_KEYS_FILE` (the operator's bootstrap keys,
+//! this module's [`ApiKeyAuthenticator`]) and in the metastore (the keys
+//! `KeyService/CreateKey` makes, [`super::directory`]).
 //!
 //! The file has one key per line, `<id> <argon2id PHC string> [label]`, where
 //! `<id>` is the key's ULID (not secret: it only picks the hash to check).
@@ -13,7 +15,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 
 use argon2::password_hash::phc::PasswordHash;
@@ -58,26 +60,67 @@ fn parse_key(key: &str) -> Option<&str> {
     (ulid_ok && secret_ok && secret.len() == SECRET_LEN).then_some(id)
 }
 
-/// A new key: `(key, file line)`. The key is shown once; only the line
-/// (with its argon2id hash) is stored.
-pub fn new_key(label: &str) -> (String, String) {
-    let id = ulid::Ulid::generate().to_string();
-    let mut random = [0u8; SECRET_LEN];
-    getrandom::fill(&mut random).unwrap_or_else(|e| panic!("OS randomness unavailable: {e}"));
+/// `len` uniformly random base62 characters from the OS.
+pub(crate) fn random_base62(len: usize) -> String {
     // 62 * 4 = 248: rejecting bytes >= 248 keeps every character uniform.
-    let mut secret = String::with_capacity(SECRET_LEN);
-    let mut pool = random.to_vec();
-    while secret.len() < SECRET_LEN {
+    let mut out = String::with_capacity(len);
+    let mut pool: Vec<u8> = Vec::new();
+    while out.len() < len {
         if pool.is_empty() {
-            pool = vec![0u8; SECRET_LEN];
+            pool = vec![0u8; len.max(16)];
             getrandom::fill(&mut pool).unwrap_or_else(|e| panic!("OS randomness unavailable: {e}"));
         }
         let byte = pool.pop().unwrap_or_default();
         if byte < 248 {
-            secret.push(BASE62[usize::from(byte % 62)] as char);
+            out.push(BASE62[usize::from(byte % 62)] as char);
         }
     }
-    let key = format!("{PREFIX}{id}_{secret}");
+    out
+}
+
+/// A new key and its id: `(lk_<id>_<secret>, id)`. Only the key's
+/// [`hash_key`] is ever stored.
+pub fn generate() -> (String, String) {
+    let id = ulid::Ulid::generate().to_string();
+    let key = format!("{PREFIX}{id}_{}", random_base62(SECRET_LEN));
+    (key, id)
+}
+
+/// The id of `key`, when it has an API key's shape.
+pub fn key_id(key: &str) -> Option<&str> {
+    parse_key(key)
+}
+
+/// At most [`MAX_VERIFICATIONS`] argon2id checks run at once, process-wide
+/// (each takes ~19 MiB): the key file's keys, the metastore's keys and the
+/// console's passwords.
+static VERIFICATIONS: Semaphore = Semaphore::const_new(MAX_VERIFICATIONS);
+
+/// Whether `secret` matches the argon2id PHC string `hash`, checked off the
+/// async runtime.
+pub(crate) async fn verify_hash(secret: &str, hash: &str) -> bool {
+    let Ok(_permit) = VERIFICATIONS.acquire().await else {
+        return false;
+    };
+    let hash = hash.to_owned();
+    let candidate = secret.to_owned();
+    tokio::task::spawn_blocking(move || {
+        PasswordHash::new(&hash)
+            .map(|h| {
+                Argon2::default()
+                    .verify_password(candidate.as_bytes(), &h)
+                    .is_ok()
+            })
+            .unwrap_or(false)
+    })
+    .await
+    .unwrap_or(false)
+}
+
+/// A new key: `(key, file line)`. The key is shown once; only the line
+/// (with its argon2id hash) is stored.
+pub fn new_key(label: &str) -> (String, String) {
+    let (key, id) = generate();
     let label = label.split_whitespace().collect::<Vec<_>>().join("-");
     let line = format!("{id} {} {label}", hash_key(&key))
         .trim_end()
@@ -157,7 +200,6 @@ struct Loaded {
 pub struct ApiKeyAuthenticator {
     path: PathBuf,
     state: Mutex<Loaded>,
-    permits: Arc<Semaphore>,
 }
 
 impl ApiKeyAuthenticator {
@@ -181,7 +223,6 @@ impl ApiKeyAuthenticator {
                 stamp: stamp(path),
                 checked: Instant::now(),
             }),
-            permits: Arc::new(Semaphore::new(MAX_VERIFICATIONS)),
         })
     }
 
@@ -235,26 +276,7 @@ impl ApiKeyAuthenticator {
             }
             entry
         };
-        let _permit = self
-            .permits
-            .clone()
-            .acquire_owned()
-            .await
-            .map_err(|_| invalid())?;
-        let hash = entry.hash.clone();
-        let candidate = key.to_owned();
-        let ok = tokio::task::spawn_blocking(move || {
-            PasswordHash::new(&hash)
-                .map(|h| {
-                    Argon2::default()
-                        .verify_password(candidate.as_bytes(), &h)
-                        .is_ok()
-                })
-                .unwrap_or(false)
-        })
-        .await
-        .unwrap_or(false);
-        if !ok {
+        if !verify_hash(key, &entry.hash).await {
             return Err(invalid());
         }
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -280,7 +302,7 @@ impl Authenticator for ApiKeyAuthenticator {
     async fn authenticate(&self, credential: &Credential) -> Option<Result<Principal, AuthError>> {
         match credential {
             Credential::ApiKey(key) => Some(self.verify(key).await),
-            Credential::Jwt(_) => None,
+            Credential::Jwt(_) | Credential::Session(_) => None,
         }
     }
 }

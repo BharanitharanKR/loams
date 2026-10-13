@@ -2250,6 +2250,9 @@ impl Server {
             }
             (_, Some(_)) => crate::auth::Auth::off(),
         };
+        // The principal store (API2 Tasks 6 and 7): its sessions and API
+        // keys authenticate through `auth` from here on.
+        let principals = crate::auth::Principals::attach(&auth, meta_store.clone(), store.clone());
         let guard = crate::auth::AuthLayerState::new(auth.clone(), &[]);
         let main_guard =
             crate::auth::AuthLayerState::new(auth.clone(), crate::auth::layer::MAIN_PUBLIC_PATHS);
@@ -2667,6 +2670,7 @@ impl Server {
             house,
             #[cfg(feature = "git")]
             git: git.as_ref().map(|g| g.runtime.clone()),
+            principals,
             #[cfg(feature = "live")]
             live,
         };
