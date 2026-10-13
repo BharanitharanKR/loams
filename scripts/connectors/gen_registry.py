@@ -384,6 +384,7 @@ HAND_WRITTEN_FAMILY_ROWS: dict[str, tuple[str, ...]] = {
     "postgres": ("aurora", "cockroachdb", "pgvector"),  # R10.9
     "mysql": ("mariadb",),  # R11.9
     "objects": ("adls-gen2", "azure-blob", "cloudflare-r2", "gcs", "minio-rustfs", "sftp"),  # R13.1
+    "sqlserver": ("azure-sql", "sql-server"),  # R12.9
     "kv": ("cassandra", "dynamodb", "dynamodb-streams", "redis-streams", "valkey"),  # R14.1
     "search": ("opensearch", "qdrant"),  # R15.5
     "mongodb": ("mongodb",),  # R16.12
@@ -545,12 +546,12 @@ NATIVE_FIRST: dict[str, dict] = {
     },
     # Task 12 — the SQL Server family.
     "sql-server": {
-        "ref": family_ref("sqlserver", "sqlserver"),
+        "ref": family_ref("sqlserver", "SqlServerFactory"),
         "position": "sqlserver-lsn",
         "fallback": ("debezium", "io.debezium.connector.sqlserver.SqlServerConnector", ["source"], "CN2 Task 12"),
     },
     "azure-sql": {
-        "ref": family_ref("sqlserver", "sqlserver"),
+        "ref": family_ref("sqlserver", "SqlServerFactory"),
         "profile": "azure-sql",
         "position": "sqlserver-lsn",
     },

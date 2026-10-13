@@ -176,6 +176,7 @@ harness = "loams_connector_mysql::harness::MyHarness"
 systems = ["SQL Server"]
 family = "sqlserver"
 services = [{ kind = "container", compose = "sqlserver", system = "SQL Server" }]
+harness = "loams_connector_sqlserver::harness::SqlHarness"
 
 [systems.oracle]
 systems = ["Oracle Database"]
@@ -222,6 +223,7 @@ services = [
   { kind = "nightly", env = ["LOAMS_AZURE_SQL_URL"], system = "Azure SQL Database" },
 ]
 extra_targets = [{ kind = "container", compose = "sqlserver", system = "SQL Server" }]
+harness = "loams_connector_sqlserver::harness::SqlHarness"
 
 # -------------------------------------------------------------------- nosql --
 
