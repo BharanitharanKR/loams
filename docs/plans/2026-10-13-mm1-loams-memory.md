@@ -1028,3 +1028,17 @@ These are §52 §19's questions, with the task that needs each answer. Every one
 ## Rulings made during execution
 
 (None yet. Task 0 starts this section.)
+
+## Owner rulings (2026-10-13)
+
+The owner accepted the controller's recommendations:
+
+| Question | Ruling |
+|---|---|
+| Q780 | Shared storage with the central isolation rule. A namespace per user can be added later for enterprise. |
+| Q781 | Resolve contradictions when facts are written, using cheap rule-based checks. Hard cases go to dreaming. This is the plan's default. |
+| Q783 | Run LoCoMo internally. Publishing LoCoMo scores waits for a legal check of CC BY-NC 4.0. LongMemEval results may be published. |
+| Q785 / Q786 | No two-way Git mirror at GA: export and import in the Agent Memory Repo format only. The mirror follows once Loams Git can purge history. |
+| Q789 / Q790 | On the desktop, learning from sessions is opt-in. Memory writes to the user's own space need no approval. |
+
+Implementation has not started; the owner will say when.
