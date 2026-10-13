@@ -7641,6 +7641,7 @@ dependencies = [
  "futures",
  "hex",
  "libc",
+ "loams-agentd-connect",
  "loams-agentd-doc",
  "loams-agentd-harness",
  "loams-agentd-link",
@@ -7661,6 +7662,30 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "loams-agentd-connect"
+version = "0.1.0-preview.1"
+dependencies = [
+ "axum 0.8.9",
+ "buffa",
+ "buffa-descriptor",
+ "buffa-types",
+ "chrono",
+ "connectrpc",
+ "connectrpc-build",
+ "futures",
+ "http",
+ "loams-agentd-proto",
+ "loams-agentd-rpc",
+ "loams-agentd-sessions",
+ "reqwest 0.13.5",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

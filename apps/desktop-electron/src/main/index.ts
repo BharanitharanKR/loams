@@ -14,10 +14,11 @@ import {
 import type { EngineState } from "../shared/contracts";
 import { VERSION_ARG } from "../shared/version";
 import { registerChatIpc } from "./agent/ipc.electron";
-import { registerAgentdIpc } from "./agentd/ipc.electron";
-import { createAgentdService } from "./agentd/setup";
 import type { ChatService } from "./agent/service";
 import { registerTools } from "./agent/tools";
+import { agentdDir, readAgentdTarget } from "./agentd/discover";
+import { registerAgentdIpc } from "./agentd/ipc.electron";
+import { createAgentdService } from "./agentd/setup";
 import { appPaths } from "./app-paths";
 import { ConnectorCatalog, catalogPath } from "./connectors/catalog";
 import { registerConnectorsIpc } from "./connectors/ipc.electron";
@@ -289,6 +290,8 @@ const singleInstance = initSingleInstance({
 					{ version: app.getVersion(), username: userInfo().username },
 					() => registry.active().kind,
 				),
+				// SD1 Task 5: the daemon's loams.agentd.v1 listener; main alone reads its token.
+				agentd: () => readAgentdTarget(agentdDir(app.getPath("userData"))),
 			});
 			const open = (): BrowserWindow => {
 				const w = createWindow();
