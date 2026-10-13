@@ -66,7 +66,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     BackendAddr, COMMAND_TIMEOUT, COMPUTE_CTL_INTERNAL_PORT, COMPUTE_CTL_PORT, COMPUTE_PG_PORT,
     ComputeHandle, ComputeLaunch, ComputeRuntime, ResizeOutcome, RuntimeError, RuntimeStatus,
-    is_pinned,
+    check_upcall_token, is_pinned,
 };
 use crate::ids::ComputeId;
 use crate::model::{Cu, EndpointRec};
@@ -631,6 +631,7 @@ impl ComputeRuntime for ComposeRuntime {
         if !is_pinned(&c.image) {
             return invalid(format!("image {:?} is not pinned by digest", c.image));
         }
+        check_upcall_token(c.upcall_token.expose())?;
         if c.cu.0 == 0 {
             return invalid("a compute needs at least 0.25 CU".into());
         }
@@ -777,7 +778,7 @@ impl ComputeRuntime for ComposeRuntime {
 /// A namespace names a compose project and files: a DNS label
 /// (`[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?`), as the Kubernetes runtime's
 /// `loams-pg-<ns>` needs too.
-fn check_namespace(ns: &str) -> Result<(), RuntimeError> {
+pub(crate) fn check_namespace(ns: &str) -> Result<(), RuntimeError> {
     let b = ns.as_bytes();
     let edge = |c: &u8| c.is_ascii_lowercase() || c.is_ascii_digit();
     let ok = !b.is_empty()

@@ -1158,6 +1158,11 @@ enum Command {
     /// key (shown only this once) and the entry to add to the keys file.
     #[cfg(feature = "postgres")]
     PgApiKey(pg_control_cli::PgApiKeyArgs),
+    /// The compute runner (`pg-control --compute-runner`): the one process
+    /// that holds the container runtime's socket, starting only the pinned
+    /// compute images.
+    #[cfg(feature = "postgres")]
+    PgRunner(pg_control_cli::PgRunnerArgs),
 }
 
 /// `loams auth …`: commands that start no server.
@@ -1291,7 +1296,7 @@ fn config(command: Command) -> ServerConfig {
         #[cfg(feature = "live")]
         Command::LiveWorker => unreachable!("loams live-worker starts no server"),
         #[cfg(feature = "postgres")]
-        Command::PgControl(_) | Command::PgApiKey(_) => {
+        Command::PgControl(_) | Command::PgApiKey(_) | Command::PgRunner(_) => {
             unreachable!("loams pg-control starts no engine server")
         }
         Command::Dev {
@@ -1513,6 +1518,7 @@ async fn serve(cli: Cli) -> ExitCode {
     let cli = match cli.command {
         Command::PgControl(args) => return pg_control_cli::run(*args).await,
         Command::PgApiKey(args) => return pg_control_cli::mint(&args),
+        Command::PgRunner(args) => return pg_control_cli::run_runner(args).await,
         command => Cli { command },
     };
     if let Err(err) = arm_failpoints() {

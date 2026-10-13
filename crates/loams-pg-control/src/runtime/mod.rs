@@ -8,6 +8,12 @@
 //! certificates from a local CA; [`images`] names the pinned compute image
 //! of each Postgres major (Task 11).
 //!
+//! **The compute runner** (the preview release stack, R-REL.1): `pg-control`
+//! never holds the container runtime's socket there. A separate process,
+//! `loams pg-runner`, holds it and serves this trait over HTTP
+//! ([`runner`]), checking every call against the images it may run;
+//! `pg-control` drives it through [`remote::RemoteRuntime`].
+//!
 //! **Replace, never restart** (§46 §7.1). A compute that stops is not
 //! started again under the same id: the reconciler starts a new compute
 //! (a new [`ComputeId`]) behind the same address. A runtime therefore never
@@ -22,11 +28,14 @@
 pub mod certs;
 pub mod compose;
 pub mod images;
+pub mod remote;
+pub mod runner;
 
 use std::fmt;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 use crate::ids::ComputeId;
 use crate::model::{ComputeBinding, Cu, EndpointRec};
@@ -51,7 +60,7 @@ pub const COMMAND_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
 /// An endpoint's stable address: a compose host port, or a Kubernetes
 /// Service. It is what `E/`'s `backend_addr` records, as `host:port`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BackendAddr {
     pub host: String,
     pub port: u16,
@@ -117,7 +126,7 @@ pub struct ComputeLaunch {
 }
 
 /// A started compute, as the runtime reports it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputeHandle {
     pub compute_id: ComputeId,
     /// `compute_ctl`'s external API, as `pg-control` reaches it: the `C/`
@@ -129,7 +138,7 @@ pub struct ComputeHandle {
 
 /// What the runtime sees of a compute: its container or Pod, not
 /// `compute_ctl`'s own state (that is `/status`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RuntimeStatus {
     /// No container or Pod: never started, removed, or unknown.
     Missing,
@@ -143,7 +152,7 @@ pub enum RuntimeStatus {
 }
 
 /// The answer to [`ComputeRuntime::resize`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResizeOutcome {
     Applied,
     /// The runtime could not resize now (for example, no room on the
@@ -154,7 +163,7 @@ pub enum ResizeOutcome {
 }
 
 /// Why a runtime call failed. The text never holds a token.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize, Deserialize)]
 pub enum RuntimeError {
     /// A launch, endpoint or address the runtime cannot use; retrying the
     /// same call fails the same way.
@@ -200,6 +209,33 @@ pub trait ComputeRuntime: Send + Sync + 'static {
 
     /// Changes a running compute's CPU and memory (§46 §7.4).
     async fn resize(&self, compute_id: &ComputeId, cu: Cu) -> Result<ResizeOutcome, RuntimeError>;
+}
+
+/// The longest upcall token a runtime takes ([`check_upcall_token`]).
+pub const MAX_UPCALL_TOKEN_BYTES: usize = 8192;
+
+/// Checks a compute's upcall token before a runtime writes it anywhere: 1
+/// to [`MAX_UPCALL_TOKEN_BYTES`] bytes of the characters a JWT (base64url
+/// and dots) or a base64 token uses. Anything else could leave its line in
+/// the compose runtime's env file and set another variable.
+///
+/// # Errors
+///
+/// [`RuntimeError::InvalidArgument`], which never repeats the token.
+pub fn check_upcall_token(token: &str) -> Result<(), RuntimeError> {
+    let ok = !token.is_empty()
+        && token.len() <= MAX_UPCALL_TOKEN_BYTES
+        && token.bytes().all(|b| {
+            b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_' | b'+' | b'/' | b'=')
+        });
+    if ok {
+        Ok(())
+    } else {
+        Err(RuntimeError::InvalidArgument(format!(
+            "the upcall token must be 1 to {MAX_UPCALL_TOKEN_BYTES} bytes of base64url, base64 \
+             and dots"
+        )))
+    }
 }
 
 /// Whether `image` is pinned by digest: `<name>@sha256:<64 lower-case

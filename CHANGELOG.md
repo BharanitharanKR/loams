@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+- **Loams Postgres's control plane in the self-hosted stack.** `--profile postgres-control`
+  runs `pg-control` (`loams.postgres.v1` on `127.0.0.1:7680`, API keys from
+  `secrets/pg-api-keys.json`) beside the Postgres stack, with its computes started on demand
+  and suspended when idle. Neither the engine nor `pg-control` gets a container runtime
+  socket: a separate compute runner, `pg-runner` (`loams pg-runner`, new image
+  `loams-pg-control`), holds it on an internal network only `pg-control` joins, needs a token
+  for every call, and starts nothing but the compute images pinned in
+  `deploy/pins/loams-postgres-images.toml`. Prefer a rootless Podman socket (PG2 ruling
+  R-REL.1).
+
 ### Changed
 - **Loams Live on the main port.** `LiveService` and `LiveAdminService` are served on the
   engine's `--listen` port and on the `tailscale serve` target, behind the engine's auth, so

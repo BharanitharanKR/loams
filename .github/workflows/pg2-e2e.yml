@@ -272,6 +272,12 @@ jobs:
           IT_UPCALL_HOST: host.docker.internal
           IT_EXTRA_HOSTS: host.docker.internal:host-gateway
         run: cargo test -p loams-pg-control --locked --test it_endpoint -- --ignored
+      - name: it_endpoint through the compute runner (R-REL.1)
+        env:
+          IT_UPCALL_HOST: host.docker.internal
+          IT_EXTRA_HOSTS: host.docker.internal:host-gateway
+          IT_COMPUTE_RUNNER: "1"
+        run: cargo test -p loams-pg-control --locked --test it_endpoint -- --ignored it_endpoint_starts_suspends_and_deletes
       - name: logs
         if: failure()
         run: |

@@ -42,5 +42,23 @@ jobs:
         run: |
           docker compose --env-file .env.example --profile '*' config --format json \
             | jq -e '[.services[] | (.ports // [])[] | select((.host_ip // "") != "127.0.0.1")] | length == 0'
+      - name: a container runtime socket only in pg-runner, on an internal network (PG2 R-REL.1)
+        working-directory: deploy/release
+        run: |
+          cfg="$(docker compose --env-file .env.example --profile '*' config --format json)"
+          # Only pg-runner mounts a socket.
+          jq -e '[.services | to_entries[]
+                  | select([(.value.volumes // [])[] | ((.source // "") + " " + (.target // ""))
+                            | test("\\.sock( |$)")] | any)
+                  | .key] == ["pg-runner"]' <<<"$cfg"
+          # pg-runner: its own network only, nothing published, no privilege.
+          jq -e '.services["pg-runner"]
+                 | ((.networks | keys) == ["pg-runner"]) and ((.ports // []) == [])
+                   and (.privileged != true) and (.network_mode == null) and (.pid == null)
+                   and ((.cap_add // []) == [])' <<<"$cfg"
+          # Its network has no route out, and pg-control is its only neighbour.
+          jq -e '.networks["pg-runner"].internal == true' <<<"$cfg"
+          jq -e '[.services | to_entries[] | select((.value.networks // {}) | has("pg-runner")) | .key]
+                 | sort == ["pg-control", "pg-runner"]' <<<"$cfg"
       - name: shellcheck
         run: shellcheck deploy/release/build.sh deploy/release/byoc/install.sh deploy/release/byoc/uninstall.sh
