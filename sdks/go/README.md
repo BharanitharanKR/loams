@@ -20,17 +20,16 @@ Requires **Go 1.24 or newer** — the SDK uses range-over-func iterators
 ## Installing
 
 ```console
-go get loams.dev/go
+go get loams.dev/go@v0.1.0-preview.2
 ```
 
-`loams.dev/go` is a **vanity import path**. Until the `go-import` meta tag is
-served (see [Publishing](#publishing) below), install from the mirror repository:
+Go 1.25 or newer: the module lives in `sdks/go` of the main repository, and the
+`go-import` tag that says so carries a subdirectory, which only Go 1.25 reads
+(see [Publishing](#publishing)). **Preview:** `v0.1.0-preview.*` versions track
+the Loams preview server; `go get loams.dev/go` without a version does not pick
+a prerelease while no release exists, so name the version.
 
-```console
-go get github.com/ostrium-labs/loams-go
-```
-
-or, from a checkout of this repository, with a `replace`:
+From a checkout of this repository, with a `replace`:
 
 ```go
 require loams.dev/go v0.0.0
@@ -165,77 +164,37 @@ hand-written API with no proto behind it, which is what §7.3 says not to do.
 
 ## Publishing
 
-**Not published.** No Go module-proxy account is confirmed, so there is no
-`GOPROXY` push, no tag and no `sdk-go-v*` release from this branch.
-
-### Module path and the mirror repository
+### Module path, repository and tags
 
 - **Module path:** `loams.dev/go`, declared once, in `go.mod`.
-- **Mirror repository:** `github.com/ostrium-labs/loams-go` (D619). It holds the
-  git tags the proxy reads; the module path stays `loams.dev/go`, which is how
-  `go-import` works.
-- **`ostrium-labs/loams-go` does not exist yet.** Creating a GitHub repository is
-  an owner action, and it needs an authenticated owner token. It was not created
-  from this branch and must not be created with a token that turns out not to
-  have the right scope.
+- **Repository:** this one. The module is the `sdks/go` subdirectory of
+  `github.com/ostrium-labs/loams`; there is no mirror repository.
+- **Tags:** a module in a subdirectory is versioned by tags prefixed with that
+  subdirectory, so release `v0.1.0-preview.2` of Loams is tag
+  `sdks/go/v0.1.0-preview.2` on the same commit.
+  `.github/workflows/sdk-release.yml` pushes it on a release tag when the
+  repository variable `SDK_PUBLISH_GO` is `true`, then asks `proxy.golang.org` for
+  the version so the module is cached and in the checksum database.
 
-### The `go-import` meta tag — **BLOCKED, owner action**
+### The `go-import` meta tag (owner action, `loams-cloud`)
 
-For `go get loams.dev/go` to resolve, something has to answer
-`https://loams.dev/go?go-get=1` with:
+For `go get loams.dev/go` to resolve, `https://loams.dev/go?go-get=1` (and
+`https://loams.dev/go/...?go-get=1` for subpackages) must answer, over HTTPS and
+without a bot challenge, with:
 
 ```html
-<meta name="go-import" content="loams.dev/go git https://github.com/ostrium-labs/loams-go">
+<meta name="go-import" content="loams.dev/go git https://github.com/ostrium-labs/loams sdks/go">
 ```
 
-The go command reads that tag, learns where the module lives, and fetches from
-there. Nothing about it can be done from inside this repository: it needs the
-`loams.dev` site to serve it, and the mirror repository to exist.
+The fourth field, `sdks/go`, is the subdirectory (Go 1.25+). As of 2026-10-13
+`loams.dev/go?go-get=1` answers **403**, so nothing resolves yet.
 
-**This is not implemented here and is not claimed to work.** What the owner has to
-do, in order:
+Verify after the first tag, from an empty module:
 
-1. **Create the mirror repository** `github.com/ostrium-labs/loams-go`, public,
-   with a `main` branch. Either empty, or with an initial commit that copies
-   `sdks/go/**` (D619 says an `sdk-mirror` workflow writes it; until that workflow
-   exists, a copy is the interim).
-2. **Serve the meta tag.** Add a route in the `loams-cloud` app that answers
-   `GET /go?go-get=1` with a minimal HTML page:
-
-   ```html
-   <!doctype html>
-   <html><head>
-     <meta name="go-import" content="loams.dev/go git https://github.com/ostrium-labs/loams-go">
-   </head><body>Go module loams.dev/go</body></html>
-   ```
-
-   The tag must be on the **root-relative path `/go`**, and the page must be
-   served over HTTPS with a valid certificate: the go command refuses plain
-   `http://` meta responses, and a redirect loses the tag unless the final
-   response carries it.
-3. **Tag a release.** `git tag v0.1.0 sdk-go-v0.1.0` in the mirror (D615 names
-   `sdk-<lang>-v<semver>` for the release tag and `v<semver>` for the module tag),
-   and push the tag.
-4. **Verify** — this is the check that says it works, and it is the only one:
-
-   ```console
-   GOPROXY=direct go install loams.dev/go/cmd/loams-example@latest
-   ```
-
-   Without the tag and without step 2, `go get loams.dev/go` fails with
-   `invalid version: unknown revision`. The failure names which step is missing,
-   which is why the steps are ordered.
-
-5. **Once the proxy has it**, publishing is `go list -m` plus a push through
-   `proxy.golang.org`, which needs `GONOSUMDB`/`GONOSUMCHECK`-free credentials:
-   `GOPROXY=https://proxy.golang.org go list -m loams.dev/go@latest` after a tag
-   is fetched directly. **Not done here.**
-
-### Release tags
-
-D615 names `sdk-go-v<semver>` as the tag that triggers the release job. **The
-release job stays a dry run**: no registry credentials, no module-proxy account,
-no publish. This branch creates no tag.
+```console
+GOPROXY=direct go list -m loams.dev/go@v0.1.0-preview.2
+GOPROXY=https://proxy.golang.org go list -m loams.dev/go@v0.1.0-preview.2
+```
 
 ## Tests
 

@@ -1390,3 +1390,65 @@ Fork PR ostrium-labs/loams-postgres#4 (branch `loams/nf1-advisories` from `main`
 6. **Fuzzing as built.** `fuzz/` is a member of the fork's workspace (crate `loams-fuzz`), so it shares `Cargo.lock` and the root `[patch]`. A separate workspace would need its own copy of the `neondatabase/rust-postgres` patch for Task 7 to repoint. The proxy's parsers are crate-private, so the proxy gains a `fuzzing` feature, enabled only by the fuzz crate, that adds `proxy::fuzzing`. New dependencies: `libfuzzer-sys` 0.4.13 (2026-06-04) and `arbitrary` 1.4.2 (2025-08-14; 1.5.0 is 6 days old). `deny.toml` allows NCSA (LLVM's libFuzzer) for `libfuzzer-sys` only. The nightly is `nightly-2025-05-10` (1.89.0-nightly, the fork's 1.88.0 era): `nightly-2026-09-15` cannot compile the proxy ("overflow evaluating the requirement … Send" in `serverless/mod.rs`). Bump it together with `rust-toolchain.toml`. The proxy targets run **without** AddressSanitizer. The workspace's `tikv-jemallocator` features make jemalloc replace `malloc`, and under ASan the proxy targets crash with SIGSEGV before libFuzzer starts. Panics and hangs are still found, and the parsers are safe Rust. `cargo fuzz` keeps overflow checks on, so an overflow panic is filed as `high` and can be re-triaged.
 7. **Verification (Actions are disabled in the fork's settings: `actions/permissions` is `enabled: false`, so no workflow runs).** 29 tests in `test_sla.py`, including the six named ones; `fuzz_targets_build` was run locally with `cargo +nightly-2025-05-10 fuzz build`. Dry runs on live data: the feed, real `cargo deny` output, the watch list, `sweep`, and a fuzz finding against the public fork, which was refused. Each target was run locally for 60 seconds. Two targets found crashes within that time. They are not described here: they will be filed privately once the tracker exists. Until then the reproducers are kept outside any repository. `actionlint` is not installed; both workflows were parsed as YAML and their shell steps checked with `bash -n`.
 8. **No required check.** As in Task 4 ruling 6: whoever enables Actions decides whether `loams-advisories / tests` and the fuzz build gate pull requests.
+
+### Task 7 rulings (2026-10-13, at `dev` `21cd2b5f`)
+
+Fork PR ostrium-labs/loams-postgres#5 (branch `loams/nf1-hygiene` from `main` `bea29e18`), merged into `main` as the merge commit `864cc63e` with the organisation admin's PR bypass. One commit (or more) per patch id: `33a2ba84` and `074ee639` LP-0002, `3e395b31` LP-0003, `abe092ca` LP-0004, `cd1bc4b1` and `e8ffc45c` LP-0005, `5f15acc3` and `ce5c7350` LP-0006, `e2ff0f39` and `941c2c32` LP-0008. CodeRabbit (one round, 5 comments): 3 fixed (case-insensitive matching, the hygiene test also runs `cargo deny check sources`, `sla.py` filters per finding), 2 declined with reasons (ruling 6's compose stack; the benches README path is right for `cargo bench`, checked in criterion 0.5.1 and pprof 0.14).
+
+1. **LP-0002.** `scripts/loams/strip-upstream-ci.sh` deleted Neon's 43 workflows. The scripts only they used (`.github/scripts/`, `.github/file-filters.yaml`) went with them, and `.github/actionlint.yml` now lists our workflows' variables (`LOAMS_SLA_REPO`) instead of Neon's 36 variables and runner labels, so `actionlint` passes on every `loams-*.yml`. `.github/actions/` stays for Task 16 to reuse or delete, except `prepare-for-subzero` (LP-0004). `.github/ISSUE_TEMPLATE` and the PR template are Neon's and untouched (issues are off on the fork).
+2. **LP-0003.**
+   - pprof is built with `["criterion", "frame-pointer", "prost-codec"]` and jemalloc_pprof with `["symbolize"]`. Cargo.lock drops `inferno` 0.11.21 and 0.12.0 and the crates only they used (arrayvec, num-format, quick-xml 0.26 and 0.37, rgb, str_stack).
+   - `CDDL-1.0` is out of `deny.toml`, with a comment saying why.
+   - The profiling routes answer `format=svg` with 400 and exactly the plan's body, `{"error":"svg flamegraphs are not built; use format=pprof"}`, before any profile is taken. That body is not Neon's usual `ApiError` shape (`{"msg": …}`).
+   - The five Criterion benches write `Output::Protobuf`, and `pagebench --profile` writes `profile.pb`.
+3. **LP-0004.** Besides the `SUBZERO_ACCESS_TOKEN` blocks, the build stage no longer copies the plan stage's `proxy/Cargo.toml` and `Cargo.lock`, which only carried the `cargo add`. `pgxn/neon/communicator`'s `rest_broker = []` feature stays: it is a feature definition, not a CI feature list. `proxy/README.md` keeps the auth broker instructions (without `--is-rest-broker`) and gains "The REST broker (Data API) is not supported" (Q720's default).
+4. **LP-0005.**
+   - All four `rust-postgres` crates and the `[patch.crates-io]` entry use one rev, `f3cf448f`, the head of `loams/neon`. The lock had `postgres` alone at `1f21e795`, the branch's head when that crate was last updated. `f3cf448f` is 4 commits ahead and changes nothing under `postgres/`, so the code built is the same.
+   - `azure-sdk-for-rust` is pinned at `f64bd572`, `tokio-epoll-uring` at `781989bb` (moved by Task 8), and `framed-websockets` at `34eff3d6`.
+   - Annotated tags `loams-20261013-1` were created on `rust-postgres`, `azure-sdk-for-rust`, `tokio-epoll-uring` and `pg_session_jwt` (`6b08baaf`, the `v0.3.1` commit LP-0006 downloads). `framed-websockets` is archived, so it is read-only and cannot take a tag; its rev is the head of its protected `loams/main`.
+   - Cargo.lock changes only its source lines.
+   - `deny.toml`'s `allow-org` is `ostrium-labs`, and `unknown-git = "deny"`. A probe that pointed one dependency back at `neondatabase` failed `cargo deny check sources`.
+5. **LP-0006.**
+   - `pg_session_jwt` now downloads from the fork's `v0.3.1` tag. The tarball's sha256 is unchanged (`62fec9e4…`, downloaded and compared).
+   - `pgrag` is dropped (Q719), with its stages, onnxruntime, `compute/patches/onnxruntime.patch` and `docker-compose/ext-src/pgrag-src`. `compute/manifest.yaml`'s `neon.unstable_extensions` still names `rag`; Task 21 regenerates it.
+   - `lcov` is **removed**, not taken from Debian. It served Neon's coverage reports, which went with LP-0002, and the CPAN modules it needed are gone too. `scripts/coverage` needs a local lcov.
+   - `ARG REPOSITORY=ghcr.io/ostrium-labs` in the `Dockerfile` and `docker-compose/compute_wrapper/Dockerfile`.
+6. **`check-no-private-sources.sh` is wider than the plan.**
+   - It also checks every `Cargo.toml` and `.gitmodules`.
+   - It matches `neondatabase` (not only `neondatabase/`), ignoring case, so `ghcr.io/neondatabase` without a slash and `neondatabase-labs` fail too.
+   - Full-line comments are allowed. The allowlist (`scripts/loams/private-sources-allowlist.txt`) is empty. `vendor/` is not checked.
+   - Not covered, because it is neither a Dockerfile nor a workflow: `docker-compose/docker-compose.yml`, Neon's extension-test stack. Its default `REPOSITORY` is still `ghcr.io/neondatabase` and its image names are Neon's. It moves to our images with Task 16.
+7. **Tests.** `scripts/loams/tests/test_hygiene.sh` has the named tests:
+   - `upstream_ci_absent`;
+   - `deny_rejects_cddl` (`cargo deny check licenses sources` passes, and a CDDL-1.0 fixture crate fails);
+   - `no_inferno` (`cargo tree --locked --target all -e features -i inferno` finds nothing);
+   - `no_private_sources` (passes on the branch, and fails on `neon-fork-point` in Cargo.lock, the Dockerfiles and the workflows; plus fixtures).
+
+   A new `.github/workflows/loams-hygiene.yml` runs it (a deviation: the plan leaves that to G0; Task 16 folds it in). Also run locally:
+   - `cargo test -p http-utils --lib` (5 passed, including `profile_cpu_svg_is_refused` and `profile_heap_svg_is_refused`);
+   - `cargo check --locked -p pageserver -p proxy -p compute_tools -p storage_controller` on the new sources;
+   - `cargo check --benches` for postgres_ffi, utils, wal_decoder and pageserver;
+   - `test_sla.py` (31), `test_check_patches.py`, `test_governance.py`, `check-patches.py`, `check-dco.sh` and `actionlint` 1.7.7.
+
+   `safekeeper`'s benches need `walproposer`, which needs a full Postgres build, so they were not checked locally.
+8. **Pre-existing, for Task 16's G0.** `cargo fmt --check` and `cargo clippy -D warnings` over the whole workspace already fail at `neon-fork-point`, in Neon's `libs/remote_storage/src/gcs_bucket.rs`: unformatted imports and about 40 unused-import warnings. G0 must fix that file or scope those checks. Every file this task changed passes `rustfmt --check`.
+9. **LP-0008 follow-up (preparing for Actions).** The run logs and run states of `loams-postgres` are public. The changes:
+   - `sla.py` prints nothing for a private finding. Before, `file --kind fuzz` printed the finding's key, which names the crash site. Tests: `test_fuzz_cli_keeps_the_finding_out_of_the_log` and `test_public_findings_are_still_printed_beside_private_ones`.
+   - `loams-fuzz.yml` no longer echoes the fuzzer's exit status.
+   - The filing step runs on every scheduled run, because a skipped step said "no crash".
+   - The job fails only when filing fails.
+   - The fuzz step waits out its time budget after an early stop.
+   - A `tracker` job skips scheduled fuzzing while `LOAMS_SLA_TOKEN` is unset.
+
+   **Owner, before enabling Actions:** a pull request's workflow can restore the default branch's Actions caches, including the fuzz corpus. Keep "Require approval for all outside collaborators" for fork pull request workflows.
+10. **Not built here.** The Dockerfile changes were reviewed but not built: images build in CI (Tasks 9–11), and Actions are disabled on the fork. Until Task 9, the storage `Dockerfile`'s `$REPOSITORY/$IMAGE:$TAG` (`ghcr.io/ostrium-labs/build-tools:pinned`) does not exist.
+
+### Task 8 rulings (2026-10-13, at `dev` `ffe1e091`)
+
+`ostrium-labs/tokio-epoll-uring` PR #2 (branch `loams/nf1-licence`, one commit `1d8152ab`, `Loams-Patch: LP-0007`, made with the git data API: there is no local clone, and none was made) merged into `loams/main` as `5ab61ac8`, tagged `loams-20261013-2`; CodeRabbit: no actionable comments. Fork PR ostrium-labs/loams-postgres#6 (branch `loams/nf1-uring-licence`, `7b26e124`) merged into `main` as `1b928b56`; CodeRabbit was rate-limited (one review an hour on the plan), so it was self-reviewed.
+
+1. **The texts, as declared (Q716's default; no licence chosen or changed).** `LICENSE-MIT` ("Copyright (c) 2023-2026 the tokio-epoll-uring authors (Neon Inc.)") and `LICENSE-APACHE` (the canonical apache.org text, sha256 `cfc7749b…`) at the root. `uring-common/LICENSE-tokio-uring` is `tokio-uring`'s `LICENSE` at `d5e90539bd6d1c518e848298564a098c300866bc`, unchanged: MIT, "Copyright (c) 2021 Carl Lerche". `LICENSING.md` maps the files: the vendored ones are `uring-common/src/buf.rs`, `src/buf/*.rs` and `src/open_options.rs`, each starting with `tokio-uring`'s notice (upstream PRs #24 `91d67e20` and #25 `53c832d3`); `lib.rs`, `io_fd.rs` and `open_options_io_uring_ext.rs` are Neon's (MIT, under `LICENSE-MIT`).
+2. **The pin moved from `781989bb` to `5ab61ac8`** (LP-0005's `tokio-epoll-uring` rev; only the two Cargo.lock source lines change, the crates' manifests are the same). That brings Task 0 ruling 6's five upstream commits (`7adcb121` … `478ab1a3`, the cancelled-`open` file-descriptor leak) plus Task 5's `CODEOWNERS`/`SECURITY.md`. Checked locally in place of G1: tokio-epoll-uring's own workspace tests at `5ab61ac8` (20 + 2 passed, including the cancelled-open tests), and `cargo test -p pageserver --lib virtual_file` with `NEON_PAGESERVER_UNIT_TEST_VIRTUAL_FILE_IOENGINE=tokio-epoll-uring` and `=std-fs` (19 passed each).
+3. **`docs/loams/LICENSING-tokio-epoll-uring.md`** in the fork records the finding, the resolution and what is open. `LOAMS_PATCHES.md` row LP-0007 (drop when upstream publishes licence files that match its manifests).
+4. **Q716 is still open: nothing was posted upstream.** Filing the one issue on `neondatabase/tokio-epoll-uring` is an exception to D231 the owner has not made. The fallback (`io-uring` feature, `loams/nf1-no-uring`) was not started: no counsel finding says the declaration is insufficient.
+5. **`third_party_licences_include_tokio_epoll_uring` lands with Task 10**, whose `THIRD_PARTY_LICENSES.html` it checks (cargo-about needs `about.toml` to point at the repository-root texts, because they are not in the crate's directory).

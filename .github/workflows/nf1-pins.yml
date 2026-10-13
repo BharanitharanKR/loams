@@ -15,7 +15,7 @@
 #
 # mirror (Task 1): mirror-images.sh against a local registry, audit-image.sh on
 # fixture `.dep-v0` payloads, and the README runbook order.
-name: NF1 pins
+name: Postgres pins
 
 on:
   workflow_dispatch:
@@ -28,50 +28,64 @@ permissions:
 
 concurrency:
   group: nf1-pins-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' }}
+  cancel-in-progress: true
 
 jobs:
-  names:
-    name: no pre-rename names (check-names.sh)
+  # names, pins and revs in one job: one runner slot instead of three (the
+  # org's concurrent-job limit is what queues pull requests). Every step runs,
+  # so one failure does not hide another.
+  checks:
+    name: Names, pins and revisions
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: check-names.sh and its tests
-        run: scripts/nf1/tests/test_check_names.sh
-
-  pins:
-    name: pin file and consumers (pins.py check)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: pins.py check
-        run: python3 -I scripts/nf1/pins.py check
-      - name: test_pins.py
-        run: python3 -I scripts/nf1/tests/test_pins.py
-
-  revs:
-    name: pinned fork revisions reachable (check-pinned-revs.sh)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: check-names.sh and its tests
+        if: ${{ !cancelled() }}
+        run: scripts/nf1/tests/test_check_names.sh
+      - name: pins.py check
+        if: ${{ !cancelled() }}
+        run: python3 -I scripts/nf1/pins.py check
+      - name: test_pins.py
+        if: ${{ !cancelled() }}
+        run: python3 -I scripts/nf1/tests/test_pins.py
       - name: check-pinned-revs.sh
+        if: ${{ !cancelled() }}
         run: scripts/nf1/check-pinned-revs.sh .
       - name: test_pinned_revs.py
+        if: ${{ !cancelled() }}
         run: python3 -I scripts/nf1/tests/test_pinned_revs.py
 
+  # The slow job (it compiles rust-audit-info): only when the mirror scripts,
+  # the pin file or this workflow change, and always on dev and on dispatch.
+  mirror-changes:
+    name: Changed paths
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      mirror: ${{ steps.filter.outputs.mirror }}
+    steps:
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            mirror:
+              - "scripts/nf1/**"
+              - "deploy/pins/**"
+              - ".github/workflows/nf1-pins.yml"
+
   mirror:
-    name: mirror and audit scripts (Task 1)
+    name: Mirror and audit scripts
+    needs: mirror-changes
+    if: ${{ !cancelled() && (needs.mirror-changes.result == 'skipped' || needs.mirror-changes.outputs.mirror == 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:

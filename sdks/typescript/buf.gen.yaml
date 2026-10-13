@@ -51,4 +51,6 @@ plugins:
       - package=loams.notifications.v1=@loams/proto/notifications
       - package=loams.errors.v1=@loams/proto/errors
       - package=loams.live.v1=@loams/live/live
+      - package=loams.auth.v1=@loams/proto/auth
+      - package=loams.admin.v1=@loams/proto/admin
 clean: true

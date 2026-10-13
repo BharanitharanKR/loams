@@ -63,4 +63,4 @@ In PR CI, Cassandra runs with `AllowAllAuthenticator`, so the `auth` suite runs 
 
 ## Registry status
 
-`connectors/registry/cassandra.yaml` is still the generated `planned` stub on Camel. The manifest this connector ships is `fabric/crates/loams-connector-kv/manifests/cassandra.yaml`. CN2 Task 2 installs it (ruling R14.1).
+`connectors/registry/cassandra.yaml` is the hand-written manifest this connector ships, with its config schema `connectors/schemas/cassandra.config.json` (ruling R14.1). It stays `planned` until the family's suites are green in CI (OR-23).

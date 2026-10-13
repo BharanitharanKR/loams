@@ -906,3 +906,76 @@ async fn deleted_graphs_are_purged_on_schedule() {
     }
     running.server.shutdown().await.expect("shutdown");
 }
+
+/// GR1 Task 15 (§48 §7.2): a statement's token rides in the `loams-consistency-token` response
+/// header as well as in its message, and a request may send one in that header: a read waits
+/// for it (`consistency_wait`) and is `UNAVAILABLE`/`consistency_wait_timeout` past it, and a
+/// header that is not a token is `INVALID_ARGUMENT`.
+#[cfg(feature = "graph")]
+#[tokio::test]
+async fn consistency_tokens_ride_in_the_header() {
+    let running = Running::start_with(|config| {
+        config.graph.consistency_wait = Duration::from_millis(200);
+    })
+    .await;
+    let (status, _) = running
+        .connect(
+            "/loams.graph.v1.GraphAdminService/CreateGraph",
+            &json!({"namespace": "acme", "name": "kg"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let call = |statement: &str, header: Option<&str>| {
+        let mut request = reqwest::Client::new()
+            .post(format!(
+                "{}/loams.graph.v1.GraphService/Execute",
+                running.base
+            ))
+            .header("content-type", "application/json")
+            .body(json!({"namespace": "acme", "graph": "kg", "statement": statement}).to_string());
+        if let Some(header) = header {
+            request = request.header("loams-consistency-token", header);
+        }
+        async move {
+            let response = request.send().await.expect("execute");
+            let status = response.status();
+            let header = response
+                .headers()
+                .get("loams-consistency-token")
+                .map(|v| v.to_str().expect("ascii").to_string());
+            let body: Value = response.json().await.expect("a JSON body");
+            (status, header, body)
+        }
+    };
+
+    let (status, header, body) = call("INSERT (:N {k: 1})", None).await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{body}");
+    let written = header.expect("the write's token in the header");
+    assert_eq!(body["consistencyToken"], written.as_str(), "{body}");
+
+    // The token read sees the write, and answers the state it read.
+    let (status, header, body) = call("MATCH (n:N) RETURN n.k", Some(&written)).await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{body}");
+    assert_eq!(body["rows"]["rows"][0]["values"][0]["int64"], "1", "{body}");
+    assert_eq!(header.as_deref(), Some(written.as_str()));
+
+    // A token the graph never reaches: the read waits, then is refused.
+    let (stream, offset) = written
+        .strip_prefix("v1:s")
+        .and_then(|rest| rest.split_once("/p0@"))
+        .expect("a graph token");
+    let ahead = format!(
+        "v1:s{stream}/p0@{}",
+        offset.parse::<u64>().expect("an offset") + 50
+    );
+    let started = std::time::Instant::now();
+    let (status, _, body) = call("MATCH (n:N) RETURN n.k", Some(&ahead)).await;
+    assert_eq!(status, reqwest::StatusCode::SERVICE_UNAVAILABLE, "{body}");
+    assert_eq!(reason(&body), "consistency_wait_timeout");
+    assert!(started.elapsed() >= Duration::from_millis(200));
+
+    let (status, _, body) = call("MATCH (n:N) RETURN n.k", Some("not-a-token")).await;
+    assert_eq!(status, reqwest::StatusCode::BAD_REQUEST, "{body}");
+    assert_eq!(reason(&body), "invalid_argument");
+    running.server.shutdown().await.expect("shutdown");
+}

@@ -1,4 +1,4 @@
-name: Desktop signing (SignPath, called)
+name: Desktop sign
 
 # Reusable signing step for the Loams Desktop release (desktop-electron-release.yml, plan AP1e
 # Task 31). It reuses release-sign.yml's SignPath pattern -- the same organisation, project and API

@@ -1,2 +1,4 @@
 # The CMake build directory. Generated, and a consumer builds their own.
 build/
+# ctest output when it is run from this directory rather than the build directory.
+Testing/
