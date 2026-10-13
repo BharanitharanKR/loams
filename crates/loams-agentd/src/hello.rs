@@ -30,6 +30,10 @@ pub const BUILD_SHA: &str = match option_env!("LOAMS_BUILD_SHA") {
     None => "unknown",
 };
 
+/// The daemon's features, in `Hello` and `GetHost` (SD1 Shared contracts):
+/// `studio.v1` is the `loams.agentd.v1` Connect surface (SD1 Task 5).
+pub const FEATURES: &[&str] = &[loams_agentd_connect::FEATURE];
+
 /// How long [`probe`] waits for a daemon to answer.
 const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -52,7 +56,10 @@ impl DaemonInfo {
             pid: self.pid,
             started_at_ms: self.started_at_ms,
             role,
-            features: Vec::new(),
+            features: FEATURES
+                .iter()
+                .map(|feature| (*feature).to_string())
+                .collect(),
         }
     }
 }
@@ -97,15 +104,20 @@ impl RpcService for HelloService {
     }
 }
 
-/// Say `Hello` to the daemon on loopback `port` as the CLI, with the main
-/// `token` (the contents of `agentd.token`).
-pub async fn probe(port: u16, token: &str) -> Result<HelloReply, RpcError> {
-    let hello = Hello {
+/// The CLI's `Hello`.
+pub fn cli_hello() -> Hello {
+    Hello {
         client: ClientKind::Cli,
         client_version: VERSION.to_string(),
         protocol: AGENTD_PROTOCOL,
-    };
-    let params = serde_json::to_value(&hello).map_err(|e| RpcError::BadParams(e.to_string()))?;
+    }
+}
+
+/// Say `Hello` to the daemon on loopback `port` as the CLI, with the main
+/// `token` (the contents of `agentd.token`).
+pub async fn probe(port: u16, token: &str) -> Result<HelloReply, RpcError> {
+    let params =
+        serde_json::to_value(cli_hello()).map_err(|e| RpcError::BadParams(e.to_string()))?;
     tokio::time::timeout(PROBE_TIMEOUT, async {
         let client =
             loams_agentd_rpc::connect_ws_with_token(&format!("ws://127.0.0.1:{port}"), token)

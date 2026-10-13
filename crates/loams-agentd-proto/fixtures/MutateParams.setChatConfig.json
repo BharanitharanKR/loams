@@ -1,0 +1,13 @@
+{
+  "chatId": "chat-1",
+  "config": {
+    "harness": "claude-code",
+    "model": "claude-sonnet",
+    "modelOptions": {
+      "effort": "high"
+    },
+    "reasoning": "high",
+    "sandbox": "workspace-write"
+  },
+  "op": "setChatConfig"
+}

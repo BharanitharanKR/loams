@@ -20,6 +20,9 @@ allow = [
     "BSL-1.0",
     # libbz2-rs-sys, via datafusion-datasource
     "bzip2-1.0.6",
+    # BSD Zero Clause (tslib, via echarts in the console). Owner, 2026-10-13
+    # (SD1 ruling T2-6): allowed everywhere, for crates and npm alike.
+    "0BSD",
     # borrow-or-share 0.2.4, via fluent-uri -> referencing -> jsonschema 0.58,
     # which loams-flow's manifest validator pulls in (CN1 Task 1). MIT-0 is
     # OSI-approved and is MIT without the attribution clause; it is a transitive
@@ -56,6 +59,15 @@ ignore = [
     # only through sqlx-mysql, which uses it for the RSA password exchange of
     # caching_sha2_password/sha256_password on a non-TLS connection.
     { id = "RUSTSEC-2023-0071", reason = "rsa via sqlx-mysql: used only for RSA password exchange on non-TLS MySQL connections; Loams connects to TiDB over TLS or the cluster network with mysql_native_password (§21 §11.2)" },
+    # quick-xml 0.39.4 through object_store 0.13.2 (CN2 Task 13), which pins
+    # `^0.39`; the fix is 0.41. object_store must stay on 0.13.2 while parquet
+    # 59 and deltalake 1.1.0 need it (CN2 R0.13). Both are denial-of-service
+    # bugs in parsing XML; object_store parses only the list and error
+    # responses of the store endpoint the instance names, behind the egress
+    # check. CN2 ruling R13.7; lifted when the workspace moves to arrow 60 and
+    # object_store 0.14.
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.39 via object_store 0.13.2 (CN2 R0.13, R13.7): parses only the configured object store's responses; fixed by moving to object_store 0.14 with arrow 60" },
+    { id = "RUSTSEC-2026-0195", reason = "quick-xml 0.39 via object_store 0.13.2 (CN2 R0.13, R13.7): parses only the configured object store's responses; fixed by moving to object_store 0.14 with arrow 60" },
 ]
 
 [sources]

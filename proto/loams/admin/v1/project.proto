@@ -1,0 +1,245 @@
+syntax = "proto3";
+
+// Projects, who may use them, and their environments (design §44 §5.2, §19
+// P9; API2 Task 7). Replaces the console's `/api/v1/projects/...` REST
+// routes for projects, access and environments, one RPC per route. The
+// package rules are in `common.proto`.
+//
+// `GetEnvironmentActivity` is §44 §5.2's `GetEnvironmentUsage`, renamed: the
+// plan's global constraint (D220, D552) forbids an RPC, field or SDK module
+// named `usage`. It answers what an environment did (queries, writes and
+// storage per day), which is an operational read, not a meter (API2 ruling
+// 6/7.4).
+package loams.admin.v1;
+
+import "google/protobuf/timestamp.proto";
+import "loams/admin/v1/common.proto";
+import "loams/options/v1/options.proto";
+
+// Projects, project access and environments.
+service ProjectService {
+  option (loams.options.v1.module) = {
+    name: "admin.projects"
+    summary: "Projects, project access and environments."
+  };
+
+  // The org's projects. (replaces `GET /api/v1/projects`)
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {
+      name: "list"
+      pagination: "projects:next_page_token"
+    };
+  }
+  // Creates a project by slug. (replaces `POST /api/v1/projects`)
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse) {
+    option (loams.options.v1.facade) = {name: "create"};
+  }
+  // One project. (replaces `GET /api/v1/projects/{project}`)
+  rpc GetProject(GetProjectRequest) returns (GetProjectResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {name: "get"};
+  }
+  // Who holds a role on the project. (replaces `GET /api/v1/projects/{project}/access`)
+  rpc ListAccess(ListAccessRequest) returns (ListAccessResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {
+      name: "listAccess"
+      pagination: "grants:next_page_token"
+    };
+  }
+  // Gives a user or a team a role on the project, replacing the role it
+  // held. (replaces `POST /api/v1/projects/{project}/access`)
+  rpc GrantAccess(GrantAccessRequest) returns (GrantAccessResponse) {
+    option idempotency_level = IDEMPOTENT;
+    option (loams.options.v1.facade) = {name: "grantAccess"};
+  }
+  // The project's environments.
+  // (replaces `GET /api/v1/projects/{project}/environments`)
+  rpc ListEnvironments(ListEnvironmentsRequest) returns (ListEnvironmentsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {
+      name: "listEnvironments"
+      pagination: "environments:next_page_token"
+    };
+  }
+  // Creates an environment by slug, with its namespace.
+  // (replaces `POST /api/v1/projects/{project}/environments`)
+  rpc CreateEnvironment(CreateEnvironmentRequest) returns (CreateEnvironmentResponse) {
+    option (loams.options.v1.facade) = {name: "createEnvironment"};
+  }
+  // One environment.
+  // (replaces `GET /api/v1/projects/{project}/environments/{environment}`)
+  rpc GetEnvironment(GetEnvironmentRequest) returns (GetEnvironmentResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {name: "getEnvironment"};
+  }
+  // Queries, writes and storage per day for the current month.
+  // (replaces `GET /api/v1/projects/{project}/environments/{environment}/usage`)
+  rpc GetEnvironmentActivity(GetEnvironmentActivityRequest) returns (GetEnvironmentActivityResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {name: "getEnvironmentActivity"};
+  }
+}
+
+// A project: a group of environments, agents and keys.
+message Project {
+  string id = 1;
+  // Unique in the org; the name requests use.
+  string slug = 2;
+  string name = 3;
+  string description = 4;
+  google.protobuf.Timestamp created_at = 5;
+  int32 environment_count = 6;
+  int32 agent_count = 7;
+}
+
+// One role on a project, held by a user or a team.
+message Grant {
+  string id = 1;
+  SubjectRef subject = 2;
+  ProjectRole role = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+// An environment of a project: one engine namespace.
+message Environment {
+  string id = 1;
+  // Unique in the project; the name requests use.
+  string slug = 2;
+  string name = 3;
+  // The project's slug.
+  string project = 4;
+  // The engine namespace this environment is (1:1).
+  string namespace = 5;
+  // Destructive actions need the project admin role and an approval.
+  bool protected = 6;
+  string region = 7;
+  string bucket = 8;
+  google.protobuf.Timestamp created_at = 9;
+  EnvironmentStats stats = 10;
+}
+
+// An environment's size and its last day's traffic.
+message EnvironmentStats {
+  int64 collections = 1;
+  int64 documents = 2;
+  int64 storage_bytes = 3;
+  int64 queries_24h = 4;
+  int64 writes_24h = 5;
+}
+
+// One day of an environment's traffic and size.
+message ActivityDay {
+  // The UTC day, `YYYY-MM-DD`.
+  string date = 1;
+  int64 queries = 2;
+  int64 writes = 3;
+  int64 storage_bytes = 4;
+}
+
+message ListProjectsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListProjectsResponse {
+  repeated Project projects = 1;
+  string next_page_token = 2;
+}
+
+message CreateProjectRequest {
+  string name = 1;
+  // Derived from `name` when empty.
+  string slug = 2;
+  string description = 3;
+}
+
+message CreateProjectResponse {
+  Project project = 1;
+}
+
+message GetProjectRequest {
+  // The project's slug.
+  string project = 1;
+}
+
+message GetProjectResponse {
+  Project project = 1;
+}
+
+message ListAccessRequest {
+  // The project's slug.
+  string project = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListAccessResponse {
+  repeated Grant grants = 1;
+  string next_page_token = 2;
+}
+
+message GrantAccessRequest {
+  // The project's slug.
+  string project = 1;
+  // A user or a team; `name` is not read.
+  SubjectRef subject = 2;
+  ProjectRole role = 3;
+}
+
+message GrantAccessResponse {
+  Grant grant = 1;
+}
+
+message ListEnvironmentsRequest {
+  // The project's slug.
+  string project = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListEnvironmentsResponse {
+  repeated Environment environments = 1;
+  string next_page_token = 2;
+}
+
+message CreateEnvironmentRequest {
+  // The project's slug.
+  string project = 1;
+  string name = 2;
+  // Derived from `name` when empty.
+  string slug = 3;
+  bool protected = 4;
+}
+
+message CreateEnvironmentResponse {
+  Environment environment = 1;
+}
+
+message GetEnvironmentRequest {
+  // The project's slug.
+  string project = 1;
+  // The environment's slug.
+  string environment = 2;
+}
+
+message GetEnvironmentResponse {
+  Environment environment = 1;
+}
+
+message GetEnvironmentActivityRequest {
+  // The project's slug.
+  string project = 1;
+  // The environment's slug.
+  string environment = 2;
+}
+
+message GetEnvironmentActivityResponse {
+  // The environment's slug.
+  string environment = 1;
+  google.protobuf.Timestamp period_start = 2;
+  google.protobuf.Timestamp period_end = 3;
+  // One entry per day of the period so far, oldest first.
+  repeated ActivityDay series = 4;
+}

@@ -19,6 +19,29 @@
 cmake_minimum_required(VERSION 3.20)
 project(loams-cpp VERSION 0.1.0 LANGUAGES CXX)
 
+# The SDK's release version. CMake's `project(VERSION)` is numeric only, so the
+# SemVer prerelease lives here; `scripts/sdk/sdk-version.py` sets both lines and
+# the release workflow checks them against the tag. It is compiled into
+# `loams::SdkVersion()` and the user agent.
+set(LOAMS_SDK_VERSION "0.1.0-preview.2")
+
+# Tests and the quickstart are on for a checkout of this repository and off for a
+# consumer: the release's source archive carries no `sdks/fixtures` corpus, and a
+# project that pulls this in with add_subdirectory/FetchContent wants the library.
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  set(LOAMS_TOP_LEVEL ON)
+else()
+  set(LOAMS_TOP_LEVEL OFF)
+endif()
+if(LOAMS_TOP_LEVEL AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../fixtures")
+  set(LOAMS_HAVE_CORPUS ON)
+else()
+  set(LOAMS_HAVE_CORPUS OFF)
+endif()
+option(LOAMS_BUILD_TESTS "Build the conformance suite (needs ../fixtures and ../conformance)" ${LOAMS_HAVE_CORPUS})
+option(LOAMS_BUILD_EXAMPLES "Build the quickstart" ${LOAMS_TOP_LEVEL})
+option(LOAMS_INSTALL "Install the library and its CMake config package" ON)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -68,7 +91,9 @@ add_library(loams_gen STATIC ${LOAMS_GEN_SOURCES} ${LOAMS_GEN_HEADERS})
 target_include_directories(loams_gen PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/gen>
   $<INSTALL_INTERFACE:include/loams-gen>)
-target_include_directories(loams_gen SYSTEM PUBLIC ${Protobuf_INCLUDE_DIRS})
+# Build tree only: an installed consumer gets protobuf's include path from
+# PkgConfig::LOAMS_PROTOBUF, which loamsConfig.cmake recreates on its machine.
+target_include_directories(loams_gen SYSTEM PUBLIC $<BUILD_INTERFACE:${Protobuf_INCLUDE_DIRS}>)
 target_link_libraries(loams_gen PUBLIC PkgConfig::LOAMS_PROTOBUF)
 # protoc's output is generated code, not this SDK's code: warnings stay off it.
 set_source_files_properties(${LOAMS_GEN_SOURCES} PROPERTIES COMPILE_OPTIONS "-w")
@@ -84,7 +109,12 @@ target_link_libraries(loams
   PUBLIC loams_gen PkgConfig::LOAMS_PROTOBUF
   PRIVATE CURL::libcurl Threads::Threads)
 target_compile_options(loams PRIVATE $<$<BOOL:${CMAKE_CXX_COMPILER_ID}>:-Wno-unused-parameter>)
-target_link_libraries(loams PRIVATE loams_warnings)
+target_compile_definitions(loams PRIVATE LOAMS_SDK_VERSION="${LOAMS_SDK_VERSION}")
+# BUILD_INTERFACE: a static library exports its private link items, and the
+# warning flags are this repository's policy, not something to impose on a consumer.
+target_link_libraries(loams PRIVATE $<BUILD_INTERFACE:loams_warnings>)
+add_library(loams::loams ALIAS loams)
+add_library(loams::loams_gen ALIAS loams_gen)
 
 # --- Tests ------------------------------------------------------------------------------------------
 #
@@ -99,6 +129,7 @@ target_link_libraries(loams PRIVATE loams_warnings)
 # because a target named `cpp_*` would put a C++ prefix on something that is not
 # part of the SDK. `required.mjs` only ever sees the ctest name, which is what
 # `run-test.sh` hands to `ctest -R`.
+if(LOAMS_BUILD_TESTS)
 enable_testing()
 
 # The shared test support: assertions, the corpus reader, the three-tier fixture
@@ -141,12 +172,41 @@ endforeach()
 add_executable(conformance_test_names tests/test_names.cpp)
 target_link_libraries(conformance_test_names PRIVATE loams loams_warnings)
 add_test(NAME cpp_conformance_test_names COMMAND conformance_test_names)
+endif()
 
 # The quickstart is compiled, so a change that breaks it breaks the build rather
 # than sitting in the tree broken until someone runs it by hand.
-add_executable(quickstart examples/quickstart/main.cpp)
-target_link_libraries(quickstart PRIVATE loams)
+if(LOAMS_BUILD_EXAMPLES)
+  add_executable(quickstart examples/quickstart/main.cpp)
+  target_link_libraries(quickstart PRIVATE loams)
+endif()
 
-install(TARGETS loams loams_gen ARCHIVE DESTINATION lib)
-install(DIRECTORY include/loams DESTINATION include)
-install(DIRECTORY gen/loams DESTINATION include/loams-gen)
+# --- Install: the library, its headers and a CMake config package ------------------------------------
+#
+# `find_package(loams CONFIG REQUIRED)` then `target_link_libraries(app PRIVATE loams::loams)`.
+# The config file finds protobuf (through pkg-config, for the reason above), libcurl
+# and Threads on the consumer's machine; the installed protobuf must be the release
+# the stubs were generated for (36.1, see README.md).
+if(LOAMS_INSTALL)
+  include(GNUInstallDirs)
+  include(CMakePackageConfigHelpers)
+  set(LOAMS_CMAKE_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/loams")
+  install(TARGETS loams loams_gen EXPORT loamsTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  install(DIRECTORY include/loams DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+  install(DIRECTORY gen/loams DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/loams-gen
+    FILES_MATCHING PATTERN "*.h")
+  install(EXPORT loamsTargets NAMESPACE loams:: DESTINATION ${LOAMS_CMAKE_DIR})
+  configure_package_config_file(cmake/loamsConfig.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/loamsConfig.cmake"
+    INSTALL_DESTINATION ${LOAMS_CMAKE_DIR})
+  # 0.y.z: a minor bump may break, so only the same minor is compatible.
+  write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/loamsConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION} COMPATIBILITY SameMinorVersion)
+  install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/loamsConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/loamsConfigVersion.cmake"
+    DESTINATION ${LOAMS_CMAKE_DIR})
+  install(FILES LICENSE NOTICE DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/loams)
+endif()

@@ -21,10 +21,24 @@ if TYPE_CHECKING:
     from loams.runtime.options import CallOptions
 from connectrpc.method import IdempotencyLevel, MethodInfo
 from google.protobuf.message import Message
+from loams.admin.v1.org_pb2 import AddTeamMemberRequest, AddTeamMemberResponse, CreateInvitationRequest, CreateInvitationResponse, CreateTeamRequest, CreateTeamResponse, GetOrgRequest, GetOrgResponse, GetTeamRequest, GetTeamResponse, ListInvitationsRequest, ListInvitationsResponse, ListMembersRequest, ListMembersResponse, ListTeamsRequest, ListTeamsResponse, RemoveMemberRequest, RemoveMemberResponse, UpdateOrgRequest, UpdateOrgResponse
+from loams.admin.v1.agent_pb2 import CreateAgentRequest, CreateAgentResponse, CreateServiceAccountRequest, CreateServiceAccountResponse, CreateTrustPolicyRequest, CreateTrustPolicyResponse, GetAgentRequest, GetAgentResponse, ListAgentTokensRequest, ListAgentTokensResponse, ListAgentsRequest, ListAgentsResponse, ListServiceAccountsRequest, ListServiceAccountsResponse, ListTrustPoliciesRequest, ListTrustPoliciesResponse, ResumeAgentRequest, ResumeAgentResponse, SuspendAgentRequest, SuspendAgentResponse, UpdateAgentRequest, UpdateAgentResponse
+from loams.admin.v1.audit_pb2 import ListAuditEventsRequest, ListAuditEventsResponse, WatchAuditEventsRequest, WatchAuditEventsResponse
+from loams.admin.v1.key_pb2 import CreateKeyRequest, CreateKeyResponse, ListKeysRequest, ListKeysResponse, RevokeKeyRequest, RevokeKeyResponse, RevokeTokenRequest, RevokeTokenResponse
+from loams.admin.v1.project_pb2 import CreateEnvironmentRequest, CreateEnvironmentResponse, CreateProjectRequest, CreateProjectResponse, GetEnvironmentActivityRequest, GetEnvironmentActivityResponse, GetEnvironmentRequest, GetEnvironmentResponse, GetProjectRequest, GetProjectResponse, GrantAccessRequest, GrantAccessResponse, ListAccessRequest, ListAccessResponse, ListEnvironmentsRequest, ListEnvironmentsResponse, ListProjectsRequest, ListProjectsResponse
+from loams.admin.v1.org_connect import OrgServiceClient, OrgServiceClientSync
+from loams.admin.v1.agent_connect import AgentServiceClient, AgentServiceClientSync
+from loams.admin.v1.audit_connect import AuditServiceClient, AuditServiceClientSync
+from loams.admin.v1.key_connect import KeyServiceClient, KeyServiceClientSync
+from loams.admin.v1.project_connect import ProjectServiceClient, ProjectServiceClientSync
+from loams.auth.v1.auth_pb2 import CompleteSetupRequest, CompleteSetupResponse, CreateSessionRequest, CreateSessionResponse, DecideConsentRequest, DecideConsentResponse, DeleteSessionRequest, DeleteSessionResponse, GetSessionRequest, GetSessionResponse, ListProvidersRequest, ListProvidersResponse
+from loams.auth.v1.auth_connect import AuthServiceClient, AuthServiceClientSync
 from loams.instance.v1.instance_pb2 import GetInstanceRequest, GetInstanceResponse, WhoAmIRequest, WhoAmIResponse
 from loams.instance.v1.instance_connect import InstanceServiceClient, InstanceServiceClientSync
-from loams.live.v1.live_pb2 import DeployRequest, DeployResponse, ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition, WatchRequest
+from loams.live.v1.live_pb2 import ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition, WatchRequest
+from loams.live.v1.admin_pb2 import ActivateDeploymentRequest, ActivateDeploymentResponse, DeployRequest, DeployResponse, GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse, ListDeploymentsRequest, ListDeploymentsResponse, TailLogsRequest, TailLogsResponse
 from loams.live.v1.live_connect import LiveServiceClient, LiveServiceClientSync
+from loams.live.v1.admin_connect import LiveAdminServiceClient, LiveAdminServiceClientSync
 
 PROTO_REV: Final[str] = "v1"
 """The proto revision this SDK was generated from (`LOAMS_PROTO_REV`,
@@ -69,9 +83,30 @@ Reason = Literal[
     "quota_exceeded",
     "storage_unavailable",
     "secret_already_issued",
+    "repo_not_found",
+    "repo_already_exists",
+    "repo_deleting",
+    "ref_stale",
+    "ref_protected",
+    "out_of_scope",
+    "object_format_unsupported",
+    "fork_too_deep",
+    "sequencer_unavailable",
+    "idempotency_key_reused",
+    "workspace_not_found",
+    "workspace_fenced",
+    "workspace_read_only",
+    "workspace_name_taken",
+    "object_missing",
+    "secret_detected",
+    "env_unsealed",
+    "env_access_denied",
+    "env_foreign_reference",
     "live_bad_cursor",
     "live_worker_crashed",
     "live_deploy_conflict",
+    "live_schema_violation",
+    "live_index_not_ready",
     "invalid_argument",
     "not_found",
     "already_exists",
@@ -129,9 +164,30 @@ REASONS: Final[tuple[Reason, ...]] = (
     "quota_exceeded",
     "storage_unavailable",
     "secret_already_issued",
+    "repo_not_found",
+    "repo_already_exists",
+    "repo_deleting",
+    "ref_stale",
+    "ref_protected",
+    "out_of_scope",
+    "object_format_unsupported",
+    "fork_too_deep",
+    "sequencer_unavailable",
+    "idempotency_key_reused",
+    "workspace_not_found",
+    "workspace_fenced",
+    "workspace_read_only",
+    "workspace_name_taken",
+    "object_missing",
+    "secret_detected",
+    "env_unsealed",
+    "env_access_denied",
+    "env_foreign_reference",
     "live_bad_cursor",
     "live_worker_crashed",
     "live_deploy_conflict",
+    "live_schema_violation",
+    "live_index_not_ready",
     "invalid_argument",
     "not_found",
     "already_exists",
@@ -185,9 +241,30 @@ REASON_CODES: Final[dict[Reason, str]] = {
     "quota_exceeded": "resource_exhausted",
     "storage_unavailable": "unavailable",
     "secret_already_issued": "failed_precondition",
+    "repo_not_found": "not_found",
+    "repo_already_exists": "already_exists",
+    "repo_deleting": "failed_precondition",
+    "ref_stale": "aborted",
+    "ref_protected": "failed_precondition",
+    "out_of_scope": "permission_denied",
+    "object_format_unsupported": "unimplemented",
+    "fork_too_deep": "failed_precondition",
+    "sequencer_unavailable": "unavailable",
+    "idempotency_key_reused": "failed_precondition",
+    "workspace_not_found": "not_found",
+    "workspace_fenced": "aborted",
+    "workspace_read_only": "failed_precondition",
+    "workspace_name_taken": "already_exists",
+    "object_missing": "failed_precondition",
+    "secret_detected": "failed_precondition",
+    "env_unsealed": "invalid_argument",
+    "env_access_denied": "permission_denied",
+    "env_foreign_reference": "permission_denied",
     "live_bad_cursor": "invalid_argument",
     "live_worker_crashed": "internal",
     "live_deploy_conflict": "failed_precondition",
+    "live_schema_violation": "invalid_argument",
+    "live_index_not_ready": "failed_precondition",
     "invalid_argument": "invalid_argument",
     "not_found": "not_found",
     "already_exists": "already_exists",
@@ -221,7 +298,9 @@ Streaming = Literal["unary", "server"]
 
 PROTO_PACKAGES: Final[tuple[str, ...]] = (
     "google.protobuf",
+    "loams.admin.v1",
     "loams.approvals.v1",
+    "loams.auth.v1",
     "loams.collection.v1",
     "loams.devices.v1",
     "loams.errors.v1",
@@ -234,6 +313,7 @@ PROTO_PACKAGES: Final[tuple[str, ...]] = (
     "loams.operations.v1",
     "loams.options.v1",
     "loams.postgres.v1",
+    "loams.repos.v1",
 )
 
 @dataclass(frozen=True, slots=True)
@@ -282,6 +362,612 @@ class ModuleBinding:
 
 #: Every annotated service, as the module catalogue. Order is by module name.
 MODULES: Final[tuple[ModuleBinding, ...]] = (
+    ModuleBinding(
+        name="admin.agents",
+        summary="Agents, their tokens and trust policies, and service accounts.",
+        service="loams.admin.v1.AgentService",
+        package="loams.admin.v1",
+        unstable=False,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="admin.agents",
+                name="create",
+                proto_name="create",
+                method="CreateAgent",
+                rpc="loams.admin.v1.AgentService/CreateAgent",
+                service="loams.admin.v1.AgentService",
+                package="loams.admin.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.agents",
+                name="create_service_account",
+                proto_name="createServiceAccount",
+                method="CreateServiceAccount",
+                rpc="loams.admin.v1.AgentService/CreateServiceAccount",
+                service="loams.admin.v1.AgentService",
+                package="loams.admin.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.agents",
+                name="create_trust_policy",
+                proto_name="createTrustPolicy",
+                method="CreateTrustPolicy",
+                rpc="loams.admin.v1.AgentService/CreateTrustPolicy",
+                service="loams.admin.v1.AgentService",
+                package="loams.admin.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.agents",
+                name="get",
+                proto_name="get",
+                method="GetAgent",
+                rpc="loams.admin.v1.AgentService/GetAgent",
+                service="loams.admin.v1.AgentService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.agents",
+                name="list",
+                proto_name="list",
+                method="ListAgents",
+                rpc="loams.admin.v1.AgentService/ListAgents",
+                service="loams.admin.v1.AgentService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="agents", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="admin.agents",
+                name="list_service_accounts",
+                proto_name="listServiceAccounts",
+                method="ListServiceAccounts",
+                rpc="loams.admin.v1.AgentService/ListServiceAccounts",
+                service="loams.admin.v1.AgentService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="service_accounts", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="admin.agents",
+                name="list_tokens",
+                proto_name="listTokens",
+                method="ListAgentTokens",
+                rpc="loams.admin.v1.AgentService/ListAgentTokens",
+                service="loams.admin.v1.AgentService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="tokens", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="admin.agents",
+                name="list_trust_policies",
+                proto_name="listTrustPolicies",
+                method="ListTrustPolicies",
+                rpc="loams.admin.v1.AgentService/ListTrustPolicies",
+                service="loams.admin.v1.AgentService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="trust_policies", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="admin.agents",
+                name="resume",
+                proto_name="resume",
+                method="ResumeAgent",
+                rpc="loams.admin.v1.AgentService/ResumeAgent",
+                service="loams.admin.v1.AgentService",
+                package="loams.admin.v1",
+                idempotency="idempotent",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.agents",
+                name="suspend",
+                proto_name="suspend",
+                method="SuspendAgent",
+                rpc="loams.admin.v1.AgentService/SuspendAgent",
+                service="loams.admin.v1.AgentService",
+                package="loams.admin.v1",
+                idempotency="idempotent",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.agents",
+                name="update",
+                proto_name="update",
+                method="UpdateAgent",
+                rpc="loams.admin.v1.AgentService/UpdateAgent",
+                service="loams.admin.v1.AgentService",
+                package="loams.admin.v1",
+                idempotency="idempotent",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+        ),
+    ),
+    ModuleBinding(
+        name="admin.audit",
+        summary="The audit log: who did what, to what, and whether it was allowed.",
+        service="loams.admin.v1.AuditService",
+        package="loams.admin.v1",
+        unstable=False,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="admin.audit",
+                name="list",
+                proto_name="list",
+                method="ListAuditEvents",
+                rpc="loams.admin.v1.AuditService/ListAuditEvents",
+                service="loams.admin.v1.AuditService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="events", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="admin.audit",
+                name="watch",
+                proto_name="watch",
+                method="WatchAuditEvents",
+                rpc="loams.admin.v1.AuditService/WatchAuditEvents",
+                service="loams.admin.v1.AuditService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="server",
+                pagination=None,
+            ),
+        ),
+    ),
+    ModuleBinding(
+        name="admin.keys",
+        summary="API keys, and revoking agent tokens.",
+        service="loams.admin.v1.KeyService",
+        package="loams.admin.v1",
+        unstable=False,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="admin.keys",
+                name="create",
+                proto_name="create",
+                method="CreateKey",
+                rpc="loams.admin.v1.KeyService/CreateKey",
+                service="loams.admin.v1.KeyService",
+                package="loams.admin.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.keys",
+                name="list",
+                proto_name="list",
+                method="ListKeys",
+                rpc="loams.admin.v1.KeyService/ListKeys",
+                service="loams.admin.v1.KeyService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="keys", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="admin.keys",
+                name="revoke",
+                proto_name="revoke",
+                method="RevokeKey",
+                rpc="loams.admin.v1.KeyService/RevokeKey",
+                service="loams.admin.v1.KeyService",
+                package="loams.admin.v1",
+                idempotency="idempotent",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.keys",
+                name="revoke_token",
+                proto_name="revokeToken",
+                method="RevokeToken",
+                rpc="loams.admin.v1.KeyService/RevokeToken",
+                service="loams.admin.v1.KeyService",
+                package="loams.admin.v1",
+                idempotency="idempotent",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+        ),
+    ),
+    ModuleBinding(
+        name="admin.org",
+        summary="The org: settings, members, invitations and teams.",
+        service="loams.admin.v1.OrgService",
+        package="loams.admin.v1",
+        unstable=False,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="admin.org",
+                name="add_team_member",
+                proto_name="addTeamMember",
+                method="AddTeamMember",
+                rpc="loams.admin.v1.OrgService/AddTeamMember",
+                service="loams.admin.v1.OrgService",
+                package="loams.admin.v1",
+                idempotency="idempotent",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.org",
+                name="create_invitation",
+                proto_name="createInvitation",
+                method="CreateInvitation",
+                rpc="loams.admin.v1.OrgService/CreateInvitation",
+                service="loams.admin.v1.OrgService",
+                package="loams.admin.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.org",
+                name="create_team",
+                proto_name="createTeam",
+                method="CreateTeam",
+                rpc="loams.admin.v1.OrgService/CreateTeam",
+                service="loams.admin.v1.OrgService",
+                package="loams.admin.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.org",
+                name="get",
+                proto_name="get",
+                method="GetOrg",
+                rpc="loams.admin.v1.OrgService/GetOrg",
+                service="loams.admin.v1.OrgService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.org",
+                name="get_team",
+                proto_name="getTeam",
+                method="GetTeam",
+                rpc="loams.admin.v1.OrgService/GetTeam",
+                service="loams.admin.v1.OrgService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.org",
+                name="list_invitations",
+                proto_name="listInvitations",
+                method="ListInvitations",
+                rpc="loams.admin.v1.OrgService/ListInvitations",
+                service="loams.admin.v1.OrgService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="invitations", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="admin.org",
+                name="list_members",
+                proto_name="listMembers",
+                method="ListMembers",
+                rpc="loams.admin.v1.OrgService/ListMembers",
+                service="loams.admin.v1.OrgService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="members", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="admin.org",
+                name="list_teams",
+                proto_name="listTeams",
+                method="ListTeams",
+                rpc="loams.admin.v1.OrgService/ListTeams",
+                service="loams.admin.v1.OrgService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="teams", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="admin.org",
+                name="remove_member",
+                proto_name="removeMember",
+                method="RemoveMember",
+                rpc="loams.admin.v1.OrgService/RemoveMember",
+                service="loams.admin.v1.OrgService",
+                package="loams.admin.v1",
+                idempotency="idempotent",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.org",
+                name="update",
+                proto_name="update",
+                method="UpdateOrg",
+                rpc="loams.admin.v1.OrgService/UpdateOrg",
+                service="loams.admin.v1.OrgService",
+                package="loams.admin.v1",
+                idempotency="idempotent",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+        ),
+    ),
+    ModuleBinding(
+        name="admin.projects",
+        summary="Projects, project access and environments.",
+        service="loams.admin.v1.ProjectService",
+        package="loams.admin.v1",
+        unstable=False,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="admin.projects",
+                name="create",
+                proto_name="create",
+                method="CreateProject",
+                rpc="loams.admin.v1.ProjectService/CreateProject",
+                service="loams.admin.v1.ProjectService",
+                package="loams.admin.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.projects",
+                name="create_environment",
+                proto_name="createEnvironment",
+                method="CreateEnvironment",
+                rpc="loams.admin.v1.ProjectService/CreateEnvironment",
+                service="loams.admin.v1.ProjectService",
+                package="loams.admin.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.projects",
+                name="get",
+                proto_name="get",
+                method="GetProject",
+                rpc="loams.admin.v1.ProjectService/GetProject",
+                service="loams.admin.v1.ProjectService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.projects",
+                name="get_environment",
+                proto_name="getEnvironment",
+                method="GetEnvironment",
+                rpc="loams.admin.v1.ProjectService/GetEnvironment",
+                service="loams.admin.v1.ProjectService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.projects",
+                name="get_environment_activity",
+                proto_name="getEnvironmentActivity",
+                method="GetEnvironmentActivity",
+                rpc="loams.admin.v1.ProjectService/GetEnvironmentActivity",
+                service="loams.admin.v1.ProjectService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.projects",
+                name="grant_access",
+                proto_name="grantAccess",
+                method="GrantAccess",
+                rpc="loams.admin.v1.ProjectService/GrantAccess",
+                service="loams.admin.v1.ProjectService",
+                package="loams.admin.v1",
+                idempotency="idempotent",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="admin.projects",
+                name="list",
+                proto_name="list",
+                method="ListProjects",
+                rpc="loams.admin.v1.ProjectService/ListProjects",
+                service="loams.admin.v1.ProjectService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="projects", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="admin.projects",
+                name="list_access",
+                proto_name="listAccess",
+                method="ListAccess",
+                rpc="loams.admin.v1.ProjectService/ListAccess",
+                service="loams.admin.v1.ProjectService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="grants", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="admin.projects",
+                name="list_environments",
+                proto_name="listEnvironments",
+                method="ListEnvironments",
+                rpc="loams.admin.v1.ProjectService/ListEnvironments",
+                service="loams.admin.v1.ProjectService",
+                package="loams.admin.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="environments", next_page_token="next_page_token"),
+            ),
+        ),
+    ),
+    ModuleBinding(
+        name="auth",
+        summary="Sign-in providers, first-run setup, sessions and OAuth consent.",
+        service="loams.auth.v1.AuthService",
+        package="loams.auth.v1",
+        unstable=False,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="auth",
+                name="complete_setup",
+                proto_name="completeSetup",
+                method="CompleteSetup",
+                rpc="loams.auth.v1.AuthService/CompleteSetup",
+                service="loams.auth.v1.AuthService",
+                package="loams.auth.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="auth",
+                name="create_session",
+                proto_name="createSession",
+                method="CreateSession",
+                rpc="loams.auth.v1.AuthService/CreateSession",
+                service="loams.auth.v1.AuthService",
+                package="loams.auth.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="auth",
+                name="decide_consent",
+                proto_name="decideConsent",
+                method="DecideConsent",
+                rpc="loams.auth.v1.AuthService/DecideConsent",
+                service="loams.auth.v1.AuthService",
+                package="loams.auth.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="auth",
+                name="delete_session",
+                proto_name="deleteSession",
+                method="DeleteSession",
+                rpc="loams.auth.v1.AuthService/DeleteSession",
+                service="loams.auth.v1.AuthService",
+                package="loams.auth.v1",
+                idempotency="idempotent",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="auth",
+                name="get_session",
+                proto_name="getSession",
+                method="GetSession",
+                rpc="loams.auth.v1.AuthService/GetSession",
+                service="loams.auth.v1.AuthService",
+                package="loams.auth.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="auth",
+                name="list_providers",
+                proto_name="listProviders",
+                method="ListProviders",
+                rpc="loams.auth.v1.AuthService/ListProviders",
+                service="loams.auth.v1.AuthService",
+                package="loams.auth.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+        ),
+    ),
     ModuleBinding(
         name="instance",
         summary="What this instance is, and who the caller is on it.",
@@ -355,6 +1041,94 @@ MODULES: Final[tuple[ModuleBinding, ...]] = (
         ),
     ),
     ModuleBinding(
+        name="live.admin",
+        summary="Live administration: deploy, roll back, index status and function logs.",
+        service="loams.live.v1.LiveAdminService",
+        package="loams.live.v1",
+        unstable=True,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="live.admin",
+                name="activate_deployment",
+                proto_name="activateDeployment",
+                method="ActivateDeployment",
+                rpc="loams.live.v1.LiveAdminService/ActivateDeployment",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="live.admin",
+                name="deploy",
+                proto_name="deploy",
+                method="Deploy",
+                rpc="loams.live.v1.LiveAdminService/Deploy",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="live.admin",
+                name="get_deployment",
+                proto_name="getDeployment",
+                method="GetDeployment",
+                rpc="loams.live.v1.LiveAdminService/GetDeployment",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="live.admin",
+                name="get_index_status",
+                proto_name="getIndexStatus",
+                method="GetIndexStatus",
+                rpc="loams.live.v1.LiveAdminService/GetIndexStatus",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="live.admin",
+                name="list_deployments",
+                proto_name="listDeployments",
+                method="ListDeployments",
+                rpc="loams.live.v1.LiveAdminService/ListDeployments",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="deployments", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="live.admin",
+                name="tail_logs",
+                proto_name="tailLogs",
+                method="TailLogs",
+                rpc="loams.live.v1.LiveAdminService/TailLogs",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="server",
+                pagination=None,
+            ),
+        ),
+    ),
+    ModuleBinding(
         name="tables",
         summary="",
         service="loams.live.v1.LiveService",
@@ -362,19 +1136,6 @@ MODULES: Final[tuple[ModuleBinding, ...]] = (
         unstable=True,
         derived=True,
         calls=(
-            CallBinding(
-                module="tables",
-                name="deploy",
-                proto_name="deploy",
-                method="Deploy",
-                rpc="loams.live.v1.LiveService/Deploy",
-                service="loams.live.v1.LiveService",
-                package="loams.live.v1",
-                idempotency="none",
-                retry="manual",
-                streaming="unary",
-                pagination=None,
-            ),
             CallBinding(
                 module="tables",
                 name="mutate",
@@ -415,6 +1176,300 @@ IDEMPOTENCY_LEVELS: Final[dict[str, IdempotencyLevel]] = {
 
 #: One ``MethodInfo`` per call, keyed by ``package.Service/Method``.
 METHODS: Final[dict[str, MethodInfo[Message, Message]]] = {
+    "loams.admin.v1.AgentService/CreateAgent": MethodInfo(
+        name="CreateAgent",
+        service_name="loams.admin.v1.AgentService",
+        input=CreateAgentRequest,
+        output=CreateAgentResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.admin.v1.AgentService/CreateServiceAccount": MethodInfo(
+        name="CreateServiceAccount",
+        service_name="loams.admin.v1.AgentService",
+        input=CreateServiceAccountRequest,
+        output=CreateServiceAccountResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.admin.v1.AgentService/CreateTrustPolicy": MethodInfo(
+        name="CreateTrustPolicy",
+        service_name="loams.admin.v1.AgentService",
+        input=CreateTrustPolicyRequest,
+        output=CreateTrustPolicyResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.admin.v1.AgentService/GetAgent": MethodInfo(
+        name="GetAgent",
+        service_name="loams.admin.v1.AgentService",
+        input=GetAgentRequest,
+        output=GetAgentResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.AgentService/ListAgents": MethodInfo(
+        name="ListAgents",
+        service_name="loams.admin.v1.AgentService",
+        input=ListAgentsRequest,
+        output=ListAgentsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.AgentService/ListServiceAccounts": MethodInfo(
+        name="ListServiceAccounts",
+        service_name="loams.admin.v1.AgentService",
+        input=ListServiceAccountsRequest,
+        output=ListServiceAccountsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.AgentService/ListAgentTokens": MethodInfo(
+        name="ListAgentTokens",
+        service_name="loams.admin.v1.AgentService",
+        input=ListAgentTokensRequest,
+        output=ListAgentTokensResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.AgentService/ListTrustPolicies": MethodInfo(
+        name="ListTrustPolicies",
+        service_name="loams.admin.v1.AgentService",
+        input=ListTrustPoliciesRequest,
+        output=ListTrustPoliciesResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.AgentService/ResumeAgent": MethodInfo(
+        name="ResumeAgent",
+        service_name="loams.admin.v1.AgentService",
+        input=ResumeAgentRequest,
+        output=ResumeAgentResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["idempotent"],
+    ),
+    "loams.admin.v1.AgentService/SuspendAgent": MethodInfo(
+        name="SuspendAgent",
+        service_name="loams.admin.v1.AgentService",
+        input=SuspendAgentRequest,
+        output=SuspendAgentResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["idempotent"],
+    ),
+    "loams.admin.v1.AgentService/UpdateAgent": MethodInfo(
+        name="UpdateAgent",
+        service_name="loams.admin.v1.AgentService",
+        input=UpdateAgentRequest,
+        output=UpdateAgentResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["idempotent"],
+    ),
+    "loams.admin.v1.AuditService/ListAuditEvents": MethodInfo(
+        name="ListAuditEvents",
+        service_name="loams.admin.v1.AuditService",
+        input=ListAuditEventsRequest,
+        output=ListAuditEventsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.AuditService/WatchAuditEvents": MethodInfo(
+        name="WatchAuditEvents",
+        service_name="loams.admin.v1.AuditService",
+        input=WatchAuditEventsRequest,
+        output=WatchAuditEventsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.KeyService/CreateKey": MethodInfo(
+        name="CreateKey",
+        service_name="loams.admin.v1.KeyService",
+        input=CreateKeyRequest,
+        output=CreateKeyResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.admin.v1.KeyService/ListKeys": MethodInfo(
+        name="ListKeys",
+        service_name="loams.admin.v1.KeyService",
+        input=ListKeysRequest,
+        output=ListKeysResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.KeyService/RevokeKey": MethodInfo(
+        name="RevokeKey",
+        service_name="loams.admin.v1.KeyService",
+        input=RevokeKeyRequest,
+        output=RevokeKeyResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["idempotent"],
+    ),
+    "loams.admin.v1.KeyService/RevokeToken": MethodInfo(
+        name="RevokeToken",
+        service_name="loams.admin.v1.KeyService",
+        input=RevokeTokenRequest,
+        output=RevokeTokenResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["idempotent"],
+    ),
+    "loams.admin.v1.OrgService/AddTeamMember": MethodInfo(
+        name="AddTeamMember",
+        service_name="loams.admin.v1.OrgService",
+        input=AddTeamMemberRequest,
+        output=AddTeamMemberResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["idempotent"],
+    ),
+    "loams.admin.v1.OrgService/CreateInvitation": MethodInfo(
+        name="CreateInvitation",
+        service_name="loams.admin.v1.OrgService",
+        input=CreateInvitationRequest,
+        output=CreateInvitationResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.admin.v1.OrgService/CreateTeam": MethodInfo(
+        name="CreateTeam",
+        service_name="loams.admin.v1.OrgService",
+        input=CreateTeamRequest,
+        output=CreateTeamResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.admin.v1.OrgService/GetOrg": MethodInfo(
+        name="GetOrg",
+        service_name="loams.admin.v1.OrgService",
+        input=GetOrgRequest,
+        output=GetOrgResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.OrgService/GetTeam": MethodInfo(
+        name="GetTeam",
+        service_name="loams.admin.v1.OrgService",
+        input=GetTeamRequest,
+        output=GetTeamResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.OrgService/ListInvitations": MethodInfo(
+        name="ListInvitations",
+        service_name="loams.admin.v1.OrgService",
+        input=ListInvitationsRequest,
+        output=ListInvitationsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.OrgService/ListMembers": MethodInfo(
+        name="ListMembers",
+        service_name="loams.admin.v1.OrgService",
+        input=ListMembersRequest,
+        output=ListMembersResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.OrgService/ListTeams": MethodInfo(
+        name="ListTeams",
+        service_name="loams.admin.v1.OrgService",
+        input=ListTeamsRequest,
+        output=ListTeamsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.OrgService/RemoveMember": MethodInfo(
+        name="RemoveMember",
+        service_name="loams.admin.v1.OrgService",
+        input=RemoveMemberRequest,
+        output=RemoveMemberResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["idempotent"],
+    ),
+    "loams.admin.v1.OrgService/UpdateOrg": MethodInfo(
+        name="UpdateOrg",
+        service_name="loams.admin.v1.OrgService",
+        input=UpdateOrgRequest,
+        output=UpdateOrgResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["idempotent"],
+    ),
+    "loams.admin.v1.ProjectService/CreateProject": MethodInfo(
+        name="CreateProject",
+        service_name="loams.admin.v1.ProjectService",
+        input=CreateProjectRequest,
+        output=CreateProjectResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.admin.v1.ProjectService/CreateEnvironment": MethodInfo(
+        name="CreateEnvironment",
+        service_name="loams.admin.v1.ProjectService",
+        input=CreateEnvironmentRequest,
+        output=CreateEnvironmentResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.admin.v1.ProjectService/GetProject": MethodInfo(
+        name="GetProject",
+        service_name="loams.admin.v1.ProjectService",
+        input=GetProjectRequest,
+        output=GetProjectResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.ProjectService/GetEnvironment": MethodInfo(
+        name="GetEnvironment",
+        service_name="loams.admin.v1.ProjectService",
+        input=GetEnvironmentRequest,
+        output=GetEnvironmentResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.ProjectService/GetEnvironmentActivity": MethodInfo(
+        name="GetEnvironmentActivity",
+        service_name="loams.admin.v1.ProjectService",
+        input=GetEnvironmentActivityRequest,
+        output=GetEnvironmentActivityResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.ProjectService/GrantAccess": MethodInfo(
+        name="GrantAccess",
+        service_name="loams.admin.v1.ProjectService",
+        input=GrantAccessRequest,
+        output=GrantAccessResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["idempotent"],
+    ),
+    "loams.admin.v1.ProjectService/ListProjects": MethodInfo(
+        name="ListProjects",
+        service_name="loams.admin.v1.ProjectService",
+        input=ListProjectsRequest,
+        output=ListProjectsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.ProjectService/ListAccess": MethodInfo(
+        name="ListAccess",
+        service_name="loams.admin.v1.ProjectService",
+        input=ListAccessRequest,
+        output=ListAccessResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.admin.v1.ProjectService/ListEnvironments": MethodInfo(
+        name="ListEnvironments",
+        service_name="loams.admin.v1.ProjectService",
+        input=ListEnvironmentsRequest,
+        output=ListEnvironmentsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.auth.v1.AuthService/CompleteSetup": MethodInfo(
+        name="CompleteSetup",
+        service_name="loams.auth.v1.AuthService",
+        input=CompleteSetupRequest,
+        output=CompleteSetupResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.auth.v1.AuthService/CreateSession": MethodInfo(
+        name="CreateSession",
+        service_name="loams.auth.v1.AuthService",
+        input=CreateSessionRequest,
+        output=CreateSessionResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.auth.v1.AuthService/DecideConsent": MethodInfo(
+        name="DecideConsent",
+        service_name="loams.auth.v1.AuthService",
+        input=DecideConsentRequest,
+        output=DecideConsentResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.auth.v1.AuthService/DeleteSession": MethodInfo(
+        name="DeleteSession",
+        service_name="loams.auth.v1.AuthService",
+        input=DeleteSessionRequest,
+        output=DeleteSessionResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["idempotent"],
+    ),
+    "loams.auth.v1.AuthService/GetSession": MethodInfo(
+        name="GetSession",
+        service_name="loams.auth.v1.AuthService",
+        input=GetSessionRequest,
+        output=GetSessionResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.auth.v1.AuthService/ListProviders": MethodInfo(
+        name="ListProviders",
+        service_name="loams.auth.v1.AuthService",
+        input=ListProvidersRequest,
+        output=ListProvidersResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
     "loams.instance.v1.InstanceService/GetInstance": MethodInfo(
         name="GetInstance",
         service_name="loams.instance.v1.InstanceService",
@@ -443,11 +1498,46 @@ METHODS: Final[dict[str, MethodInfo[Message, Message]]] = {
         output=Transition,
         idempotency_level=IDEMPOTENCY_LEVELS["none"],
     ),
-    "loams.live.v1.LiveService/Deploy": MethodInfo(
+    "loams.live.v1.LiveAdminService/ActivateDeployment": MethodInfo(
+        name="ActivateDeployment",
+        service_name="loams.live.v1.LiveAdminService",
+        input=ActivateDeploymentRequest,
+        output=ActivateDeploymentResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.live.v1.LiveAdminService/Deploy": MethodInfo(
         name="Deploy",
-        service_name="loams.live.v1.LiveService",
+        service_name="loams.live.v1.LiveAdminService",
         input=DeployRequest,
         output=DeployResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.live.v1.LiveAdminService/GetDeployment": MethodInfo(
+        name="GetDeployment",
+        service_name="loams.live.v1.LiveAdminService",
+        input=GetDeploymentRequest,
+        output=GetDeploymentResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.live.v1.LiveAdminService/GetIndexStatus": MethodInfo(
+        name="GetIndexStatus",
+        service_name="loams.live.v1.LiveAdminService",
+        input=GetIndexStatusRequest,
+        output=GetIndexStatusResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.live.v1.LiveAdminService/ListDeployments": MethodInfo(
+        name="ListDeployments",
+        service_name="loams.live.v1.LiveAdminService",
+        input=ListDeploymentsRequest,
+        output=ListDeploymentsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.live.v1.LiveAdminService/TailLogs": MethodInfo(
+        name="TailLogs",
+        service_name="loams.live.v1.LiveAdminService",
+        input=TailLogsRequest,
+        output=TailLogsResponse,
         idempotency_level=IDEMPOTENCY_LEVELS["none"],
     ),
     "loams.live.v1.LiveService/Mutate": MethodInfo(
@@ -465,6 +1555,978 @@ METHODS: Final[dict[str, MethodInfo[Message, Message]]] = {
         idempotency_level=IDEMPOTENCY_LEVELS["none"],
     ),
 }
+class AdminAgentsModule(Protocol):
+    """`loams.admin.agents` — Agents, their tokens and trust policies, and service accounts.
+
+    Wraps `loams.admin.v1.AgentService`.
+    """
+
+    module: ClassVar[Literal["admin.agents"]]
+    service: ClassVar[Literal["loams.admin.v1.AgentService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.admin.v1.AgentService/CreateAgent`, retried: manual.
+    """
+    async def create(
+        self,
+        request: loams.admin.v1.agent_pb2.CreateAgentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.CreateAgentResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/CreateServiceAccount`, retried: manual.
+    """
+    async def create_service_account(
+        self,
+        request: loams.admin.v1.agent_pb2.CreateServiceAccountRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.CreateServiceAccountResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/CreateTrustPolicy`, retried: manual.
+    """
+    async def create_trust_policy(
+        self,
+        request: loams.admin.v1.agent_pb2.CreateTrustPolicyRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.CreateTrustPolicyResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/GetAgent`, retried: safe.
+    """
+    async def get(
+        self,
+        request: loams.admin.v1.agent_pb2.GetAgentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.GetAgentResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/ListAgents`, retried: safe. AIP-158: page with `agents` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list(
+        self,
+        request: loams.admin.v1.agent_pb2.ListAgentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.ListAgentsResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/ListServiceAccounts`, retried: safe. AIP-158: page with `service_accounts` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list_service_accounts(
+        self,
+        request: loams.admin.v1.agent_pb2.ListServiceAccountsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.ListServiceAccountsResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/ListAgentTokens`, retried: safe. AIP-158: page with `tokens` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list_tokens(
+        self,
+        request: loams.admin.v1.agent_pb2.ListAgentTokensRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.ListAgentTokensResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/ListTrustPolicies`, retried: safe. AIP-158: page with `trust_policies` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list_trust_policies(
+        self,
+        request: loams.admin.v1.agent_pb2.ListTrustPoliciesRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.ListTrustPoliciesResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/ResumeAgent`, retried: safe.
+    """
+    async def resume(
+        self,
+        request: loams.admin.v1.agent_pb2.ResumeAgentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.ResumeAgentResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/SuspendAgent`, retried: safe.
+    """
+    async def suspend(
+        self,
+        request: loams.admin.v1.agent_pb2.SuspendAgentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.SuspendAgentResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/UpdateAgent`, retried: safe.
+    """
+    async def update(
+        self,
+        request: loams.admin.v1.agent_pb2.UpdateAgentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.UpdateAgentResponse:
+        ...
+
+
+
+class AdminAgentsModuleSync(Protocol):
+    """`loams.admin.agents` — Agents, their tokens and trust policies, and service accounts.
+
+    Wraps `loams.admin.v1.AgentService`.
+    """
+
+    module: ClassVar[Literal["admin.agents"]]
+    service: ClassVar[Literal["loams.admin.v1.AgentService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.admin.v1.AgentService/CreateAgent`, retried: manual.
+    """
+    def create(
+        self,
+        request: loams.admin.v1.agent_pb2.CreateAgentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.CreateAgentResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/CreateServiceAccount`, retried: manual.
+    """
+    def create_service_account(
+        self,
+        request: loams.admin.v1.agent_pb2.CreateServiceAccountRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.CreateServiceAccountResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/CreateTrustPolicy`, retried: manual.
+    """
+    def create_trust_policy(
+        self,
+        request: loams.admin.v1.agent_pb2.CreateTrustPolicyRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.CreateTrustPolicyResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/GetAgent`, retried: safe.
+    """
+    def get(
+        self,
+        request: loams.admin.v1.agent_pb2.GetAgentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.GetAgentResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/ListAgents`, retried: safe. AIP-158: page with `agents` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list(
+        self,
+        request: loams.admin.v1.agent_pb2.ListAgentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.ListAgentsResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/ListServiceAccounts`, retried: safe. AIP-158: page with `service_accounts` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list_service_accounts(
+        self,
+        request: loams.admin.v1.agent_pb2.ListServiceAccountsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.ListServiceAccountsResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/ListAgentTokens`, retried: safe. AIP-158: page with `tokens` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list_tokens(
+        self,
+        request: loams.admin.v1.agent_pb2.ListAgentTokensRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.ListAgentTokensResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/ListTrustPolicies`, retried: safe. AIP-158: page with `trust_policies` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list_trust_policies(
+        self,
+        request: loams.admin.v1.agent_pb2.ListTrustPoliciesRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.ListTrustPoliciesResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/ResumeAgent`, retried: safe.
+    """
+    def resume(
+        self,
+        request: loams.admin.v1.agent_pb2.ResumeAgentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.ResumeAgentResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/SuspendAgent`, retried: safe.
+    """
+    def suspend(
+        self,
+        request: loams.admin.v1.agent_pb2.SuspendAgentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.SuspendAgentResponse:
+        ...
+
+    """`loams.admin.v1.AgentService/UpdateAgent`, retried: safe.
+    """
+    def update(
+        self,
+        request: loams.admin.v1.agent_pb2.UpdateAgentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.agent_pb2.UpdateAgentResponse:
+        ...
+
+
+
+class AdminAuditModule(Protocol):
+    """`loams.admin.audit` — The audit log: who did what, to what, and whether it was allowed.
+
+    Wraps `loams.admin.v1.AuditService`.
+    """
+
+    module: ClassVar[Literal["admin.audit"]]
+    service: ClassVar[Literal["loams.admin.v1.AuditService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.admin.v1.AuditService/ListAuditEvents`, retried: safe. AIP-158: page with `events` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list(
+        self,
+        request: loams.admin.v1.audit_pb2.ListAuditEventsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.audit_pb2.ListAuditEventsResponse:
+        ...
+
+    """`loams.admin.v1.AuditService/WatchAuditEvents`, retried: safe.
+    """
+    def watch(
+        self,
+        request: loams.admin.v1.audit_pb2.WatchAuditEventsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> AsyncIterator[loams.admin.v1.audit_pb2.WatchAuditEventsResponse]:
+        ...
+
+
+
+class AdminAuditModuleSync(Protocol):
+    """`loams.admin.audit` — The audit log: who did what, to what, and whether it was allowed.
+
+    Wraps `loams.admin.v1.AuditService`.
+    """
+
+    module: ClassVar[Literal["admin.audit"]]
+    service: ClassVar[Literal["loams.admin.v1.AuditService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.admin.v1.AuditService/ListAuditEvents`, retried: safe. AIP-158: page with `events` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list(
+        self,
+        request: loams.admin.v1.audit_pb2.ListAuditEventsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.audit_pb2.ListAuditEventsResponse:
+        ...
+
+    """`loams.admin.v1.AuditService/WatchAuditEvents`, retried: safe.
+    """
+    def watch(
+        self,
+        request: loams.admin.v1.audit_pb2.WatchAuditEventsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> Iterator[loams.admin.v1.audit_pb2.WatchAuditEventsResponse]:
+        ...
+
+
+
+class AdminKeysModule(Protocol):
+    """`loams.admin.keys` — API keys, and revoking agent tokens.
+
+    Wraps `loams.admin.v1.KeyService`.
+    """
+
+    module: ClassVar[Literal["admin.keys"]]
+    service: ClassVar[Literal["loams.admin.v1.KeyService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.admin.v1.KeyService/CreateKey`, retried: manual.
+    """
+    async def create(
+        self,
+        request: loams.admin.v1.key_pb2.CreateKeyRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.key_pb2.CreateKeyResponse:
+        ...
+
+    """`loams.admin.v1.KeyService/ListKeys`, retried: safe. AIP-158: page with `keys` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list(
+        self,
+        request: loams.admin.v1.key_pb2.ListKeysRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.key_pb2.ListKeysResponse:
+        ...
+
+    """`loams.admin.v1.KeyService/RevokeKey`, retried: safe.
+    """
+    async def revoke(
+        self,
+        request: loams.admin.v1.key_pb2.RevokeKeyRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.key_pb2.RevokeKeyResponse:
+        ...
+
+    """`loams.admin.v1.KeyService/RevokeToken`, retried: safe.
+    """
+    async def revoke_token(
+        self,
+        request: loams.admin.v1.key_pb2.RevokeTokenRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.key_pb2.RevokeTokenResponse:
+        ...
+
+
+
+class AdminKeysModuleSync(Protocol):
+    """`loams.admin.keys` — API keys, and revoking agent tokens.
+
+    Wraps `loams.admin.v1.KeyService`.
+    """
+
+    module: ClassVar[Literal["admin.keys"]]
+    service: ClassVar[Literal["loams.admin.v1.KeyService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.admin.v1.KeyService/CreateKey`, retried: manual.
+    """
+    def create(
+        self,
+        request: loams.admin.v1.key_pb2.CreateKeyRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.key_pb2.CreateKeyResponse:
+        ...
+
+    """`loams.admin.v1.KeyService/ListKeys`, retried: safe. AIP-158: page with `keys` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list(
+        self,
+        request: loams.admin.v1.key_pb2.ListKeysRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.key_pb2.ListKeysResponse:
+        ...
+
+    """`loams.admin.v1.KeyService/RevokeKey`, retried: safe.
+    """
+    def revoke(
+        self,
+        request: loams.admin.v1.key_pb2.RevokeKeyRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.key_pb2.RevokeKeyResponse:
+        ...
+
+    """`loams.admin.v1.KeyService/RevokeToken`, retried: safe.
+    """
+    def revoke_token(
+        self,
+        request: loams.admin.v1.key_pb2.RevokeTokenRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.key_pb2.RevokeTokenResponse:
+        ...
+
+
+
+class AdminOrgModule(Protocol):
+    """`loams.admin.org` — The org: settings, members, invitations and teams.
+
+    Wraps `loams.admin.v1.OrgService`.
+    """
+
+    module: ClassVar[Literal["admin.org"]]
+    service: ClassVar[Literal["loams.admin.v1.OrgService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.admin.v1.OrgService/AddTeamMember`, retried: safe.
+    """
+    async def add_team_member(
+        self,
+        request: loams.admin.v1.org_pb2.AddTeamMemberRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.AddTeamMemberResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/CreateInvitation`, retried: manual.
+    """
+    async def create_invitation(
+        self,
+        request: loams.admin.v1.org_pb2.CreateInvitationRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.CreateInvitationResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/CreateTeam`, retried: manual.
+    """
+    async def create_team(
+        self,
+        request: loams.admin.v1.org_pb2.CreateTeamRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.CreateTeamResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/GetOrg`, retried: safe.
+    """
+    async def get(
+        self,
+        request: loams.admin.v1.org_pb2.GetOrgRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.GetOrgResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/GetTeam`, retried: safe.
+    """
+    async def get_team(
+        self,
+        request: loams.admin.v1.org_pb2.GetTeamRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.GetTeamResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/ListInvitations`, retried: safe. AIP-158: page with `invitations` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list_invitations(
+        self,
+        request: loams.admin.v1.org_pb2.ListInvitationsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.ListInvitationsResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/ListMembers`, retried: safe. AIP-158: page with `members` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list_members(
+        self,
+        request: loams.admin.v1.org_pb2.ListMembersRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.ListMembersResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/ListTeams`, retried: safe. AIP-158: page with `teams` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list_teams(
+        self,
+        request: loams.admin.v1.org_pb2.ListTeamsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.ListTeamsResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/RemoveMember`, retried: safe.
+    """
+    async def remove_member(
+        self,
+        request: loams.admin.v1.org_pb2.RemoveMemberRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.RemoveMemberResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/UpdateOrg`, retried: safe.
+    """
+    async def update(
+        self,
+        request: loams.admin.v1.org_pb2.UpdateOrgRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.UpdateOrgResponse:
+        ...
+
+
+
+class AdminOrgModuleSync(Protocol):
+    """`loams.admin.org` — The org: settings, members, invitations and teams.
+
+    Wraps `loams.admin.v1.OrgService`.
+    """
+
+    module: ClassVar[Literal["admin.org"]]
+    service: ClassVar[Literal["loams.admin.v1.OrgService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.admin.v1.OrgService/AddTeamMember`, retried: safe.
+    """
+    def add_team_member(
+        self,
+        request: loams.admin.v1.org_pb2.AddTeamMemberRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.AddTeamMemberResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/CreateInvitation`, retried: manual.
+    """
+    def create_invitation(
+        self,
+        request: loams.admin.v1.org_pb2.CreateInvitationRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.CreateInvitationResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/CreateTeam`, retried: manual.
+    """
+    def create_team(
+        self,
+        request: loams.admin.v1.org_pb2.CreateTeamRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.CreateTeamResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/GetOrg`, retried: safe.
+    """
+    def get(
+        self,
+        request: loams.admin.v1.org_pb2.GetOrgRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.GetOrgResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/GetTeam`, retried: safe.
+    """
+    def get_team(
+        self,
+        request: loams.admin.v1.org_pb2.GetTeamRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.GetTeamResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/ListInvitations`, retried: safe. AIP-158: page with `invitations` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list_invitations(
+        self,
+        request: loams.admin.v1.org_pb2.ListInvitationsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.ListInvitationsResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/ListMembers`, retried: safe. AIP-158: page with `members` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list_members(
+        self,
+        request: loams.admin.v1.org_pb2.ListMembersRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.ListMembersResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/ListTeams`, retried: safe. AIP-158: page with `teams` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list_teams(
+        self,
+        request: loams.admin.v1.org_pb2.ListTeamsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.ListTeamsResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/RemoveMember`, retried: safe.
+    """
+    def remove_member(
+        self,
+        request: loams.admin.v1.org_pb2.RemoveMemberRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.RemoveMemberResponse:
+        ...
+
+    """`loams.admin.v1.OrgService/UpdateOrg`, retried: safe.
+    """
+    def update(
+        self,
+        request: loams.admin.v1.org_pb2.UpdateOrgRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.org_pb2.UpdateOrgResponse:
+        ...
+
+
+
+class AdminProjectsModule(Protocol):
+    """`loams.admin.projects` — Projects, project access and environments.
+
+    Wraps `loams.admin.v1.ProjectService`.
+    """
+
+    module: ClassVar[Literal["admin.projects"]]
+    service: ClassVar[Literal["loams.admin.v1.ProjectService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.admin.v1.ProjectService/CreateProject`, retried: manual.
+    """
+    async def create(
+        self,
+        request: loams.admin.v1.project_pb2.CreateProjectRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.CreateProjectResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/CreateEnvironment`, retried: manual.
+    """
+    async def create_environment(
+        self,
+        request: loams.admin.v1.project_pb2.CreateEnvironmentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.CreateEnvironmentResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/GetProject`, retried: safe.
+    """
+    async def get(
+        self,
+        request: loams.admin.v1.project_pb2.GetProjectRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.GetProjectResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/GetEnvironment`, retried: safe.
+    """
+    async def get_environment(
+        self,
+        request: loams.admin.v1.project_pb2.GetEnvironmentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.GetEnvironmentResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/GetEnvironmentActivity`, retried: safe.
+    """
+    async def get_environment_activity(
+        self,
+        request: loams.admin.v1.project_pb2.GetEnvironmentActivityRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.GetEnvironmentActivityResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/GrantAccess`, retried: safe.
+    """
+    async def grant_access(
+        self,
+        request: loams.admin.v1.project_pb2.GrantAccessRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.GrantAccessResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/ListProjects`, retried: safe. AIP-158: page with `projects` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list(
+        self,
+        request: loams.admin.v1.project_pb2.ListProjectsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.ListProjectsResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/ListAccess`, retried: safe. AIP-158: page with `grants` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list_access(
+        self,
+        request: loams.admin.v1.project_pb2.ListAccessRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.ListAccessResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/ListEnvironments`, retried: safe. AIP-158: page with `environments` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list_environments(
+        self,
+        request: loams.admin.v1.project_pb2.ListEnvironmentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.ListEnvironmentsResponse:
+        ...
+
+
+
+class AdminProjectsModuleSync(Protocol):
+    """`loams.admin.projects` — Projects, project access and environments.
+
+    Wraps `loams.admin.v1.ProjectService`.
+    """
+
+    module: ClassVar[Literal["admin.projects"]]
+    service: ClassVar[Literal["loams.admin.v1.ProjectService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.admin.v1.ProjectService/CreateProject`, retried: manual.
+    """
+    def create(
+        self,
+        request: loams.admin.v1.project_pb2.CreateProjectRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.CreateProjectResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/CreateEnvironment`, retried: manual.
+    """
+    def create_environment(
+        self,
+        request: loams.admin.v1.project_pb2.CreateEnvironmentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.CreateEnvironmentResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/GetProject`, retried: safe.
+    """
+    def get(
+        self,
+        request: loams.admin.v1.project_pb2.GetProjectRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.GetProjectResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/GetEnvironment`, retried: safe.
+    """
+    def get_environment(
+        self,
+        request: loams.admin.v1.project_pb2.GetEnvironmentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.GetEnvironmentResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/GetEnvironmentActivity`, retried: safe.
+    """
+    def get_environment_activity(
+        self,
+        request: loams.admin.v1.project_pb2.GetEnvironmentActivityRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.GetEnvironmentActivityResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/GrantAccess`, retried: safe.
+    """
+    def grant_access(
+        self,
+        request: loams.admin.v1.project_pb2.GrantAccessRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.GrantAccessResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/ListProjects`, retried: safe. AIP-158: page with `projects` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list(
+        self,
+        request: loams.admin.v1.project_pb2.ListProjectsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.ListProjectsResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/ListAccess`, retried: safe. AIP-158: page with `grants` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list_access(
+        self,
+        request: loams.admin.v1.project_pb2.ListAccessRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.ListAccessResponse:
+        ...
+
+    """`loams.admin.v1.ProjectService/ListEnvironments`, retried: safe. AIP-158: page with `environments` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list_environments(
+        self,
+        request: loams.admin.v1.project_pb2.ListEnvironmentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.admin.v1.project_pb2.ListEnvironmentsResponse:
+        ...
+
+
+
+class AuthModule(Protocol):
+    """`loams.auth` — Sign-in providers, first-run setup, sessions and OAuth consent.
+
+    Wraps `loams.auth.v1.AuthService`.
+    """
+
+    module: ClassVar[Literal["auth"]]
+    service: ClassVar[Literal["loams.auth.v1.AuthService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.auth.v1.AuthService/CompleteSetup`, retried: manual.
+    """
+    async def complete_setup(
+        self,
+        request: loams.auth.v1.auth_pb2.CompleteSetupRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.auth.v1.auth_pb2.CompleteSetupResponse:
+        ...
+
+    """`loams.auth.v1.AuthService/CreateSession`, retried: manual.
+    """
+    async def create_session(
+        self,
+        request: loams.auth.v1.auth_pb2.CreateSessionRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.auth.v1.auth_pb2.CreateSessionResponse:
+        ...
+
+    """`loams.auth.v1.AuthService/DecideConsent`, retried: manual.
+    """
+    async def decide_consent(
+        self,
+        request: loams.auth.v1.auth_pb2.DecideConsentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.auth.v1.auth_pb2.DecideConsentResponse:
+        ...
+
+    """`loams.auth.v1.AuthService/DeleteSession`, retried: safe.
+    """
+    async def delete_session(
+        self,
+        request: loams.auth.v1.auth_pb2.DeleteSessionRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.auth.v1.auth_pb2.DeleteSessionResponse:
+        ...
+
+    """`loams.auth.v1.AuthService/GetSession`, retried: safe.
+    """
+    async def get_session(
+        self,
+        request: loams.auth.v1.auth_pb2.GetSessionRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.auth.v1.auth_pb2.GetSessionResponse:
+        ...
+
+    """`loams.auth.v1.AuthService/ListProviders`, retried: safe.
+    """
+    async def list_providers(
+        self,
+        request: loams.auth.v1.auth_pb2.ListProvidersRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.auth.v1.auth_pb2.ListProvidersResponse:
+        ...
+
+
+
+class AuthModuleSync(Protocol):
+    """`loams.auth` — Sign-in providers, first-run setup, sessions and OAuth consent.
+
+    Wraps `loams.auth.v1.AuthService`.
+    """
+
+    module: ClassVar[Literal["auth"]]
+    service: ClassVar[Literal["loams.auth.v1.AuthService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.auth.v1.AuthService/CompleteSetup`, retried: manual.
+    """
+    def complete_setup(
+        self,
+        request: loams.auth.v1.auth_pb2.CompleteSetupRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.auth.v1.auth_pb2.CompleteSetupResponse:
+        ...
+
+    """`loams.auth.v1.AuthService/CreateSession`, retried: manual.
+    """
+    def create_session(
+        self,
+        request: loams.auth.v1.auth_pb2.CreateSessionRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.auth.v1.auth_pb2.CreateSessionResponse:
+        ...
+
+    """`loams.auth.v1.AuthService/DecideConsent`, retried: manual.
+    """
+    def decide_consent(
+        self,
+        request: loams.auth.v1.auth_pb2.DecideConsentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.auth.v1.auth_pb2.DecideConsentResponse:
+        ...
+
+    """`loams.auth.v1.AuthService/DeleteSession`, retried: safe.
+    """
+    def delete_session(
+        self,
+        request: loams.auth.v1.auth_pb2.DeleteSessionRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.auth.v1.auth_pb2.DeleteSessionResponse:
+        ...
+
+    """`loams.auth.v1.AuthService/GetSession`, retried: safe.
+    """
+    def get_session(
+        self,
+        request: loams.auth.v1.auth_pb2.GetSessionRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.auth.v1.auth_pb2.GetSessionResponse:
+        ...
+
+    """`loams.auth.v1.AuthService/ListProviders`, retried: safe.
+    """
+    def list_providers(
+        self,
+        request: loams.auth.v1.auth_pb2.ListProvidersRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.auth.v1.auth_pb2.ListProvidersResponse:
+        ...
+
+
+
 class InstanceModule(Protocol):
     """`loams.instance` — What this instance is, and who the caller is on it.
 
@@ -589,6 +2651,148 @@ class LiveModuleSync(Protocol):
 
 
 
+class LiveAdminModule(Protocol):
+    """`loams.live.admin` — Live administration: deploy, roll back, index status and function logs.
+
+    Wraps `loams.live.v1.LiveAdminService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
+    """
+
+    module: ClassVar[Literal["live.admin"]]
+    service: ClassVar[Literal["loams.live.v1.LiveAdminService"]]
+    unstable: ClassVar[Literal[True]]
+    """`loams.live.v1.LiveAdminService/ActivateDeployment`, retried: manual.
+    """
+    async def activate_deployment(
+        self,
+        request: loams.live.v1.admin_pb2.ActivateDeploymentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.ActivateDeploymentResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/Deploy`, retried: manual.
+    """
+    async def deploy(
+        self,
+        request: loams.live.v1.admin_pb2.DeployRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.DeployResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/GetDeployment`, retried: safe.
+    """
+    async def get_deployment(
+        self,
+        request: loams.live.v1.admin_pb2.GetDeploymentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.GetDeploymentResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/GetIndexStatus`, retried: safe.
+    """
+    async def get_index_status(
+        self,
+        request: loams.live.v1.admin_pb2.GetIndexStatusRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.GetIndexStatusResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/ListDeployments`, retried: safe. AIP-158: page with `deployments` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list_deployments(
+        self,
+        request: loams.live.v1.admin_pb2.ListDeploymentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.ListDeploymentsResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/TailLogs`, retried: manual.
+    """
+    def tail_logs(
+        self,
+        request: loams.live.v1.admin_pb2.TailLogsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> AsyncIterator[loams.live.v1.admin_pb2.TailLogsResponse]:
+        ...
+
+
+
+class LiveAdminModuleSync(Protocol):
+    """`loams.live.admin` — Live administration: deploy, roll back, index status and function logs.
+
+    Wraps `loams.live.v1.LiveAdminService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
+    """
+
+    module: ClassVar[Literal["live.admin"]]
+    service: ClassVar[Literal["loams.live.v1.LiveAdminService"]]
+    unstable: ClassVar[Literal[True]]
+    """`loams.live.v1.LiveAdminService/ActivateDeployment`, retried: manual.
+    """
+    def activate_deployment(
+        self,
+        request: loams.live.v1.admin_pb2.ActivateDeploymentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.ActivateDeploymentResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/Deploy`, retried: manual.
+    """
+    def deploy(
+        self,
+        request: loams.live.v1.admin_pb2.DeployRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.DeployResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/GetDeployment`, retried: safe.
+    """
+    def get_deployment(
+        self,
+        request: loams.live.v1.admin_pb2.GetDeploymentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.GetDeploymentResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/GetIndexStatus`, retried: safe.
+    """
+    def get_index_status(
+        self,
+        request: loams.live.v1.admin_pb2.GetIndexStatusRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.GetIndexStatusResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/ListDeployments`, retried: safe. AIP-158: page with `deployments` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list_deployments(
+        self,
+        request: loams.live.v1.admin_pb2.ListDeploymentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.ListDeploymentsResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/TailLogs`, retried: manual.
+    """
+    def tail_logs(
+        self,
+        request: loams.live.v1.admin_pb2.TailLogsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> Iterator[loams.live.v1.admin_pb2.TailLogsResponse]:
+        ...
+
+
+
 class TablesModule(Protocol):
     """A second facade name for the same RPCs, exposed as `loams.tables`.
 
@@ -598,16 +2802,6 @@ class TablesModule(Protocol):
     module: ClassVar[Literal["tables"]]
     service: ClassVar[Literal["loams.live.v1.LiveService"]]
     unstable: ClassVar[Literal[True]]
-    """`loams.live.v1.LiveService/Deploy`, retried: manual.
-    """
-    async def deploy(
-        self,
-        request: loams.live.v1.live_pb2.DeployRequest,
-        *,
-        options: CallOptions | None = None,
-    ) -> loams.live.v1.live_pb2.DeployResponse:
-        ...
-
     """`loams.live.v1.LiveService/Mutate`, retried: manual.
     """
     async def mutate(
@@ -639,16 +2833,6 @@ class TablesModuleSync(Protocol):
     module: ClassVar[Literal["tables"]]
     service: ClassVar[Literal["loams.live.v1.LiveService"]]
     unstable: ClassVar[Literal[True]]
-    """`loams.live.v1.LiveService/Deploy`, retried: manual.
-    """
-    def deploy(
-        self,
-        request: loams.live.v1.live_pb2.DeployRequest,
-        *,
-        options: CallOptions | None = None,
-    ) -> loams.live.v1.live_pb2.DeployResponse:
-        ...
-
     """`loams.live.v1.LiveService/Mutate`, retried: manual.
     """
     def mutate(

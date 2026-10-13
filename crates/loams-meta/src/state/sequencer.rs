@@ -1,6 +1,8 @@
 //! The stream sequencer: dense offsets and the offset index (design §02 §3).
 
-use loams_common::meta::{ApplyError, EntryKind, IndexEntry, WAL_COMMIT_WINDOW_MS, WalChunk};
+use loams_common::meta::{
+    ApplyError, EntryKind, Fence, IndexEntry, WAL_COMMIT_WINDOW_MS, WalChunk,
+};
 
 use super::{MetaState, validate_key};
 use crate::command::Reply;
@@ -13,11 +15,27 @@ impl MetaState {
         created_at_ms: u64,
         chunks: Vec<WalChunk>,
     ) -> Result<Reply, ApplyError> {
+        self.commit_wal_fenced(object, created_at_ms, chunks, &[])
+    }
+
+    /// [`MetaState::commit_wal`] under `fences` (GR1 Task 12): a committed
+    /// object answers its offsets as before; a new one is applied only while
+    /// every fence holds.
+    pub(super) fn commit_wal_fenced(
+        &mut self,
+        object: String,
+        created_at_ms: u64,
+        chunks: Vec<WalChunk>,
+        fences: &[Fence],
+    ) -> Result<Reply, ApplyError> {
         validate_key("WAL object path", &object)?;
         if let Some(record) = self.wal_commits.get(&object) {
             return Ok(Reply::WalCommitted {
                 base_offsets: record.base_offsets.clone(),
             });
+        }
+        for fence in fences {
+            self.check_fence(fence)?;
         }
         if created_at_ms.saturating_add(WAL_COMMIT_WINDOW_MS) < self.clock_ms {
             return Err(ApplyError::StaleCommit { object });

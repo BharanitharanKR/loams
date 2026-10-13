@@ -192,6 +192,12 @@ SchemaChange    v1  { graph_id, lease_epoch, commit_epoch, statement, language }
   - There is no per-record CRC, because log batches carry one.
 - **Snapshots.** A checkpoint job on the owner runs every 15 minutes or every 64 MiB of log, whichever comes first (defaults). It writes a native snapshot (Grafeo `backup_full` of a checkpointed database) to `ns/<ns_id>/graphs/<graph_id>/snap/<epoch>/`, then CAS-commits the manifest `{snapshot, covered_offset, covered_epoch, format, engine_version}` in the metastore. Weekly, and before any engine upgrade, it also writes a **portable snapshot**: Parquet files of nodes and edges with the typed values, which is the I6 escape hatch and the export format (§14.3).
 - **Retention.** The log is trimmed below the oldest retained snapshot's offset, never below the PITR window (7 days by default). GC follows §09's rules for unreferenced objects.
+- **As built by GR1 Task 13 (R13.1–R13.7).**
+  - The manifest is a bucket document committed by a fenced CAS of the metastore pointer `graph-manifest/<gr_id>`, as the catalog is (R4.1).
+  - Snapshots live under `ns/<ns_id>/graphs/<gr_id>/snap/<offset>/<kind>-<ULID>/`. The covered "epoch" is the durable log offset (R9.5).
+  - The trim point is the lower of two offsets: the newest snapshot older than the PITR window, and the newest portable snapshot.
+  - A portable snapshot's property values use the log record's encoding.
+  - A graph whose stream was trimmed opens from its newest usable snapshot. Every other graph still replays its whole stream until Task 14.
 
 ### 6.5 Opening, recovery and eviction
 
@@ -200,6 +206,11 @@ SchemaChange    v1  { graph_id, lease_epoch, commit_epoch, statement, language }
 - **Amended by GR1 Task 9 (R9.5).** A replayed engine restarts at epoch 0 whatever the log's `commit_epoch`s were, so `commit_epoch` is not an order across recovery. Replay order and idempotency use the log offset (a record at or below the last applied offset is skipped), with `txn_seq` as Loams' own per-graph counter; `commit_epoch` is informational. `durable_epoch` after open is the last replayed log offset. A replayed engine is checkpointed (`wal_checkpoint`) before its local files may stand in for the log, because replay writes bypass Grafeo's WAL.
 - **Idle eviction.** A graph with no statement for `graph.idle_evict_after` (1 h by default) is checkpointed and dropped from memory. Its local files stay as a cache until disk pressure removes them. The next statement reopens it (cold-start target: §17.2).
 - **Engine upgrades.** If the new Grafeo cannot read the native snapshot, the owner rebuilds from the latest portable snapshot plus the log. The manifest's `engine_version` tells it which path to take.
+- **As built by GR1 Task 14 (R14.1–R14.8).**
+  - Every durable open chooses its base in order: the local cache, when a clean close stamped it (`cache.json`: offset, next `txn_seq`, idempotency keys, engine version, the database file's size and CRC-32C) and every check still holds; else the manifest's newest usable snapshot (native first when on disk and readable, then portable, older ones after a failure, the manifest re-read at most twice); else the whole stream when it starts at 0. Replay starts at the base's offset.
+  - The stamp is consumed before the engine opens the files, so only a clean close (eviction, shutdown) makes local files trusted. A crash, a reload or a fenced engine leaves none, and the graph is rebuilt.
+  - Eviction: idle (1 h), or least recently used while the open graphs' estimated memory is over `node_memory` (unset until Task 26). It checkpoints first unless a snapshot covers the durable offset, keeps a stamped local cache, gives the owner lease up, and reports `EVICTED`. A graph a caller holds is never evicted. A deleted graph's engine and local cache go on the next pass.
+  - Disk pressure does not yet remove local caches (Task 26).
 
 ## 7. Transactions and consistency (D744, D745)
 
@@ -208,6 +219,7 @@ SchemaChange    v1  { graph_id, lease_epoch, commit_epoch, statement, language }
 - A graph's owner is chosen by rendezvous hashing over nodes with the `graph` role (§04 §5's affinity), and holds a lease `graph/<graph_id>/owner` with an epoch in the metastore (M0.4's lease framework). Lease TTL is 10 s, renewed every 3 s (defaults).
 - Every append carries the lease epoch, and the log refuses a stale epoch, so two owners can never both commit (I5).
 - Writes that reach a non-owner are forwarded to the owner; if no owner holds the lease, the receiving node attempts to acquire it.
+- *As built by GR1 Task 12 (R12.1–R12.7):* the metastore checks a commit's fences atomically with the offset assignment (`WalCommit.fences`). Each engine instance runs under one epoch, taken fresh before it reads the stream, so a reload's new epoch refuses any commit of the old engine that lands late. A free lease goes to the rendezvous choice among the `graph` nodes. Every data-plane call (not only writes) is forwarded to the owner, over `/internal/v1/graph/<method>` until `loams.internal.v1` exists. The graph's stream is the reserved `_graph.<gr_id>`.
 
 ### 7.2 Reads and tokens
 
@@ -218,6 +230,13 @@ SchemaChange    v1  { graph_id, lease_epoch, commit_epoch, statement, language }
 | `eventual` | Any replica | Whatever the replica has applied |
 
 The token is D76's `{(stream, partition, offset)}` over the graph's implicit stream (one partition), returned in the response and in the `loams-consistency-token` header, as `loams.collection.v1` does. A replica is a follower that tails the stream and applies change sets to its own Grafeo instance (the same replay as §6.5).
+
+*As built by GR1 Task 15 (R15.1–R15.6):*
+- A graph's `replicas` followers run on the graph nodes ranked right after the owner's place in its rendezvous order. Each is an in-memory Grafeo instance, apart from the owned graphs, opened like an owner (snapshot and tail, or the whole stream) but with no lease. It refuses every write and tails the stream by long-polling it.
+- A follower opens on its first read and is closed by the eviction pass (idle, deleted, placed elsewhere, or this node took the lease).
+- `eventual` and `at_least` reads go to this node's follower when it runs one, and otherwise to the owner. `strong` reads and every write go to the owner.
+- Every answer carries a token: the write's own, or the serving replica's position after a read. The request header follows `loams.collection.v1`'s rule.
+- `consistency_wait` is server configuration (default 5 s).
 
 ### 7.3 Transactions
 
@@ -276,7 +295,7 @@ message ExecuteRequest {
   bool read_only = 6;                                                     // an assertion: a write is refused
   Consistency consistency = 7;                                            // strong | eventual | at_least(token)
   uint32 timeout_ms = 8; uint32 max_rows = 9;                             // capped by D752
-  string idempotency_key = 10;                                            // required when the statement writes
+  string idempotency_key = 10;                                            // optional in preview; required for writes from GR1 Task 24
 }
 
 message ExecuteResponse {

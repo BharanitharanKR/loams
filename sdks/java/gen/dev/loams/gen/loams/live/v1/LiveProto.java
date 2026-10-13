@@ -101,16 +101,6 @@ public final class LiveProto {
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_loams_live_v1_MutateResponse_fieldAccessorTable;
   static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_loams_live_v1_DeployRequest_descriptor;
-  static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_loams_live_v1_DeployRequest_fieldAccessorTable;
-  static final com.google.protobuf.Descriptors.Descriptor
-    internal_static_loams_live_v1_DeployResponse_descriptor;
-  static final 
-    com.google.protobuf.GeneratedMessage.FieldAccessorTable
-      internal_static_loams_live_v1_DeployResponse_fieldAccessorTable;
-  static final com.google.protobuf.Descriptors.Descriptor
     internal_static_loams_live_v1_Schema_descriptor;
   static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
@@ -125,6 +115,26 @@ public final class LiveProto {
   static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_loams_live_v1_IndexSchema_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_Validator_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_Validator_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_ValidatorObject_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_ValidatorObject_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_ValidatorObject_FieldsEntry_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_ValidatorObject_FieldsEntry_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_ValidatorUnion_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_ValidatorUnion_fieldAccessorTable;
   static final com.google.protobuf.Descriptors.Descriptor
     internal_static_loams_live_v1_LiveError_descriptor;
   static final 
@@ -184,43 +194,63 @@ public final class LiveProto {
       "ey\030\003 \001(\tH\000R\016idempotencyKey\210\001\001B\022\n\020_idempo" +
       "tency_key\"[\n\016MutateResponse\022\033\n\tcommit_ts" +
       "\030\001 \001(\004R\010commitTs\022,\n\006result\030\002 \001(\0132\024.loams" +
-      ".live.v1.ValueR\006result\"V\n\rDeployRequest\022" +
-      "\026\n\006bundle\030\001 \001(\014R\006bundle\022-\n\006schema\030\002 \001(\0132" +
-      "\025.loams.live.v1.SchemaR\006schema\"5\n\016Deploy" +
-      "Response\022#\n\rdeployment_id\030\001 \001(\tR\014deploym" +
-      "entId\"<\n\006Schema\0222\n\006tables\030\001 \003(\0132\032.loams." +
-      "live.v1.TableSchemaR\006tables\"W\n\013TableSche" +
-      "ma\022\022\n\004name\030\001 \001(\tR\004name\0224\n\007indexes\030\002 \003(\0132" +
-      "\032.loams.live.v1.IndexSchemaR\007indexes\"9\n\013" +
-      "IndexSchema\022\022\n\004name\030\001 \001(\tR\004name\022\026\n\006field" +
-      "s\030\002 \003(\tR\006fields\"S\n\tLiveError\022,\n\004code\030\001 \001" +
-      "(\0162\030.loams.live.v1.ErrorCodeR\004code\022\030\n\007me" +
-      "ssage\030\002 \001(\tR\007message*\305\002\n\tErrorCode\022\032\n\026ER" +
-      "ROR_CODE_UNSPECIFIED\020\000\022\037\n\033ERROR_CODE_INV" +
-      "ALID_ARGUMENT\020\001\022\030\n\024ERROR_CODE_NOT_FOUND\020" +
-      "\002\022\"\n\036ERROR_CODE_FAILED_PRECONDITION\020\003\022!\n" +
-      "\035ERROR_CODE_RESOURCE_EXHAUSTED\020\004\022\035\n\031ERRO" +
-      "R_CODE_FUNCTION_ERROR\020\005\022\037\n\033ERROR_CODE_FU" +
-      "NCTION_TIMEOUT\020\006\022%\n!ERROR_CODE_FUNCTION_" +
-      "OUT_OF_MEMORY\020\007\022\032\n\026ERROR_CODE_UNAVAILABL" +
-      "E\020\010\022\027\n\023ERROR_CODE_INTERNAL\020\t2\247\004\n\013LiveSer" +
-      "vice\022N\n\005Watch\022\033.loams.live.v1.WatchReque" +
-      "st\032\031.loams.live.v1.Transition\"\013\222\265\030\007\022\005wat" +
-      "ch0\001\022s\n\016ModifyQuerySet\022$.loams.live.v1.M" +
-      "odifyQuerySetRequest\032%.loams.live.v1.Mod" +
-      "ifyQuerySetResponse\"\024\222\265\030\020\022\016modifyQuerySe" +
-      "t\022W\n\005Query\022\033.loams.live.v1.QueryRequest\032" +
-      "\034.loams.live.v1.QueryResponse\"\023\222\265\030\017\n\006tab" +
-      "les\022\005query\022[\n\006Mutate\022\034.loams.live.v1.Mut" +
-      "ateRequest\032\035.loams.live.v1.MutateRespons" +
-      "e\"\024\222\265\030\020\n\006tables\022\006mutate\022[\n\006Deploy\022\034.loam" +
-      "s.live.v1.DeployRequest\032\035.loams.live.v1." +
-      "DeployResponse\"\024\222\265\030\020\n\006tables\022\006deploy\032@\212\265" +
-      "\030<\n\004live\0222Live sync: watch a query set o" +
-      "ver a server stream.\030\001B~\n\033dev.loams.gen." +
-      "loams.live.v1B\tLiveProtoP\001\242\002\003LLX\252\002\rLoams" +
-      ".Live.V1\312\002\rLoams\\Live\\V1\342\002\031Loams\\Live\\V1" +
-      "\\GPBMetadata\352\002\017Loams::Live::V1b\006proto3"
+      ".live.v1.ValueR\006result\"<\n\006Schema\0222\n\006tabl" +
+      "es\030\001 \003(\0132\032.loams.live.v1.TableSchemaR\006ta" +
+      "bles\"\327\001\n\013TableSchema\022\022\n\004name\030\001 \001(\tR\004name" +
+      "\0224\n\007indexes\030\002 \003(\0132\032.loams.live.v1.IndexS" +
+      "chemaR\007indexes\0226\n\tvalidator\030\003 \001(\0132\030.loam" +
+      "s.live.v1.ValidatorR\tvalidator\0220\n\021schema" +
+      "_validation\030\004 \001(\010H\000R\020schemaValidation\210\001\001" +
+      "B\024\n\022_schema_validation\"9\n\013IndexSchema\022\022\n" +
+      "\004name\030\001 \001(\tR\004name\022\026\n\006fields\030\002 \003(\tR\006field" +
+      "s\"\365\002\n\tValidator\022A\n\tprimitive\030\001 \001(\0162!.loa" +
+      "ms.live.v1.ValidatorPrimitiveH\000R\tprimiti" +
+      "ve\0220\n\005array\030\002 \001(\0132\030.loams.live.v1.Valida" +
+      "torH\000R\005array\0228\n\006object\030\003 \001(\0132\036.loams.liv" +
+      "e.v1.ValidatorObjectH\000R\006object\0220\n\007litera" +
+      "l\030\004 \001(\0132\024.loams.live.v1.ValueH\000R\007literal" +
+      "\0225\n\005union\030\005 \001(\0132\035.loams.live.v1.Validato" +
+      "rUnionH\000R\005union\0226\n\010optional\030\006 \001(\0132\030.loam" +
+      "s.live.v1.ValidatorH\000R\010optional\022\020\n\002id\030\007 " +
+      "\001(\tH\000R\002idB\006\n\004kind\"\252\001\n\017ValidatorObject\022B\n" +
+      "\006fields\030\001 \003(\0132*.loams.live.v1.ValidatorO" +
+      "bject.FieldsEntryR\006fields\032S\n\013FieldsEntry" +
+      "\022\020\n\003key\030\001 \001(\tR\003key\022.\n\005value\030\002 \001(\0132\030.loam" +
+      "s.live.v1.ValidatorR\005value:\0028\001\"D\n\016Valida" +
+      "torUnion\0222\n\007members\030\001 \003(\0132\030.loams.live.v" +
+      "1.ValidatorR\007members\"S\n\tLiveError\022,\n\004cod" +
+      "e\030\001 \001(\0162\030.loams.live.v1.ErrorCodeR\004code\022" +
+      "\030\n\007message\030\002 \001(\tR\007message*\224\002\n\022ValidatorP" +
+      "rimitive\022#\n\037VALIDATOR_PRIMITIVE_UNSPECIF" +
+      "IED\020\000\022\034\n\030VALIDATOR_PRIMITIVE_NULL\020\001\022\035\n\031V" +
+      "ALIDATOR_PRIMITIVE_INT64\020\002\022\037\n\033VALIDATOR_" +
+      "PRIMITIVE_FLOAT64\020\003\022\037\n\033VALIDATOR_PRIMITI" +
+      "VE_BOOLEAN\020\004\022\036\n\032VALIDATOR_PRIMITIVE_STRI" +
+      "NG\020\005\022\035\n\031VALIDATOR_PRIMITIVE_BYTES\020\006\022\033\n\027V" +
+      "ALIDATOR_PRIMITIVE_ANY\020\007*\305\002\n\tErrorCode\022\032" +
+      "\n\026ERROR_CODE_UNSPECIFIED\020\000\022\037\n\033ERROR_CODE" +
+      "_INVALID_ARGUMENT\020\001\022\030\n\024ERROR_CODE_NOT_FO" +
+      "UND\020\002\022\"\n\036ERROR_CODE_FAILED_PRECONDITION\020" +
+      "\003\022!\n\035ERROR_CODE_RESOURCE_EXHAUSTED\020\004\022\035\n\031" +
+      "ERROR_CODE_FUNCTION_ERROR\020\005\022\037\n\033ERROR_COD" +
+      "E_FUNCTION_TIMEOUT\020\006\022%\n!ERROR_CODE_FUNCT" +
+      "ION_OUT_OF_MEMORY\020\007\022\032\n\026ERROR_CODE_UNAVAI" +
+      "LABLE\020\010\022\027\n\023ERROR_CODE_INTERNAL\020\t2\312\003\n\013Liv" +
+      "eService\022N\n\005Watch\022\033.loams.live.v1.WatchR" +
+      "equest\032\031.loams.live.v1.Transition\"\013\222\265\030\007\022" +
+      "\005watch0\001\022s\n\016ModifyQuerySet\022$.loams.live." +
+      "v1.ModifyQuerySetRequest\032%.loams.live.v1" +
+      ".ModifyQuerySetResponse\"\024\222\265\030\020\022\016modifyQue" +
+      "rySet\022W\n\005Query\022\033.loams.live.v1.QueryRequ" +
+      "est\032\034.loams.live.v1.QueryResponse\"\023\222\265\030\017\n" +
+      "\006tables\022\005query\022[\n\006Mutate\022\034.loams.live.v1" +
+      ".MutateRequest\032\035.loams.live.v1.MutateRes" +
+      "ponse\"\024\222\265\030\020\n\006tables\022\006mutate\032@\212\265\030<\n\004live\022" +
+      "2Live sync: watch a query set over a ser" +
+      "ver stream.\030\001B~\n\033dev.loams.gen.loams.liv" +
+      "e.v1B\tLiveProtoP\001\242\002\003LLX\252\002\rLoams.Live.V1\312" +
+      "\002\rLoams\\Live\\V1\342\002\031Loams\\Live\\V1\\GPBMetad" +
+      "ata\352\002\017Loams::Live::V1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -318,38 +348,50 @@ public final class LiveProto {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_MutateResponse_descriptor,
         new java.lang.String[] { "CommitTs", "Result", });
-    internal_static_loams_live_v1_DeployRequest_descriptor =
-      getDescriptor().getMessageTypes().get(15);
-    internal_static_loams_live_v1_DeployRequest_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_loams_live_v1_DeployRequest_descriptor,
-        new java.lang.String[] { "Bundle", "Schema", });
-    internal_static_loams_live_v1_DeployResponse_descriptor =
-      getDescriptor().getMessageTypes().get(16);
-    internal_static_loams_live_v1_DeployResponse_fieldAccessorTable = new
-      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
-        internal_static_loams_live_v1_DeployResponse_descriptor,
-        new java.lang.String[] { "DeploymentId", });
     internal_static_loams_live_v1_Schema_descriptor =
-      getDescriptor().getMessageTypes().get(17);
+      getDescriptor().getMessageTypes().get(15);
     internal_static_loams_live_v1_Schema_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_Schema_descriptor,
         new java.lang.String[] { "Tables", });
     internal_static_loams_live_v1_TableSchema_descriptor =
-      getDescriptor().getMessageTypes().get(18);
+      getDescriptor().getMessageTypes().get(16);
     internal_static_loams_live_v1_TableSchema_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_TableSchema_descriptor,
-        new java.lang.String[] { "Name", "Indexes", });
+        new java.lang.String[] { "Name", "Indexes", "Validator", "SchemaValidation", });
     internal_static_loams_live_v1_IndexSchema_descriptor =
-      getDescriptor().getMessageTypes().get(19);
+      getDescriptor().getMessageTypes().get(17);
     internal_static_loams_live_v1_IndexSchema_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_IndexSchema_descriptor,
         new java.lang.String[] { "Name", "Fields", });
-    internal_static_loams_live_v1_LiveError_descriptor =
+    internal_static_loams_live_v1_Validator_descriptor =
+      getDescriptor().getMessageTypes().get(18);
+    internal_static_loams_live_v1_Validator_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_Validator_descriptor,
+        new java.lang.String[] { "Primitive", "Array", "Object", "Literal", "Union", "Optional", "Id", "Kind", });
+    internal_static_loams_live_v1_ValidatorObject_descriptor =
+      getDescriptor().getMessageTypes().get(19);
+    internal_static_loams_live_v1_ValidatorObject_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_ValidatorObject_descriptor,
+        new java.lang.String[] { "Fields", });
+    internal_static_loams_live_v1_ValidatorObject_FieldsEntry_descriptor =
+      internal_static_loams_live_v1_ValidatorObject_descriptor.getNestedTypes().get(0);
+    internal_static_loams_live_v1_ValidatorObject_FieldsEntry_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_ValidatorObject_FieldsEntry_descriptor,
+        new java.lang.String[] { "Key", "Value", });
+    internal_static_loams_live_v1_ValidatorUnion_descriptor =
       getDescriptor().getMessageTypes().get(20);
+    internal_static_loams_live_v1_ValidatorUnion_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_ValidatorUnion_descriptor,
+        new java.lang.String[] { "Members", });
+    internal_static_loams_live_v1_LiveError_descriptor =
+      getDescriptor().getMessageTypes().get(21);
     internal_static_loams_live_v1_LiveError_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_LiveError_descriptor,

@@ -1,9 +1,125 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/websocket.config.json",
-  "title": "WebSocket instance config (placeholder)",
-  "description": "Placeholder for a WebSocket instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "WebSocket connector instance config (loams.flow/v1)",
+  "description": "One WebSocket endpoint's settings (CN2 Task 18, loams_connector_brokers::websocket): frames in, frames out. WebSocket has no acknowledgement and no replay, so both directions are at most once and the source is not resumable.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "url"
+  ],
+  "properties": {
+    "url": {
+      "description": "ws://host/path or wss://host/path, without credentials.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^wss?://[^@/]+(/.*)?$"
+    },
+    "headers": {
+      "description": "Fixed, non-secret handshake headers. A credential header (Authorization, Cookie, X-Api-Key) is refused here; use `auth`.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "auth": {
+      "description": "Credentials by secret name: an API key in a named header (`key`) or a bearer token (`jwt`).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key_header": {
+          "description": "The header the API key goes in.",
+          "type": "string",
+          "minLength": 1
+        },
+        "key": {
+          "description": "The API key. A secret name, resolved through the namespace's secret store (D189); the value is never stored here.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "bearer": {
+          "description": "A bearer token (Authorization: Bearer …). A secret name, resolved through the namespace's secret store (D189); the value is never stored here.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "tls": {
+      "description": "TLS settings: a CA bundle to trust instead of the webpki roots, and a client certificate for mTLS.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ca_pem": {
+          "description": "PEM CA bundle (not a secret).",
+          "type": "string",
+          "minLength": 1
+        },
+        "cert_pem": {
+          "description": "PEM client certificate chain for mTLS (not a secret).",
+          "type": "string",
+          "minLength": 1
+        },
+        "key_pem": {
+          "description": "The client's PEM private key, for mTLS. A secret name, resolved through the namespace's secret store (D189); the value is never stored here.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "max_frame_bytes": {
+      "description": "The largest frame accepted.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 16777216
+    },
+    "source": {
+      "description": "The source.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "subscribe": {
+          "description": "A text frame sent after the handshake, such as a subscription request.",
+          "type": "string",
+          "minLength": 1
+        },
+        "max_batch": {
+          "description": "Messages per batch at most (the pipeline's budget may be smaller).",
+          "type": "integer",
+          "minimum": 1,
+          "default": 1000
+        },
+        "poll_wait_ms": {
+          "description": "How long one read waits for the first message before reporting nothing.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 200
+        }
+      }
+    },
+    "sink": {
+      "description": "The sink.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "frame": {
+          "description": "auto (text for textual data, else binary), text, binary, or structured (the CloudEvent as JSON).",
+          "type": "string",
+          "enum": [
+            "auto",
+            "text",
+            "binary",
+            "structured"
+          ],
+          "default": "auto"
+        }
+      }
+    },
+    "pipeline": {
+      "description": "The SDK's per-instance pipeline overrides (`PipelineConfig::with_overrides`): max_batch_rows, max_batch_bytes, linger_ms, max_in_flight_batches, memory_budget_bytes, checkpoint_interval_ms and retry. The broker-side window (prefetch, credit, Receive Maximum, max_ack_pending, receiver queue) is derived from them unless set.",
+      "type": "object"
+    }
+  }
 }

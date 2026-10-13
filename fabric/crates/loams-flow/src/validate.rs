@@ -16,6 +16,11 @@
 //! * [`LicenceGate`] is D359: AGPL, BSL, SSPL, ELv2, `NOASSERTION` and unknown ids
 //!   are refused for anything Loams ships or runs by default, and the refused set is
 //!   read from `connectors/licences.toml` rather than written here a second time.
+//!   CN2 plan Task 3 adds the `ci-service` and `user-supplied` kinds and where each
+//!   may be placed ([`LicenceComponent::check_placement`], [`LicenceGate::scan_image`],
+//!   [`LicenceGate::scan_compose`]), and the crates compiled into each
+//!   `loams-connector-*` family crate ([`LicenceGate::check_family_crates`]);
+//!   `scripts/connectors/{image_licences.py,crate_licences.py}` run the same rules in CI.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -221,14 +226,16 @@ pub fn semantic_rules(
 
 /// Whether R-CN2-6 (OR-1, native first for P1 and P2) is an error.
 ///
-/// CN2 plan Task 1 makes it a warning until Task 2 has assigned the runtimes —
-/// the registry as built has 63 Camel and 9 OpenAPI P2 rows — and an error after.
-/// Task 2 flips this to `true` in the same change that assigns them; until then
-/// [`semantic_warnings`] reports it and [`semantic_rules`] does not.
-pub const NATIVE_FIRST_ENFORCED: bool = false;
+/// CN2 plan Task 1 made it a warning until Task 2 had assigned the runtimes (the
+/// registry then had 63 Camel and 9 OpenAPI P2 rows). CN2 Task 2 assigned them —
+/// every P1 and P2 manifest declares its directions, native by default unless a
+/// `fallback-only:` note names an OR-4 reason — and flipped this to `true`, so
+/// [`semantic_rules`] refuses and [`semantic_warnings`] is empty.
+pub const NATIVE_FIRST_ENFORCED: bool = true;
 
-/// The rules that warn rather than refuse: today only R-CN2-6, while
-/// [`NATIVE_FIRST_ENFORCED`] is `false`. A [`crate::Registry`] load collects these
+/// The rules that warn rather than refuse: only R-CN2-6, and only while
+/// [`NATIVE_FIRST_ENFORCED`] is `false`, which it has not been since CN2 Task 2.
+/// Kept so a rule can be staged as a warning again the same way. A [`crate::Registry`] load collects these
 /// per manifest and keeps them in [`crate::Registry::warnings`].
 pub fn semantic_warnings(spec: &ConnectorSpec) -> Vec<ManifestError> {
     let mut warnings = Vec::new();
@@ -439,9 +446,17 @@ fn rule_cn2_5_preview_needs_the_contract_suite(
 /// OR-4's reasons a P1 or P2 direction may run on a non-native runtime by default,
 /// as the words a `fallback-only:` note names them by, matched case-insensitively:
 /// Oracle (its client is proprietary), Salesforce CDC, JMS providers without AMQP
-/// 1.0, the generic JDBC ★ (a Java API), and the Debezium Server CDC rows that stay
-/// fallbacks of the native CDC.
-pub const OR4_FALLBACK_REASONS: &[&str] = &["oracle", "salesforce", "jms", "jdbc", "debezium"];
+/// 1.0, the generic JDBC ★ (a Java API), the Debezium Server CDC rows that stay
+/// fallbacks of the native CDC, and (CN2 Task 2) the Camel runtime row of §33 A.8,
+/// which is OR-4's fallback runtime itself rather than a connector.
+pub const OR4_FALLBACK_REASONS: &[&str] = &[
+    "oracle",
+    "salesforce",
+    "jms",
+    "jdbc",
+    "debezium",
+    "camel runtime",
+];
 
 /// The prefix of the note R-CN2-6 reads.
 pub const FALLBACK_ONLY_PREFIX: &str = "fallback-only:";
@@ -1126,6 +1141,66 @@ pub enum LicenceError {
         /// The refused SPDX id.
         id: String,
     },
+    /// A `[components.*]` stanza lacks a field its kind needs, or carries one in the
+    /// wrong shape (CN2 Task 3: a `ci-service` names an image, a digest, a reason and
+    /// its CI profiles; a `user-supplied` driver names its file and mount path).
+    #[error("{path}: components.{key}: {message}")]
+    Malformed {
+        /// The file's path.
+        path: String,
+        /// The `[components.<key>]` stanza.
+        key: String,
+        /// What is wrong with it.
+        message: String,
+    },
+    /// A `ci-service` or `user-supplied` component found where it may not be (OR-3;
+    /// CN1 Ruling 8).
+    #[error("{origin}: components.{key} ({kind}) is in {placement}: {rule}")]
+    Misplaced {
+        /// The file, image or service the component was found in.
+        origin: String,
+        /// The `[components.<key>]` stanza.
+        key: String,
+        /// The stanza's kind.
+        kind: ComponentKind,
+        /// Where it was found.
+        placement: String,
+        /// The rule it breaks.
+        rule: &'static str,
+    },
+    /// A crate compiled into a family crate carries a refused licence (D359).
+    #[error(
+        "{family}: dependency {krate} {version} is licensed {licence}, which the gate refuses (D359)"
+    )]
+    RefusedCrate {
+        /// The `loams-connector-*` crate it is compiled into.
+        family: String,
+        /// The dependency.
+        krate: String,
+        /// Its version.
+        version: String,
+        /// Its licence expression, as `cargo metadata` reports it.
+        licence: String,
+    },
+    /// A crate compiled into a family crate declares no licence (D359 refuses an
+    /// unlicensed dependency).
+    #[error(
+        "{family}: dependency {krate} {version} declares no licence, which the gate refuses (D359)"
+    )]
+    UnlicensedCrate {
+        /// The `loams-connector-*` crate it is compiled into.
+        family: String,
+        /// The dependency.
+        krate: String,
+        /// Its version.
+        version: String,
+    },
+    /// `cargo metadata`'s output is not the shape the gate reads.
+    #[error("cargo metadata: {message}")]
+    Metadata {
+        /// What is missing.
+        message: String,
+    },
 }
 
 impl LicenceGate {
@@ -1217,17 +1292,801 @@ impl LicenceGate {
     /// No `[components.*]` stanza of the gate input may itself carry a refused id:
     /// a component Loams names with an AGPL or BSL id is refused however no manifest
     /// uses it. `scripts/connectors/gen_registry.py --check` asserts the same.
+    ///
+    /// Two kinds are exempt. A `service` stanza is a system Loams reaches over its API
+    /// and neither ships nor links (the D359 carve-out, CN2 R2.8; CN2 Task 0's R0.30
+    /// test images rely on it), so a refused id on one is recorded, not refused. A
+    /// `ci-service` (OR-3, the D60 precedent) runs only in CI, is never shipped, and so
+    /// may carry a refused id such as Redpanda's BSL. Every stanza is also read with
+    /// [`LicenceGate::read_components`], so a `ci-service` or `user-supplied` stanza
+    /// missing a field its kind needs fails here too.
     pub fn check_components(&self, text: &str, origin: &str) -> Result<(), LicenceError> {
-        for (key, id) in Self::components(text, origin)? {
-            if self.refuses(&id) {
+        for component in Self::read_components(text, origin)? {
+            if !matches!(
+                component.kind,
+                ComponentKind::Service | ComponentKind::CiService
+            ) && self.refuses(&component.spdx)
+            {
                 return Err(LicenceError::RefusedListedComponent {
                     path: origin.to_string(),
-                    key,
-                    id,
+                    key: component.key,
+                    id: component.spdx,
                 });
             }
         }
         Ok(())
+    }
+
+    /// Every `[components.*]` stanza, read and checked for the fields its kind needs.
+    pub fn read_components(
+        text: &str,
+        origin: &str,
+    ) -> Result<Vec<LicenceComponent>, LicenceError> {
+        let flat = parse_licences_toml(text).map_err(|message| LicenceError::Syntax {
+            path: origin.to_string(),
+            message,
+        })?;
+        let keys: BTreeSet<&str> = flat
+            .keys()
+            .filter_map(|key| key.strip_prefix("components."))
+            .filter_map(|rest| rest.rsplit_once('.').map(|(stanza, _)| stanza))
+            .collect();
+        keys.into_iter()
+            .map(|key| LicenceComponent::read(&flat, key, origin))
+            .collect()
+    }
+
+    /// D359 for one crate compiled into the family crate `family`: its licence
+    /// expression must exist and must leave a choice outside the refused set.
+    ///
+    /// `OR` (and the old `/` spelling) is satisfied by either side, `AND` needs both,
+    /// and `WITH <exception>` is judged by its licence. A leaf is refused when the
+    /// `[deny]` list names it or when it is of a refused family (`AGPL-3.0` is
+    /// `AGPL-3.0-only` spelled short), the same rule `gen_registry.py` applies.
+    pub fn check_crate_licence(
+        &self,
+        family: &str,
+        krate: &str,
+        version: &str,
+        licence: Option<&str>,
+    ) -> Result<(), LicenceError> {
+        let Some(licence) = licence.map(str::trim).filter(|licence| !licence.is_empty()) else {
+            return Err(LicenceError::UnlicensedCrate {
+                family: family.to_string(),
+                krate: krate.to_string(),
+                version: version.to_string(),
+            });
+        };
+        let refused = || LicenceError::RefusedCrate {
+            family: family.to_string(),
+            krate: krate.to_string(),
+            version: version.to_string(),
+            licence: licence.to_string(),
+        };
+        let tokens = spdx_tokens(licence);
+        let mut parser = SpdxParser {
+            tokens: &tokens,
+            at: 0,
+            gate: self,
+        };
+        match parser.or_expression() {
+            Some(true) if parser.at == tokens.len() => Ok(()),
+            _ => Err(refused()),
+        }
+    }
+
+    /// Whether a crate licence id is refused: by the `[deny]` list, or by family.
+    fn refuses_crate_id(&self, id: &str) -> bool {
+        if self.refuses(id) {
+            return true;
+        }
+        let family = id.split('-').next().unwrap_or(id).to_ascii_uppercase();
+        REFUSED_FAMILIES.contains(&family.as_str())
+    }
+
+    /// D359 over `cargo metadata --format-version 1`: every crate compiled into each
+    /// workspace member named `loams-connector-*` (normal and build dependencies,
+    /// transitively; dev dependencies are not compiled into the crate). A workspace
+    /// with no family crate passes with an empty report.
+    pub fn check_family_crates(
+        &self,
+        metadata: &Value,
+    ) -> Result<Vec<FamilyCrateReport>, Vec<LicenceError>> {
+        let malformed = |message: &str| {
+            vec![LicenceError::Metadata {
+                message: message.to_string(),
+            }]
+        };
+        let Some(packages) = metadata["packages"].as_array() else {
+            return Err(malformed("no packages array"));
+        };
+        let Some(members) = metadata["workspace_members"].as_array() else {
+            return Err(malformed("no workspace_members array"));
+        };
+        let Some(nodes) = metadata["resolve"]["nodes"].as_array() else {
+            return Err(malformed("no resolve.nodes array (run without --no-deps)"));
+        };
+        let by_id: BTreeMap<&str, &Value> = packages
+            .iter()
+            .filter_map(|package| Some((package["id"].as_str()?, package)))
+            .collect();
+        let edges: BTreeMap<&str, Vec<&str>> = nodes
+            .iter()
+            .filter_map(|node| {
+                let deps = node["deps"]
+                    .as_array()?
+                    .iter()
+                    .filter(|dep| compiled_in(dep))
+                    .filter_map(|dep| dep["pkg"].as_str())
+                    .collect();
+                Some((node["id"].as_str()?, deps))
+            })
+            .collect();
+
+        let mut reports = Vec::new();
+        let mut errors = Vec::new();
+        for member in members.iter().filter_map(Value::as_str) {
+            let Some(package) = by_id.get(member) else {
+                continue;
+            };
+            let family = package["name"].as_str().unwrap_or_default();
+            if !is_family_crate(family) {
+                continue;
+            }
+            let mut seen: BTreeSet<&str> = BTreeSet::new();
+            let mut stack: Vec<&str> = edges.get(member).cloned().unwrap_or_default();
+            while let Some(id) = stack.pop() {
+                if !seen.insert(id) {
+                    continue;
+                }
+                stack.extend(edges.get(id).into_iter().flatten().copied());
+            }
+            let mut dependencies = Vec::new();
+            for id in &seen {
+                let Some(dep) = by_id.get(id) else {
+                    errors.push(LicenceError::Metadata {
+                        message: format!("{family}: dependency {id} has no package entry"),
+                    });
+                    continue;
+                };
+                let name = dep["name"].as_str().unwrap_or(id);
+                let version = dep["version"].as_str().unwrap_or_default();
+                if let Err(error) =
+                    self.check_crate_licence(family, name, version, dep["license"].as_str())
+                {
+                    errors.push(error);
+                }
+                dependencies.push(name.to_string());
+            }
+            dependencies.sort();
+            dependencies.dedup();
+            reports.push(FamilyCrateReport {
+                name: family.to_string(),
+                dependencies,
+            });
+        }
+        if errors.is_empty() {
+            Ok(reports)
+        } else {
+            Err(errors)
+        }
+    }
+
+    /// The `ci-service` and `user-supplied` components that a Containerfile of the
+    /// image `image` names: none may be in an image Loams builds (OR-3; CN1 Ruling 8).
+    ///
+    /// A `ci-service` is found by its image reference on any instruction line; a
+    /// `user-supplied` driver by its file name (the pattern up to its first wildcard)
+    /// or its mount path. Comment lines are skipped.
+    pub fn scan_image(
+        components: &[LicenceComponent],
+        image: &str,
+        containerfile: &str,
+    ) -> Result<(), Vec<LicenceError>> {
+        let placement = Placement::Image(image);
+        let mut errors = Vec::new();
+        for line in containerfile.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let lower = line.to_ascii_lowercase();
+            for component in components {
+                let named = match component.kind {
+                    ComponentKind::CiService => component
+                        .image
+                        .as_deref()
+                        .is_some_and(|reference| names_image(&lower, reference)),
+                    ComponentKind::UserSupplied => component.names_driver(&lower),
+                    _ => false,
+                };
+                if named && let Err(error) = component.check_placement(&placement) {
+                    errors.push(error.with_origin(&format!("image {image}")));
+                }
+            }
+        }
+        dedup_errors(errors)
+    }
+
+    /// The services of a compose file, against where each `ci-service` and
+    /// `user-supplied` component may run. A service with no `profiles` is in the
+    /// default profile. `${NAME:-default}` in an image is read as its default.
+    pub fn scan_compose(
+        components: &[LicenceComponent],
+        origin: &str,
+        compose: &str,
+    ) -> Result<(), Vec<LicenceError>> {
+        let document: serde_json::Value = match serde_norway::from_str(compose) {
+            Ok(document) => document,
+            Err(error) => {
+                return Err(vec![LicenceError::Syntax {
+                    path: origin.to_string(),
+                    message: error.to_string(),
+                }]);
+            }
+        };
+        let mut errors = Vec::new();
+        let Some(services) = document["services"].as_object() else {
+            return Ok(());
+        };
+        for (name, service) in services {
+            let profiles: Vec<String> = service["profiles"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|profile| profile.as_str().map(str::to_string))
+                .collect();
+            let where_ = format!("{origin} service {name}");
+            let image = service["image"]
+                .as_str()
+                .map(|image| expand_defaults(image).to_ascii_lowercase());
+            let volumes: Vec<String> = service["volumes"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(volume_spec)
+                .collect();
+            for component in components {
+                match component.kind {
+                    ComponentKind::CiService => {
+                        let named = image.as_deref().is_some_and(|image| {
+                            component
+                                .image
+                                .as_deref()
+                                .is_some_and(|reference| names_image(image, reference))
+                        });
+                        if named
+                            && let Err(error) =
+                                component.check_placement(&Placement::Compose(&profiles))
+                        {
+                            errors.push(error.with_origin(&where_));
+                        }
+                    }
+                    ComponentKind::UserSupplied => {
+                        for volume in &volumes {
+                            let target = volume_target(volume);
+                            let lower = volume.to_ascii_lowercase();
+                            let mount = component.mount.as_deref().unwrap_or_default();
+                            let at_mount = !mount.is_empty()
+                                && (target == mount || target.starts_with(&format!("{mount}/")));
+                            if !(at_mount || component.names_driver(&lower)) {
+                                continue;
+                            }
+                            // A documented mount, but only outside the default profile.
+                            let placement = if profiles.is_empty() {
+                                Placement::Compose(&profiles)
+                            } else {
+                                Placement::Mount(target)
+                            };
+                            if let Err(error) = component.check_placement(&placement) {
+                                errors.push(error.with_origin(&where_));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        dedup_errors(errors)
+    }
+}
+
+/// The licence families D359 refuses whatever the exact spelling, as
+/// `scripts/connectors/gen_registry.py`'s `REFUSED_LICENCE_FAMILIES` lists them.
+/// `BSL-1.0` (Boost) is not `BUSL`, so it is not among them.
+const REFUSED_FAMILIES: [&str; 6] = ["AGPL", "BUSL", "SSPL", "ELASTIC", "NOASSERTION", "UNKNOWN"];
+
+/// Whether `name` is a connector family crate (CN2 Task 3): `loams-connector-*`,
+/// which includes `loams-connector-sdk`, compiled into every family crate.
+pub fn is_family_crate(name: &str) -> bool {
+    name.strip_prefix("loams-connector-")
+        .is_some_and(|rest| !rest.is_empty())
+}
+
+/// Whether a compose profile is one a `ci-service` may run in (OR-3): a name that
+/// starts with `connectors-`, such as `connectors-ci-only` or `connectors-p2`. The
+/// bare `connectors` profile is the default connector stack and is not one.
+pub fn is_ci_profile(name: &str) -> bool {
+    name.strip_prefix("connectors-")
+        .is_some_and(|rest| !rest.is_empty())
+}
+
+/// One family crate the gate checked, with the crates compiled into it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FamilyCrateReport {
+    /// The `loams-connector-*` crate.
+    pub name: String,
+    /// The names of the crates compiled into it, sorted.
+    pub dependencies: Vec<String>,
+}
+
+/// The kind of a `[components.*]` stanza in `connectors/licences.toml`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ComponentKind {
+    /// A runtime Loams supervises.
+    Runtime,
+    /// A driver or shared library loaded from a mounted directory or an allowlist.
+    Driver,
+    /// A Rust crate compiled in.
+    Library,
+    /// A service reached over its API, which Loams neither ships nor links.
+    Service,
+    /// A proprietary or source-available image that runs only in CI (OR-3).
+    CiService,
+    /// A driver the operator supplies and mounts, never shipped (CN1 Ruling 8).
+    UserSupplied,
+}
+
+impl ComponentKind {
+    /// The kind as `connectors/licences.toml` spells it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Runtime => "runtime",
+            Self::Driver => "driver",
+            Self::Library => "library",
+            Self::Service => "service",
+            Self::CiService => "ci-service",
+            Self::UserSupplied => "user-supplied",
+        }
+    }
+
+    /// The kind from its spelling.
+    pub fn parse(text: &str) -> Option<Self> {
+        [
+            Self::Runtime,
+            Self::Driver,
+            Self::Library,
+            Self::Service,
+            Self::CiService,
+            Self::UserSupplied,
+        ]
+        .into_iter()
+        .find(|kind| kind.as_str() == text)
+    }
+
+    /// Whether Loams ships, links or loads it: the kinds D359's deny list gates
+    /// everywhere.
+    pub fn is_shipped(self) -> bool {
+        matches!(self, Self::Runtime | Self::Driver | Self::Library)
+    }
+}
+
+impl fmt::Display for ComponentKind {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+/// One `[components.*]` stanza of `connectors/licences.toml`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LicenceComponent {
+    /// The stanza key.
+    pub key: String,
+    /// The SPDX id, or a `LicenseRef-*` for a `ci-service` or `user-supplied` one.
+    pub spdx: String,
+    /// The kind.
+    pub kind: ComponentKind,
+    /// A `ci-service`'s image reference, without tag or digest.
+    pub image: Option<String>,
+    /// A `ci-service`'s pinned digest, `sha256:<64 hex>`.
+    pub digest: Option<String>,
+    /// Why a `ci-service` is needed.
+    pub reason: Option<String>,
+    /// The compose profiles a `ci-service` runs in, each a CI profile.
+    pub profiles: Vec<String>,
+    /// A `user-supplied` driver's file-name pattern, such as `ojdbc*.jar`.
+    pub driver: Option<String>,
+    /// A `user-supplied` driver's documented mount path, absolute.
+    pub mount: Option<String>,
+}
+
+/// Where a `ci-service` or `user-supplied` component was found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Placement<'a> {
+    /// In an image Loams builds, by name.
+    Image(&'a str),
+    /// In a compose service with these profiles; none is the default profile.
+    Compose(&'a [String]),
+    /// In a CI workflow file.
+    CiWorkflow(&'a str),
+    /// Mounted into a container at this path.
+    Mount(&'a str),
+}
+
+impl fmt::Display for Placement<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Image(name) => write!(formatter, "image {name}"),
+            Self::Compose([]) => formatter.write_str("the default compose profile"),
+            Self::Compose(profiles) => {
+                write!(formatter, "compose profiles [{}]", profiles.join(", "))
+            }
+            Self::CiWorkflow(path) => write!(formatter, "CI workflow {path}"),
+            Self::Mount(path) => write!(formatter, "mount {path}"),
+        }
+    }
+}
+
+impl LicenceComponent {
+    fn read(
+        flat: &BTreeMap<String, String>,
+        key: &str,
+        origin: &str,
+    ) -> Result<Self, LicenceError> {
+        let field = |name: &str| {
+            flat.get(&format!("components.{key}.{name}"))
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty())
+        };
+        let malformed = |message: String| LicenceError::Malformed {
+            path: origin.to_string(),
+            key: key.to_string(),
+            message,
+        };
+        let spdx = field("spdx").ok_or_else(|| malformed("no spdx".to_string()))?;
+        let kind_text = field("kind").ok_or_else(|| malformed("no kind".to_string()))?;
+        let kind = ComponentKind::parse(&kind_text).ok_or_else(|| {
+            malformed(format!(
+                "kind {kind_text:?} is not runtime, driver, library, service, ci-service or \
+                 user-supplied"
+            ))
+        })?;
+        let component = Self {
+            key: key.to_string(),
+            spdx,
+            kind,
+            image: field("image"),
+            digest: field("digest"),
+            reason: field("reason"),
+            profiles: field("profiles")
+                .map(|array| split_toml_array(&array))
+                .unwrap_or_default(),
+            driver: field("driver"),
+            mount: field("mount"),
+        };
+        component.check_fields().map_err(malformed)?;
+        Ok(component)
+    }
+
+    /// The fields CN2 Task 3 requires of the two new kinds.
+    fn check_fields(&self) -> Result<(), String> {
+        match self.kind {
+            ComponentKind::CiService => {
+                let image = self
+                    .image
+                    .as_deref()
+                    .ok_or("a ci-service names its image")?;
+                let last = image.rsplit('/').next().unwrap_or(image);
+                if image.contains('@') || last.contains(':') {
+                    return Err(format!(
+                        "image {image:?} carries a tag or digest; the digest goes in `digest`"
+                    ));
+                }
+                let digest = self.digest.as_deref().unwrap_or_default();
+                let hex = digest.strip_prefix("sha256:").unwrap_or_default();
+                if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                    return Err(format!(
+                        "digest {digest:?} is not sha256:<64 hex> (images are pinned by digest)"
+                    ));
+                }
+                if self.reason.is_none() {
+                    return Err("a ci-service gives the reason it is needed".to_string());
+                }
+                if !(is_spdx_id(&self.spdx) || is_eula_ref(&self.spdx)) {
+                    return Err(format!(
+                        "spdx {:?} is neither an SPDX id nor LicenseRef-<vendor>-EULA",
+                        self.spdx
+                    ));
+                }
+                if self.profiles.is_empty() {
+                    return Err("a ci-service names the CI profiles it runs in".to_string());
+                }
+                if let Some(profile) = self.profiles.iter().find(|p| !is_ci_profile(p)) {
+                    return Err(format!(
+                        "profile {profile:?} is not a CI profile (connectors-*; OR-3)"
+                    ));
+                }
+                if self.mount.is_some() || self.driver.is_some() {
+                    return Err("a ci-service has no driver or mount".to_string());
+                }
+            }
+            ComponentKind::UserSupplied => {
+                if self.driver.is_none() {
+                    return Err("a user-supplied component names its driver file".to_string());
+                }
+                let mount = self.mount.as_deref().unwrap_or_default();
+                if !mount.starts_with('/') {
+                    return Err(format!(
+                        "mount {mount:?} is not an absolute path; a user-supplied driver is \
+                         only ever a documented mount"
+                    ));
+                }
+                if !(is_spdx_id(&self.spdx) || self.spdx.starts_with("LicenseRef-")) {
+                    return Err(format!(
+                        "spdx {:?} is neither an SPDX id nor a LicenseRef-*",
+                        self.spdx
+                    ));
+                }
+                if self.image.is_some() || !self.profiles.is_empty() {
+                    return Err("a user-supplied driver has no image or profiles".to_string());
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Whether this component may be placed at `placement` (OR-3; CN1 Ruling 8).
+    /// Kinds other than `ci-service` and `user-supplied` are placed anywhere: their
+    /// licence, not their placement, is what the gate checks.
+    pub fn check_placement(&self, placement: &Placement<'_>) -> Result<(), LicenceError> {
+        let refuse = |rule: &'static str| {
+            Err(LicenceError::Misplaced {
+                origin: "connectors/licences.toml".to_string(),
+                key: self.key.clone(),
+                kind: self.kind,
+                placement: placement.to_string(),
+                rule,
+            })
+        };
+        match (self.kind, placement) {
+            (ComponentKind::CiService, Placement::CiWorkflow(_)) => Ok(()),
+            (ComponentKind::CiService, Placement::Compose(profiles))
+                if !profiles.is_empty() && profiles.iter().all(|p| is_ci_profile(p)) =>
+            {
+                Ok(())
+            }
+            (ComponentKind::CiService, _) => refuse(
+                "a ci-service runs only in a connectors-* compose profile or a CI workflow, \
+                 never in an image or the default profile (OR-3)",
+            ),
+            (ComponentKind::UserSupplied, Placement::Mount(path))
+                if self.mount.as_deref().is_some_and(|mount| {
+                    *path == mount || path.starts_with(&format!("{mount}/"))
+                }) =>
+            {
+                Ok(())
+            }
+            (ComponentKind::UserSupplied, _) => refuse(
+                "a user-supplied driver is only ever mounted at its documented path, never \
+                 shipped in an image or the default profile (CN1 Ruling 8)",
+            ),
+            _ => Ok(()),
+        }
+    }
+
+    /// Whether lowercased `text` names this `user-supplied` driver's file.
+    fn names_driver(&self, text: &str) -> bool {
+        let Some(driver) = self.driver.as_deref() else {
+            return false;
+        };
+        let stem = driver
+            .split(['*', '?', '['])
+            .next()
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        let by_name = stem.len() >= 3 && text.contains(&stem);
+        let by_mount = self
+            .mount
+            .as_deref()
+            .is_some_and(|mount| text.contains(&mount.to_ascii_lowercase()));
+        by_name || by_mount
+    }
+}
+
+impl LicenceError {
+    /// The same error, naming where it was found.
+    fn with_origin(self, origin: &str) -> Self {
+        match self {
+            Self::Misplaced {
+                key,
+                kind,
+                placement,
+                rule,
+                ..
+            } => Self::Misplaced {
+                origin: origin.to_string(),
+                key,
+                kind,
+                placement,
+                rule,
+            },
+            other => other,
+        }
+    }
+}
+
+fn dedup_errors(mut errors: Vec<LicenceError>) -> Result<(), Vec<LicenceError>> {
+    let mut seen = BTreeSet::new();
+    errors.retain(|error| seen.insert(error.to_string()));
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
+/// Whether a `cargo metadata` dependency edge is compiled into its parent: a normal
+/// or build dependency, not dev-only.
+fn compiled_in(dep: &Value) -> bool {
+    match dep["dep_kinds"].as_array() {
+        Some(kinds) if !kinds.is_empty() => kinds
+            .iter()
+            .any(|kind| kind["kind"].as_str() != Some("dev")),
+        _ => true,
+    }
+}
+
+/// Whether lowercased `text` names the image `reference` (no tag or digest):
+/// `docker.io/` and `library/` prefixes are ignored, and the reference must end at a
+/// tag, a digest, whitespace or the end.
+fn names_image(text: &str, reference: &str) -> bool {
+    let reference = normalise_image(&reference.to_ascii_lowercase());
+    text.split_whitespace().any(|word| {
+        let word = normalise_image(word);
+        word.strip_prefix(reference.as_str())
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with([':', '@']))
+    })
+}
+
+fn normalise_image(image: &str) -> String {
+    let image = image.trim_start_matches("--from=");
+    let image = image.strip_prefix("docker.io/").unwrap_or(image);
+    image.strip_prefix("library/").unwrap_or(image).to_string()
+}
+
+/// `${NAME:-default}` and `${NAME-default}` replaced by their defaults, and a bare
+/// `${NAME}` by nothing: what compose runs with no environment set.
+fn expand_defaults(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("${") {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 2..];
+        let Some(end) = after.find('}') else {
+            out.push_str(&rest[start..]);
+            return out;
+        };
+        let inner = &after[..end];
+        if let Some((_, default)) = inner.split_once(":-").or_else(|| inner.split_once('-')) {
+            out.push_str(default);
+        }
+        rest = &after[end + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// A compose volume as one `source:target[:mode]` string, short or long syntax.
+fn volume_spec(volume: &Value) -> Option<String> {
+    if let Some(short) = volume.as_str() {
+        return Some(expand_defaults(short));
+    }
+    let target = volume["target"].as_str()?;
+    let source = volume["source"].as_str().unwrap_or_default();
+    Some(format!("{}:{target}", expand_defaults(source)))
+}
+
+/// The container path of a `source:target[:mode]` volume.
+fn volume_target(volume: &str) -> &str {
+    let mut parts = volume.split(':');
+    let first = parts.next().unwrap_or_default();
+    parts.next().unwrap_or(first)
+}
+
+fn is_spdx_id(id: &str) -> bool {
+    !id.is_empty()
+        && !id.starts_with("LicenseRef-")
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'+' | b'-'))
+}
+
+/// `LicenseRef-<vendor>-EULA`, the id a vendor-licensed `ci-service` carries.
+fn is_eula_ref(id: &str) -> bool {
+    id.strip_prefix("LicenseRef-")
+        .and_then(|rest| rest.strip_suffix("-EULA"))
+        .is_some_and(|vendor| {
+            !vendor.is_empty()
+                && vendor
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-'))
+        })
+}
+
+/// An SPDX licence expression's tokens: `(`, `)`, and words.
+fn spdx_tokens(expression: &str) -> Vec<String> {
+    expression
+        .replace('(', " ( ")
+        .replace(')', " ) ")
+        .replace('/', " OR ")
+        .split_whitespace()
+        .map(str::to_string)
+        .collect()
+}
+
+/// A recursive-descent reader of an SPDX expression that yields whether it leaves a
+/// choice outside the refused set; `None` is an expression it cannot read, which the
+/// gate refuses like a missing licence.
+struct SpdxParser<'a> {
+    tokens: &'a [String],
+    at: usize,
+    gate: &'a LicenceGate,
+}
+
+impl SpdxParser<'_> {
+    fn peek(&self) -> Option<&str> {
+        self.tokens.get(self.at).map(String::as_str)
+    }
+
+    fn or_expression(&mut self) -> Option<bool> {
+        let mut acceptable = self.and_expression()?;
+        while self
+            .peek()
+            .is_some_and(|token| token.eq_ignore_ascii_case("OR"))
+        {
+            self.at += 1;
+            acceptable |= self.and_expression()?;
+        }
+        Some(acceptable)
+    }
+
+    fn and_expression(&mut self) -> Option<bool> {
+        let mut acceptable = self.term()?;
+        while self
+            .peek()
+            .is_some_and(|token| token.eq_ignore_ascii_case("AND"))
+        {
+            self.at += 1;
+            acceptable &= self.term()?;
+        }
+        Some(acceptable)
+    }
+
+    fn term(&mut self) -> Option<bool> {
+        let token = self.peek()?.to_string();
+        self.at += 1;
+        if token == "(" {
+            let inner = self.or_expression()?;
+            if self.peek() != Some(")") {
+                return None;
+            }
+            self.at += 1;
+            return Some(inner);
+        }
+        if token == ")" || ["AND", "OR", "WITH"].contains(&token.to_ascii_uppercase().as_str()) {
+            return None;
+        }
+        if self
+            .peek()
+            .is_some_and(|next| next.eq_ignore_ascii_case("WITH"))
+        {
+            self.at += 1;
+            self.peek()?;
+            self.at += 1;
+        }
+        let id = token.trim_end_matches('+');
+        Some(!self.gate.refuses_crate_id(id))
     }
 }
 

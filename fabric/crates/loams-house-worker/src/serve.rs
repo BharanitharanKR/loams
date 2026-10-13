@@ -124,6 +124,12 @@ pub struct Worker {
     bound: Option<Bind>,
     sessions: HashMap<String, SessionSlot>,
     ready: Ready,
+    /// Whether this worker is its engine's only user (its own process), so it
+    /// may drop every view database between statements (HS1 Task 11). In-process
+    /// workers share one engine and never do.
+    owns_engine: bool,
+    /// Whether the last statement left read views behind.
+    views_live: bool,
 }
 
 /// The engine configuration a worker with these arguments runs.
@@ -151,7 +157,9 @@ impl Worker {
         // the working directory, so it is the worker's own.
         std::env::set_current_dir(args.files_dir())
             .map_err(|err| loams_error("CANNOT_CHDIR", err))?;
-        Self::boot_on(engine_config(args), started)
+        let mut worker = Self::boot_on(engine_config(args), started)?;
+        worker.ready.s3_endpoint = args.s3_endpoint.clone();
+        Ok(worker)
     }
 
     /// Starts (or joins) the engine `config` describes and prepares a worker on it.
@@ -177,6 +185,7 @@ impl Worker {
             clickhouse_version: engine.version().to_string(),
             boot_ms: u32::try_from(started.elapsed().as_millis()).unwrap_or(u32::MAX),
             settings,
+            s3_endpoint: None,
         };
         Ok(Self {
             engine,
@@ -184,6 +193,8 @@ impl Worker {
             bound: None,
             sessions: HashMap::new(),
             ready,
+            owns_engine: false,
+            views_live: false,
         })
     }
 
@@ -198,6 +209,7 @@ impl Worker {
         R: Read + Send + 'static,
         W: Write,
     {
+        self.owns_engine = matches!(hosting, Hosting::Process(_));
         let frames = spawn_reader(reader, hosting);
         if let Err(err) = send(&mut writer, &Frame::Ready(self.ready.clone())) {
             return err;
@@ -321,6 +333,23 @@ impl Worker {
             *input_failure = Some(true);
         }
 
+        // Every entry is checked before any runs (HS1 R11.11): a batch with one
+        // refused entry makes nothing, which matters most to in-process workers,
+        // which never drop views between statements.
+        for view in &execute.views {
+            self.check_control_ddl(view).map_err(Failure::Engine)?;
+        }
+
+        // The read views of §49 §7 are the statement's own (HS1 Task 11): what an
+        // earlier statement made is gone before this one's are made, so a name it
+        // does not name, or a pin it did not take, is never read.
+        if self.owns_engine && self.views_live {
+            drop_views(&self.control).map_err(|err| Failure::Engine(engine_error(&err)))?;
+            self.views_live = false;
+        }
+        if !execute.views.is_empty() {
+            self.views_live = true;
+        }
         for view in &execute.views {
             self.control
                 .execute_simple(view)
@@ -330,6 +359,7 @@ impl Worker {
         let now = Instant::now();
         let Some(spec) = &execute.session else {
             let fresh = self.user_connection(&execute.query_id)?;
+            use_database(&fresh, execute)?;
             apply_settings(&fresh, &bind, execute)?;
             return statement(&fresh, execute, frames, writer, input_failure);
         };
@@ -375,7 +405,8 @@ impl Worker {
             .filter(|name| is_setting_name(name))
             .collect();
         let before = snapshot(&slot.session, &names);
-        let applied_ok = apply_settings(&slot.session, &bind, execute);
+        let applied_ok = use_database(&slot.session, execute)
+            .and_then(|()| apply_settings(&slot.session, &bind, execute));
         let applied = snapshot(&slot.session, &names);
         let result = match applied_ok {
             Ok(()) => statement(&slot.session, execute, frames, writer, input_failure),
@@ -395,6 +426,29 @@ impl Worker {
             self.sessions.remove(&spec.key);
         }
         result
+    }
+
+    /// Whether the control connection may run `sql` (HS1 R11.11). It is not
+    /// read-only, and chDB has one user (`--user=` is ignored, `CREATE USER`
+    /// and `EXECUTE AS` are refused, R1.8), so no grant can confine it to view
+    /// DDL; the worker does: one statement, ClickHouse's own parser says so, of
+    /// one of the shapes [`control_ddl_shape`] takes.
+    fn check_control_ddl(&self, sql: &str) -> Result<(), EngineError> {
+        let one = matches!(
+            self.control.classify(sql),
+            Ok(analysis) if analysis.statements == 1
+        );
+        if one && control_ddl_shape(sql) {
+            return Ok(());
+        }
+        Err(EngineError {
+            code: 497,
+            name: "ACCESS_DENIED".to_string(),
+            message: "the worker's control connection runs only the House's view DDL \
+                      (one CREATE DATABASE … ENGINE = Memory, CREATE OR REPLACE VIEW or \
+                      DROP TABLE IF EXISTS)"
+                .to_string(),
+        })
     }
 
     /// `Classify`: ClickHouse's parser on the control connection, nothing run
@@ -695,6 +749,175 @@ fn restore(
     true
 }
 
+/// The databases a worker never drops: the engine's own and `default`, which
+/// it empties instead (a dropped `default` breaks later connects, R1.9).
+const KEPT_DATABASES: &[&str] = &[
+    "system",
+    "information_schema",
+    "INFORMATION_SCHEMA",
+    "default",
+    "_temporary_and_external_tables",
+];
+
+/// A name in backquotes.
+fn quoted_name(name: &str) -> String {
+    format!("`{}`", name.replace('\\', "\\\\").replace('`', "\\`"))
+}
+
+/// A name as the front prints it: a plain word, or back-quoted with `\\` and
+/// `` \` `` escaped. Returns the text after it.
+fn after_name(text: &str) -> Option<&str> {
+    let bytes = text.as_bytes();
+    match bytes.first()? {
+        b'`' => {
+            let mut at = 1;
+            while at < bytes.len() {
+                match bytes[at] {
+                    b'\\' => at += 2,
+                    b'`' => return Some(&text[at + 1..]),
+                    _ => at += 1,
+                }
+            }
+            None
+        }
+        first if first.is_ascii_alphabetic() || *first == b'_' => {
+            let end = bytes
+                .iter()
+                .position(|b| !(b.is_ascii_alphanumeric() || *b == b'_'))
+                .unwrap_or(bytes.len());
+            Some(&text[end..])
+        }
+        _ => None,
+    }
+}
+
+/// `<name> <type>, …)`, a read view's column list after its `(` (HS1 R-ACL.1),
+/// returning the text after the `)`. Each type is held to the form
+/// `loams_house::views` prints: names, numbers, `( ) , = - + .`, spaces and
+/// string literals with no quote, backslash or line break in them; never `--`.
+fn after_columns(text: &str) -> Option<&str> {
+    let mut rest = text;
+    loop {
+        rest = after_name(rest)?.strip_prefix(' ')?;
+        rest = after_type(rest)?;
+        if let Some(next) = rest.strip_prefix(", ") {
+            rest = next;
+        } else {
+            return rest.strip_prefix(')');
+        }
+    }
+}
+
+/// One column type, returning the text from the `,` or `)` that ends it. At the
+/// top level only a name and its parenthesised arguments; inside them also
+/// spaces, `, = - + .` and string literals.
+fn after_type(text: &str) -> Option<&str> {
+    let mut depth = 0usize;
+    let mut in_literal = false;
+    let mut previous = ' ';
+    for (at, ch) in text.char_indices() {
+        if in_literal {
+            match ch {
+                '\'' => in_literal = false,
+                '\\' | '\n' | '\r' => return None,
+                _ => {}
+            }
+            continue;
+        }
+        match ch {
+            '\'' if depth > 0 => in_literal = true,
+            '(' => depth += 1,
+            ')' | ',' if depth == 0 => return (at > 0).then(|| &text[at..]),
+            ')' => depth -= 1,
+            '-' if previous == '-' => return None,
+            // At the top a type is one name, or a name and its arguments: a
+            // space there would start something else (`DEFAULT …`).
+            c if c.is_ascii_alphanumeric() || c == '_' => {}
+            c if depth > 0 && " ,=-+.".contains(c) => {}
+            _ => return None,
+        }
+        previous = ch;
+    }
+    None
+}
+
+/// `<name>.<name>`, returning the text after it.
+fn after_qualified(text: &str) -> Option<&str> {
+    after_name(after_name(text)?.strip_prefix('.')?)
+}
+
+/// The shapes of the front's view DDL (`loams_house::views`, `system`): `CREATE
+/// DATABASE IF NOT EXISTS d ENGINE = Memory`, `CREATE OR REPLACE VIEW d.v AS\n…`,
+/// a read view of the bucket `CREATE OR REPLACE VIEW d.v (<name> <type>, …) SQL
+/// SECURITY NONE AS\n…` (HS1 R-ACL.1), and `DROP TABLE IF EXISTS d.t`, exactly.
+pub fn control_ddl_shape(sql: &str) -> bool {
+    if let Some(rest) = sql.strip_prefix("CREATE DATABASE IF NOT EXISTS ") {
+        return after_name(rest) == Some(" ENGINE = Memory");
+    }
+    if let Some(rest) = sql.strip_prefix("CREATE OR REPLACE VIEW ") {
+        let Some(after) = after_qualified(rest) else {
+            return false;
+        };
+        if after.starts_with(" AS\n") {
+            return true;
+        }
+        return after
+            .strip_prefix(" (")
+            .and_then(after_columns)
+            .is_some_and(|body| body.starts_with(" SQL SECURITY NONE AS\n"));
+    }
+    if let Some(rest) = sql.strip_prefix("DROP TABLE IF EXISTS ") {
+        return after_qualified(rest) == Some("");
+    }
+    false
+}
+
+/// Drops every read view an earlier statement made (HS1 Task 11): the views in
+/// `default` and every other `Memory` database the front created. Session
+/// temporary tables live elsewhere and stay.
+pub fn drop_views(control: &Session) -> Result<(), ChdbError> {
+    let names = |sql: &str| -> Result<Vec<String>, ChdbError> {
+        let bytes = control.query(sql, "TSVRaw", &[])?;
+        Ok(String::from_utf8_lossy(&bytes)
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect())
+    };
+    let kept = KEPT_DATABASES
+        .iter()
+        .map(|d| format!("'{d}'"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    for database in names(&format!(
+        "SELECT name FROM system.databases WHERE engine = 'Memory' AND name NOT IN ({kept})"
+    ))? {
+        control.execute_simple(&format!(
+            "DROP DATABASE IF EXISTS {}",
+            quoted_name(&database)
+        ))?;
+    }
+    for table in
+        names("SELECT name FROM system.tables WHERE database = 'default' AND NOT is_temporary")?
+    {
+        control.execute_simple(&format!(
+            "DROP TABLE IF EXISTS default.{}",
+            quoted_name(&table)
+        ))?;
+    }
+    Ok(())
+}
+
+/// `USE` the statement's database on its user connection (HS1 Task 11).
+fn use_database(session: &Session, execute: &Execute) -> Result<(), Failure> {
+    let Some(database) = &execute.database else {
+        return Ok(());
+    };
+    session
+        .execute_simple(&format!("USE {}", quoted_name(database)))
+        .map_err(|err| Failure::Engine(engine_error(&err)))
+}
+
 /// `DROP DATABASE default; CREATE DATABASE default ENGINE = Memory`, once.
 ///
 /// Skipped when `default` is already a `Memory` database, which is what a second
@@ -918,7 +1141,46 @@ fn fill_memory(progress: &mut Progress) {
 
 #[cfg(test)]
 mod tests {
-    use super::is_setting_name;
+    use super::{control_ddl_shape, is_setting_name};
+
+    #[test]
+    fn control_ddl_shapes() {
+        for ok in [
+            "CREATE DATABASE IF NOT EXISTS d ENGINE = Memory",
+            "CREATE DATABASE IF NOT EXISTS `my db` ENGINE = Memory",
+            "CREATE DATABASE IF NOT EXISTS `a\\`b` ENGINE = Memory",
+            "CREATE OR REPLACE VIEW d.v AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW `__loams_system`.`tables` AS\nSELECT 1",
+            "DROP TABLE IF EXISTS d.`t`",
+            "CREATE OR REPLACE VIEW d.v (a UInt8) SQL SECURITY NONE AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.`t` (k UInt64, `s t` Nullable(String), \
+             e Enum8('a b' = 1, 'c' = -2), d DateTime64(3, 'UTC')) SQL SECURITY NONE AS\nSELECT 1",
+        ] {
+            assert!(control_ddl_shape(ok), "{ok}");
+        }
+        for bad in [
+            "CREATE DATABASE IF NOT EXISTS d ENGINE = Atomic",
+            "CREATE DATABASE IF NOT EXISTS d ENGINE = Memory; SELECT 1",
+            "CREATE DATABASE IF NOT EXISTS `d ENGINE = Memory",
+            "CREATE OR REPLACE VIEW v AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a UInt8) AS SELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a UInt8) AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a UInt8) SQL SECURITY NONE AS SELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a UInt8) SQL SECURITY DEFINER AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a UInt8 -- x\n) SQL SECURITY NONE AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a Enum8('x\\' = 1)) SQL SECURITY NONE AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a UInt8 DEFAULT file('/etc/passwd')) SQL SECURITY NONE \
+             AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.v () SQL SECURITY NONE AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a UInt8; DROP DATABASE d) SQL SECURITY NONE AS\nSELECT 1",
+            "CREATE TABLE d.t (a UInt8) ENGINE = Memory",
+            "DROP TABLE IF EXISTS d.t; DROP DATABASE d",
+            "DROP DATABASE d",
+            "INSERT INTO d.v VALUES (1)",
+        ] {
+            assert!(!control_ddl_shape(bad), "{bad}");
+        }
+    }
 
     #[test]
     fn setting_names_are_identifiers() {

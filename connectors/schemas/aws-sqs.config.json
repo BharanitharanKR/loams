@@ -1,9 +1,83 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/aws-sqs.config.json",
-  "title": "AWS SQS instance config (placeholder)",
-  "description": "Placeholder for a AWS SQS instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "AWS SQS connector instance config (loams.flow/v1)",
+  "description": "One SQS connector instance's settings, read by the native cloud family (`loams_connector_cloud::sqs`, CN2 Task 19): the queue, the long-poll source's leases and the FIFO sink's group. The `auth.*` keys hold the **names** of secrets (D189) and are exactly the manifest's `secrets` list. See docs/guides/connectors/aws-sqs.md.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "queue_url"
+  ],
+  "properties": {
+    "queue_url": {
+      "description": "The queue URL, standard or FIFO (`….fifo`).",
+      "type": "string",
+      "minLength": 1
+    },
+    "region": {
+      "description": "The AWS region, such as eu-west-1. Required unless `endpoint` is set; with an emulator endpoint it defaults to us-east-1.",
+      "type": "string",
+      "minLength": 1
+    },
+    "endpoint": {
+      "description": "An emulator or VPC endpoint URL, such as floci's http://floci:4566. With an emulator endpoint and no `auth`, requests are signed with a placeholder key (R19.3).",
+      "type": "string",
+      "minLength": 1
+    },
+    "auth": {
+      "description": "Static AWS credentials, each the **name** of a secret (the manifest's `iam` auth slug: SigV4). Required without `endpoint`. There is no IMDS, IRSA or SSO chain yet (R19.1).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "access_key_id": {
+          "description": "The name of the secret holding the AWS access key id. Resolved through the secret store (D189); never stored in the instance.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "secret_access_key": {
+          "description": "The name of the secret holding the AWS secret access key. Resolved through the secret store (D189); never stored in the instance.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "session_token": {
+          "description": "The name of the secret holding an AWS session token, for temporary credentials. Resolved through the secret store (D189); never stored in the instance.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "wait_time_seconds": {
+      "description": "ReceiveMessage's long-poll wait.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 20,
+      "default": 20
+    },
+    "visibility_timeout_seconds": {
+      "description": "How long a received message stays invisible; it is renewed at half this while its event waits for the Fabric.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 43200,
+      "default": 30
+    },
+    "receivers": {
+      "description": "Receive loops run in parallel on the queue.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "default": 1
+    },
+    "message_group_id": {
+      "description": "FIFO sink only: the MessageGroupId; without it the event's subject, else `loams`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }

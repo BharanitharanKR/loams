@@ -29,6 +29,8 @@ const PACKAGE_PARAMETERS: &[&str] = &[
     "loams.operations.v1=loams_proto::loams::operations::v1",
     "loams.notifications.v1=loams_proto::loams::notifications::v1",
     "loams.live.v1=loams_live_proto::loams::live::v1",
+    "loams.auth.v1=loams_proto::loams::auth::v1",
+    "loams.admin.v1=loams_proto::loams::admin::v1",
 ];
 
 /// The three types the generated traits name that the runtime defines. They are

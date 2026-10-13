@@ -2,17 +2,22 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/elasticsearch.config.json",
   "title": "Elasticsearch connector instance config (loams.flow/v1)",
-  "description": "One Elasticsearch connector instance's settings: the cluster URL, the index, the source's scroll window and the sink's bulk size. Loams renders both Iggy plugin configs from this one instance (design §33 §8 row 11; CN1 plan Task 10), so it covers the source and the sink. `basic.password` and `api_key` resolve through the namespace's secret store (D189) and are exactly the manifest's `secrets` list. The `key` property is required because the manifest declares capabilities.sink.upsert: true (CN1 Task 1's semantic rule); it is also the document _id the upsert and the delete use.",
+  "description": "One Elasticsearch connector instance's settings, read by the native search family (`loams_connector_search::elasticsearch`, CN2 Task 15, OR-8): the cluster URL, the index, the `_bulk` sink's batching and the point-in-time source's cursor. It covers the source and the sink. `basic.password` and `api_key` hold the **names** of secrets in the namespace's store (D189), which the connector resolves when it connects; they are exactly the manifest's `secrets` list. The `key` property is declared because the manifest declares capabilities.sink.upsert: true (CN1 Task 1's semantic rule); it is the document _id the upsert and the delete use, and without it _id is the event's ce_id.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["url", "index", "key"],
+  "required": ["url", "index"],
   "properties": {
     "url": {
-      "description": "The cluster base URL. A Loams collection's ES gateway endpoint works unchanged (§33 §8 row 11).",
+      "description": "The cluster base URL, http:// or https://, with no credentials in it. A Loams collection's ES gateway endpoint works unchanged (§33 §8 row 11), as an extra target (OR-2).",
       "type": "string",
       "minLength": 1
     },
-    "index": { "description": "The index read or written.", "type": "string", "minLength": 1 },
+    "index": { "description": "The index (or alias) read or written.", "type": "string", "minLength": 1 },
+    "api": {
+      "description": "The point-in-time API the cluster speaks. An OpenSearch target profile sets `opensearch` in its defaults.",
+      "enum": ["elasticsearch", "opensearch"],
+      "default": "elasticsearch"
+    },
     "basic": {
       "description": "HTTP basic auth (the manifest's `basic` auth slug).",
       "type": "object",
@@ -21,7 +26,7 @@
       "properties": {
         "username": { "description": "The basic-auth user.", "type": "string", "minLength": 1 },
         "password": {
-          "description": "The basic-auth password. Resolved through the secret store (D189); the rendered Iggy config reads it from a mounted file.",
+          "description": "The name of the secret holding the basic-auth password, resolved through the secret store (D189).",
           "type": "string",
           "minLength": 1,
           "writeOnly": true
@@ -29,55 +34,46 @@
       }
     },
     "api_key": {
-      "description": "An API key, base64 of id:api_key. Resolved through the secret store (D189); the rendered Iggy config reads it from a mounted file.",
+      "description": "The name of the secret holding an API key (the base64 of id:api_key, sent as `Authorization: ApiKey …`), resolved through the secret store (D189).",
       "type": "string",
       "minLength": 1,
       "writeOnly": true
     },
     "key": {
-      "description": "The sink's upsert key: the field whose value becomes the document _id. Required because the manifest declares capabilities.sink.upsert: true (CN1 Task 1's semantic rule).",
+      "description": "The document key: a JSON pointer (or a top-level field name) into an event's data whose value becomes the _id. Without it, _id is the event's ce_id. Either way a replay overwrites rather than duplicates (effectively once).",
       "type": "string",
       "minLength": 1
     },
-    "bulk_size": {
-      "description": "Documents per bulk request.",
-      "type": "integer",
-      "minimum": 1,
-      "default": 5000
-    },
-    "flush_interval_ms": {
-      "description": "How often a partial bulk is flushed.",
-      "type": "integer",
-      "minimum": 1,
-      "default": 1000
-    },
-    "scroll": {
-      "description": "The source's scroll or point-in-time window.",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "keep_alive": { "description": "How long a scroll stays open, as a duration string.", "type": "string", "default": "2m" },
-        "size": { "description": "Hits per scroll page.", "type": "integer", "minimum": 1, "default": 1000 },
-        "sort": {
-          "description": "The sort field the point-in-time read orders on; it must be unique and stable, and it is the source's position.",
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    },
     "apply_deletes": {
-      "description": "Apply deletes for events carrying loamsop = d, as a delete by _id.",
+      "description": "Apply events carrying loamsop = d as a delete by _id.",
       "type": "boolean",
       "default": true
     },
-    "tls": {
-      "description": "TLS material for an https:// URL.",
+    "bulk": {
+      "description": "The `_bulk` sink. A partial failure resends only the failed items; a 429 halves the documents per request.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "ca_pem": { "description": "The CA bundle, as PEM.", "type": "string" },
-        "verify_full": { "description": "Whether the server certificate's hostname is verified.", "type": "boolean", "default": true }
+        "max_docs": { "description": "Documents per `_bulk` request at most.", "type": "integer", "minimum": 1, "default": 1000 },
+        "max_bytes": { "description": "Bytes per `_bulk` request at most.", "type": "integer", "minimum": 1, "default": 5242880 },
+        "max_item_retries": { "description": "Retries of the failed items of one write before it fails.", "type": "integer", "minimum": 0, "default": 5 },
+        "retry_backoff_ms": { "description": "The first backoff between item retries, doubled each time (30 s at most).", "type": "integer", "minimum": 0, "default": 100 }
       }
-    }
+    },
+    "source": {
+      "description": "The point-in-time source: `search_after` with a tiebreaker, incremental by a cursor field.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cursor_field": { "description": "A field that only grows (an update time, a sequence): reads are ordered by it and a new pass starts at its last value read. Without it every pass reads the whole index.", "type": "string", "minLength": 1 },
+        "tiebreaker": { "description": "The sort tiebreaker inside a point in time: `_shard_doc` on Elasticsearch, `_id` on OpenSearch by default.", "type": "string", "minLength": 1 },
+        "page_size": { "description": "Hits per page.", "type": "integer", "minimum": 1, "default": 1000 },
+        "keep_alive": { "description": "How long a point in time stays open between pages, as a duration string.", "type": "string", "default": "2m" },
+        "poll_interval_ms": { "description": "With it, a pass that reached the end starts again this long after; without it the source reads one pass and ends.", "type": "integer", "minimum": 1 },
+        "query": { "description": "A Query DSL query the read is filtered by.", "type": "object" }
+      }
+    },
+    "request_timeout_ms": { "description": "Per-request timeout.", "type": "integer", "minimum": 1, "default": 30000 },
+    "pipeline": { "description": "The connector SDK's pipeline overrides (`pipeline.*`).", "type": "object" }
   }
 }

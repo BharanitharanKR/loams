@@ -1,12 +1,14 @@
 import { ipcMain, session } from "electron";
 import { CH } from "../../shared/contracts";
 import { assertTrustedSender } from "../security/policy";
+import { upstream } from "../protocol/inflight";
 import { getMainWindow } from "../shell/main-window";
 import { clearSessionCookies, serverHandlers } from "./handlers";
 import type { ServerRegistry } from "./registry";
 
 export function registerServerIpc(registry: ServerRegistry): void {
 	const h = serverHandlers(registry, {
+		abortInFlight: () => upstream.abortAll(),
 		clearCookies: (origin) =>
 			clearSessionCookies(session.defaultSession.cookies, origin),
 		reload: () => getMainWindow()?.webContents.reloadIgnoringCache(),

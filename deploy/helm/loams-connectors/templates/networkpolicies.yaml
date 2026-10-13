@@ -1,0 +1,61 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $fullname := include "loams-connectors.fullname" . }}
+{{- $monitoring := .Values.metrics.monitoringNamespace }}
+# Flow pods: only Prometheus reaches them (metrics and health). Their egress
+# is guarded in-process, per connection, by the SDK's egress hook (Task 25).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-flow
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "loams-connectors.labels" . | nindent 4 }}
+    app.kubernetes.io/component: flow
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "loams-connectors.flowSelector" . | nindent 6 }}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $monitoring }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.flow.metricsPort | int64 }}
+{{- range (include "loams-connectors.servedK8sNamespaces" . | trim | splitList "\n") }}
+{{- if . }}
+---
+# Fallback pods in {{ . }}: no egress at all until KubeRuntime's per-group
+# policy, rendered from the namespace's EgressPolicy, opens it (Kubernetes
+# unions policies, so this one only ever closes); ingress only for metrics.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $fullname }}-fallback-default
+  namespace: {{ . }}
+  labels:
+    {{- include "loams-connectors.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: fallback
+spec:
+  podSelector:
+    matchLabels:
+      loams.dev/fallback: "true"
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $monitoring }}
+      ports:
+        - protocol: TCP
+          port: {{ $.Values.fallback.camel.metricsPort | int64 }}
+        - protocol: TCP
+          port: {{ $.Values.fallback.debezium.metricsPort | int64 }}
+        - protocol: TCP
+          port: {{ $.Values.fallback.iggy.metricsPort | int64 }}
+  egress: []
+{{- end }}
+{{- end }}
+{{- end }}

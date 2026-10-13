@@ -3,21 +3,38 @@
 # and `--check` fails CI when the two disagree (CN1 Task 2: appendix_matches_csv).
 # splunk: a planned stub with no capability detail (D353); a hand-written manifest
 # replaces it, and the generator never rewrites an id listed in handwritten.txt.
+# CN2 Task 2 declares its directions and each one's default runtime (OR-1, R-CN2-6);
+# its family task fills in the rest.
 apiVersion: loams.flow/v1
 kind: Connector
 id: splunk
 name: Splunk
-specVersion: 0.1.0
+specVersion: 0.2.0
 category: observability
 priority: P2
 starred: false
 status: planned
 runtime:
-  kind: camel
-  ref: splunk
+  kind: native
+  ref: loams_connector_http::http
+  profile: splunk
 licence:
   component: Apache-2.0
 capabilities:
+  source:
+    streaming: true
+    batch: true
+    cdc: false
+    webhook: false
+    resumable: false
+    position: ""
+  sink:
+    streaming: true
+    batch: true
+    transactional: false
+    upsert: false
+    delete: false
+    idempotent: false
   delivery:
     source: at_least_once
     sink: at_least_once
@@ -43,3 +60,5 @@ envelope:
 limits: {}
 conformance: []
 docs: null
+notes:
+  - the HEC sink counts a batch as written only once Splunk acknowledges it as indexed (indexer acknowledgement); HEC does not deduplicate a resend, so delivery stays at_least_once (CN2 Task 20, R20.8)

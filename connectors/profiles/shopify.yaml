@@ -1,0 +1,49 @@
+# Shopify — an HTTP-API profile (CN2 OR-11, Task 20). Written from Shopify's
+# public Admin REST API reference (version 2025-07):
+#   Products: https://shopify.dev/docs/api/admin-rest/2025-07/resources/product
+#   Pagination (Link headers): https://shopify.dev/docs/api/admin-rest/usage/pagination
+#   Access tokens: https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens
+#   Rate limits: https://shopify.dev/docs/api/usage/limits
+#   Webhook HMAC: https://shopify.dev/docs/apps/build/webhooks/subscribe/https#step-5-verify-the-webhook
+# `shop` is the store's myshopify.com subdomain. The access token is a secret
+# named by `auth.api_key` and sent in `X-Shopify-Access-Token`. Shopify's
+# GraphQL Admin API is the vendor's preferred surface for new public apps; the
+# REST resources here serve custom and existing apps (R20.6).
+apiVersion: loams.flow/v1
+kind: Profile
+id: shopify
+profile_kind: http-api
+module: http
+system:
+  name: Shopify
+  service: { fixture: conformance/connectors/fixtures/shopify }
+defaults: {}
+narrows: []
+http:
+  base_url: "https://{config.shop}.myshopify.com/admin/api/2025-07"
+  auth: { scheme: header, header: X-Shopify-Access-Token }
+  headers: { Accept: application/json }
+  resources:
+    products:
+      list:
+        method: GET
+        path: "/products.json"
+        items: "/products"
+        key: "/id"
+        query: { limit: "250" }
+      create:
+        method: POST
+        path: "/products.json"
+        wrap: "/product"
+    orders:
+      list:
+        method: GET
+        path: "/orders.json"
+        items: "/orders"
+        key: "/id"
+        query: { limit: "250", status: any }
+  rate_limit:
+    requests: 2
+    per_seconds: 1
+    honour_headers: ["Retry-After"]
+  webhook: { scheme: shopify, header: "X-Shopify-Hmac-Sha256" }

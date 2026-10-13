@@ -1,0 +1,9 @@
+{
+  "actionId": "action-1",
+  "actionName": "Test",
+  "terminal": {
+    "cwd": "/home/dev/project",
+    "id": "term-1",
+    "shell": "/bin/bash"
+  }
+}

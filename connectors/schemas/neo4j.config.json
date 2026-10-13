@@ -1,9 +1,132 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/neo4j.config.json",
-  "title": "Neo4j instance config (placeholder)",
-  "description": "Placeholder for a Neo4j instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "Neo4j connector instance config (loams.flow/v1)",
+  "description": "One Neo4j instance's settings, read by the native protocols family (`loams_connector_protocols::neo4j`, CN2 Task 21) over Neo4j's HTTP Query API (5.19 or later; no Bolt, D634 (c)). `auth.*` hold secret **names** (D189), exactly the manifest's `secrets`.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "url"
+  ],
+  "properties": {
+    "url": {
+      "description": "The HTTP endpoint, `http://neo4j:7474`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "database": {
+      "description": "The database.",
+      "type": "string",
+      "minLength": 1,
+      "default": "neo4j"
+    },
+    "auth": {
+      "description": "HTTP Basic or a bearer token (SSO), by secret name.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "basic": {
+          "description": "HTTP Basic: the user name and the password's secret name.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "username": {
+              "description": "The user name.",
+              "type": "string",
+              "minLength": 1
+            },
+            "password": {
+              "description": "The password. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+              "type": "string",
+              "minLength": 1,
+              "writeOnly": true
+            }
+          },
+          "required": [
+            "username",
+            "password"
+          ]
+        },
+        "bearer": {
+          "description": "A bearer token (SSO). The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "sink": {
+      "description": "A parameterised statement per batch, the batch's event data bound as `$rows`.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "statement": {
+          "description": "The statement; it must use `$rows` (`UNWIND $rows AS row MERGE …`).",
+          "type": "string",
+          "minLength": 1
+        },
+        "delete_statement": {
+          "description": "Run for events with loamsop = d; it must use `$rows`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "batch": {
+          "description": "Rows per request (one implicit transaction).",
+          "type": "integer",
+          "minimum": 1,
+          "default": 500
+        }
+      },
+      "required": [
+        "statement"
+      ]
+    },
+    "source": {
+      "description": "One split per label, read in `(cursor, elementId)` order.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "description": "The label read; also the split id and the events' resource.",
+          "type": "string",
+          "minLength": 1
+        },
+        "cursor": {
+          "description": "The property the source orders and resumes by.",
+          "type": "string",
+          "minLength": 1
+        },
+        "statement": {
+          "description": "A custom statement taking `$cursor`, `$after` and `$limit` and returning `cursor` and `eid`, ordered by them.",
+          "type": "string",
+          "minLength": 1
+        },
+        "page_size": {
+          "description": "Rows per page.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 500
+        },
+        "poll_interval_ms": {
+          "description": "Keep polling from the cursor at this interval; one pass without it.",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "label",
+        "cursor"
+      ]
+    },
+    "request_timeout_ms": {
+      "description": "Per-request timeout, in milliseconds.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 30000
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }

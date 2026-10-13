@@ -10,7 +10,7 @@ import type { DescService } from '@bufbuild/protobuf';
 import { createClient, type Transport } from '@connectrpc/connect';
 import { type PluginModule, service } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
-import { approvals, devices, instance, notifications, operations } from '@loams/proto';
+import { admin, approvals, auth, devices, instance, notifications, operations } from '@loams/proto';
 
 /** The services this plugin provides, by cordis service name. */
 export const RPC_SERVICES: readonly { name: string; api: string; service: DescService }[] = [
@@ -23,6 +23,13 @@ export const RPC_SERVICES: readonly { name: string; api: string; service: DescSe
     api: 'loams.notifications.v1',
     service: notifications.NotificationService,
   },
+  // The console API (API2 Tasks 6, 7; the console moved onto it in Task 10).
+  { name: 'rpc.auth', api: 'loams.auth.v1', service: auth.AuthService },
+  { name: 'rpc.org', api: 'loams.admin.v1', service: admin.OrgService },
+  { name: 'rpc.projects', api: 'loams.admin.v1', service: admin.ProjectService },
+  { name: 'rpc.agents', api: 'loams.admin.v1', service: admin.AgentService },
+  { name: 'rpc.keys', api: 'loams.admin.v1', service: admin.KeyService },
+  { name: 'rpc.audit', api: 'loams.admin.v1', service: admin.AuditService },
 ];
 
 const plugin: PluginModule = {

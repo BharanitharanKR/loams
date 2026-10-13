@@ -1,9 +1,105 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/dynamodb.config.json",
-  "title": "DynamoDB instance config (placeholder)",
-  "description": "Placeholder for a DynamoDB instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "DynamoDB connector instance config (loams.flow/v1)",
+  "description": "One DynamoDB instance's settings (CN2 Task 14): a parallel Scan source (one split per segment) and a BatchWriteItem sink that retries UnprocessedItems, with conditional writes on an optional version attribute. The three credential fields are names of secrets in the namespace's secret store (D189), never the keys themselves.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "table",
+    "access_key_id",
+    "secret_access_key"
+  ],
+  "properties": {
+    "table": {
+      "description": "The table.",
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 255
+    },
+    "region": {
+      "description": "The AWS region.",
+      "type": "string",
+      "minLength": 1,
+      "default": "us-east-1"
+    },
+    "endpoint_url": {
+      "description": "An endpoint other than the region's (a VPC endpoint, or an emulator in tests).",
+      "type": "string",
+      "minLength": 1
+    },
+    "access_key_id": {
+      "description": "The name of the secret holding the access key id.",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "secret_access_key": {
+      "description": "The name of the secret holding the secret access key.",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "session_token": {
+      "description": "The name of the secret holding a session token (temporary credentials).",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "segments": {
+      "description": "Parallel Scan segments, one split each.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "default": 4
+    },
+    "page_size": {
+      "description": "Items per Scan call.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000,
+      "default": 100
+    },
+    "consistent_read": {
+      "description": "Strongly consistent scans.",
+      "type": "boolean",
+      "default": false
+    },
+    "poll_interval_ms": {
+      "description": "Scan again this long after the last scan finished; without it the table is read once.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "item_format": {
+      "description": "json (plain JSON; sets become lists) or dynamodb-json (lossless), for both directions.",
+      "type": "string",
+      "enum": [
+        "json",
+        "dynamodb-json"
+      ],
+      "default": "json"
+    },
+    "version_attribute": {
+      "description": "Sink: a numeric attribute; each put replaces the stored item only when its version is higher.",
+      "type": "string",
+      "minLength": 1
+    },
+    "key": {
+      "description": "Sink: the upsert key, the table's key attributes, partition key first; read from DescribeTable when omitted.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "max_unprocessed_retries": {
+      "description": "Sink: retries of UnprocessedItems before the batch is throttled.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 64,
+      "default": 8
+    }
+  }
 }

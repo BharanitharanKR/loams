@@ -1,0 +1,49 @@
+# Zendesk — an HTTP-API profile (CN2 OR-11, Task 20). Written from Zendesk's
+# public Support API reference:
+#   Tickets: https://developer.zendesk.com/api-reference/ticketing/tickets/tickets/
+#   Cursor pagination (page[size], links.next, meta.has_more):
+#     https://developer.zendesk.com/api-reference/introduction/pagination/
+#   API token auth (`{email}/token`): https://developer.zendesk.com/api-reference/introduction/security-and-auth/
+#   Rate limits: https://developer.zendesk.com/api-reference/introduction/rate-limits/
+#   Webhook signatures: https://developer.zendesk.com/documentation/webhooks/verifying/
+# `subdomain` is the `<subdomain>.zendesk.com` name; `auth.username` names the
+# secret holding `{email}/token` and `auth.password` the API token's.
+apiVersion: loams.flow/v1
+kind: Profile
+id: zendesk
+profile_kind: http-api
+module: http
+system:
+  name: Zendesk
+  service: { fixture: conformance/connectors/fixtures/zendesk }
+defaults: {}
+narrows: []
+http:
+  base_url: "https://{config.subdomain}.zendesk.com/api/v2"
+  auth: { scheme: basic }
+  resources:
+    tickets:
+      list:
+        method: GET
+        path: "/tickets.json"
+        items: "/tickets"
+        next_url: "/links/next"
+        key: "/id"
+        query: { "page[size]": "100" }
+      create:
+        method: POST
+        path: "/tickets.json"
+        wrap: "/ticket"
+    users:
+      list:
+        method: GET
+        path: "/users.json"
+        items: "/users"
+        next_url: "/links/next"
+        key: "/id"
+        query: { "page[size]": "100" }
+  rate_limit:
+    requests: 700
+    per_seconds: 60
+    honour_headers: ["Retry-After", "X-Rate-Limit-Remaining"]
+  webhook: { scheme: zendesk, header: X-Zendesk-Webhook-Signature }

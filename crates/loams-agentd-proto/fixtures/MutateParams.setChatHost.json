@@ -1,0 +1,5 @@
+{
+  "chatId": "chat-1",
+  "deviceId": "device-1",
+  "op": "setChatHost"
+}

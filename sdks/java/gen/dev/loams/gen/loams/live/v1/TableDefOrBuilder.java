@@ -95,4 +95,70 @@ public interface TableDefOrBuilder extends
    * @return The nextIndexId.
    */
   int getNextIndexId();
+
+  /**
+   * <pre>
+   * The validator every write to the table must match (design §45 §4.1;
+   * LV1 plan Task 8), as the active deployment's schema declares it.
+   * Absent: none.
+   * </pre>
+   *
+   * <code>.loams.live.v1.Validator validator = 6 [json_name = "validator"];</code>
+   * @return Whether the validator field is set.
+   */
+  boolean hasValidator();
+  /**
+   * <pre>
+   * The validator every write to the table must match (design §45 §4.1;
+   * LV1 plan Task 8), as the active deployment's schema declares it.
+   * Absent: none.
+   * </pre>
+   *
+   * <code>.loams.live.v1.Validator validator = 6 [json_name = "validator"];</code>
+   * @return The validator.
+   */
+  dev.loams.gen.loams.live.v1.Validator getValidator();
+  /**
+   * <pre>
+   * The validator every write to the table must match (design §45 §4.1;
+   * LV1 plan Task 8), as the active deployment's schema declares it.
+   * Absent: none.
+   * </pre>
+   *
+   * <code>.loams.live.v1.Validator validator = 6 [json_name = "validator"];</code>
+   */
+  dev.loams.gen.loams.live.v1.ValidatorOrBuilder getValidatorOrBuilder();
+
+  /**
+   * <pre>
+   * A stricter validator a deploy is checking the table's documents
+   * against: until that deploy activates or fails, every write must match
+   * it as well as `validator`. Absent: none.
+   * </pre>
+   *
+   * <code>.loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];</code>
+   * @return Whether the enforcing field is set.
+   */
+  boolean hasEnforcing();
+  /**
+   * <pre>
+   * A stricter validator a deploy is checking the table's documents
+   * against: until that deploy activates or fails, every write must match
+   * it as well as `validator`. Absent: none.
+   * </pre>
+   *
+   * <code>.loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];</code>
+   * @return The enforcing.
+   */
+  dev.loams.gen.loams.live.v1.EnforcingValidator getEnforcing();
+  /**
+   * <pre>
+   * A stricter validator a deploy is checking the table's documents
+   * against: until that deploy activates or fails, every write must match
+   * it as well as `validator`. Absent: none.
+   * </pre>
+   *
+   * <code>.loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];</code>
+   */
+  dev.loams.gen.loams.live.v1.EnforcingValidatorOrBuilder getEnforcingOrBuilder();
 }

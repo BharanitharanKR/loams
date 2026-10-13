@@ -3,6 +3,7 @@
 use loams_kv::TxnError;
 
 use crate::pb;
+use crate::validate::FieldViolation;
 
 /// Why a Loams Live operation failed. Each variant maps to one
 /// [`pb::ErrorCode`], which is what clients see (design §20 §7.1).
@@ -16,6 +17,16 @@ pub enum LiveError {
     /// `live_bad_cursor`.
     #[error("invalid argument: {0}")]
     BadCursor(String),
+    /// A write whose document does not match its table's validator (LV1
+    /// plan Task 8, design §45 §4.1): `INVALID_ARGUMENT`, reason
+    /// `live_schema_violation`. The message names the table and the field
+    /// paths (never the values); `violations` holds them (up to
+    /// [`MAX_VIOLATIONS`](crate::validate::MAX_VIOLATIONS)).
+    #[error("invalid argument: {message}")]
+    SchemaViolation {
+        message: String,
+        violations: Vec<FieldViolation>,
+    },
     /// A document, table or index does not exist.
     #[error("not found: {0}")]
     NotFound(String),
@@ -23,6 +34,11 @@ pub enum LiveError {
     /// change on a non-empty table, R1 plan Ruling 5).
     #[error("failed precondition: {0}")]
     FailedPrecondition(String),
+    /// A query on an index a deploy is still backfilling (LV1 plan Task 9,
+    /// design §45 §4.2): `FAILED_PRECONDITION`, reason
+    /// `live_index_not_ready`. The text names the index and the table.
+    #[error("failed precondition: {0}")]
+    IndexNotReady(String),
     /// A deploy whose `expected_active` is not the active deployment (LV1
     /// plan Task 6, design §45 §3.3): `FAILED_PRECONDITION`, reason
     /// `live_deploy_conflict`. The text names both deployments.
@@ -100,11 +116,13 @@ impl LiveError {
         match self {
             LiveError::InvalidArgument(_)
             | LiveError::BadCursor(_)
+            | LiveError::SchemaViolation { .. }
             | LiveError::NotLoopback(_)
             | LiveError::IsolationRequired
             | LiveError::IsolationUnavailable => pb::ErrorCode::ERROR_CODE_INVALID_ARGUMENT,
             LiveError::NotFound(_) => pb::ErrorCode::ERROR_CODE_NOT_FOUND,
             LiveError::FailedPrecondition(_)
+            | LiveError::IndexNotReady(_)
             | LiveError::DeployConflict(_)
             | LiveError::JournalTrimmed { .. } => pb::ErrorCode::ERROR_CODE_FAILED_PRECONDITION,
             LiveError::LimitExceeded { .. } => pb::ErrorCode::ERROR_CODE_RESOURCE_EXHAUSTED,
@@ -134,9 +152,21 @@ impl LiveError {
     pub fn reason(&self) -> Option<&'static str> {
         match self {
             LiveError::BadCursor(_) => Some("live_bad_cursor"),
+            LiveError::SchemaViolation { .. } => Some("live_schema_violation"),
             LiveError::DeployConflict(_) => Some("live_deploy_conflict"),
+            LiveError::IndexNotReady(_) => Some("live_index_not_ready"),
             LiveError::WorkerCrashed(_) => Some("live_worker_crashed"),
             _ => None,
+        }
+    }
+
+    /// The field violations of a [`LiveError::SchemaViolation`]; empty for
+    /// every other error. (They reach the wire's `field_violations` when
+    /// Live's errors are mapped onto the main Connect port, LV1 Task 19.)
+    pub fn field_violations(&self) -> &[FieldViolation] {
+        match self {
+            LiveError::SchemaViolation { violations, .. } => violations,
+            _ => &[],
         }
     }
 

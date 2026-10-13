@@ -8,7 +8,9 @@
 //! never moving it back, persists
 //! it (`oracle.gc_safe_point`), and deletes every version older than the
 //! newest version at or below it (that version too when it is a
-//! tombstone). It also deletes expired commit tokens and fences, as the
+//! tombstone), and every lock at or below it: a lock only makes commits
+//! started before it conflict, and the committer refuses a commit started
+//! below the safe point. It also deletes expired commit tokens and fences, as the
 //! cluster GC loop does on TiKV. A thread per store file runs a round every
 //! `gc_interval`.
 
@@ -20,7 +22,7 @@ use std::time::{Duration, Instant};
 
 use redb::{ReadableDatabase, ReadableTable};
 
-use super::mvcc::{decode, is_tombstone, relative, split};
+use super::mvcc::{decode, is_lock, is_tombstone, relative, split};
 use super::oracle::wall_ms;
 use super::{Core, GC_SAFE_POINT, Handle, ORACLE, Shared, VERSIONS, commit};
 use crate::{KvError, Pair, Ts};
@@ -226,7 +228,7 @@ const GC_BATCH: usize = 4_096;
 
 /// Where a GC round is in the table between two write transactions: the
 /// last entry it scanned, and whether the key it is in already kept its
-/// newest version at or below the safe point.
+/// newest version (locks aside) at or below the safe point.
 #[derive(Debug, Default)]
 struct Cursor {
     last: Option<Vec<u8>>,
@@ -268,7 +270,7 @@ fn collect(core: &Core, safe_point: Ts) -> Result<(u64, u64), redb::Error> {
                             cursor.kept = false;
                         }
                         if ts <= safe_point {
-                            if cursor.kept {
+                            if cursor.kept || is_lock(v.value()) {
                                 doomed.push(composite.to_vec());
                             } else {
                                 cursor.kept = true;
@@ -328,7 +330,7 @@ impl Handle {
             if !p.starts_with(lo) {
                 break;
             }
-            if current.as_deref() == Some(p) {
+            if current.as_deref() == Some(p) || is_lock(v.value()) {
                 continue;
             }
             current = Some(p.to_vec());

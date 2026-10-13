@@ -4,7 +4,8 @@
 #
 #   docker compose up -d loams tailscale
 #
-# or the whole stack (adds tidb and the Postgres stack) with `up -d`.
+# or the whole stack (adds tidb and the Postgres stack) with `up -d`; add
+# `--profile house` for Loams House on its own tailnet node.
 #
 # Network exposure: nothing binds a host port on 0.0.0.0. Only the engine and
 # the Tailscale sidecar share a network namespace (the `loams` service's); no
@@ -13,10 +14,12 @@
 # whose only client is the sidecar's `tailscale serve` proxy. The sidecar joins
 # the user's Tailscale tailnet (Headscale is coming soon) and
 # serves https://loams.<tailnet>/ from that listener; that tailnet URL is
-# LOAMS_ENGINE_URL for the console. Every other service (pd, tikv, tidb, house,
+# LOAMS_ENGINE_URL for the console. Every other service (pd, tikv, tidb,
 # agentd, the Postgres stack) is on the compose network and cannot reach the
-# engine's loopback listeners. The few published ports (console, headscale,
-# the Postgres stack's) are on 127.0.0.1 unless .env says otherwise.
+# engine's loopback listeners. The House is on a network of its own, with its
+# own sidecar in its namespace (`house-tailscale`, https://loams-house.<tailnet>/).
+# The few published ports (console, headscale, the Postgres stack's) are on
+# 127.0.0.1 unless .env says otherwise.
 name: loams
 
 include:
@@ -78,6 +81,9 @@ services:
   tidb:
     <<: *restart
     image: ${TIDB_IMAGE:-ghcr.io/ostrium-labs/tidb:v8.5.8-loams.1}
+    # The patched TiDB image is amd64 only: on Apple silicon and other arm64
+    # hosts Docker Desktop runs it emulated (Rosetta or QEMU).
+    platform: ${TIDB_PLATFORM:-linux/amd64}
     command:
       - --store=tikv
       - --path=pd:2379
@@ -93,7 +99,7 @@ services:
 
   loams:
     <<: *restart
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.0-preview.1}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.0-preview.2}
     command:
       - standalone
       - --bucket=${LOAMS_BUCKET:-file:///var/lib/loams/bucket}
@@ -106,7 +112,8 @@ services:
       - --meta=tikv://pd:2379/loams_meta
       - --live-store=tikv://pd:2379/loams_live_dev
       # No --house-endpoint yet: the House serves loopback plaintext only until
-      # TLS (D111, HS1 Task 20), and it no longer shares this namespace.
+      # TLS (D111, HS1 Task 20), and it may not share this namespace; it has
+      # its own tailnet node instead (`--profile house`).
     environment:
       RUST_LOG: ${RUST_LOG:-info}
       # Engine auth (preview): tailscale | oidc | apikey | off (loopback only).
@@ -143,17 +150,62 @@ services:
       retries: 3
 
   # Loams House (the ClickHouse HTTP interface, loams-fabric with its chDB
-  # workers), `--profile house`. It may not share the engine's namespace, and it
-  # serves loopback plaintext only until TLS (D111, HS1 Task 20), so for now
-  # nothing reaches it: the engine answers loams.house.v1 with
-  # house_not_configured. Once TLS lands, it listens on the compose network and
-  # the engine gets --house-endpoint.
+  # workers), `--profile house`. It serves loopback plaintext only until TLS
+  # (D111, HS1 Task 20), so it gets a door of its own, the same shape as the
+  # engine's: the `house-tailscale` sidecar shares its network namespace and
+  # serves https://loams-house.<tailnet>/ from 127.0.0.1:8123 (TLS from the
+  # tailnet's certificates, reachable only by tailnet members the policy lets
+  # in). Clients sign in as ClickHouse user `default` with the password in
+  # /var/lib/loams-house/house.key (created on first start). It is on its own
+  # network: nothing else in the stack can reach it, and its workers reach
+  # nothing of the stack. The engine is not wired to it yet (no
+  # --house-endpoint: the engine's link needs Task 20's TLS), so the console's
+  # House page still says not configured.
+  #
+  # Workers run sealed (L3): HOUSE_SANDBOX=pods (the default) is Landlock (TCP
+  # rules, Linux 6.7 or later) and seccomp, inside this container and its own
+  # network; netns adds a user and network namespace per worker, which needs
+  # unprivileged user namespaces in the container (Podman's default; Docker's
+  # default seccomp profile refuses them). The worker refuses to boot when its
+  # sandbox cannot be put in force. chDB's access control (R-ACL.1) and the
+  # statement checks (L1) are always on.
   house:
     <<: *restart
     profiles: [house]
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-fabric:${LOAMS_VERSION:-0.1.0-preview.1}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-fabric:${LOAMS_VERSION:-0.1.0-preview.2}
+    command:
+      - house
+      - --single-node
+      - --data-dir=/var/lib/loams-house
+      - --sandbox=${HOUSE_SANDBOX:-pods}
+    environment:
+      RUST_LOG: ${RUST_LOG:-info}
+    networks: [house]
     volumes:
       - house-data:/var/lib/loams-house
+
+  # The House's tailnet node, in the House's network namespace (its only
+  # neighbour there). A second node on the tailnet: give it its own auth key
+  # (HOUSE_TS_AUTHKEY) or a reusable TS_AUTHKEY.
+  house-tailscale:
+    <<: *restart
+    profiles: [house]
+    image: docker.io/tailscale/tailscale:${TAILSCALE_TAG:-v1.90.6}
+    network_mode: service:house
+    environment:
+      TS_AUTHKEY: ${HOUSE_TS_AUTHKEY:-${TS_AUTHKEY:-}}
+      TS_HOSTNAME: ${HOUSE_TS_HOSTNAME:-loams-house}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"
+      TS_AUTH_ONCE: "true"
+      TS_SERVE_CONFIG: /config/house-serve-https.json
+      TS_EXTRA_ARGS: --login-server=${TS_LOGIN_SERVER:-https://controlplane.tailscale.com} ${TS_EXTRA_ARGS:-}
+    volumes:
+      - house-tailscale-state:/var/lib/tailscale
+      - ./tailscale:/config:ro
+    depends_on:
+      house:
+        condition: service_started
 
   # The only way in from outside: a tailnet node named TS_HOSTNAME in the
   # engine's network namespace, the only container besides the engine there. Userspace networking needs no extra
@@ -169,7 +221,7 @@ services:
       TS_USERSPACE: "true"
       TS_AUTH_ONCE: "true"
       # https (Tailscale: MagicDNS + HTTPS certificates), or http for Headscale
-      # (coming soon, unsupported in 0.1.0-preview.1); see tailscale/serve-*.json.
+      # (coming soon, unsupported in 0.1.0-preview.2); see tailscale/serve-*.json.
       TS_SERVE_CONFIG: /config/serve-${TS_SERVE_MODE:-https}.json
       TS_EXTRA_ARGS: --login-server=${TS_LOGIN_SERVER:-https://controlplane.tailscale.com} ${TS_EXTRA_ARGS:-}
     volumes:
@@ -179,7 +231,7 @@ services:
       loams:
         condition: service_started
 
-  # COMING SOON, unsupported in 0.1.0-preview.1: Headscale issues no ts.net
+  # COMING SOON, unsupported in 0.1.0-preview.2: Headscale issues no ts.net
   # HTTPS certificates, so the hosted console cannot reach an engine on it.
   # A self-hosted tailnet control server (`--profile headscale`). Clients,
   # including the browser's device, must reach HEADSCALE_SERVER_URL, so on a VM
@@ -222,16 +274,21 @@ services:
   agentd:
     <<: *restart
     profiles: [agentd]
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-agentd:${LOAMS_VERSION:-0.1.0-preview.1}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-agentd:${LOAMS_VERSION:-0.1.0-preview.2}
     volumes:
       - ./agentd:/etc/loams-agentd:ro
       - agentd-data:/home/loams
+
+networks:
+  # The House's own network (see `house`): no other service joins it.
+  house: {}
 
 volumes:
   pd-data:
   tikv-data:
   loams-data:
   house-data:
+  house-tailscale-state:
   tailscale-state:
   headscale-data:
   agentd-data:

@@ -1,0 +1,62 @@
+{
+  "recorded_from": "GitLab",
+  "synthetic": true,
+  "docs": [
+    "https://docs.gitlab.com/api/issues/",
+    "https://docs.gitlab.com/api/rest/#pagination"
+  ],
+  "scenario": {
+    "direction": "sink",
+    "resource": "issues",
+    "config": {
+      "project": "loams/demo",
+      "base_url": "{proxy}/api/v4"
+    },
+    "secrets": {
+      "api_key": "synthetic-gitlab-token"
+    },
+    "input": [
+      {
+        "title": "Imported",
+        "description": "Created by Loams",
+        "labels": "import"
+      }
+    ],
+    "expect": 1
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v4/projects/loams%2Fdemo/issues",
+        "headers": {},
+        "body": {
+          "json": {
+            "title": "Imported",
+            "description": "Created by Loams",
+            "labels": "import"
+          }
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "id": 80,
+            "iid": 4,
+            "project_id": 3,
+            "title": "Imported",
+            "description": "Created by Loams",
+            "state": "opened",
+            "labels": "import",
+            "web_url": "https://gitlab.com/loams/demo/-/issues/1",
+            "updated_at": "2026-09-01T10:00:00.000Z"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -198,15 +198,15 @@ impl Daemon {
         Ok(client)
     }
 
-    /// Stop it over the RPC (`StopEngine`) and wait for it to exit.
+    /// Stop it over the RPC (`Shutdown`) and wait for it to exit.
     pub fn stop(mut self) -> ExitStatus {
         let reply = block_on(async {
             self.owner()
                 .await?
-                .call(methods::STOP_ENGINE, serde_json::json!({}))
+                .call(methods::SHUTDOWN, serde_json::json!({}))
                 .await
         });
-        assert!(reply.is_ok(), "StopEngine failed: {reply:?}");
+        assert!(reply.is_ok(), "Shutdown failed: {reply:?}");
         wait_for_exit(self.child.take().expect("running"), STOP_TIMEOUT)
     }
 

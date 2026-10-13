@@ -34,6 +34,11 @@ export interface SlotMap {
   'shell.dock.right': { kind: 'single'; props: Record<string, never> };
   /** The server switcher, in the header. */
   'shell.header.server': { kind: 'list'; props: Record<string, never> };
+  /**
+   * The sidebar's context above the nav: the project switcher and the open project's
+   * pages (API2 Task 10). While it has an entry, it replaces the environment switcher.
+   */
+  'shell.nav.context': { kind: 'list'; props: Record<string, never> };
 }
 
 export type SlotName = keyof SlotMap;
@@ -55,6 +60,11 @@ export interface SlotMeta {
   id?: string;
   /** An icon name the shell knows ("postgres", "live"); unknown names get a plain dot. */
   icon?: string;
+  /**
+   * The console mode a nav entry shows in (§53 §4.1, D901), for a plugin in both
+   * modes. Without it the entry shows in each of its plugin's modes.
+   */
+  mode?: 'console' | 'studio';
 }
 
 export interface SlotSpec<N extends SlotName> {

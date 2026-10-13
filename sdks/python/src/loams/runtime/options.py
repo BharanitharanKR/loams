@@ -70,7 +70,7 @@ class CallOptions:
     Everything is optional: the client's defaults apply, and the *generated*
     binding supplies the retry class, so a caller never states it.
 
-    The instance's URL is not here: in `connect-python` it belongs to the
+    The instance's URL is not here: in `connectrpc` it belongs to the
     client, which is why a `Loams` hands its own address to the client it builds.
     """
 

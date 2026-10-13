@@ -1,0 +1,22 @@
+{
+	"session": {
+		"user": {
+			"id": "usr_01",
+			"name": "Priya Raman",
+			"email": "priya@acme.dev",
+			"twoFactor": true,
+			"createdAt": "2026-06-15T12:23:21Z",
+			"lastSeenAt": "2026-10-13T12:21:21Z"
+		},
+		"org": {
+			"id": "org_acme",
+			"name": "Acme Robotics",
+			"slug": "acme",
+			"createdAt": "2026-06-15T12:23:21Z",
+			"allowedDomains": ["acme.dev"]
+		},
+		"role": "ORG_ROLE_OWNER",
+		"csrfToken": "csrf_mock_2d5b7c",
+		"expiresAt": "2026-10-14T00:23:21Z"
+	}
+}

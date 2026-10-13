@@ -45,11 +45,20 @@ export function StatusPage({
     <div className="lc-page">
       <header className="lc-page-head">
         <h1>{flags.instanceName || 'Loams'}</h1>
+        {flags.features.demo && (
+          <p>Sample data, served inside this browser tab. Nothing you do here reaches a server.</p>
+        )}
         <p>
           {reachable ? (
             <>
               <Badge>{flags.edition}</Badge> <Badge>v{flags.serverVersion}</Badge>{' '}
               <Badge>{platform.kind === 'desktop' ? 'Loams Desktop' : 'browser'}</Badge>
+              {flags.features.demo && (
+                <>
+                  {' '}
+                  <Badge>demo</Badge>
+                </>
+              )}
             </>
           ) : null}
         </p>
@@ -87,11 +96,14 @@ const plugin: PluginModule = {
       );
       return;
     }
+    // Where the instance serves the console API, `/` is the org's overview
+    // (@loams/plugin-org, API2 Task 10) and Status moves to `/status`.
+    const path = flags.has('loams.admin.v1') ? '/status' : '/';
     ctx.effect(() =>
       router.page(
         {
           id: 'status',
-          path: '/',
+          path,
           title: 'Status',
           plugin: 'stack-status',
           nav: { group: 'Instance', order: 0 },

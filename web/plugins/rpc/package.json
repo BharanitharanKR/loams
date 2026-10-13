@@ -27,7 +27,13 @@
         "rpc.approvals",
         "rpc.operations",
         "rpc.devices",
-        "rpc.notifications"
+        "rpc.notifications",
+        "rpc.auth",
+        "rpc.org",
+        "rpc.projects",
+        "rpc.agents",
+        "rpc.keys",
+        "rpc.audit"
       ],
       "slots": [],
       "permissions": [],
@@ -60,11 +66,11 @@
   },
   "devDependencies": {
     "@testing-library/react": "16.3.3",
-    "@types/react": "19.3.0",
-    "@types/react-dom": "19.3.0",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "jsdom": "30.1.1",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "typescript": "5.9.3",
     "vitest": "5.0.3"
   }

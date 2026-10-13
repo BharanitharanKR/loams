@@ -1,0 +1,59 @@
+[package]
+name = "loams-connector-search"
+description = "The Loams search and vector connector family (CN2 Task 15, OR-6): a native Elasticsearch source (point-in-time and search_after, incremental by a cursor field) and `_bulk` sink (idempotent by `_id`, retrying only failed items, shrinking on 429), serving OpenSearch as a target profile, and a Qdrant upsert sink (UUID v5 point ids) and scroll source."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[features]
+# The conformance harness (`loams_connector_search::conformance`), which links
+# the kit. Off in a release build: a family crate depends only on the SDK and
+# its protocol crates (OR-6); the crate's own tests turn it on (ruling R15.6).
+conformance = ["dep:loams-flow-conformance"]
+
+[dependencies]
+# Every family crate depends on the SDK and its protocol crates only (OR-6).
+loams-connector-sdk = { path = "../loams-connector-sdk" }
+# AWS SigV4 for Amazon OpenSearch Service (`auth.aws`): the HTTP family's
+# signer, which needs nothing beyond the SDK, `http` and `sha2` (ruling R15.3).
+loams-connector-http = { path = "../loams-connector-http" }
+# The SDK's own async-trait pin (0.1.92 in fabric/Cargo.lock).
+async-trait = "0.1.89"
+# HTTP Basic and Elasticsearch `ApiKey` credentials.
+base64.workspace = true
+bytes.workspace = true
+# Requests for the SDK's client (`sdk::http`, egress-checked after DNS).
+http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# The content digest in Qdrant event ids and the SigV4 payload hash.
+sha2.workspace = true
+tokio = { workspace = true, features = ["sync", "time"] }
+tracing.workspace = true
+# Qdrant point ids: UUID v5 of the document key (ruling R15.2). `uuid` 1.27.0
+# is already in fabric/Cargo.lock; `v5` adds `sha1_smol` 1.0.1 (2024-07-18,
+# BSD-3-Clause, no dependencies), the one new crate.
+uuid = { workspace = true, features = ["v5"] }
+
+loams-flow-conformance = { path = "../loams-flow-conformance", optional = true }
+
+[dev-dependencies]
+# The crate's own tests build the conformance harness.
+loams-connector-search = { path = ".", features = ["conformance"] }
+# The registry and the profile loader (the suites read manifests and the
+# OpenSearch profile from the checkout).
+loams-flow = { path = "../loams-flow" }
+loams-flow-conformance = { path = "../loams-flow-conformance" }
+# The fake Elasticsearch, OpenSearch and Qdrant APIs of the no-server tests:
+# hyper's server, the workspace's pin, as the SDK's own tests use it.
+http-body-util.workspace = true
+hyper = { workspace = true, features = ["server", "http1"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "test-util"] }
+uuid = { workspace = true, features = ["v5"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,72 @@
+[package]
+name = "loams-connector-protocols"
+description = "The Loams protocols, graph, observability, functions and AI connector family (CN2 Task 21, OR-6): a dynamic gRPC client (unary sink with replies, server-streaming source), GraphQL (Relay-cursor query source, mutation sink, graphql-ws subscriptions), Neo4j over its HTTP Query API, Grafeo over loams.graph.v1, Prometheus remote write (receiver and sender), Lambda, Cloud Run and Azure Functions, and OpenAI and Anthropic sinks with replies."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+# Every family crate depends on the SDK and its protocol crates only (OR-6).
+loams-connector-sdk = { path = "../loams-connector-sdk" }
+# AWS SigV4 for Lambda `Invoke`: the HTTP family's signer, which needs nothing
+# beyond the SDK, `http` and `sha2` (ruling R21.8, as R15.3 for OpenSearch).
+loams-connector-http = { path = "../loams-connector-http" }
+# The generated `loams.graph.v1` messages (OR-20, ruling R21.4).
+loams-flow-proto = { path = "../loams-flow-proto", features = ["graph"] }
+# The generated messages' runtime (`Message`, `EnumValue`), the version
+# `loams-flow-proto` generates for.
+buffa = "0.9.2"
+# The SDK's own async-trait pin (0.1.92 in fabric/Cargo.lock).
+async-trait = "0.1.89"
+# Basic credentials, bytes fields in proto3 JSON, the WebSocket key.
+base64.workspace = true
+bytes.workspace = true
+http.workspace = true
+# gRPC needs HTTP/2 with trailers. hyper's `http2` client over a connection
+# `sdk::net` opened after the egress check (ruling R21.2). hyper already
+# carries `h2` 0.4.19 in fabric/Cargo.lock; the feature adds no crate.
+http-body-util.workspace = true
+hyper = { workspace = true, features = ["client", "http2"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+# Dynamic gRPC messages over a user-supplied `FileDescriptorSet` or server
+# reflection (OR-12). The SDK's pin, without features: the JSON mapping is
+# written here rather than taking the `serde` feature's two new crates
+# (ruling R21.3).
+prost-reflect = { version = "=0.16.5", default-features = false }
+# The Prometheus remote-write messages and the reflection messages, derived.
+# 0.14.4 with prost-derive is already in fabric/Cargo.lock through
+# prost-reflect.
+prost = "0.14"
+# TLS with ALPN `h2` for gRPC, mTLS client certificates and a custom CA: the
+# SDK's rustls pin (ring only).
+rustls = { version = "0.23.27", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+# The SDK's root set, for gRPC's own TLS config (ALPN `h2`). 1.0 is already in
+# fabric/Cargo.lock.
+webpki-roots = "1"
+serde.workspace = true
+serde_json.workspace = true
+# Event ids, the SigV4 payload hash and the WebSocket key.
+sha2.workspace = true
+# Prometheus remote write is snappy (block format) protobuf. 1.1.2
+# (BSD-3-Clause) is already in fabric/Cargo.lock through parquet.
+snap = "1.1.2"
+tokio = { workspace = true, features = ["sync", "time", "net", "io-util", "macros", "rt"] }
+
+[dev-dependencies]
+# Synthetic fixtures of the documented request and response shapes (the
+# conformance kit's `FixtureProxy`), and the in-memory Fabric for replies.
+loams-flow-conformance = { path = "../loams-flow-conformance" }
+# Loopback HTTP/1.1 and HTTP/2 servers for the no-server tests (a gRPC server
+# with reflection, a Connect server, a remote-write receiver).
+hyper = { workspace = true, features = ["client", "server", "http1", "http2"] }
+# The loopback gRPC peer's body (data frames, then trailers).
+http-body.workspace = true
+hyper-util = { workspace = true, features = ["tokio"] }
+prost-types = "0.14"
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "io-util", "test-util"] }
+
+[lints]
+workspace = true

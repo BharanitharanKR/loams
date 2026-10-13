@@ -50,6 +50,7 @@ private static final long serialVersionUID = 0L;
             dev.loams.gen.loams.live.v1.TableDef.class, dev.loams.gen.loams.live.v1.TableDef.Builder.class);
   }
 
+  private int bitField0_;
   public static final int FORMAT_FIELD_NUMBER = 1;
   private int format_ = 0;
   /**
@@ -196,6 +197,94 @@ private static final long serialVersionUID = 0L;
     return nextIndexId_;
   }
 
+  public static final int VALIDATOR_FIELD_NUMBER = 6;
+  private dev.loams.gen.loams.live.v1.Validator validator_;
+  /**
+   * <pre>
+   * The validator every write to the table must match (design §45 §4.1;
+   * LV1 plan Task 8), as the active deployment's schema declares it.
+   * Absent: none.
+   * </pre>
+   *
+   * <code>.loams.live.v1.Validator validator = 6 [json_name = "validator"];</code>
+   * @return Whether the validator field is set.
+   */
+  @java.lang.Override
+  public boolean hasValidator() {
+    return ((bitField0_ & 0x00000001) != 0);
+  }
+  /**
+   * <pre>
+   * The validator every write to the table must match (design §45 §4.1;
+   * LV1 plan Task 8), as the active deployment's schema declares it.
+   * Absent: none.
+   * </pre>
+   *
+   * <code>.loams.live.v1.Validator validator = 6 [json_name = "validator"];</code>
+   * @return The validator.
+   */
+  @java.lang.Override
+  public dev.loams.gen.loams.live.v1.Validator getValidator() {
+    return validator_ == null ? dev.loams.gen.loams.live.v1.Validator.getDefaultInstance() : validator_;
+  }
+  /**
+   * <pre>
+   * The validator every write to the table must match (design §45 §4.1;
+   * LV1 plan Task 8), as the active deployment's schema declares it.
+   * Absent: none.
+   * </pre>
+   *
+   * <code>.loams.live.v1.Validator validator = 6 [json_name = "validator"];</code>
+   */
+  @java.lang.Override
+  public dev.loams.gen.loams.live.v1.ValidatorOrBuilder getValidatorOrBuilder() {
+    return validator_ == null ? dev.loams.gen.loams.live.v1.Validator.getDefaultInstance() : validator_;
+  }
+
+  public static final int ENFORCING_FIELD_NUMBER = 7;
+  private dev.loams.gen.loams.live.v1.EnforcingValidator enforcing_;
+  /**
+   * <pre>
+   * A stricter validator a deploy is checking the table's documents
+   * against: until that deploy activates or fails, every write must match
+   * it as well as `validator`. Absent: none.
+   * </pre>
+   *
+   * <code>.loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];</code>
+   * @return Whether the enforcing field is set.
+   */
+  @java.lang.Override
+  public boolean hasEnforcing() {
+    return ((bitField0_ & 0x00000002) != 0);
+  }
+  /**
+   * <pre>
+   * A stricter validator a deploy is checking the table's documents
+   * against: until that deploy activates or fails, every write must match
+   * it as well as `validator`. Absent: none.
+   * </pre>
+   *
+   * <code>.loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];</code>
+   * @return The enforcing.
+   */
+  @java.lang.Override
+  public dev.loams.gen.loams.live.v1.EnforcingValidator getEnforcing() {
+    return enforcing_ == null ? dev.loams.gen.loams.live.v1.EnforcingValidator.getDefaultInstance() : enforcing_;
+  }
+  /**
+   * <pre>
+   * A stricter validator a deploy is checking the table's documents
+   * against: until that deploy activates or fails, every write must match
+   * it as well as `validator`. Absent: none.
+   * </pre>
+   *
+   * <code>.loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];</code>
+   */
+  @java.lang.Override
+  public dev.loams.gen.loams.live.v1.EnforcingValidatorOrBuilder getEnforcingOrBuilder() {
+    return enforcing_ == null ? dev.loams.gen.loams.live.v1.EnforcingValidator.getDefaultInstance() : enforcing_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -225,6 +314,12 @@ private static final long serialVersionUID = 0L;
     if (nextIndexId_ != 0) {
       output.writeUInt32(5, nextIndexId_);
     }
+    if (((bitField0_ & 0x00000001) != 0)) {
+      output.writeMessage(6, getValidator());
+    }
+    if (((bitField0_ & 0x00000002) != 0)) {
+      output.writeMessage(7, getEnforcing());
+    }
     getUnknownFields().writeTo(output);
   }
 
@@ -253,6 +348,14 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(5, nextIndexId_);
     }
+    if (((bitField0_ & 0x00000001) != 0)) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(6, getValidator());
+    }
+    if (((bitField0_ & 0x00000002) != 0)) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(7, getEnforcing());
+    }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
     return size;
@@ -278,6 +381,16 @@ private static final long serialVersionUID = 0L;
         .equals(other.getIndexesList())) return false;
     if (getNextIndexId()
         != other.getNextIndexId()) return false;
+    if (hasValidator() != other.hasValidator()) return false;
+    if (hasValidator()) {
+      if (!getValidator()
+          .equals(other.getValidator())) return false;
+    }
+    if (hasEnforcing() != other.hasEnforcing()) return false;
+    if (hasEnforcing()) {
+      if (!getEnforcing()
+          .equals(other.getEnforcing())) return false;
+    }
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -301,6 +414,14 @@ private static final long serialVersionUID = 0L;
     }
     hash = (37 * hash) + NEXT_INDEX_ID_FIELD_NUMBER;
     hash = (53 * hash) + getNextIndexId();
+    if (hasValidator()) {
+      hash = (37 * hash) + VALIDATOR_FIELD_NUMBER;
+      hash = (53 * hash) + getValidator().hashCode();
+    }
+    if (hasEnforcing()) {
+      hash = (37 * hash) + ENFORCING_FIELD_NUMBER;
+      hash = (53 * hash) + getEnforcing().hashCode();
+    }
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -426,13 +547,21 @@ private static final long serialVersionUID = 0L;
 
     // Construct using dev.loams.gen.loams.live.v1.TableDef.newBuilder()
     private Builder() {
-
+      maybeForceBuilderInitialization();
     }
 
     private Builder(
         com.google.protobuf.GeneratedMessage.BuilderParent parent) {
       super(parent);
-
+      maybeForceBuilderInitialization();
+    }
+    private void maybeForceBuilderInitialization() {
+      if (com.google.protobuf.GeneratedMessage
+              .alwaysUseFieldBuilders) {
+        getIndexesFieldBuilder();
+        getValidatorFieldBuilder();
+        getEnforcingFieldBuilder();
+      }
     }
     @java.lang.Override
     public Builder clear() {
@@ -449,6 +578,16 @@ private static final long serialVersionUID = 0L;
       }
       bitField0_ = (bitField0_ & ~0x00000008);
       nextIndexId_ = 0;
+      validator_ = null;
+      if (validatorBuilder_ != null) {
+        validatorBuilder_.dispose();
+        validatorBuilder_ = null;
+      }
+      enforcing_ = null;
+      if (enforcingBuilder_ != null) {
+        enforcingBuilder_.dispose();
+        enforcingBuilder_ = null;
+      }
       return this;
     }
 
@@ -507,6 +646,20 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000010) != 0)) {
         result.nextIndexId_ = nextIndexId_;
       }
+      int to_bitField0_ = 0;
+      if (((from_bitField0_ & 0x00000020) != 0)) {
+        result.validator_ = validatorBuilder_ == null
+            ? validator_
+            : validatorBuilder_.build();
+        to_bitField0_ |= 0x00000001;
+      }
+      if (((from_bitField0_ & 0x00000040) != 0)) {
+        result.enforcing_ = enforcingBuilder_ == null
+            ? enforcing_
+            : enforcingBuilder_.build();
+        to_bitField0_ |= 0x00000002;
+      }
+      result.bitField0_ |= to_bitField0_;
     }
 
     @java.lang.Override
@@ -560,6 +713,12 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getNextIndexId() != 0) {
         setNextIndexId(other.getNextIndexId());
+      }
+      if (other.hasValidator()) {
+        mergeValidator(other.getValidator());
+      }
+      if (other.hasEnforcing()) {
+        mergeEnforcing(other.getEnforcing());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -620,6 +779,20 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000010;
               break;
             } // case 40
+            case 50: {
+              input.readMessage(
+                  getValidatorFieldBuilder().getBuilder(),
+                  extensionRegistry);
+              bitField0_ |= 0x00000020;
+              break;
+            } // case 50
+            case 58: {
+              input.readMessage(
+                  getEnforcingFieldBuilder().getBuilder(),
+                  extensionRegistry);
+              bitField0_ |= 0x00000040;
+              break;
+            } // case 58
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1154,6 +1327,356 @@ private static final long serialVersionUID = 0L;
       nextIndexId_ = 0;
       onChanged();
       return this;
+    }
+
+    private dev.loams.gen.loams.live.v1.Validator validator_;
+    private com.google.protobuf.SingleFieldBuilder<
+        dev.loams.gen.loams.live.v1.Validator, dev.loams.gen.loams.live.v1.Validator.Builder, dev.loams.gen.loams.live.v1.ValidatorOrBuilder> validatorBuilder_;
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1;
+     * LV1 plan Task 8), as the active deployment's schema declares it.
+     * Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 6 [json_name = "validator"];</code>
+     * @return Whether the validator field is set.
+     */
+    public boolean hasValidator() {
+      return ((bitField0_ & 0x00000020) != 0);
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1;
+     * LV1 plan Task 8), as the active deployment's schema declares it.
+     * Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 6 [json_name = "validator"];</code>
+     * @return The validator.
+     */
+    public dev.loams.gen.loams.live.v1.Validator getValidator() {
+      if (validatorBuilder_ == null) {
+        return validator_ == null ? dev.loams.gen.loams.live.v1.Validator.getDefaultInstance() : validator_;
+      } else {
+        return validatorBuilder_.getMessage();
+      }
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1;
+     * LV1 plan Task 8), as the active deployment's schema declares it.
+     * Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 6 [json_name = "validator"];</code>
+     */
+    public Builder setValidator(dev.loams.gen.loams.live.v1.Validator value) {
+      if (validatorBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        validator_ = value;
+      } else {
+        validatorBuilder_.setMessage(value);
+      }
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1;
+     * LV1 plan Task 8), as the active deployment's schema declares it.
+     * Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 6 [json_name = "validator"];</code>
+     */
+    public Builder setValidator(
+        dev.loams.gen.loams.live.v1.Validator.Builder builderForValue) {
+      if (validatorBuilder_ == null) {
+        validator_ = builderForValue.build();
+      } else {
+        validatorBuilder_.setMessage(builderForValue.build());
+      }
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1;
+     * LV1 plan Task 8), as the active deployment's schema declares it.
+     * Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 6 [json_name = "validator"];</code>
+     */
+    public Builder mergeValidator(dev.loams.gen.loams.live.v1.Validator value) {
+      if (validatorBuilder_ == null) {
+        if (((bitField0_ & 0x00000020) != 0) &&
+          validator_ != null &&
+          validator_ != dev.loams.gen.loams.live.v1.Validator.getDefaultInstance()) {
+          getValidatorBuilder().mergeFrom(value);
+        } else {
+          validator_ = value;
+        }
+      } else {
+        validatorBuilder_.mergeFrom(value);
+      }
+      if (validator_ != null) {
+        bitField0_ |= 0x00000020;
+        onChanged();
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1;
+     * LV1 plan Task 8), as the active deployment's schema declares it.
+     * Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 6 [json_name = "validator"];</code>
+     */
+    public Builder clearValidator() {
+      bitField0_ = (bitField0_ & ~0x00000020);
+      validator_ = null;
+      if (validatorBuilder_ != null) {
+        validatorBuilder_.dispose();
+        validatorBuilder_ = null;
+      }
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1;
+     * LV1 plan Task 8), as the active deployment's schema declares it.
+     * Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 6 [json_name = "validator"];</code>
+     */
+    public dev.loams.gen.loams.live.v1.Validator.Builder getValidatorBuilder() {
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return getValidatorFieldBuilder().getBuilder();
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1;
+     * LV1 plan Task 8), as the active deployment's schema declares it.
+     * Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 6 [json_name = "validator"];</code>
+     */
+    public dev.loams.gen.loams.live.v1.ValidatorOrBuilder getValidatorOrBuilder() {
+      if (validatorBuilder_ != null) {
+        return validatorBuilder_.getMessageOrBuilder();
+      } else {
+        return validator_ == null ?
+            dev.loams.gen.loams.live.v1.Validator.getDefaultInstance() : validator_;
+      }
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1;
+     * LV1 plan Task 8), as the active deployment's schema declares it.
+     * Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 6 [json_name = "validator"];</code>
+     */
+    private com.google.protobuf.SingleFieldBuilder<
+        dev.loams.gen.loams.live.v1.Validator, dev.loams.gen.loams.live.v1.Validator.Builder, dev.loams.gen.loams.live.v1.ValidatorOrBuilder> 
+        getValidatorFieldBuilder() {
+      if (validatorBuilder_ == null) {
+        validatorBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+            dev.loams.gen.loams.live.v1.Validator, dev.loams.gen.loams.live.v1.Validator.Builder, dev.loams.gen.loams.live.v1.ValidatorOrBuilder>(
+                getValidator(),
+                getParentForChildren(),
+                isClean());
+        validator_ = null;
+      }
+      return validatorBuilder_;
+    }
+
+    private dev.loams.gen.loams.live.v1.EnforcingValidator enforcing_;
+    private com.google.protobuf.SingleFieldBuilder<
+        dev.loams.gen.loams.live.v1.EnforcingValidator, dev.loams.gen.loams.live.v1.EnforcingValidator.Builder, dev.loams.gen.loams.live.v1.EnforcingValidatorOrBuilder> enforcingBuilder_;
+    /**
+     * <pre>
+     * A stricter validator a deploy is checking the table's documents
+     * against: until that deploy activates or fails, every write must match
+     * it as well as `validator`. Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];</code>
+     * @return Whether the enforcing field is set.
+     */
+    public boolean hasEnforcing() {
+      return ((bitField0_ & 0x00000040) != 0);
+    }
+    /**
+     * <pre>
+     * A stricter validator a deploy is checking the table's documents
+     * against: until that deploy activates or fails, every write must match
+     * it as well as `validator`. Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];</code>
+     * @return The enforcing.
+     */
+    public dev.loams.gen.loams.live.v1.EnforcingValidator getEnforcing() {
+      if (enforcingBuilder_ == null) {
+        return enforcing_ == null ? dev.loams.gen.loams.live.v1.EnforcingValidator.getDefaultInstance() : enforcing_;
+      } else {
+        return enforcingBuilder_.getMessage();
+      }
+    }
+    /**
+     * <pre>
+     * A stricter validator a deploy is checking the table's documents
+     * against: until that deploy activates or fails, every write must match
+     * it as well as `validator`. Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];</code>
+     */
+    public Builder setEnforcing(dev.loams.gen.loams.live.v1.EnforcingValidator value) {
+      if (enforcingBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        enforcing_ = value;
+      } else {
+        enforcingBuilder_.setMessage(value);
+      }
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * A stricter validator a deploy is checking the table's documents
+     * against: until that deploy activates or fails, every write must match
+     * it as well as `validator`. Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];</code>
+     */
+    public Builder setEnforcing(
+        dev.loams.gen.loams.live.v1.EnforcingValidator.Builder builderForValue) {
+      if (enforcingBuilder_ == null) {
+        enforcing_ = builderForValue.build();
+      } else {
+        enforcingBuilder_.setMessage(builderForValue.build());
+      }
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * A stricter validator a deploy is checking the table's documents
+     * against: until that deploy activates or fails, every write must match
+     * it as well as `validator`. Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];</code>
+     */
+    public Builder mergeEnforcing(dev.loams.gen.loams.live.v1.EnforcingValidator value) {
+      if (enforcingBuilder_ == null) {
+        if (((bitField0_ & 0x00000040) != 0) &&
+          enforcing_ != null &&
+          enforcing_ != dev.loams.gen.loams.live.v1.EnforcingValidator.getDefaultInstance()) {
+          getEnforcingBuilder().mergeFrom(value);
+        } else {
+          enforcing_ = value;
+        }
+      } else {
+        enforcingBuilder_.mergeFrom(value);
+      }
+      if (enforcing_ != null) {
+        bitField0_ |= 0x00000040;
+        onChanged();
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * A stricter validator a deploy is checking the table's documents
+     * against: until that deploy activates or fails, every write must match
+     * it as well as `validator`. Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];</code>
+     */
+    public Builder clearEnforcing() {
+      bitField0_ = (bitField0_ & ~0x00000040);
+      enforcing_ = null;
+      if (enforcingBuilder_ != null) {
+        enforcingBuilder_.dispose();
+        enforcingBuilder_ = null;
+      }
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * A stricter validator a deploy is checking the table's documents
+     * against: until that deploy activates or fails, every write must match
+     * it as well as `validator`. Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];</code>
+     */
+    public dev.loams.gen.loams.live.v1.EnforcingValidator.Builder getEnforcingBuilder() {
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return getEnforcingFieldBuilder().getBuilder();
+    }
+    /**
+     * <pre>
+     * A stricter validator a deploy is checking the table's documents
+     * against: until that deploy activates or fails, every write must match
+     * it as well as `validator`. Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];</code>
+     */
+    public dev.loams.gen.loams.live.v1.EnforcingValidatorOrBuilder getEnforcingOrBuilder() {
+      if (enforcingBuilder_ != null) {
+        return enforcingBuilder_.getMessageOrBuilder();
+      } else {
+        return enforcing_ == null ?
+            dev.loams.gen.loams.live.v1.EnforcingValidator.getDefaultInstance() : enforcing_;
+      }
+    }
+    /**
+     * <pre>
+     * A stricter validator a deploy is checking the table's documents
+     * against: until that deploy activates or fails, every write must match
+     * it as well as `validator`. Absent: none.
+     * </pre>
+     *
+     * <code>.loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];</code>
+     */
+    private com.google.protobuf.SingleFieldBuilder<
+        dev.loams.gen.loams.live.v1.EnforcingValidator, dev.loams.gen.loams.live.v1.EnforcingValidator.Builder, dev.loams.gen.loams.live.v1.EnforcingValidatorOrBuilder> 
+        getEnforcingFieldBuilder() {
+      if (enforcingBuilder_ == null) {
+        enforcingBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+            dev.loams.gen.loams.live.v1.EnforcingValidator, dev.loams.gen.loams.live.v1.EnforcingValidator.Builder, dev.loams.gen.loams.live.v1.EnforcingValidatorOrBuilder>(
+                getEnforcing(),
+                getParentForChildren(),
+                isClean());
+        enforcing_ = null;
+      }
+      return enforcingBuilder_;
     }
 
     // @@protoc_insertion_point(builder_scope:loams.live.v1.TableDef)

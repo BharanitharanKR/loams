@@ -1,0 +1,68 @@
+{
+  "recorded_from": "Jira",
+  "synthetic": true,
+  "docs": [
+    "https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post"
+  ],
+  "scenario": {
+    "direction": "sink",
+    "resource": "issues",
+    "config": {
+      "site": "loams-test",
+      "base_url": "{proxy}"
+    },
+    "secrets": {
+      "username": "synthetic-jira-user",
+      "password": "synthetic-jira-api-token"
+    },
+    "input": [
+      {
+        "fields": {
+          "project": {
+            "key": "LOAMS"
+          },
+          "summary": "Imported",
+          "issuetype": {
+            "name": "Task"
+          }
+        }
+      }
+    ],
+    "expect": 1
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/rest/api/3/issue",
+        "headers": {},
+        "body": {
+          "json": {
+            "fields": {
+              "project": {
+                "key": "LOAMS"
+              },
+              "summary": "Imported",
+              "issuetype": {
+                "name": "Task"
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "id": "10004",
+            "key": "LOAMS-4",
+            "self": "https://loams-test.atlassian.net/rest/api/3/issue/10004"
+          }
+        }
+      }
+    }
+  ]
+}

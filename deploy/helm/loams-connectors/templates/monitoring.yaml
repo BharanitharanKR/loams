@@ -1,0 +1,54 @@
+{{- $fullname := include "loams-connectors.fullname" . }}
+{{- /* R24.1: the scrape configuration for flow and the fallback pods. */}}
+{{- if .Values.metrics.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ $fullname }}-flow
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "loams-connectors.labels" . | nindent 4 }}
+    app.kubernetes.io/component: flow
+spec:
+  selector:
+    matchLabels:
+      {{- include "loams-connectors.labels" . | nindent 6 }}
+      app.kubernetes.io/component: flow
+  namespaceSelector:
+    matchNames: [{{ .Release.Namespace | quote }}]
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+{{- end }}
+{{- if .Values.metrics.podMonitor.enabled }}
+{{- $served := include "loams-connectors.servedK8sNamespaces" . | trim | splitList "\n" | compact }}
+{{- range $runtime := list "camel" "debezium" "iggy" }}
+{{- $r := index $.Values.fallback $runtime }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ $fullname }}-{{ $runtime }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "loams-connectors.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: fallback
+spec:
+  selector:
+    matchLabels:
+      loams.dev/fallback: "true"
+      loams.dev/runtime: {{ $runtime }}
+  namespaceSelector:
+    matchNames: {{ $served | toJson }}
+  podTargetLabels:
+    - loams.dev/namespace
+    - loams.dev/instance
+    - loams.dev/connector
+    - loams.dev/group
+  podMetricsEndpoints:
+    - port: metrics
+      path: {{ $r.metricsPath }}
+      interval: {{ $.Values.metrics.podMonitor.interval }}
+{{- end }}
+{{- end }}

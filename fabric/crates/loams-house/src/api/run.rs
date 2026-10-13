@@ -206,6 +206,7 @@ pub(super) fn sorted<'a>(
 fn execute(
     st: &Statement,
     settings: &[(String, String)],
+    views: &[String],
     sql: String,
     format: &str,
     limits: Limits,
@@ -214,13 +215,18 @@ fn execute(
         query_id: st.query_id.clone(),
         session: None,
         settings: settings.to_vec(),
-        views: Vec::new(),
+        views: views.to_vec(),
         sql,
         format: format.to_string(),
         params: st.params.clone(),
         limits,
         input: None,
         output: loams_house_ipc::Output::Blocks,
+        database: Some(if st.database.is_empty() {
+            "default".to_string()
+        } else {
+            st.database.clone()
+        }),
     }
 }
 
@@ -276,10 +282,22 @@ impl HouseApi {
                 ),
             ))));
         }
-        if !st.database.is_empty() && st.database != "default" {
-            return Err(to_connect(&HouseError::from(ChError::unknown_database(
-                format!("Database {} does not exist", st.database),
-            ))));
+        let database = if st.database.is_empty() {
+            "default"
+        } else {
+            st.database.as_str()
+        };
+        match &self.lake {
+            Some(lake) => lake
+                .require_database(user.namespace, database)
+                .await
+                .map_err(|err| to_connect(&err))?,
+            None if database != "default" => {
+                return Err(to_connect(&HouseError::from(ChError::unknown_database(
+                    format!("Database {database} does not exist"),
+                ))));
+            }
+            None => {}
         }
         let known = self.pool.known_settings();
         for (name, value) in &st.settings {
@@ -296,8 +314,8 @@ impl HouseApi {
         };
 
         // What the statement is (the HTTP interface's `prepare`, without a body).
-        let plan = request::plan(st.sql.as_bytes(), false);
-        let classified = match &plan.input {
+        let mut plan = request::plan(st.sql.as_bytes(), false);
+        let mut classified = match &plan.input {
             Some(spec) => {
                 check_text(&spec.insert).map_err(|err| to_connect(&err))?;
                 Classified::Known {
@@ -321,6 +339,63 @@ impl HouseApi {
                 "sql",
                 "the result format is the request's `format`: drop the FORMAT clause",
             ));
+        }
+        // `SHOW TABLES`, `SHOW DATABASES`, `SHOW PROCESSLIST`: ClickHouse's own
+        // `SELECT` over the House's `system` tables (HS1 Task 11).
+        if let Classified::Known { stmt, .. } = &classified
+            && let Some(query) =
+                gate::show_answer(self.lake.as_deref(), user.namespace, database, stmt)
+                    .await
+                    .map_err(|err| to_connect(&err))?
+        {
+            plan.sql = query.clone();
+            classified = Classified::Known {
+                stmt: Stmt::Query { text: query },
+                format: None,
+            };
+        }
+        // The catalog's statements (HS1 Task 10), as over HTTP: DDL and `USE`
+        // answer here, `DESCRIBE`/`SHOW CREATE`/`EXISTS` of a catalog table read
+        // their rows.
+        if st.explain.is_none()
+            && let Classified::Known { stmt, .. } = &classified
+        {
+            if read_only && !stmt.is_read() {
+                return Err(refuse_write());
+            }
+            let outcome = gate::catalog_answer(
+                self.lake.as_deref(),
+                &self.pool,
+                user.namespace,
+                database,
+                stmt,
+                &plan.sql,
+                None,
+                &st.query_id,
+            )
+            .await
+            .map_err(|err| to_connect(&err))?;
+            match outcome {
+                gate::CatalogOutcome::Done => {
+                    let running = self.running.register(&st.query_id, user)?;
+                    return Ok(Started {
+                        lease: None,
+                        header: Some(Vec::new()),
+                        framer: Framer::Json(JsonFramer::new(st.caps, false)),
+                        running,
+                        deadline: None,
+                        started: Instant::now(),
+                    });
+                }
+                gate::CatalogOutcome::Rows(query) => {
+                    plan.sql = query.clone();
+                    classified = Classified::Known {
+                        stmt: Stmt::Query { text: query },
+                        format: None,
+                    };
+                }
+                gate::CatalogOutcome::NotOurs => {}
+            }
         }
         let (expect, unparsed, is_read, is_query) = match &classified {
             Classified::Known { stmt, .. } => {
@@ -407,6 +482,35 @@ impl HouseApi {
             self.pool.release(lease, Outcome::Completed);
             return Err(err);
         }
+        // What it reads (HS1 Task 11): lake tables pinned, `system` tables the
+        // House's, chosen by the request's settings (Loams's own included).
+        let reads = if input.is_some() {
+            crate::read::ReadPlan::default()
+        } else {
+            match gate::read_plan(
+                self.lake.as_deref(),
+                user.namespace,
+                database,
+                &user.user,
+                &mut lease,
+                &analysis,
+                &sql,
+                &st.settings,
+            )
+            .await
+            {
+                Ok(reads) => reads,
+                Err(err) => {
+                    self.pool.release(lease, Outcome::Completed);
+                    return Err(to_connect(&err));
+                }
+            }
+        };
+        let sql = if input.is_some() {
+            sql
+        } else {
+            reads.sql.clone()
+        };
         if running.cancelled() {
             self.pool.release(lease, Outcome::Completed);
             return Err(to_connect(&cancelled_error(&st.query_id)));
@@ -442,6 +546,7 @@ impl HouseApi {
                 execute(
                     &st,
                     &settings,
+                    &reads.views,
                     format!("DESCRIBE TABLE (\n{sql}\n) SETTINGS describe_compact_output = 1"),
                     "JSONCompactEachRow",
                     Limits {
@@ -453,6 +558,7 @@ impl HouseApi {
                 execute(
                     &st,
                     &settings,
+                    &reads.views,
                     sql.clone(),
                     "JSONCompactEachRowWithNamesAndTypes",
                     Limits {
@@ -504,10 +610,15 @@ impl HouseApi {
         let mut main = execute(
             &st,
             &settings,
+            &reads.views,
             if input.is_some() { String::new() } else { text },
             format,
             limits,
         );
+        if input.is_some() {
+            // As over HTTP: a streamed `INSERT` gets no views, so no database.
+            main.database = None;
+        }
         main.input = input;
         let has_input = main.input.is_some();
         if let Err(err) = lease.start(main).await {

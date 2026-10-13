@@ -2,7 +2,12 @@
 //! reads at a timestamp, and the embedded [`Txn`] and [`Snap`].
 //!
 //! The table `versions` maps `keyspace_id:u32 BE ‖ esc(root ‖ key) ‖
-//! (u64::MAX − commit_ts) BE` to `0x00 ‖ value`, or `0x01` for a tombstone.
+//! (u64::MAX − commit_ts) BE` to `0x00 ‖ value`, `0x01` for a tombstone, or
+//! `0x02` for a lock: a committed `lock_keys` of a key the transaction did
+//! not write. A lock is TiKV's `Lock` write record: it counts as a version
+//! for the commit's conflict check, so a transaction started before it that
+//! writes or locks the key conflicts, and reads and the insert check skip
+//! it.
 //! `esc` escapes each `0x00` as `0x00 0xFF` and ends with `0x00 0x00`: it
 //! keeps the order of keys and makes them prefix-free, so the versions of a
 //! key are contiguous, newest first, and a range of keys maps to exactly
@@ -30,6 +35,7 @@ pub(crate) const BELOW_SAFE_POINT: &str = "read below the GC safe point";
 
 const TOMBSTONE: u8 = 0x01;
 const VALUE: u8 = 0x00;
+const LOCK: u8 = 0x02;
 
 /// Appends `bytes`, each `0x00` escaped as `0x00 0xFF`.
 fn escape_into(out: &mut Vec<u8>, bytes: &[u8]) {
@@ -102,6 +108,16 @@ pub(crate) fn is_tombstone(stored: &[u8]) -> bool {
     stored.first() == Some(&TOMBSTONE)
 }
 
+/// Whether a stored value is a lock (no value: reads skip it).
+pub(crate) fn is_lock(stored: &[u8]) -> bool {
+    stored.first() == Some(&LOCK)
+}
+
+/// The stored form of a lock.
+pub(crate) fn encode_lock() -> Vec<u8> {
+    vec![LOCK]
+}
+
 /// The stored form of `value` (`None`: a tombstone).
 pub(crate) fn encode(value: Option<&[u8]>) -> Vec<u8> {
     match value {
@@ -118,22 +134,36 @@ pub(crate) fn encode(value: Option<&[u8]>) -> Vec<u8> {
 /// A version: its commit timestamp and value (`None` for a tombstone).
 pub(crate) type Version = (Ts, Option<Vec<u8>>);
 
-/// The newest version of `prefix` at or below `at`.
+/// The newest version of `prefix` at or below `at`, locks skipped.
 pub(crate) fn newest<T>(table: &T, prefix: &[u8], at: Ts) -> Result<Option<Version>, StorageError>
+where
+    T: ReadableTable<&'static [u8], &'static [u8]>,
+{
+    Ok(head(table, prefix, at)?.1)
+}
+
+/// The newest entry of `prefix` at or below `at`, a lock included (its
+/// commit timestamp), and the newest version, locks skipped.
+pub(crate) fn head<T>(
+    table: &T,
+    prefix: &[u8],
+    at: Ts,
+) -> Result<(Option<Ts>, Option<Version>), StorageError>
 where
     T: ReadableTable<&'static [u8], &'static [u8]>,
 {
     let lo = version_key(prefix, at);
     let hi = version_key(prefix, Ts(0));
-    let mut range = table.range(lo.as_slice()..=hi.as_slice())?;
-    match range.next() {
-        Some(entry) => {
-            let (k, v) = entry?;
-            let ts = split(k.value()).map_or(Ts(0), |(_, ts)| ts);
-            Ok(Some((ts, decode(v.value()))))
+    let mut first = None;
+    for entry in table.range(lo.as_slice()..=hi.as_slice())? {
+        let (k, v) = entry?;
+        let ts = split(k.value()).map_or(Ts(0), |(_, ts)| ts);
+        first.get_or_insert(ts);
+        if !is_lock(v.value()) {
+            return Ok((first, Some((ts, decode(v.value())))));
         }
-        None => Ok(None),
     }
+    Ok((first, None))
 }
 
 /// The table range of the keys `start..end` under `root` in keyspace `ks`
@@ -558,7 +588,10 @@ impl Txn {
     }
 
     /// Locks `keys` without writing them: a concurrent write to one of them
-    /// is a write-write conflict.
+    /// is a write-write conflict, whichever commits first. Committed, a lock
+    /// of a key the transaction did not write leaves a lock version (TiKV's
+    /// `Lock` record), so a transaction started before the commit that
+    /// writes or locks the key conflicts; rolled back, it leaves nothing.
     pub async fn lock_keys<K: AsRef<[u8]>>(
         &mut self,
         keys: impl IntoIterator<Item = K>,
@@ -766,6 +799,15 @@ mod tests {
             }
             assert_eq!(relative(a, 2), keys[i]);
         }
+    }
+
+    #[test]
+    fn a_lock_is_neither_a_value_nor_a_tombstone() {
+        let lock = encode_lock();
+        assert!(is_lock(&lock));
+        assert!(!is_tombstone(&lock));
+        assert_eq!(decode(&lock), None);
+        assert!(!is_lock(&encode(None)) && !is_lock(&encode(Some(b"\x02"))));
     }
 
     #[test]

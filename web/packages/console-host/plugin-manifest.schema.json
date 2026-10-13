@@ -55,7 +55,9 @@
           "operations:cancel",
           "notifications:read",
           "ui:notifications",
-          "ui:clipboard-write"
+          "ui:clipboard-write",
+          "agentd:use",
+          "agentd:git-write"
         ]
       }
     },
@@ -74,6 +76,13 @@
       "type": "array",
       "items": { "enum": ["oss", "desktop", "cloud"] },
       "uniqueItems": true
+    },
+    "modes": {
+      "type": "array",
+      "items": { "enum": ["console", "studio"] },
+      "uniqueItems": true,
+      "minItems": 1,
+      "description": "The console modes the plugin belongs to (design §53 §4.1, D901); [\"console\"] when absent. Core plugins load in every mode."
     },
     "config": {
       "type": "string",

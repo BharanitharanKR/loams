@@ -4,10 +4,101 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+- **Loams Live on the main port.** `LiveService` and `LiveAdminService` are served on the
+  engine's `--listen` port and on the `tailscale serve` target, behind the engine's auth, so
+  the console and SDKs reach Live over the tailnet (LV1 Task 12). Until Live has TLS of its own
+  (LV1 Task 18) a main port bound beyond loopback does not serve it. `--live-listen` still
+  serves the same API on Live's own loopback listener and is deprecated.
+- **The console's Live deployments page talks to the engine.** It uses `LiveAdminService`
+  (deploy history, rollback by activation, a deployment's functions with their validators,
+  and the function log tail) instead of sample data, and is on in the browser console, no
+  longer under "Demo data". It needs an engine that serves Live on its main port (LV1 Task
+  12). Worker health is not shown until the engine reports it (LV1 Task 27).
+
+## [0.1.0-preview.2] - unreleased
+
+The second preview. Everything marked **Preview** in the [feature status table](docs/release/preview.md#feature-status)
+ships in it, built from `dev` with the work held back from preview.1 merged. Same shape as
+preview.1: you run the stack with Docker Compose over your own Tailscale tailnet and use the
+hosted console. Images are tagged `0.1.0-preview.2` and the rolling `:preview` (never
+`:latest`). Formats can change between previews and there is no upgrade path: start a fresh
+stack (`docker compose down -v`) rather than reusing preview.1 volumes. Start with
+[`docs/release/preview.md`](docs/release/preview.md).
+
+### Added
+- **Loams House on your tailnet.** `--profile house` now starts the House with its own
+  Tailscale sidecar, `house-tailscale`, which serves the ClickHouse HTTP interface at
+  `https://loams-house.<tailnet>.ts.net` (TLS from the tailnet's certificates; user `default`,
+  password in `house.key` in the `house-data` volume). The House runs on a compose network of
+  its own, so nothing else in the stack can reach it and its workers reach nothing of the
+  stack. New since preview.1: lake tables with a catalog and DDL (HS1 Task 10), lake reads and
+  `system` tables (Task 11), and `house-cache`, the S3 read proxy (Task 9).
+- **House security layers on by default.** chDB's own access control is the first line (HS1
+  ruling R-ACL.1: worker users have no `SOURCES` grants and a constrained settings profile;
+  `open_acl` is refused outside a test build), control DDL is checked against it (R11.11), the
+  statement checks (L1) stay as the second line, and workers now run sealed (L3): the image's
+  default and the compose default are `--sandbox pods` (Landlock with TCP rules and seccomp,
+  no privilege needed), and `HOUSE_SANDBOX=netns` adds a user and network namespace per worker
+  where the container allows unprivileged user namespaces (Podman's default).
+- **Loams Graph durability.** A fenced single owner per graph with forwarding between graph
+  nodes (GR1 Task 12, D744), snapshots in the bucket with a graph manifest (Task 13), and
+  crash recovery, rehydration and idle eviction (Task 14). Grafeo is built from Loams' fork,
+  `ostrium-labs/grafeo` v0.5.43-loams.1.
+- **Loams Live deploys.** `LiveAdminService` with deploy, rollback, index status and function
+  logs (LV1 Task 10), schema validators enforced on writes and checked on deploy (Task 8), and
+  online index changes with a journal fence and a leased backfill (Task 9). It is served on
+  the Live listener, behind the engine's auth.
+- **Desktop and CLI on macOS and Windows.** Loams Desktop ships for macOS (arm64, x64) and
+  Windows (x64) beside Linux, and the `loams` CLI as macOS arm64/x86_64 tarballs and a Windows
+  zip beside the Linux packages. Preview builds are unsigned: macOS is ad-hoc signed, not
+  notarized; Windows is unsigned (SmartScreen warns). Fixed on the way: the Windows engine build,
+  the macOS x64 timeout, the missing arm64 signature ("damaged" on Apple silicon), the CLI Linux
+  packages, and a cookie race when leaving a server in the desktop app.
+- **SDK release pipeline.** One workflow builds, tests and publishes the seven supported SDKs
+  from the release tag: npm `@loams/client` and `@loams/live` (dist-tag `preview`), PyPI `loams`
+  (`0.1.0a2`), crates.io `loams-proto`, `loams-live-proto` and `loams`, NuGet `Loams`, the Go
+  module `loams.dev/go` (tag `sdks/go/v0.1.0-preview.2`), Swift Package Manager from this
+  repository's tag, and a C++ CMake source archive on the GitHub release. Each registry
+  publishes once it is enabled for the project; see the preview guide for which are live.
+
+### Changed
+- Workspace and image version `0.1.0-preview.2`; `deploy/release` (compose, `.env.example`,
+  `byoc/install.sh`) defaults to it.
+- `loams-fabric`'s image runs its workers sealed (`--sandbox pods`) instead of
+  `--sandbox none --unsafe-no-sandbox`. A worker whose sandbox cannot be put in force refuses
+  to boot and the House stops (Landlock needs Linux 6.7 or later; `netns` cannot start under
+  Docker's default seccomp profile).
+
+### Fixed
+- The ClickHouse HTTP interface returns one document per result for any row count (HS1
+  R8.4/R8.12). This fix was already in preview.1, whose notes still listed it as pending.
+
+### Known limitations
+- **House writes:** `INSERT` into House tables arrives with HS1 Task 12; this preview serves
+  queries over the allowed table functions, lake-table DDL and reads, and `system` tables.
+- **The engine does not reach the House yet.** The engine's link to it needs TLS (HS1 Task
+  20), so `loams.house.v1` and the console's House page still answer `house_not_configured`.
+  Use the House directly over its tailnet URL with any ClickHouse HTTP client.
+- **Loams Postgres:** the control plane can now run computes and endpoints (PG2 Tasks 10 to
+  12: the compose compute runtime, the endpoint lifecycle and idle suspend), but
+  `pg-control` is not in the engine image: it drives Docker from inside the engine, which the
+  self-hosted stack does not allow. The Postgres stack runs as in preview.1.
+- **Loams Live:** the Live listener (and so `LiveAdminService`) is loopback only and not
+  forwarded over the tailnet; the console's Live deployments view stays off. Cross-node
+  pickup can still take up to 60 s.
+- **Not in this release** (built on `dev`, held): Loams Git (the bucket WAL, ref log,
+  checkpoints, forks, GC and `loams.repos.v1`'s catalog are built, but there is no push or
+  fetch path yet: no `git-remote-loams`, shim or Smart HTTP), first-party connectors (CN2:
+  the native connector families are built and tested, but no image hosts the runtime and
+  several families are not done), Loams Jobs, the Loams SQL gate (`sqldb`), and Headscale.
+- See [`docs/release/preview.md`](docs/release/preview.md#known-limitations).
+
+
 ## [0.1.0-preview.1] - 2026-10-12
 
 The first release of Loams, v0.1.0-preview.1, published as a **preview**: usable, tested in CI, not production
-ready. Everything marked **Preview** in the [README's feature table](README.md#features) ships in
+ready. Everything marked **Preview** in the [feature status table](docs/release/preview.md#feature-status) ships in
 it, and formats, APIs and flags can still change before the next preview. The entries after
 the known limitations, recorded before the preview was cut, are part of it too. Start with
 [`docs/release/preview.md`](docs/release/preview.md).

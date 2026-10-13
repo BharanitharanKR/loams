@@ -1,0 +1,58 @@
+{
+  "recorded_from": "Stripe",
+  "synthetic": true,
+  "docs": [
+    "https://docs.stripe.com/api/customers/create",
+    "https://docs.stripe.com/api/idempotent_requests"
+  ],
+  "scenario": {
+    "direction": "sink",
+    "resource": "customers",
+    "config": {
+      "base_url": "{proxy}"
+    },
+    "secrets": {
+      "token": "sk_test_synthetic"
+    },
+    "input": [
+      {
+        "email": "ada@example.test",
+        "name": "Ada Lovelace",
+        "metadata": {
+          "loams_id": "a1"
+        }
+      }
+    ],
+    "expect": 1
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/customers",
+        "headers": {},
+        "body": {
+          "text": "email=ada%40example.test&metadata%5Bloams_id%5D=a1&name=Ada%20Lovelace"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "id": "cus_TD4",
+            "object": "customer",
+            "email": "ada@example.test",
+            "name": "Ada Lovelace",
+            "metadata": {
+              "loams_id": "a1"
+            },
+            "livemode": false
+          }
+        }
+      }
+    }
+  ]
+}

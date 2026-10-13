@@ -1,9 +1,160 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/graphql.config.json",
-  "title": "GraphQL instance config (placeholder)",
-  "description": "Placeholder for a GraphQL instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "GraphQL connector instance config (loams.flow/v1)",
+  "description": "One GraphQL instance's settings, read by the native protocols family (`loams_connector_protocols::graphql`, CN2 Task 21): queries and mutations over the SDK's egress-checked HTTP client, subscriptions over `graphql-transport-ws` (R21.2). A source is a `query` or a `subscription`, not both. `auth.*` hold secret **names** (D189), exactly the manifest's `secrets`.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "url"
+  ],
+  "properties": {
+    "url": {
+      "description": "The GraphQL endpoint.",
+      "type": "string",
+      "minLength": 1
+    },
+    "auth": {
+      "description": "A bearer token or a key in a header, by secret name.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bearer": {
+          "description": "A bearer token (`oauth2`). The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "header": {
+          "description": "A key in a header (`key`).",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "description": "The header, `X-Api-Key`.",
+              "type": "string",
+              "minLength": 1
+            },
+            "secret": {
+              "description": "The key. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+              "type": "string",
+              "minLength": 1,
+              "writeOnly": true
+            },
+            "prefix": {
+              "description": "Text before the key in the header value.",
+              "type": "string",
+              "default": ""
+            }
+          },
+          "required": [
+            "name",
+            "secret"
+          ]
+        }
+      }
+    },
+    "query": {
+      "description": "A Relay-cursor query source (batch, resumable): one `item` event per node.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "description": "The query; it takes the page-size and cursor variables.",
+          "type": "string",
+          "minLength": 1
+        },
+        "variables": {
+          "description": "Fixed variables.",
+          "type": "object"
+        },
+        "connection": {
+          "description": "The Relay connection in the answer, a JSON pointer (`/data/viewer/repositories`).",
+          "type": "string",
+          "minLength": 1
+        },
+        "page_size": {
+          "description": "Items per page.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 50
+        },
+        "first_variable": {
+          "description": "The page-size variable.",
+          "type": "string",
+          "minLength": 1,
+          "default": "first"
+        },
+        "after_variable": {
+          "description": "The cursor variable.",
+          "type": "string",
+          "minLength": 1,
+          "default": "after"
+        },
+        "poll_interval_ms": {
+          "description": "Restart from the first page after this long; read once without it.",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "query",
+        "connection"
+      ]
+    },
+    "subscription": {
+      "description": "A subscription source over `graphql-transport-ws` (streaming, not resumable).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "description": "The subscription document.",
+          "type": "string",
+          "minLength": 1
+        },
+        "variables": {
+          "description": "Fixed variables.",
+          "type": "object"
+        },
+        "url": {
+          "description": "`ws://` or `wss://`; the HTTP URL with its scheme swapped when omitted.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "query"
+      ]
+    },
+    "mutation": {
+      "description": "The sink: one mutation per event.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mutation": {
+          "description": "The mutation document.",
+          "type": "string",
+          "minLength": 1
+        },
+        "variables_pointer": {
+          "description": "Where the variables object is in the event's data (a JSON pointer); the whole data when omitted.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "mutation"
+      ]
+    },
+    "request_timeout_ms": {
+      "description": "Per-request timeout, in milliseconds.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 30000
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }

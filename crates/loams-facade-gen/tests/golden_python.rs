@@ -36,6 +36,8 @@ const PACKAGE_PARAMETERS: &[&str] = &[
     "loams.operations.v1=loams.operations.v1.operations_pb2",
     "loams.notifications.v1=loams.notifications.v1.notifications_pb2",
     "loams.live.v1=loams.live.v1.live_pb2",
+    "loams.auth.v1=loams.auth.v1.auth_pb2",
+    "loams.admin.v1=loams.admin.v1.org_pb2",
 ];
 
 /// SDK1 Task 3's `golden_python`.

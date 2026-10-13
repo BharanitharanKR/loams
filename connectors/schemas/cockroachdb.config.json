@@ -1,9 +1,194 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/cockroachdb.config.json",
-  "title": "CockroachDB instance config (placeholder)",
-  "description": "Placeholder for a CockroachDB instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "CockroachDB connector instance config (loams.flow/v1)",
+  "description": "One CockroachDB connector instance's settings, read by the native Postgres family (`loams_connector_postgres::PostgresFactory`, CN2 Task 10, OR-9): CockroachDB through the target profile `cockroachdb` (port 26257, database `defaultdb`); its CDC is a sinkless changefeed and its batch reads are `SELECT … AS OF SYSTEM TIME` pages. `mode` picks the batch or CDC source, and a `table` makes the instance an upsert sink. `password` holds the **name** of a secret in the namespace's store (D189), which the connector resolves when it connects; it is exactly the manifest's `secrets` list. CN1's `table`, `schema_name`, `key` and `password` keep their meaning.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "host",
+    "user"
+  ],
+  "properties": {
+    "host": {
+      "description": "The database host. Every connection goes through the SDK's egress check, after DNS.",
+      "type": "string",
+      "minLength": 1
+    },
+    "port": {
+      "description": "The database port.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "default": 26257
+    },
+    "database": {
+      "description": "The database name.",
+      "type": "string",
+      "minLength": 1,
+      "default": "defaultdb"
+    },
+    "user": {
+      "description": "The role the connector logs in as.",
+      "type": "string",
+      "minLength": 1
+    },
+    "password": {
+      "description": "The name of the secret holding the role's password, resolved through the namespace's secret store (D189); never the password itself. Absent: trust or peer authentication. Not used with `auth: iam`, where the password is a freshly minted RDS IAM token.",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "auth": {
+      "description": "How the instance logs in: `basic` (or its alias `password`) with `password`. AWS RDS IAM tokens (`iam`) are Aurora's (the `aurora` manifest), not this target's.",
+      "enum": [
+        "basic",
+        "password"
+      ],
+      "default": "basic"
+    },
+    "sslmode": {
+      "description": "`disable`, `require` (encrypt without verifying the certificate) or `verify-full` (verify the chain and the host name). Defaults to `disable`, or `verify-full` with `auth: iam`.",
+      "enum": [
+        "disable",
+        "require",
+        "verify-full"
+      ]
+    },
+    "ca_pem": {
+      "description": "Extra trusted roots for `verify-full`, as PEM (the Amazon RDS CA bundle, for example); without it only the webpki roots are trusted.",
+      "type": "string"
+    },
+    "mode": {
+      "description": "The source: `batch` reads each table in `tables` in key order as Arrow batches; `cdc` streams changes (pgoutput logical replication on Postgres, a sinkless changefeed on CockroachDB) after an initial snapshot.",
+      "enum": [
+        "batch",
+        "cdc"
+      ],
+      "default": "batch"
+    },
+    "tables": {
+      "description": "The tables the source reads, `schema.table` or `table` (schema `public`). A string is one table.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ]
+    },
+    "key": {
+      "description": "Batch reads: the columns to page by. Sink: the upsert key, INSERT … ON CONFLICT (key) DO UPDATE. Defaults to the table's primary key. Declared because the manifest declares capabilities.sink.upsert: true (CN1 Task 1's semantic rule); CN1's single-column `key` is still accepted as a string.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      ]
+    },
+    "publication": {
+      "description": "CDC: a publication you manage. Without it the connector creates and owns `loams_<instance>` and drops it when the instance is deleted.",
+      "type": "string",
+      "minLength": 1
+    },
+    "slot": {
+      "description": "CDC: the replication slot name. Default `loams_<namespace>_<instance>`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "snapshot": {
+      "description": "CDC: take the initial snapshot inside the slot's exported snapshot (`initial`), or start streaming at the slot's consistent point (`never`).",
+      "enum": [
+        "initial",
+        "never"
+      ],
+      "default": "initial"
+    },
+    "streaming": {
+      "description": "CDC: receive in-progress transactions (pgoutput protocol 2, PostgreSQL 14+), buffered per transaction until it commits.",
+      "type": "boolean",
+      "default": false
+    },
+    "stream_buffer_bytes": {
+      "description": "CDC: the most one streamed in-progress transaction may buffer.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 67108864
+    },
+    "heartbeat_ms": {
+      "description": "CDC: the idle heartbeat (`pg_logical_emit_message`) that keeps the slot moving on a quiet database; 0 disables it.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 10000
+    },
+    "status_interval_ms": {
+      "description": "CDC: the Standby Status Update interval, which is also the keepalive.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 10000
+    },
+    "resolved_ms": {
+      "description": "CockroachDB changefeeds: the `resolved` timestamp interval.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 1000
+    },
+    "table": {
+      "description": "Sink: the table rows are upserted into, `schema.table` or `table`. Setting it makes the instance a sink.",
+      "type": "string",
+      "minLength": 1
+    },
+    "schema_name": {
+      "description": "Sink: the schema an unqualified `table` is in (CN1's meaning).",
+      "type": "string",
+      "minLength": 1,
+      "default": "public"
+    },
+    "transactional": {
+      "description": "Sink: commit each batch in one transaction with the instance's row in `_loams_checkpoints`, fenced by the lease epoch (exactly once). False makes a plain at-least-once upsert sink.",
+      "type": "boolean",
+      "default": true
+    },
+    "checkpoint_schema": {
+      "description": "Sink: the schema `_loams_checkpoints` lives in.",
+      "type": "string",
+      "minLength": 1,
+      "default": "public"
+    },
+    "evolution": {
+      "description": "The schema evolution policy (see the schema-mapping guide).",
+      "enum": [
+        "additive",
+        "widen",
+        "pause"
+      ],
+      "default": "additive"
+    },
+    "lossy": {
+      "description": "Conversions allowed to lose information, by path (for example a `timestamp without time zone` column read as UTC).",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }

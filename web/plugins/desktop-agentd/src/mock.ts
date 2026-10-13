@@ -2,6 +2,7 @@
 // and the tests, until loams-agentd ships (DD1 Tasks 6, 10, 11). No token, no URLs.
 import type {
   AgentdBackground,
+  AgentdRepo,
   AgentdSession,
   AgentdStatus,
   IpcResult,
@@ -51,12 +52,40 @@ export function sampleSessions(now: number = Date.now()): AgentdSession[] {
   ];
 }
 
+/** FAKE sample repositories for the preview; no path is read. */
+export function sampleRepos(): AgentdRepo[] {
+  return [
+    { path: '~/src/loams', name: 'loams', defaultBranch: 'dev' },
+    { path: '~/src/acme-site', name: 'acme-site', defaultBranch: 'main' },
+  ];
+}
+
+function repoName(pathOrUrl: string): string {
+  return (
+    pathOrUrl
+      .replace(/\/+$/, '')
+      .split(/[/:]/)
+      .pop()
+      ?.replace(/\.git$/, '') || pathOrUrl
+  );
+}
+
+function addRepo(repos: AgentdRepo[], path: string): AgentdRepo {
+  const known = repos.find((r) => r.path === path);
+  if (known) return { ...known };
+  const repo = { path, name: repoName(path), defaultBranch: 'main' };
+  repos.push(repo);
+  return { ...repo };
+}
+
 export interface MockAgentdOptions {
   background?: AgentdBackground;
   running?: boolean;
   sessions?: AgentdSession[];
   dataDir?: string;
   now?: number;
+  /** Studio's projects (`agentd.repos`); FAKE sample paths, nothing on disk is read. */
+  repos?: AgentdRepo[];
 }
 
 export interface MockAgentd {
@@ -72,6 +101,7 @@ export function createMockAgentdApi(o: MockAgentdOptions = {}): MockAgentd {
   let background: AgentdBackground = o.background ?? 'ask';
   const sessions = o.sessions ?? sampleSessions(now);
   const calls: string[] = [];
+  const repos: AgentdRepo[] = (o.repos ?? sampleRepos()).map((r) => ({ ...r }));
   const listeners = new Set<(s: AgentdStatus) => void>();
   const runningStatus = (mode: 'service' | 'child'): AgentdStatus => ({
     state: 'running',
@@ -141,6 +171,27 @@ export function createMockAgentdApi(o: MockAgentdOptions = {}): MockAgentd {
       }
       emit({ state: 'stopped', dataDir, version: '0.2.1' });
       return ok;
+    },
+    repos: {
+      list: async () => {
+        calls.push('repos');
+        return status.state === 'running'
+          ? { ok: true, value: repos.map((r) => ({ ...r })) }
+          : notRunning;
+      },
+      add: async (path) => {
+        calls.push(`repos.add:${path}`);
+        if (status.state !== 'running') return notRunning;
+        return { ok: true, value: addRepo(repos, path) };
+      },
+      clone: async (url) => {
+        calls.push(`repos.clone:${url}`);
+        if (status.state !== 'running') return notRunning;
+        if (!/^(https|ssh):\/\/|^[\w.-]+@[\w.-]+:/.test(url)) {
+          return { ok: false, code: 'invalid_url', message: 'Expected an https or ssh git URL' };
+        }
+        return { ok: true, value: addRepo(repos, `~/src/${repoName(url)}`) };
+      },
     },
     background: {
       get: async () => background,

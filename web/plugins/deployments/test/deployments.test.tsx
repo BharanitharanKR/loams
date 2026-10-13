@@ -306,7 +306,8 @@ describe('DeploymentsPage', () => {
     render(<DeploymentsPage client={client} />);
     expect(await screen.findByRole('heading', { name: 'api v1.42.0' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'api v1.42.0 pipeline' })).toBeTruthy();
-    expect(screen.getAllByText('Validate').length).toBeGreaterThanOrEqual(3);
+    // The stage graph's nodes mount a tick after the heading.
+    expect((await screen.findAllByText('Validate')).length).toBeGreaterThanOrEqual(3);
     expect(screen.getByRole('heading', { name: 'billing-worker v0.19.0' })).toBeTruthy();
     expect(screen.getByLabelText('Deploys per hour, last 15 minutes')).toBeTruthy();
   });

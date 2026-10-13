@@ -1,7 +1,9 @@
 //! Generates the `loams.live.v1` messages (and the internal
-//! `loams.live.worker.v1` ones), the `LiveService` trait and its
-//! client from `proto/loams/live/v1/*.proto` at the workspace root (R1 plan
-//! Task 7), with connect-rust's code generator and the system `protoc`.
+//! `loams.live.worker.v1` ones), the `LiveService` and `LiveAdminService`
+//! traits and their clients from `proto/loams/live/v1/*.proto` at the
+//! workspace root (R1 plan Task 7, LV1 plan Task 10), with connect-rust's
+//! code generator and the system `protoc`, and writes their descriptor set
+//! for `grpc.reflection.v1`.
 
 fn main() {
     // Read at run time, not with `env!`: the shared target directory reuses
@@ -9,11 +11,26 @@ fn main() {
     // compile time would point into whichever worktree compiled it first.
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .expect("cargo sets CARGO_MANIFEST_DIR for build scripts");
-    let root = format!("{manifest_dir}/../../proto");
-    let mut files: Vec<String> = ["value", "live", "journal", "catalog", "idempotency"]
-        .iter()
-        .map(|name| format!("{root}/loams/live/v1/{name}.proto"))
-        .collect();
+    // `proto/` inside the crate: a symlink to the workspace's `proto/` in this
+    // repository, real files in the published crate. A checkout without symlink
+    // support (Windows with `core.symlinks=false`) falls back to the workspace.
+    let packaged = format!("{manifest_dir}/proto");
+    let root = if std::path::Path::new(&packaged).join("loams").is_dir() {
+        packaged
+    } else {
+        format!("{manifest_dir}/../../proto")
+    };
+    let mut files: Vec<String> = [
+        "value",
+        "live",
+        "admin",
+        "journal",
+        "catalog",
+        "idempotency",
+    ]
+    .iter()
+    .map(|name| format!("{root}/loams/live/v1/{name}.proto"))
+    .collect();
     // The internal worker protocol (LV1 plan Ruling 5, Task 5).
     files.push(format!("{root}/loams/live/worker/v1/worker.proto"));
     println!("cargo::rerun-if-changed=build.rs");
@@ -24,6 +41,7 @@ fn main() {
         .files(&files)
         .includes(&[root])
         .include_file("_connectrpc.rs")
+        .emit_descriptor_set("loams_live_descriptor.bin")
         .gate_client_feature(true)
         .compile()
     {

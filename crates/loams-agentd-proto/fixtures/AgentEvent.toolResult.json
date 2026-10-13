@@ -1,0 +1,11 @@
+{
+  "diff": {
+    "newText": "fn main() {\n    run();\n}\n",
+    "oldText": "fn main() {}\n",
+    "path": "src/main.rs"
+  },
+  "id": "call-1",
+  "isError": false,
+  "output": "Finished",
+  "type": "toolResult"
+}

@@ -3,11 +3,13 @@
 # and `--check` fails CI when the two disagree (CN1 Task 2: appendix_matches_csv).
 # camel-runtime: a planned stub with no capability detail (D353); a hand-written manifest
 # replaces it, and the generator never rewrites an id listed in handwritten.txt.
+# CN2 Task 2 declares its directions and each one's default runtime (OR-1, R-CN2-6);
+# its family task fills in the rest.
 apiVersion: loams.flow/v1
 kind: Connector
 id: camel-runtime
 name: Camel (runtime)
-specVersion: 0.1.0
+specVersion: 0.2.0
 category: integration
 priority: P1
 starred: false
@@ -18,6 +20,20 @@ runtime:
 licence:
   component: Apache-2.0
 capabilities:
+  source:
+    streaming: true
+    batch: true
+    cdc: false
+    webhook: true
+    resumable: false
+    position: ""
+  sink:
+    streaming: true
+    batch: true
+    transactional: false
+    upsert: false
+    delete: false
+    idempotent: false
   delivery:
     source: at_least_once
     sink: at_least_once
@@ -43,3 +59,5 @@ envelope:
 limits: {}
 conformance: []
 docs: null
+notes:
+  - 'fallback-only: the Camel runtime itself, which OR-4 keeps only as the fallback runtime for the rows it names; replaced_by: CN2 Task 23'

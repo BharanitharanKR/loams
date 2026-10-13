@@ -256,6 +256,42 @@ void main() {
     expect(excDecided.reason, equals('approval_already_decided'));
   });
 
+  // ErrorParser.reasons is a transcription of docs/api/reasons.md's registry:
+  // the same reasons in the same order, so a reason added to or dropped from
+  // the page fails here rather than drifting silently. Each reason must also
+  // map to a typed exception of its own.
+  test('dart_error_reason_registry_matches_reasons_md', () {
+    final page = File('${Directory.current.parent.parent.path}/docs/api/reasons.md');
+    // The registry's rows are `| `reason` | ...`: the first column's backticked token.
+    final row = RegExp(r'^\|\s*`([a-z][a-z0-9_]*)`\s*\|');
+    final documented = <String>[];
+    for (final line in page.readAsLinesSync()) {
+      final match = row.firstMatch(line.trim());
+      if (match != null) {
+        documented.add(match.group(1)!);
+      }
+    }
+    expect(documented, isNotEmpty, reason: "docs/api/reasons.md yielded no reasons; its table's shape changed");
+
+    expect(ErrorParser.reasons.keys.toList(), equals(documented),
+        reason: 'docs/api/reasons.md and ErrorParser.reasons have drifted apart');
+
+    final classes = <Type>{};
+    for (final reason in ErrorParser.reasons.keys) {
+      final exc = ErrorParser.parse(400, {
+        'code': 'unknown',
+        'details': [
+          {'@type': 'type.googleapis.com/loams.errors.v1.ErrorInfo', 'reason': reason}
+        ]
+      });
+      expect(exc.reason, equals(reason));
+      expect(exc.unknownReason, isNull, reason: 'reason $reason was reported as unknown');
+      expect(exc.runtimeType, isNot(equals(LoamsException)), reason: 'reason $reason has no typed exception');
+      classes.add(exc.runtimeType);
+    }
+    expect(classes.length, equals(ErrorParser.reasons.length), reason: 'two reasons share one exception class');
+  });
+
   test('dart_stream_resume_with_cursor', () async {
     // R3: Frame 1 with cursor "c1", Frame 2 heartbeat, Frame 3 trailer
     final f1 = Envelopes.pack(Uint8List.fromList(utf8.encode(jsonEncode({'cursor': 'c1', 'data': 'msg1'}))));

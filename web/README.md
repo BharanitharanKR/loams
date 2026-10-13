@@ -7,11 +7,11 @@ The Loams console and its design system (design [§19](../docs/design/19-console
 | Package | What |
 |---|---|
 | `packages/ui` (`@loams/ui`) | Tokens, the mark and wordmark, grain textures and React primitives: buttons, status tags, cards, empty states, fields, tables, stats, notices, dialogs, snippets, meters, avatars, formatters. Plain CSS with `loams-` classes; works in Vite and Next.js |
-| `apps/console` (`@loams/console`) | One single-page app for OSS, Loams Cloud and BYOC. It reads `GET /api/v1/instance` to know its edition and sign-in methods |
+| `apps/console` (`@loams/console`) | One single-page app for OSS, Loams Cloud and BYOC, served at the base path's root (`/ui/`). It reads `InstanceService/GetInstance` to know its edition and the APIs the server serves, and `AuthService/ListProviders` for its sign-in methods |
 
 ### The cordis console (design §37 §5, AP1a)
 
-The console is becoming a [cordis](https://github.com/cordiverse/cordis) v4 application: a small host boots a cordis context from a plugin catalog, and everything else is a plugin with a manifest, declared services, slots and permissions. Until today's pages move into plugins (AP1a Task 5) it is served beside the current console at `/ui/cordis.html`.
+The console is a [cordis](https://github.com/cordiverse/cordis) v4 application: a small host boots a cordis context from a plugin catalog, and everything else is a plugin with a manifest, declared services, slots and permissions. The original React console's pages moved into plugins (AP1a Task 5, API2 Task 10); its old addresses (`/ui/teams`, `/ui/projects/<p>/environments/<e>`, `/ui/cordis.html`) land on the same pages' hash routes (`/ui/#/teams`).
 
 | Package | What |
 |---|---|
@@ -20,20 +20,23 @@ The console is becoming a [cordis](https://github.com/cordiverse/cordis) v4 appl
 | `packages/console-host` (`@loams/console-host`) | Boot, the `loams.yml` catalog (no YAML tags, so no `!!js`), manifests (`loams.plugin` in package.json, `plugin-manifest.schema.json`), trust tiers, the guard proxy, permissions, the sandbox bridge; `./testing` has an in-memory app-protos mock |
 | `packages/platform-web` (`@loams/platform-web`) | `platform` and `transport` in a browser |
 | `packages/proto` (`@loams/proto`) | Generated clients for the app protos (AP0) |
-| `plugins/*` | `shell` (layout, nav, `router`), `rpc` (`rpc.*` clients, gated on `api_versions`), `identity` (`session`), `stack-status`, `namespaces`, `approvals`, and `sandbox` (the in-frame runtime) |
+| `packages/admin-ui` (`@loams/admin-ui`) | What the console's own pages share: page heads, the audit table, the activity chart, labels for the `loams.admin.v1` enums, the pages' styles; `./testing` has an in-memory `loams.auth.v1` and `loams.admin.v1` |
+| `plugins/*` | `shell` (layout, nav, `router`), `rpc` (`rpc.*` clients, gated on `api_versions`), `identity` (`session`, with the console's sign-in gate), the console's own pages (`account`: sign-in, setup, consent; `org`: overview, teams, members, settings; `projects`: projects, environments, access and the project switcher; `agents`; `audit`, live), `stack-status`, `namespaces`, `approvals`, and `sandbox` (the in-frame runtime) |
 | `examples/plugin-hello` | A third-party plugin that runs in a sandboxed frame |
 | `apps/console/catalog/base.yml` | The `oss` plugin set |
 
 ```bash
-pnpm dev                                     # then open http://localhost:5173/ui/cordis.html (demo mode, no server)
-cargo run -p loams-apps-mock                 # or against the app-protos mock on :8084:
+cargo run -p loams-apps-mock                 # the console API and the app protos on :8084
+pnpm dev                                     # then open http://localhost:5173/ui/ (proxied to the mock)
+                                             # http://localhost:5173/ui/?demo is the in-browser demo, no server
 VITE_LOAMS_APPS_URL=http://127.0.0.1:8084 VITE_LOAMS_DEV_BEARER=mock-access-usr_omar pnpm dev
+                                             # straight at the mock with a bearer token
 pnpm test                                    # Vitest, every package
 ```
 
 Third-party plugins are off unless the instance sets the `console.third_party_plugins` feature (the demo mock does): until the unified auth plan can vend attenuated tokens there is no server-side boundary for them. `window.loamsConsole` in the browser console shows the plugin table and `pending()`.
 
-The console speaks the contract in [`api/console/openapi.json`](../api/console/openapi.json). Until the gateway implements it (M2), [`loams-apps-mock`](../crates/loams-apps-mock) serves it with seed data on `:8084`, beside the app protos. The contract and seed themselves live in [`loams-console-mock`](../crates/loams-console-mock), which is a library now: `loams-apps-mock` mounts its routes over axum, so one listener answers both surfaces.
+The console speaks Connect: `loams.auth.v1` and `loams.admin.v1` (API2 Tasks 6, 7) through `@loams/proto` and `@connectrpc/connect-query`, over the console's one transport. Until the server serves them (API2 Task 7's server half), [`loams-apps-mock`](../crates/loams-apps-mock) serves them from the console seed on `:8084`, beside the app protos; the seed itself lives in [`loams-console-mock`](../crates/loams-console-mock). The console's pages appear only where `GetInstance.api_versions` names those packages.
 
 ## Develop
 
@@ -44,13 +47,7 @@ cargo run -p loams-apps-mock          # the console API mock on :8084 (add --sig
 cd web && pnpm install && pnpm dev       # the console on http://localhost:5173/ui/
 ```
 
-`pnpm dev` proxies `/api`, `/v1`, `/.well-known`, `/health` and `/ready` to the mock. To use a real engine instead, set `LOAMS_API=http://127.0.0.1:8080`.
-
-After changing the contract, regenerate the console's types:
-
-```bash
-pnpm gen:api
-```
+`pnpm dev` proxies the Connect paths (`/loams.<package>.<Service>/<Method>`), `/api`, `/v1`, `/.well-known`, `/health` and `/ready` to the mock. To use a real engine instead, set `LOAMS_API=http://127.0.0.1:8080`; `LOAMS_UI_BASE=/` serves the console at the root instead of `/ui/`.
 
 ## Check and build
 
@@ -88,7 +85,7 @@ The hosted console is the cordis console (`cordis.html`) served at `/`. On first
 
 | Mode | Sign-in |
 |---|---|
-| `tailscale` (default) | No sign-in screen. The engine identifies the caller from the tailnet; the header shows the user `GET /api/v1/session` returns. |
+| `tailscale` (default) | No sign-in screen. The engine identifies the caller from the tailnet; the header shows the user `AuthService/GetSession` returns. |
 | `oidc` | A Loams account: Authorization Code + PKCE at `https://auth.loams.dev` with the `loams-console` client, sent as `Authorization: Bearer <token>`. Tokens stay in memory; a reload renews silently with `prompt=none`, a refresh token is used while the page lives; nothing that grants access goes to `localStorage` or `sessionStorage`. Offered when the deploy has a client. |
 | `apikey` | The connect screen requires an engine API key on every load, kept in the tab's memory only and sent as the bearer. |
 

@@ -1,0 +1,74 @@
+[package]
+name = "loams-connector-objects"
+description = "The Loams object-storage connector family (CN2 Task 13, OR-6): S3 (the native sink of the S3 ★, OR-8), Cloudflare R2 and MinIO/RustFS as S3 targets, GCS, Azure Blob, ADLS Gen2 and SFTP, on the connector SDK."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+# Every family crate depends on the SDK and its protocol crates only (OR-6).
+loams-connector-sdk = { path = "../loams-connector-sdk" }
+# Arrow: listed objects decode to `RecordBatch`es (D356) and the sink's staged
+# parts are Arrow IPC streams. The workspace's 59 line. Apache-2.0.
+arrow-array.workspace = true
+arrow-ipc.workspace = true
+arrow-json.workspace = true
+arrow-schema.workspace = true
+# A decoded batch cut to the budget is copied into its own buffers, so its
+# memory size is its own (`get_array_memory_size` of a slice counts the whole
+# parent). 59.3.0 is already in fabric/Cargo.lock through `arrow`. Apache-2.0.
+arrow-select = "59"
+# The SDK's own async-trait pin (0.1.92 in fabric/Cargo.lock).
+async-trait = "0.1.89"
+base64.workspace = true
+bytes.workspace = true
+futures.workspace = true
+http.workspace = true
+# `x-ms-date` of the DFS requests. 1.0.3 is already in fabric/Cargo.lock
+# (through hyper). MIT OR Apache-2.0.
+httpdate = "1.0.3"
+# One implementation over S3, GCS and Azure Blob (CN2 Task 13). Pinned to
+# 0.13.2, not 0.14 (CN2 R0.13): parquet 59.3.0 and deltalake 1.1.0 both need
+# `^0.13.2`. 0.13.2 (2026-03-24), MIT OR Apache-2.0 (published in the legacy
+# `MIT/Apache-2.0` form, R0.5). Without the default `fs` feature: the family
+# never writes to the local file system.
+object_store = { version = "=0.13.2", default-features = false, features = ["aws", "gcp", "azure"] }
+# The sink's Parquet writer and the source's Parquet reader. The workspace's
+# 59 line, already in fabric/Cargo.lock with these features. Apache-2.0.
+parquet.workspace = true
+# object_store's own HTTP client, built here by `store::EgressConnector` so
+# that every connection resolves through the instance's egress check (Task 25's
+# hook). The same 0.12 line and features object_store asks for, so nothing new
+# is compiled: rustls with ring and the platform's roots. MIT OR Apache-2.0.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "http2"] }
+# HMAC-SHA256 for ADLS Gen2's Shared Key signature over the DFS REST API
+# (R0.21). 0.17.14 is already in fabric/Cargo.lock (rustls, object_store).
+# Apache-2.0 AND ISC.
+ring = "0.17.14"
+# SSH 2 and SFTP v3 for the SFTP source and sink (CN2 R0.5: russh 0.63.3,
+# russh-sftp 3.0.1). russh without its defaults: `ring` instead of aws-lc-rs,
+# and no `rsa`, whose `rsa` crate carries RUSTSEC-2023-0071 with no fix, so
+# Ed25519 and ECDSA keys only (R13.6). Apache-2.0.
+russh = { version = "=0.63.3", default-features = false, features = ["ring"] }
+russh-sftp = "=3.0.1"
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "rt", "sync", "time"] }
+tracing.workspace = true
+
+[dev-dependencies]
+http-body-util.workspace = true
+# The fake DFS endpoint of the ADLS Gen2 request-shape test, as the SDK's and
+# the HTTP family's tests use hyper's server.
+hyper = { workspace = true, features = ["server", "http1"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+tempfile.workspace = true
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time", "test-util"] }
+
+[lints]
+workspace = true

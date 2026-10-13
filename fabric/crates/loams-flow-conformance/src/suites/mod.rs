@@ -94,13 +94,25 @@ impl RunEnv {
             }
             ServiceKind::Fixture { dir, .. } => {
                 let path = self.root.join(dir);
-                let recorded = std::fs::read_dir(&path).is_ok_and(|entries| {
-                    entries
-                        .filter_map(Result::ok)
-                        .any(|e| e.path().extension().is_some_and(|x| x == "json"))
-                });
-                if recorded {
+                // A synthetic fixture (R20.1) replays in the family's own
+                // tests but is not a recording of the real system, so it
+                // never makes the service available to a suite (OR-23).
+                let fixtures: Vec<crate::fixture::Fixture> = std::fs::read_dir(&path)
+                    .map(|entries| {
+                        entries
+                            .filter_map(Result::ok)
+                            .map(|e| e.path())
+                            .filter(|p| p.extension().is_some_and(|x| x == "json"))
+                            .filter_map(|p| crate::fixture::Fixture::load(&p).ok())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if fixtures.iter().any(|f| f.counts_toward_preview()) {
                     Ok(())
+                } else if !fixtures.is_empty() {
+                    Err(format!(
+                        "only synthetic fixtures under {dir}; a recording from the nightly job is needed"
+                    ))
                 } else {
                     Err(format!("no recording under {dir}"))
                 }

@@ -88,6 +88,27 @@ fn base64_decode(s: &str) -> Vec<u8> {
     out
 }
 
+/// API2 Task 10: the console gates its org, project, agent and audit pages on
+/// these packages (AP1a Ruling 6), so the mock that serves them names them.
+#[tokio::test]
+async fn get_instance_names_the_console_api() {
+    let mock = start(Duration::from_secs(15)).await;
+    let client =
+        InstanceServiceClient::new(http(Protocol::Connect), config(&mock, Protocol::Connect));
+    let info = client
+        .get_instance(GetInstanceRequest::default())
+        .await
+        .expect("GetInstance")
+        .into_owned();
+    for package in ["loams.auth.v1", "loams.admin.v1"] {
+        assert!(
+            info.api_versions.iter().any(|v| v == package),
+            "{package} missing from {:?}",
+            info.api_versions
+        );
+    }
+}
+
 #[tokio::test]
 async fn every_protocol_serves_get_instance() {
     let mock = start(Duration::from_secs(15)).await;

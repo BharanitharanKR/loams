@@ -1,0 +1,76 @@
+{
+  "recorded_from": "AWS Lambda, Google Cloud Run and Azure Functions",
+  "synthetic": true,
+  "docs": [
+    "https://docs.aws.amazon.com/lambda/latest/api/API_Invoke.html",
+    "https://cloud.google.com/run/docs/authenticating/service-to-service",
+    "https://learn.microsoft.com/en-us/azure/azure-functions/function-keys-how-to"
+  ],
+  "scenario": {
+    "lambda": {
+      "provider": "lambda",
+      "function": "loams-echo",
+      "endpoint": "{proxy}",
+      "aws": {
+        "access_key_id": "aws-key-id",
+        "secret_access_key": "aws-secret",
+        "region": "eu-west-1"
+      },
+      "reply_topic": "orders.replies"
+    },
+    "cloud_run": { "provider": "cloud_run", "url": "{proxy}/label", "id_token": "run-id-token" },
+    "azure_functions": { "provider": "azure_functions", "url": "{proxy}/api/label", "function_key": "fn-key" },
+    "secrets": {
+      "aws-key-id": "AKIDSYNTHETIC000000",
+      "aws-secret": "synthetic-aws-secret-0000000000",
+      "run-id-token": "synthetic-id-token",
+      "fn-key": "synthetic-function-key"
+    }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/2015-03-31/functions/loams-echo/invocations",
+        "body": { "json": { "order": 7 } }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json", "x-amz-executed-version": "$LATEST" },
+        "body": { "json": { "echo": { "order": 7 } } }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/2015-03-31/functions/loams-echo/invocations",
+        "body": { "json": { "order": "boom" } }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json",
+          "x-amz-executed-version": "$LATEST",
+          "x-amz-function-error": "Unhandled"
+        },
+        "body": { "json": { "errorMessage": "boom", "errorType": "ValueError" } }
+      }
+    },
+    {
+      "request": { "method": "POST", "path": "/label", "body": { "json": { "order": 7 } } },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json" },
+        "body": { "json": { "label": "ok", "platform": "cloud-run" } }
+      }
+    },
+    {
+      "request": { "method": "POST", "path": "/api/label", "body": { "json": { "order": 7 } } },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json" },
+        "body": { "json": { "label": "ok", "platform": "azure-functions" } }
+      }
+    }
+  ]
+}

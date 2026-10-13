@@ -1,0 +1,41 @@
+# Twilio SMS — an HTTP-API profile (CN2 OR-11, Task 20). Written from
+# Twilio's public Messaging API reference:
+#   Message resource (create, list, next_page_uri):
+#     https://www.twilio.com/docs/messaging/api/message-resource
+#   Authentication (Account SID or API key, basic auth): https://www.twilio.com/docs/usage/requests-to-twilio
+#   Form-encoded requests: https://www.twilio.com/docs/usage/requests-to-twilio#make-a-post-request
+#   Webhook signatures (X-Twilio-Signature): https://www.twilio.com/docs/usage/webhooks/webhooks-security
+# `account_sid` is the account's identifier (not a secret); `auth.username`
+# names the secret holding the Account SID or an API key SID, and
+# `auth.password` the auth token's or API secret's.
+apiVersion: loams.flow/v1
+kind: Profile
+id: twilio-sms
+profile_kind: http-api
+module: http
+system:
+  name: Twilio
+  service: { fixture: conformance/connectors/fixtures/twilio-sms }
+defaults: {}
+narrows: []
+http:
+  base_url: "https://api.twilio.com/2010-04-01/Accounts/{config.account_sid}"
+  auth: { scheme: basic }
+  resources:
+    messages:
+      list:
+        method: GET
+        path: "/Messages.json"
+        items: "/messages"
+        next_url: "/next_page_uri"
+        key: "/sid"
+        query: { PageSize: "100" }
+      create:
+        method: POST
+        path: "/Messages.json"
+        encoding: form
+  rate_limit:
+    requests: 100
+    per_seconds: 1
+    honour_headers: ["Retry-After"]
+  webhook: { scheme: twilio, header: X-Twilio-Signature }

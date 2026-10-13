@@ -130,23 +130,30 @@ fn imports(out: &mut String, model: &Model, packages: &PackageMap) -> Result<(),
             continue;
         }
         seen.push(specifier);
-        writeln!(
-            out,
-            "from {module} import {names}",
-            module = specifier,
-            names = package_types(model, &module.package).join(", "),
-        )
-        .ok();
+        // One import per proto *file*: protoc-gen-python emits a `_pb2` module
+        // per file, so a package split over several files (`loams.live.v1`'s
+        // `live.proto` and `admin.proto`) imports each type from its own. The
+        // package map's module comes first, so a one-file package is unchanged.
+        for (messages, names) in grouped(specifier, package_types(model, &module.package)) {
+            writeln!(
+                out,
+                "from {messages} import {names}",
+                names = names.join(", ")
+            )
+            .ok();
+        }
         // The client module sits beside the messages: protoc-gen-connectrpc
         // writes `<file>_connect.py` next to `<file>_pb2.py`, in the same
         // package directory.
-        writeln!(
-            out,
-            "from {module} import {clients}",
-            module = client_module(specifier),
-            clients = package_clients(model, &module.package).join(", "),
-        )
-        .ok();
+        for (messages, clients) in grouped(specifier, package_clients(model, &module.package)) {
+            writeln!(
+                out,
+                "from {module} import {clients}",
+                module = client_module(&messages),
+                clients = clients.join(", "),
+            )
+            .ok();
+        }
     }
     out.push('\n');
     Ok(())
@@ -164,40 +171,81 @@ fn client_module(messages: &str) -> String {
 /// The message types the facade's signatures name in one package, sorted.
 /// `protoc-gen-python` exports every message of a file from that file's `_pb2`
 /// module, so the leaf name is the Python name.
-fn package_types(model: &Model, package: &str) -> Vec<String> {
-    let mut names: Vec<String> = model
+fn package_types(model: &Model, package: &str) -> Vec<(String, String)> {
+    let mut names: Vec<(String, String)> = model
         .calls()
         .filter(|call| call.package == package)
         .flat_map(|call| {
             [
-                naming::leaf(&call.input).to_owned(),
-                naming::leaf(&call.output).to_owned(),
+                (
+                    call.input_file.clone(),
+                    naming::leaf(&call.input).to_owned(),
+                ),
+                (
+                    call.output_file.clone(),
+                    naming::leaf(&call.output).to_owned(),
+                ),
             ]
         })
-        .filter(|name| !name.is_empty())
+        .filter(|(_, name)| !name.is_empty())
         .collect();
-    names.sort();
+    names.sort_by(|left, right| left.1.cmp(&right.1));
     names.dedup();
     names
+}
+
+/// The Python module protoc-gen-python writes for one proto file, next to the
+/// package map's module: `loams/live/v1/admin.proto` beside
+/// `loams.live.v1.live_pb2` is `loams.live.v1.admin_pb2`. An unknown file
+/// falls back to the package map's module.
+fn file_module(specifier: &str, file: &str) -> String {
+    let stem = file
+        .rsplit('/')
+        .next()
+        .and_then(|name| name.strip_suffix(".proto"));
+    match (stem, specifier.rsplit_once('.')) {
+        (Some(stem), Some((parent, _))) if !stem.is_empty() => format!("{parent}.{stem}_pb2"),
+        _ => specifier.to_owned(),
+    }
+}
+
+/// `(file, name)` pairs grouped by the module each file is, the package map's
+/// own module first and the rest by module path; names keep their order.
+fn grouped(specifier: &str, items: Vec<(String, String)>) -> Vec<(String, Vec<String>)> {
+    let mut groups: Vec<(String, Vec<String>)> = Vec::new();
+    for (file, name) in items {
+        let module = file_module(specifier, &file);
+        match groups.iter_mut().find(|(existing, _)| *existing == module) {
+            Some((_, names)) => {
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+            None => groups.push((module, vec![name])),
+        }
+    }
+    groups.sort_by(|left, right| {
+        (left.0 != specifier, &left.0).cmp(&(right.0 != specifier, &right.0))
+    });
+    groups
 }
 
 /// The Connect client classes one package's services generate. Two modules can
 /// be facade names for one service (`loams.live` and `loams.tables` are both
 /// `loams.live.v1.LiveService`), so the same pair is listed once.
-fn package_clients(model: &Model, package: &str) -> Vec<String> {
-    let mut services: Vec<&str> = model
-        .modules
-        .iter()
-        .filter(|module| module.package == package)
-        .map(|module| module.service.as_str())
+fn package_clients(model: &Model, package: &str) -> Vec<(String, String)> {
+    let mut services: Vec<(&str, &str)> = model
+        .calls()
+        .filter(|call| call.package == package)
+        .map(|call| (call.service.as_str(), call.service_file.as_str()))
         .collect();
     services.sort();
     services.dedup();
     let mut names = Vec::new();
-    for service in services {
+    for (service, file) in services {
         let base = naming::pascal(naming::leaf(service));
-        names.push(format!("{base}Client"));
-        names.push(format!("{base}ClientSync"));
+        names.push((file.to_owned(), format!("{base}Client")));
+        names.push((file.to_owned(), format!("{base}ClientSync")));
     }
     names
 }
@@ -481,8 +529,8 @@ pub fn call_signature_sync(call: &Call, packages: &PackageMap) -> Result<String,
 }
 
 fn signature(call: &Call, packages: &PackageMap, sync: bool) -> Result<String, String> {
-    let input = qualified(&call.input, packages)?;
-    let output = qualified(&call.output, packages)?;
+    let input = qualified(&call.input, &call.input_file, packages)?;
+    let output = qualified(&call.output, &call.output_file, packages)?;
     let streaming = call.streaming == crate::Streaming::Server;
     let (prefix, iterator) = if sync {
         ("", "Iterator")
@@ -531,7 +579,7 @@ fn call_doc(call: &Call) -> String {
 
 /// A fully qualified proto message as the Python name for it: the module the
 /// generated messages live in, and the leaf.
-fn qualified(full: &str, packages: &PackageMap) -> Result<String, String> {
+fn qualified(full: &str, file: &str, packages: &PackageMap) -> Result<String, String> {
     if full.is_empty() {
         return Err("a method has no message type".to_owned());
     }
@@ -539,7 +587,11 @@ fn qualified(full: &str, packages: &PackageMap) -> Result<String, String> {
     let Some(module) = packages.get(package) else {
         return Err(format!("{package} is not in the package map"));
     };
-    Ok(format!("{}.{}", module, naming::leaf(full)))
+    Ok(format!(
+        "{}.{}",
+        file_module(module, file),
+        naming::leaf(full)
+    ))
 }
 
 /// A Rust-style `true`/`false`, which Python spells the same way but a

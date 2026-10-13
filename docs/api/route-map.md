@@ -79,6 +79,7 @@ Merged outside `HotLayer` on every node (`api::router` and `api::internal_router
 | GET | `/internal/v1/node/stats` | internal | `loams.internal.v1.NodeService/GetNodeStats` | `ForwardStats::snapshot`, `HotTierImpl::counters`, `NodeInfo::meta` | `cluster.rs` |
 | POST | `/internal/v1/hot/status` | internal | `loams.internal.v1.HotService/GetHotStatus` | `hot::local_status` | `cluster.rs`, `hot_http.rs` (owner path) |
 | POST | `/internal/v1/hot/warm` | internal | `loams.internal.v1.HotService/Warm` | `hot::warm_local` | `cluster.rs`, `hot_http.rs` (owner path) |
+| POST | `/internal/v1/graph/{method}` | internal | `loams.internal.v1.GraphForwardService/Forward` (GR1 Task 12; moves with API1 Task 8) | `GraphAdmin::serve_forwarded` (feature `graph`) | `loams-graph` `ownership` tests |
 
 ## Cluster bootstrap (`crates/loams/src/server.rs`)
 
@@ -106,6 +107,8 @@ Served on the cluster listener before the API router (`meta_rpc::router`). See r
 
 The real server does not serve `/api/v1` yet (the gateway work is AP4/MT1); only `loams-apps-mock` does, from the contract. `loams-console-mock` keeps the contract and the seed and its `routes()` list, and `loams-apps-mock::console` mounts that list over axum on the same listener as the app protos, so the console, the desktop, the phone apps and the SDKs all point at one address. Tests: `crates/loams-console-mock/tests/contract.rs` (`every_operation_has_a_mock_and_every_mock_an_operation`, `every_mocked_body_matches_its_response_schema`, `the_server_answers_from_the_seed`) and the console's `web/apps/console` tests over `openapi-fetch`. Services are in `loams.admin.v1` unless noted.
 
+**On Connect (API2 Tasks 6 and 7, mock half).** Every `app` row below is also served over Connect by `loams-apps-mock` (`src/admin/`), from the same resolved seed as the REST route, as the RPC in its Target RPC column; `loams-console-mock`'s `CONNECT_RPCS` is the same table as code, and `tests/contract.rs` (`connect_rpcs_cover_the_contract_and_agree_with_the_route_map`) holds it to this page and to the contract. Two RPCs answer no REST route: `AuthService/ListProviders` (the `sign_in` part of `GET /api/v1/instance`) and `AuditService/WatchAuditEvents`. The tests are `crates/loams-apps-mock/tests/console_rpc.rs`: each console route test ported with `_rpc`, `mock_rest_and_connect_answer_alike`, `create_key_returns_secret_once` and `watch_audit_resumes_from_cursor`. The server does not serve `loams.auth.v1` or `loams.admin.v1` yet: `crates/loams/src/api/connect_admin.rs` is the server half of Task 7. The REST routes stay until API2 Task 11.
+
 | Method | Route | Kind | Target RPC | Internal call | Existing tests |
 |---|---|---|---|---|---|
 | GET | `/api/v1/instance` | app | `loams.instance.v1.InstanceService/GetInstance` (exists, AP0) | console mock seed | console mock contract tests |
@@ -132,7 +135,7 @@ The real server does not serve `/api/v1` yet (the gateway work is AP4/MT1); only
 | GET | `/api/v1/projects/{project}/environments` | app | `ProjectService/ListEnvironments` | console mock seed | console mock contract tests |
 | POST | `/api/v1/projects/{project}/environments` | app | `ProjectService/CreateEnvironment` | console mock seed | console mock contract tests |
 | GET | `/api/v1/projects/{project}/environments/{environment}` | app | `ProjectService/GetEnvironment` | console mock seed | console mock contract tests |
-| GET | `/api/v1/projects/{project}/environments/{environment}/usage` | app | `ProjectService/GetEnvironmentUsage` | console mock seed | console mock contract tests |
+| GET | `/api/v1/projects/{project}/environments/{environment}/usage` | app | `ProjectService/GetEnvironmentActivity` (§44's `GetEnvironmentUsage`, renamed: API2 ruling 6/7.4) | console mock seed | console mock contract tests |
 | GET | `/api/v1/projects/{project}/agents` | app | `AgentService/ListAgents` | console mock seed | console mock contract tests |
 | POST | `/api/v1/projects/{project}/agents` | app | `AgentService/CreateAgent` | console mock seed | console mock contract tests |
 | GET | `/api/v1/agents/{agent}` | app | `AgentService/GetAgent` | console mock seed | console mock contract tests |
@@ -195,6 +198,30 @@ Design §46 §4.2's console REST for Loams Postgres. Since PG2 Task 9 the `pg-co
 | `/v1/namespaces/{ns}/postgres/projects/{project}/databases/{database}` | DELETE | `loams.postgres.v1.PostgresService/DeleteDatabase` | `branch` query |
 | `/v1/namespaces/{ns}/postgres/projects/{project}/connection_info` | GET | `loams.postgres.v1.PostgresService/GetConnectionInfo` | `branch`, `endpoint`, `role`, `database`, `read_only` query; never a password; beyond §46 §4.2's pattern |
 | `/v1/namespaces/{ns}/postgres/projects/{project}:issue_credential` | POST | `loams.postgres.v1.PostgresService/IssueConnectCredential` | answers the credential once; beyond §46 §4.2's pattern |
+
+## Planned: `loams.repos.v1` and Loams Git's HTTP routes (GT1 Task 12)
+
+Loams Git (design §36, §19.10). With the `loams` feature `git`, the main port serves `loams.repos.v1.RepoService` over Connect, gRPC and gRPC-Web, behind the engine's authentication (`LOAMS_AUTH_MODE`), from GT1 Task 13; without it every RPC answers `feature_not_in_variant`. As for `loams.postgres.v1`, **no REST route** is served (API2, D602): the console REST rows below stay planned. `every_rpc_has_a_planned_console_route` (`crates/loams-proto/tests/repos.rs`) checks that every row names an RPC of the service and every RPC has a row. `{repo}` is the repository's name, which the server resolves to its immutable `repo_id`; `Idempotency-Key` carries `idempotency_key` and `Loams-Consistency-Token` carries `consistency_token` (§44 §5.2). The rows put the route first, which `route_map_covers_every_route` skips.
+
+| Route | Method | Target RPC | Notes |
+|---|---|---|---|
+| `/v1/namespaces/{ns}/repos` | POST | `loams.repos.v1.RepoService/CreateRepo` |  |
+| `/v1/namespaces/{ns}/repos` | GET | `loams.repos.v1.RepoService/ListRepos` | `page_size`, `page_token` query |
+| `/v1/namespaces/{ns}/repos/{repo}` | GET | `loams.repos.v1.RepoService/GetRepo` |  |
+| `/v1/namespaces/{ns}/repos/{repo}` | DELETE | `loams.repos.v1.RepoService/DeleteRepo` | returns an `Operation` |
+| `/v1/namespaces/{ns}/repos/{repo}:fork` | POST | `loams.repos.v1.RepoService/ForkRepo` | the new name in the body |
+| `/v1/namespaces/{ns}/repos/{repo}/config` | PATCH | `loams.repos.v1.RepoService/UpdateRepoConfig` | `update_mask` from the body's fields |
+| `/v1/namespaces/{ns}/repos/{repo}/refs` | GET | `loams.repos.v1.RepoService/ListRefs` | `prefix`, `page_size`, `page_token` query |
+| `/v1/namespaces/{ns}/repos/{repo}:compact` | POST | `loams.repos.v1.RepoService/CompactRepo` | returns an `Operation` |
+| `/v1/namespaces/{ns}/repos/{repo}:watch` | GET | `loams.repos.v1.RepoService/WatchRepo` | server stream |
+
+Git Smart HTTP (§36 §6.1, D602, D603) is a **protocol** surface and stays HTTP. It is served on `--git-listen` (loopback until MT1) from GT1 Task 46, with `info/refs` and `git-upload-pack` from Task 46 to Task 49 and `git-receive-pack` from Task 50:
+
+| Route | Method | Kind | Notes |
+|---|---|---|---|
+| `/git/{ns}/{repo}.git/info/refs` | GET | protocol | `?service=git-upload-pack` or `git-receive-pack` |
+| `/git/{ns}/{repo}.git/git-upload-pack` | POST | protocol | v2 (`Git-Protocol: version=2`), and v0/v1 for libgit2 (Task 52, R0.10) |
+| `/git/{ns}/{repo}.git/git-receive-pack` | POST | protocol | v0/v1 receive-pack |
 
 ## Out of scope: compatibility surfaces (D603)
 

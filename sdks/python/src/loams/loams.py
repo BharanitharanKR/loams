@@ -154,7 +154,7 @@ class Loams:
             warns you.** D609 puts the token in the response message *and* in the
             response header `loams-consistency-token`. No generated message has a
             `consistency_token` field, so that half of the contract is not there
-            to read; and `connect-python==0.9.0` exposes only `execute_unary` and
+            to read; and `connectrpc==0.12.1` exposes only `execute_unary` and
             `execute_server_stream`, which return the message and discard the
             response headers, so the other half is unreachable too. The store
             therefore stays empty and no `loams-consistency` header is ever sent.
@@ -165,7 +165,7 @@ class Loams:
             when the flag is off; with it on, the store is there and
             `loams.consistency.current()` is still `None`, which is how you can
             tell. `tests/test_consistency.py` pins the gap, and fails on a
-            connect-python upgrade that would let us close it.
+            connectrpc upgrade that would let us close it.
         """
         if api_key is not None and auth is not None:
             raise ValueError("pass api_key or auth, not both: they answer the same question")

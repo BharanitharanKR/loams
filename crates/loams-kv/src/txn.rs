@@ -117,7 +117,15 @@ impl Txn {
     }
 
     /// Locks `keys` without writing them: a concurrent write to one of them
-    /// is a write-write conflict (design §20 §5.2's read promotion).
+    /// is a write-write conflict (design §20 §5.2's read promotion), on both
+    /// backends and whichever commits first. A write committed after this
+    /// transaction started makes its commit conflict; once it commits, a
+    /// transaction started before that commit which writes or locks one of
+    /// the keys conflicts at its own commit (TiKV's `Lock` record; the
+    /// embedded store's lock version), whether the key is present or not. A
+    /// lock is no value: reads and inserts do not see it. Rolled back, it
+    /// leaves no lock (TiKV's rollback record may still make a transaction
+    /// concurrent with it conflict).
     pub async fn lock_keys<K: AsRef<[u8]>>(
         &mut self,
         keys: impl IntoIterator<Item = K>,

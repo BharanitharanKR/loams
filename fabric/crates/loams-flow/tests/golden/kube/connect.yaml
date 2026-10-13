@@ -1,0 +1,229 @@
+---
+apiVersion: v1
+data:
+  billing-jms.sink.yaml: |
+    - route:
+        id: loams-7-billing-jms-sink
+        from:
+          uri: iggy:loams-7/billing
+        steps:
+          - to: jms:queue:billing
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: loams-flow
+    loams.dev/connector: jms
+    loams.dev/fallback: 'true'
+    loams.dev/group: ns-7
+    loams.dev/instance: billing-jms
+    loams.dev/namespace: '7'
+    loams.dev/runtime: camel
+  name: loams-connect-7-billing-jms
+  namespace: loams-7
+---
+apiVersion: v1
+data:
+  orders-oracle.source.yaml: |
+    - route:
+        id: loams-7-orders-oracle-source
+        from:
+          uri: sql:select * from orders
+          parameters:
+            dataSource: '#oracle'
+            passwordFile: /var/run/loams/secrets/oracle-creds/password
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: loams-flow
+    loams.dev/connector: oracle
+    loams.dev/fallback: 'true'
+    loams.dev/group: ns-7
+    loams.dev/instance: orders-oracle
+    loams.dev/namespace: '7'
+    loams.dev/runtime: camel
+  name: loams-connect-7-orders-oracle
+  namespace: loams-7
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/component: connector-egress
+    app.kubernetes.io/managed-by: loams-flow
+    loams.dev/fallback: 'true'
+    loams.dev/group: ns-7
+    loams.dev/namespace: '7'
+    loams.dev/runtime: camel
+  name: loams-connect-ns-7-egress
+  namespace: loams-7
+spec:
+  egress:
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 0.0.0.0/8
+        - 127.0.0.0/8
+        - 169.254.0.0/16
+        - 100.100.100.200/32
+        - 168.63.129.16/32
+        - 224.0.0.0/4
+        - 255.255.255.255/32
+        - 10.244.0.0/16
+        - 10.96.0.0/12
+        - 10.0.0.10/32
+    - ipBlock:
+        cidr: ::/0
+        except:
+        - ::/128
+        - ::1/128
+        - fe80::/10
+        - fd00:ec2::254/128
+        - ff00::/8
+  - to:
+    - ipBlock:
+        cidr: 10.20.30.0/24
+  - ports:
+    - port: 8080
+      protocol: TCP
+    - port: 8090
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: loams-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: loams-fabric
+  podSelector:
+    matchLabels:
+      loams.dev/group: ns-7
+      loams.dev/runtime: camel
+  policyTypes:
+  - Egress
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: loams-flow
+    loams.dev/fallback: 'true'
+    loams.dev/group: ns-7
+    loams.dev/namespace: '7'
+    loams.dev/runtime: camel
+  name: loams-connect-ns-7
+  namespace: loams-7
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      loams.dev/group: ns-7
+      loams.dev/runtime: camel
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        loams.dev/config-hash: b22fb1a234fca5d2
+      labels:
+        loams.dev/fallback: 'true'
+        loams.dev/group: ns-7
+        loams.dev/namespace: '7'
+        loams.dev/runtime: camel
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - env:
+        - name: CAMEL_MAIN_LOGMASK
+          value: 'true'
+        - name: LOAMS_CONNECT_ROUTES_DIR
+          value: /etc/loams-connect/routes
+        image: ghcr.io/ostrium-labs/loams-connect@sha256:1111111111111111111111111111111111111111111111111111111111111111
+        imagePullPolicy: IfNotPresent
+        name: loams-connect
+        ports:
+        - containerPort: 9876
+          name: metrics
+          protocol: TCP
+        resources:
+          limits:
+            memory: 1Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /etc/loams-connect/routes/7
+          name: routes-7
+          readOnly: true
+        - mountPath: /var/run/loams/secrets/jms-broker
+          name: secret-0
+          readOnly: true
+        - mountPath: /var/run/loams/secrets/oracle-creds
+          name: secret-1
+          readOnly: true
+        - mountPath: /tmp
+          name: tmp
+          readOnly: false
+      enableServiceLinks: false
+      securityContext:
+        fsGroup: 1001
+        runAsGroup: 1001
+        runAsNonRoot: true
+        runAsUser: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: loams-connectors-fallback
+      volumes:
+      - name: routes-7
+        projected:
+          defaultMode: 292
+          sources:
+          - configMap:
+              items:
+              - key: billing-jms.sink.yaml
+                path: billing-jms.sink.yaml
+              name: loams-connect-7-billing-jms
+          - configMap:
+              items:
+              - key: orders-oracle.source.yaml
+                path: orders-oracle.source.yaml
+              name: loams-connect-7-orders-oracle
+      - name: secret-0
+        secret:
+          defaultMode: 256
+          items:
+          - key: value
+            path: value
+          optional: false
+          secretName: jms-broker
+      - name: secret-1
+        secret:
+          defaultMode: 256
+          items:
+          - key: password
+            path: password
+          - key: user
+            path: user
+          optional: false
+          secretName: oracle-creds
+      - emptyDir:
+          sizeLimit: 256Mi
+        name: tmp

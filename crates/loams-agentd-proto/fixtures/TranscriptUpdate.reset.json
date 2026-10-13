@@ -1,0 +1,124 @@
+{
+  "contextUsage": {
+    "tokens": 12000,
+    "window": 200000
+  },
+  "historyPending": true,
+  "replayBaseline": {
+    "entries": {
+      "msg-1": {
+        "call-1": 0,
+        "e5": 0,
+        "fork:chat-2": 0,
+        "img-1": 0,
+        "in-req-1": 0,
+        "r1": 27,
+        "t0": 13
+      },
+      "msg-u1": {
+        "t0": 13
+      }
+    }
+  },
+  "reset": [
+    {
+      "createdAt": 1791797400000,
+      "deviceId": "device-1",
+      "id": "msg-u1",
+      "parts": [
+        {
+          "id": "t0",
+          "kind": "text",
+          "text": "Fix the build"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "createdAt": 1791797400001,
+      "deviceId": "device-1",
+      "durationMs": 4200,
+      "id": "msg-1",
+      "parts": [
+        {
+          "id": "t0",
+          "kind": "text",
+          "text": "Building now."
+        },
+        {
+          "id": "img-1",
+          "kind": "image",
+          "mimeType": "image/png",
+          "name": "shot.png",
+          "path": "/home/dev/.uploads/shot.png"
+        },
+        {
+          "id": "r1",
+          "kind": "reasoning",
+          "text": "The linker flag is missing."
+        },
+        {
+          "call": {
+            "kind": "unknown",
+            "name": "Agent: review"
+          },
+          "diff": {
+            "newText": "fn main() {\n    run();\n}\n",
+            "oldText": "fn main() {}\n",
+            "path": "src/main.rs"
+          },
+          "diffRef": "chat-1/call-1.diff",
+          "diffStats": [
+            {
+              "additions": 2,
+              "deletions": 1,
+              "path": "src/main.rs"
+            }
+          ],
+          "id": "call-1",
+          "isError": false,
+          "kind": "tool",
+          "output": "ok",
+          "outputBytes": 2048,
+          "outputRef": "chat-1/call-1",
+          "resolved": true,
+          "subagentRef": "chat-1:sub-1",
+          "subagentStatus": "running",
+          "subagentTail": "Reading files"
+        },
+        {
+          "id": "in-req-1",
+          "kind": "input",
+          "questions": [
+            {
+              "header": "Branch",
+              "id": "q-1",
+              "multiSelect": false,
+              "multiline": false,
+              "options": [
+                "main",
+                "dev"
+              ],
+              "question": "Which branch?"
+            }
+          ],
+          "requestId": "req-1",
+          "resolved": false
+        },
+        {
+          "id": "e5",
+          "kind": "error",
+          "message": "rate limited"
+        },
+        {
+          "id": "fork:chat-2",
+          "kind": "fork",
+          "sourceChatId": "chat-1",
+          "sourceTitle": "Fix the build"
+        }
+      ],
+      "role": "assistant",
+      "status": "complete"
+    }
+  ]
+}

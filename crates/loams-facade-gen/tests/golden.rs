@@ -26,6 +26,8 @@ const PACKAGE_PARAMETERS: &[&str] = &[
     "loams.notifications.v1=@loams/proto/notifications",
     "loams.errors.v1=@loams/proto/errors",
     "loams.live.v1=@loams/live/live",
+    "loams.auth.v1=@loams/proto/auth",
+    "loams.admin.v1=@loams/proto/admin",
 ];
 
 const PROTO_REV: &str = "v1";

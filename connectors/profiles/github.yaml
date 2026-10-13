@@ -1,0 +1,40 @@
+# GitHub — an HTTP-API profile (CN2 OR-11, Task 20). Written from GitHub's
+# public REST API reference (API version 2022-11-28):
+#   Issues: https://docs.github.com/en/rest/issues/issues
+#   Pagination (Link headers): https://docs.github.com/en/rest/using-the-rest-api/using-pagination-in-the-rest-api
+#   Rate limits: https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+#   Webhook signatures: https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries
+# The `issues` listing also returns pull requests (an item with a
+# `pull_request` key), as the API does. The GitHub → Forgejo and GitHub →
+# ItsPlane import routes read it (connectors/routes/).
+apiVersion: loams.flow/v1
+kind: Profile
+id: github
+profile_kind: http-api
+module: http
+system:
+  name: GitHub
+  service: { fixture: conformance/connectors/fixtures/github }
+defaults: {}
+narrows: []
+http:
+  base_url: "https://api.github.com"
+  auth: { scheme: bearer }
+  headers:
+    Accept: application/vnd.github+json
+    X-GitHub-Api-Version: "2022-11-28"
+  resources:
+    issues:
+      list:
+        method: GET
+        path: "/repos/{config.owner}/{config.repo}/issues"
+        key: "/node_id"
+        query: { state: all, per_page: "100", sort: updated, direction: asc }
+      create:
+        method: POST
+        path: "/repos/{config.owner}/{config.repo}/issues"
+  rate_limit:
+    requests: 5000
+    per_seconds: 3600
+    honour_headers: ["Retry-After", "X-RateLimit-Remaining", "X-RateLimit-Reset"]
+  webhook: { scheme: github, header: X-Hub-Signature-256 }

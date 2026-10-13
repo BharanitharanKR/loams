@@ -291,7 +291,7 @@ public final class Modules {
         }
 
         /**
-         * {@code loams.live.v1.LiveService/Deploy}, retried: manual.
+         * {@code loams.live.v1.LiveAdminService/Deploy}, retried: manual.
          *
          * <p>Admin: deploys a function bundle and a schema. Not keyed — {@code DeployRequest} has
          * no {@code idempotency_key} field, and inventing one would be the SDK guessing at the

@@ -397,7 +397,8 @@ async fn session_survives_worker_recycle_without_temp_tables() {
 async fn unparsed_statements_are_decided_by_clickhouse() {
     let (house, _pool) = house("unparsed", per_namespace(1)).await;
     let addr = house.local_addr();
-    let ddl = "CREATE TABLE t (a UInt64 CODEC(ZSTD(3))) ENGINE = MergeTree ORDER BY a";
+    // A column CODEC was the form here until HS1 Task 10 made it lake DDL.
+    let ddl = "ALTER TABLE t DELETE WHERE a = 1";
     let refused = in_session(addr, "alice", "u", ddl, &[]).await;
     assert_eq!(code(&refused), Some("62"), "{}", refused.text());
     assert!(
@@ -432,9 +433,10 @@ async fn owned_statements_of_later_tasks_are_48() {
     let (house, _pool) = house("later", per_namespace(1)).await;
     let addr = house.local_addr();
     for (sql, task) in [
+        // Without a catalog (HS1 Task 10) there are no lake tables.
         (
             "CREATE TABLE t (a UInt64) ENGINE = MergeTree ORDER BY a",
-            "Task 10",
+            "has no catalog",
         ),
         (
             "CREATE TABLE q (a String) ENGINE = LoamsStream('s', 'JSONEachRow')",
@@ -442,7 +444,7 @@ async fn owned_statements_of_later_tasks_are_48() {
         ),
         ("OPTIMIZE TABLE t FINAL", "Task 13"),
         ("KILL QUERY WHERE query_id = 'x'", "Task 21"),
-        ("UNDROP TABLE t", "Task 15"),
+        ("UNDROP TABLE t", "has no catalog"),
     ] {
         let response = in_session(addr, "alice", "l", sql, &[]).await;
         assert_eq!(code(&response), Some("48"), "{sql}: {}", response.text());

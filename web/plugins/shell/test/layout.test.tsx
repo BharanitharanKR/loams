@@ -1,9 +1,9 @@
-import type { SessionService } from '@loams/console-host';
+import type { FlagsService, SessionService } from '@loams/console-host';
 import { SlotProvider, SlotRegistry } from '@loams/slots';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DOCK_DEFAULT, DOCK_KEY, DOCK_MAX, DOCK_MIN, Layout } from '../src/layout.js';
+import { DOCK_DEFAULT, DOCK_KEY, DOCK_MAX, DOCK_MIN, Layout, THEME_KEY } from '../src/layout.js';
 import { HashRouter, type HashSource } from '../src/router.js';
 
 function memory(start = '/'): HashSource {
@@ -23,16 +23,25 @@ const session = {
   subscribe: () => () => {},
 } as unknown as SessionService;
 
-function setup(start = '/') {
+function setup(start = '/', flags?: FlagsService, s: SessionService = session) {
   const slots = new SlotRegistry();
   const router = new HashRouter(slots, memory(start));
   const ui = render(
     <SlotProvider registry={slots}>
-      <Layout router={router} session={session} />
+      <Layout router={router} session={s} flags={flags} />
     </SlotProvider>,
   );
   return { slots, router, ui };
 }
+
+const flags = {
+  edition: 'oss',
+  instanceName: 'Acme Loams',
+  serverVersion: '0.1.0-preview.1',
+  features: {},
+  apiVersions: [],
+  has: () => false,
+} as FlagsService;
 
 const section = (
   slots: SlotRegistry,
@@ -56,6 +65,85 @@ beforeEach(() => {
   };
 });
 afterEach(cleanup);
+
+describe('shell chrome', () => {
+  it('shows the Loams wordmark, the edition, a readable preview badge and the version', () => {
+    setup('/', flags);
+    expect(screen.getByRole('img', { name: 'Loams' })).toBeTruthy();
+    expect(screen.getByText('OSS')).toBeTruthy();
+    expect(screen.getByText('Preview').className).toBe('lc-preview');
+    expect(screen.getByText('Loams 0.1.0-preview.1')).toBeTruthy();
+  });
+
+  it('breadcrumbs name the instance, the section and the page', () => {
+    const { slots, router } = setup('/live', flags);
+    act(() => {
+      section(slots, 'Live', 'Data', 40);
+      router.page({ id: 'live', path: '/live', title: 'Live' }, () => <p>live page</p>);
+    });
+    const trail = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect([...trail.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+      'Acme Loams',
+      'Data',
+      'Live',
+    ]);
+    expect(within(trail).getByText('Live').closest('li')?.getAttribute('aria-current')).toBe(
+      'page',
+    );
+  });
+
+  it('toggles the theme and remembers it', () => {
+    document.documentElement.classList.remove('dark');
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Use dark theme' }));
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(localStorage.getItem(THEME_KEY)).toBe('dark');
+    fireEvent.click(screen.getByRole('button', { name: 'Use light theme' }));
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(localStorage.getItem(THEME_KEY)).toBe('light');
+  });
+
+  it('opens the nav drawer from the menu button and closes it again', () => {
+    setup();
+    const open = screen.getByRole('button', { name: 'Open navigation' });
+    expect(open.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(open);
+    expect(document.getElementById('lc-side')?.hasAttribute('data-open')).toBe(true);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close navigation' })[0] as HTMLElement);
+    expect(document.getElementById('lc-side')?.hasAttribute('data-open')).toBe(false);
+  });
+
+  it('switches the session environment from the sidebar', async () => {
+    const envs = [
+      { id: 'dev', name: 'Development', namespace: 'd', protected: false },
+      { id: 'prod', name: 'Production', namespace: 'p', protected: true },
+    ];
+    let selected = 'dev';
+    const listeners = new Set<() => void>();
+    const withEnvs = {
+      ...session,
+      environments: () => envs,
+      environment: () => envs.find((e) => e.id === selected),
+      select: (id: string) => {
+        selected = id;
+        for (const l of listeners) l();
+      },
+      subscribe: (l: () => void) => {
+        listeners.add(l);
+        return () => listeners.delete(l);
+      },
+    } as unknown as SessionService;
+    setup('/', undefined, withEnvs);
+    const trigger = screen.getByRole('combobox', { name: 'Environment' });
+    expect(trigger.textContent).toContain('Development');
+    fireEvent.click(trigger);
+    const option = await screen.findByRole('option', { name: 'Production' });
+    // Let the list finish opening, then pick with the keyboard as a person would.
+    await act(() => new Promise((r) => setTimeout(r, 400)));
+    fireEvent.keyDown(option, { key: 'Enter' });
+    expect(selected).toBe('prod');
+  });
+});
 
 describe('shell layout', () => {
   it('nav_groups_and_orders_sections', () => {

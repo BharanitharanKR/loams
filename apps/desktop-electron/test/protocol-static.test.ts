@@ -54,7 +54,7 @@ describe("resolveStatic", () => {
 		expect(
 			resolveStatic(root, u("loams-app://console/ui/cordis/data")),
 		).toEqual({
-			spaFallback: join(root, "cordis.html"),
+			spaFallback: join(root, "index.html"),
 		});
 	});
 

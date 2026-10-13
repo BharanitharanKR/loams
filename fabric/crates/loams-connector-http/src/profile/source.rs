@@ -8,15 +8,15 @@ use std::time::Duration;
 use async_trait::async_trait;
 use bytes::Bytes;
 use loams_connector_sdk::{
-    AsyncJob, Budget, CloudEvent, ConnectorError, EventBatch, ListOp, Position, Source,
-    SourceBatch, SourceFactory, Split, SplitEnumerator, SplitState,
+    AsyncJob, Budget, CloudEvent, ConnectorError, CursorFrom, EventBatch, ListOp, Position,
+    ResponseFormat, Source, SourceBatch, SourceFactory, Split, SplitEnumerator, SplitState,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tokio::time::Instant;
 
-use super::{Engine, RECORD_EVENT};
+use super::{Engine, ITEM_EVENT, SendOpts};
 
 /// The default `poll.interval_ms` of an async job.
 const DEFAULT_JOB_POLL: Duration = Duration::from_secs(1);
@@ -26,7 +26,7 @@ const MAX_EMPTY_PAGES: usize = 16;
 
 #[derive(Debug, Clone)]
 pub(crate) enum Mode {
-    List(ListOp),
+    List(Box<ListOp>),
     Job(Box<AsyncJob>),
 }
 
@@ -98,7 +98,8 @@ impl SourceFactory for HttpApiSourceFactory {
 /// as the position's opaque bytes.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 struct Pos {
-    /// The cursor the page is asked for with (`None`: the first page).
+    /// The cursor the page is asked for with (`None`: the first page); for
+    /// offset pagination, the offset or page number.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     cursor: Option<String>,
     /// The `Link: rel="next"` URL the page is fetched from.
@@ -204,8 +205,15 @@ impl HttpApiSource {
             Some(id) => id.clone(),
             None => {
                 let body = job.create.body.as_ref().map(|b| Bytes::from(b.to_string()));
-                let url = engine.url(&job.create.path, None, &[]);
-                let resp = engine.send(job.create.method, &url, body, &[]).await?;
+                let path = engine.with_secrets(&job.create.path, true).await?;
+                let url = engine.url(&path, None, &[]);
+                let opts = SendOpts {
+                    label: Some(&job.create.path),
+                    ..SendOpts::default()
+                };
+                let resp = engine
+                    .send(job.create.method, &url, body, &[], opts)
+                    .await?;
                 let doc = json_body(resp.body())?;
                 let id = match doc.pointer(&job.id) {
                     Some(Value::String(s)) => s.clone(),
@@ -229,8 +237,13 @@ impl HttpApiSource {
             return Ok(false);
         }
         self.last_poll = Some(Instant::now());
-        let url = engine.url(&job.poll.path, Some(&id), &[]);
-        let resp = engine.send(job.poll.method, &url, None, &[]).await?;
+        let path = engine.with_secrets(&job.poll.path, true).await?;
+        let url = engine.url(&path, Some(&id), &[]);
+        let opts = SendOpts {
+            label: Some(&job.poll.path),
+            ..SendOpts::default()
+        };
+        let resp = engine.send(job.poll.method, &url, None, &[], opts).await?;
         let doc = json_body(resp.body())?;
         let state = doc
             .pointer(&job.poll.state)
@@ -253,75 +266,136 @@ impl HttpApiSource {
     async fn fetch(&self) -> Result<Page, ConnectorError> {
         let list = self.listing();
         let engine = &self.engine;
+        let offset_start = |o: &loams_connector_sdk::OffsetSpec| if o.pages { 1 } else { 0 };
         let url = match (&self.pos.url, &self.pos.cursor) {
             (Some(url), _) => url.clone(),
             (None, cursor) => {
-                let mut query: Vec<(&str, &str)> = list
+                let mut query: Vec<(String, String)> = list
                     .query
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect();
+                if let Some(o) = &list.offset {
+                    let at = cursor
+                        .clone()
+                        .unwrap_or_else(|| offset_start(o).to_string());
+                    query.push((o.param.clone(), at));
+                    if let Some(lp) = &o.limit_param {
+                        query.push((lp.clone(), o.limit.to_string()));
+                    }
+                } else if let (Some(c), Some(spec)) = (cursor, &list.cursor) {
+                    query.push((spec.param.clone(), c.clone()));
+                }
+                let query: Vec<(&str, &str)> = query
                     .iter()
                     .map(|(k, v)| (k.as_str(), v.as_str()))
                     .collect();
-                if let (Some(c), Some(spec)) = (cursor, &list.cursor) {
-                    query.push((spec.param.as_str(), c.as_str()));
-                }
-                engine.url(&list.path, self.pos.job.as_deref(), &query)
+                let path = engine.with_secrets(&list.path, true).await?;
+                engine.url(&path, self.pos.job.as_deref(), &query)
             }
         };
-        let resp = engine.send(list.method, &url, None, &[]).await?;
-        let doc = json_body(resp.body())?;
-        let items = match &list.items {
-            Some(p) => doc.pointer(p),
-            None => Some(&doc),
+        let opts = SendOpts {
+            label: Some(&list.path),
+            ..SendOpts::default()
         };
-        let items = match items {
-            Some(Value::Array(a)) => a.clone(),
-            None | Some(Value::Null) => Vec::new(),
-            Some(_) => {
-                return Err(ConnectorError::fatal(format!(
-                    "the {} listing's items are not an array",
-                    self.resource
-                )));
-            }
-        };
-        let next = match &list.cursor {
-            Some(spec) => match doc.pointer(&spec.next) {
-                Some(Value::String(s)) if !s.is_empty() => Next::Cursor(s.clone()),
-                Some(Value::Number(n)) => Next::Cursor(n.to_string()),
-                _ => Next::End,
-            },
-            None => match link_next(resp.headers()) {
-                Some(url) => {
-                    let url = if url.starts_with('/') {
-                        let origin = engine
-                            .url("", None, &[])
-                            .split('/')
-                            .take(3)
-                            .collect::<Vec<_>>()
-                            .join("/");
-                        format!("{origin}{url}")
-                    } else {
-                        url
-                    };
-                    if !engine.same_origin(&url) {
-                        return Err(ConnectorError::fatal(
-                            "a Link header points off the API's origin; not followed",
-                        ));
+        let resp = engine.send(list.method, &url, None, &[], opts).await?;
+        let (doc, items) = match list.format {
+            ResponseFormat::Json => {
+                let doc = json_body(resp.body())?;
+                let items = match &list.items {
+                    Some(p) => doc.pointer(p),
+                    None => Some(&doc),
+                };
+                let items = match items {
+                    Some(Value::Array(a)) => a.clone(),
+                    None | Some(Value::Null) => Vec::new(),
+                    Some(_) => {
+                        return Err(ConnectorError::fatal(format!(
+                            "the {} listing's items are not an array",
+                            self.resource
+                        )));
                     }
-                    Next::Url(url)
-                }
+                };
+                (doc, items)
+            }
+            ResponseFormat::Csv => (Value::Null, csv_rows(resp.body())?),
+            ResponseFormat::Ndjson => (
+                Value::Null,
+                ndjson_items(resp.body(), list.items.as_deref())?,
+            ),
+        };
+        let text = |v: Option<&Value>| match v {
+            Some(Value::String(s)) if !s.is_empty() && s != "null" => Some(s.clone()),
+            Some(Value::Number(n)) => Some(n.to_string()),
+            _ => None,
+        };
+        let more = list
+            .cursor
+            .as_ref()
+            .and_then(|c| c.more.as_ref())
+            .is_none_or(|m| doc.pointer(m) == Some(&Value::Bool(true)));
+        let next = if let Some(ptr) = &list.next_url {
+            match text(doc.pointer(ptr)) {
+                Some(u) => Next::Url(engine.next_page(&u).ok_or_else(|| {
+                    ConnectorError::fatal(
+                        "a next-page URL points off the API's origin; not followed",
+                    )
+                })?),
                 None => Next::End,
-            },
+            }
+        } else if let Some(spec) = &list.cursor {
+            let cursor = match spec.from {
+                CursorFrom::Body => text(doc.pointer(&spec.next)),
+                CursorFrom::LastItem => items.last().and_then(|i| text(i.pointer(&spec.next))),
+                CursorFrom::Header => resp
+                    .headers()
+                    .get(spec.next.as_str())
+                    .and_then(|v| v.to_str().ok())
+                    .map(|v| Value::String(v.trim().to_string()))
+                    .and_then(|v| text(Some(&v))),
+            };
+            match cursor {
+                Some(c) if more => Next::Cursor(c),
+                _ => Next::End,
+            }
+        } else if let Some(o) = &list.offset {
+            let at: u64 = self
+                .pos
+                .cursor
+                .as_deref()
+                .and_then(|c| c.parse().ok())
+                .unwrap_or(offset_start(o));
+            if items.len() >= o.limit as usize {
+                let step = if o.pages { 1 } else { items.len() as u64 };
+                Next::Cursor((at + step).to_string())
+            } else {
+                Next::End
+            }
+        } else {
+            match link_next(resp.headers()) {
+                Some(url) => Next::Url(engine.next_page(&url).ok_or_else(|| {
+                    ConnectorError::fatal("a Link header points off the API's origin; not followed")
+                })?),
+                None => Next::End,
+            }
         };
         Ok(Page { items, next })
     }
 
     fn event(&self, item: &Value) -> Result<CloudEvent, ConnectorError> {
-        let data = serde_json::to_vec(item)
+        let raw = serde_json::to_vec(item)
             .map_err(|e| ConnectorError::fatal(format!("encoding an item: {e}")))?;
+        // The id is the raw item's, so a projection (an import route) keeps
+        // the identity of what was read.
         let mut digest = Sha256::new();
         digest.update(self.resource.as_bytes());
         digest.update(b"\n");
-        digest.update(&data);
+        digest.update(&raw);
+        let data = match self.engine.project() {
+            Some(p) => serde_json::to_vec(&p.apply(item))
+                .map_err(|e| ConnectorError::fatal(format!("encoding an item: {e}")))?,
+            None => raw,
+        };
         let id: String = digest
             .finalize()
             .iter()
@@ -331,7 +405,11 @@ impl HttpApiSource {
         let mut ev = self
             .engine
             .envelope
-            .event(RECORD_EVENT, &self.resource, id)
+            .event(
+                self.listing().event.as_deref().unwrap_or(ITEM_EVENT),
+                &self.resource,
+                id,
+            )
             .with_data("application/json", data);
         if let Some(key) = &self.listing().key {
             match item.pointer(key) {
@@ -442,6 +520,89 @@ impl Source for HttpApiSource {
     }
 }
 
+/// A CSV body (RFC 4180: quoted fields, doubled quotes, CRLF or LF) as one
+/// object of strings per row, keyed by the header row.
+fn csv_rows(body: &[u8]) -> Result<Vec<Value>, ConnectorError> {
+    let text = std::str::from_utf8(body)
+        .map_err(|_| ConnectorError::retryable("the API's CSV response is not UTF-8"))?;
+    let mut records: Vec<Vec<String>> = Vec::new();
+    let mut record = Vec::new();
+    let mut field = String::new();
+    let mut quoted = false;
+    let mut chars = text.chars().peekable();
+    let mut any = false;
+    while let Some(c) = chars.next() {
+        any = true;
+        match (quoted, c) {
+            (true, '"') if chars.peek() == Some(&'"') => {
+                chars.next();
+                field.push('"');
+            }
+            (true, '"') => quoted = false,
+            (true, c) => field.push(c),
+            (false, '"') => quoted = true,
+            (false, ',') => record.push(std::mem::take(&mut field)),
+            (false, '\r') => {}
+            (false, '\n') => {
+                record.push(std::mem::take(&mut field));
+                records.push(std::mem::take(&mut record));
+                any = false;
+            }
+            (false, c) => field.push(c),
+        }
+    }
+    if quoted {
+        return Err(ConnectorError::retryable(
+            "the API's CSV response ends inside a quote",
+        ));
+    }
+    if any {
+        record.push(field);
+        records.push(record);
+    }
+    let mut rows = records.into_iter();
+    let Some(header) = rows.next() else {
+        return Ok(Vec::new());
+    };
+    rows.filter(|r| !(r.len() == 1 && r[0].is_empty()))
+        .map(|r| {
+            if r.len() != header.len() {
+                return Err(ConnectorError::retryable(
+                    "a CSV row has a different number of fields from the header",
+                ));
+            }
+            Ok(Value::Object(
+                header
+                    .iter()
+                    .cloned()
+                    .zip(r.into_iter().map(Value::String))
+                    .collect(),
+            ))
+        })
+        .collect()
+}
+
+/// One JSON document per line; `items` points at the item in each (lines
+/// without one, such as a stream's trailer, are skipped).
+fn ndjson_items(body: &[u8], items: Option<&str>) -> Result<Vec<Value>, ConnectorError> {
+    let mut out = Vec::new();
+    for line in body.split(|b| *b == b'\n') {
+        if line.iter().all(u8::is_ascii_whitespace) {
+            continue;
+        }
+        let doc = json_body(line)?;
+        match items {
+            Some(p) => {
+                if let Some(v) = doc.pointer(p).filter(|v| !v.is_null()) {
+                    out.push(v.clone());
+                }
+            }
+            None => out.push(doc),
+        }
+    }
+    Ok(out)
+}
+
 fn json_body(body: &[u8]) -> Result<Value, ConnectorError> {
     serde_json::from_slice(body)
         .map_err(|_| ConnectorError::retryable("the API's response is not JSON"))
@@ -483,6 +644,27 @@ mod tests {
             link_next(&h).as_deref(),
             Some("https://api.example/x?page=3")
         );
+    }
+
+    #[test]
+    fn csv_and_ndjson_bodies() {
+        let rows =
+            csv_rows(b"Id,Name\r\n001,\"Acme, Inc.\"\r\n002,\"Say \"\"hi\"\"\"\r\n").expect("csv");
+        assert_eq!(
+            rows,
+            vec![
+                serde_json::json!({"Id": "001", "Name": "Acme, Inc."}),
+                serde_json::json!({"Id": "002", "Name": "Say \"hi\""}),
+            ]
+        );
+        assert!(csv_rows(b"").expect("empty").is_empty());
+        assert!(csv_rows(b"a,b\n1\n").is_err());
+        let items = ndjson_items(
+            b"{\"result\":{\"a\":1}}\n\n{\"result\":{\"a\":2}}\n{\"lastrow\":true}\n",
+            Some("/result"),
+        )
+        .expect("ndjson");
+        assert_eq!(items.len(), 2);
     }
 
     #[test]

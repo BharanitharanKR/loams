@@ -5,7 +5,6 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::Range;
-use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -364,7 +363,7 @@ impl LocalSplitStorage {
             (self.file.clone(), self.checksums.clone(), self.path.clone());
         let bytes = tokio::task::spawn_blocking(move || -> StorageResult<Vec<u8>> {
             let mut out = vec![0; (to - from) as usize];
-            file.read_exact_at(&mut out, from).map_err(io_error)?;
+            read_exact_at(&file, &mut out, from).map_err(io_error)?;
             checksums.verify(from, &out).map_err(|err| {
                 StorageErrorKind::Io.with_error(anyhow::anyhow!("{}: {err}", path.display()))
             })?;
@@ -376,6 +375,30 @@ impl LocalSplitStorage {
         .map_err(|err| StorageErrorKind::Internal.with_error(err))??;
         Ok(OwnedBytes::new(bytes))
     }
+}
+
+/// A positional read of exactly `buf.len()` bytes. Windows' `seek_read` may
+/// return short, so it loops; Unix has `read_exact_at` already.
+#[cfg(unix)]
+fn read_exact_at(file: &std::fs::File, buf: &mut [u8], offset: u64) -> std::io::Result<()> {
+    std::os::unix::fs::FileExt::read_exact_at(file, buf, offset)
+}
+
+#[cfg(windows)]
+fn read_exact_at(file: &std::fs::File, mut buf: &mut [u8], mut offset: u64) -> std::io::Result<()> {
+    use std::os::windows::fs::FileExt;
+    while !buf.is_empty() {
+        match file.seek_read(buf, offset) {
+            Ok(0) => return Err(std::io::ErrorKind::UnexpectedEof.into()),
+            Ok(n) => {
+                buf = &mut buf[n..];
+                offset += n as u64;
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(err) => return Err(err),
+        }
+    }
+    Ok(())
 }
 
 fn io_error(err: std::io::Error) -> StorageError {

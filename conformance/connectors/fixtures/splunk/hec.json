@@ -1,0 +1,106 @@
+{
+  "recorded_from": "Splunk Enterprise",
+  "synthetic": true,
+  "docs": [
+    "https://docs.splunk.com/Documentation/Splunk/latest/Data/HECRESTendpoints",
+    "https://docs.splunk.com/Documentation/Splunk/latest/Data/AboutHECIDXAck"
+  ],
+  "scenario": {
+    "direction": "sink",
+    "resource": "events",
+    "config": {
+      "server_url": "{proxy}"
+    },
+    "secrets": {
+      "api_key": "00000000-0000-4000-8000-00000000c0de"
+    },
+    "input": [
+      {
+        "msg": "a"
+      },
+      {
+        "msg": "b"
+      }
+    ],
+    "expect": 2
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/collector/event",
+        "headers": {},
+        "body": {
+          "text": "{\"event\":{\"msg\":\"a\"}}\n{\"event\":{\"msg\":\"b\"}}"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "text": "Success",
+            "code": 0,
+            "ackId": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/collector/ack",
+        "headers": {},
+        "body": {
+          "json": {
+            "acks": [
+              0
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "acks": {
+              "0": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/collector/ack",
+        "headers": {},
+        "body": {
+          "json": {
+            "acks": [
+              0
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "acks": {
+              "0": true
+            }
+          }
+        }
+      }
+    }
+  ]
+}
