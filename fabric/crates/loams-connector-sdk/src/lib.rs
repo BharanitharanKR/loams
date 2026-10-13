@@ -26,6 +26,7 @@ use std::sync::Arc;
 
 pub mod budget;
 pub mod checkpoint;
+pub mod codecs;
 pub mod delivery;
 pub mod egress;
 pub mod envelope;
@@ -39,6 +40,7 @@ pub mod position;
 pub mod profile;
 pub mod ratelimit;
 pub mod retry;
+pub mod schema;
 pub mod secrets;
 pub mod sink;
 pub mod source;
