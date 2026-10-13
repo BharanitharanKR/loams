@@ -1,5 +1,6 @@
 /*
- * The cordis console's layout, in the original console's look (src/app.css):
+ * The console's layout, in the original React console's look (its app.css, retired
+ * with that console in API2 Task 10):
  * a sidebar of sections, a slim top bar with breadcrumbs, square panels on
  * the ground. Every colour, shadow and radius is a @loams/ui token.
  */
@@ -534,6 +535,12 @@ code {
   min-height: 360px;
   border: 1px dashed var(--op-rule);
   background: transparent;
+}
+.lc-bare {
+  min-height: 100svh;
+}
+.lc-boot {
+  min-height: 100svh;
 }
 .loams-boot {
   display: grid;

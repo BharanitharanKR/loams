@@ -13,6 +13,21 @@
 - id: identity
   name: '@loams/plugin-identity'
 
+# The console's own pages: sign-in, the org, its projects and agents, and the
+# audit log, on loams.auth.v1 and loams.admin.v1 (API2 Task 10). Each injects
+# the `rpc.*` clients it reads, so it appears only where the instance serves
+# the package (AP1a Ruling 6).
+- id: account
+  name: '@loams/plugin-account'
+- id: org
+  name: '@loams/plugin-org'
+- id: projects
+  name: '@loams/plugin-projects'
+- id: agents
+  name: '@loams/plugin-agents'
+- id: audit
+  name: '@loams/plugin-audit'
+
 # First-party pages.
 - id: stack-status
   name: '@loams/plugin-stack-status'

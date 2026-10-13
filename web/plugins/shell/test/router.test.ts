@@ -105,6 +105,7 @@ describe('router hardening', () => {
       path: '/studio/t/c_1',
       pageId: 'thread',
       params: { panel: 'diff', host: 'h 1', threadId: 'c_1' },
+      query: { panel: 'diff', host: 'h 1' },
     });
     // A route parameter wins over a query parameter of the same name.
     source.go('/studio/t/c_2?threadId=evil');

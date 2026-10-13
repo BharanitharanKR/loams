@@ -86,6 +86,7 @@ export {
   sandboxScriptId,
 } from './sandbox.js';
 export {
+  type ConsoleAccount,
   type FlagsService,
   type Location,
   type PageProps,
@@ -95,6 +96,7 @@ export {
   type RpcServices,
   type ServiceName,
   type Services,
+  type SessionGate,
   type SessionService,
   service,
   watch,

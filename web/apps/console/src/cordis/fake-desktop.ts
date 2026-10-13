@@ -1,5 +1,5 @@
 // DEV ONLY: an in-browser fake of the Electron preload's `LoamsDesktopApi`,
-// so the desktop edition can be previewed at `<base>cordis.html?desktop`
+// so the desktop edition can be previewed at `<base>?desktop`
 // (main.tsx loads this behind `import.meta.env.DEV`; it must never reach a
 // production bundle, and main.test.ts checks the guard).
 //

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import cordisMain from '../src/cordis/main.tsx?raw';
-import classicMain from '../src/main.tsx?raw';
 
 // The console tsconfig carries no Node types, and vitest returns '' for CSS
 // `?raw` imports, so read the two stylesheets through node:fs by a variable
@@ -44,8 +43,7 @@ describe('console tailwind theme (utilities over @loams/ui tokens)', () => {
     expect(code).not.toMatch(/#[0-9a-f]{3,8}\b/i);
   });
 
-  it('is imported by both entries', () => {
+  it('is imported by the console entry', () => {
     expect(cordisMain).toContain("import '../tailwind.css'");
-    expect(classicMain).toContain("import './tailwind.css'");
   });
 });

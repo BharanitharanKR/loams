@@ -9,8 +9,9 @@ import { configDefaults } from 'vitest/config';
 
 // The engine serves the build at /ui (design §19 §3). In development the
 // console API comes from loams-apps-mock (`cargo run -p loams-apps-mock`,
-// port 8084), which serves the console's REST contract and the app protos on
-// one listener, unless LOAMS_API points at an engine.
+// port 8084), which serves the console API (loams.auth.v1, loams.admin.v1) and
+// the app protos over Connect on one listener, unless LOAMS_API points at an
+// engine.
 const api = process.env.LOAMS_API ?? 'http://127.0.0.1:8084';
 
 // Where the console is mounted. The engine serves it at /ui/ (design §19 §3);
@@ -65,7 +66,7 @@ function sandboxAssets(base: string): Plugin {
 }
 
 /**
- * The desktop preview (`cordis.html?desktop`) reads the connector catalog the
+ * The desktop preview (`?desktop`) reads the connector catalog the
  * desktop app ships, apps/desktop-electron/resources/connectors.json, which is
  * generated and not checked in. The dev server builds it on start when it is
  * missing (about half a second), so the Connectors page works without a manual
@@ -108,7 +109,7 @@ function cspMeta(): Plugin {
     transformIndexHtml: {
       order: 'post',
       handler(html, ctx) {
-        if (!ctx.filename.endsWith('cordis.html')) return html;
+        if (!/(?:^|\/)(?:index|cordis)\.html$/.test(ctx.filename)) return html;
         return html.replace(
           '<meta charset="utf-8" />',
           `<meta charset="utf-8" />\n    <meta http-equiv="Content-Security-Policy" content="${CSP}" />`,
@@ -143,7 +144,8 @@ export default defineConfig({
     assetsInlineLimit: 0,
     sourcemap: true,
     rollupOptions: {
-      // Today's console, and the cordis console beside it (AP1a).
+      // The console (index.html), and cordis.html, its former address, which moves
+      // to the root on load (API2 Task 10).
       input: { main: 'index.html', cordis: 'cordis.html' },
     },
   },

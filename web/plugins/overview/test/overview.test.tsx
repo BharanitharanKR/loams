@@ -303,7 +303,7 @@ describe('overview page', () => {
     for (const id of ['live', 'postgres', 'wesql']) {
       expect(within(card(id)).getByText('Local only')).toBeTruthy();
       expect(
-        within(card(id)).getByText(/available when This computer is the active server/),
+        within(card(id)).getByText(/available when this computer is the active server/),
       ).toBeTruthy();
     }
     // The server-backed cards still read from the remote server.

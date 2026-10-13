@@ -19,6 +19,8 @@ export interface WebPlatformOptions {
   baseUrl?: string;
   /** Development only: `Authorization: Bearer <devBearer>` on every request. */
   devBearer?: string;
+  /** The server SDK snippets name, when it is not `baseUrl` (a dev server's proxy target). */
+  serverUrl?: string;
   /** Use this transport instead of the network (the demo mode). */
   transport?: Transport;
   /**
@@ -31,11 +33,19 @@ export interface WebPlatformOptions {
 export function webFetch(
   devBearer?: string,
   token?: WebPlatformOptions['token'],
+  csrf: () => string | undefined = () => undefined,
 ): typeof globalThis.fetch {
   return async (input, init) => {
     const headers = new Headers(init?.headers);
     const bearer = token ? await token() : devBearer;
     if (bearer) headers.set('authorization', `Bearer ${bearer}`);
+    // The cookie session's CSRF token on everything but a GET (design §19 §6, API2
+    // ruling 6/7.9). Connect sends unary calls as POST. A bearer needs none.
+    const method = (
+      init?.method ?? (input instanceof Request ? input.method : 'GET')
+    ).toUpperCase();
+    const csrfToken = token ? undefined : csrf();
+    if (csrfToken && method !== 'GET') headers.set('x-csrf-token', csrfToken);
     return globalThis.fetch(input, {
       ...init,
       headers,
@@ -50,11 +60,16 @@ export function createWebPlatform(options: WebPlatformOptions = {}): PluginModul
     apply(ctx: Context) {
       const baseUrl = options.baseUrl ?? globalThis.location?.origin;
       if (!baseUrl) throw new Error('platform-web: no baseUrl and no page origin');
-      const fetch = webFetch(options.devBearer, options.token);
+      let csrf: string | undefined;
+      const fetch = webFetch(options.devBearer, options.token, () => csrf);
       const platform: PlatformService = {
         kind: 'web',
         fetch,
         baseUrl,
+        ...(options.serverUrl ? { serverUrl: options.serverUrl } : {}),
+        setCsrfToken(token) {
+          csrf = token;
+        },
         async openExternal(url) {
           // Web links only: never `javascript:`, `data:` or a custom scheme.
           const { protocol } = new URL(url, baseUrl);
