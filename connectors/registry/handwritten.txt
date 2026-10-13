@@ -1,6 +1,7 @@
 adbc
 arrow
 avro
+azure-event-hubs
 bigquery
 clickhouse
 debezium-mysql
@@ -19,6 +20,7 @@ opentelemetry
 parquet
 postgresql
 redis
+redpanda
 s3
 snowflake
 webhooks

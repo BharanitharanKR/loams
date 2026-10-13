@@ -361,7 +361,23 @@ HANDWRITTEN_PREVIEW = set(HANDWRITTEN_UNSTARRED)
 # stamp `preview` on A.3's Grafeo row and disagree with Appendix A, so the two sets are kept
 # apart: HANDWRITTEN_PREVIEW decides the status a hand-written row is given, and this set
 # decides which hand-written ids the check will accept at all.
-HAND_WRITTEN_UNSTARRED_IDS: set[str] = set(HANDWRITTEN_UNSTARRED) | {"grafeo"}
+#
+# CN2's family tasks (9 to 20) left their P2 rows' manifests and config schemas to Task 2,
+# which assigned the runtimes (NATIVE_FIRST below); the registry follow-up then replaced
+# each generated stub with the hand-written manifest its family built, keyed here by
+# family. They are unstarred and stay `planned` until their suites are green in CI
+# (OR-23): hand-written is not preview, as Grafeo's row already showed. Their CSV cells
+# (runtime, ref, profile, fallback) are still NATIVE_FIRST's, so `--check` and
+# loams-flow's `csv_and_manifests_agree` compare the two. loams-flow's registry test
+# names the same ids (`HAND_WRITTEN_UNSTARRED_P2`).
+HAND_WRITTEN_FAMILY_ROWS: dict[str, tuple[str, ...]] = {
+    "kafka": ("azure-event-hubs", "redpanda"),  # R9.7
+}
+HAND_WRITTEN_UNSTARRED_IDS: set[str] = (
+    set(HANDWRITTEN_UNSTARRED)
+    | {"grafeo"}
+    | {cid for ids in HAND_WRITTEN_FAMILY_ROWS.values() for cid in ids}
+)
 
 # Which component in connectors/licences.toml each CSV runtime kind means, for the check that
 # every runtime the CSV names has a licence-gate entry. `native` and `openapi` are Loams's
@@ -1177,6 +1193,15 @@ def check(rows_from_doc: list[dict], problems: list[str], notes: list[str]) -> N
                 f"handwritten.txt: {cid!r} is neither starred nor one of the hand-written "
                 "unstarred rows, so it is a generated stub's id (CN1 Ruling 1, D628, D634)"
             )
+    # The other way round for CN2's family rows: one missing from handwritten.txt would have
+    # its hand-written manifest and config schema overwritten by the next generator run.
+    for family, ids in sorted(HAND_WRITTEN_FAMILY_ROWS.items()):
+        for cid in ids:
+            if cid not in handwritten:
+                problems.append(
+                    f"{cid}: the {family} family's hand-written manifest is not in "
+                    "handwritten.txt, so the generator would overwrite it"
+                )
 
     # D353: a manifest declares the shape of its instance's settings, so every config.$ref must
     # resolve to a file that exists — the hand-written schemas and the generated placeholders
