@@ -1,0 +1,58 @@
+# Redis Streams — P2 (§33 Appendix A.1), CN2 Task 14. The manifest Task 2
+# installs as connectors/registry/redis-streams.yaml (ruling R14.1).
+# Runtime: native Rust, loams-connector-kv's Redis implementation: the Streams
+# source (XREADGROUP, XACK after the Fabric acknowledges, XAUTOCLAIM) and the
+# XADD sink, tested against Valkey 8 and Redis 8 (a `ci-service`, OR-3).
+apiVersion: loams.flow/v1
+kind: Connector
+id: redis-streams
+name: Redis Streams
+specVersion: 0.2.0
+category: messaging
+priority: P2
+starred: false
+status: planned
+runtime:
+  kind: native
+  ref: loams_connector_kv::redis::RedisFactory
+  version: "redis 1.7.1"
+licence:
+  component: Apache-2.0
+  dependencies:
+    redis: BSD-3-Clause
+capabilities:
+  source:
+    streaming: true
+    batch: false
+    cdc: false
+    webhook: false
+    resumable: true
+    position: the stream entry id, acknowledged with XACK only after the Fabric has the batch
+  sink:
+    streaming: true
+    batch: true
+    transactional: false
+    upsert: false
+    delete: false
+    idempotent: false             # XADD appends again on a replay
+  delivery: { source: effectively_once, sink: at_least_once }
+  ordering: per_partition         # entries keep their id order within a stream
+  formats: [cloudevents-binary, json]
+  schema: { registry: none, evolution: none }
+  bulk: { arrow: false, max_batch_rows: 65536 }
+  backpressure: push-with-ack     # the consumer group's pending list holds what the Fabric has not acknowledged
+auth: [none, basic]
+config:
+  $ref: schemas/redis-streams.config.json
+secrets: [password]
+envelope:
+  emits: io.loams.dev.flow.redis-streams.stream-entry.v1
+  consumes: "*"
+  passthrough: true               # an entry written in binary mode (ce_* fields) keeps its type, source and id
+  stable_ids: true
+limits: { max_record_bytes: 8388608 }
+conformance: [contract, roundtrip, kill-restart, dup-check, backpressure, auth]
+notes:
+  - "Tested against Valkey 8 (connectors-p2) and Redis 8 (connectors-ci-only, OR-3): redis_streams_group_ack_after_fabric runs on both."
+  - "The sink writes CloudEvents binary mode (ce_id, ce_source, ce_type, ce_specversion, content-type, ce_<extension>, data), so the source passes them through with their identity."
+docs: docs/guides/connectors/redis-streams.md

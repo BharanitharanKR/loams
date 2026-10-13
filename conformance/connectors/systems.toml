@@ -131,9 +131,14 @@ services = [
 ]
 
 [systems.redis-streams]
-systems = ["Redis"]
+systems = ["Redis", "Valkey"]
 family = "kv"
-services = [{ kind = "container", compose = "redis", system = "Redis" }]
+services = [
+  { kind = "container", compose = "valkey", system = "Valkey" },
+  { kind = "container", compose = "redis", system = "Redis" },
+]
+harness = "loams_connector_kv::harness::redis::Streams"
+notes = ["Run against Valkey 8 (connectors-p2) and Redis 8 (connectors-ci-only, OR-3), one harness each (CN2 Task 14)."]
 
 [systems.websocket]
 systems = ["WebSocket"]
@@ -204,6 +209,7 @@ services = [{ kind = "container", compose = "mongodb", system = "MongoDB" }]
 systems = ["Apache Cassandra"]
 family = "kv"
 services = [{ kind = "container", compose = "cassandra", system = "Apache Cassandra" }]
+harness = "loams_connector_kv::harness::cassandra::Cassandra"
 
 [systems.dynamodb]
 systems = ["Amazon DynamoDB"]
@@ -212,11 +218,13 @@ services = [
   { kind = "emulator", compose = "floci", system = "Amazon DynamoDB", vendor = "floci" },
   { kind = "nightly", env = ["LOAMS_AWS_ACCESS_KEY_ID", "LOAMS_AWS_SECRET_ACCESS_KEY", "LOAMS_AWS_REGION"], system = "Amazon DynamoDB" },
 ]
+harness = "loams_connector_kv::harness::dynamodb::DynamoDb"
 
 [systems.valkey]
 systems = ["Valkey"]
 family = "kv"
 services = [{ kind = "container", compose = "valkey", system = "Valkey" }]
+harness = "loams_connector_kv::harness::redis::ValkeyKeys"
 
 # ---------------------------------------------------------- search, vector --
 
@@ -380,6 +388,7 @@ services = [
   { kind = "emulator", compose = "floci", system = "Amazon DynamoDB Streams", vendor = "floci" },
   { kind = "nightly", env = ["LOAMS_AWS_ACCESS_KEY_ID", "LOAMS_AWS_SECRET_ACCESS_KEY", "LOAMS_AWS_REGION"], system = "Amazon DynamoDB Streams" },
 ]
+harness = "loams_connector_kv::harness::dynamodb::DynamoDbStreams"
 
 # --------------------------------------------------------- integration, saas --
 
