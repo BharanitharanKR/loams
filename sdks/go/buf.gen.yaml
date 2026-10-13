@@ -51,4 +51,6 @@ plugins:
       - package=loams.operations.v1=loams.dev/go/gen/loams/operations/v1
       - package=loams.notifications.v1=loams.dev/go/gen/loams/notifications/v1
       - package=loams.live.v1=loams.dev/go/gen/loams/live/v1
+      - package=loams.auth.v1=loams.dev/go/gen/loams/auth/v1
+      - package=loams.admin.v1=loams.dev/go/gen/loams/admin/v1
 clean: true

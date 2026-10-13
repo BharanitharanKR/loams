@@ -51,6 +51,16 @@ const FILES: &[&str] = &[
     "loams/repos/v1/workspaces.proto",
     "loams/repos/v1/objects.proto",
     "loams/repos/v1/env.proto",
+    // The console API (API2 Tasks 6 and 7): the types and clients the Rust
+    // SDK's facade binds. The server registers neither package yet; its
+    // `connect_admin.rs` and `connect_auth.rs` are the tasks' server half.
+    "loams/admin/v1/common.proto",
+    "loams/admin/v1/org.proto",
+    "loams/admin/v1/project.proto",
+    "loams/admin/v1/agent.proto",
+    "loams/admin/v1/key.proto",
+    "loams/admin/v1/audit.proto",
+    "loams/auth/v1/auth.proto",
 ];
 
 fn main() {

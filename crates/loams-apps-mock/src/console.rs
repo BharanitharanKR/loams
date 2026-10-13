@@ -21,7 +21,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::SystemTime;
 
 use anyhow::{Context as _, Result};
 use axum::Router;
@@ -30,7 +29,7 @@ use axum::extract::Request;
 use axum::http::{HeaderValue, Method, StatusCode, header};
 use axum::response::Response;
 use axum::routing::any;
-use loams_console_mock::{Route, load_seed, routes};
+use loams_console_mock::{Route, routes};
 
 /// The paths this module answers itself, which are therefore dropped from the
 /// seed's route list.
@@ -95,13 +94,15 @@ pub(crate) struct Console {
 }
 
 impl Console {
-    /// Loads the shared console seed and expands it against `now`.
+    /// The answers for the shared console seed, already resolved against
+    /// `now` ([`loams_console_mock::load_seed`]). The Connect console API
+    /// ([`crate::admin`]) serves the same value, so both surfaces answer the
+    /// same records with the same times.
     ///
     /// `signed_in` false answers `GET /api/v1/session` with 401, which is how
     /// the console's sign-in and setup screens are built.
-    pub(crate) fn load(signed_in: bool) -> Result<Self> {
-        let seed = load_seed(SystemTime::now()).context("loading the console seed")?;
-        Self::from_routes(routes(&seed, signed_in)?)
+    pub(crate) fn from_seed(seed: &serde_json::Value, signed_in: bool) -> Result<Self> {
+        Self::from_routes(routes(seed, signed_in)?)
     }
 
     /// Prepares an already-expanded route list.
