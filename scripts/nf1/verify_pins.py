@@ -11,14 +11,20 @@ For each image in the pin file whose `source` is a fork commit
    loams-release.yml or loams-sign.yml at refs/heads/main. An unsigned digest,
    or one signed from another branch or another repository (the old name
    ostrium-labs/neon included), fails.
-2. `gh attestation verify --owner ostrium-labs`: the build provenance.
-3. The SPDX SBOM attestation (`--predicate-type https://spdx.dev/Document/v2.3`):
-   no package licence names CDDL, and every package outside Debian's own has
-   only allowlisted licences. Debian packages (purl `pkg:deb/...`) are listed
-   separately, for information. NOASSERTION is counted, not refused.
+2. `gh attestation verify --repo ostrium-labs/loams-postgres --source-digest
+   <the pin's commit> --source-ref refs/heads/main`: the build provenance, made
+   by the fork for that commit (another repository's attestation does not count).
+3. The SPDX SBOM attestations (`--predicate-type https://spdx.dev/Document/v2.3`,
+   the same constraints): one per platform (amd64 and arm64, so at least two
+   distinct documents); no package licence names CDDL, and every package outside
+   Debian's own has only allowlisted licences. Debian packages (purl
+   `pkg:deb/...`) are listed separately, for information. NOASSERTION is
+   counted, not refused.
 4. For a compute image (`compute-v<N>`): an artifact of type
    application/vnd.loams.sources.v1 is attached (`oras discover`), the sources
-   of its GPL components.
+   of its GPL components, and is signed with the same identity (`cosign verify`).
+Every tool call has a timeout (TOOL_TIMEOUT seconds, default 300); a timeout is
+a failure of that image.
 
 A `mirror:` source (Neon's images, until NF1 Task 14) is skipped with a notice.
 Tools: COSIGN, GH and ORAS name the binaries (default cosign, gh, oras).
@@ -40,7 +46,9 @@ PIN_FILE = ROOT / "deploy" / "pins" / "loams-postgres-images.toml"
 ISSUER = "https://token.actions.githubusercontent.com"
 IDENTITY = (r"^https://github.com/ostrium-labs/loams-postgres/\.github/workflows/"
             r"loams-(release|sign)\.yml@refs/heads/main$")
-OWNER = "ostrium-labs"
+FORK = "ostrium-labs/loams-postgres"
+SOURCE_REF = "refs/heads/main"
+PLATFORMS = 2  # amd64 and arm64: one SBOM attestation each
 SBOM_PREDICATE = "https://spdx.dev/Document/v2.3"
 SOURCES_TYPE = "application/vnd.loams.sources.v1"
 FORK_SOURCE = re.compile(r"ostrium-labs/loams-postgres@[0-9a-f]{40}")
@@ -61,7 +69,11 @@ def tool(name):
 
 
 def run(*args):
-    return subprocess.run([str(a) for a in args], capture_output=True, text=True)
+    try:
+        return subprocess.run([str(a) for a in args], capture_output=True, text=True,
+                              timeout=int(os.environ.get("TOOL_TIMEOUT", "300")))
+    except subprocess.TimeoutExpired as e:
+        return subprocess.CompletedProcess(e.cmd, 124, "", f"timed out after {e.timeout} s")
 
 
 # ------------------------------------------------------------- SPDX licences
@@ -168,17 +180,24 @@ def spdx_documents(gh_json):
 
 # ------------------------------------------------------------------- checks
 
-def verify_image(key, img):
-    ref = f"{img['repository']}@{img['digest']}"
-    problems = []
+def cosign_verify(ref):
     r = run(tool("cosign"), "verify", "--certificate-oidc-issuer", ISSUER,
             "--certificate-identity-regexp", IDENTITY, ref)
-    if r.returncode != 0:
-        problems.append(f"cosign verify failed: {(r.stderr or r.stdout).strip()[-300:]}")
-    r = run(tool("gh"), "attestation", "verify", f"oci://{ref}", "--owner", OWNER)
+    return None if r.returncode == 0 else (r.stderr or r.stdout).strip()[-300:]
+
+
+def verify_image(key, img):
+    ref = f"{img['repository']}@{img['digest']}"
+    commit = img["source"].split("@", 1)[1]
+    scope = ["--repo", FORK, "--source-digest", commit, "--source-ref", SOURCE_REF]
+    problems = []
+    err = cosign_verify(ref)
+    if err:
+        problems.append(f"cosign verify failed: {err}")
+    r = run(tool("gh"), "attestation", "verify", f"oci://{ref}", *scope)
     if r.returncode != 0:
         problems.append(f"no build provenance attestation: {(r.stderr or r.stdout).strip()[-300:]}")
-    r = run(tool("gh"), "attestation", "verify", f"oci://{ref}", "--owner", OWNER,
+    r = run(tool("gh"), "attestation", "verify", f"oci://{ref}", *scope,
             "--predicate-type", SBOM_PREDICATE, "--format", "json")
     docs = []
     if r.returncode == 0:
@@ -186,8 +205,12 @@ def verify_image(key, img):
             docs = spdx_documents(json.loads(r.stdout))
         except json.JSONDecodeError:
             pass
+    # One per platform: distinct documents (by namespace, else by content).
+    distinct = {d.get("documentNamespace") or json.dumps(d, sort_keys=True) for d in docs}
     if not docs:
         problems.append("no SPDX SBOM attestation")
+    elif len(distinct) < PLATFORMS:
+        problems.append(f"{len(distinct)} SPDX SBOM attestation(s); one per platform ({PLATFORMS}) is required")
     for doc in docs:
         failures, debian, unknown = sbom_findings(doc)
         problems += [f"SBOM: {f}" for f in failures]
@@ -208,6 +231,9 @@ def verify_image(key, img):
                 pass
         if not found:
             problems.append(f"no {SOURCES_TYPE} artifact attached (the GPL components' sources)")
+        # Attached is not enough: one of them must be signed by the release.
+        elif not any(cosign_verify(f"{img['repository']}@{a.get('digest', '')}") is None for a in found):
+            problems.append(f"the {SOURCES_TYPE} artifact is not signed by loams-release.yml or loams-sign.yml")
     return problems
 
 

@@ -1570,21 +1570,24 @@ Fork PR ostrium-labs/loams-postgres#10 (branch `loams/nf1-sign`, LP-0012) merged
 3. **`verify-pins.sh`** (a wrapper for `verify_pins.py`, stdlib).
    - For each pin with a fork source:
      - **`cosign verify`** with the shared identity: issuer `https://token.actions.githubusercontent.com`, and `^https://github.com/ostrium-labs/loams-postgres/\.github/workflows/loams-(release|sign)\.yml@refs/heads/main$`.
-     - **`gh attestation verify --owner ostrium-labs`.**
-     - **The SBOM attestation** (`--predicate-type https://spdx.dev/Document/v2.3`):
+     - **`gh attestation verify --repo ostrium-labs/loams-postgres --source-digest <the pin's commit> --source-ref refs/heads/main`**: the provenance must come from the fork, for that commit (PR #537 review; the plan said `--owner ostrium-labs`, which any repository of the organisation satisfies).
+     - **The SBOM attestations** (`--predicate-type https://spdx.dev/Document/v2.3`, the same scope), at least one distinct document per platform (two):
        - SPDX expressions are evaluated: `OR` needs one allowed side, `AND` needs all;
        - CDDL fails anywhere, Debian packages included;
        - outside `pkg:deb/` packages, only the plan's allowlist plus deny.toml's `0BSD`, `CC0-1.0` and `Unicode-3.0` pass;
        - Debian packages' licences are listed separately;
        - `NOASSERTION` is counted, not refused.
-     - **For `compute-v<N>`:** `oras discover` must find the sources artifact.
+     - **For `compute-v<N>`:** `oras discover` must find the sources artifact, and `cosign verify` with the same identity must pass on it: attached is not enough.
+   - Every tool call has a timeout (`TOOL_TIMEOUT`, default 300 s); a timeout fails the image.
    - `mirror:` pins print a `::notice::` and call no tool. Today's pin file passes this way.
 4. **Tests:** `test_verify_pins.sh` uses stub `cosign`, `gh` and `oras` that answer from fixtures. The stub cosign applies the script's `--certificate-identity-regexp` itself, so the identity is what gets tested. Cases:
    - `unsigned_digest_fails_verify`;
    - `wrong_identity_fails_verify`: a `dev` branch, the old name `ostrium-labs/neon`, and `loams-build-storage.yml` all fail;
    - `sbom_has_no_forbidden_licence`: CDDL, SSPL, CDDL in a Debian package, and a missing SBOM all fail; `MIT OR SSPL-1.0` passes;
-   - `gpl_sources_attached`;
-   - `mirror_pin_skipped_with_notice`;
+   - `provenance_bound_to_the_fork_commit`, `one_sbom_per_platform`;
+   - `gpl_sources_attached` (missing, or attached but unsigned);
+   - `mirror_pin_skipped_with_notice` (fixtures only; the job runs `verify-pins.sh` on the repository's pin file separately);
+   - `tool_timeout_is_a_failure`;
    - `signed_pins_pass`.
 
    Two mutations (accepting any branch; ignoring CDDL) each made the suite fail.
