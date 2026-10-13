@@ -915,6 +915,122 @@ mod postgres {
         pg.shutdown().await;
     }
 
+    /// R-REL.1: the compute runner answers its health unauthenticated,
+    /// refuses every other call without its token, and refuses an image
+    /// outside its list with its token.
+    #[tokio::test]
+    async fn pg_runner_holds_the_runtime_behind_its_token() {
+        use loams::pg_control::{ComputesConfig, PgRunner, PgRunnerConfig};
+        use loams_pg_control::runtime::compose::ComposeBin;
+        use loams_pg_control::secrets::Secret;
+
+        let dir = TempDir::new().expect("temp dir");
+        let runner = PgRunner::start(PgRunnerConfig {
+            listen: SocketAddr::from(([127, 0, 0, 1], 0)),
+            token: Secret::new("runner-token".into()),
+            computes: ComputesConfig {
+                // Never run: every call below is refused first.
+                compose_bin: Some(ComposeBin {
+                    program: "/bin/false".into(),
+                    args: Vec::new(),
+                }),
+                control_plane_uri: Some("http://pg-control:7690".into()),
+                ..ComputesConfig::default()
+            },
+            data_dir: dir.path().into(),
+        })
+        .await
+        .expect("the runner starts");
+        let pinned = loams_pg_control::runtime::images::pinned().expect("pins");
+        assert_eq!(
+            runner.images().iter().collect::<BTreeSet<_>>(),
+            pinned.values().collect::<BTreeSet<_>>()
+        );
+        let base = format!("http://{}", runner.addr());
+        let client = reqwest::Client::new();
+        let health = client
+            .get(format!("{base}/health"))
+            .send()
+            .await
+            .expect("get");
+        assert_eq!(health.status().as_u16(), 200);
+        let launch = json!({
+            "compute_id": "cmp-01K7AAAAAAAAAAAAAAAAAAAAAA",
+            "binding": {
+                "namespace": "acme",
+                "project_id": "prj-01K7AAAAAAAAAAAAAAAAAAAAAA",
+                "endpoint_id": "ep-01K7AAAAAAAAAAAAAAAAAAAAAA",
+            },
+            "address": { "host": "127.0.0.1", "port": 55500 },
+            "image": "docker.io/library/alpine@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+            "cu": 4,
+            "upcall_token": "a.b.c",
+        });
+        let anonymous = client
+            .post(format!("{base}/v1/start"))
+            .json(&launch)
+            .send()
+            .await
+            .expect("post");
+        assert_eq!(anonymous.status().as_u16(), 401);
+        let refused = client
+            .post(format!("{base}/v1/start"))
+            .bearer_auth("runner-token")
+            .json(&launch)
+            .send()
+            .await
+            .expect("post");
+        assert_eq!(refused.status().as_u16(), 400);
+        let body: Value = refused.json().await.expect("json");
+        assert!(
+            body["error"]["InvalidArgument"]
+                .as_str()
+                .is_some_and(|m| m.contains("not one the runner runs")),
+            "{body}"
+        );
+        runner.shutdown().await;
+    }
+
+    /// The runner does not know where pg-control's upcall listener is.
+    #[tokio::test]
+    async fn pg_runner_needs_a_control_plane_uri() {
+        use loams::pg_control::{ComputesConfig, PgRunner, PgRunnerConfig};
+        use loams_pg_control::secrets::Secret;
+
+        let dir = TempDir::new().expect("temp dir");
+        let e = PgRunner::start(PgRunnerConfig {
+            listen: SocketAddr::from(([127, 0, 0, 1], 0)),
+            token: Secret::new("runner-token".into()),
+            computes: ComputesConfig::default(),
+            data_dir: dir.path().into(),
+        })
+        .await
+        .expect_err("refused");
+        assert!(e.to_string().contains("--compute-control-plane-uri"), "{e}");
+    }
+
+    /// With a compute runner, pg-control starts without any compose
+    /// command or container socket of its own.
+    #[tokio::test]
+    async fn pg_control_starts_with_a_compute_runner() {
+        use loams::pg_control::{ComputesConfig, RunnerClient};
+        use loams_pg_control::secrets::Secret;
+
+        let pg = Running::start(|config| {
+            config.computes = Some(ComputesConfig {
+                // Not looked for: the runner runs compose.
+                compose_bin: None,
+                runner: Some(RunnerClient {
+                    url: "http://127.0.0.1:9".parse().expect("a URL"),
+                    token: Secret::new("runner-token".into()),
+                }),
+                ..ComputesConfig::default()
+            });
+        })
+        .await;
+        pg.shutdown().await;
+    }
+
     /// `--pg-authz dev` is for a loopback listener only.
     #[tokio::test]
     async fn dev_authz_refuses_a_public_listener() {

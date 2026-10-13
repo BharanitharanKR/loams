@@ -25,6 +25,7 @@
 pub mod catalog;
 pub mod changeset;
 pub mod classify;
+pub mod consistency;
 pub mod durable;
 pub mod engine;
 pub mod evict;
@@ -32,6 +33,7 @@ pub mod limits;
 pub mod owner;
 pub mod recovery;
 pub mod redact;
+pub mod replica;
 pub mod service;
 pub mod snapshot;
 pub mod value;

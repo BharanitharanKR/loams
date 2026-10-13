@@ -267,7 +267,7 @@ wheels = [
 
 [[package]]
 name = "loams"
-version = "0.1.0"
+version = "0.1.0a2"
 source = { editable = "." }
 dependencies = [
     { name = "connectrpc" },

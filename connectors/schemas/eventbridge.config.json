@@ -1,9 +1,81 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/eventbridge.config.json",
-  "title": "EventBridge instance config (placeholder)",
-  "description": "Placeholder for a EventBridge instance's settings. It is filled in when this connector is built: CN2 for the P2 rows, as first-party native connectors with declared fallbacks (CN2 OR-1, OR-4), and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "Amazon EventBridge connector instance config (loams.flow/v1)",
+  "description": "One EventBridge connector instance's settings, read by the native cloud family (`loams_connector_cloud::eventbridge`, CN2 Task 19): the bus the sink puts events on, and the SQS queue a rule targets, which the source reads. The `auth.*` keys hold the **names** of secrets (D189) and are exactly the manifest's `secrets` list. See docs/guides/connectors/eventbridge.md.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "properties": {
+    "event_bus": {
+      "description": "Sink: the event bus, a name or ARN.",
+      "type": "string",
+      "minLength": 1,
+      "default": "default"
+    },
+    "queue_url": {
+      "description": "Source: the SQS queue a rule on the bus targets (required for the source).",
+      "type": "string",
+      "minLength": 1
+    },
+    "region": {
+      "description": "The AWS region, such as eu-west-1. Required unless `endpoint` is set; with an emulator endpoint it defaults to us-east-1.",
+      "type": "string",
+      "minLength": 1
+    },
+    "endpoint": {
+      "description": "An emulator or VPC endpoint URL, such as floci's http://floci:4566. With an emulator endpoint and no `auth`, requests are signed with a placeholder key (R19.3).",
+      "type": "string",
+      "minLength": 1
+    },
+    "auth": {
+      "description": "Static AWS credentials, each the **name** of a secret (the manifest's `iam` auth slug: SigV4). Required without `endpoint`. There is no IMDS, IRSA or SSO chain yet (R19.1).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "access_key_id": {
+          "description": "The name of the secret holding the AWS access key id. Resolved through the secret store (D189); never stored in the instance.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "secret_access_key": {
+          "description": "The name of the secret holding the AWS secret access key. Resolved through the secret store (D189); never stored in the instance.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "session_token": {
+          "description": "The name of the secret holding an AWS session token, for temporary credentials. Resolved through the secret store (D189); never stored in the instance.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "wait_time_seconds": {
+      "description": "ReceiveMessage's long-poll wait.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 20,
+      "default": 20
+    },
+    "visibility_timeout_seconds": {
+      "description": "How long a received message stays invisible; it is renewed at half this while its event waits for the Fabric.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 43200,
+      "default": 30
+    },
+    "receivers": {
+      "description": "Receive loops run in parallel on the queue.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "default": 1
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }

@@ -257,7 +257,7 @@ final class ConformanceTests: XCTestCase {
         // invent a field the schema does not declare.
         let deploy = StubTransport(replies: [.success([:])])
         let deployInvoker = CallInvoker(transport: deploy, auth: nil, maxRetries: 0)
-        let deployBinding = try loamsRequireBinding(module: "tables", call: "Deploy")
+        let deployBinding = try loamsRequireBinding(module: "live.admin", call: "Deploy")
         let deployRequest = DynamicMessage(protoTypeName: deployRequestTypeName, fields: ["collection": .string("acme")])
         let _: DynamicMessage = try await deployInvoker.unary(binding: deployBinding, request: deployRequest)
         XCTAssertTrue(
@@ -563,12 +563,11 @@ final class ConformanceTests: XCTestCase {
             )
         }
 
-        // The end-to-end half is a **deliberate skip, not an omission**: no RPC is
-        // paged yet, so a fixture for one would test the stub rather than the SDK.
-        XCTAssertTrue(
-            loamsModules.allSatisfy { $0.calls.allSatisfy { $0.pagination == nil } },
-            "no annotated RPC is paged yet; ListCollections arrives with API1 Task 2"
-        )
+        // The first annotated paged RPC this SDK speaks is
+        // `live.admin.listDeployments` (LV1 Task 10); the TypeScript and Rust
+        // facades page it the same way.
+        let pagedCalls = loamsModules.flatMap { $0.calls }.filter { $0.pagination != nil }.map(\.rpc)
+        XCTAssertEqual(pagedCalls, ["loams.live.v1.LiveAdminService/ListDeployments"])
     }
 
     /// R9: the SDK declares its proto revision and reports the server's packages

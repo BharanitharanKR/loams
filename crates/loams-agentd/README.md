@@ -22,7 +22,7 @@ cargo run -p loams-agentd -- run --child --config .agentd-dev/config.toml
 `config.toml` has the keys listed in the plan's Shared contracts; every key is optional, so an empty file works. The daemon keeps its other files in the config's directory, so give it a directory of its own:
 - `agentd.lock`, the single-instance lock;
 - `agentd.token`, the RPC token (0600, new at every start);
-- `agentd.json`, the discovery file (protocol, version, pid, port, start time and mode; removed on a clean exit);
+- `agentd.json`, the discovery file (protocol, version, pid, port, start time, mode and `connectPort`; removed on a clean exit);
 - `store/`, the sessions engine's data;
 - `adapters/`, the harnesses' managed ACP adapter installs;
 - `runtime/`, the installed binaries (see below);
@@ -31,6 +31,8 @@ cargo run -p loams-agentd -- run --child --config .agentd-dev/config.toml
 The RPC listens on `127.0.0.1` on an ephemeral port, which `agentd.json` names. `--child` (Loams Desktop starts and stops the daemon) or `--service` (the per-user service) sets the mode that `Hello` reports; without either flag, `[daemon] mode` in the config decides. `LOAMS_AGENTD_CONFIG` overrides `--config`.
 
 Every WebSocket upgrade must carry `Authorization: Bearer <agentd.token>` and no `Origin`, with `Host: 127.0.0.1:<port>`; anything else is refused (401 or 403) before the RPC is served, and `Hello` must be the first call on a connection (design §50 §7).
+
+Beside it, a second loopback listener serves `loams.agentd.v1`, the Connect surface Loams Studio reads (design §53 §6.1–§6.2, plan SD1 Task 5; crate `loams-agentd-connect`), on the port `agentd.json` names as `connectPort`. It keeps the same rules: the main token (`Authorization: Bearer <agentd.token>`; the MCP shim's run tokens are not accepted), `Host: 127.0.0.1:<connectPort>`, and a 403 for any `Origin`. Its handlers call the same engine dispatch as the ndjson methods, which stay as they are; `Shutdown` is not on it. Loams Desktop's renderer reaches it only through Electron main's protocol proxy (`loams-app://console/loams.agentd.v1.*`), which adds the token and lets through only the methods whose ndjson twin is `renderer: true`. `Hello` and `StudioService.GetHost` list the feature `studio.v1`.
 
 Exit codes: 0 stopped, 3 already running (a second `run` on the same directory prints `already running (pid …)`), 4 invalid config (the message names the key), 70 internal error.
 
@@ -95,5 +97,6 @@ Only the `new` rows may name a crate that does not exist yet. A crate added to t
 | `loams-agentd-tools` | Apache-2.0 | new | Loams and SQL tools (DD1 Tasks 20, 21) |
 | `loams-agentd-factory` | Apache-2.0 | new | Factory ops (DD1 Task 23) |
 | `loams-agentd-supervisor` | Apache-2.0 | new | The engine and stack supervisor (DD1 Tasks 14, 15) |
+| `loams-agentd-connect` | Apache-2.0 | new | `loams.agentd.v1`, the Connect surface for Loams Studio: the loopback listener beside the ndjson one (SD1 Tasks 4, 5) |
 
 Changes that the Loams Authors make to the MIT crates are released under those crates' MIT licence.

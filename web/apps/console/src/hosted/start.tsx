@@ -2,7 +2,7 @@
 // (the deploy's LOAMS_AUTH_MODE is the default, tailscale unless set; the choice is
 // remembered in this browser):
 //   tailscale  no sign-in: the engine identifies the tailnet user, and the header shows
-//              whoever GET /api/v1/session says it is;
+//              whoever AuthService/GetSession says it is;
 //   oidc       sign in at auth.loams.dev (Authorization Code + PKCE, the deploy's
 //              client), then the access token is the bearer;
 //   apikey     the connect screen asks for an API key (memory only), sent as the bearer.

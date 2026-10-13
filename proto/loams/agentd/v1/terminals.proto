@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+// Terminals (design §53 §5.7, §6.4; plan SD1 Task 4): PTYs the daemon runs in
+// a thread's checkout. Output is replayed from a sequence number, then
+// followed live. See studio.proto for the package's rules.
+package loams.agentd.v1;
+
+import "loams/options/v1/options.proto";
+
+service TerminalService {
+  option (loams.options.v1.module) = {
+    name: "agentd.terminals"
+    summary: "Loams Studio's terminals: open, stream, write, resize and close PTYs."
+    unstable: true
+  };
+
+  // ndjson: `OpenTerminal`.
+  rpc OpenTerminal(OpenTerminalRequest) returns (OpenTerminalResponse);
+  // Replays from `after_seq`, then follows the live tail (ndjson:
+  // `SubscribeTerminal`).
+  rpc SubscribeTerminal(SubscribeTerminalRequest) returns (stream SubscribeTerminalResponse);
+  // ndjson: `WriteTerminal`.
+  rpc WriteTerminal(WriteTerminalRequest) returns (WriteTerminalResponse);
+  // ndjson: `ResizeTerminal`.
+  rpc ResizeTerminal(ResizeTerminalRequest) returns (ResizeTerminalResponse);
+  // ndjson: `CloseTerminal`.
+  rpc CloseTerminal(CloseTerminalRequest) returns (CloseTerminalResponse);
+}
+
+message TerminalSession {
+  string id = 1;
+  string cwd = 2;
+  string shell = 3;
+}
+
+// One terminal frame (ndjson `TerminalEvent`, tagged by `type`).
+message TerminalEvent {
+  oneof event {
+    TerminalData data = 1;
+    TerminalExit exit = 2;
+  }
+}
+
+message TerminalData {
+  uint64 seq = 1;
+  string data = 2;
+}
+
+message TerminalExit {
+  uint64 seq = 1;
+  int32 exit_code = 2;
+  optional string signal = 3;
+}
+
+message OpenTerminalRequest {
+  string chat_id = 1;
+  uint32 cols = 2;
+  uint32 rows = 3;
+  optional string cwd = 4;
+}
+
+message OpenTerminalResponse {
+  TerminalSession terminal = 1;
+}
+
+message SubscribeTerminalRequest {
+  string terminal_id = 1;
+  optional uint64 after_seq = 2;
+}
+
+message SubscribeTerminalResponse {
+  TerminalEvent event = 1;
+}
+
+message WriteTerminalRequest {
+  string terminal_id = 1;
+  string data = 2;
+}
+
+message WriteTerminalResponse {
+  bool ok = 1;
+}
+
+message ResizeTerminalRequest {
+  string terminal_id = 1;
+  uint32 cols = 2;
+  uint32 rows = 3;
+}
+
+message ResizeTerminalResponse {
+  bool ok = 1;
+}
+
+message CloseTerminalRequest {
+  string terminal_id = 1;
+}
+
+message CloseTerminalResponse {
+  bool ok = 1;
+}

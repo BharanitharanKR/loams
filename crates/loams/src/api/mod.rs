@@ -31,6 +31,7 @@ pub(crate) mod graph;
 pub mod hot;
 pub mod house_proxy;
 pub mod internal;
+pub(crate) mod live;
 #[cfg(feature = "postgres")]
 mod postgres_messages;
 mod query;
@@ -150,6 +151,11 @@ pub struct AppState {
     /// The principal store, its authorizer and the setup gate, behind
     /// `loams.auth.v1` and `loams.admin.v1` (API2 Tasks 6 and 7).
     pub principals: crate::auth::Principals,
+    /// Loams Live's two services (LV1 plan Task 12, feature `live`), registered on this router;
+    /// `None` when Live is off or this router may not serve it (a non-loopback main port before
+    /// LV1 Task 18), and then the package answers `feature_not_in_variant`.
+    #[cfg(feature = "live")]
+    pub live: Option<loams_live::LiveRoutes>,
 }
 
 /// What a query node needs to run forwarded reads (plan M1.3 Task 11).

@@ -23,4 +23,28 @@ describe('@loams/plugin-rpc', () => {
     };
     expect((await client.listApprovals({})).approvals.length).toBe(2);
   });
+
+  it('console_api_clients_follow_auth_and_admin', async () => {
+    const mock = createMockControl({});
+    const root = new Root();
+    const served = ['loams.auth.v1', 'loams.admin.v1'];
+    await root.plugin({
+      name: 'deps',
+      apply(ctx: Context) {
+        ctx.provide('transport', mock.transport);
+        ctx.provide('flags', { has: (api: string) => served.includes(api) });
+      },
+    });
+    await root.plugin({ name: 'rpc', inject: rpc.inject, apply: rpc.apply });
+    const provided = RPC_SERVICES.map((s) => s.name).filter((n) => root.get(n) !== undefined);
+    expect(provided).toEqual([
+      'rpc.instance',
+      'rpc.auth',
+      'rpc.org',
+      'rpc.projects',
+      'rpc.agents',
+      'rpc.keys',
+      'rpc.audit',
+    ]);
+  });
 });

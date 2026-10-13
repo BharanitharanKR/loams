@@ -5,17 +5,24 @@ syntax = "proto3";
 
 package loams.live.v1;
 
-// One mutation's changes, written at `seq = head + 1` of one journal shard in
-// the mutation's own transaction.
+// One transaction's changes, written at `seq = head + 1` of one journal shard
+// in the transaction's own commit: a mutation's writes, or a catalog change
+// (LV1 plan Task 11), or both (a mutation that created a table). An entry has
+// at least one write or one catalog change.
 message JournalEntry {
   // The TSO physical time of the transaction's start timestamp, in ms.
   // Diagnostics only; the commit timestamp orders entries.
   uint64 commit_hint_ms = 1;
   repeated WriteRecord writes = 2;
-  // The mutation's function path ("module:export" or "_system:insert").
+  // The mutation's function path ("module:export" or "_system:insert"), or
+  // the catalog operation for an entry with no writes ("live.deploy", ...).
   string function = 3;
   // The request id, for tracing.
   string request_id = 4;
+  // The catalog changes the transaction committed (LV1 plan Task 11). Every
+  // node's tailer sees them at the tick that contains them and reloads what
+  // they change before it matches that tick's writes.
+  repeated CatalogChange catalog = 5;
 }
 
 // What a write did to one document: its key and the index entries it
@@ -36,4 +43,28 @@ enum WriteKind {
   WRITE_KIND_INSERT = 1;
   WRITE_KIND_REPLACE = 2;
   WRITE_KIND_DELETE = 3;
+}
+
+// One change to an app's catalog (LV1 plan Task 11).
+message CatalogChange {
+  CatalogChangeKind kind = 1;
+  // The table a table, index or validator change is about.
+  optional uint32 table_id = 2;
+  // The deployment an activation made active (its ULID text).
+  string deployment = 3;
+}
+
+// What a catalog change changed.
+enum CatalogChangeKind {
+  CATALOG_CHANGE_KIND_UNSPECIFIED = 0;
+  // A table was created (by a deployed schema or a first insert).
+  CATALOG_CHANGE_KIND_TABLE_CREATED = 1;
+  // A table's indexes changed: one was added, changed state or was removed.
+  CATALOG_CHANGE_KIND_INDEXES = 2;
+  // A table's validators changed.
+  CATALOG_CHANGE_KIND_VALIDATOR = 3;
+  // A deployment became active (a deploy or an activation, LV1 Tasks 6-7).
+  CATALOG_CHANGE_KIND_DEPLOYMENT_ACTIVATED = 4;
+  // The app's settings changed (its journal shard count).
+  CATALOG_CHANGE_KIND_APP_SETTINGS = 5;
 }

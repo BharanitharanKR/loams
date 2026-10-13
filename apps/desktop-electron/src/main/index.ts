@@ -14,14 +14,19 @@ import {
 import type { EngineState } from "../shared/contracts";
 import { VERSION_ARG } from "../shared/version";
 import { registerChatIpc } from "./agent/ipc.electron";
-import { registerAgentdIpc } from "./agentd/ipc.electron";
-import { createAgentdService } from "./agentd/setup";
 import type { ChatService } from "./agent/service";
 import { registerTools } from "./agent/tools";
+import { agentdDir, readAgentdTarget } from "./agentd/discover";
+import { registerAgentdIpc } from "./agentd/ipc.electron";
+import { createAgentdService } from "./agentd/setup";
 import { appPaths } from "./app-paths";
 import { ConnectorCatalog, catalogPath } from "./connectors/catalog";
 import { registerConnectorsIpc } from "./connectors/ipc.electron";
-import { findEngineBinary, probeLiveSupport } from "./engine/binary";
+import {
+	findEngineBinary,
+	probeLiveOnMainPort,
+	probeLiveSupport,
+} from "./engine/binary";
 import { registerEngineIpc } from "./engine/ipc.electron";
 import { EngineSupervisor } from "./engine/supervisor";
 import { FactoryEmbed } from "./factory/embed.electron";
@@ -173,7 +178,7 @@ function createWindow(): BrowserWindow {
 		}
 	});
 	win.once("ready-to-show", () => win.show());
-	void win.loadURL("loams-app://console/ui/cordis.html");
+	void win.loadURL("loams-app://console/ui/");
 	return win;
 }
 
@@ -234,6 +239,7 @@ const singleInstance = initSingleInstance({
 				now: Date.now,
 				sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
 				liveSupported: probeLiveSupport,
+				liveOnMainPort: probeLiveOnMainPort,
 			});
 			engine.on("state", (st: EngineState) => {
 				registry.setLocalUrl(st.phase === "ready" ? st.url : "");
@@ -289,6 +295,8 @@ const singleInstance = initSingleInstance({
 					{ version: app.getVersion(), username: userInfo().username },
 					() => registry.active().kind,
 				),
+				// SD1 Task 5: the daemon's loams.agentd.v1 listener; main alone reads its token.
+				agentd: () => readAgentdTarget(agentdDir(app.getPath("userData"))),
 			});
 			const open = (): BrowserWindow => {
 				const w = createWindow();

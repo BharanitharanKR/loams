@@ -1,0 +1,60 @@
+[package]
+name = "loams-connector-lakehouse"
+description = "The Loams lakehouse connector family (CN2 Task 17, OR-6): Delta Lake in both directions (OR-18), exactly-once through Delta's `txn` action, and the native Iceberg raw-topic sink (OR-8), on the connector SDK."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[features]
+default = []
+
+[dependencies]
+# Every family crate depends on the SDK and its protocol crates only (OR-6).
+loams-connector-sdk = { path = "../loams-connector-sdk" }
+# The workspace's arrow 59 line (CN1 Ruling 4). Apache-2.0.
+arrow-array.workspace = true
+# Partition values are strings in the Delta log; cast to the column's type.
+# 59.3.0 is already in fabric/Cargo.lock through `arrow`.
+arrow-cast = "59"
+arrow-json.workspace = true
+arrow-schema.workspace = true
+arrow-select = "59"
+# The SDK's own async-trait pin (0.1.92 in fabric/Cargo.lock).
+async-trait = "0.1.89"
+# The checkpoint's opaque positions in a commit's `commitInfo`.
+base64.workspace = true
+bytes.workspace = true
+# Delta Lake (OR-18, CN2 R0.14): deltalake-core 1.1.0 (2026-09-28,
+# Apache-2.0), on arrow/parquet 59 and object_store 0.13.2. Without its
+# `datafusion` feature: the sink commits through `CommitBuilder` and the
+# source reads the log itself (R17.6), so datafusion 55 is never compiled.
+# `rustls` is required (deltalake refuses to build without a TLS feature);
+# its kernel engine's reqwest 0.13 brings aws-lc-rs (R17.11).
+deltalake-core = { version = "=1.1.0", default-features = false, features = ["rustls"] }
+futures.workspace = true
+# Storage for Delta tables: S3 and its targets (RustFS in CI), built here with
+# the egress-checked HTTP client (R13.3's pattern) and handed to deltalake as
+# its storage backend. Pinned to 0.13.2 (CN2 R0.13). MIT OR Apache-2.0.
+object_store = { version = "=0.13.2", default-features = false, features = ["aws", "fs"] }
+# Reading a version's data and change files. The workspace's 59 line.
+parquet.workspace = true
+# object_store's own HTTP client, built by `store::EgressConnector` so every
+# connection resolves through the instance's egress check (R13.3). The same
+# 0.12 line and features object_store asks for. MIT OR Apache-2.0.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "http2"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tracing.workspace = true
+url = "2"
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "test-util"] }
+
+[lints]
+workspace = true

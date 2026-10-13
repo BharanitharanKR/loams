@@ -140,4 +140,49 @@ describe("agentd service", () => {
 		expect(seen.at(-1)).toBe(0);
 		expect(seen).toContain(1);
 	});
+
+	it("studio_repos_list_add_and_clone_through_the_daemon", async () => {
+		const { svc, client } = setup({ running: true });
+		expect((await svc.repos()).ok).toBe(false);
+		await svc.attach();
+		const list = await svc.repos();
+		expect(list).toEqual({
+			ok: true,
+			value: [{ path: "/home/omar/src/loams", name: "loams", defaultBranch: "main" }],
+		});
+		const added = await svc.addRepo("/home/omar/src/site");
+		expect(added).toEqual({
+			ok: true,
+			value: { path: "/home/omar/src/site", name: "site", defaultBranch: "main" },
+		});
+		const cloned = await svc.cloneRepo("https://git.example.com/acme/api.git");
+		expect(cloned.ok && cloned.value.name).toBe("api");
+		expect((await svc.repos()).ok && (await svc.repos())).toMatchObject({
+			value: [{ name: "loams" }, { name: "site" }, { name: "api" }],
+		});
+		expect(client.calls).toEqual(
+			expect.arrayContaining(["ListRepos", "AddRepo", "CloneRepo"]),
+		);
+	});
+
+	it("studio_repo_params_are_checked_in_main", async () => {
+		const { svc, client } = setup({ running: true });
+		await svc.attach();
+		for (const bad of [42, "", "relative/path", "/a\u0000b", "x".repeat(5000)])
+			expect(await svc.addRepo(bad)).toMatchObject({ ok: false, code: "bad_params" });
+		for (const bad of [
+			"file:///etc",
+			"ext::sh -c touch% /tmp/pwned",
+			"-uhttps://x",
+			"https://",
+			"javascript:alert(1)",
+			"/local/path",
+			7,
+		])
+			expect(await svc.cloneRepo(bad)).toMatchObject({ ok: false, code: "invalid_url" });
+		expect(client.calls).not.toContain("AddRepo");
+		expect(client.calls).not.toContain("CloneRepo");
+		expect((await svc.cloneRepo("git@git.example.com:acme/api.git")).ok).toBe(true);
+		expect((await svc.cloneRepo("ssh://git@git.example.com/acme/web.git")).ok).toBe(true);
+	});
 });

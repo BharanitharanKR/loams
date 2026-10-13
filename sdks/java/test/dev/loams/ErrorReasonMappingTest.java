@@ -267,7 +267,7 @@ public class ErrorReasonMappingTest {
         if (rpc.equals("loams.live.v1.LiveService/Mutate")) {
             return MutateRequest.getDefaultInstance();
         }
-        if (rpc.equals("loams.live.v1.LiveService/Deploy")) {
+        if (rpc.equals("loams.live.v1.LiveAdminService/Deploy")) {
             return dev.loams.gen.loams.live.v1.DeployRequest.getDefaultInstance();
         }
         if (rpc.equals("loams.live.v1.LiveService/Query")) {

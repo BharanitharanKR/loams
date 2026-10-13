@@ -1390,3 +1390,235 @@ Fork PR ostrium-labs/loams-postgres#4 (branch `loams/nf1-advisories` from `main`
 6. **Fuzzing as built.** `fuzz/` is a member of the fork's workspace (crate `loams-fuzz`), so it shares `Cargo.lock` and the root `[patch]`. A separate workspace would need its own copy of the `neondatabase/rust-postgres` patch for Task 7 to repoint. The proxy's parsers are crate-private, so the proxy gains a `fuzzing` feature, enabled only by the fuzz crate, that adds `proxy::fuzzing`. New dependencies: `libfuzzer-sys` 0.4.13 (2026-06-04) and `arbitrary` 1.4.2 (2025-08-14; 1.5.0 is 6 days old). `deny.toml` allows NCSA (LLVM's libFuzzer) for `libfuzzer-sys` only. The nightly is `nightly-2025-05-10` (1.89.0-nightly, the fork's 1.88.0 era): `nightly-2026-09-15` cannot compile the proxy ("overflow evaluating the requirement … Send" in `serverless/mod.rs`). Bump it together with `rust-toolchain.toml`. The proxy targets run **without** AddressSanitizer. The workspace's `tikv-jemallocator` features make jemalloc replace `malloc`, and under ASan the proxy targets crash with SIGSEGV before libFuzzer starts. Panics and hangs are still found, and the parsers are safe Rust. `cargo fuzz` keeps overflow checks on, so an overflow panic is filed as `high` and can be re-triaged.
 7. **Verification (Actions are disabled in the fork's settings: `actions/permissions` is `enabled: false`, so no workflow runs).** 29 tests in `test_sla.py`, including the six named ones; `fuzz_targets_build` was run locally with `cargo +nightly-2025-05-10 fuzz build`. Dry runs on live data: the feed, real `cargo deny` output, the watch list, `sweep`, and a fuzz finding against the public fork, which was refused. Each target was run locally for 60 seconds. Two targets found crashes within that time. They are not described here: they will be filed privately once the tracker exists. Until then the reproducers are kept outside any repository. `actionlint` is not installed; both workflows were parsed as YAML and their shell steps checked with `bash -n`.
 8. **No required check.** As in Task 4 ruling 6: whoever enables Actions decides whether `loams-advisories / tests` and the fuzz build gate pull requests.
+
+### Task 7 rulings (2026-10-13, at `dev` `21cd2b5f`)
+
+Fork PR ostrium-labs/loams-postgres#5 (branch `loams/nf1-hygiene` from `main` `bea29e18`), merged into `main` as the merge commit `864cc63e` with the organisation admin's PR bypass. One commit (or more) per patch id: `33a2ba84` and `074ee639` LP-0002, `3e395b31` LP-0003, `abe092ca` LP-0004, `cd1bc4b1` and `e8ffc45c` LP-0005, `5f15acc3` and `ce5c7350` LP-0006, `e2ff0f39` and `941c2c32` LP-0008. CodeRabbit (one round, 5 comments): 3 fixed (case-insensitive matching, the hygiene test also runs `cargo deny check sources`, `sla.py` filters per finding), 2 declined with reasons (ruling 6's compose stack; the benches README path is right for `cargo bench`, checked in criterion 0.5.1 and pprof 0.14).
+
+1. **LP-0002.** `scripts/loams/strip-upstream-ci.sh` deleted Neon's 43 workflows. The scripts only they used (`.github/scripts/`, `.github/file-filters.yaml`) went with them, and `.github/actionlint.yml` now lists our workflows' variables (`LOAMS_SLA_REPO`) instead of Neon's 36 variables and runner labels, so `actionlint` passes on every `loams-*.yml`. `.github/actions/` stays for Task 16 to reuse or delete, except `prepare-for-subzero` (LP-0004). `.github/ISSUE_TEMPLATE` and the PR template are Neon's and untouched (issues are off on the fork).
+2. **LP-0003.**
+   - pprof is built with `["criterion", "frame-pointer", "prost-codec"]` and jemalloc_pprof with `["symbolize"]`. Cargo.lock drops `inferno` 0.11.21 and 0.12.0 and the crates only they used (arrayvec, num-format, quick-xml 0.26 and 0.37, rgb, str_stack).
+   - `CDDL-1.0` is out of `deny.toml`, with a comment saying why.
+   - The profiling routes answer `format=svg` with 400 and exactly the plan's body, `{"error":"svg flamegraphs are not built; use format=pprof"}`, before any profile is taken. That body is not Neon's usual `ApiError` shape (`{"msg": …}`).
+   - The five Criterion benches write `Output::Protobuf`, and `pagebench --profile` writes `profile.pb`.
+3. **LP-0004.** Besides the `SUBZERO_ACCESS_TOKEN` blocks, the build stage no longer copies the plan stage's `proxy/Cargo.toml` and `Cargo.lock`, which only carried the `cargo add`. `pgxn/neon/communicator`'s `rest_broker = []` feature stays: it is a feature definition, not a CI feature list. `proxy/README.md` keeps the auth broker instructions (without `--is-rest-broker`) and gains "The REST broker (Data API) is not supported" (Q720's default).
+4. **LP-0005.**
+   - All four `rust-postgres` crates and the `[patch.crates-io]` entry use one rev, `f3cf448f`, the head of `loams/neon`. The lock had `postgres` alone at `1f21e795`, the branch's head when that crate was last updated. `f3cf448f` is 4 commits ahead and changes nothing under `postgres/`, so the code built is the same.
+   - `azure-sdk-for-rust` is pinned at `f64bd572`, `tokio-epoll-uring` at `781989bb` (moved by Task 8), and `framed-websockets` at `34eff3d6`.
+   - Annotated tags `loams-20261013-1` were created on `rust-postgres`, `azure-sdk-for-rust`, `tokio-epoll-uring` and `pg_session_jwt` (`6b08baaf`, the `v0.3.1` commit LP-0006 downloads). `framed-websockets` is archived, so it is read-only and cannot take a tag; its rev is the head of its protected `loams/main`.
+   - Cargo.lock changes only its source lines.
+   - `deny.toml`'s `allow-org` is `ostrium-labs`, and `unknown-git = "deny"`. A probe that pointed one dependency back at `neondatabase` failed `cargo deny check sources`.
+5. **LP-0006.**
+   - `pg_session_jwt` now downloads from the fork's `v0.3.1` tag. The tarball's sha256 is unchanged (`62fec9e4…`, downloaded and compared).
+   - `pgrag` is dropped (Q719), with its stages, onnxruntime, `compute/patches/onnxruntime.patch` and `docker-compose/ext-src/pgrag-src`. `compute/manifest.yaml`'s `neon.unstable_extensions` still names `rag`; Task 21 regenerates it.
+   - `lcov` is **removed**, not taken from Debian. It served Neon's coverage reports, which went with LP-0002, and the CPAN modules it needed are gone too. `scripts/coverage` needs a local lcov.
+   - `ARG REPOSITORY=ghcr.io/ostrium-labs` in the `Dockerfile` and `docker-compose/compute_wrapper/Dockerfile`.
+6. **`check-no-private-sources.sh` is wider than the plan.**
+   - It also checks every `Cargo.toml` and `.gitmodules`.
+   - It matches `neondatabase` (not only `neondatabase/`), ignoring case, so `ghcr.io/neondatabase` without a slash and `neondatabase-labs` fail too.
+   - Full-line comments are allowed. The allowlist (`scripts/loams/private-sources-allowlist.txt`) is empty. `vendor/` is not checked.
+   - Not covered, because it is neither a Dockerfile nor a workflow: `docker-compose/docker-compose.yml`, Neon's extension-test stack. Its default `REPOSITORY` is still `ghcr.io/neondatabase` and its image names are Neon's. It moves to our images with Task 16.
+7. **Tests.** `scripts/loams/tests/test_hygiene.sh` has the named tests:
+   - `upstream_ci_absent`;
+   - `deny_rejects_cddl` (`cargo deny check licenses sources` passes, and a CDDL-1.0 fixture crate fails);
+   - `no_inferno` (`cargo tree --locked --target all -e features -i inferno` finds nothing);
+   - `no_private_sources` (passes on the branch, and fails on `neon-fork-point` in Cargo.lock, the Dockerfiles and the workflows; plus fixtures).
+
+   A new `.github/workflows/loams-hygiene.yml` runs it (a deviation: the plan leaves that to G0; Task 16 folds it in). Also run locally:
+   - `cargo test -p http-utils --lib` (5 passed, including `profile_cpu_svg_is_refused` and `profile_heap_svg_is_refused`);
+   - `cargo check --locked -p pageserver -p proxy -p compute_tools -p storage_controller` on the new sources;
+   - `cargo check --benches` for postgres_ffi, utils, wal_decoder and pageserver;
+   - `test_sla.py` (31), `test_check_patches.py`, `test_governance.py`, `check-patches.py`, `check-dco.sh` and `actionlint` 1.7.7.
+
+   `safekeeper`'s benches need `walproposer`, which needs a full Postgres build, so they were not checked locally.
+8. **Pre-existing, for Task 16's G0.** `cargo fmt --check` and `cargo clippy -D warnings` over the whole workspace already fail at `neon-fork-point`, in Neon's `libs/remote_storage/src/gcs_bucket.rs`: unformatted imports and about 40 unused-import warnings. G0 must fix that file or scope those checks. Every file this task changed passes `rustfmt --check`.
+9. **LP-0008 follow-up (preparing for Actions).** The run logs and run states of `loams-postgres` are public. The changes:
+   - `sla.py` prints nothing for a private finding. Before, `file --kind fuzz` printed the finding's key, which names the crash site. Tests: `test_fuzz_cli_keeps_the_finding_out_of_the_log` and `test_public_findings_are_still_printed_beside_private_ones`.
+   - `loams-fuzz.yml` no longer echoes the fuzzer's exit status.
+   - The filing step runs on every scheduled run, because a skipped step said "no crash".
+   - The job fails only when filing fails.
+   - The fuzz step waits out its time budget after an early stop.
+   - A `tracker` job skips scheduled fuzzing while `LOAMS_SLA_TOKEN` is unset.
+
+   **Owner, before enabling Actions:** a pull request's workflow can restore the default branch's Actions caches, including the fuzz corpus. Keep "Require approval for all outside collaborators" for fork pull request workflows.
+10. **Not built here.** The Dockerfile changes were reviewed but not built: images build in CI (Tasks 9–11), and Actions are disabled on the fork. Until Task 9, the storage `Dockerfile`'s `$REPOSITORY/$IMAGE:$TAG` (`ghcr.io/ostrium-labs/build-tools:pinned`) does not exist.
+
+### Task 8 rulings (2026-10-13, at `dev` `ffe1e091`)
+
+`ostrium-labs/tokio-epoll-uring` PR #2 (branch `loams/nf1-licence`, one commit `1d8152ab`, `Loams-Patch: LP-0007`, made with the git data API: there is no local clone, and none was made) merged into `loams/main` as `5ab61ac8`, tagged `loams-20261013-2`; CodeRabbit: no actionable comments. Fork PR ostrium-labs/loams-postgres#6 (branch `loams/nf1-uring-licence`, `7b26e124`) merged into `main` as `1b928b56`; CodeRabbit was rate-limited (one review an hour on the plan), so it was self-reviewed.
+
+1. **The texts, as declared (Q716's default; no licence chosen or changed).** `LICENSE-MIT` ("Copyright (c) 2023-2026 the tokio-epoll-uring authors (Neon Inc.)") and `LICENSE-APACHE` (the canonical apache.org text, sha256 `cfc7749b…`) at the root. `uring-common/LICENSE-tokio-uring` is `tokio-uring`'s `LICENSE` at `d5e90539bd6d1c518e848298564a098c300866bc`, unchanged: MIT, "Copyright (c) 2021 Carl Lerche". `LICENSING.md` maps the files: the vendored ones are `uring-common/src/buf.rs`, `src/buf/*.rs` and `src/open_options.rs`, each starting with `tokio-uring`'s notice (upstream PRs #24 `91d67e20` and #25 `53c832d3`); `lib.rs`, `io_fd.rs` and `open_options_io_uring_ext.rs` are Neon's (MIT, under `LICENSE-MIT`).
+2. **The pin moved from `781989bb` to `5ab61ac8`** (LP-0005's `tokio-epoll-uring` rev; only the two Cargo.lock source lines change, the crates' manifests are the same). That brings Task 0 ruling 6's five upstream commits (`7adcb121` … `478ab1a3`, the cancelled-`open` file-descriptor leak) plus Task 5's `CODEOWNERS`/`SECURITY.md`. Checked locally in place of G1: tokio-epoll-uring's own workspace tests at `5ab61ac8` (20 + 2 passed, including the cancelled-open tests), and `cargo test -p pageserver --lib virtual_file` with `NEON_PAGESERVER_UNIT_TEST_VIRTUAL_FILE_IOENGINE=tokio-epoll-uring` and `=std-fs` (19 passed each).
+3. **`docs/loams/LICENSING-tokio-epoll-uring.md`** in the fork records the finding, the resolution and what is open. `LOAMS_PATCHES.md` row LP-0007 (drop when upstream publishes licence files that match its manifests).
+4. **Q716 is still open: nothing was posted upstream.** Filing the one issue on `neondatabase/tokio-epoll-uring` is an exception to D231 the owner has not made. The fallback (`io-uring` feature, `loams/nf1-no-uring`) was not started: no counsel finding says the declaration is insufficient.
+5. **`third_party_licences_include_tokio_epoll_uring` lands with Task 10**, whose `THIRD_PARTY_LICENSES.html` it checks (cargo-about needs `about.toml` to point at the repository-root texts, because they are not in the crate's directory).
+
+### Task 9 rulings (2026-10-13, at `dev` `f8fc9f1b`)
+
+Fork PR ostrium-labs/loams-postgres#7 (branch `loams/nf1-build-tools`, `bd5dcda5`, LP-0009) merged into `main` as `517503ee`; CodeRabbit was rate-limited after the retry, so it was self-reviewed.
+
+1. **`loams-build-tools.yml`.** `build-tools/Dockerfile` is built for **bookworm only** (the storage image's Debian; Neon also built a bullseye variant, which nothing here uses), for amd64 and arm64, on `ubuntu-24.04` and `ubuntu-24.04-arm`.
+   - On `main`, each architecture is pushed by digest with BuildKit's provenance (`mode=max`) and SBOM, and the two are joined into `ghcr.io/ostrium-labs/loams-postgres-build-tools:<sha12>`.
+   - The cache is `loams-postgres-buildcache:build-tools-<arch>`, written from `main` only.
+   - A pull request builds both architectures and pushes nothing.
+   - Triggers: `build-tools/` changes, monthly (the 2nd, 03:23 UTC) and manual dispatch.
+   - Task 12 then moved the signing and attestation to `loams-sign.yml`, as the plan said it would.
+2. **The pin PR.**
+   - `scripts/loams/pin-build-tools.sh` rewrites `ARG BUILD_TOOLS=` and nothing else. It refuses a tag, another registry or a short digest.
+   - The job `pin` commits as `github-actions[bot]`, with a matching `Signed-off-by` and `Loams-Patch: LP-0009`, so the DCO and patch checks pass. It pushes to `bot/build-tools-<digest12>`, outside the `loams/*` no-deletion ruleset, so the branch can be deleted after merging.
+   - The PR is opened with `LOAMS_BOT_TOKEN` (the App, Q733) when that secret exists, and with `GITHUB_TOKEN` otherwise.
+   - The `GITHUB_TOKEN` path needs the owner's "Allow GitHub Actions to create and approve pull requests". The checks of a PR opened with `GITHUB_TOKEN` wait for a maintainer to approve them; the App token runs them at once.
+3. **`Dockerfile`: `FROM $BUILD_TOOLS`** in the three build stages, replacing `$REPOSITORY/$IMAGE:$TAG` (`pinned`).
+   - **Bootstrap:** until our first build, the default is the neon-archive mirror of Neon's last public build-tools (`ghcr.io/ostrium-labs/neon-archive/build-tools@sha256:bd1fe230…`). That image is byte-identical to Neon's `d4a4001a…-bookworm` and its audit is clean (Task 1).
+   - It is a builder stage only: nothing from it ships in an image, so the "never deployed" ruling on the neon-archive packages (Task 2 ruling 2) is kept. The first run's pin PR replaces it.
+   - This needs the owner to give `loams-postgres` read access to that private package, or to run `loams-build-tools.yml` before the first storage build.
+4. **No `ARG BUILD_TOOLS` in the compute Dockerfile** (deviation). It has no build-tools base: it builds its own `build-deps` from Debian and installs its own toolchain.
+5. **Tests.** `test_hygiene.sh build_tools_pinned_by_digest`:
+   - the ARG is an `ostrium-labs` image by digest;
+   - every `FROM` is `$BUILD_TOOLS` or the pinned Debian base;
+   - `pin-build-tools.sh` changes exactly that line and refuses bad references.
+
+   This is the plan's G0 grep check; it runs in `loams-hygiene.yml` until Task 16. "The workflow builds on PR" waits for Actions (owner). `actionlint` is clean.
+
+### Task 10 rulings (2026-10-13, at `dev` `f8fc9f1b`)
+
+Fork PR ostrium-labs/loams-postgres#8 (branch `loams/nf1-storage`, `468ad273`, LP-0010) merged into `main` as `bde73437`; CodeRabbit was rate-limited after the retry (one review an hour on the plan), so it was self-reviewed.
+
+1. **`loams-build-storage.yml`** builds the `Dockerfile` for amd64 and arm64.
+   - **Runners:** `vars.RUNNER_HEAVY` and `vars.RUNNER_HEAVY_ARM`, defaulting to the standard `ubuntu-24.04` and `ubuntu-24.04-arm` (Q721 is open).
+   - **BuildKit's root on `/mnt`** when the runner has more than 40 GB free there. Docker's `data-root` moves; `daemon.json` is merged with `jq`.
+   - **Build args:** `GIT_VERSION=<sha>` and `BUILD_TAG` (`<sha12>`, or the release passed by `workflow_call`).
+   - **Cache:** `loams-postgres-buildcache:storage-<arch>`, written from `main` only.
+   - **Push by digest.** `index` creates `:<sha12>` and `:edge` and attests the provenance.
+   - **`smoke`:**
+     - `labels_present`: the revision label equals the commit, on both platforms;
+     - the licence files are present;
+     - `smoke_select_1`.
+   - **`audit`:** `storage_image_audit_clean`, `audit-image.sh` exits 0.
+   - A pull request builds both architectures and pushes nothing.
+2. **The smoke stack is `scripts/loams/smoke/` in the fork** (deviation; the plan only says "a `deploy/loams-postgres-dev`-shaped stack"). It is Loams' `deploy/loams-postgres-dev` without published ports: RustFS by index digest `8cc98017…`, broker, pageserver, one safekeeper and a compute. `run.sh` drives it:
+   - a random compose project `loams-smoke-<hex>`;
+   - a tenant and timeline created through the pageserver API (`curl` inside the pageserver container);
+   - `SELECT 1`, and a check of the server's major version;
+   - optional SQL files;
+   - `pageserver --version` compared against `EXPECT_COMMIT`;
+   - `down -v` of its own project only.
+
+   The smoke spec preloads `pgaudit`, which Task 11's core smoke needs.
+   **Run locally** with podman on Neon's 77e22e4b images: `SELECT 1` on 170005, `EXPECT_COMMIT` checked both ways, nothing left behind.
+3. **The smoke's compute** is `vars.SMOKE_COMPUTE_IMAGE`. It defaults to the neon-archive mirror of Neon's compute-node-v17 (test only, never shipped; it needs package read access) until our compute-v17 exists.
+4. **`audit-image.sh` and `audit_image.py` are vendored** from `scripts/nf1` (same contract). The skopeo image is pinned inline. The tests are `test_audit_image.py` (9 tests).
+5. **`THIRD_PARTY_LICENSES.html`** comes from cargo-about 0.9.2 (sha256-checked per architecture), using `about.toml` and `about.hbs`.
+   - **Accepted licences:** deny.toml's allow list plus its exceptions. MIT is first, so a dual-licensed crate is listed with its own copyright notice; Apache-2.0 first would have dropped `tokio-epoll-uring`'s MIT notice.
+   - **`tokio-epoll-uring`:** a `clarify` entry points it at the repository-root texts, with checksums.
+   - The image build fails if the notice is missing.
+   - `third_party_licences_include_tokio_epoll_uring` (Task 8's test) is in `test_hygiene.sh`, and `loams-hygiene.yml` installs cargo-about.
+6. **`.dockerignore` fixed a broken build.** `fuzz/` has been a workspace member since LP-0008 (Task 6), but `.dockerignore` left it out of the build context. Cargo could not load the workspace in the image build, so the storage and compute images could not be built from `main`. `test_docker_context.py` now runs `cargo metadata --locked` on exactly what `.dockerignore` lets through.
+7. **Labels:** `org.opencontainers.image.{title,description,source,revision,version,vendor,licenses}`. **Files:** `/usr/share/doc/loams-postgres/{LICENSE,NOTICE,LOAMS_PATCHES.md,THIRD_PARTY_LICENSES.html}`.
+8. **Not measured:** the build times for §51 §5.2 (Q721) need Actions. The workflow writes each architecture's job time to the run summary.
+9. **Pre-existing, not changed:** the final stage downloads the AWS CLI from `awscli.amazonaws.com` without a checksum. That breaks "every downloaded source by sha256". Left for Task 20 or a follow-up.
+
+### Task 11 rulings (2026-10-13, at `dev` `f8fc9f1b`)
+
+Fork PR ostrium-labs/loams-postgres#9 (branch `loams/nf1-compute`, LP-0011) merged into `main` as `3178b3b4`; CodeRabbit: 1 comment (the smoke's checks printed false instead of failing), fixed in b827700d.
+
+1. **The matrix comes from Loams' pin file.** `scripts/loams/compute-matrix.py` reads `supported ∪ maintenance ∪ beta` (today 16 and 17) and takes each major's minor from `vendor/revisions.json`.
+   - Debian follows Neon: bullseye for 14–16, bookworm for 17 and newer, until Q727 (Task 28).
+   - Tags follow the shared contract: `<pgminor>-<sha12>` and `edge`. A beta major gets `<pgminor>-beta-<sha12>` and `beta`.
+   - Both amd64 and arm64 (Q729's default).
+   - Tests: `test_compute_matrix.py` (7, in `loams-hygiene.yml`).
+2. **Heavy stages** (`scripts/loams/compute-heavy-stages.txt`):
+   - The list is `plv8-build`, `rdkit-build`, `postgis-build`, `pgrouting-build`, plus `pg_mooncake-build` beside `pg_duckdb-build`. pg_mooncake also vendors DuckDB; both leave the list when Task 21 drops them (Q719).
+   - On `main` each heavy stage builds in its own job (`--target`, `outputs: type=cacheonly`).
+   - Each writes its **own** cache ref, `compute-v<N>-<arch>-<stage>`. One shared ref would be overwritten by every job.
+   - The image build reads all of them plus its own `compute-v<N>-<arch>`.
+   - BuildKit runs one stage at a time (`max-parallelism = 1`, as Neon's CI did), because each stage runs `make -j$(nproc)`.
+   - A pull request skips the heavy jobs and builds from `main`'s caches.
+3. **`cargo auditable` in the compute image** (Task 1 ruling 3). `compute_ctl`, `fast_import` and `local_proxy` are built with `cargo auditable build` (cargo-auditable 0.7.0, as build-tools), so the audit reads their `.dep-v0` instead of the strings fallback.
+   - `GIT_VERSION` reaches that stage.
+   - The Rust crates' `THIRD_PARTY_LICENSES.html` is generated in the same step, because the crate sources live only in its cache mounts.
+   - The image has OCI labels and `/usr/share/doc/loams-postgres-compute/{LICENSE,NOTICE,LOAMS_PATCHES.md,THIRD_PARTY_LICENSES.html}`.
+4. **`core_extensions_create`.** `compute/tests/loams-smoke/core-extensions.sql` uses §51 §7.1's `core` tier until Task 20's manifest exists:
+   - contrib;
+   - `neon` and `neon_utils`;
+   - `vector`, `postgis`, `pg_cron`, `pg_partman` (in schema `partman`), `pgaudit`, `pg_hint_plan`, `hypopg`, `pg_repack`, `pg_ivm` and `pg_session_jwt`;
+   - `wal2json`, which is an output plugin, decoding one change through a logical slot.
+
+   Every `CREATE EXTENSION` is `IF NOT EXISTS`, because `compute_ctl` creates `pg_stat_statements` and `neon` itself. A `DO` block then fails on any missing extension. The `pg_stat_statements`, pgvector and PostGIS queries follow.
+   **Run locally** through `scripts/loams/smoke/run.sh` on Neon's 77e22e4b `compute-node-v17` and `-v16`: ok on 170005 and 160009. `pgaudit` needs `shared_preload_libraries`, so the smoke spec preloads it.
+5. **`compute_image_audit_clean`:** `audit-image.sh` exits 0 on the index, and the job checks that `compute_ctl`, `local_proxy` and `fast_import` are among the audited binaries.
+6. **Timings (`heavy_stage_jobs_under_limit`)** go to each job's summary. The cold and warm durations per major and architecture, and the Q721 budget check, need the first runs (Actions: owner).
+7. **The smoke's storage image** is `vars.SMOKE_STORAGE_IMAGE`, defaulting to `loams-postgres-storage:edge` from Task 10.
+8. **LP-0032 takes effect with these images.** Our `compute_ctl` creates spec roles with least privilege (Task 4 ruling 4). Loams switches to them in Task 14.
+
+### Task 12 rulings (2026-10-13, at `dev` `4e9e715f`)
+
+Fork PR ostrium-labs/loams-postgres#10 (branch `loams/nf1-sign`, LP-0012) merged into `main` as `233f02d1`; CodeRabbit was rate-limited after the retry, so it was self-reviewed. Here: `scripts/nf1/verify-pins.sh`, `verify_pins.py`, `tests/test_verify_pins.sh` and `nf1-pins.yml`.
+
+1. **`loams-sign.yml`** (reusable; inputs `image`, `digest`, `sources`, `pg-version`, `debian`):
+   - `cosign sign --yes` (keyless);
+   - `actions/attest-build-provenance`, pushed to the registry;
+   - an SPDX SBOM **per platform** (Syft through `anchore/sbom-action` with a `platform:` config; both are attested against the index digest with `actions/attest-sbom`);
+   - with `sources: true`, the compute sources: `oras attach --artifact-type application/vnd.loams.sources.v1 … sources.tar:application/x-tar`, and the attached artifact is signed too.
+
+   Callers: `loams-release.yml` (Task 13) and `loams-build-tools.yml`, whose inline attestation (Task 9) moved here. Edge builds keep their inline provenance attestation and stay unsigned.
+2. **The sources before Task 20 (deviation).** The plan lists `sources.tar` "from the manifest", but the manifest (Task 20) does not exist yet. `scripts/loams/compute-sources.py` appends two generated stages to the compute Dockerfile instead.
+   - **`loams-sources`** takes, from every `-src` stage (38 today), the downloaded tarballs and the patches applied (`<stage>--<file>`), plus Postgres' tree as `postgres-v<N>.tar.gz`. It adds `SHA256SUMS`, and `GIT-SOURCES` listing each `git clone` with its URL and tag (plv8's stage already packs its clone as `plv8.tar.gz`).
+   - **`loams-sources-out`** outputs those files alone.
+
+   Every GPL component (PostGIS, pgRouting, postgresql-unit; SFCGAL is LGPL) arrives as a tarball. A new `-src` stage is covered without an edit. Tests: `test_compute_sources.py`. Task 20 can switch the list to the manifest.
+3. **`verify-pins.sh`** (a wrapper for `verify_pins.py`, stdlib).
+   - For each pin with a fork source:
+     - **`cosign verify`** with the shared identity: issuer `https://token.actions.githubusercontent.com`, and `^https://github.com/ostrium-labs/loams-postgres/\.github/workflows/loams-(release|sign)\.yml@refs/heads/main$`.
+     - **`gh attestation verify --repo ostrium-labs/loams-postgres --source-digest <the pin's commit> --source-ref refs/heads/main`**: the provenance must come from the fork, for that commit (PR #537 review; the plan said `--owner ostrium-labs`, which any repository of the organisation satisfies).
+     - **The SBOM attestations** (`--predicate-type https://spdx.dev/Document/v2.3`, the same scope), at least one distinct document per platform (two):
+       - SPDX expressions are evaluated: `OR` needs one allowed side, `AND` needs all;
+       - CDDL fails anywhere, Debian packages included;
+       - outside `pkg:deb/` packages, only the plan's allowlist plus deny.toml's `0BSD`, `CC0-1.0` and `Unicode-3.0` pass;
+       - Debian packages' licences are listed separately;
+       - `NOASSERTION` is counted, not refused.
+     - **For `compute-v<N>`:** `oras discover` must find the sources artifact, and `cosign verify` with the same identity must pass on it: attached is not enough.
+   - Every tool call has a timeout (`TOOL_TIMEOUT`, default 300 s); a timeout fails the image.
+   - `mirror:` pins print a `::notice::` and call no tool. Today's pin file passes this way.
+4. **Tests:** `test_verify_pins.sh` uses stub `cosign`, `gh` and `oras` that answer from fixtures. The stub cosign applies the script's `--certificate-identity-regexp` itself, so the identity is what gets tested. Cases:
+   - `unsigned_digest_fails_verify`;
+   - `wrong_identity_fails_verify`: a `dev` branch, the old name `ostrium-labs/neon`, and `loams-build-storage.yml` all fail;
+   - `sbom_has_no_forbidden_licence`: CDDL, SSPL, CDDL in a Debian package, and a missing SBOM all fail; `MIT OR SSPL-1.0` passes;
+   - `provenance_bound_to_the_fork_commit`, `one_sbom_per_platform`;
+   - `gpl_sources_attached` (missing, or attached but unsigned);
+   - `mirror_pin_skipped_with_notice` (fixtures only; the job runs `verify-pins.sh` on the repository's pin file separately);
+   - `tool_timeout_is_a_failure`;
+   - `signed_pins_pass`.
+
+   Two mutations (accepting any branch; ignoring CDDL) each made the suite fail.
+5. **`nf1-pins.yml`.** The `checks` job installs cosign v3.0.6 (`sigstore/cosign-installer` v4.1.2) and oras (`setup-oras` v2.0.1), then runs `verify-pins.sh` and `test_verify_pins.sh`. These are steps in the existing job, not a separate `verify` job, to keep to one runner slot, as its comment asks.
+6. **Not run against real images:** no fork image is signed until Actions are enabled (owner). The Fulcio `job_workflow_ref` claim the plan asks to confirm (that a reusable workflow's certificate names `loams-sign.yml`) is checked on the first release.
+
+### Task 13 rulings (2026-10-13, at `dev` `88a3770a`)
+
+Fork PR ostrium-labs/loams-postgres#11 (branch `loams/nf1-release`, LP-0013) merged into `main` as `de63e7e4`. CodeRabbit left 3 comments, all fixed: release documents are validated before any registry write, the month must be 01–12, and compute digests for unpinned majors are refused.
+
+1. **`loams-release.yml`.** Triggers: `workflow_dispatch` (inputs `kind` = `full|storage|compute`, `version`) and `workflow_call` (for Task 18). It runs on `main` only. The steps:
+   - `check-tag` refuses a malformed or existing version;
+   - **the gate:** `loams-hygiene`, `loams-patches` and `loams-dco` as reusable workflows, until Task 16's `loams-gate.yml` adds G1–G3;
+   - the builds: `loams-build-storage.yml` and `loams-build-compute.yml` with `build-tag` = the version;
+   - `tag-images` resolves the digests without writing anything, refuses an image release tag that already exists, and writes the pin document and the notes. A refused document stops the release before any registry write. Only then does it tag the images `lp-YYYY.MM.N` (storage) and `<pgminor>-lp-YYYY.MM.N` (compute; a beta major gets `<pgminor>-beta-lp-…`);
+   - `loams-sign.yml` per image, as a matrix; compute images also get their sources;
+   - the annotated tag and the GitHub Release, with the notes and the pin document `loams-postgres-images.toml` as an asset, taken from `tag-images`' artifact;
+   - the pin PR.
+
+   The three check workflows gain `workflow_call` and put the caller's name in their concurrency group, so a push to `main` cannot cancel a release's gate.
+2. **`kind`.** `storage` releases the storage image, `compute` every pinned major's compute image, and `full` both. A compute minor release is `full`, because the storage image carries the WAL-redo Postgres (§51 §5.6). A partial release keeps Loams' other pins, and `pin-doc` refuses one that would leave a major's storage and compute minors apart (`pins.py check` would fail on it).
+3. **`release-notes.py`** (stdlib):
+   - `check-tag` (month 01–12) and `previous` (the newest earlier `lp-` tag).
+   - `pin-doc`: Loams' current pin file with the released images replaced, `source = "ostrium-labs/loams-postgres@<commit>"`, and minors from `vendor/revisions.json`; compute digests for a major Loams does not pin are refused. Documents generated for a `full` and a `storage` release passed Loams' `pins.py` `validate()` unchanged.
+   - `notes`: the digests (built here, or "unchanged" and their source); the Postgres majors, minors and status; the extension versions, from `compute/loams-extensions.toml` once Task 20 writes it (until then the notes say so); the `LP-` rows added and dropped since the previous release, from `LOAMS_PATCHES.md` at both tags.
+
+   Tests: `test_release.py`, 10 tests, including `release_tag_immutable`, `notes_list_digests_and_patches` and `pin_pr_matches_release`.
+4. **The pin PR** uses `LOAMS_BOT_TOKEN` (the `loams-postgres-bot` App, Q733).
+   - Steps: a shallow clone of Loams `dev`, `pins.py set --from-release <the release asset's https URL>`, `pins.py check`, then a commit as the bot with a matching `Signed-off-by`, branch `bot/pins-<version>`, and a PR into `dev`.
+   - The body repeats the pin document, so the PR and the release can be compared digest by digest.
+   - Without the token the job prints the `pins.py set` command to run by hand.
+5. **Cadence.** Weekly on Tuesdays: in a month's first week, if no `lp-YYYY.MM.*` tag exists yet, the job opens one issue on `ostrium-labs/loams` (issues are off on the fork). It needs the bot token.
+6. **`docs/loams/release.md`**: the cadence table, cutting a release, what it needs, and verifying with `verify-pins.sh`.
+7. **Not run:** a real release needs Actions, package publishing and the bot token (owner). Task 14 cuts the first one.

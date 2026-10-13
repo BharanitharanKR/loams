@@ -1,0 +1,207 @@
+---
+apiVersion: v1
+data:
+  ch-legacy.sink.toml: |
+    [plugin]
+    name = "clickhouse_sink"
+    [config]
+    url = "https://ch.example.com:8443"
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: loams-flow
+    loams.dev/connector: clickhouse
+    loams.dev/fallback: 'true'
+    loams.dev/group: ns-9
+    loams.dev/instance: ch-legacy
+    loams.dev/namespace: '9'
+    loams.dev/runtime: iggy
+  name: loams-iggy-connectors-9-ch-legacy
+  namespace: loams-9
+---
+apiVersion: v1
+data:
+  es-legacy.sink.toml: |
+    [plugin]
+    name = "elasticsearch_sink"
+    [config]
+    url = "https://es.example.com:9200"
+    password_file = "/var/run/loams/secrets/es/password"
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: loams-flow
+    loams.dev/connector: elasticsearch
+    loams.dev/fallback: 'true'
+    loams.dev/group: ns-9
+    loams.dev/instance: es-legacy
+    loams.dev/namespace: '9'
+    loams.dev/runtime: iggy
+  name: loams-iggy-connectors-9-es-legacy
+  namespace: loams-9
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/component: connector-egress
+    app.kubernetes.io/managed-by: loams-flow
+    loams.dev/fallback: 'true'
+    loams.dev/group: ns-9
+    loams.dev/namespace: '9'
+    loams.dev/runtime: iggy
+  name: loams-iggy-connectors-ns-9-egress
+  namespace: loams-9
+spec:
+  egress:
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 0.0.0.0/8
+        - 127.0.0.0/8
+        - 169.254.0.0/16
+        - 100.100.100.200/32
+        - 168.63.129.16/32
+        - 224.0.0.0/4
+        - 255.255.255.255/32
+        - 10.244.0.0/16
+        - 10.96.0.0/12
+        - 10.0.0.10/32
+    - ipBlock:
+        cidr: ::/0
+        except:
+        - ::/128
+        - ::1/128
+        - fe80::/10
+        - fd00:ec2::254/128
+        - ff00::/8
+  - ports:
+    - port: 8080
+      protocol: TCP
+    - port: 8090
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: loams-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: loams-fabric
+  podSelector:
+    matchLabels:
+      loams.dev/group: ns-9
+      loams.dev/runtime: iggy
+  policyTypes:
+  - Egress
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: loams-flow
+    loams.dev/fallback: 'true'
+    loams.dev/group: ns-9
+    loams.dev/namespace: '9'
+    loams.dev/runtime: iggy
+  name: loams-iggy-connectors-ns-9
+  namespace: loams-9
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      loams.dev/group: ns-9
+      loams.dev/runtime: iggy
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        loams.dev/config-hash: d1e0fe912e08c87b
+      labels:
+        loams.dev/fallback: 'true'
+        loams.dev/group: ns-9
+        loams.dev/namespace: '9'
+        loams.dev/runtime: iggy
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - env:
+        - name: LOAMS_IGGY_CONNECTORS_DIR
+          value: /etc/loams-iggy/connectors
+        image: ghcr.io/ostrium-labs/iggy-connectors@sha256:3333333333333333333333333333333333333333333333333333333333333333
+        imagePullPolicy: IfNotPresent
+        name: iggy-connectors
+        ports:
+        - containerPort: 8081
+          name: metrics
+          protocol: TCP
+        resources:
+          limits:
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /etc/loams-iggy/connectors/9
+          name: connectors-9
+          readOnly: true
+        - mountPath: /var/run/loams/secrets/es
+          name: secret-0
+          readOnly: true
+        - mountPath: /tmp
+          name: tmp
+          readOnly: false
+      enableServiceLinks: false
+      securityContext:
+        fsGroup: 10001
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: loams-connectors-fallback
+      volumes:
+      - name: connectors-9
+        projected:
+          defaultMode: 292
+          sources:
+          - configMap:
+              items:
+              - key: ch-legacy.sink.toml
+                path: ch-legacy.sink.toml
+              name: loams-iggy-connectors-9-ch-legacy
+          - configMap:
+              items:
+              - key: es-legacy.sink.toml
+                path: es-legacy.sink.toml
+              name: loams-iggy-connectors-9-es-legacy
+      - name: secret-0
+        secret:
+          defaultMode: 256
+          items:
+          - key: password
+            path: password
+          optional: false
+          secretName: es
+      - emptyDir:
+          sizeLimit: 256Mi
+        name: tmp

@@ -133,9 +133,7 @@ mod tests {
             Err(ImageError::NotPinned(_))
         ));
         assert!(matches!(
-            parse_override(&format!(
-                "17=ghcr.io/ostrium-labs/neon-archive/compute@{DIGEST}"
-            )),
+            parse_override(&format!("17=ghcr.io/example/neon-archive/compute@{DIGEST}")),
             Err(ImageError::Archive(_))
         ));
         assert!(matches!(

@@ -4,7 +4,8 @@
 #
 #   deploy/release/build.sh [options] [image...]
 #
-#   image            loams, loams-fabric, loams-agentd [default: all three]
+#   image            loams, loams-fabric, loams-agentd, loams-pg-control
+#                    [default: all four]
 #   --version V      the version tag [default: the tag on HEAD, else 0.0.0-dev.<sha>]
 #   --registry R     [default: ghcr.io/ostrium-labs, or $LOAMS_REGISTRY]
 #   --platforms P    comma-separated [default: linux/amd64,linux/arm64]
@@ -41,12 +42,12 @@ while (($#)); do
     --push) push=1; shift ;;
     --jobs) jobs="${2:?--jobs needs a value}"; shift 2 ;;
     --arch-tag) arch_tag=1; shift ;;
-    -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    loams|loams-fabric|loams-agentd) images+=("$1"); shift ;;
+    -h|--help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    loams|loams-fabric|loams-agentd|loams-pg-control) images+=("$1"); shift ;;
     *) die "unknown argument: $1" ;;
   esac
 done
-((${#images[@]})) || images=(loams loams-fabric loams-agentd)
+((${#images[@]})) || images=(loams loams-fabric loams-agentd loams-pg-control)
 [[ -z "$jobs" || "$jobs" =~ ^[0-9]+$ ]] || die "--jobs must be a number"
 
 revision="$(git -C "$root" rev-parse HEAD 2>/dev/null || echo unknown)"

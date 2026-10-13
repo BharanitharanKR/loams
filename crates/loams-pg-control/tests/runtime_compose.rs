@@ -486,7 +486,8 @@ async fn status_and_resize() {
 
 /// What `start` refuses before it runs anything: an image not pinned by
 /// digest, a namespace that cannot name a compose project, an unbound
-/// compute, no address, and a port outside the range. `bind_address`
+/// compute, no address, a port outside the range, and a token that would
+/// leave its line in the env file. `bind_address`
 /// refuses an address the compute was not started with.
 #[tokio::test]
 async fn bad_launches_are_refused() {
@@ -510,6 +511,10 @@ async fn bad_launches_are_refused() {
     cases.push(l);
     let mut l = good.clone();
     l.address = Some(BackendAddr::new("127.0.0.1", 5432));
+    cases.push(l);
+    // The token is the env file's one line: a newline would add a variable.
+    let mut l = good.clone();
+    l.upcall_token = Secret::new(format!("{TOKEN}\nLD_PRELOAD=/tmp/x.so"));
     cases.push(l);
     for l in cases {
         let err = rt.start(&l).await.unwrap_err();

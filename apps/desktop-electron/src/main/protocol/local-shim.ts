@@ -1,3 +1,15 @@
+import {
+	create,
+	type DescMessage,
+	fromBinary,
+	fromJson,
+	type JsonValue,
+	type MessageShape,
+	toBinary,
+	toJson,
+} from "@bufbuild/protobuf";
+import { timestampFromMs } from "@bufbuild/protobuf/wkt";
+import { admin, auth, instance } from "@loams/proto";
 import type { LocalShim } from "./handler.electron";
 
 export interface LocalShimInfo {
@@ -5,71 +17,138 @@ export interface LocalShimInfo {
 	username: string;
 }
 
-const json = (status: number, body: unknown): Response =>
-	new Response(JSON.stringify(body), {
+const GET_INSTANCE = "/loams.instance.v1.InstanceService/GetInstance";
+const AUTH = "/loams.auth.v1.AuthService/";
+const ADMIN = "/loams.admin.v1.";
+
+/** Connect's error body; the HTTP status follows the code (Connect protocol). */
+const connectError = (
+	status: number,
+	code: string,
+	message: string,
+): Response =>
+	new Response(JSON.stringify({ code, message }), {
 		status,
 		headers: { "content-type": "application/json" },
 	});
 
+const NO_CONTROL_PLANE =
+	"This needs a Loams control plane. Add a server in Servers.";
+
+/** Binary (`application/proto`) or JSON (`application/json`), as the request was. */
+function isBinary(contentType: string | null): boolean {
+	return (contentType ?? "").split(";")[0]?.trim() === "application/proto";
+}
+
+function encode<D extends DescMessage>(
+	schema: D,
+	message: MessageShape<D>,
+	binary: boolean,
+	headers?: Headers,
+): Response {
+	const out = new Headers(headers);
+	out.delete("content-length");
+	out.delete("content-encoding");
+	out.set("content-type", binary ? "application/proto" : "application/json");
+	return new Response(
+		binary
+			? toBinary(schema, message)
+			: JSON.stringify(toJson(schema, message)),
+		{ status: 200, headers: out },
+	);
+}
+
 /**
- * Answers the classic console's REST endpoints for the local engine, which has
- * no control plane. Shapes follow the apps mock (plan R0.9). Pure: no electron.
- * `kind` is consulted per request so a remote server is never shimmed.
+ * The local engine has no control plane, so the console's own API
+ * (`loams.auth.v1`, `loams.admin.v1`; API2 Task 10) is answered here, over
+ * Connect, for the local edition:
+ *
+ * - `AuthService/GetSession` answers the person at this computer, in the org
+ *   "This computer"; `ListProviders` answers that there is no sign-in.
+ * - `InstanceService/GetInstance` goes to the engine, and its answer gains the
+ *   `local` and `desktop` features and `loams.auth.v1`, which this shim serves.
+ * - Every other auth or admin RPC is `unimplemented`: add a server for those.
+ *
+ * Pure: no electron. `kind` is consulted per request so a remote server is
+ * never shimmed. Returns null when the request is not the shim's.
  */
 export function createLocalShim(
 	info: LocalShimInfo,
 	kind: () => string,
 	now: () => number = Date.now,
 ): LocalShim {
-	return (pathname, method) => {
+	const session = () => {
+		const t = now();
+		return create(auth.SessionSchema, {
+			user: {
+				id: "local",
+				name: info.username,
+				createdAt: timestampFromMs(t),
+				lastSeenAt: timestampFromMs(t),
+			},
+			org: {
+				id: "local",
+				name: "This computer",
+				slug: "local",
+				createdAt: timestampFromMs(t),
+			},
+			role: admin.OrgRole.OWNER,
+			csrfToken: "local",
+			expiresAt: timestampFromMs(t + 12 * 3600_000),
+		});
+	};
+
+	return (pathname, req, forward) => {
 		if (kind() !== "local") return null;
-		if (!pathname.startsWith("/api/v1/")) return null;
-		if (method === "GET" && pathname === "/api/v1/instance")
-			return json(200, {
-				name: "Loams",
-				edition: "oss",
-				version: info.version,
-				setup_required: false,
-				sign_in: { password: false, totp: false, passkeys: false, oidc: [] },
-				features: {
-					billing: false,
-					multi_org: false,
-					passkeys: false,
-					local: true,
-					desktop: true,
-				},
-			});
-		if (method === "GET" && pathname === "/api/v1/session") {
-			const t = now();
-			return json(200, {
-				user: {
-					id: "local",
-					name: info.username,
-					email: null,
-					avatar_url: null,
-					two_factor: false,
-					sso: null,
-					created_at: new Date(t).toISOString().replace(/\.\d+Z$/, "Z"),
-					last_seen_at: new Date(t).toISOString().replace(/\.\d+Z$/, "Z"),
-				},
-				org: {
-					id: "local",
-					name: "This computer",
-					slug: "local",
-					created_at: new Date(t).toISOString().replace(/\.\d+Z$/, "Z"),
-					require_two_factor: false,
-					allowed_domains: [],
-				},
-				role: "owner",
-				csrf_token: "local",
-				expires_at: new Date(t + 12 * 3600_000)
-					.toISOString()
-					.replace(/\.\d+Z$/, "Z"),
+		const binary = isBinary(req.headers.get("content-type"));
+		if (pathname === GET_INSTANCE && req.method === "POST") {
+			return forward().then(async (res) => {
+				const encoding = res.headers.get("content-encoding");
+				if (!res.ok || (encoding && encoding !== "identity")) return res;
+				const fromProto = isBinary(res.headers.get("content-type"));
+				const answer = fromProto
+					? fromBinary(
+							instance.GetInstanceResponseSchema,
+							new Uint8Array(await res.arrayBuffer()),
+						)
+					: fromJson(
+							instance.GetInstanceResponseSchema,
+							(await res.json()) as JsonValue,
+						);
+				answer.features = { ...answer.features, local: true, desktop: true };
+				if (!answer.apiVersions.includes("loams.auth.v1"))
+					answer.apiVersions = [...answer.apiVersions, "loams.auth.v1"];
+				return encode(
+					instance.GetInstanceResponseSchema,
+					answer,
+					fromProto,
+					res.headers,
+				);
 			});
 		}
-		return json(404, {
-			code: "not_in_local_edition",
-			message: "This needs a Loams control plane. Add a server in Servers.",
-		});
+		if (pathname.startsWith(AUTH) && req.method === "POST") {
+			const method = pathname.slice(AUTH.length);
+			if (method === "GetSession")
+				return Promise.resolve(
+					encode(
+						auth.GetSessionResponseSchema,
+						create(auth.GetSessionResponseSchema, { session: session() }),
+						binary,
+					),
+				);
+			if (method === "ListProviders")
+				return Promise.resolve(
+					encode(
+						auth.ListProvidersResponseSchema,
+						create(auth.ListProvidersResponseSchema, {}),
+						binary,
+					),
+				);
+		}
+		if (pathname.startsWith(AUTH) || pathname.startsWith(ADMIN))
+			return Promise.resolve(
+				connectError(501, "unimplemented", NO_CONTROL_PLANE),
+			);
+		return null;
 	};
 }

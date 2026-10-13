@@ -35,6 +35,17 @@ export function compile(path: string): { pattern: RegExp; keys: string[] } {
   return { pattern: new RegExp(`^${source}/?$`), keys };
 }
 
+/** A route's query string as a plain record; a malformed escape is kept as written. */
+export function parseQuery(search: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  try {
+    for (const [k, v] of new URLSearchParams(search)) out[k] = v;
+  } catch {
+    // URLSearchParams does not throw on bad escapes; nothing to do.
+  }
+  return out;
+}
+
 export interface HashSource {
   get(): string;
   set(path: string): void;
@@ -54,10 +65,17 @@ export const windowHash: HashSource = {
   },
 };
 
+/** One breadcrumb; the last is the current page. */
+export interface Crumb {
+  label: string;
+  href?: string;
+}
+
 export class HashRouter implements RouterService {
   #routes: Route[] = [];
   #listeners = new Set<() => void>();
   #current: Location;
+  #trail: Crumb[] | undefined;
   readonly #unlisten: () => void;
 
   constructor(
@@ -110,9 +128,33 @@ export class HashRouter implements RouterService {
     return this.#current;
   }
 
+  /** The route as the source holds it, query included (`/studio/t/c_1?panel=diff`). */
+  raw(): string {
+    return this.source.get();
+  }
+
   /** The title of the current page, for the document title. */
   title(): string | undefined {
-    return this.#routes.find((r) => r.spec.id === this.#current.pageId)?.spec.title;
+    return this.spec()?.title;
+  }
+
+  /**
+   * A page's own breadcrumbs (an org, a project, the record it shows), in place of
+   * the shell's; the last crumb is also the tab title. Cleared when the route changes.
+   */
+  setTrail(trail: Crumb[] | undefined): void {
+    if (JSON.stringify(trail) === JSON.stringify(this.#trail)) return;
+    this.#trail = trail;
+    for (const listener of this.#listeners) listener();
+  }
+
+  trail(): Crumb[] | undefined {
+    return this.#trail;
+  }
+
+  /** The current page's spec (its title, and whether it is bare or public). */
+  spec(): PageSpec | undefined {
+    return this.#routes.find((r) => r.spec.id === this.#current.pageId)?.spec;
   }
 
   readonly subscribe = (listener: () => void): (() => void) => {
@@ -125,11 +167,22 @@ export class HashRouter implements RouterService {
     this.#listeners.clear();
   }
 
-  #resolve(path: string): Location {
+  #resolve(raw: string): Location {
+    // `/sign-in?next=%2Fteams`, `/studio/t/c_1?panel=diff&host=h1` (§53 §4.4): the route is
+    // matched without its query. The query is kept as `query`, and its parameters also join
+    // the page's params, where route parameters win over them.
+    const at = raw.indexOf('?');
+    const path = at < 0 ? raw : raw.slice(0, at) || '/';
+    const query = at < 0 ? {} : parseQuery(raw.slice(at + 1));
+    const located = this.#match(path, query);
+    return Object.keys(query).length > 0 ? { ...located, query } : located;
+  }
+
+  #match(path: string, query: Record<string, string>): Location {
     for (const route of this.#routes) {
       const match = route.pattern.exec(path);
       if (!match) continue;
-      const params: Record<string, string> = {};
+      const params: Record<string, string> = { ...query };
       try {
         route.keys.forEach((key, i) => {
           params[key] = decodeURIComponent(match[i + 1] ?? '');
@@ -149,8 +202,10 @@ export class HashRouter implements RouterService {
     const same =
       next.path === this.#current.path &&
       next.pageId === this.#current.pageId &&
-      JSON.stringify(next.params) === JSON.stringify(this.#current.params);
+      JSON.stringify(next.params) === JSON.stringify(this.#current.params) &&
+      JSON.stringify(next.query) === JSON.stringify(this.#current.query);
     if (same) return;
+    if (next.path !== this.#current.path) this.#trail = undefined;
     this.#current = next;
     for (const listener of this.#listeners) listener();
   }

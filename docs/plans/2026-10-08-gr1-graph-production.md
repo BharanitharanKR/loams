@@ -1798,3 +1798,39 @@ Owner decision 2026-10-12: Loams builds Grafeo from its fork, `ostrium-labs/graf
 - LG-0006 (epoch continuity): a reopened engine (WAL, `.grafeo`, snapshot import) keeps its epoch, and `GrafeoDB::sync_epoch` carries a replayed engine forward. R9.5's ruling stands: order and idempotency stay on the log offset and `txn_seq`; `replay_does_not_carry_the_engine_epoch` also shows the replay can now carry it. Using `sync_epoch` in recovery is left to Task 14.
 
 **RF.3 Workarounds kept.** The per-graph gate (R9.3), the capture's dangling-edge refusal (now a guard), `run_on_session`'s split, per-group `gc`, Task 6's Loams-side deadline and semaphore (the engine still checks the deadline between chunks only, R0.8), and the `temporal` feature staying off (R9.6: two of its three gaps remain).
+
+### Task 15 (2026-10-13, on `gr1-b2-t15`)
+
+Carried in: the per-graph gate stays (R9.3, LG-0005 ruling 2026-10-13), so a follower applies a record under its own gate, held exclusively, as the owner's lane does.
+
+**R15.1 What a follower is (`src/replica.rs`).**
+- A Grafeo engine of its own, in memory, in an `Engine` apart from the owned graphs' (`Replicas`, one per node, made with the log). Checkpoints, eviction, stamping, maintenance and the owner's open never see a follower.
+- It opens the way an owner does (`recovery::open`: the manifest's newest usable snapshot and the records after it, or the whole stream), with no lease and no fence. In memory it opens from a portable snapshot, and R13.3 keeps one at or below the trim point, so a follower can always open.
+- It never appends. `OpenSpec::follower` makes the graph read-only, so a writing statement is refused (`graph_read_only`) before it reaches the engine, whatever the router decided.
+- A follower's memory is the graph's size again on that node. Task 26 counts it.
+
+**R15.2 Placement.** A graph's followers run on the graph nodes ranked right after the owner's place in its rendezvous order (`owner::ranked`; `Ownership::follows(graph, replicas)`: among the first `replicas + 1`, and not holding the lease). `replicas = 0` (the default) has none. A follower opens on the first read routed to it and is tailed from then on. It is closed by the eviction pass (`GraphAdmin::retire_followers`, run by `evict_due`) when the graph was deleted or replaced, this node took its lease, it is no longer placed here, or it was not read for `idle_after`; by the owner's open on the same node; and by shutdown. Opening followers before their first read (warm standbys) is Task 28's.
+
+**R15.3 Routing (`GraphAdmin::route`; §48 §7.2).**
+- `strong` (the default) and every write go to the owner, here or forwarded, as in Task 12. A write that carries `eventual` or `at_least` is the owner's too, and its consistency is ignored.
+- An `eventual` or `at_least` read is served by this node's follower when this node runs one of the graph's followers, and otherwise by the owner. A forwarded read that reaches a follower's node is served there: a follower never forwards.
+- Whether a statement reads is the server gate's answer (`classify::gate_verdict` within the server's limits). A statement the gate refuses goes to the owner, which answers the refusal. `Explain` without `profile` only plans, so it may run on a follower; a `PROFILE` must read. `GetSchema` and `ExecuteBatch` stay the owner's (neither has a consistency field).
+
+**R15.4 Tokens and the wait (`src/consistency.rs`).**
+- `at_least(token)` waits on whichever replica serves it until that replica's published position reaches the token's offset, at most `consistency_wait` (`GraphConfig.consistency_wait`, config only, default 5 s; `GraphAdmin::with_consistency_wait`). Past it: `UNAVAILABLE`/`consistency_wait_timeout`. The wait runs inside the statement's deadline and holds its slots. A statement deadline shorter than the wait answers `graph_statement_timeout`.
+- A token of another stream, or one that does not parse, is `INVALID_ARGUMENT`.
+- Every `Execute`, `ExecuteBatch` and `ExecuteStream` answer carries a token: a write's own, or for a read, the serving replica's position after the statement. That position is never older than the state the read saw, so a later `at_least` read with it is monotonic.
+- The `loams-consistency-token` request header follows `loams.collection.v1`'s rule (`read_consistency`): it turns `strong`, `eventual` or none into `at_least(header)`, and merges into an `at_least` (the later offset; tokens of two streams are refused). `Execute` and `Explain` take it (and `ExecuteStream`, on its inner request). `Execute` and `ExecuteBatch` answer their token in the header as well. `ExecuteStream`'s token is in its last chunk only, since its headers go out first.
+
+**R15.5 The tail.** One task per follower long-polls the stream from the follower's position (`FOLLOW_WAIT`, 500 ms per fetch), applies the records in order under the exclusive gate, keeps the idempotency index and `txn_seq` as a replay does (`Durable::follow`, sharing `replay_record` with `Durable::open`), and then publishes the position, which wakes the waiting reads. A record that does not apply, a gap, or a stream trimmed past the follower's position marks the follower for reload, and its next read rebuilds it from a snapshot. A follower applies only records the log has committed, so it never shows a write that is not durable (I2).
+
+**R15.6 No promotion yet.** A node that takes a graph's lease closes its follower and opens the graph as owner from the stream (one epoch per engine, R12.3). Promoting a follower in place is Task 28's.
+
+**R15.7 Tests** (`tests/ownership.rs`, 5 new):
+- `token_read_on_other_node_sees_write` (D76's case): served by the follower without a forward; with `replicas = 0`, forwarded to the owner.
+- `token_read_during_owner_move_sees_write`: the owner is cut off and still holds its lease; the follower serves the token read. After the lease moves, the new owner serves it and the follower is gone.
+- `token_wait_times_out_with_reason`: on a follower and on the owner; another stream's token and a malformed one are `INVALID_ARGUMENT`.
+- `eventual_read_served_by_follower`: a paused tail leaves the follower behind, and `Execute`, `ExecuteStream` and `Explain` are still served there, each with the follower's own token. An `at_least` read with the newer token waits for the tail.
+- `strong_read_routed_to_owner`: a `strong` read (and the default) is forwarded and sees every write; a write sent with `eventual` goes to the owner.
+- `loams` `connect_graph` gains `consistency_tokens_ride_in_the_header`.
+- Unit tests: `consistency.rs` (levels, the header rule), `owner.rs` (`ranked_starts_with_the_rendezvous_choice`).

@@ -21,6 +21,9 @@
 //! * [`secrets`] — the `SecretStore`s (file for dev, Kubernetes for production), the
 //!   fallback pods' secret mounts and the fallback log filter (CN2 Task 25).
 //! * [`overlay`] — refusal of executable or file-reading content in fallback overlays.
+//! * [`runtime`] — the connector fleet on Kubernetes: fenced instance and split
+//!   leases, the `flow` Deployment's scale and the fallback pods `KubeRuntime`
+//!   renders (CN2 Task 26).
 //!
 //! The YAML is the source and the protobuf form mirrors it key for key, so
 //! [`manifest::ConnectorSpec::to_proto`] and [`manifest::ConnectorSpec::from_proto`]
@@ -54,6 +57,7 @@ pub mod metrics;
 pub mod overlay;
 pub mod profile;
 pub mod registry;
+pub mod runtime;
 pub mod secrets;
 pub mod validate;
 

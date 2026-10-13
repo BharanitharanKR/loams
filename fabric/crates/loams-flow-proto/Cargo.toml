@@ -21,6 +21,14 @@ publish = false
 # this `client = ["connectrpc/client"]` and adds the `connectrpc` dependency,
 # as `loams-live-proto` does for `LiveService`.
 client = []
+# `loams.graph.v1` (Grafeo's Connect API, design §48 §8) and the three
+# packages it imports, generated from the repository root's `proto/` tree (CN2
+# owner ruling OR-20; Task 21's Grafeo connector, ruling R21.4). The service
+# traits connect-rust emits for `GraphService` and `GraphAdminService` need
+# `connectrpc`; the generated `GraphServiceClient` stays behind `client`, which
+# the Grafeo connector does not turn on: it speaks Connect over the SDK's
+# egress-checked HTTP client instead.
+graph = ["dep:connectrpc"]
 
 [dependencies]
 # The generated message types are buffa's, not `prost`'s: `connectrpc-build`
@@ -39,6 +47,9 @@ buffa-types = { version = "0.9.2", features = ["json"] }
 # The generated JSON mapping derives serde, through the `::serde` paths buffa's
 # emit writes.
 serde.workspace = true
+# The `graph` feature's service traits. 0.9.1 is already in fabric/Cargo.lock
+# through `loams-house-proto`. Apache-2.0.
+connectrpc = { workspace = true, optional = true }
 
 [build-dependencies]
 connectrpc-build.workspace = true

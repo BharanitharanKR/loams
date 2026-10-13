@@ -15,6 +15,13 @@
 //! client's Connect timeout ([`GraphAdmin::for_call`](loams_graph::service::admin::GraphAdmin::for_call),
 //! GR1 Task 6).
 //!
+//! Consistency (GR1 Task 15, §48 §7.2): a `loams-consistency-token` request header is applied to
+//! the request's own `consistency` the way `loams.collection.v1` applies it (it turns `strong`,
+//! `eventual` or none into `at_least`, and merges into an `at_least`), and `Execute` and
+//! `ExecuteBatch` answer their token in the same header as well as in the message.
+//! `ExecuteStream`'s token is in its last chunk only: its headers go out before the statement
+//! has run.
+//!
 //! Not served yet, answered `not_implemented`: `RestoreGraph`, `ExportGraph`, `ImportGraph`
 //! (Task 29).
 
@@ -280,6 +287,30 @@ impl GraphAdminService for Served {
     }
 }
 
+/// Applies the request's `loams-consistency-token` header, if any, to its `consistency` (GR1
+/// Task 15): the rule [`read_consistency`](super::read_consistency) applies to collections.
+#[cfg(feature = "graph")]
+fn apply_token_header(
+    ctx: &RequestContext,
+    consistency: &mut buffa::MessageField<pb::Consistency, buffa::Inline<pb::Consistency>>,
+) -> Result<(), connectrpc::ConnectError> {
+    match ctx.headers().get(&super::CONSISTENCY_TOKEN) {
+        Some(header) => loams_graph::consistency::apply_header(consistency, header.as_bytes()),
+        None => Ok(()),
+    }
+}
+
+/// `response` with its token in the `loams-consistency-token` header too, when it has one.
+#[cfg(feature = "graph")]
+fn with_token<M>(response: M, token: &str) -> Response<M> {
+    let response = Response::new(response);
+    if token.is_empty() {
+        response
+    } else {
+        response.with_header(super::CONSISTENCY_TOKEN.as_str(), token.to_string())
+    }
+}
+
 #[cfg(feature = "graph")]
 impl GraphService for Served {
     async fn execute(
@@ -287,36 +318,35 @@ impl GraphService for Served {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::ExecuteRequest>,
     ) -> ServiceResult<pb::ExecuteResponse> {
-        Response::ok(
-            self.admin
-                .for_call(ctx.deadline())
-                .execute(request.to_owned_message())
-                .await?,
-        )
+        let mut request = request.to_owned_message();
+        apply_token_header(&ctx, &mut request.consistency)?;
+        let answer = self.admin.for_call(ctx.deadline()).execute(request).await?;
+        let token = answer.consistency_token.clone();
+        Ok(with_token(answer, &token))
     }
     async fn execute_batch(
         &self,
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::ExecuteBatchRequest>,
     ) -> ServiceResult<pb::ExecuteBatchResponse> {
-        Response::ok(
-            self.admin
-                .for_call(ctx.deadline())
-                .execute_batch(request.to_owned_message())
-                .await?,
-        )
+        // A batch is the owner's (it has no consistency of its own), so a request header has
+        // nothing to change; the answer's token is in the header too.
+        let answer = self
+            .admin
+            .for_call(ctx.deadline())
+            .execute_batch(request.to_owned_message())
+            .await?;
+        let token = answer.consistency_token.clone();
+        Ok(with_token(answer, &token))
     }
     async fn explain(
         &self,
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::ExplainRequest>,
     ) -> ServiceResult<pb::Plan> {
-        Response::ok(
-            self.admin
-                .for_call(ctx.deadline())
-                .explain(request.to_owned_message())
-                .await?,
-        )
+        let mut request = request.to_owned_message();
+        apply_token_header(&ctx, &mut request.consistency)?;
+        Response::ok(self.admin.for_call(ctx.deadline()).explain(request).await?)
     }
 
     async fn execute_stream(
@@ -324,10 +354,18 @@ impl GraphService for Served {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::ExecuteStreamRequest>,
     ) -> ServiceResult<ServiceStream<pb::ResultChunk>> {
+        let mut request = request.to_owned_message();
+        if let Some(inner) = request.request.as_option_mut() {
+            apply_token_header(&ctx, &mut inner.consistency)?;
+        } else if ctx.headers().contains_key(&super::CONSISTENCY_TOKEN) {
+            let mut inner = pb::ExecuteRequest::default();
+            apply_token_header(&ctx, &mut inner.consistency)?;
+            request.request = inner.into();
+        }
         Response::ok(
             self.admin
                 .for_call(ctx.deadline())
-                .execute_stream(request.to_owned_message())
+                .execute_stream(request)
                 .await?,
         )
     }

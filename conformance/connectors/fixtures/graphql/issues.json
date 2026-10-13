@@ -1,0 +1,132 @@
+{
+  "recorded_from": "GraphQL (GitHub GraphQL API)",
+  "synthetic": true,
+  "docs": [
+    "https://docs.github.com/en/graphql/guides/forming-calls-with-graphql",
+    "https://docs.github.com/en/graphql/guides/using-pagination-in-the-graphql-api",
+    "https://docs.github.com/en/graphql/reference/mutations#addcomment"
+  ],
+  "scenario": {
+    "config": {
+      "url": "{proxy}/graphql",
+      "auth": { "bearer": "github-token" },
+      "query": {
+        "query": "query($owner: String!, $name: String!, $first: Int!, $after: String) { repository(owner: $owner, name: $name) { issues(first: $first, after: $after) { pageInfo { hasNextPage endCursor } nodes { id number title } } } }",
+        "variables": { "owner": "example-org", "name": "example-repo" },
+        "connection": "/data/repository/issues",
+        "page_size": 2
+      },
+      "mutation": {
+        "mutation": "mutation($input: AddCommentInput!) { addComment(input: $input) { commentEdge { node { id } } } }"
+      }
+    },
+    "secrets": { "github-token": "synthetic-ghp-0000000000000000" }
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/graphql",
+        "body": {
+          "json": {
+            "query": "query($owner: String!, $name: String!, $first: Int!, $after: String) { repository(owner: $owner, name: $name) { issues(first: $first, after: $after) { pageInfo { hasNextPage endCursor } nodes { id number title } } } }",
+            "variables": { "owner": "example-org", "name": "example-repo", "first": 2, "after": null }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json; charset=utf-8" },
+        "body": {
+          "json": {
+            "data": {
+              "repository": {
+                "issues": {
+                  "pageInfo": { "hasNextPage": true, "endCursor": "Y3Vyc29yOnYyOpHOc3ludGgy" },
+                  "nodes": [
+                    { "id": "I_synthetic1", "number": 1, "title": "First issue" },
+                    { "id": "I_synthetic2", "number": 2, "title": "Second issue" }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/graphql",
+        "body": {
+          "json": {
+            "query": "query($owner: String!, $name: String!, $first: Int!, $after: String) { repository(owner: $owner, name: $name) { issues(first: $first, after: $after) { pageInfo { hasNextPage endCursor } nodes { id number title } } } }",
+            "variables": { "owner": "example-org", "name": "example-repo", "first": 2, "after": "Y3Vyc29yOnYyOpHOc3ludGgy" }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json; charset=utf-8" },
+        "body": {
+          "json": {
+            "data": {
+              "repository": {
+                "issues": {
+                  "pageInfo": { "hasNextPage": false, "endCursor": "Y3Vyc29yOnYyOpHOc3ludGgz" },
+                  "nodes": [ { "id": "I_synthetic3", "number": 3, "title": "Third issue" } ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/graphql",
+        "body": {
+          "json": {
+            "query": "mutation($input: AddCommentInput!) { addComment(input: $input) { commentEdge { node { id } } } }",
+            "variables": { "input": { "subjectId": "I_synthetic1", "body": "Synced by Loams" } }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json; charset=utf-8" },
+        "body": { "json": { "data": { "addComment": { "commentEdge": { "node": { "id": "IC_synthetic9" } } } } } }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/graphql",
+        "body": {
+          "json": {
+            "query": "mutation($input: AddCommentInput!) { addComment(input: $input) { commentEdge { node { id } } } }",
+            "variables": { "input": { "subjectId": "I_missing", "body": "Synced by Loams" } }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json; charset=utf-8" },
+        "body": {
+          "json": {
+            "data": { "addComment": null },
+            "errors": [
+              {
+                "type": "NOT_FOUND",
+                "path": [ "addComment" ],
+                "locations": [ { "line": 1, "column": 40 } ],
+                "message": "Could not resolve to a node with the global id of 'I_missing'"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

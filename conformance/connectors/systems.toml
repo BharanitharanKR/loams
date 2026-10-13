@@ -157,15 +157,26 @@ services = [
 
 # --------------------------------------------------------------- relational --
 
+# MySQL is a ★ (P1) row; CN2 Task 11 builds its native connector directly
+# on the SDK (R0.2), so it gains its entry here rather than in Task 8
+# (R11.9, as R10.9 did for PostgreSQL).
+[systems.mysql]
+systems = ["MySQL"]
+family = "mysql"
+services = [{ kind = "container", compose = "mysql", system = "MySQL" }]
+harness = "loams_connector_mysql::harness::MyHarness"
+
 [systems.mariadb]
 systems = ["MariaDB"]
 family = "mysql"
 services = [{ kind = "container", compose = "mariadb", system = "MariaDB" }]
+harness = "loams_connector_mysql::harness::MyHarness"
 
 [systems.sql-server]
 systems = ["SQL Server"]
 family = "sqlserver"
 services = [{ kind = "container", compose = "sqlserver", system = "SQL Server" }]
+harness = "loams_connector_sqlserver::harness::SqlHarness"
 
 [systems.oracle]
 systems = ["Oracle Database"]
@@ -192,8 +203,11 @@ harness = "loams_connector_postgres::harness::PgHarness"
 [systems.aurora]
 systems = ["Amazon Aurora"]
 family = "postgres"
+# One nightly service per engine (R11.10): each family's harness needs only
+# its own cluster's URL.
 services = [
-  { kind = "nightly", env = ["LOAMS_AURORA_POSTGRES_URL", "LOAMS_AURORA_MYSQL_URL"], system = "Amazon Aurora" },
+  { kind = "nightly", env = ["LOAMS_AURORA_POSTGRES_URL"], system = "Amazon Aurora" },
+  { kind = "nightly", env = ["LOAMS_AURORA_MYSQL_URL"], system = "Amazon Aurora" },
 ]
 extra_targets = [
   { kind = "container", compose = "pgvector", system = "PostgreSQL" },
@@ -209,13 +223,20 @@ services = [
   { kind = "nightly", env = ["LOAMS_AZURE_SQL_URL"], system = "Azure SQL Database" },
 ]
 extra_targets = [{ kind = "container", compose = "sqlserver", system = "SQL Server" }]
+harness = "loams_connector_sqlserver::harness::SqlHarness"
 
 # -------------------------------------------------------------------- nosql --
 
 [systems.mongodb]
 systems = ["MongoDB"]
 family = "mongodb"
-services = [{ kind = "container", compose = "mongodb", system = "MongoDB" }]
+services = [
+  { kind = "container", compose = "mongodb", system = "MongoDB" },
+  # A standalone server, for the sink's narrowing to effectively once
+  # (CN2 Task 16).
+  { kind = "container", compose = "mongodb-standalone", system = "MongoDB" },
+]
+harness = "loams_connector_mongodb::conformance::MongoHarness"
 
 [systems.cassandra]
 systems = ["Apache Cassandra"]
@@ -292,7 +313,12 @@ services = [{ kind = "container", compose = "neo4j", system = "Neo4j" }]
 [systems.grafeo]
 systems = ["Grafeo"]
 family = "protocols"
-services = [{ kind = "container", compose = "loams-graph", system = "Grafeo" }]
+services = [
+  { kind = "container", compose = "loams-graph", system = "Grafeo" },
+  # A Loams graph endpoint with an API key (CN2 Task 21's
+  # grafeo_against_a_loams_graph), until FL1's estate serves `loams-graph`.
+  { kind = "nightly", env = ["LOAMS_GRAFEO_URL", "LOAMS_GRAFEO_API_KEY", "LOAMS_GRAFEO_NAMESPACE", "LOAMS_GRAFEO_GRAPH"], system = "Grafeo" },
+]
 notes = ["Grafeo is a Loams engine (D741): it is the system under test here, not a stand-in, so it may name a Loams service."]
 
 # ---------------------------------------------------- warehouse, lakehouse --

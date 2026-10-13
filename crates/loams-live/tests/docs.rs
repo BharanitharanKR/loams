@@ -546,10 +546,20 @@ async fn tables_are_created_on_first_insert_and_ids_name_their_table(store: Test
     let before = kv.now().await.expect("ts");
     let (a, b, id) = in_txn!(kv, [], |txn| {
         let limits = Limits::default();
-        let a = catalog::table_for_insert(txn, &AppKeys::dedicated(), "a", &limits).await?;
-        let again = catalog::table_for_insert(txn, &AppKeys::dedicated(), "a", &limits).await?;
+        let (a, created) =
+            catalog::table_for_insert(txn, &AppKeys::dedicated(), "a", &limits).await?;
+        // The new table's change, for the mutation's journal entry (LV1 Task 11).
+        let created = created.expect("a TABLE_CREATED change");
+        assert_eq!(
+            created.kind,
+            pb::CatalogChangeKind::CATALOG_CHANGE_KIND_TABLE_CREATED
+        );
+        assert_eq!(created.table_id, Some(a.id.0));
+        let (again, none) =
+            catalog::table_for_insert(txn, &AppKeys::dedicated(), "a", &limits).await?;
         assert_eq!(a, again);
-        let b = catalog::table_for_insert(txn, &AppKeys::dedicated(), "b", &limits).await?;
+        assert_eq!(none, None, "an existing table changes nothing");
+        let (b, _) = catalog::table_for_insert(txn, &AppKeys::dedicated(), "b", &limits).await?;
         let (id, _) = docs::insert(
             txn,
             &AppKeys::dedicated(),

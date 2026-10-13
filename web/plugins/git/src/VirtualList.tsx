@@ -145,7 +145,7 @@ export function VirtualList<T>(p: VirtualListProps<T>) {
       tabIndex={0}
       aria-label={p.label}
       aria-activedescendant={items.length ? rowId(active) : undefined}
-      className="relative overflow-y-auto rounded-md border border-solid border-line focus-visible:outline-2 focus-visible:outline-accent"
+      className="relative overflow-y-auto rounded-md border border-solid border-rule focus-visible:outline-2 focus-visible:outline-accent"
       style={{ height }}
       onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
       onKeyDown={onKeyDown}

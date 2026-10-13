@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+// Attachments (design §53 §6.4; plan SD1 Task 4): uploads and the transcript's
+// images and tool outputs, read in chunks. Browsers cannot stream a request
+// body over Connect, so an upload is a series of unary chunks and a commit.
+// See studio.proto for the package's rules.
+package loams.agentd.v1;
+
+import "loams/options/v1/options.proto";
+
+service AttachmentService {
+  option (loams.options.v1.module) = {
+    name: "agentd.attachments"
+    summary: "Loams Studio's attachments: chunked uploads, transcript images and tool outputs."
+    unstable: true
+  };
+
+  // ndjson: `UploadChunk`.
+  rpc UploadChunk(UploadChunkRequest) returns (UploadChunkResponse);
+  // Finishes an upload and answers its path (ndjson: `UploadCommit`).
+  rpc UploadCommit(UploadCommitRequest) returns (UploadCommitResponse);
+  // A transcript image, path-jailed to the uploads directory and the
+  // workspace's checkouts (ndjson: `ReadAttachmentChunk`).
+  rpc ReadAttachmentChunk(ReadAttachmentChunkRequest) returns (ReadAttachmentChunkResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // A tool result's full output, one page at a time (ndjson:
+  // `FetchToolBlob`).
+  rpc FetchToolBlob(FetchToolBlobRequest) returns (FetchToolBlobResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message AttachmentChunk {
+  string name = 1;
+  string mime_type = 2;
+  // Base64, as on the ndjson wire.
+  string data = 3;
+  uint64 next_offset = 4;
+  bool done = 5;
+}
+
+message ToolOutputChunk {
+  string text = 1;
+  uint64 offset = 2;
+  uint64 len = 3;
+  uint64 total = 4;
+  bool truncated = 5;
+  bool eof = 6;
+}
+
+message UploadChunkRequest {
+  string upload_id = 1;
+  // Base64, as on the ndjson wire.
+  string data = 2;
+  optional uint64 seq = 3;
+}
+
+message UploadChunkResponse {
+  bool ok = 1;
+}
+
+message UploadCommitRequest {
+  string upload_id = 1;
+  string file_name = 2;
+}
+
+message UploadCommitResponse {
+  string path = 1;
+}
+
+message ReadAttachmentChunkRequest {
+  string path = 1;
+  uint64 offset = 2;
+}
+
+message ReadAttachmentChunkResponse {
+  AttachmentChunk chunk = 1;
+}
+
+message FetchToolBlobRequest {
+  string blob_ref = 1;
+  uint64 offset = 2;
+  optional uint64 len = 3;
+}
+
+message FetchToolBlobResponse {
+  ToolOutputChunk chunk = 1;
+}

@@ -79,6 +79,7 @@ Merged outside `HotLayer` on every node (`api::router` and `api::internal_router
 | GET | `/internal/v1/node/stats` | internal | `loams.internal.v1.NodeService/GetNodeStats` | `ForwardStats::snapshot`, `HotTierImpl::counters`, `NodeInfo::meta` | `cluster.rs` |
 | POST | `/internal/v1/hot/status` | internal | `loams.internal.v1.HotService/GetHotStatus` | `hot::local_status` | `cluster.rs`, `hot_http.rs` (owner path) |
 | POST | `/internal/v1/hot/warm` | internal | `loams.internal.v1.HotService/Warm` | `hot::warm_local` | `cluster.rs`, `hot_http.rs` (owner path) |
+| POST | `/internal/v1/graph/{method}` | internal | `loams.internal.v1.GraphForwardService/Forward` (GR1 Task 12; moves with API1 Task 8) | `GraphAdmin::serve_forwarded` (feature `graph`) | `loams-graph` `ownership` tests |
 
 ## Cluster bootstrap (`crates/loams/src/server.rs`)
 

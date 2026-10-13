@@ -35,6 +35,11 @@ public final class JournalProto {
   static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_loams_live_v1_WriteRecord_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_CatalogChange_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_CatalogChange_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -45,22 +50,33 @@ public final class JournalProto {
   static {
     java.lang.String[] descriptorData = {
       "\n\033loams/live/v1/journal.proto\022\rloams.liv" +
-      "e.v1\"\243\001\n\014JournalEntry\022$\n\016commit_hint_ms\030" +
+      "e.v1\"\333\001\n\014JournalEntry\022$\n\016commit_hint_ms\030" +
       "\001 \001(\004R\014commitHintMs\0222\n\006writes\030\002 \003(\0132\032.lo" +
       "ams.live.v1.WriteRecordR\006writes\022\032\n\010funct" +
       "ion\030\003 \001(\tR\010function\022\035\n\nrequest_id\030\004 \001(\tR" +
-      "\trequestId\"\305\001\n\013WriteRecord\022\031\n\010table_id\030\001" +
-      " \001(\rR\007tableId\022\025\n\006doc_id\030\002 \001(\014R\005docId\022,\n\004" +
-      "kind\030\003 \001(\0162\030.loams.live.v1.WriteKindR\004ki" +
-      "nd\022,\n\022index_keys_removed\030\004 \003(\014R\020indexKey" +
-      "sRemoved\022(\n\020index_keys_added\030\005 \003(\014R\016inde" +
-      "xKeysAdded*m\n\tWriteKind\022\032\n\026WRITE_KIND_UN" +
-      "SPECIFIED\020\000\022\025\n\021WRITE_KIND_INSERT\020\001\022\026\n\022WR" +
-      "ITE_KIND_REPLACE\020\002\022\025\n\021WRITE_KIND_DELETE\020" +
-      "\003B\201\001\n\033dev.loams.gen.loams.live.v1B\014Journ" +
-      "alProtoP\001\242\002\003LLX\252\002\rLoams.Live.V1\312\002\rLoams\\" +
-      "Live\\V1\342\002\031Loams\\Live\\V1\\GPBMetadata\352\002\017Lo" +
-      "ams::Live::V1b\006proto3"
+      "\trequestId\0226\n\007catalog\030\005 \003(\0132\034.loams.live" +
+      ".v1.CatalogChangeR\007catalog\"\305\001\n\013WriteReco" +
+      "rd\022\031\n\010table_id\030\001 \001(\rR\007tableId\022\025\n\006doc_id\030" +
+      "\002 \001(\014R\005docId\022,\n\004kind\030\003 \001(\0162\030.loams.live." +
+      "v1.WriteKindR\004kind\022,\n\022index_keys_removed" +
+      "\030\004 \003(\014R\020indexKeysRemoved\022(\n\020index_keys_a" +
+      "dded\030\005 \003(\014R\016indexKeysAdded\"\222\001\n\rCatalogCh" +
+      "ange\0224\n\004kind\030\001 \001(\0162 .loams.live.v1.Catal" +
+      "ogChangeKindR\004kind\022\036\n\010table_id\030\002 \001(\rH\000R\007" +
+      "tableId\210\001\001\022\036\n\ndeployment\030\003 \001(\tR\ndeployme" +
+      "ntB\013\n\t_table_id*m\n\tWriteKind\022\032\n\026WRITE_KI" +
+      "ND_UNSPECIFIED\020\000\022\025\n\021WRITE_KIND_INSERT\020\001\022" +
+      "\026\n\022WRITE_KIND_REPLACE\020\002\022\025\n\021WRITE_KIND_DE" +
+      "LETE\020\003*\367\001\n\021CatalogChangeKind\022#\n\037CATALOG_" +
+      "CHANGE_KIND_UNSPECIFIED\020\000\022%\n!CATALOG_CHA" +
+      "NGE_KIND_TABLE_CREATED\020\001\022\037\n\033CATALOG_CHAN" +
+      "GE_KIND_INDEXES\020\002\022!\n\035CATALOG_CHANGE_KIND" +
+      "_VALIDATOR\020\003\022,\n(CATALOG_CHANGE_KIND_DEPL" +
+      "OYMENT_ACTIVATED\020\004\022$\n CATALOG_CHANGE_KIN" +
+      "D_APP_SETTINGS\020\005B\201\001\n\033dev.loams.gen.loams" +
+      ".live.v1B\014JournalProtoP\001\242\002\003LLX\252\002\rLoams.L" +
+      "ive.V1\312\002\rLoams\\Live\\V1\342\002\031Loams\\Live\\V1\\G" +
+      "PBMetadata\352\002\017Loams::Live::V1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -71,13 +87,19 @@ public final class JournalProto {
     internal_static_loams_live_v1_JournalEntry_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_JournalEntry_descriptor,
-        new java.lang.String[] { "CommitHintMs", "Writes", "Function", "RequestId", });
+        new java.lang.String[] { "CommitHintMs", "Writes", "Function", "RequestId", "Catalog", });
     internal_static_loams_live_v1_WriteRecord_descriptor =
       getDescriptor().getMessageTypes().get(1);
     internal_static_loams_live_v1_WriteRecord_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_WriteRecord_descriptor,
         new java.lang.String[] { "TableId", "DocId", "Kind", "IndexKeysRemoved", "IndexKeysAdded", });
+    internal_static_loams_live_v1_CatalogChange_descriptor =
+      getDescriptor().getMessageTypes().get(2);
+    internal_static_loams_live_v1_CatalogChange_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_CatalogChange_descriptor,
+        new java.lang.String[] { "Kind", "TableId", "Deployment", });
     descriptor.resolveAllFeaturesImmutable();
   }
 

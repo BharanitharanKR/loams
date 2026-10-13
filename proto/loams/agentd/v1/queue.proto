@@ -1,0 +1,257 @@
+syntax = "proto3";
+
+// The queue (design §53 §6.4; plan SD1 Task 4): messages typed while the
+// agent is busy, held on the thread and delivered in order, with
+// host-authoritative edit leases. See studio.proto for the package's rules.
+package loams.agentd.v1;
+
+import "loams/options/v1/options.proto";
+
+service QueueService {
+  option (loams.options.v1.module) = {
+    name: "agentd.queue"
+    summary: "Loams Studio's message queue: queue, edit, reorder and deliver while the agent is busy."
+    unstable: true
+  };
+
+  // The thread's queue, then the whole queue again on each change (ndjson:
+  // `WatchQueue`).
+  rpc WatchQueue(WatchQueueRequest) returns (stream WatchQueueResponse);
+  // Appends to the queue (ndjson: `QueueMessage`).
+  rpc QueueMessage(QueueMessageRequest) returns (QueueMessageResponse);
+  // Retypes a queued message; empty text deletes it (ndjson:
+  // `UpdateQueuedMessage`).
+  rpc UpdateQueuedMessage(UpdateQueuedMessageRequest) returns (UpdateQueuedMessageResponse);
+  // Takes the edit lease on one queued message (ndjson:
+  // `BeginQueuedMessageEdit`).
+  rpc BeginQueuedMessageEdit(BeginQueuedMessageEditRequest) returns (BeginQueuedMessageEditResponse);
+  // ndjson: `RenewQueuedMessageEdit`.
+  rpc RenewQueuedMessageEdit(RenewQueuedMessageEditRequest) returns (RenewQueuedMessageEditResponse);
+  // Commits, cancels, discards or releases an edit (ndjson:
+  // `FinishQueuedMessageEdit`).
+  rpc FinishQueuedMessageEdit(FinishQueuedMessageEditRequest) returns (FinishQueuedMessageEditResponse);
+  // ndjson: `MoveQueuedMessage`.
+  rpc MoveQueuedMessage(MoveQueuedMessageRequest) returns (MoveQueuedMessageResponse);
+  // ndjson: `RemoveQueuedMessage`.
+  rpc RemoveQueuedMessage(RemoveQueuedMessageRequest) returns (RemoveQueuedMessageResponse);
+  // Interrupts the running turn and sends this message (ndjson:
+  // `SendQueuedMessageNow`).
+  rpc SendQueuedMessageNow(SendQueuedMessageNowRequest) returns (SendQueuedMessageNowResponse);
+  // Steers this message into the running turn (ndjson:
+  // `SteerQueuedMessageNow`).
+  rpc SteerQueuedMessageNow(SteerQueuedMessageNowRequest) returns (SteerQueuedMessageNowResponse);
+  // Re-sends the thread's failed sends (ndjson: `RetryDelivery`).
+  rpc RetryDelivery(RetryDeliveryRequest) returns (RetryDeliveryResponse);
+}
+
+message QueuedMessage {
+  string id = 1;
+  string text = 2;
+  repeated string attachments = 3;
+  // Deliver after the running turn ends instead of steering into it.
+  bool hold_for_turn_end = 4;
+  string issued_by = 5;
+  int64 issued_at_ms = 6;
+  optional int64 edited_at_ms = 7;
+  QueueDeliveryGate delivery_gate = 8;
+}
+
+// Why a queued message is held (ndjson `QueueDeliveryGate`, tagged by `kind`).
+message QueueDeliveryGate {
+  oneof gate {
+    QueueEditingGate editing = 1;
+    QueueReviewRequiredGate review_required = 2;
+  }
+}
+
+message QueueEditingGate {
+  string lease_id = 1;
+  string owner_device_id = 2;
+  string owner_instance_id = 3;
+  int64 acquired_at_ms = 4;
+  int64 expires_at_ms = 5;
+  string base_text_hash = 6;
+}
+
+message QueueReviewRequiredGate {
+  string previous_lease_id = 1;
+  string owner_device_id = 2;
+  int64 since_ms = 3;
+  string base_text_hash = 4;
+}
+
+// ndjson `BeginQueueEditOutcome`, tagged by `outcome`.
+message BeginQueueEditOutcome {
+  oneof outcome {
+    QueueEditAcquired acquired = 1;
+    QueueEditLocked locked = 2;
+    QueueEditNoDetail missing = 3;
+  }
+}
+
+message QueueEditAcquired {
+  string lease_id = 1;
+  string text = 2;
+  repeated string attachments = 3;
+  string base_text_hash = 4;
+  int64 expires_at_ms = 5;
+}
+
+message QueueEditLocked {
+  string owner_device_id = 1;
+  int64 expires_at_ms = 2;
+}
+
+// An outcome that carries nothing but its name.
+message QueueEditNoDetail {}
+
+// ndjson `RenewQueueEditOutcome`, tagged by `outcome`.
+message RenewQueueEditOutcome {
+  oneof outcome {
+    QueueEditRenewed renewed = 1;
+    QueueEditNoDetail lost = 2;
+    QueueEditNoDetail missing = 3;
+  }
+}
+
+message QueueEditRenewed {
+  int64 expires_at_ms = 1;
+}
+
+enum FinishQueuedMessageEditAction {
+  FINISH_QUEUED_MESSAGE_EDIT_ACTION_UNSPECIFIED = 0;
+  FINISH_QUEUED_MESSAGE_EDIT_ACTION_COMMIT = 1;
+  FINISH_QUEUED_MESSAGE_EDIT_ACTION_CANCEL = 2;
+  FINISH_QUEUED_MESSAGE_EDIT_ACTION_DISCARD = 3;
+  FINISH_QUEUED_MESSAGE_EDIT_ACTION_RELEASE_UNCHANGED = 4;
+}
+
+// ndjson `FinishQueueEditOutcome`, tagged by `outcome`.
+message FinishQueueEditOutcome {
+  oneof outcome {
+    QueueEditNoDetail committed = 1;
+    QueueEditNoDetail cancelled = 2;
+    QueueEditNoDetail discarded = 3;
+    QueueEditNoDetail released = 4;
+    QueueEditConflict conflict = 5;
+    QueueEditNoDetail lost = 6;
+    QueueEditNoDetail missing = 7;
+  }
+}
+
+message QueueEditConflict {
+  string current_text = 1;
+}
+
+// A list whose absence differs from an empty list.
+message QueueAttachments {
+  repeated string paths = 1;
+}
+
+message WatchQueueRequest {
+  string chat_id = 1;
+}
+
+message WatchQueueResponse {
+  repeated QueuedMessage items = 1;
+}
+
+message QueueMessageRequest {
+  string chat_id = 1;
+  string text = 2;
+  repeated string attachments = 3;
+  bool hold_for_turn_end = 4;
+}
+
+message QueueMessageResponse {
+  string id = 1;
+}
+
+message UpdateQueuedMessageRequest {
+  string chat_id = 1;
+  string id = 2;
+  string text = 3;
+}
+
+message UpdateQueuedMessageResponse {
+  bool changed = 1;
+}
+
+message BeginQueuedMessageEditRequest {
+  string chat_id = 1;
+  string id = 2;
+  string editor_device_id = 3;
+  string editor_instance_id = 4;
+}
+
+message BeginQueuedMessageEditResponse {
+  BeginQueueEditOutcome outcome = 1;
+}
+
+message RenewQueuedMessageEditRequest {
+  string chat_id = 1;
+  string id = 2;
+  string lease_id = 3;
+}
+
+message RenewQueuedMessageEditResponse {
+  RenewQueueEditOutcome outcome = 1;
+}
+
+message FinishQueuedMessageEditRequest {
+  string chat_id = 1;
+  string id = 2;
+  string lease_id = 3;
+  FinishQueuedMessageEditAction action = 4;
+  optional string text = 5;
+  optional string expected_text_hash = 6;
+  // Unset keeps the message's attachments.
+  QueueAttachments attachments = 7;
+}
+
+message FinishQueuedMessageEditResponse {
+  FinishQueueEditOutcome outcome = 1;
+}
+
+message MoveQueuedMessageRequest {
+  string chat_id = 1;
+  string id = 2;
+  uint64 to_index = 3;
+}
+
+message MoveQueuedMessageResponse {
+  bool changed = 1;
+}
+
+message RemoveQueuedMessageRequest {
+  string chat_id = 1;
+  string id = 2;
+}
+
+message RemoveQueuedMessageResponse {
+  bool removed = 1;
+}
+
+message SendQueuedMessageNowRequest {
+  string chat_id = 1;
+  string id = 2;
+}
+
+message SendQueuedMessageNowResponse {
+  bool sent = 1;
+}
+
+message SteerQueuedMessageNowRequest {
+  string chat_id = 1;
+  string id = 2;
+}
+
+message SteerQueuedMessageNowResponse {
+  bool sent = 1;
+}
+
+message RetryDeliveryRequest {
+  string chat_id = 1;
+}
+
+message RetryDeliveryResponse {}

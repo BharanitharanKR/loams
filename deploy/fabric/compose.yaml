@@ -234,6 +234,11 @@ services:
     profiles: [connectors-p2]
     labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--web.enable-remote-write-receiver"]
+    # CN2 Task 21 (R21.7): scrape itself and remote-write to the receiver the
+    # connector's test serves on the runner.
+    volumes:
+      - ./emulators/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts: ["host.docker.internal:host-gateway"]
     ports: ["9090:9090"]
 
   # Vault's API, open licence (the `vault` manifest's system).
@@ -370,6 +375,13 @@ services:
       MSSQL_AGENT_ENABLED: "true"
       MSSQL_SA_PASSWORD: Loams-Test-Pass-1
     ports: ["1433:1433"]
+    # Ready once a login answers, so `up --wait` means the suites can connect
+    # (the image ships sqlcmd under mssql-tools18; -C trusts its self-signed
+    # certificate).
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-C", "-S", "localhost", "-U", "sa", "-P", "Loams-Test-Pass-1", "-Q", "SELECT 1"]
+      interval: 3s
+      retries: 60
 
   oracle:
     image: gvenzl/oracle-free:23.26.3-slim@sha256:6d61d267a3b978c24c5ac1790e62e927416a0aec446bd86e4b3a1527562757bd
@@ -407,7 +419,23 @@ services:
         - mongosh
         - --quiet
         - --eval
-        - "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]}).ok }"
+        # Healthy only once the member is the writable primary, so `up --wait`
+        # means the suites can write (CN2 Task 16).
+        - "try { rs.status() } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]}) }; if (!db.hello().isWritablePrimary) { quit(1) }"
+      interval: 2s
+      retries: 60
+
+  # The same image as a standalone server (no replica set, so no
+  # transactions and no change streams): the sink's narrowing to effectively
+  # once (CN2 Task 16, mongodb_standalone_narrows_to_effectively_once).
+  mongodb-standalone:
+    image: mongo:8.0.30@sha256:4a0f30875898413139bec44c73c02a05fed172578de65b644dcdcee143ae7306
+    profiles: [connectors-ci-only]
+    labels: { io.loams.licence: "SSPL-1.0", io.loams.ci-service: "true" }
+    command: ["--bind_ip_all"]
+    ports: ["27018:27017"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "if (db.adminCommand('ping').ok !== 1) { quit(1) }"]
       interval: 2s
       retries: 60
 
