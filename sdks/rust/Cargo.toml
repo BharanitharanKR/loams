@@ -17,7 +17,7 @@ resolver = "3"
 members = []
 
 [workspace.package]
-version = "0.0.1"
+version = "0.1.0-preview.2"
 edition = "2024"
 rust-version = "1.97"
 license = "Apache-2.0"
@@ -61,12 +61,10 @@ documentation = "https://docs.rs/loams"
 readme = "README.md"
 keywords = ["loams", "connect", "grpc", "sdk", "client"]
 categories = ["api-bindings", "database"]
-# `publish = false` until the crates.io trusted-publisher is confirmed (D400,
-# D619). The plan's gate is "do not publish until the owner confirmed the
-# registry account"; this flag is what stops an accidental `cargo publish`
-# before then, and it comes off in the PR that does publish. See
-# docs/release/publishing.md.
-publish = false
+# Published by .github/workflows/sdk-release.yml on a release tag, and only when
+# the repository variable SDK_PUBLISH_CRATES is `true` (the owner sets it once
+# the crates.io trusted publisher is configured). The version is the release's,
+# checked by sdks/tools/sdk-version.py.
 
 [features]
 default = ["tls"]

@@ -63,6 +63,13 @@ MANIFESTS = [
      r'^\[workspace\.package\]\nversion = "([^"]+)"$'),
     ("rust Cargo.lock", "sdks/rust/Cargo.lock", "semver",
      r'^name = "loams"\nversion = "([^"]+)"$'),
+    # The Rust SDK's requirement on the two proto crates follows the root
+    # workspace's version (ecosystem "root"), so it can be no newer than what the
+    # path dependency is; `check --strict-root` then pins both to the release.
+    ("rust dep loams-proto", "sdks/rust/Cargo.toml", "root",
+     r'^loams-proto = \{ path = "\.\./\.\./crates/loams-proto", version = "([^"]+)"'),
+    ("rust dep loams-live-proto", "sdks/rust/Cargo.toml", "root",
+     r'^loams-live-proto = \{ path = "\.\./\.\./crates/loams-live-proto", version = "([^"]+)"'),
     ("csharp Loams", "sdks/csharp/src/Loams/Loams.csproj", "semver",
      r"^    <Version>([^<]+)</Version>$"),
     ("cpp loams (LOAMS_SDK_VERSION)", "sdks/cpp/CMakeLists.txt", "semver",
@@ -116,8 +123,13 @@ def spell(version: str) -> dict[str, str]:
     }
 
 
-def expected(spelling: dict[str, str], ecosystem: str) -> str:
-    return {"semver": spelling["semver"], "pep440": spelling["pep440"], "core": spelling["core"]}[ecosystem]
+def expected(spelling: dict[str, str], ecosystem: str, root: str) -> str:
+    return {
+        "semver": spelling["semver"],
+        "pep440": spelling["pep440"],
+        "core": spelling["core"],
+        "root": root,
+    }[ecosystem]
 
 
 def read_all(root: Path) -> list[tuple[str, str, str, str | None]]:
@@ -148,11 +160,11 @@ def check(root: Path, version: str | None, strict_root: bool) -> list[str]:
         version = next(value for label, _, _, value in found if label == "typescript @loams/client")
         assert version is not None
     spelling = spell(version)
+    have = root_version(root)
     for label, path, ecosystem, value in found:
-        want = expected(spelling, ecosystem)
+        want = expected(spelling, ecosystem, have)
         if value != want:
             problems.append(f"{path}: {label} is {value}, the release wants {want}")
-    have = root_version(root)
     if have != spelling["semver"]:
         message = (
             f"Cargo.toml: {ROOT_WORKSPACE[0]} is {have}, the release wants {spelling['semver']} "
@@ -167,6 +179,7 @@ def check(root: Path, version: str | None, strict_root: bool) -> list[str]:
 
 def set_all(root: Path, version: str) -> None:
     spelling = spell(version)
+    have = root_version(root)
     for label, path, ecosystem, pattern in MANIFESTS:
         file = root / path
         text = file.read_text()
@@ -175,10 +188,9 @@ def set_all(root: Path, version: str) -> None:
         if not match:
             raise VersionError(f"{path}: no version found for {label}")
         start, end = match.span(1)
-        text = text[:start] + expected(spelling, ecosystem) + text[end:]
+        text = text[:start] + expected(spelling, ecosystem, have) + text[end:]
         file.write_text(text)
-        print(f"{path}: {label} -> {expected(spelling, ecosystem)}")
-    have = root_version(root)
+        print(f"{path}: {label} -> {expected(spelling, ecosystem, have)}")
     if have != spelling["semver"]:
         print(
             f"note: the root Cargo workspace is {have}; bump [workspace.package] version to "
