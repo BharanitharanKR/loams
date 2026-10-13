@@ -21,7 +21,7 @@ use crate::proto::loams::operations::v1::{Operation, OperationState, Progress};
 /// The proto packages the mock serves, their services, and whether each is
 /// `unstable`: `GetInstance.services` lists them all, and `api_versions` names
 /// them.
-pub const SERVICES: [(&str, &[&str], bool); 6] = [
+pub const SERVICES: [(&str, &[&str], bool); 8] = [
     (
         "loams.instance.v1",
         &["loams.instance.v1.InstanceService"],
@@ -56,6 +56,20 @@ pub const SERVICES: [(&str, &[&str], bool); 6] = [
             "loams.graph.v1.GraphService",
         ],
         true,
+    ),
+    // API2 Tasks 6/7 (rulings 6/7.1, 6/7.13): the console API over Connect. The
+    // console's pages (API2 Task 10) gate on these rows (AP1a Ruling 6).
+    ("loams.auth.v1", &["loams.auth.v1.AuthService"], false),
+    (
+        "loams.admin.v1",
+        &[
+            "loams.admin.v1.OrgService",
+            "loams.admin.v1.ProjectService",
+            "loams.admin.v1.AgentService",
+            "loams.admin.v1.KeyService",
+            "loams.admin.v1.AuditService",
+        ],
+        false,
     ),
 ];
 

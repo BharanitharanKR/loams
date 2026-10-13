@@ -20,12 +20,23 @@ import {
   Empty,
   Logo,
   Menu,
+  MenuItem,
   MenuLabel,
+  MenuSeparator,
   SelectMenu,
   Toaster,
   ToastProvider,
 } from '@loams/ui';
-import { BookOpen, ChevronsUpDown, Menu as MenuIcon, Moon, PanelRight, Sun, X } from 'lucide-react';
+import {
+  BookOpen,
+  ChevronsUpDown,
+  LogOut,
+  Menu as MenuIcon,
+  Moon,
+  PanelRight,
+  Sun,
+  X,
+} from 'lucide-react';
 import {
   type KeyboardEvent,
   type PointerEvent,
@@ -37,7 +48,7 @@ import {
 } from 'react';
 import { iconFor } from './icons.js';
 import { ModeSwitcher, useMode, useModeShortcut } from './mode-switcher.js';
-import type { HashRouter } from './router.js';
+import type { Crumb, HashRouter } from './router.js';
 
 export const DOCK_MIN = 320;
 export const DOCK_MAX = 720;
@@ -70,6 +81,8 @@ interface NavItem {
  */
 const LEGACY: Record<string, Pick<NavItem, 'group' | 'icon' | 'order'>> = {
   '/': { group: 'Data', icon: 'overview', order: 0 },
+  // The instance's status, when `/` is the org's overview (API2 Task 10).
+  '/status': { group: 'Operate', icon: 'overview', order: 10 },
   '/namespaces': { group: 'Data', icon: 'namespaces', order: 15 },
   '/approvals': { group: 'Organisation', icon: 'approvals', order: 50 },
 };
@@ -231,8 +244,10 @@ function Crumbs({
   const sections = useSlot('shell.nav.section');
   const legacy = useSlot('console.nav');
   const location = useLocation(router);
+  const trail = useSyncExternalStore(router.subscribe, () => router.trail());
   const filter = useModeFilter(mode);
   const title = location.pageId ? router.title() : undefined;
+  if (trail && trail.length > 0) return <Trail crumbs={trail} />;
   let group: string | undefined;
   let home: { label: string; href: string } | undefined;
   for (const [g, items] of navSections(sections, legacy, filter)) {
@@ -257,6 +272,10 @@ function Crumbs({
   }
   const last = title ?? home?.label ?? 'Not found';
   if (location.path !== root.href || last !== root.label) crumbs.push({ label: last });
+  return <Trail crumbs={crumbs} />;
+}
+
+function Trail({ crumbs }: { crumbs: Crumb[] }) {
   return (
     <nav aria-label="Breadcrumb" className="lc-trail">
       <ol>
@@ -276,7 +295,8 @@ function Crumbs({
 
 function Outlet({ router }: { router: HashRouter }) {
   const location = useLocation(router);
-  const title = location.pageId ? router.title() : undefined;
+  const trail = useSyncExternalStore(router.subscribe, () => router.trail());
+  const title = trail?.at(-1)?.label ?? (location.pageId ? router.title() : undefined);
   useEffect(() => {
     document.title = title ? `${title} · Loams` : 'Loams';
   }, [title]);
@@ -387,11 +407,26 @@ function DockHandle({ width, onWidth }: { width: number; onWidth: (w: number) =>
 
 const KIND_LABEL: Record<number, string> = { 1: 'User', 2: 'Service account', 3: 'Agent' };
 
-function UserMenu({ session }: { session: SessionService }) {
+const ROLE_LABEL: Record<number, string> = { 1: 'owner', 2: 'admin', 3: 'member' };
+
+function UserMenu({
+  session,
+  router,
+  local,
+}: {
+  session: SessionService;
+  router: HashRouter;
+  /** The desktop's own engine: there is no session to end. */
+  local?: boolean;
+}) {
   useSyncExternalStore(session.subscribe, () => session.principal());
+  const account = useSyncExternalStore(session.subscribe, () => session.account?.());
   const who = session.principal();
-  if (!who) return null;
-  const name = who.displayName || 'Signed in';
+  if (!who && !account) return null;
+  const name = account?.user?.name || who?.displayName || 'Signed in';
+  const email = account?.user?.email || who?.email;
+  const role = account ? ROLE_LABEL[account.role] : undefined;
+  const signOut = session.signOut && !local ? session.signOut : undefined;
   return (
     <Menu
       label="Account"
@@ -403,13 +438,44 @@ function UserMenu({ session }: { session: SessionService }) {
     >
       <MenuLabel>
         <strong className="text-ink">{name}</strong>
-        {who.email && <span>{who.email}</span>}
+        {email && <span>{email}</span>}
         <span>
-          <Badge>{KIND_LABEL[who.kind] ?? 'Signed in'}</Badge>
+          <Badge>{role ?? (who ? KIND_LABEL[who.kind] : undefined) ?? 'Signed in'}</Badge>
         </span>
       </MenuLabel>
+      {signOut && (
+        <>
+          <MenuSeparator />
+          <MenuItem
+            onSelect={() => {
+              void signOut().then(() => router.navigate('/sign-in'));
+            }}
+          >
+            <LogOut size={15} aria-hidden="true" /> Sign out
+          </MenuItem>
+        </>
+      )}
     </Menu>
   );
+}
+
+/**
+ * Sends a visitor without a session to sign-in (or a fresh install to setup), as the
+ * original console's session gate did. Public pages (sign-in, setup) stay put.
+ */
+function useGate(router: HashRouter, session: SessionService) {
+  const location = useLocation(router);
+  const gate = useSyncExternalStore(session.subscribe, () => session.gate?.() ?? 'none');
+  const isPublic = router.spec()?.public === true;
+  const pending =
+    location.pageId !== undefined && !isPublic && (gate === 'signed-out' || gate === 'setup');
+  useEffect(() => {
+    if (!pending) return;
+    if (gate === 'setup') return router.navigate('/setup');
+    const here = `${location.path}${location.query ? `?${new URLSearchParams(location.query)}` : ''}`;
+    router.navigate(here === '/' ? '/sign-in' : `/sign-in?next=${encodeURIComponent(here)}`);
+  }, [pending, gate, location, router]);
+  return pending;
 }
 
 /**
@@ -536,13 +602,32 @@ export function Layout({
   }, [hasDock, toggle]);
 
   const version = flags?.serverVersion;
+  const gated = useGate(router, session);
+  const hasContext = useSlot('shell.nav.context').length > 0;
+  if (gated) return <div className="lc-boot" aria-busy="true" />;
+  if (router.spec()?.bare) {
+    return (
+      <ToastProvider>
+        <main className="lc-bare" id="lc-main">
+          <Outlet router={router} />
+        </main>
+        <Toaster />
+      </ToastProvider>
+    );
+  }
   return (
     <ToastProvider>
       <div className="lc-shell" data-mode={current}>
         {/* A plain container: the Console nav inside is the landmark; `complementary` is the agent dock. */}
         <div id="lc-side" className="lc-side" data-open={drawer || undefined}>
           <Brand flags={flags} home={MODE_HOME[current]} onClose={() => setDrawer(false)} />
-          {current === 'console' && <EnvironmentSwitcher session={session} />}
+          {/* The project switcher and the open project's pages, when a plugin serves them;
+              otherwise, in Console, the session's environments. */}
+          {hasContext ? (
+            <Slot name="shell.nav.context" props={{}} />
+          ) : (
+            current === 'console' && <EnvironmentSwitcher session={session} />
+          )}
           <Nav router={router} mode={mode} />
           <div className="lc-side-foot">
             <a href="https://loams.dev/docs" target="_blank" rel="noreferrer">
@@ -609,7 +694,7 @@ export function Layout({
                   <Moon size={16} aria-hidden="true" />
                 )}
               </button>
-              <UserMenu session={session} />
+              <UserMenu session={session} router={router} local={flags?.features.local} />
             </div>
           </header>
           <div className="lc-content" style={{ ['--lc-dock-width' as string]: `${dock.width}px` }}>

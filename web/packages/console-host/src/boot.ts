@@ -170,6 +170,7 @@ export const flagsPlugin: PluginModule = {
           serverVersion: info.serverVersion,
           features: { ...info.features },
           apiVersions: [...info.apiVersions],
+          setupRequired: info.setupRequired,
           has: (api) => info.apiVersions.includes(api),
         };
       } catch (error) {

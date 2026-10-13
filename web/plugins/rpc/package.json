@@ -27,7 +27,13 @@
         "rpc.approvals",
         "rpc.operations",
         "rpc.devices",
-        "rpc.notifications"
+        "rpc.notifications",
+        "rpc.auth",
+        "rpc.org",
+        "rpc.projects",
+        "rpc.agents",
+        "rpc.keys",
+        "rpc.audit"
       ],
       "slots": [],
       "permissions": [],

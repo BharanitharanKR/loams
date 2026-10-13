@@ -96,11 +96,14 @@ const plugin: PluginModule = {
       );
       return;
     }
+    // Where the instance serves the console API, `/` is the org's overview
+    // (@loams/plugin-org, API2 Task 10) and Status moves to `/status`.
+    const path = flags.has('loams.admin.v1') ? '/status' : '/';
     ctx.effect(() =>
       router.page(
         {
           id: 'status',
-          path: '/',
+          path,
           title: 'Status',
           plugin: 'stack-status',
           nav: { group: 'Instance', order: 0 },

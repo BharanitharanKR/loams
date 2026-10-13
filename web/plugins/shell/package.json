@@ -34,7 +34,8 @@
         "shell.overlay",
         "shell.nav.section",
         "shell.dock.right",
-        "shell.header.server"
+        "shell.header.server",
+        "shell.nav.context"
       ],
       "permissions": [],
       "requires": {

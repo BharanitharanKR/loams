@@ -19,7 +19,10 @@
       "entry": ".",
       "tier": "core",
       "inject": [
-        "rpc.instance"
+        "rpc.instance",
+        "flags",
+        "transport",
+        "platform"
       ],
       "provides": [
         "session"
