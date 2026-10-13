@@ -6,6 +6,8 @@ name: Fabric
 #   connectors-unit  — fmt, clippy, tests and cargo-deny over `fabric/`
 #   connectors-drift — the weekly network-dependent catalog drift checks
 #   connect-routes   — declared, gated off until CN1 Task 12 lands
+# Jobs owned by CN2 (plan 2026-10-10-cn2-connectors):
+#   sdk-unit         — fmt, clippy and tests of `loams-connector-sdk` (Task 4)
 # Jobs FL1 owns and adds here separately: connectors-it (the ★ contract suites
 # against the `connectors` compose profile, from CN1 Tasks 3–13), and the
 # `fabric` workspace's own build/publish steps. Keep this file minimal and
@@ -47,6 +49,7 @@ jobs:
       fabric: ${{ steps.filter.outputs.fabric }}
       drift: ${{ steps.filter.outputs.drift }}
       connect-routes: ${{ steps.filter.outputs.connect-routes }}
+      sdk: ${{ steps.filter.outputs.sdk }}
     steps:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
@@ -85,6 +88,13 @@ jobs:
               - "connect/**"
               - "fabric/crates/loams-flow/**"
               - "fabric/crates/loams-fabric/**"
+            # The connector SDK (CN2 Task 4) and the workspace files its build
+            # reads.
+            sdk:
+              - *toolchain
+              - "fabric/Cargo.toml"
+              - "fabric/Cargo.lock"
+              - "fabric/crates/loams-connector-sdk/**"
 
   # CN1 owns this job. FL1 owns the `lints_match_root` test that proves the
   # fabric workspace's lint table equals the root workspace's; it runs in FL1's
@@ -135,6 +145,32 @@ jobs:
         run: |
           python3 scripts/connectors/crate_licences.py --self-test
           python3 scripts/connectors/crate_licences.py
+
+  # CN2 owns this job (plan 2026-10-10-cn2-connectors, Task 4): the connector
+  # SDK alone, the crate every native connector family builds on. It needs no
+  # protoc and no services (the in-memory Fabric and the reference connector
+  # serve its tests), so it stays fast; `connectors-unit` covers the crate
+  # again inside the whole workspace, with cargo-deny.
+  sdk-unit:
+    name: connector SDK (fmt, clippy, tests)
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk == 'true') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fabric -> target
+          key: sdk-unit
+      - name: rustfmt
+        working-directory: fabric
+        run: cargo fmt -p loams-connector-sdk --check
+      - name: clippy
+        working-directory: fabric
+        run: cargo clippy -p loams-connector-sdk --all-targets --locked -- -D warnings
+      - name: tests
+        working-directory: fabric
+        run: cargo test -p loams-connector-sdk --locked
 
   # CN1 Task 2's drift checks (design §33 CN-R1): the appendix is regenerated
   # from connectors/registry/catalog.csv and diffed against the design doc, and
