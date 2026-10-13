@@ -8121,6 +8121,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "loams-git-remote"
+version = "0.1.0-preview.2"
+dependencies = [
+ "bytes",
+ "futures",
+ "hex",
+ "loams-git",
+ "loams-store",
+ "rand 0.9.5",
+ "sha2 0.11.0",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "ulid 3.0.0",
+]
+
+[[package]]
 name = "loams-graph"
 version = "0.1.0-preview.2"
 dependencies = [

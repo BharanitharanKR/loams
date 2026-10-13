@@ -1,0 +1,46 @@
+[package]
+name = "loams-git-remote"
+description = "git-remote-loams: a serverless git remote helper that clones, fetches and pushes straight to a Loams Git repository on a bucket (design §36 §6.2; plan GT1 Task 51)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+# Not on crates.io until a release ships the helper (an owner decision: the
+# release-crates list and the Linux packages). Install from source with
+# `cargo install --path crates/loams-git-remote`.
+publish = false
+
+[[bin]]
+name = "git-remote-loams"
+path = "src/main.rs"
+
+[features]
+# A test hook: `LOAMS_GIT_FAULTS` injects lost acknowledgements into the
+# store and lost answers into commits (tests/faults.rs). Never in a release.
+faults = ["dep:rand"]
+
+[dependencies]
+bytes.workspace = true
+futures.workspace = true
+hex.workspace = true
+loams-git.workspace = true
+loams-store.workspace = true
+rand = { workspace = true, optional = true }
+sha2.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "time"] }
+ulid.workspace = true
+
+[dev-dependencies]
+loams-git.workspace = true
+loams-store.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[[test]]
+name = "faults"
+required-features = ["faults"]
+
+[lints]
+workspace = true
