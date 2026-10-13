@@ -21,9 +21,10 @@ checkout:
 uv sync --all-extras --dev     # from sdks/python
 ```
 
-The runtime dependency is [`connect-python`](https://pypi.org/project/connect-python/),
-which provides the `connectrpc` import name. That is not a typo — the
-distribution and the module it installs have different names.
+The runtime dependency is [`connectrpc`](https://pypi.org/project/connectrpc/)
+0.12.1 (connectrpc/connect-py), pinned in `scripts/sdk/pins.lock`. Up to 0.9.0
+the same project was published as `connect-python`; the import name has always
+been `connectrpc`.
 
 ## Use
 

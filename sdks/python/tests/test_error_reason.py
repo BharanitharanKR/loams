@@ -43,7 +43,7 @@ from loams import (
 )
 from loams._gen.facade import REASON_CODES, REASONS
 from loams.errors.v1.errors_pb2 import ErrorInfo
-from loams.runtime.errors import _unpack, is_loams_error, to_loams_error
+from loams.runtime.errors import _unpack, error_detail, is_loams_error, to_loams_error
 
 #: The class each code raises, for the codes the SDK names. A caller branching on
 #: the coarse category depends on this mapping.
@@ -57,7 +57,7 @@ def _wire(code: Code, reason: str | None, *, hint: str = "") -> ConnectError:
     """A Connect error as a server sends it: a code, plus an `ErrorInfo`."""
     details = ()
     if reason is not None:
-        details = (ErrorInfo(reason=reason, hint=hint),)
+        details = (error_detail(ErrorInfo(reason=reason, hint=hint)),)
     return ConnectError(code, f"{reason or code.name.lower()} happened", details=details)
 
 
@@ -100,7 +100,7 @@ def test_feature_not_in_variant_carries_its_variant() -> None:
     wire = ConnectError(
         Code.FAILED_PRECONDITION,
         "this build does not have that",
-        details=(ErrorInfo(reason="feature_not_in_variant", metadata={"variant": "oss"}),),
+        details=(error_detail(ErrorInfo(reason="feature_not_in_variant", metadata={"variant": "oss"})),),
     )
     error = to_loams_error(wire)
     assert isinstance(error, FeatureNotInVariantError), f"got {type(error).__name__}"
@@ -136,7 +136,7 @@ def test_a_detail_type_other_than_errorinfo_does_not_set_the_reason() -> None:
     wire = ConnectError(
         Code.NOT_FOUND,
         "gone",
-        details=(ErrorInfo(reason=""),),
+        details=(error_detail(ErrorInfo(reason="")),),
     )
     error = to_loams_error(wire)
     assert isinstance(error, NotFoundError), f"got {type(error).__name__}"
