@@ -298,7 +298,9 @@ describe('sign-in modes', () => {
     );
     expect(init?.credentials).toBe('omit');
     expect(
-      await fetchIdentity('https://e', async () => json(200, { session: { user: { name: 'Ada' } } })),
+      await fetchIdentity('https://e', async () =>
+        json(200, { session: { user: { name: 'Ada' } } }),
+      ),
     ).toEqual({ ok: true, user: 'Ada' });
     const refused = await fetchIdentity('https://e', async () => json(401, {}));
     expect(refused).toEqual({ ok: false, message: expect.stringMatching(/tailnet/) });
@@ -434,7 +436,9 @@ describe('sign-in modes', () => {
 
   it('tailscale: no sign-in or connect screen, the engine names the user', async () => {
     saveMode('tailscale');
-    const fetcher = vi.fn(async () => json(200, { session: { user: { email: 'ada@example.com' } } }));
+    const fetcher = vi.fn(async () =>
+      json(200, { session: { user: { email: 'ada@example.com' } } }),
+    );
     vi.stubGlobal('fetch', fetcher);
     const root = document.createElement('div');
     document.body.append(root);
