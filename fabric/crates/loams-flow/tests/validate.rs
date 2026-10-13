@@ -381,8 +381,9 @@ fn check_use_refuses_undeclared() {
         "upsert"
     );
 
-    // `clickhouse` delivers at-least-once into a sink that neither dedupes nor
-    // transactions, so `exactly_once` is refused rather than claimed (§33 §2.2).
+    // `clickhouse`'s sink dedupes by insert token but is not transactional, so it is
+    // effectively once (CN2 R17.3) and `exactly_once` is refused rather than claimed
+    // (§33 §2.2).
     assert_eq!(
         check_use(&clickhouse, &uses_exactly_once())
             .unwrap_err()
@@ -394,10 +395,10 @@ fn check_use_refuses_undeclared() {
     // the error must name.
     let error = check_use(&clickhouse, &uses_exactly_once()).unwrap_err();
     assert_eq!(error.connector, "clickhouse");
-    assert_eq!(error.spec_version, "1.1.0");
+    assert_eq!(error.spec_version, "1.2.0");
     assert_eq!(
         error.to_string(),
-        "clickhouse (manifest specVersion 1.1.0) does not declare the capability delivery.sink"
+        "clickhouse (manifest specVersion 1.2.0) does not declare the capability delivery.sink"
     );
 
     // And the same uses against a manifest that declares them all pass, so the three

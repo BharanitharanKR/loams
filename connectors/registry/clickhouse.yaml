@@ -1,5 +1,13 @@
-# ClickHouse — ★ connector 12 of §33 §8; CN1 plan Task 10.
-# Runtime: the native Rust task loams_flow::connectors::clickhouse.
+# ClickHouse — ★ connector 12 of §33 §8; CN1 plan Task 10, sink by CN2 Task 17.
+# Runtime: the native Rust task loams_flow::connectors::clickhouse for the source;
+# CN2 Task 17 (R17.2, R17.3) moves the sink to the analytics family's native
+# loams_connector_analytics::clickhouse_sink (runtime.sink, OR-10), which speaks the
+# HTTP interface through the SDK's egress-checked client and dedupes each insert
+# with insert_deduplication_token. Iggy's clickhouse_sink stays its fallback.
+# Status stays `preview` (★) until the suites are green in CI (OR-23). Minor
+# bump: the sink's runtime moved and its delivery widened.
+#
+# CN1's history follows.
 #
 # Split-runtime finding.  §33 §8 row 12 gives two implementations for one
 # system: an Iggy `clickhouse_sink` for the sink direction, and a native Rust
@@ -18,7 +26,7 @@ apiVersion: loams.flow/v1
 kind: Connector
 id: clickhouse
 name: ClickHouse
-specVersion: 1.1.0
+specVersion: 1.2.0
 category: warehouse
 priority: P1
 starred: true
@@ -26,7 +34,10 @@ status: preview
 runtime:
   kind: native
   ref: loams_flow::connectors::clickhouse
-  version: "clickhouse 0.15"
+  version: "clickhouse 0.15 (source); ClickHouse HTTP interface (sink)"
+  sink:
+    kind: native
+    ref: loams_connector_analytics::clickhouse_sink   # CN2 Task 17 (R17.2)
   # CN2 OR-8: the sink is native (CN2 Task 17); Iggy's `clickhouse_sink`, CN1's sink
   # runtime (§33 §8 row 12), is its declared fallback (OR-4).
   fallback:
@@ -50,13 +61,15 @@ capabilities:
     # CN1 Task 10: the source is incremental by a cursor column, and that value
     # is the as-of position §33 §6 puts into the batch event's run-id.
   sink:
-    streaming: true               # the Iggy plugin writes as batches arrive
+    streaming: true               # one synchronous insert per batch as batches arrive
     batch: true
     transactional: false          # ClickHouse inserts are not transactional across a batch
     upsert: false                 # ReplacingMergeTree merges in the background; CN1 claims no upsert
     delete: false                 # a lightweight delete is not declared until CN1 Task 10 proves it
-    idempotent: false             # a retried insert duplicates rows without a deduplication setting
-  delivery: { source: at_least_once, sink: at_least_once }
+    idempotent: true              # insert_deduplication_token = the batch's id, the same on every retry (R17.3)
+  delivery: { source: at_least_once, sink: effectively_once }
+    # Sink: effectively once within the table's deduplication window; a plain
+    # MergeTree needs non_replicated_deduplication_window (see the note).
   ordering: per_key               # key-range partitions, so per key the rows are ordered
   formats: [cloudevents-binary, cloudevents-structured, json, arrow]
     # arrow because the native source reads FORMAT ArrowStream (CN1 Task 10).
@@ -65,8 +78,8 @@ capabilities:
   bulk: { arrow: true, max_batch_rows: 65536 }
     # The native source reads `SELECT … FORMAT ArrowStream` in key-range
     # partitions (CN1 Task 10), so its batches are Arrow end to end and never
-    # per-row JSON (D356). The sink path is Iggy's clickhouse_sink, whose bulk
-    # API is not an Arrow path.
+    # per-row JSON (D356). The native sink inserts an Arrow batch as
+    # FORMAT ArrowStream and an events batch as FORMAT JSONEachRow.
   backpressure: pull
 auth: [basic]                     # §33 Appendix A.4
 config:
@@ -82,5 +95,8 @@ envelope:
   consumes: "*"
   passthrough: false
 limits: { batch_rows: 65536, batch_bytes: 8388608 }
-conformance: [contract, roundtrip]
+conformance: [contract, roundtrip, dup-check]
 docs: docs/guides/connectors/clickhouse.md
+notes:
+  - "sink: effectively_once holds within the table's deduplication window: replicated MergeTree tables have one by default, and a plain MergeTree needs non_replicated_deduplication_window; without it a retried batch can land twice (at_least_once), and `dedup: false` turns the token off (R17.3)"
+  - "config: the native sink reads only url, database, table, user, password, dedup, settings, timeout_secs and pipeline, and refuses any other key, so a config carrying the source's keys (query, partitions, cursor_column, key_column) or the Iggy fallback's (columns, batch_rows, async_insert, wait_for_async_insert, tls) does not start the native sink (R17.2)"

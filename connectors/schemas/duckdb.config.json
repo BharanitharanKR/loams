@@ -1,9 +1,56 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/duckdb.config.json",
-  "title": "DuckDB instance config (placeholder)",
-  "description": "Placeholder for a DuckDB instance's settings. It is filled in when this connector is built: CN2 for the P2 rows, as first-party native connectors with declared fallbacks (CN2 OR-1, OR-4), and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "DuckDB connector instance config (loams.flow/v1)",
+  "description": "One DuckDB instance's settings, read by the ADBC module (`loams_connector_analytics::adbc`, CN2 Task 17, R17.7) under the target profile `duckdb`, whose defaults set `driver: duckdb`. The driver is loaded by path from the runtime's allowlist (`LOAMS_ADBC_ALLOWLIST`) with a SHA-256 check (CN1 Ruling 9); the instance only names it.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [],
+  "properties": {
+    "driver": {
+      "description": "An allowlisted ADBC driver's name; the `duckdb` profile defaults it.",
+      "type": "string",
+      "minLength": 1,
+      "default": "duckdb"
+    },
+    "database": {
+      "description": "Database options passed to the driver as strings: `path` is DuckDB's database file. Never a secret.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "query": {
+      "description": "The source's query, streamed as Arrow batches. Give it an `ORDER BY` for an exact resume (R17.9).",
+      "type": "string",
+      "minLength": 1
+    },
+    "sink": {
+      "description": "The sink: ADBC bulk ingest per batch.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "table"
+      ],
+      "properties": {
+        "table": {
+          "description": "The target table.",
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "description": "`append`, or `create_append` to create the table from the first batch when it does not exist.",
+          "enum": [
+            "append",
+            "create_append"
+          ],
+          "default": "append"
+        }
+      }
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }
