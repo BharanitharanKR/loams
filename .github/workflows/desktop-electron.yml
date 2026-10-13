@@ -42,13 +42,15 @@ jobs:
           - { name: linux-x64, runner: ubuntu-24.04, target: package-linux }
           - { name: linux-arm64, runner: ubuntu-24.04-arm, target: package-linux }
           - { name: windows-x64, runner: windows-2025, target: package-windows }
-          - { name: macos-arm64, runner: macos-15, target: package-macos, mac_arch: arm64 }
-          # Cross-built on Apple Silicon: the Intel runners took over 90 minutes for the engine alone
-          # and timed out (run 38280683907). The x64 engine is smoke-tested under Rosetta.
-          - { name: macos-x64, runner: macos-15, target: package-macos, mac_arch: x64, rust_target: x86_64-apple-darwin }
+          # The runners are repository variables so either pool can be swapped when GitHub's
+          # macOS capacity runs short (on 2026-10-13 the arm64 pool queued jobs for hours). A build
+          # whose runner is the other architecture is cross-compiled: MACOS_X64_RUNNER=macos-15 builds
+          # x64 on Apple Silicon (smoke-tested under Rosetta); MACOS_ARM64_RUNNER=macos-15-intel builds
+          # arm64 on Intel (not executable there). The Intel engine build takes 90+ minutes.
+          - { name: macos-arm64, runner: "${{ vars.MACOS_ARM64_RUNNER || 'macos-15' }}", target: package-macos, mac_arch: arm64 }
+          - { name: macos-x64, runner: "${{ vars.MACOS_X64_RUNNER || 'macos-15-intel' }}", target: package-macos, mac_arch: x64 }
     env:
       LOAMS_DESKTOP_MAC_ARCH: ${{ matrix.mac_arch }}
-      RUST_TARGET: ${{ matrix.rust_target }}
       # electron-builder skips all macOS signing on a pull request unless told otherwise. This
       # workflow holds no signing secrets, so this only enables the ad-hoc signature ("-") that
       # Apple Silicon needs to run the app at all.
@@ -65,7 +67,10 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
 
+      # The same tests run on every other platform; the slow Intel runner only made them flaky
+      # (a 5 s vitest timeout in run 38339687116).
       - name: unit tests and typecheck
+        if: matrix.name != 'macos-x64'
         run: pnpm nx run-many -t test typecheck -p loams-desktop-electron @loams/console plugins --outputStyle=static
 
       # The engine build.rs scripts need protoc (see release-package.yml).
@@ -93,13 +98,20 @@ jobs:
 
       # The desktop engine needs durable, live-tikv (Live on the TiKV stack, ruling T23-7) and
       # graph (the Graph page, GR1 Task 8); the default build has live (the embedded store) only.
-      # A cross build (macos-x64) goes to target/<triple>/release; LOAMS_BIN points fetch-engine.mjs at it.
+      # A cross build goes to target/<triple>/release; LOAMS_BIN points fetch-engine.mjs at it.
       - name: engine
         shell: bash
         run: |
           set -euo pipefail
           features=live,durable,live-tikv,graph
-          if [ -n "$RUST_TARGET" ]; then
+          # A macOS build whose runner is the other architecture is a cross build (see the matrix).
+          if [ "$RUNNER_OS" = macOS ]; then
+            want=arm64; target=aarch64-apple-darwin
+            [ "$LOAMS_DESKTOP_MAC_ARCH" = x64 ] && { want=x86_64; target=x86_64-apple-darwin; }
+            [ "$(uname -m)" = "$want" ] || RUST_TARGET=$target
+            echo "RUST_TARGET=${RUST_TARGET:-}" >> "$GITHUB_ENV"
+          fi
+          if [ -n "${RUST_TARGET:-}" ]; then
             rustup target add "$RUST_TARGET"
             cargo build --release -p loams --features "$features" --target "$RUST_TARGET"
             echo "LOAMS_BIN=$PWD/target/$RUST_TARGET/release/loams" >> "$GITHUB_ENV"
@@ -114,10 +126,14 @@ jobs:
           bin="${LOAMS_BIN:-target/release/loams}"
           [ "$RUNNER_OS" = Windows ] && bin=target/release/loams.exe
           file "$bin" || true
-          if [ "$RUST_TARGET" = x86_64-apple-darwin ]; then
-            # Rosetta is not always installed on the arm64 images.
+          if [ "${RUST_TARGET:-}" = x86_64-apple-darwin ]; then
+            # Cross-built on Apple Silicon: run it under Rosetta, which the image may lack.
             arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
             arch -x86_64 "$bin" --version
+          elif [ "${RUST_TARGET:-}" = aarch64-apple-darwin ]; then
+            # Cross-built on Intel, which cannot run it: check the architecture only.
+            echo "::notice::arm64 engine cross-built on an Intel runner; not executed here"
+            [ "$(lipo -archs "$bin")" = arm64 ]
           else
             "$bin" --version
           fi
