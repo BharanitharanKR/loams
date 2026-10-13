@@ -10,6 +10,11 @@ All notable changes to this project are documented here. The format follows [Kee
   the console and SDKs reach Live over the tailnet (LV1 Task 12). Until Live has TLS of its own
   (LV1 Task 18) a main port bound beyond loopback does not serve it. `--live-listen` still
   serves the same API on Live's own loopback listener and is deprecated.
+- **The console's Live deployments page talks to the engine.** It uses `LiveAdminService`
+  (deploy history, rollback by activation, a deployment's functions with their validators,
+  and the function log tail) instead of sample data, and is on in the browser console, no
+  longer under "Demo data". It needs an engine that serves Live on its main port (LV1 Task
+  12). Worker health is not shown until the engine reports it (LV1 Task 27).
 
 ## [0.1.0-preview.2] - unreleased
 
