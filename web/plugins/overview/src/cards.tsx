@@ -321,7 +321,7 @@ const STACK_TAG: Record<StackState['phase'], { tone: Tone; label: string }> = {
 
 const LOCAL_ONLY = { tone: 'planned', label: 'Local only' } as const;
 const LocalOnly = () => (
-  <Muted>Local only: available when This computer is the active server.</Muted>
+  <Muted>Local only: available when this computer is the active server.</Muted>
 );
 
 export function StackCard({
