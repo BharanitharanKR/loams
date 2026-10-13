@@ -108,7 +108,7 @@ https://github.com/<owner>/<repo>/releases/download/desktop-latest
 engine's own releases cannot be mistaken for it). It holds the manifests, their `.sig` files and the
 payload files they name (the Windows installer, the AppImages), and **only
 `desktop-promote.yml` writes to it**. It runs when a `desktop-v*` release is **published**, or on
-demand: Actions > Desktop update feed (promote) > Run workflow, with the tag. It refuses a draft, and
+demand: Actions > Desktop promote > Run workflow, with the tag. It refuses a draft, and
 skips a prerelease tag, and refuses a version that is not newer than the one in the feed unless dispatched with `allow_downgrade`, so a client is never pointed at a draft or an unfinished version. Files upload in order (payloads, then `.sig` files, then manifests last), so a client never sees a
 manifest without its payload and signature. Assets of earlier versions are removed afterwards.
 

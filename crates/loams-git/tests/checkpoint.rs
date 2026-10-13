@@ -304,3 +304,42 @@ async fn create_repo_is_idempotent_and_sha1_only() {
         Err(RefError::NotFound)
     ));
 }
+
+/// `latest_state` reads the tail without a sequencer and writes nothing:
+/// the latest checkpoint, then the segments after it (plan GT1 Task 51's
+/// read path for the serverless helper).
+#[tokio::test]
+async fn latest_state_reads_the_tail_and_writes_nothing() {
+    let store = Store::in_memory();
+    let clock = Arc::new(ManualClock::stepping(NOW, 3));
+    let log = mem_reflog_with(store.clone(), clock, |config| {
+        config.checkpoint.every_segments = 2;
+    })
+    .await;
+    run_ops(&log, &[(0, 0), (1, 0), (0, 2), (2, 0), (1, 1)]).await;
+    let tail = log.seq();
+    let expected = log
+        .snapshot(loams_git::ReadAt::Latest)
+        .await
+        .expect("snapshot");
+    // Stopped first, so no checkpoint or hint write races the count.
+    log.shutdown().await;
+    let wal = StoreWalStore::new(store.clone(), test_paths());
+    let before = store.list_page("", None, 10_000).await.expect("list").len();
+    let state = loams_git::latest_state(&wal).await.expect("read");
+    assert_eq!(state.seq, tail);
+    assert_eq!(state.snapshot(), *expected);
+    let after = store.list_page("", None, 10_000).await.expect("list").len();
+    assert_eq!(before, after, "a read wrote an object");
+    let absent = StoreWalStore::new(
+        store,
+        RepoPaths::new(
+            loams_git::NamespaceId(1),
+            &loams_git::RepoId::parse("rabsent").expect("id"),
+        ),
+    );
+    assert!(matches!(
+        loams_git::latest_state(&absent).await,
+        Err(RefError::NotFound)
+    ));
+}

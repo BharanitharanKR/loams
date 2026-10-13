@@ -2,7 +2,7 @@
   "instance": {
     "name": "Acme Loams",
     "edition": "oss",
-    "version": "0.1.0-dev",
+    "version": "0.1.0-preview.1",
     "setup_required": false,
     "sign_in": {
       "password": true,

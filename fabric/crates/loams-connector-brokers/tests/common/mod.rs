@@ -60,10 +60,10 @@ pub fn endpoint(var: &str, default: &str) -> String {
         .unwrap_or_else(|| default.to_owned())
 }
 
-/// The staged manifest (R18.1).
+/// The registry's manifest (staged in this crate first, R18.1).
 pub fn spec(id: &str) -> ConnectorSpec {
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("manifests");
-    loams_flow::load_manifest(&root.join(format!("{id}.yaml")), &root)
+    let root = loams_flow::manifest::repository_root().join("connectors");
+    loams_flow::load_manifest(&root.join("registry").join(format!("{id}.yaml")), &root)
         .unwrap_or_else(|e| panic!("{id}: {}", loams_flow::validate::render_errors(&e)))
 }
 
@@ -360,7 +360,7 @@ impl BrokerHarness {
         }
     }
 
-    /// Run `suites` from the kit against this harness and the staged
+    /// Run `suites` from the kit against this harness and the registry's
     /// manifest; skipped when the stack is down.
     pub async fn run(&self, id: &str, suites: &[Suite]) -> SuiteReport {
         let spec = spec(id);

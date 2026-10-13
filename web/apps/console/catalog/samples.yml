@@ -1,0 +1,11 @@
+# The sample third-party plugin, for demo mode only (the in-browser mock, `pnpm dev`
+# or `?demo`): src/cordis/main.tsx applies this patch after base.yml there and
+# nowhere else, so a real instance never lists it in the nav.
+#
+# It runs in a sandboxed frame, and only when the instance sets the
+# `console.third_party_plugins` feature (off until the unified auth plan can vend
+# attenuated tokens; the demo mock turns it on).
+
+- insert:
+    - id: hello
+      name: '@loams/example-plugin-hello'

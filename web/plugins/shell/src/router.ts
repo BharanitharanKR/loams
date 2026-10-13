@@ -110,6 +110,11 @@ export class HashRouter implements RouterService {
     return this.#current;
   }
 
+  /** The route as the source holds it, query included (`/studio/t/c_1?panel=diff`). */
+  raw(): string {
+    return this.source.get();
+  }
+
   /** The title of the current page, for the document title. */
   title(): string | undefined {
     return this.#routes.find((r) => r.spec.id === this.#current.pageId)?.spec.title;
@@ -125,11 +130,19 @@ export class HashRouter implements RouterService {
     this.#listeners.clear();
   }
 
-  #resolve(path: string): Location {
+  #resolve(raw: string): Location {
+    // A query (`/studio/t/c_1?panel=diff&host=h1`, §53 §4.4) is not part of the route:
+    // its parameters join the page's params, and route parameters win over them.
+    const at = raw.indexOf('?');
+    const path = at < 0 ? raw : raw.slice(0, at) || '/';
+    const query: Record<string, string> = {};
+    if (at >= 0) {
+      for (const [key, value] of new URLSearchParams(raw.slice(at + 1))) query[key] = value;
+    }
     for (const route of this.#routes) {
       const match = route.pattern.exec(path);
       if (!match) continue;
-      const params: Record<string, string> = {};
+      const params: Record<string, string> = { ...query };
       try {
         route.keys.forEach((key, i) => {
           params[key] = decodeURIComponent(match[i + 1] ?? '');

@@ -44,6 +44,25 @@ describe("deeplink_allowlist", () => {
 	])("rejects %j", (raw) => {
 		expect(parseDeepLink(raw)).toBeNull();
 	});
+	it("deeplink_allows_studio_thread_and_group", () => {
+		expect(parseDeepLink("loams://open/studio/t/c_01hq7x")).toEqual({
+			path: "/studio/t/c_01hq7x",
+		});
+		expect(parseDeepLink("loams://open/studio/g/g-2")).toEqual({
+			path: "/studio/g/g-2",
+		});
+		for (const raw of [
+			"loams://open/studio",
+			"loams://open/studio/t",
+			"loams://open/studio/t/",
+			"loams://open/studio/t/a/b",
+			"loams://open/studio/p/x",
+			"loams://open/studio/settings",
+			"loams://open/studio/t/..",
+			"loams://open/studio/t/a?panel=diff",
+		])
+			expect(parseDeepLink(raw)).toBeNull();
+	});
 	it("is case-insensitive on the scheme only", () => {
 		expect(parseDeepLink("LOAMS://open/data")).toEqual({ path: "/data" });
 	});

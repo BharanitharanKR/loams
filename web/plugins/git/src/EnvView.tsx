@@ -118,7 +118,7 @@ export function EnvView(p: { client: GitClient; namespace: string; repoId: strin
         </h3>
         <ul className="m-0 grid list-none gap-3 p-0 md:grid-cols-2">
           {envs.map((e) => (
-            <li key={e.name} className="rounded-md border border-solid border-line p-3">
+            <li key={e.name} className="rounded-md border border-solid border-rule p-3">
               <p className="m-0 flex items-center gap-2">
                 <span className="font-mono text-ink">{e.name}</span>
                 <Badge>rev {e.revision}</Badge>
@@ -181,7 +181,7 @@ export function EnvView(p: { client: GitClient; namespace: string; repoId: strin
             </thead>
             <tbody>
               {keys.map((k) => (
-                <tr key={k.key} className="border-0 border-t border-solid border-line align-top">
+                <tr key={k.key} className="border-0 border-t border-solid border-rule align-top">
                   <th scope="row" className="py-1.5 pr-3 text-left font-normal">
                     <span className="font-mono text-ink">{k.key}</span>
                     <span className="block text-xs text-muted">{k.file}</span>
@@ -338,7 +338,7 @@ function AuditLog(p: {
           </thead>
           <tbody>
             {events.map((e) => (
-              <tr key={e.id} className="border-0 border-t border-solid border-line">
+              <tr key={e.id} className="border-0 border-t border-solid border-rule">
                 <td className="py-1 pr-3 text-xs text-muted">
                   <time dateTime={e.at}>{formatRelative(e.at)}</time>
                 </td>

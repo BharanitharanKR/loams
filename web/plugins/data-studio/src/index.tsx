@@ -83,8 +83,10 @@ const plugin: PluginModule = {
     // The static `/sql` route is registered before `/:coll`, because the router
     // takes the first match: a collection named "sql" is not reachable by URL.
     const routes: { id: string; path: string; title: string; view: View }[] = [
-      { id: 'data', path: '/data', title: 'Data', view: 'collections' },
-      { id: 'data-ns', path: '/data/:ns', title: 'Data', view: 'collections' },
+      // The visible name is "Data explorer" (Q812), so it is not confused with Loams Studio;
+      // the routes and the plugin id stay, to keep links working.
+      { id: 'data', path: '/data', title: 'Data explorer', view: 'collections' },
+      { id: 'data-ns', path: '/data/:ns', title: 'Data explorer', view: 'collections' },
       { id: 'data-sql', path: '/data/:ns/sql', title: 'SQL', view: 'sql' },
       { id: 'data-coll', path: '/data/:ns/:coll', title: 'Collection', view: 'documents' },
       { id: 'data-search', path: '/data/:ns/:coll/search', title: 'Search', view: 'search' },
@@ -114,7 +116,7 @@ const plugin: PluginModule = {
           name: 'shell.nav.section',
           plugin: 'data-studio',
           order: 20,
-          meta: { id: 'data', label: 'Data', href: '/data', icon: 'data', group: 'Data' },
+          meta: { id: 'data', label: 'Data explorer', href: '/data', icon: 'data', group: 'Data' },
         },
         () => null,
       ),

@@ -125,6 +125,13 @@ code {
 @media (min-width: 960px) {
   .app {
     grid-template-columns: var(--side) minmax(0, 1fr);
+    /* The sidebar's ground runs the full height of the page, however long. */
+    background: linear-gradient(
+      90deg,
+      var(--op-surface) 0 calc(var(--side) - 1px),
+      var(--op-rule-soft) calc(var(--side) - 1px) var(--side),
+      var(--op-bg) var(--side)
+    );
   }
 }
 
@@ -154,7 +161,7 @@ code {
     transform: none;
     visibility: visible;
     transition: transform 260ms var(--op-ease);
-    box-shadow: 24px 0 48px -24px rgb(0 0 0 / 0.5);
+    box-shadow: var(--op-shadow-modal);
   }
 }
 
@@ -162,7 +169,7 @@ code {
   position: fixed;
   inset: 0;
   z-index: 55;
-  background: rgb(8 6 4 / 0.5);
+  background: var(--op-scrim);
 }
 
 .side-brand {
@@ -242,6 +249,26 @@ code {
   font-weight: 600;
   color: var(--op-accent-ink);
   background: var(--op-accent);
+}
+
+/* An org page: no project is open, the switcher shows the last one. */
+.switcher[data-idle] {
+  border-style: dashed;
+  background: transparent;
+}
+
+.switcher[data-idle] select {
+  color: var(--op-muted);
+  font-weight: 400;
+}
+
+.switcher[data-idle] .switcher-mark {
+  color: var(--op-muted);
+  background: var(--op-raised);
+}
+
+.side-group-note {
+  color: var(--op-faint);
 }
 
 .side-nav {
@@ -502,7 +529,7 @@ code {
   min-width: 240px;
   border: 1px solid var(--op-rule);
   background: var(--op-bg);
-  box-shadow: 0 24px 48px -24px rgb(0 0 0 / 0.5);
+  box-shadow: var(--op-shadow-pop);
   animation: rise 180ms var(--op-ease) both;
 }
 
@@ -1106,7 +1133,7 @@ code {
   border-left: 3px solid var(--op-grow);
   font-size: 0.86rem;
   background: var(--op-bg);
-  box-shadow: 0 16px 32px -16px rgb(0 0 0 / 0.5);
+  box-shadow: var(--op-shadow-pop);
   animation: rise 240ms var(--op-ease) both;
 }
 

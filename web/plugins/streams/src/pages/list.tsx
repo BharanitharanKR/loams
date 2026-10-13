@@ -24,6 +24,7 @@ import {
   ErrorNotice,
   errorText,
   NamespacePicker,
+  NOT_SERVED,
   PageHead,
   rememberNamespace,
   useLoad,
@@ -378,7 +379,13 @@ export function ListPage({
       </div>
       <Card title={tab === 'streams' ? `Streams in ${ns}` : `Links in ${ns}`} flush>
         {active.state === 'loading' && <p className="lc-muted p-4">Loading…</p>}
-        {active.state === 'error' && (
+        {active.state === 'error' && active.message === NOT_SERVED && (
+          <Empty title="Streams are not on this server">
+            Streams and links live on a Loams engine. Switch to a server that runs one, such as This
+            computer, to list them.
+          </Empty>
+        )}
+        {active.state === 'error' && active.message !== NOT_SERVED && (
           <div className="p-4">
             <ErrorNotice
               title={tab === 'streams' ? 'Could not list streams' : 'Could not list links'}

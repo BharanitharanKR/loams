@@ -21,8 +21,10 @@ byte for byte in both directions. If a Redpanda suite finds a missing
 capability, it is added to the profile's `narrows` with a `narrows:` note on
 the manifest. It is never skipped.
 
-Configuration is the Kafka connector's (`kafka.config.json`). The profile
-adds no defaults.
+Configuration is the Kafka connector's keys, in
+`connectors/schemas/redpanda.config.json` (as `kafka.config.json`, without
+the schema registry, which the native family does not wire in yet, R9.8).
+The profile adds no defaults.
 
 ## Fallback
 

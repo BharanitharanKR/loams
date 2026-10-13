@@ -1,4 +1,4 @@
-//! The brokers family's manifests (staged in `manifests/`, R18.1) against
+//! The brokers family's manifests (`connectors/registry/`, staged here first, R18.1) against
 //! the code: each validates with `loams-flow`'s loader (the manifest schema,
 //! CN1's and CN2's semantic rules, the secret rule against its config
 //! schema), names a module this crate has, claims no more than its factory
@@ -18,13 +18,15 @@ use loams_connector_sdk::{
 use loams_flow::ConnectorSpec;
 use serde_json::{Value, json};
 
-fn manifests() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("manifests")
+/// The repository's `connectors/` tree: the manifests are `registry/<id>.yaml`
+/// and their `config.$ref`s resolve against it.
+fn connectors() -> PathBuf {
+    loams_flow::manifest::repository_root().join("connectors")
 }
 
 fn load(id: &str) -> ConnectorSpec {
-    let root = manifests();
-    loams_flow::load_manifest(&root.join(format!("{id}.yaml")), &root)
+    let root = connectors();
+    loams_flow::load_manifest(&root.join("registry").join(format!("{id}.yaml")), &root)
         .unwrap_or_else(|e| panic!("{id}: {}", loams_flow::validate::render_errors(&e)))
 }
 

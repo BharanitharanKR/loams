@@ -61,7 +61,7 @@ tokio-tungstenite = { version = "=0.30.0", default-features = false, features = 
 [dev-dependencies]
 arrow-array.workspace = true
 arrow-schema.workspace = true
-# The staged manifests' example configs are checked against their config
+# The family's manifests' example configs are checked against their config
 # schemas (tests/registry.rs); loams-flow already links it.
 jsonschema.workspace = true
 loams-flow = { path = "../loams-flow" }

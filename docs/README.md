@@ -8,7 +8,8 @@ Build, understand, and contribute to Loams: hybrid retrieval on object storage, 
 
 | You want to… | Read |
 |---|---|
-| Run your first query | [Repository quickstart](../README.md#quick-start) |
+| Run your first query | [Engine quick start](engine-quickstart.md) |
+| Find your way around the repository | [Project layout](project-layout.md) |
 | Build on Windows or macOS | [Build from source](build-from-source/README.md) |
 | Understand the architecture | [Design overview](design/README.md), [architecture](design/01-architecture.md), and [decision log](design/13-decision-log.md) |
 | Work across engine, apps, and plugins | [Monorepo guide](monorepo.md) |
@@ -35,7 +36,7 @@ Additional references: [open-core boundaries](open-core.md), [remote browser pro
 
 ## Read status in context
 
-The code and [root README](../README.md#features) describe current implementation. Design documents explain intended behavior; plans and reviews are dated snapshots and may describe work that has since landed. A proposal is not a shipped feature. Loams has no stable release; verify flags with the binary from your checkout and keep the selected source ref with any deployment instructions.
+The code and [feature status table](release/preview.md#feature-status) describe current implementation. Design documents explain intended behavior; plans and reviews are dated snapshots and may describe work that has since landed. A proposal is not a shipped feature. Loams has no stable release; verify flags with the binary from your checkout and keep the selected source ref with any deployment instructions.
 
 The public site at [loams.dev/docs](https://loams.dev/docs) combines reader guides with generated copies of `docs/design`. Update design originals here; the website syncs them with `LOAMS_REPO`, `LOAMS_REF`, or `LOAMS_DESIGN_DIR`.
 
