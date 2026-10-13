@@ -1,0 +1,97 @@
+{{- $fullname := include "loams-connectors.fullname" . }}
+{{- $name := printf "%s-flow" $fullname }}
+{{- /* An upgrade keeps the replica count the fleet's leader set (R26.7). */}}
+{{- $existing := lookup "apps/v1" "Deployment" .Release.Namespace $name }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "loams-connectors.labels" . | nindent 4 }}
+    app.kubernetes.io/component: flow
+spec:
+  replicas: {{ if $existing }}{{ $existing.spec.replicas }}{{ else }}{{ .Values.flow.replicas.min | int64 }}{{ end }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "loams-connectors.flowSelector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "loams-connectors.flowSelector" . | nindent 8 }}
+      annotations:
+        loams.dev/fleet-config-hash: {{ include "loams-connectors.fleet" . | sha256sum | trunc 16 | quote }}
+    spec:
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: {{ .Values.flow.terminationGracePeriodSeconds | int64 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ .Values.flow.uid | int64 }}
+        runAsGroup: {{ .Values.flow.uid | int64 }}
+        fsGroup: {{ .Values.flow.uid | int64 }}
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "loams-connectors.flowSelector" . | nindent 14 }}
+      containers:
+        - name: flow
+          image: {{ include "loams-connectors.flowImage" . }}
+          imagePullPolicy: IfNotPresent
+          command: ["loams-fabric"]
+          args: ["flow", "--fleet-config", "/etc/loams-flow/fleet.yaml"]
+          env:
+            # The lease holder name: unique per pod (OR-16).
+            - name: LOAMS_FLOW_POD
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: LOAMS_FLOW_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          ports:
+            # FlowService itself listens on loopback only (D111); the pod
+            # exposes metrics and health.
+            - name: metrics
+              containerPort: {{ .Values.flow.metricsPort | int64 }}
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: metrics
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: metrics
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.flow.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: fleet
+              mountPath: /etc/loams-flow
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: fleet
+          configMap:
+            name: {{ $fullname }}-fleet
+            defaultMode: 0444
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi

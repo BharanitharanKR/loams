@@ -2,6 +2,9 @@ import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
 import { protocol, type Session } from "electron";
 import type { EngineState, ServerEntry } from "../../shared/contracts";
+import { isAgentdPath } from "../agentd/allowlist";
+import type { AgentdTarget } from "../agentd/discover";
+import { handleAgentdRequest } from "./agentd";
 import { upstream } from "./inflight";
 import { isProxied, proxyRequest } from "./proxy";
 import { routeRequest } from "./route";
@@ -18,6 +21,8 @@ export interface AppProtocolDeps {
 	engineState: () => EngineState;
 	/** Answers a few endpoints itself when the active server is the local engine. */
 	localShim: LocalShim;
+	/** The local daemon's Connect listener and token (SD1 Task 5), or null. */
+	agentd: () => AgentdTarget | null;
 }
 
 /** Must run before app ready. */
@@ -67,6 +72,12 @@ export function installAppProtocol(ses: Session, deps: AppProtocolDeps): void {
 	ses.protocol.handle(APP_SCHEME, async (req) => {
 		const url = new URL(req.url);
 		if (url.hostname !== "console") return text(404, "not found");
+
+		// Before the server routes: `/loams.` is otherwise the active server's.
+		if (isAgentdPath(url.pathname))
+			return handleAgentdRequest(req, deps.agentd, (r) =>
+				ses.fetch(r as Request),
+			);
 
 		if (isProxied(url.pathname)) {
 			const server = deps.activeServer();

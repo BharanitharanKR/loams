@@ -57,6 +57,8 @@ export interface Discovery {
 	port: number;
 	startedAtMs: number;
 	mode: DaemonMode;
+	/** The `loams.agentd.v1` Connect listener's loopback port (SD1 Task 5); absent from an older daemon. */
+	connectPort?: number;
 }
 
 /** A session row as `ListSessions` returns it (the fork's surviving method). */
@@ -107,8 +109,14 @@ export interface Repo {
 export interface UnaryMethods {
 	DaemonStatus: { params: Record<string, never>; result: DaemonStatus };
 	ListSessions: { params: Record<string, never>; result: SessionSummary[] };
-	AttachSession: { params: { sessionId: string }; result: { sessionId: string } };
-	Drain: { params: { reason: "stop" | "upgrade" | "quit"; timeoutMs: number }; result: null };
+	AttachSession: {
+		params: { sessionId: string };
+		result: { sessionId: string };
+	};
+	Drain: {
+		params: { reason: "stop" | "upgrade" | "quit"; timeoutMs: number };
+		result: null;
+	};
 	Shutdown: { params: Record<string, never>; result: null };
 	ListRepos: { params: Record<string, never>; result: Repo[] };
 	AddRepo: { params: { path: string }; result: Repo };

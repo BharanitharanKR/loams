@@ -102,3 +102,66 @@ export async function proxyRequest(
 		headers: rh,
 	});
 }
+
+/** Request headers never forwarded to the daemon: the renderer's own identity
+ * and credentials, and the hop-by-hop set. */
+const AGENTD_DROPPED_REQUEST = [
+	"origin",
+	"referer",
+	"cookie",
+	"authorization",
+	"host",
+	...HOP_BY_HOP,
+];
+
+/** Response headers a renderer never gets from the daemon. */
+const AGENTD_DROPPED_RESPONSE = [
+	"set-cookie",
+	"www-authenticate",
+	"authorization",
+];
+
+/**
+ * Forwards a loams-app://console/loams.agentd.v1.* request to the daemon's
+ * loopback Connect listener (SD1 Task 5, §53 §6.2). It drops the renderer's
+ * `Origin`, `Cookie`, `Referer` and `Authorization` (the listener refuses any
+ * `Origin`), adds `Authorization: Bearer <token>`, which only main holds, and
+ * returns the upstream body as the response body, so a server stream reaches
+ * the renderer frame by frame. A response header that carries the token is
+ * dropped, so the token cannot reach the renderer even if echoed.
+ */
+export async function proxyAgentdRequest(
+	req: Request,
+	target: string,
+	/** `Bearer <token>`. */
+	authorization: string,
+	fetchImpl: typeof fetch,
+): Promise<Response> {
+	const src = new URL(req.url);
+	const dest = new URL(target);
+	const headers = new Headers(req.headers);
+	for (const k of AGENTD_DROPPED_REQUEST) headers.delete(k);
+	headers.set("authorization", authorization);
+	const hasBody = req.method !== "GET" && req.method !== "HEAD";
+	const res = await fetchImpl(
+		new Request(`${dest.origin}${src.pathname}${src.search}`, {
+			method: req.method,
+			headers,
+			body: hasBody ? req.body : undefined,
+			redirect: "manual",
+			duplex: "half",
+		}),
+	);
+	const secret = authorization.replace(/^Bearer /i, "");
+	const rh = new Headers(res.headers);
+	stripFraming(rh);
+	for (const k of AGENTD_DROPPED_RESPONSE) rh.delete(k);
+	for (const [k, v] of [...rh.entries()])
+		if (secret && v.includes(secret)) rh.delete(k);
+	rh.set("x-content-type-options", "nosniff");
+	return new Response(res.body, {
+		status: res.status,
+		statusText: res.statusText,
+		headers: rh,
+	});
+}

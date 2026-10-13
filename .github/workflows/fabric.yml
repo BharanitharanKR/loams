@@ -20,6 +20,9 @@ name: Connectors
 #                        accounts, with repository secrets (OR-3, OR-23)
 #   connectors-alerts  — promtool rule tests of the connector alerts and the
 #                        metrics/activity tests that run them (Task 24)
+#   connectors-kind    — the loams-connectors chart (helm lint, golden render),
+#                        the fleet's golden and lease tests, and the kind
+#                        mixed-fleet test once its images exist (Task 26)
 #   connectors-bench   — on dispatch (the nightly): the reference pipeline's and each family's
 #                        benches against their real systems, checked against
 #                        conformance/connectors/bench/baselines.toml (Task 27)
@@ -80,6 +83,7 @@ jobs:
       # A JSON list of the families whose suites a pull request must run.
       families: ${{ steps.families.outputs.list }}
       alerts: ${{ steps.filter.outputs.alerts }}
+      kube: ${{ steps.filter.outputs.kube }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name == 'push'
@@ -182,6 +186,15 @@ jobs:
               - "fabric/crates/loams-connector-sdk/**"
               - "fabric/crates/loams-flow/**"
               - "deploy/observability/connectors/**"
+            # The connector fleet on Kubernetes (CN2 Task 26): the chart and
+            # the code that renders the fallback pods and holds the leases.
+            kube:
+              - *toolchain
+              - "fabric/Cargo.toml"
+              - "fabric/Cargo.lock"
+              - "fabric/crates/loams-connector-sdk/**"
+              - "fabric/crates/loams-flow/**"
+              - "deploy/helm/loams-connectors/**"
       # The changed families, as a JSON list for the shards' matrices. A
       # shard whose family has no service in its stack, or no crate yet,
       # finishes at once (scripts/connectors/compose_services.py).
@@ -656,6 +669,66 @@ jobs:
         working-directory: fabric
         run: cargo test -p loams-flow --test activity --locked
 
+  # CN2 owns this job (plan 2026-10-10-cn2-connectors, Task 26). helm comes
+  # from the v3.22.0 release (Apache-2.0, 2026-09-10) and kind from v0.33.0
+  # (Apache-2.0, 2026-08-26), each checked against its published SHA-256.
+  # `helm_lint_and_template_golden` lints the chart and compares its render
+  # with the golden file; the rest of tests/kube.rs covers KubeRuntime's
+  # golden objects and the fenced leases. The kind test (`it_kind_mixed_fleet`)
+  # needs the loams-fabric, loams-connect and Iggy connectors images, which
+  # FL1, CN1 Task 12 and Task 22 publish; it runs once the repository variable
+  # LOAMS_KIND_FLEET_VALUES names a values file with their digests (R26.10).
+  connectors-kind:
+    name: "Connectors: Kubernetes fleet (helm chart, kube golden, kind)"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.kube == 'true'))) }}
+    runs-on: ubuntu-24.04
+    env:
+      HELM_VERSION: "3.22.0"
+      HELM_SHA256: 1e4ab49e429626cf6c6958d914248b78c9730803c2751b87627e171dc800e7bb
+      KIND_VERSION: "0.33.0"
+      KIND_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: helm
+        run: |
+          dir="$RUNNER_TEMP/helm"
+          mkdir -p "$dir"
+          curl -sSfL --retry 3 -o "$dir/helm.tgz" "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz"
+          echo "${HELM_SHA256}  $dir/helm.tgz" | sha256sum -c -
+          tar -xzf "$dir/helm.tgz" -C "$dir" --strip-components=1 linux-amd64/helm
+          echo "LOAMS_HELM=$dir/helm" >> "$GITHUB_ENV"
+          echo "$dir" >> "$GITHUB_PATH"
+      - name: helm lint
+        run: helm lint --strict deploy/helm/loams-connectors -f deploy/helm/loams-connectors/ci/golden-values.yaml
+      # loams-flow builds loams-flow-proto, which needs protoc.
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fabric -> target
+          key: connectors-kind
+      - name: chart golden, KubeRuntime golden and lease tests
+        working-directory: fabric
+        run: cargo test -p loams-flow --test kube --locked
+      - name: kind
+        if: ${{ vars.LOAMS_KIND_FLEET_VALUES != '' }}
+        run: |
+          dir="$RUNNER_TEMP/kind"
+          mkdir -p "$dir"
+          curl -sSfL --retry 3 -o "$dir/kind" "https://github.com/kubernetes-sigs/kind/releases/download/v${KIND_VERSION}/kind-linux-amd64"
+          echo "${KIND_SHA256}  $dir/kind" | sha256sum -c -
+          chmod +x "$dir/kind"
+          "$dir/kind" create cluster --name loams-connectors --wait 120s
+      - name: mixed fleet on kind
+        if: ${{ vars.LOAMS_KIND_FLEET_VALUES != '' }}
+        working-directory: fabric
+        env:
+          LOAMS_KIND_FLEET_VALUES: ${{ github.workspace }}/${{ vars.LOAMS_KIND_FLEET_VALUES }}
+        run: cargo test -p loams-flow --test it_kind --locked -- --ignored
+
   # CN2 owns this job (plan 2026-10-10-cn2-connectors, Task 27): the
   # performance budgets. The reference pipeline (no I/O) and each family's
   # benches against their real systems write one report per connector and
@@ -903,6 +976,7 @@ jobs:
       - connectors-p2
       - connectors-ci-only
       - connectors-alerts
+      - connectors-kind
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

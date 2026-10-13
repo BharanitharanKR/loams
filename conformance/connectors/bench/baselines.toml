@@ -154,3 +154,12 @@ direction = "source"
 family = "kv"
 status = "pending"
 owner = "CN2 Task 14"
+
+# --- mongodb (CN2 Task 16): harness exists; bench pending -------------------
+
+[[connector]]
+id = "mongodb"
+direction = "source"
+family = "mongodb"
+status = "pending"
+owner = "CN2 Task 16"

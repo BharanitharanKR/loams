@@ -1,0 +1,128 @@
+syntax = "proto3";
+
+// Diffs (design §53 §5.6, §6.4; plan SD1 Task 4): the checkout diffs of this
+// device's threads, one diff on demand, a file's two sides, and discards. The
+// gap G21 (discard some paths) is declared here and answers `unimplemented`
+// until SD1 Task 9. Patches and file text are data: a client renders them as
+// text (§53 D919). See studio.proto for the package's rules.
+package loams.agentd.v1;
+
+import "loams/options/v1/options.proto";
+
+service DiffService {
+  option (loams.options.v1.module) = {
+    name: "agentd.diff"
+    summary: "Loams Studio's diffs: checkout diffs, file sides and discards."
+    unstable: true
+  };
+
+  // Every chat checkout's diff, then the list again on each change (ndjson:
+  // `WatchCheckoutDiffs`).
+  rpc WatchCheckoutDiffs(WatchCheckoutDiffsRequest) returns (stream WatchCheckoutDiffsResponse);
+  // One diff: the working tree, a branch, a commit or a turn (ndjson:
+  // `GetCheckoutDiff`).
+  rpc GetCheckoutDiff(GetCheckoutDiffRequest) returns (GetCheckoutDiffResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // A file's old and new text (ndjson: `GetCheckoutFileDiffText`).
+  rpc GetCheckoutFileDiffText(GetCheckoutFileDiffTextRequest) returns (GetCheckoutFileDiffTextResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Restores a thread's checkout to HEAD and removes its untracked paths;
+  // refused when the checksum is stale (ndjson: `DiscardWorkingTree`).
+  rpc Discard(DiscardRequest) returns (DiscardResponse);
+  // G21: discards some paths only (SD1 Task 9).
+  rpc DiscardPaths(DiscardPathsRequest) returns (DiscardPathsResponse);
+}
+
+message DiffFileSummary {
+  string path = 1;
+  optional string old_path = 2;
+  // git's status letter word, for example "modified".
+  string status = 3;
+  uint32 additions = 4;
+  uint32 deletions = 5;
+  bool binary = 6;
+}
+
+message CheckoutDiff {
+  string checkout_id = 1;
+  string device_id = 2;
+  string cwd = 3;
+  // A unified diff.
+  string patch = 4;
+  repeated DiffFileSummary files = 5;
+  uint32 additions = 6;
+  uint32 deletions = 7;
+  bool truncated = 8;
+  // Names this diff for later checksum-guarded writes.
+  string checksum = 9;
+  int64 updated_at_ms = 10;
+}
+
+message CheckoutFileDiffText {
+  string diff_checksum = 1;
+  optional string old_text = 2;
+  optional string new_text = 3;
+  optional string old_content_hash = 4;
+  optional string new_content_hash = 5;
+  bool binary = 6;
+  bool truncated = 7;
+  // The diff moved since `diff_checksum`.
+  bool stale = 8;
+}
+
+message WatchCheckoutDiffsRequest {}
+
+message WatchCheckoutDiffsResponse {
+  repeated CheckoutDiff diffs = 1;
+}
+
+message GetCheckoutDiffRequest {
+  string cwd = 1;
+  // "branch", "commit" or "turn"; anything else, empty included, is the
+  // working tree.
+  string mode = 2;
+  optional string base_ref = 3;
+  optional string chat_id = 4;
+  optional string commit_sha = 5;
+}
+
+message GetCheckoutDiffResponse {
+  CheckoutDiff diff = 1;
+}
+
+message GetCheckoutFileDiffTextRequest {
+  string checkout_id = 1;
+  string cwd = 2;
+  string path = 3;
+  string mode = 4;
+  optional string base_ref = 5;
+  optional string chat_id = 6;
+  optional string commit_sha = 7;
+  string diff_checksum = 8;
+}
+
+message GetCheckoutFileDiffTextResponse {
+  CheckoutFileDiffText text = 1;
+}
+
+message DiscardRequest {
+  string chat_id = 1;
+  string checkout_id = 2;
+  string expected_checksum = 3;
+}
+
+message DiscardResponse {
+  bool ok = 1;
+  // The checkout's checksum after the discard.
+  string checksum = 2;
+}
+
+message DiscardPathsRequest {
+  string checkout_id = 1;
+  repeated string paths = 2;
+  string expected_checksum = 3;
+}
+
+message DiscardPathsResponse {}

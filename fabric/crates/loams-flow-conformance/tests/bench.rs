@@ -514,8 +514,9 @@ fn crate_upkeep_self_test_green() {
     );
 }
 
-/// `connectors-bench` and `crate-upkeep` run on their own schedules (and on
-/// demand); `camel-bump` runs only by hand, with a version.
+/// `connectors-bench` and `crate-upkeep` run on a dispatch only: the nightly
+/// (nightly.yml) dispatches this workflow, and the per-workflow crons are gone
+/// (two-tier CI, 2026-10-13). `camel-bump` runs only by hand, with a version.
 #[test]
 fn upkeep_jobs_are_scheduled_or_manual() {
     let wf =
@@ -528,17 +529,10 @@ fn upkeep_jobs_are_scheduled_or_manual() {
             .unwrap_or_else(|| panic!("{job} has an if"))
             .to_owned()
     };
-    for (job, cron) in [
-        ("connectors-bench", "5 5 * * 0"),
-        ("crate-upkeep", "29 5 * * 1"),
-    ] {
+    for job in ["connectors-bench", "crate-upkeep"] {
         let c = cond(job);
-        assert!(c.contains(&format!("'{cron}'")), "{job}: {c}");
-        assert!(
-            wf.contains(&format!("- cron: \"{cron}\"")),
-            "{job}: no {cron} cron"
-        );
         assert!(c.contains("workflow_dispatch"), "{job}: {c}");
+        assert!(!c.contains("pull_request"), "{job}: {c}");
     }
     let c = cond("camel-bump");
     assert!(
