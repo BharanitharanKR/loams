@@ -1452,3 +1452,30 @@ Fork PR ostrium-labs/loams-postgres#5 (branch `loams/nf1-hygiene` from `main` `b
 3. **`docs/loams/LICENSING-tokio-epoll-uring.md`** in the fork records the finding, the resolution and what is open. `LOAMS_PATCHES.md` row LP-0007 (drop when upstream publishes licence files that match its manifests).
 4. **Q716 is still open: nothing was posted upstream.** Filing the one issue on `neondatabase/tokio-epoll-uring` is an exception to D231 the owner has not made. The fallback (`io-uring` feature, `loams/nf1-no-uring`) was not started: no counsel finding says the declaration is insufficient.
 5. **`third_party_licences_include_tokio_epoll_uring` lands with Task 10**, whose `THIRD_PARTY_LICENSES.html` it checks (cargo-about needs `about.toml` to point at the repository-root texts, because they are not in the crate's directory).
+
+### Task 9 rulings (2026-10-13, at `dev` `f8fc9f1b`)
+
+Fork PR ostrium-labs/loams-postgres#7 (branch `loams/nf1-build-tools`, `bd5dcda5`, LP-0009) merged into `main` as `517503ee`; CodeRabbit was rate-limited after the retry, so it was self-reviewed.
+
+1. **`loams-build-tools.yml`.** `build-tools/Dockerfile` is built for **bookworm only** (the storage image's Debian; Neon also built a bullseye variant, which nothing here uses), for amd64 and arm64, on `ubuntu-24.04` and `ubuntu-24.04-arm`.
+   - On `main`, each architecture is pushed by digest with BuildKit's provenance (`mode=max`) and SBOM, and the two are joined into `ghcr.io/ostrium-labs/loams-postgres-build-tools:<sha12>`.
+   - The cache is `loams-postgres-buildcache:build-tools-<arch>`, written from `main` only.
+   - A pull request builds both architectures and pushes nothing.
+   - Triggers: `build-tools/` changes, monthly (the 2nd, 03:23 UTC) and manual dispatch.
+   - Task 12 then moved the signing and attestation to `loams-sign.yml`, as the plan said it would.
+2. **The pin PR.**
+   - `scripts/loams/pin-build-tools.sh` rewrites `ARG BUILD_TOOLS=` and nothing else. It refuses a tag, another registry or a short digest.
+   - The job `pin` commits as `github-actions[bot]`, with a matching `Signed-off-by` and `Loams-Patch: LP-0009`, so the DCO and patch checks pass. It pushes to `bot/build-tools-<digest12>`, outside the `loams/*` no-deletion ruleset, so the branch can be deleted after merging.
+   - The PR is opened with `LOAMS_BOT_TOKEN` (the App, Q733) when that secret exists, and with `GITHUB_TOKEN` otherwise.
+   - The `GITHUB_TOKEN` path needs the owner's "Allow GitHub Actions to create and approve pull requests", and its PRs start no checks.
+3. **`Dockerfile`: `FROM $BUILD_TOOLS`** in the three build stages, replacing `$REPOSITORY/$IMAGE:$TAG` (`pinned`).
+   - **Bootstrap:** until our first build, the default is the neon-archive mirror of Neon's last public build-tools (`ghcr.io/ostrium-labs/neon-archive/build-tools@sha256:bd1fe230…`). That image is byte-identical to Neon's `d4a4001a…-bookworm` and its audit is clean (Task 1).
+   - It is a builder stage only: nothing from it ships in an image, so the "never deployed" ruling on the neon-archive packages (Task 2 ruling 2) is kept. The first run's pin PR replaces it.
+   - This needs the owner to give `loams-postgres` read access to that private package, or to run `loams-build-tools.yml` before the first storage build.
+4. **No `ARG BUILD_TOOLS` in the compute Dockerfile** (deviation). It has no build-tools base: it builds its own `build-deps` from Debian and installs its own toolchain.
+5. **Tests.** `test_hygiene.sh build_tools_pinned_by_digest`:
+   - the ARG is an `ostrium-labs` image by digest;
+   - every `FROM` is `$BUILD_TOOLS` or the pinned Debian base;
+   - `pin-build-tools.sh` changes exactly that line and refuses bad references.
+
+   This is the plan's G0 grep check; it runs in `loams-hygiene.yml` until Task 16. "The workflow builds on PR" waits for Actions (owner). `actionlint` is clean.
