@@ -49,7 +49,15 @@ if (root) {
 
       const platform = createWebPlatform(
         demo
-          ? { transport: createMockTransport({ features: { [THIRD_PARTY_FLAG]: true } }) }
+          ? {
+              transport: createMockTransport({
+                // The dev server's demo also shows Studio (behind `studio` until SD1 Task 32).
+                features: {
+                  [THIRD_PARTY_FLAG]: true,
+                  ...(import.meta.env.DEV ? { studio: true } : {}),
+                },
+              }),
+            }
           : {
               baseUrl: appsUrl ?? config.server,
               devBearer: import.meta.env.DEV

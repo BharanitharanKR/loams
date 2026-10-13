@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { Button, DataTable, Dialog, Menu, MenuItem, Tabs, VirtualList } from '../src';
+import { Button, DataTable, Dialog, Menu, MenuItem, Segmented, Tabs, VirtualList } from '../src';
 
 afterEach(cleanup);
 
@@ -73,6 +73,39 @@ describe('Tabs', () => {
     expect(screen.getByText('first')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'Beta' }));
     expect(screen.getByRole('tab', { name: 'Beta' }).getAttribute('aria-selected')).toBe('true');
+  });
+});
+
+describe('Segmented', () => {
+  it('presses one option and never none', () => {
+    const seen: string[] = [];
+    function S() {
+      const [v, setV] = useState<'console' | 'studio'>('console');
+      return (
+        <Segmented
+          label="Mode"
+          value={v}
+          onValueChange={(next) => {
+            seen.push(next);
+            setV(next);
+          }}
+          options={[
+            { value: 'console', label: 'Console' },
+            { value: 'studio', label: 'Studio' },
+          ]}
+        />
+      );
+    }
+    render(<S />);
+    expect(screen.getByRole('group', { name: 'Mode' })).toBeTruthy();
+    const studio = screen.getByRole('button', { name: 'Studio' });
+    expect(studio.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(studio);
+    expect(studio.getAttribute('aria-pressed')).toBe('true');
+    // Pressing the pressed option again keeps it pressed.
+    fireEvent.click(studio);
+    expect(studio.getAttribute('aria-pressed')).toBe('true');
+    expect(seen).toEqual(['studio']);
   });
 });
 

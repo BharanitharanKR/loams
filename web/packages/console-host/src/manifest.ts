@@ -3,6 +3,7 @@
 // `plugin-manifest.schema.json` beside this package; this validator is the
 // one the host and the build run, and the tests keep the two in step.
 
+import { isMode, type Mode } from './mode.js';
 import { isPermission, type Permission } from './permissions.js';
 import { CORE_PLUGINS } from './tiers.js';
 
@@ -30,6 +31,11 @@ export interface PluginManifest {
   permissions: Permission[];
   requires: { console: string; api: string[] };
   editions: Edition[];
+  /**
+   * The console modes the plugin belongs to (§53 §4.1, D901); `["console"]` when
+   * absent. Core plugins load in every mode whatever they declare.
+   */
+  modes: Mode[];
   config?: string;
   server?: { kind: 'function' | 'connector'; ref: string } | null;
 }
@@ -38,7 +44,8 @@ export class ManifestError extends Error {
   override name = 'ManifestError';
 }
 
-const KEYS = new Set([
+/** Every key a `loams.plugin` block may hold (the schema's `properties`). */
+export const MANIFEST_KEYS: ReadonlySet<string> = new Set([
   'kind',
   'entry',
   'tier',
@@ -49,6 +56,7 @@ const KEYS = new Set([
   'permissions',
   'requires',
   'editions',
+  'modes',
   'config',
   'server',
 ]);
@@ -80,7 +88,7 @@ export function validateManifest(pkg: unknown): PluginManifest {
     throw new ManifestError(`${name}: no "loams.plugin" block`);
   }
   for (const key of Object.keys(block)) {
-    if (!KEYS.has(key)) throw new ManifestError(`${name}: unknown manifest key "${key}"`);
+    if (!MANIFEST_KEYS.has(key)) throw new ManifestError(`${name}: unknown manifest key "${key}"`);
   }
   if (block.kind !== 'console') throw new ManifestError(`${name}: "kind" must be "console"`);
   if (typeof block.entry !== 'string') throw new ManifestError(`${name}: "entry" is required`);
@@ -121,6 +129,12 @@ export function validateManifest(pkg: unknown): PluginManifest {
   const editions = strings(block.editions, 'editions', name);
   for (const edition of editions) {
     if (!EDITIONS.has(edition)) throw new ManifestError(`${name}: unknown edition "${edition}"`);
+  }
+  const modes = block.modes === undefined ? ['console'] : strings(block.modes, 'modes', name);
+  if (modes.length === 0) throw new ManifestError(`${name}: "modes" needs at least one mode`);
+  for (const [i, mode] of modes.entries()) {
+    if (!isMode(mode)) throw new ManifestError(`${name}: unknown mode "${mode}"`);
+    if (modes.indexOf(mode) !== i) throw new ManifestError(`${name}: mode "${mode}" listed twice`);
   }
   const requires = (block.requires ?? {}) as Record<string, unknown>;
   if (typeof requires !== 'object' || requires === null || Array.isArray(requires)) {
@@ -173,6 +187,7 @@ export function validateManifest(pkg: unknown): PluginManifest {
       api,
     },
     editions: editions as Edition[],
+    modes: modes as Mode[],
     ...(typeof block.config === 'string' ? { config: block.config } : {}),
     server: server as PluginManifest['server'],
   };

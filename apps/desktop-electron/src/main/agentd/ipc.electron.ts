@@ -26,6 +26,18 @@ export function registerAgentdIpc(svc: AgentdService): () => void {
 		assertTrustedSender(e);
 		return svc.stop(opts);
 	});
+	ipcMain.handle(CH.agentdRepos, (e) => {
+		assertTrustedSender(e);
+		return svc.repos();
+	});
+	ipcMain.handle(CH.agentdAddRepo, (e, path: unknown) => {
+		assertTrustedSender(e);
+		return svc.addRepo(path);
+	});
+	ipcMain.handle(CH.agentdCloneRepo, (e, url: unknown) => {
+		assertTrustedSender(e);
+		return svc.cloneRepo(url);
+	});
 	ipcMain.handle(CH.agentdBackgroundGet, (e) => {
 		assertTrustedSender(e);
 		return svc.background();
@@ -47,6 +59,9 @@ export function registerAgentdIpc(svc: AgentdService): () => void {
 			CH.agentdStop,
 			CH.agentdBackgroundGet,
 			CH.agentdBackgroundSet,
+			CH.agentdRepos,
+			CH.agentdAddRepo,
+			CH.agentdCloneRepo,
 		])
 			ipcMain.removeHandler(ch);
 	};

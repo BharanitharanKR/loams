@@ -434,6 +434,8 @@ export function createFakeDesktop(): LoamsDesktopApi {
       },
       onNavigate: () => () => undefined,
       takePendingNavigation: async () => null,
+      // No OS dialog in a browser preview: a prompt stands in for the folder picker.
+      pickFolder: async (title) => globalThis.prompt(title ?? 'Folder path', '~/src/new-project'),
       setBadge: async () => undefined,
     },
     connectors: {

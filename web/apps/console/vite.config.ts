@@ -30,6 +30,17 @@ const SANDBOX_FILES: Record<string, string> = {
   'plugins/hello/client.js': require.resolve('@loams/example-plugin-hello/client'),
 };
 
+/**
+ * Attribution shipped beside the bundle (SD1 T1-7): the root NOTICE and T3 Code's
+ * MIT licence, since the console bundles code vendored into @loams/studio-ui.
+ */
+const ATTRIBUTION_FILES: Record<string, string> = {
+  NOTICE: fileURLToPath(new URL('../../../NOTICE', import.meta.url)),
+  'LICENSE.t3code': fileURLToPath(
+    new URL('../../packages/studio-ui/LICENSE.t3code', import.meta.url),
+  ),
+};
+
 function sandboxAssets(base: string): Plugin {
   return {
     name: 'loams-sandbox-assets',
@@ -46,7 +57,7 @@ function sandboxAssets(base: string): Plugin {
       });
     },
     generateBundle() {
-      for (const [fileName, file] of Object.entries(SANDBOX_FILES)) {
+      for (const [fileName, file] of Object.entries({ ...SANDBOX_FILES, ...ATTRIBUTION_FILES })) {
         this.emitFile({ type: 'asset', fileName, source: readFileSync(file) });
       }
     },
