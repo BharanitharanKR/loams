@@ -186,7 +186,17 @@ test('npm_licences_allow_list_matches_deny_toml', () => {
   ]) {
     assert.ok(allow.has(id), id);
   }
-  for (const id of ['GPL-3.0', 'LGPL-3.0', 'AGPL-3.0', 'SSPL-1.0', 'BUSL-1.1']) {
+  // Owner ruling on SD1 T2-2: no npm-only additions to deny.toml's list.
+  for (const id of [
+    'GPL-3.0',
+    'LGPL-3.0',
+    'AGPL-3.0',
+    'SSPL-1.0',
+    'BUSL-1.1',
+    '0BSD',
+    'BlueOak-1.0.0',
+    'Python-2.0',
+  ]) {
     assert.ok(!allow.has(id), id);
   }
 });

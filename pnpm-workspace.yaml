@@ -22,6 +22,12 @@ overrides:
   'nx@23.2.1>axios': 1.20.0
   'nx@23.2.1>smol-toml': 1.9.0
   'nx@23.2.1>brace-expansion': 5.0.12
+  # Licences (SD1 T2-5, CONTRIBUTING rule 3): sax moved from ISC to BlueOak-1.0.0 in
+  # 1.4.2; builder-util-runtime asks for ^1.2.4, so keep the last ISC release.
+  'builder-util-runtime@9.7.0>sax': 1.4.1
+  # js-yaml 4 uses argparse (Python-2.0) only for its command-line tool, which nothing
+  # here runs; the library (`load`, `dump`) never imports it.
+  'js-yaml@4.3.2>argparse': '-'
 
 allowBuilds:
   esbuild: true

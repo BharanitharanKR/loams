@@ -5,9 +5,9 @@
 //
 // Runs `pnpm --filter <project>... licenses list --prod --json` for the console, the desktop and
 // @loams/studio-ui (and the workspace packages they depend on), and checks every production
-// dependency against CONTRIBUTING rule 3: the allow list in deny.toml plus the few permissive
-// licences that occur only on npm (NPM_ONLY_ALLOW). It parses SPDX expressions, accepts an `OR`
-// expression when one branch is allowed (and records the branch taken), and fails on anything
+// dependency against CONTRIBUTING rule 3: the allow list in deny.toml, and nothing else. It
+// parses SPDX expressions, accepts an `OR` expression when one branch is allowed (and records
+// the branch taken), and fails on anything
 // else, on an unknown licence and on any Tiptap Pro or Cloud package. Exceptions are exact
 // {package, version, licence, reason, approvedBy} entries in npm-licences.exceptions.json; they
 // can never admit a copyleft or source-available licence or a Tiptap Pro package.
@@ -20,14 +20,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = resolve(HERE, '..', '..');
 export const DEFAULT_PROJECTS = ['@loams/console', '@loams/desktop', '@loams/studio-ui'];
 const DEFAULT_EXCEPTIONS = join(HERE, 'npm-licences.exceptions.json');
-
-// Permissive, OSI-approved licences that deny.toml does not list because no crate uses them.
-// They are "compatible licenses" under CONTRIBUTING rule 3 (SD1 ruling T2-2).
-export const NPM_ONLY_ALLOW = {
-  '0BSD': 'BSD Zero Clause (tslib)',
-  'BlueOak-1.0.0': 'Blue Oak Model License (sax, glob family)',
-  'Python-2.0': 'PSF License 2.0 (argparse)',
-};
 
 // Never allowed, not even by an exception (CONTRIBUTING rule 3: no AGPL, GPL, LGPL, BSL (Business
 // Source), SSPL, ELv2 or proprietary code). Non-commercial Creative Commons is proprietary in effect.
@@ -45,13 +37,13 @@ const PROPRIETARY_SCOPES = [/^@tiptap-pro\//, /^@tiptap-cloud\//];
 
 class GateError extends Error {}
 
-/** The `allow = [...]` list of deny.toml's [licenses] table, plus NPM_ONLY_ALLOW. */
+/** The `allow = [...]` list of deny.toml's [licenses] table. */
 export function loadAllowList(denyToml = readFileSync(join(REPO_ROOT, 'deny.toml'), 'utf8')) {
   const section = denyToml.split(/^\[licenses\]\s*$/m)[1]?.split(/^\[/m)[0] ?? '';
   const list = section.match(/^allow\s*=\s*\[([\s\S]*?)\]/m)?.[1];
   if (!list) throw new GateError('deny.toml has no [licenses] allow list');
   const ids = [...list.replace(/#.*$/gm, '').matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-  return new Set([...ids, ...Object.keys(NPM_ONLY_ALLOW)]);
+  return new Set(ids);
 }
 
 // ---------- SPDX ----------

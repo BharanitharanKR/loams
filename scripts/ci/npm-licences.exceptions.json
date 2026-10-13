@@ -4,13 +4,13 @@
     "version": "5.3.0",
     "licence": "OFL-1.1",
     "reason": "A font, not code: the SIL Open Font License 1.1 permits bundling it; the console's fonts are attributed in the root NOTICE.",
-    "approvedBy": "PENDING owner review (SD1 Task 2 PR)"
+    "approvedBy": "owner, 2026-10-13"
   },
   {
     "package": "@fontsource-variable/martian-mono",
     "version": "5.3.0",
     "licence": "OFL-1.1",
     "reason": "A font, not code: the SIL Open Font License 1.1 permits bundling it; the console's fonts are attributed in the root NOTICE.",
-    "approvedBy": "PENDING owner review (SD1 Task 2 PR)"
+    "approvedBy": "owner, 2026-10-13"
   }
 ]
