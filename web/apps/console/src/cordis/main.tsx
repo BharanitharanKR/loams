@@ -1,11 +1,15 @@
-// The browser entry of the cordis console (§37 §5, AP1a). Served at
-// /ui/cordis.html beside today's console until AP1a Task 5 moves today's
-// pages into plugins and this becomes /ui/.
+// The browser entry of the console (§37 §5, AP1a): index.html at the base
+// path's root (`/ui/`, or `/` with LOAMS_UI_BASE=/). The original React
+// console's pages are plugins now (API2 Task 10), and its old addresses
+// (`/ui/teams`, `/ui/cordis.html`) move to the hash routes here (legacy.ts).
 //
-//   pnpm dev                                    → demo mode (an in-browser mock)
+//   pnpm dev                                    → the server the dev server proxies
+//                                                 (LOAMS_API, default loams-apps-mock
+//                                                 on 127.0.0.1:8084), cookie session
+//   pnpm dev, then open /?demo                  → demo mode (an in-browser mock)
 //   VITE_LOAMS_APPS_URL=http://127.0.0.1:8084 \
 //   VITE_LOAMS_DEV_BEARER=mock-access-usr_omar pnpm dev
-//                                               → against `cargo run -p loams-apps-mock`
+//                                               → straight at the mock, with a bearer
 
 // First, so the page never paints in the wrong theme.
 import './theme.js';
@@ -22,13 +26,18 @@ import samplesYml from '../../catalog/samples.yml?raw';
 import { startHosted } from '../hosted/start.js';
 import { loadRuntimeConfig } from '../runtime-config.js';
 import { startDesktop } from './desktop.js';
+import { legacyUrl } from './legacy.js';
 import { startConsole } from './start.js';
+
+// An old console address (`/ui/projects/docs`, `/ui/cordis.html?desktop`) becomes
+// its hash route before anything reads the location.
+const moved = legacyUrl(globalThis.location, import.meta.env.BASE_URL);
+if (moved) globalThis.history.replaceState(null, '', moved);
 
 const appsUrl = import.meta.env.DEV
   ? (import.meta.env.VITE_LOAMS_APPS_URL as string | undefined)
   : undefined;
-const demo =
-  new URLSearchParams(globalThis.location.search).has('demo') || (import.meta.env.DEV && !appsUrl);
+const demo = new URLSearchParams(globalThis.location.search).has('demo');
 
 const root = document.getElementById('root');
 if (root) {
@@ -52,6 +61,13 @@ if (root) {
           ? { transport: createMockTransport({ features: { [THIRD_PARTY_FLAG]: true } }) }
           : {
               baseUrl: appsUrl ?? config.server,
+              // The Connect snippets name the server the dev server proxies to.
+              serverUrl:
+                appsUrl ??
+                config.server ??
+                (import.meta.env.DEV
+                  ? (import.meta.env.LOAMS_DEV_SERVER as string | undefined)
+                  : undefined),
               devBearer: import.meta.env.DEV
                 ? (import.meta.env.VITE_LOAMS_DEV_BEARER as string | undefined)
                 : undefined,

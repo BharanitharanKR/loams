@@ -10,7 +10,6 @@
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
-    "gen:api": "openapi-typescript ../../../api/console/openapi.json -o src/api/schema.d.ts",
     "test": "vitest run && node --test deploy/*.test.mjs",
     "test:browser": "node --test browser/*.test.mjs"
   },
@@ -62,7 +61,6 @@
     "@loams/ui": "workspace:*",
     "lucide-react": "catalog:",
     "oauth4webapi": "3.8.8",
-    "openapi-fetch": "0.17.0",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-router": "8.4.0"
@@ -74,7 +72,6 @@
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "6.1.1",
     "jsdom": "30.1.1",
-    "openapi-typescript": "7.13.0",
     "tailwindcss": "catalog:",
     "typescript": "5.9.3",
     "vite": "8.3.1",
