@@ -23,7 +23,10 @@
 //! the [`AppEngine`] that serves an app's active deployment; the schema a
 //! deployment declares, with its table validators (LV1 Task 8), is in
 //! [`schema`], and the leased table scans that check them in [`backfill`].
+//! The admin service, `LiveAdminService` (LV1 Task 10), is in [`admin`],
+//! and the function logs it tails in [`logs`].
 
+pub mod admin;
 pub mod backfill;
 pub mod catalog;
 mod config;
@@ -35,6 +38,7 @@ pub mod ids;
 pub mod journal;
 pub mod keys;
 mod limits;
+pub mod logs;
 pub mod query;
 pub mod readset;
 pub mod schema;

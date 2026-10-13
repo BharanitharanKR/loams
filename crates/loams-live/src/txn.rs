@@ -822,6 +822,9 @@ struct Inner {
     /// Counts this runner's commits that wrote a journal entry; the
     /// subscription manager ticks when it moves (§20 §8.2 step 1).
     commits: tokio::sync::watch::Sender<u64>,
+    /// The console lines of the app's calls on this node (LV1 plan Task
+    /// 10).
+    logs: Arc<crate::logs::Ring>,
 }
 
 impl fmt::Debug for Runner {
@@ -903,6 +906,7 @@ impl Runner {
                 limits: config.limits.clone(),
                 options,
                 commits: tokio::sync::watch::Sender::new(0),
+                logs: Arc::new(crate::logs::Ring::default()),
             }),
         })
     }
@@ -932,6 +936,13 @@ impl Runner {
     /// tick right after a local commit (§20 §8.2 step 1).
     pub fn commits(&self) -> tokio::sync::watch::Receiver<u64> {
         self.inner.commits.subscribe()
+    }
+
+    /// The app's function logs on this node (LV1 plan Task 10): its
+    /// callers record what their calls wrote ([`crate::logs::Ring::record`]),
+    /// since they know the request; the runner itself records nothing.
+    pub fn logs(&self) -> &Arc<crate::logs::Ring> {
+        &self.inner.logs
     }
 
     /// The app's journal, with its stored shard count (read now).

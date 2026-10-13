@@ -1205,7 +1205,9 @@ async fn follow_changed(
     }
 }
 
-/// A query at `at`, retried on storage failures.
+/// A query at `at`, retried on storage failures. What its final attempt
+/// wrote goes to the app's log ring (LV1 plan Task 10), under a request id
+/// of its own.
 async fn evaluate_one(
     runner: &Runner,
     f: &dyn Function,
@@ -1213,15 +1215,24 @@ async fn evaluate_one(
     at: &Ts,
 ) -> Result<Queried, LiveError> {
     let mut attempt = 1;
-    loop {
+    let evaluated = loop {
         match runner.query(f, args.clone(), *at).await {
             Err(LiveError::Txn(e)) if attempt < EVAL_ATTEMPTS && transient(&e) => {
                 attempt += 1;
                 tokio::time::sleep(Duration::from_millis(10 * u64::from(attempt))).await;
             }
-            other => return other,
+            other => break other,
         }
-    }
+    };
+    let call = crate::logs::CallInfo {
+        request_id: None,
+        function: f.name(),
+        deployment: f.deployment(),
+    };
+    runner
+        .logs()
+        .record(&call, evaluated.as_ref().map(|q| &q.output));
+    evaluated
 }
 
 fn transient(e: &TxnError) -> bool {

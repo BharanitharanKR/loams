@@ -23,8 +23,8 @@ from connectrpc.method import IdempotencyLevel, MethodInfo
 from google.protobuf.message import Message
 from loams.instance.v1.instance_pb2 import GetInstanceRequest, GetInstanceResponse, WhoAmIRequest, WhoAmIResponse
 from loams.instance.v1.instance_connect import InstanceServiceClient, InstanceServiceClientSync
-from loams.live.v1.live_pb2 import DeployRequest, DeployResponse, ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition, WatchRequest
-from loams.live.v1.live_connect import LiveServiceClient, LiveServiceClientSync
+from loams.live.v1.live_pb2 import ActivateDeploymentRequest, ActivateDeploymentResponse, DeployRequest, DeployResponse, GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse, ListDeploymentsRequest, ListDeploymentsResponse, ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, TailLogsRequest, TailLogsResponse, Transition, WatchRequest
+from loams.live.v1.live_connect import LiveAdminServiceClient, LiveAdminServiceClientSync, LiveServiceClient, LiveServiceClientSync
 
 PROTO_REV: Final[str] = "v1"
 """The proto revision this SDK was generated from (`LOAMS_PROTO_REV`,
@@ -419,6 +419,94 @@ MODULES: Final[tuple[ModuleBinding, ...]] = (
         ),
     ),
     ModuleBinding(
+        name="live.admin",
+        summary="Live administration: deploy, roll back, index status and function logs.",
+        service="loams.live.v1.LiveAdminService",
+        package="loams.live.v1",
+        unstable=True,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="live.admin",
+                name="activate_deployment",
+                proto_name="activateDeployment",
+                method="ActivateDeployment",
+                rpc="loams.live.v1.LiveAdminService/ActivateDeployment",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="live.admin",
+                name="deploy",
+                proto_name="deploy",
+                method="Deploy",
+                rpc="loams.live.v1.LiveAdminService/Deploy",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="live.admin",
+                name="get_deployment",
+                proto_name="getDeployment",
+                method="GetDeployment",
+                rpc="loams.live.v1.LiveAdminService/GetDeployment",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="live.admin",
+                name="get_index_status",
+                proto_name="getIndexStatus",
+                method="GetIndexStatus",
+                rpc="loams.live.v1.LiveAdminService/GetIndexStatus",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="live.admin",
+                name="list_deployments",
+                proto_name="listDeployments",
+                method="ListDeployments",
+                rpc="loams.live.v1.LiveAdminService/ListDeployments",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="deployments", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="live.admin",
+                name="tail_logs",
+                proto_name="tailLogs",
+                method="TailLogs",
+                rpc="loams.live.v1.LiveAdminService/TailLogs",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="server",
+                pagination=None,
+            ),
+        ),
+    ),
+    ModuleBinding(
         name="tables",
         summary="",
         service="loams.live.v1.LiveService",
@@ -426,19 +514,6 @@ MODULES: Final[tuple[ModuleBinding, ...]] = (
         unstable=True,
         derived=True,
         calls=(
-            CallBinding(
-                module="tables",
-                name="deploy",
-                proto_name="deploy",
-                method="Deploy",
-                rpc="loams.live.v1.LiveService/Deploy",
-                service="loams.live.v1.LiveService",
-                package="loams.live.v1",
-                idempotency="none",
-                retry="manual",
-                streaming="unary",
-                pagination=None,
-            ),
             CallBinding(
                 module="tables",
                 name="mutate",
@@ -507,11 +582,46 @@ METHODS: Final[dict[str, MethodInfo[Message, Message]]] = {
         output=Transition,
         idempotency_level=IDEMPOTENCY_LEVELS["none"],
     ),
-    "loams.live.v1.LiveService/Deploy": MethodInfo(
+    "loams.live.v1.LiveAdminService/ActivateDeployment": MethodInfo(
+        name="ActivateDeployment",
+        service_name="loams.live.v1.LiveAdminService",
+        input=ActivateDeploymentRequest,
+        output=ActivateDeploymentResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.live.v1.LiveAdminService/Deploy": MethodInfo(
         name="Deploy",
-        service_name="loams.live.v1.LiveService",
+        service_name="loams.live.v1.LiveAdminService",
         input=DeployRequest,
         output=DeployResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.live.v1.LiveAdminService/GetDeployment": MethodInfo(
+        name="GetDeployment",
+        service_name="loams.live.v1.LiveAdminService",
+        input=GetDeploymentRequest,
+        output=GetDeploymentResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.live.v1.LiveAdminService/GetIndexStatus": MethodInfo(
+        name="GetIndexStatus",
+        service_name="loams.live.v1.LiveAdminService",
+        input=GetIndexStatusRequest,
+        output=GetIndexStatusResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.live.v1.LiveAdminService/ListDeployments": MethodInfo(
+        name="ListDeployments",
+        service_name="loams.live.v1.LiveAdminService",
+        input=ListDeploymentsRequest,
+        output=ListDeploymentsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.live.v1.LiveAdminService/TailLogs": MethodInfo(
+        name="TailLogs",
+        service_name="loams.live.v1.LiveAdminService",
+        input=TailLogsRequest,
+        output=TailLogsResponse,
         idempotency_level=IDEMPOTENCY_LEVELS["none"],
     ),
     "loams.live.v1.LiveService/Mutate": MethodInfo(
@@ -653,16 +763,26 @@ class LiveModuleSync(Protocol):
 
 
 
-class TablesModule(Protocol):
-    """A second facade name for the same RPCs, exposed as `loams.tables`.
+class LiveAdminModule(Protocol):
+    """`loams.live.admin` — Live administration: deploy, roll back, index status and function logs.
 
-    Wraps `loams.live.v1.LiveService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
+    Wraps `loams.live.v1.LiveAdminService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
     """
 
-    module: ClassVar[Literal["tables"]]
-    service: ClassVar[Literal["loams.live.v1.LiveService"]]
+    module: ClassVar[Literal["live.admin"]]
+    service: ClassVar[Literal["loams.live.v1.LiveAdminService"]]
     unstable: ClassVar[Literal[True]]
-    """`loams.live.v1.LiveService/Deploy`, retried: manual.
+    """`loams.live.v1.LiveAdminService/ActivateDeployment`, retried: manual.
+    """
+    async def activate_deployment(
+        self,
+        request: loams.live.v1.live_pb2.ActivateDeploymentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.live_pb2.ActivateDeploymentResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/Deploy`, retried: manual.
     """
     async def deploy(
         self,
@@ -672,6 +792,128 @@ class TablesModule(Protocol):
     ) -> loams.live.v1.live_pb2.DeployResponse:
         ...
 
+    """`loams.live.v1.LiveAdminService/GetDeployment`, retried: safe.
+    """
+    async def get_deployment(
+        self,
+        request: loams.live.v1.live_pb2.GetDeploymentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.live_pb2.GetDeploymentResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/GetIndexStatus`, retried: safe.
+    """
+    async def get_index_status(
+        self,
+        request: loams.live.v1.live_pb2.GetIndexStatusRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.live_pb2.GetIndexStatusResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/ListDeployments`, retried: safe. AIP-158: page with `deployments` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list_deployments(
+        self,
+        request: loams.live.v1.live_pb2.ListDeploymentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.live_pb2.ListDeploymentsResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/TailLogs`, retried: manual.
+    """
+    def tail_logs(
+        self,
+        request: loams.live.v1.live_pb2.TailLogsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> AsyncIterator[loams.live.v1.live_pb2.TailLogsResponse]:
+        ...
+
+
+
+class LiveAdminModuleSync(Protocol):
+    """`loams.live.admin` — Live administration: deploy, roll back, index status and function logs.
+
+    Wraps `loams.live.v1.LiveAdminService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
+    """
+
+    module: ClassVar[Literal["live.admin"]]
+    service: ClassVar[Literal["loams.live.v1.LiveAdminService"]]
+    unstable: ClassVar[Literal[True]]
+    """`loams.live.v1.LiveAdminService/ActivateDeployment`, retried: manual.
+    """
+    def activate_deployment(
+        self,
+        request: loams.live.v1.live_pb2.ActivateDeploymentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.live_pb2.ActivateDeploymentResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/Deploy`, retried: manual.
+    """
+    def deploy(
+        self,
+        request: loams.live.v1.live_pb2.DeployRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.live_pb2.DeployResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/GetDeployment`, retried: safe.
+    """
+    def get_deployment(
+        self,
+        request: loams.live.v1.live_pb2.GetDeploymentRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.live_pb2.GetDeploymentResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/GetIndexStatus`, retried: safe.
+    """
+    def get_index_status(
+        self,
+        request: loams.live.v1.live_pb2.GetIndexStatusRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.live_pb2.GetIndexStatusResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/ListDeployments`, retried: safe. AIP-158: page with `deployments` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list_deployments(
+        self,
+        request: loams.live.v1.live_pb2.ListDeploymentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.live_pb2.ListDeploymentsResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/TailLogs`, retried: manual.
+    """
+    def tail_logs(
+        self,
+        request: loams.live.v1.live_pb2.TailLogsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> Iterator[loams.live.v1.live_pb2.TailLogsResponse]:
+        ...
+
+
+
+class TablesModule(Protocol):
+    """A second facade name for the same RPCs, exposed as `loams.tables`.
+
+    Wraps `loams.live.v1.LiveService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
+    """
+
+    module: ClassVar[Literal["tables"]]
+    service: ClassVar[Literal["loams.live.v1.LiveService"]]
+    unstable: ClassVar[Literal[True]]
     """`loams.live.v1.LiveService/Mutate`, retried: manual.
     """
     async def mutate(
@@ -703,16 +945,6 @@ class TablesModuleSync(Protocol):
     module: ClassVar[Literal["tables"]]
     service: ClassVar[Literal["loams.live.v1.LiveService"]]
     unstable: ClassVar[Literal[True]]
-    """`loams.live.v1.LiveService/Deploy`, retried: manual.
-    """
-    def deploy(
-        self,
-        request: loams.live.v1.live_pb2.DeployRequest,
-        *,
-        options: CallOptions | None = None,
-    ) -> loams.live.v1.live_pb2.DeployResponse:
-        ...
-
     """`loams.live.v1.LiveService/Mutate`, retried: manual.
     """
     def mutate(

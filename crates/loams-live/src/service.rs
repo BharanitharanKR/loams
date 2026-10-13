@@ -1,39 +1,56 @@
 //! The Loams Live sync service (design §20 §7, D121; R1 plan Task 12):
-//! [`LiveServer`] serves `loams.live.v1.LiveService` over connect-rust and
-//! axum on its own loopback listener, with one [`Subscriptions`] manager, one
-//! journal janitor and the [`Sessions`] of the app.
+//! [`LiveServer`] serves `loams.live.v1.LiveService` and
+//! `LiveAdminService` (LV1 plan Task 10, [`crate::admin`]) over connect-rust
+//! and axum on its own loopback listener, with one [`Subscriptions`]
+//! manager, one journal janitor and the [`Sessions`] of the app, and
+//! `grpc.reflection.v1` listing those two services.
 //!
 //! `Watch` opens a session and streams its Transitions; `ModifyQuerySet`
 //! changes a session's query set; `Query` and `Mutate` run through the
 //! app's [`Runner`], resolving functions through its [`AppEngine`]: the
-//! `_system:*` functions, else the active deployment's. `Deploy` deploys a
-//! bundle against the active deployment (LV1 plan Task 6; Task 10 moves it
-//! to `LiveAdminService`) when the server has a function [`Runtime`].
+//! `_system:*` functions, else the active deployment's. Each `Query` and
+//! `Mutate` gets a request id, answered in the `loams-request-id` header,
+//! under which its function's console lines go to the app's log ring
+//! ([`crate::logs`]). Deploys need a function [`Runtime`].
 //! Connect, gRPC and gRPC-Web, JSON and binary, over HTTP/1.1 and HTTP/2
-//! (cleartext, loopback only).
+//! (cleartext, loopback only), behind the [`Guard`] the engine passes (its
+//! authentication layer).
 
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use connectrpc::{
-    ConnectError, ConnectRpcService, RequestContext, Response, ServiceRequest, ServiceResult,
-    ServiceStream,
+    ConnectError, RequestContext, Response, ServiceRequest, ServiceResult, ServiceStream,
 };
 use futures::StreamExt;
 use loams_kv::Store;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::deploy::{self, AppEngine, DeployRequest, Runtime};
-use crate::pb::{self, LiveService, LiveServiceServer};
-use crate::schema::Schema;
+use crate::admin::Admin;
+use crate::deploy::{self, AppEngine, Runtime};
+use crate::logs::{CallInfo, REQUEST_ID_HEADER, Ring};
+use crate::pb::{self, LiveAdminServiceExt, LiveService, LiveServiceExt};
 use crate::session::{Outbox, SESSION_HEADER, Sessions, Start, args_of, chunks, ts_of};
 use crate::subs::{SubsConfig, SubsStats, Subscriptions};
 use crate::{Janitor, LiveConfig, LiveError, Runner, check_isolation, check_listen};
 
 /// How long stopping waits for in-flight requests before aborting them.
 const STOP_GRACE: Duration = Duration::from_secs(10);
+
+/// Wraps the Live listener's routes before they serve (LV1 plan Task 10):
+/// the engine puts its authentication layer here, which also names the
+/// caller with an [`admin::Caller`](crate::admin::Caller).
+pub type Guard = Arc<dyn Fn(axum::Router) -> axum::Router + Send + Sync>;
+
+/// The services the Live listener's reflection lists.
+const REFLECTED: [&str; 4] = [
+    pb::LIVE_SERVICE_SERVICE_NAME,
+    pb::LIVE_ADMIN_SERVICE_SERVICE_NAME,
+    "grpc.reflection.v1.ServerReflection",
+    "grpc.reflection.v1alpha.ServerReflection",
+];
 
 /// Starts Loams Live servers.
 #[derive(Debug)]
@@ -54,7 +71,7 @@ pub struct LiveHandle {
 
 impl LiveServer {
     /// [`start_with`](Self::start_with) without a function runtime: only
-    /// the `_system:*` functions serve, and `Deploy` is refused.
+    /// the `_system:*` functions serve, and deploys are refused.
     pub async fn start(
         config: LiveConfig,
         shutdown: CancellationToken,
@@ -62,16 +79,27 @@ impl LiveServer {
         LiveServer::start_with(config, Runtime::none(), shutdown).await
     }
 
+    /// [`start_guarded`](Self::start_guarded) with no guard: every local
+    /// process may call every RPC.
+    pub async fn start_with(
+        config: LiveConfig,
+        runtime: Runtime,
+        shutdown: CancellationToken,
+    ) -> Result<LiveHandle, LiveError> {
+        LiveServer::start_guarded(config, runtime, None, shutdown).await
+    }
+
     /// Checks that `config.listen` is loopback, opens the app's store
     /// (whichever backend `config.store` names), opens its runner and its
     /// [`AppEngine`] on `runtime` (loading the active deployment), starts
     /// the subscription manager (its consumer is `config.node` unless set)
-    /// and the janitor, binds the listener and serves until `shutdown` is
-    /// cancelled or [`LiveHandle::stop`]. Logs once that the API is
-    /// unauthenticated.
-    pub async fn start_with(
+    /// and the janitor, binds the listener and serves, behind `guard` when
+    /// given, until `shutdown` is cancelled or [`LiveHandle::stop`]. Without
+    /// a guard it logs once that the API is unauthenticated.
+    pub async fn start_guarded(
         config: LiveConfig,
         runtime: Runtime,
+        guard: Option<Guard>,
         shutdown: CancellationToken,
     ) -> Result<LiveHandle, LiveError> {
         check_listen(config.listen)?;
@@ -117,13 +145,22 @@ impl LiveServer {
         ));
         let service = Live {
             runner,
-            engine,
+            engine: engine.clone(),
             subs: subs.clone(),
             sessions: sessions.clone(),
             max_transition_bytes: config.session.max_transition_bytes,
         };
-        let app = axum::Router::new()
-            .fallback_service(ConnectRpcService::new(LiveServiceServer::new(service)));
+        let admin = Admin {
+            engine,
+            stop: stop.clone(),
+        };
+        let rpc = Arc::new(admin).register(Arc::new(service).register(connectrpc::Router::new()));
+        let rpc = reflection(rpc);
+        let mut app = axum::Router::new().fallback_service(rpc.into_axum_service());
+        let guarded = guard.is_some();
+        if let Some(guard) = guard {
+            app = guard(app);
+        }
         let until = stop.clone();
         let serve = tokio::spawn(async move {
             let served = axum::serve(listener, app)
@@ -133,12 +170,14 @@ impl LiveServer {
                 tracing::error!(error = %e, "the Live sync API failed");
             }
         });
-        tracing::warn!(
-            %addr,
-            app = %config.app,
-            "Loams Live API is unauthenticated (D111): Query, Mutate and Deploy are open to \
-             every local process; it listens on loopback only"
-        );
+        if !guarded {
+            tracing::warn!(
+                %addr,
+                app = %config.app,
+                "Loams Live API is unauthenticated (D111): Query, Mutate and the admin calls are \
+                 open to every local process; it listens on loopback only"
+            );
+        }
         Ok(LiveHandle {
             addr,
             store,
@@ -214,6 +253,21 @@ async fn janitor_loop(engine: AppEngine, interval: Duration, stop: CancellationT
     }
 }
 
+/// Installs `grpc.reflection.v1` on `rpc`, listing the two Live services
+/// (and itself). Reflection is a convenience: a descriptor set that does
+/// not parse is logged and the listener serves without it.
+fn reflection(rpc: connectrpc::Router) -> connectrpc::Router {
+    match connectrpc_reflection::Reflector::from_descriptor_set_bytes(
+        loams_live_proto::FILE_DESCRIPTOR_SET,
+    ) {
+        Ok(reflector) => connectrpc_reflection::install(rpc, reflector.with_services(REFLECTED)),
+        Err(e) => {
+            tracing::warn!(error = %e, "Live reflection is off: the descriptor set does not parse");
+            rpc
+        }
+    }
+}
+
 /// The `LiveService` implementation.
 struct Live {
     runner: Runner,
@@ -221,6 +275,32 @@ struct Live {
     subs: Arc<Subscriptions>,
     sessions: Sessions,
     max_transition_bytes: usize,
+}
+
+impl Live {
+    /// Records what a call of `f` wrote in the app's log ring.
+    fn record(
+        &self,
+        request_id: &str,
+        f: &dyn crate::Function,
+        outcome: Result<&crate::CallOutput, &LiveError>,
+    ) {
+        let call = CallInfo {
+            request_id: Some(request_id),
+            function: f.name(),
+            deployment: f.deployment(),
+        };
+        self.runner.logs().record(&call, outcome);
+    }
+}
+
+/// The Connect error of `e`, answered with the call's request id.
+fn with_request_id(e: &LiveError, request_id: &str) -> ConnectError {
+    let mut headers = axum::http::HeaderMap::new();
+    if let Ok(value) = axum::http::HeaderValue::from_str(request_id) {
+        headers.insert(REQUEST_ID_HEADER, value);
+    }
+    connect_error(e).with_headers(headers)
 }
 
 /// The Connect error of `e` (the codes of §20 §7.1).
@@ -309,6 +389,7 @@ impl LiveService for Live {
         request: ServiceRequest<'_, pb::QueryRequest>,
     ) -> ServiceResult<pb::QueryResponse> {
         let req = request.to_owned_message();
+        let request_id = Ring::request_id();
         let run = async {
             let f = deploy::resolve(&self.engine, &req.function)?;
             let args = args_of(req.args.into_option())?;
@@ -324,14 +405,17 @@ impl LiveService for Live {
                         .map_err(|e| LiveError::Internal(format!("a timestamp: {e}")))?,
                 },
             };
-            self.runner.query(&*f, args, at).await
+            let queried = self.runner.query(&*f, args, at).await;
+            self.record(&request_id, &*f, queried.as_ref().map(|q| &q.output));
+            queried
         };
-        let queried = run.await.map_err(|e| connect_error(&e))?;
+        let queried = run.await.map_err(|e| with_request_id(&e, &request_id))?;
         Ok(Response::new(pb::QueryResponse {
             ts: queried.ts.0,
             result: buffa::MessageField::some(queried.result.to_proto()),
             ..Default::default()
-        }))
+        })
+        .with_header(REQUEST_ID_HEADER, request_id))
     }
 
     async fn mutate(
@@ -340,12 +424,18 @@ impl LiveService for Live {
         request: ServiceRequest<'_, pb::MutateRequest>,
     ) -> ServiceResult<pb::MutateResponse> {
         let req = request.to_owned_message();
+        let request_id = Ring::request_id();
         let run = async {
             let f = deploy::resolve(&self.engine, &req.function)?;
             let args = args_of(req.args.into_option())?;
-            self.runner.mutate(f, args, req.idempotency_key).await
+            let mutated = self
+                .runner
+                .mutate(f.clone(), args, req.idempotency_key)
+                .await;
+            self.record(&request_id, &*f, mutated.as_ref().map(|m| &m.output));
+            mutated
         };
-        let mutated = run.await.map_err(|e| connect_error(&e))?;
+        let mutated = run.await.map_err(|e| with_request_id(&e, &request_id))?;
         let commit_ts = mutated.commit_ts.0;
         if let Some(session) = ctx.header(SESSION_HEADER).and_then(|v| v.to_str().ok()) {
             self.sessions.mutation_committed(session, commit_ts);
@@ -354,42 +444,7 @@ impl LiveService for Live {
             commit_ts,
             result: buffa::MessageField::some(mutated.result.to_proto()),
             ..Default::default()
-        }))
-    }
-
-    async fn deploy(
-        &self,
-        _ctx: RequestContext,
-        request: ServiceRequest<'_, pb::DeployRequest>,
-    ) -> ServiceResult<pb::DeployResponse> {
-        let req = request.to_owned_message();
-        let run = async {
-            // R1's request has no `expected_active`: deploy against the
-            // active deployment, as the catalog names it now.
-            let expected_active = self.engine.read_active().await?;
-            let schema = req
-                .schema
-                .as_option()
-                .map(Schema::from_proto)
-                .transpose()?
-                .unwrap_or_default();
-            deploy::deploy(
-                &self.engine,
-                DeployRequest {
-                    bundle: req.bundle,
-                    schema,
-                    expected_active,
-                    message: String::new(),
-                    dry_run: false,
-                },
-                deploy::UNAUTHENTICATED,
-            )
-            .await
-        };
-        let outcome = run.await.map_err(|e| connect_error(&e))?;
-        Ok(Response::new(pb::DeployResponse {
-            deployment_id: outcome.record.id.to_string(),
-            ..Default::default()
-        }))
+        })
+        .with_header(REQUEST_ID_HEADER, request_id))
     }
 }

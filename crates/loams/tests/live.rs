@@ -96,3 +96,89 @@ async fn dev_on_tikv_sweeps_live_with_the_metastore_gc_loop() {
     assert_eq!(server.live_swept_by_metastore_gc(), Some(true));
     server.shutdown().await.expect("stops");
 }
+
+/// LV1 plan Task 10: Live's listener sits behind the engine's
+/// authentication layer. With API keys on, `LiveService` and
+/// `LiveAdminService` refuse a call without a key; with one they serve, and
+/// a deployment records the key's id (never the key) as its creator.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_live_listener_sits_behind_the_auth_layer() {
+    use base64::Engine as _;
+    use serde_json::{Value, json};
+
+    let dir = TempDir::new().expect("a temp dir");
+    let (key, line) = loams::auth::api_key::new_key("live");
+    let keys = dir.path().join("api-keys");
+    std::fs::write(&keys, format!("{line}\n")).expect("the key file");
+    let key_id = line.split_whitespace().next().expect("an id").to_string();
+    let mut config = ServerConfig::new(dir.path());
+    config.listen = SocketAddr::from(([127, 0, 0, 1], 0));
+    config.log.flush_interval = Duration::from_millis(20);
+    config.auth = loams::auth::AuthConfig::api_keys(&keys);
+    let store = loams_live::EmbeddedConfig::new(
+        dir.path().join("live").join("store.redb"),
+        loams_live::keyspace_of("t10"),
+    );
+    let mut live =
+        loams_live::LiveConfig::with_store("t10", loams_live::StoreConfig::Embedded(store));
+    live.listen = SocketAddr::from(([127, 0, 0, 1], 0));
+    config.live = Some(live);
+    let server = Server::start(config).await.expect("starts");
+    let addr = server.live_addr().expect("Live runs");
+
+    let call = |path: &'static str, body: Value, bearer: Option<String>| async move {
+        let mut request = reqwest::Client::new()
+            .post(format!("http://{addr}{path}"))
+            .header("content-type", "application/json")
+            .header("connect-protocol-version", "1")
+            .body(body.to_string());
+        if let Some(bearer) = bearer {
+            request = request.header("authorization", format!("Bearer {bearer}"));
+        }
+        let response = request.send().await.expect("a call");
+        let status = response.status().as_u16();
+        let reason = response
+            .headers()
+            .get("loams-auth-reason")
+            .map(|v| v.to_str().expect("text").to_string());
+        let text = response.text().await.expect("a body");
+        (status, reason, text)
+    };
+    for path in [
+        "/loams.live.v1.LiveAdminService/ListDeployments",
+        "/loams.live.v1.LiveService/Query",
+    ] {
+        let (status, reason, body) = call(path, json!({}), None).await;
+        assert_eq!(status, 401, "{path}: {body}");
+        assert_eq!(reason.as_deref(), Some("token_missing"), "{path}");
+    }
+    let (status, _, body) = call(
+        "/loams.live.v1.LiveAdminService/ListDeployments",
+        json!({}),
+        Some(key.clone()),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    let bundle = r#"
+import { query } from "loams:server";
+export const notes = { ping: query(async () => "pong") };
+"#;
+    let (status, _, body) = call(
+        "/loams.live.v1.LiveAdminService/Deploy",
+        json!({
+            "bundle": base64::engine::general_purpose::STANDARD.encode(bundle),
+            "message": "with a key",
+        }),
+        Some(key.clone()),
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    let deployed: Value = serde_json::from_str(&body).expect("JSON");
+    assert_eq!(
+        deployed["deployment"]["createdBy"],
+        format!("apikey:{key_id}"),
+        "{body}"
+    );
+    assert!(!body.contains(&key), "the key never comes back: {body}");
+    server.shutdown().await.expect("stops");
+}

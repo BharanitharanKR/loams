@@ -920,9 +920,9 @@ impl Function for SevenFn {
     }
 }
 
-/// The server deploys over `LiveService.Deploy` and runs the deployment's
-/// functions for `Mutate` and `Query`; a server without a function runtime
-/// refuses the deploy.
+/// The server deploys over `LiveAdminService.Deploy` (LV1 Task 10) and runs
+/// the deployment's functions for `Mutate` and `Query`; a server without a
+/// function runtime refuses the deploy.
 async fn live_service_deploys_and_serves_functions(store: TestStore) {
     let mut config = store.live_config(APP);
     config.listen = "127.0.0.1:0".parse().expect("an address");
@@ -936,9 +936,10 @@ async fn live_service_deploys_and_serves_functions(store: TestStore) {
     )
     .await
     .expect("the server starts");
-    let uri = format!("http://{}", handle.addr).parse().expect("a uri");
-    let c = pb::LiveServiceClient::new(HttpClient::plaintext(), ClientConfig::new(uri));
-    let deployed = c
+    let uri: axum::http::Uri = format!("http://{}", handle.addr).parse().expect("a uri");
+    let c = pb::LiveServiceClient::new(HttpClient::plaintext(), ClientConfig::new(uri.clone()));
+    let admin = pb::LiveAdminServiceClient::new(HttpClient::plaintext(), ClientConfig::new(uri));
+    let deployed = admin
         .deploy(pb::DeployRequest {
             bundle: bundle(1),
             schema: MessageField::some(notes_schema().to_proto()),
@@ -947,7 +948,13 @@ async fn live_service_deploys_and_serves_functions(store: TestStore) {
         .await
         .expect("Deploy")
         .into_owned();
-    let id: Ulid = deployed.deployment_id.parse().expect("a ULID");
+    let id: Ulid = deployed
+        .deployment
+        .as_option()
+        .expect("a deployment")
+        .id
+        .parse()
+        .expect("a ULID");
     let mutated = c
         .mutate(pb::MutateRequest {
             function: "notes:add".into(),
@@ -971,26 +978,29 @@ async fn live_service_deploys_and_serves_functions(store: TestStore) {
         LiveValue::from_proto(counted.result.into_option().expect("a result")).expect("a value"),
         LiveValue::F64(1.0)
     );
-    // A second deploy replaces the first (the service deploys against the
-    // active deployment).
-    let again = c
+    // A second deploy replaces the first, against it.
+    let again = admin
         .deploy(pb::DeployRequest {
             bundle: bundle(2),
             schema: MessageField::some(notes_schema().to_proto()),
+            expected_active: Some(id.to_string()),
             ..Default::default()
         })
         .await
         .expect("a second Deploy")
         .into_owned();
-    assert_ne!(again.deployment_id, id.to_string());
+    assert_ne!(
+        again.deployment.as_option().expect("a deployment").id,
+        id.to_string()
+    );
     handle.stop().await;
 
     let bare = LiveServer::start(config, CancellationToken::new())
         .await
         .expect("a server without a runtime");
     let uri = format!("http://{}", bare.addr).parse().expect("a uri");
-    let c = pb::LiveServiceClient::new(HttpClient::plaintext(), ClientConfig::new(uri));
-    let e = c
+    let admin = pb::LiveAdminServiceClient::new(HttpClient::plaintext(), ClientConfig::new(uri));
+    let e = admin
         .deploy(pb::DeployRequest {
             bundle: bundle(3),
             ..Default::default()
@@ -1528,6 +1538,7 @@ async fn janitor_fails_abandoned_pending_deploys(store: TestStore) {
         message: String::new(),
         parent: Some(v1.record.id),
         state: DeploymentState::Pending,
+        functions: Vec::new(),
     };
     app.runner()
         .store()

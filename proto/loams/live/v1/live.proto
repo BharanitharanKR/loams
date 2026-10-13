@@ -5,7 +5,13 @@
 // HTTP/1.1 until the request body ends. So one design works on HTTP/1.1 and
 // HTTP/2, over Connect, gRPC and gRPC-Web.
 //
-// R1 has no authentication (D111): the server binds loopback only.
+// The server binds loopback only (D111) until LV1 moves Live to the main
+// port (Task 12); the listener sits behind the engine's authentication
+// layer (`LOAMS_AUTH_MODE`, off by default on loopback). Deploying and the
+// other admin calls are `LiveAdminService` (admin.proto).
+//
+// `Query` and `Mutate` answer with a `loams-request-id` header: the id their
+// function's console lines carry in `LiveAdminService.TailLogs`.
 syntax = "proto3";
 
 package loams.live.v1;
@@ -46,7 +52,7 @@ service LiveService {
   //
   // Exposed on `loams.tables`, not on `loams.live`: §44 §7.2 splits the
   // service into the session half (watch, modify) and the table half (query,
-  // mutate, deploy), and both are facade names for these RPCs.
+  // mutate), and both are facade names for these RPCs.
   rpc Query(QueryRequest) returns (QueryResponse) {
     option (loams.options.v1.facade) = { module: "tables" name: "query" };
   }
@@ -54,10 +60,8 @@ service LiveService {
   rpc Mutate(MutateRequest) returns (MutateResponse) {
     option (loams.options.v1.facade) = { module: "tables" name: "mutate" };
   }
-  // Admin: deploys a function bundle and a schema.
-  rpc Deploy(DeployRequest) returns (DeployResponse) {
-    option (loams.options.v1.facade) = { module: "tables" name: "deploy" };
-  }
+  // Deploying moved to `LiveAdminService.Deploy` (admin.proto; design §45
+  // §6.3, D689; LV1 plan Task 10).
 }
 
 // A session's state: (query-set version, identity version, ts). A client
@@ -166,16 +170,6 @@ message MutateRequest {
 message MutateResponse {
   uint64 commit_ts = 1;
   Value result = 2;
-}
-
-message DeployRequest {
-  // One ES module (§20 §6).
-  bytes bundle = 1;
-  Schema schema = 2;
-}
-
-message DeployResponse {
-  string deployment_id = 1;
 }
 
 // A deployed schema: tables, their indexes and their validators.

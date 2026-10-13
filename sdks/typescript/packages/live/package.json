@@ -15,7 +15,7 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./live": "./src/gen/loams/live/v1/live_pb.ts",
+    "./live": "./src/live.ts",
     "./options": "./src/gen/loams/options/v1/options_pb.ts",
     "./value": "./src/gen/loams/live/v1/value_pb.ts"
   },
