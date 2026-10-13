@@ -292,7 +292,8 @@ jobs:
           exe=target/x86_64-pc-windows-msvc/release/loams.exe
           # smoke test: the binary starts and reports its version
           "$exe" --version
-          echo "LOAMS_BIN=$PWD/$exe" >> "$GITHUB_ENV"
+          # Node reads this path, so give it a Windows one (D:/a/...), not Git Bash's /d/a/...
+          echo "LOAMS_BIN=$(cygpath -m "$PWD/$exe")" >> "$GITHUB_ENV"
       - name: no Windows engine
         if: steps.engine.outcome != 'success'
         shell: bash
