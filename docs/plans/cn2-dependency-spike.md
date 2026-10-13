@@ -261,3 +261,23 @@ There is a precedent already merged: `fabric/crates/loams-house-proto/build.rs` 
 `proto/loams/graph/v1/graph.proto` imports exactly those three plus well-known types. So a cross-workspace build of the `loams.graph.v1` client is possible (R0.29).
 
 **Unverified**: whether `connectrpc-build` 0.9 can map imported packages to another crate's types (an `extern_path` equivalent). If it cannot, generating the three shared packages a second time in `loams-flow-proto` would give `loams-house-proto` and `loams-flow-proto` two distinct Rust types for `loams.errors.v1.ErrorInfo`. That is harmless unless a crate links both.
+
+## 9. Performance measurements (Task 27)
+
+Task 27 records **how** each native connector is measured, not numbers from the build machine: that machine is shared and runs `-j 1`, so anything timed there is noise (ruling R27.1). The numbers come from the scheduled `connectors-bench` job on CI's runner class (`ubuntu-24.04`, release builds) and live in `conformance/connectors/bench/baselines.toml` once calibrated (R27.2).
+
+| Measure | Reference pipeline (`loams-connectors-bench reference`) | Family benches (`tests/bench.rs`, through the conformance harness) |
+|---|---|---|
+| Batch sizes | 1, 100 and 10 000 rows (`max_batch_rows`) | 10, 1 000 and 10 000 records per round, 10 rounds each (`BenchPlan::default`) |
+| Throughput | events and MiB per second, read to Fabric ack | records over the rounds' start-to-settle time; MiB/s where the harness knows its record size |
+| p99 latency | a batch's read to its Fabric ack (nearest rank) | a round's start (from the checkpoint) to settle: a restart plus the delivery of the round |
+| Memory per instance | peak in-flight bytes against the instance's budget (a hard bound), plus the RSS one idle instance adds (`instance_overhead_bytes`) | the harness's `memory()` (peak in-flight against budget) |
+| CPU per 10k events | CPU of every thread of the process (`/proc/self/task/*/schedstat`) | the same, including the harness's own seeding and reads |
+
+**Regression budget.** A scheduled run more than 15 % worse than its calibrated baseline on any metric fails `connectors-bench`, as does a missing batch size, a run on another runner class or profile, a report without a baseline entry, or a peak above the memory budget.
+
+**Floors in PR CI.** The reference pipeline also runs in the conformance kit's PR tests at small scale against floors derived from its configuration, never measured: at least 1 000 events/s, and a p99 under five lingers plus 100 µs per row. They catch a stalled pipeline (one linger per batch is 5 events/s), not a slow one. One local debug run on the shared machine (2026-10-13, not a baseline, not recorded in `baselines.toml`) sat about 12× above the throughput floor at batch size 1 and 10× under the p99 ceiling at 10 000, so the floors are not flaky by a narrow margin.
+
+**Density.** A `flow` pod's defaults in `deploy/helm/loams-connectors/values.yaml` (`budgets`) follow from the SDK's 64 MiB per-instance memory budget plus a per-instance overhead: 32 MiB until a calibrated measurement replaces it (then the largest recorded overhead plus 25 %, rounded up to a MiB). With a 4 GiB pod and a 256 MiB process base that is 40 instances per pod. `budget_values_match_measurements` keeps the chart equal to the derivation.
+
+**Build cost** stays with each family task (R0.4); Task 27 does not measure builds.

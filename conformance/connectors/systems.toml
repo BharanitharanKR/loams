@@ -298,7 +298,12 @@ services = [{ kind = "container", compose = "neo4j", system = "Neo4j" }]
 [systems.grafeo]
 systems = ["Grafeo"]
 family = "protocols"
-services = [{ kind = "container", compose = "loams-graph", system = "Grafeo" }]
+services = [
+  { kind = "container", compose = "loams-graph", system = "Grafeo" },
+  # A Loams graph endpoint with an API key (CN2 Task 21's
+  # grafeo_against_a_loams_graph), until FL1's estate serves `loams-graph`.
+  { kind = "nightly", env = ["LOAMS_GRAFEO_URL", "LOAMS_GRAFEO_API_KEY", "LOAMS_GRAFEO_NAMESPACE", "LOAMS_GRAFEO_GRAPH"], system = "Grafeo" },
+]
 notes = ["Grafeo is a Loams engine (D741): it is the system under test here, not a stand-in, so it may name a Loams service."]
 
 # ---------------------------------------------------- warehouse, lakehouse --

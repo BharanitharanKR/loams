@@ -117,3 +117,36 @@ metrics:
   podMonitor:
     enabled: true
     interval: 30s
+
+# CN2 Task 27 owns `budgets` (ruling R27.4).
+# BEGIN budgets (CN2 Task 27) ------------------------------------------------
+# Generated: `cargo run -p loams-flow-conformance --bin loams-connectors-bench
+# -- budgets`; the test `budget_values_match_measurements` fails when this
+# block differs from what the measurements derive.
+#
+# A native instance costs its pipeline memory budget (the SDK's default, a
+# hard bound the pipeline enforces) plus a per-instance overhead (client
+# buffers, connections, tasks). Until `connectors-bench` has calibrated a
+# measured overhead (`calibrated: true`), the overhead is a conservative
+# 32 MiB. A `flow` pod holds as many instances as fit in its memory limit
+# after the process's own base:
+#   instancesPerPod = (memoryLimitBytes - processBaseBytes)
+#                     / (memoryBudgetBytes + overheadBytes)
+# The memory request equals the limit (memory is not overcommitted); there
+# is a CPU request and no CPU limit (throttling stalls a pipeline).
+budgets:
+  pipeline:
+    maxBatchRows: 65536
+    maxBatchBytes: 8388608
+    maxInFlightBatches: 4
+    memoryBudgetBytes: 67108864
+  instance:
+    overheadBytes: 33554432
+    calibrated: false
+  flowPod:
+    processBaseBytes: 268435456
+    memoryLimitBytes: 4294967296
+    memoryRequestBytes: 4294967296
+    cpuRequestMillis: 1000
+    instancesPerPod: 40
+# END budgets ----------------------------------------------------------------
