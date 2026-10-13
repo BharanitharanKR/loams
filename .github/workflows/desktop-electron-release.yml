@@ -1,4 +1,4 @@
-name: Desktop (Electron) release
+name: Release desktop
 
 # Cuts a draft GitHub Release of Loams Desktop from a `desktop-vX.Y.Z` tag (plan AP1e Task 31;
 # D676 Linux, D677 Windows through SignPath and macOS unsigned). docs/release/desktop.md is the page a
@@ -67,7 +67,7 @@ jobs:
   # branch. Then decide, once, what this run can sign: every later job reads these outputs, so the
   # file names, the signing calls and the release notes cannot disagree.
   plan:
-    name: plan
+    name: Plan
     environment: desktop-release
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -177,7 +177,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   linux:
-    name: linux (${{ matrix.arch }})
+    name: "Linux: package (${{ matrix.arch }})"
     needs: plan
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
@@ -236,7 +236,7 @@ jobs:
           overwrite: true
 
   sign-rpm:
-    name: sign rpm (${{ matrix.arch }})
+    name: "Linux: sign the rpm (${{ matrix.arch }})"
     needs: [plan, linux]
     if: needs.plan.outputs.sign_rpm == 'true'
     strategy:
@@ -249,7 +249,7 @@ jobs:
       require_signing: ${{ vars.DESKTOP_REQUIRE_SIGNING == 'true' }}
 
   windows-unpacked:
-    name: windows (unpacked app)
+    name: "Windows: package the unpacked app"
     needs: plan
     runs-on: windows-2025
     # A cold Windows engine build takes about an hour.
@@ -312,7 +312,7 @@ jobs:
           overwrite: true
 
   sign-win-unpacked:
-    name: sign Windows app
+    name: "Windows: sign the app"
     needs: [plan, windows-unpacked]
     if: needs.plan.outputs.sign_win == 'true'
     uses: ./.github/workflows/desktop-sign.yml
@@ -323,7 +323,7 @@ jobs:
 
   # The installer is built from the (signed) unpacked app, so it packages signed executables.
   windows-installer:
-    name: windows (NSIS installer)
+    name: "Windows: build the installer"
     needs: [plan, windows-unpacked, sign-win-unpacked]
     if: ${{ !cancelled() && needs.windows-unpacked.result == 'success' && (needs.sign-win-unpacked.result == 'success' || needs.sign-win-unpacked.result == 'skipped') }}
     runs-on: windows-2025
@@ -403,7 +403,7 @@ jobs:
           overwrite: true
 
   sign-win-installer:
-    name: sign Windows installer
+    name: "Windows: sign the installer"
     needs: [plan, windows-installer]
     if: needs.plan.outputs.sign_win == 'true' && needs.windows-installer.outputs.unpacked_signed == 'true'
     uses: ./.github/workflows/desktop-sign.yml
@@ -413,7 +413,7 @@ jobs:
       require_signing: ${{ vars.DESKTOP_REQUIRE_SIGNING == 'true' }}
 
   verify-win-installer:
-    name: verify the signed installer
+    name: "Windows: verify the installer"
     needs: [plan, sign-win-installer]
     if: needs.sign-win-installer.outputs.signed == 'true'
     runs-on: windows-2025
@@ -443,7 +443,7 @@ jobs:
           "signed=$($signed.ToString().ToLower())" >> $env:GITHUB_OUTPUT
 
   macos:
-    name: macos (${{ matrix.arch }})
+    name: "macOS: package (${{ matrix.arch }})"
     needs: plan
     # The Apple signing secrets, when they exist, live with the others in this environment.
     environment: desktop-release
@@ -568,7 +568,7 @@ jobs:
           overwrite: true
 
   release:
-    name: ${{ needs.plan.outputs.mode == 'product' && 'attach to the product release' || 'draft release' }}
+    name: "${{ needs.plan.outputs.mode == 'product' && 'Release: attach to the product release' || 'Release: draft' }}"
     environment: desktop-release
     needs: [plan, linux, sign-rpm, windows-installer, sign-win-installer, verify-win-installer, macos]
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.dry_run != 'true' }}

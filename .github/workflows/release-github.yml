@@ -1,4 +1,4 @@
-name: Release (GitHub release, SBOM, provenance)
+name: Release GitHub
 
 # The second half of a preview release. "Release images" (release-images.yml)
 # builds deploy/release/Containerfile.<name> on a v* tag and publishes
@@ -45,7 +45,7 @@ env:
 
 jobs:
   guard:
-    name: release tag
+    name: Tag guard
     # A tag push's workflow_run carries the tag in head_branch; a branch run of
     # "Release images" (there is none today) is not a release.
     if: >-
@@ -93,7 +93,7 @@ jobs:
           echo "$TAG at $sha"
 
   attest:
-    name: ${{ matrix.image }} provenance and SBOM
+    name: Provenance and SBOM (${{ matrix.image }})
     needs: guard
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -239,7 +239,7 @@ jobs:
   # release by their own workflows (dispatched at the tag, so each runs the
   # tag's workflow file and checks out the tag's commit).
   binaries:
-    name: dispatch the CLI and desktop builds
+    name: Dispatch the CLI and desktop builds
     needs: [guard, release]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
