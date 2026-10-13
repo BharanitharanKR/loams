@@ -1,0 +1,476 @@
+{
+  "title": "Loams Flow Connectors",
+  "uid": "loams-flow-connectors",
+  "description": "Connector metrics of CN2 Task 24: throughput, lag, errors, backpressure, CDC position risk, restarts and DLQ, per instance.",
+  "tags": [
+    "loams",
+    "flow",
+    "connectors"
+  ],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Data source",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {}
+      },
+      {
+        "name": "namespace",
+        "label": "Namespace",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(loams_flow_connector_up, namespace)",
+          "refId": "Var"
+        },
+        "definition": "label_values(loams_flow_connector_up, namespace)",
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2,
+        "sort": 1
+      },
+      {
+        "name": "connector",
+        "label": "Connector",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(loams_flow_connector_up{namespace=~\"$namespace\"}, connector)",
+          "refId": "Var"
+        },
+        "definition": "label_values(loams_flow_connector_up{namespace=~\"$namespace\"}, connector)",
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2,
+        "sort": 1
+      },
+      {
+        "name": "instance",
+        "label": "Instance",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(loams_flow_connector_up{namespace=~\"$namespace\",connector=~\"$connector\"}, instance)",
+          "refId": "Var"
+        },
+        "definition": "label_values(loams_flow_connector_up{namespace=~\"$namespace\",connector=~\"$connector\"}, instance)",
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2,
+        "sort": 1
+      },
+      {
+        "name": "direction",
+        "label": "Direction",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(loams_flow_connector_up, direction)",
+          "refId": "Var"
+        },
+        "definition": "label_values(loams_flow_connector_up, direction)",
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2,
+        "sort": 1
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Instances up",
+      "description": "1 while running, 0 once failed or fenced",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (namespace, instance, connector, direction) (loams_flow_connector_up{namespace=~\"$namespace\",instance=~\"$instance\",connector=~\"$connector\",direction=~\"$direction\"})",
+          "legendFormat": "{{namespace}}/{{instance}} {{direction}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Events per second",
+      "description": "Events acknowledged by the Fabric (sources) or by the target (sinks)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (namespace, instance, direction) (rate(loams_flow_connector_events_total{namespace=~\"$namespace\",instance=~\"$instance\",connector=~\"$connector\",direction=~\"$direction\"}[$__rate_interval]))",
+          "legendFormat": "{{namespace}}/{{instance}} {{direction}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Bytes per second",
+      "description": "dir=in: read from the external system; dir=out: written to it",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (namespace, instance, direction, dir) (rate(loams_flow_connector_bytes_total{namespace=~\"$namespace\",instance=~\"$instance\",connector=~\"$connector\",direction=~\"$direction\"}[$__rate_interval]))",
+          "legendFormat": "{{namespace}}/{{instance}} {{dir}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "External calls per second",
+      "description": "Reads, writes and commits against the external system",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (namespace, instance, direction) (rate(loams_flow_connector_api_calls_total{namespace=~\"$namespace\",instance=~\"$instance\",connector=~\"$connector\",direction=~\"$direction\"}[$__rate_interval]))",
+          "legendFormat": "{{namespace}}/{{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Errors by class",
+      "description": "Retryable and throttled errors are retried; auth, fatal and position_lost stop the instance",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (namespace, instance, direction, class) (rate(loams_flow_connector_errors_total{namespace=~\"$namespace\",instance=~\"$instance\",connector=~\"$connector\",direction=~\"$direction\"}[$__rate_interval]))",
+          "legendFormat": "{{namespace}}/{{instance}} {{class}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Lag",
+      "description": "The alert fires when lag stays above lag_alert_seconds for 5 minutes",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (namespace, instance, direction) (loams_flow_connector_lag_seconds{namespace=~\"$namespace\",instance=~\"$instance\",connector=~\"$connector\",direction=~\"$direction\"})",
+          "legendFormat": "{{namespace}}/{{instance}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (namespace, instance, direction) (loams_flow_connector_lag_alert_seconds{namespace=~\"$namespace\",instance=~\"$instance\",connector=~\"$connector\",direction=~\"$direction\"})",
+          "legendFormat": "{{namespace}}/{{instance}} alert threshold"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Paused by backpressure",
+      "description": "Seconds per second the sources spent waiting for budget, summed over their tasks",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (namespace, instance, direction) (rate(loams_flow_connector_budget_wait_seconds_total{namespace=~\"$namespace\",instance=~\"$instance\",connector=~\"$connector\",direction=~\"$direction\"}[$__rate_interval]))",
+          "legendFormat": "{{namespace}}/{{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "CDC position risk",
+      "description": "Share of the upstream log retention used; the alert fires above 0.8",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 28
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (namespace, instance, direction) (loams_flow_cdc_position_risk_ratio{namespace=~\"$namespace\",instance=~\"$instance\",connector=~\"$connector\",direction=~\"$direction\"})",
+          "legendFormat": "{{namespace}}/{{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Restarts (10 min)",
+      "description": "More than 5 in 10 minutes is a restart loop",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 28
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (namespace, instance, direction) (increase(loams_flow_connector_restarts_total{namespace=~\"$namespace\",instance=~\"$instance\",connector=~\"$connector\",direction=~\"$direction\"}[10m]))",
+          "legendFormat": "{{namespace}}/{{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Dead-lettered events (10 min)",
+      "description": "Events sent to the instance's DLQ topic",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 36
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (namespace, instance, direction) (increase(loams_flow_connector_dlq_total{namespace=~\"$namespace\",instance=~\"$instance\",connector=~\"$connector\",direction=~\"$direction\"}[10m]))",
+          "legendFormat": "{{namespace}}/{{instance}}"
+        }
+      ]
+    }
+  ]
+}
