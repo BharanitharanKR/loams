@@ -1,8 +1,9 @@
 //! `sdk::http`: the HTTP client every HTTP-speaking family uses. Each request
 //! opens its connection through [`crate::net::connect`] (egress checked after
-//! DNS) and speaks HTTP/1.1 with hyper; `https` goes through rustls. Redirects
-//! are **not** followed: a family that follows one makes a new request, which
-//! is egress-checked again (Task 25's `redirect_rechecked`).
+//! DNS) and speaks HTTP/1.1 with hyper; `https` goes through rustls.
+//! [`HttpClient::send`] follows no redirect; [`HttpClient::send_following`]
+//! follows each one as a new request, egress-checked again before and after
+//! DNS (Task 25's `redirect_rechecked`).
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -62,6 +63,74 @@ impl HttpClient {
             .map_err(|_| ConnectorError::retryable("HTTP request timed out"))?
     }
 
+    /// [`send`](Self::send), following up to `max_redirects` redirects
+    /// (301, 302, 303, 307 and 308). Each hop is a new request through
+    /// [`crate::net::connect`], so its host is egress-checked before DNS and
+    /// its addresses after DNS, exactly like the first (Task 25's
+    /// `redirect_rechecked`). A redirect from `https` to `http` is refused;
+    /// a redirect to another origin drops `Authorization`, `Cookie` and
+    /// `Proxy-Authorization`; 303 (and 301 or 302 after a `POST`) continues
+    /// as a body-less `GET`. More hops than `max_redirects` is `Fatal`.
+    pub async fn send_following(
+        &self,
+        req: Request<Bytes>,
+        max_redirects: usize,
+    ) -> Result<Response<Bytes>, ConnectorError> {
+        let (mut parts, mut body) = req.into_parts();
+        parts.headers.remove(http::header::HOST);
+        let mut hops = 0usize;
+        loop {
+            let mut next = Request::new(body.clone());
+            *next.method_mut() = parts.method.clone();
+            *next.uri_mut() = parts.uri.clone();
+            *next.headers_mut() = parts.headers.clone();
+            let resp = self.send(next).await?;
+            let status = resp.status().as_u16();
+            if !matches!(status, 301 | 302 | 303 | 307 | 308) {
+                return Ok(resp);
+            }
+            let Some(location) = resp
+                .headers()
+                .get(http::header::LOCATION)
+                .and_then(|v| v.to_str().ok())
+            else {
+                return Ok(resp);
+            };
+            if hops == max_redirects {
+                return Err(ConnectorError::fatal(format!(
+                    "more than {max_redirects} HTTP redirects"
+                )));
+            }
+            hops += 1;
+            let to = resolve_location(&parts.uri, location)?;
+            let (from_https, from_host, from_port) = target(&parts.uri)?;
+            let (to_https, to_host, to_port) = target(&to)?;
+            if from_https && !to_https {
+                return Err(ConnectorError::fatal(format!(
+                    "redirect from https to http ({to_host}) refused"
+                )));
+            }
+            if (from_https, &from_host, from_port) != (to_https, &to_host, to_port) {
+                for h in [
+                    http::header::AUTHORIZATION,
+                    http::header::COOKIE,
+                    http::header::PROXY_AUTHORIZATION,
+                ] {
+                    parts.headers.remove(h);
+                }
+            }
+            let to_get = status == 303
+                || (matches!(status, 301 | 302) && parts.method == http::Method::POST);
+            if to_get {
+                parts.method = http::Method::GET;
+                body = Bytes::new();
+                parts.headers.remove(http::header::CONTENT_TYPE);
+                parts.headers.remove(http::header::CONTENT_LENGTH);
+            }
+            parts.uri = to;
+        }
+    }
+
     async fn send_inner(&self, req: Request<Bytes>) -> Result<Response<Bytes>, ConnectorError> {
         let uri = req.uri().clone();
         let (https, host, port) = target(&uri)?;
@@ -117,6 +186,35 @@ fn target(uri: &Uri) -> Result<(bool, String, u16), ConnectorError> {
         .to_owned();
     let port = uri.port_u16().unwrap_or(if https { 443 } else { 80 });
     Ok((https, host, port))
+}
+
+/// A `Location` header against the request it answers: an absolute URL, a
+/// scheme-relative `//host/path`, an absolute path, or a path relative to
+/// the request's directory.
+fn resolve_location(base: &Uri, location: &str) -> Result<Uri, ConnectorError> {
+    let bad = |e: &dyn std::fmt::Display| ConnectorError::fatal(format!("bad redirect: {e}"));
+    let location = location.trim();
+    if location.contains("://") {
+        return location.parse::<Uri>().map_err(|e| bad(&e));
+    }
+    let scheme = base.scheme_str().unwrap_or("http");
+    if let Some(rest) = location.strip_prefix("//") {
+        return format!("{scheme}://{rest}")
+            .parse::<Uri>()
+            .map_err(|e| bad(&e));
+    }
+    let authority = base
+        .authority()
+        .ok_or_else(|| ConnectorError::fatal("redirect from a URL with no host"))?;
+    let path = if location.starts_with('/') {
+        location.to_owned()
+    } else {
+        let dir = base.path().rsplit_once('/').map_or("", |(d, _)| d);
+        format!("{dir}/{location}")
+    };
+    format!("{scheme}://{authority}{path}")
+        .parse::<Uri>()
+        .map_err(|e| bad(&e))
 }
 
 async fn exchange<T>(
@@ -201,6 +299,22 @@ mod tests {
             classify_status(StatusCode::UNPROCESSABLE_ENTITY, None),
             Some(ErrorClass::Poison)
         );
+    }
+
+    #[test]
+    fn redirect_locations_resolve() {
+        let base: Uri = "https://api.example.com/v1/items?page=2"
+            .parse()
+            .expect("uri");
+        let cases = [
+            ("https://other.example.org/x", "https://other.example.org/x"),
+            ("//cdn.example.net/y", "https://cdn.example.net/y"),
+            ("/v2/items", "https://api.example.com/v2/items"),
+            ("next?page=3", "https://api.example.com/v1/next?page=3"),
+        ];
+        for (loc, want) in cases {
+            assert_eq!(resolve_location(&base, loc).expect(loc).to_string(), want);
+        }
     }
 
     #[tokio::test]
