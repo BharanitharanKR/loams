@@ -186,6 +186,63 @@ public enum Reason
     /// <summary>A Live function read an index a deploy is still backfilling.</summary>
     LiveIndexNotReady = 54,
 
+    /// <summary>The named Loams Git repository does not exist.</summary>
+    RepoNotFound = 55,
+
+    /// <summary>A Loams Git repository of that name already exists.</summary>
+    RepoAlreadyExists = 56,
+
+    /// <summary>The repository was deleted and is waiting to be purged.</summary>
+    RepoDeleting = 57,
+
+    /// <summary>A ref write's expected old value no longer holds.</summary>
+    RefStale = 58,
+
+    /// <summary>A protection rule refuses the ref write.</summary>
+    RefProtected = 59,
+
+    /// <summary>The write is outside the credential's branch prefixes or cones.</summary>
+    OutOfScope = 60,
+
+    /// <summary>The repository's object format is not supported (SHA-1 only for now).</summary>
+    ObjectFormatUnsupported = 61,
+
+    /// <summary>The source repository is already as many forks deep as allowed.</summary>
+    ForkTooDeep = 62,
+
+    /// <summary>The repository's sequencer is shutting down, lost its lease, or could not open.</summary>
+    SequencerUnavailable = 63,
+
+    /// <summary>The idempotency key was used inside its window for a different request.</summary>
+    IdempotencyKeyReused = 64,
+
+    /// <summary>The named workspace does not exist.</summary>
+    WorkspaceNotFound = 65,
+
+    /// <summary>Another writer appended the workspace snapshot first.</summary>
+    WorkspaceFenced = 66,
+
+    /// <summary>The workspace or snapshot is read-only.</summary>
+    WorkspaceReadOnly = 67,
+
+    /// <summary>The owner already has a workspace of that name.</summary>
+    WorkspaceNameTaken = 68,
+
+    /// <summary>A snapshot or push names an object the repository does not have.</summary>
+    ObjectMissing = 69,
+
+    /// <summary>The leak scanner found a credential outside <c>env/</c>.</summary>
+    SecretDetected = 70,
+
+    /// <summary>An <c>env/</c> file holds a plaintext value.</summary>
+    EnvUnsealed = 71,
+
+    /// <summary>The credential has no grant for the environment.</summary>
+    EnvAccessDenied = 72,
+
+    /// <summary>A sealed <c>env/</c> reference names another repository's secret.</summary>
+    EnvForeignReference = 73,
+
     /// <summary>A malformed field or an unparseable value.</summary>
     InvalidArgument = 15,
 
@@ -289,6 +346,25 @@ public static class ReasonRegistry
         Reason.QuotaExceeded,
         Reason.StorageUnavailable,
         Reason.SecretAlreadyIssued,
+        Reason.RepoNotFound,
+        Reason.RepoAlreadyExists,
+        Reason.RepoDeleting,
+        Reason.RefStale,
+        Reason.RefProtected,
+        Reason.OutOfScope,
+        Reason.ObjectFormatUnsupported,
+        Reason.ForkTooDeep,
+        Reason.SequencerUnavailable,
+        Reason.IdempotencyKeyReused,
+        Reason.WorkspaceNotFound,
+        Reason.WorkspaceFenced,
+        Reason.WorkspaceReadOnly,
+        Reason.WorkspaceNameTaken,
+        Reason.ObjectMissing,
+        Reason.SecretDetected,
+        Reason.EnvUnsealed,
+        Reason.EnvAccessDenied,
+        Reason.EnvForeignReference,
         Reason.LiveBadCursor,
         Reason.LiveWorkerCrashed,
         Reason.LiveDeployConflict,
@@ -348,6 +424,25 @@ public static class ReasonRegistry
             [Reason.QuotaExceeded] = "quota_exceeded",
             [Reason.StorageUnavailable] = "storage_unavailable",
             [Reason.SecretAlreadyIssued] = "secret_already_issued",
+            [Reason.RepoNotFound] = "repo_not_found",
+            [Reason.RepoAlreadyExists] = "repo_already_exists",
+            [Reason.RepoDeleting] = "repo_deleting",
+            [Reason.RefStale] = "ref_stale",
+            [Reason.RefProtected] = "ref_protected",
+            [Reason.OutOfScope] = "out_of_scope",
+            [Reason.ObjectFormatUnsupported] = "object_format_unsupported",
+            [Reason.ForkTooDeep] = "fork_too_deep",
+            [Reason.SequencerUnavailable] = "sequencer_unavailable",
+            [Reason.IdempotencyKeyReused] = "idempotency_key_reused",
+            [Reason.WorkspaceNotFound] = "workspace_not_found",
+            [Reason.WorkspaceFenced] = "workspace_fenced",
+            [Reason.WorkspaceReadOnly] = "workspace_read_only",
+            [Reason.WorkspaceNameTaken] = "workspace_name_taken",
+            [Reason.ObjectMissing] = "object_missing",
+            [Reason.SecretDetected] = "secret_detected",
+            [Reason.EnvUnsealed] = "env_unsealed",
+            [Reason.EnvAccessDenied] = "env_access_denied",
+            [Reason.EnvForeignReference] = "env_foreign_reference",
             [Reason.LiveBadCursor] = "live_bad_cursor",
             [Reason.LiveWorkerCrashed] = "live_worker_crashed",
             [Reason.LiveDeployConflict] = "live_deploy_conflict",
@@ -432,6 +527,25 @@ public static class ReasonRegistry
             [Reason.QuotaExceeded] = Code.ResourceExhausted,
             [Reason.StorageUnavailable] = Code.Unavailable,
             [Reason.SecretAlreadyIssued] = Code.FailedPrecondition,
+            [Reason.RepoNotFound] = Code.NotFound,
+            [Reason.RepoAlreadyExists] = Code.AlreadyExists,
+            [Reason.RepoDeleting] = Code.FailedPrecondition,
+            [Reason.RefStale] = Code.Aborted,
+            [Reason.RefProtected] = Code.FailedPrecondition,
+            [Reason.OutOfScope] = Code.PermissionDenied,
+            [Reason.ObjectFormatUnsupported] = Code.Unimplemented,
+            [Reason.ForkTooDeep] = Code.FailedPrecondition,
+            [Reason.SequencerUnavailable] = Code.Unavailable,
+            [Reason.IdempotencyKeyReused] = Code.FailedPrecondition,
+            [Reason.WorkspaceNotFound] = Code.NotFound,
+            [Reason.WorkspaceFenced] = Code.Aborted,
+            [Reason.WorkspaceReadOnly] = Code.FailedPrecondition,
+            [Reason.WorkspaceNameTaken] = Code.AlreadyExists,
+            [Reason.ObjectMissing] = Code.FailedPrecondition,
+            [Reason.SecretDetected] = Code.FailedPrecondition,
+            [Reason.EnvUnsealed] = Code.InvalidArgument,
+            [Reason.EnvAccessDenied] = Code.PermissionDenied,
+            [Reason.EnvForeignReference] = Code.PermissionDenied,
             [Reason.LiveBadCursor] = Code.InvalidArgument,
             [Reason.LiveWorkerCrashed] = Code.Internal,
             [Reason.LiveDeployConflict] = Code.FailedPrecondition,

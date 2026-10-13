@@ -1927,6 +1927,158 @@ const UNPRODUCIBLE_REASONS = [
     standIn: null,
   },
   {
+    reason: 'repo_not_found',
+    code: 'not_found',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'repo_already_exists',
+    code: 'already_exists',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'repo_deleting',
+    code: 'failed_precondition',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'ref_stale',
+    code: 'aborted',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'ref_protected',
+    code: 'failed_precondition',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'out_of_scope',
+    code: 'permission_denied',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'object_format_unsupported',
+    code: 'unimplemented',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'fork_too_deep',
+    code: 'failed_precondition',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'sequencer_unavailable',
+    code: 'unavailable',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'idempotency_key_reused',
+    code: 'failed_precondition',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'workspace_not_found',
+    code: 'not_found',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'workspace_fenced',
+    code: 'aborted',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'workspace_read_only',
+    code: 'failed_precondition',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'workspace_name_taken',
+    code: 'already_exists',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'object_missing',
+    code: 'failed_precondition',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'secret_detected',
+    code: 'failed_precondition',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'env_unsealed',
+    code: 'invalid_argument',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'env_access_denied',
+    code: 'permission_denied',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'env_foreign_reference',
+    code: 'permission_denied',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
     reason: 'live_bad_cursor',
     code: 'invalid_argument',
     why:

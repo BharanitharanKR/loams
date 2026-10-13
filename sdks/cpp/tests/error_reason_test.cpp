@@ -6,7 +6,7 @@
 // page `docs/api/reasons.md`, so a caller switching on it is exhaustive and a
 // reason the registry has lost stops compiling.
 //
-// This walks **every** reason in the registry — all fifty-four — round a full
+// This walks **every** reason in the registry — all seventy-three — round a full
 // encode/decode cycle, through the wire form the server actually sends: a Connect
 // JSON error body with a base64 `loams.errors.v1.ErrorInfo` in `details`, and a
 // gRPC-Web `grpc-status-details-bin` header. It asserts the reason survives, that
@@ -98,6 +98,25 @@ const std::vector<RegistryRow>& Registry() {
       {Reason::kQuotaExceeded, Code::kResourceExhausted, "quota"},
       {Reason::kStorageUnavailable, Code::kUnavailable, "component"},
       {Reason::kSecretAlreadyIssued, Code::kFailedPrecondition, "role"},
+      {Reason::kRepoNotFound, Code::kNotFound, "repo"},
+      {Reason::kRepoAlreadyExists, Code::kAlreadyExists, "repo"},
+      {Reason::kRepoDeleting, Code::kFailedPrecondition, "repo"},
+      {Reason::kRefStale, Code::kAborted, "ref"},
+      {Reason::kRefProtected, Code::kFailedPrecondition, "ref"},
+      {Reason::kOutOfScope, Code::kPermissionDenied, "ref"},
+      {Reason::kObjectFormatUnsupported, Code::kUnimplemented, "object_format"},
+      {Reason::kForkTooDeep, Code::kFailedPrecondition, "max"},
+      {Reason::kSequencerUnavailable, Code::kUnavailable, "repo"},
+      {Reason::kIdempotencyKeyReused, Code::kFailedPrecondition, ""},
+      {Reason::kWorkspaceNotFound, Code::kNotFound, "workspace"},
+      {Reason::kWorkspaceFenced, Code::kAborted, "workspace"},
+      {Reason::kWorkspaceReadOnly, Code::kFailedPrecondition, "workspace"},
+      {Reason::kWorkspaceNameTaken, Code::kAlreadyExists, "workspace"},
+      {Reason::kObjectMissing, Code::kFailedPrecondition, "oid"},
+      {Reason::kSecretDetected, Code::kFailedPrecondition, "path"},
+      {Reason::kEnvUnsealed, Code::kInvalidArgument, "path"},
+      {Reason::kEnvAccessDenied, Code::kPermissionDenied, "environment"},
+      {Reason::kEnvForeignReference, Code::kPermissionDenied, "path"},
       {Reason::kLiveBadCursor, Code::kInvalidArgument, ""},
       {Reason::kLiveWorkerCrashed, Code::kInternal, ""},
       {Reason::kLiveDeployConflict, Code::kFailedPrecondition, ""},
@@ -283,7 +302,7 @@ int main() {
   // matched, which is how a caller stops branching on it.
   const std::vector<Reason>& all = AllReasons();
   LOAMS_REQUIRE(!all.empty(), "the reason registry is empty");
-  LOAMS_CHECK_EQ(all.size(), std::size_t{54}, "the registry should carry all fifty-four reasons");
+  LOAMS_CHECK_EQ(all.size(), std::size_t{73}, "the registry should carry all seventy-three reasons");
   LOAMS_CHECK_EQ(Registry().size(), all.size(), "this test's registry table and the enum disagree in size");
   for (const Reason reason : all) {
     LOAMS_CHECK(!ToString(reason).empty(), "a reason with no registry spelling");
