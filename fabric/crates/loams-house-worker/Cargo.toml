@@ -84,6 +84,8 @@ loams-house-lake = { path = "../loams-house-lake" }
 # `read.rs` (HS1 Task 11): data files written to a `file://` bucket that the
 # catalog and `house-cache` share.
 loams-store = { path = "../../../crates/loams-store" }
+# `insert.rs` (HS1 Task 12): a catalog whose commits fail on demand.
+async-trait.workspace = true
 
 [lints]
 workspace = true

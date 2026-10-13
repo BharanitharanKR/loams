@@ -483,6 +483,12 @@ pub struct CreateTable {
     pub as_select: bool,
     /// `AS <table or function>` with no columns (refused).
     pub as_other: bool,
+    /// Where the clauses after the name and column list start (HS1 Task 12).
+    pub clauses_at: usize,
+    /// Where `AS` (or `EMPTY AS`) starts, and where what follows it starts.
+    pub as_at: Option<(usize, usize)>,
+    /// `EMPTY AS`: the table only, no rows.
+    pub empty_as: bool,
 }
 
 fn engine_clause(body: &str) -> Result<(String, Vec<String>), HouseError> {
@@ -611,6 +617,13 @@ pub fn parse_create_table(text: &str) -> Result<CreateTable, HouseError> {
             }
         };
         let body_start = c.toks[i + width - 1].end;
+        if clauses.is_empty() {
+            out.clauses_at = t.start;
+        }
+        if keyword == "AS" {
+            out.as_at = Some((t.start, body_start));
+            out.empty_as = word == "EMPTY";
+        }
         if let Some(last) = clauses.last_mut() {
             last.2 = t.start;
         }
@@ -619,6 +632,9 @@ pub fn parse_create_table(text: &str) -> Result<CreateTable, HouseError> {
             break;
         }
         i += width;
+    }
+    if clauses.is_empty() {
+        out.clauses_at = text.len();
     }
     if clauses.is_empty() && !c.done() {
         return Err(syntax(format!(
@@ -1056,6 +1072,140 @@ pub fn insert_target(text: &str) -> Option<QualifiedName> {
     }
     c.eat("TABLE");
     c.qualified().ok()
+}
+
+/// An `INSERT` into a table, read up to its data or its query (HS1 Task 12).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InsertHead {
+    /// The table.
+    pub target: QualifiedName,
+    /// The column list, when the statement has one.
+    pub columns: Option<Vec<String>>,
+    /// The statement's own `SETTINGS` (string literals unquoted).
+    pub settings: Vec<(String, String)>,
+    /// What follows.
+    pub rest: InsertRest,
+}
+
+/// What follows an `INSERT`'s head.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InsertRest {
+    /// Nothing: the data streams after it (`FORMAT` was taken off).
+    Nothing,
+    /// `VALUES`, and the tuples from this offset.
+    Values(usize),
+    /// A query (`SELECT`, `WITH`, a parenthesised query) from this offset.
+    Select(usize),
+}
+
+/// Reads an `INSERT INTO [TABLE] [db.]t [(c, …)] [SETTINGS …]` head and what
+/// follows it. A column list must be plain names (`48` otherwise: no
+/// `* EXCEPT`, no `COLUMNS(…)` on lake tables), and a `FORMAT` must have been
+/// taken off by the request's planner.
+pub fn parse_insert(text: &str) -> Result<InsertHead, HouseError> {
+    let mut c = Cursor::new(text);
+    c.expect("INSERT")?;
+    c.expect("INTO")?;
+    if c.is_word_at(c.at, "FUNCTION") {
+        return Err(syntax("INSERT INTO FUNCTION does not write a table"));
+    }
+    c.eat("TABLE");
+    let target = c.qualified()?;
+    let mut columns = None;
+    if c.peek().is_some_and(|t| c.is_symbol(&t, b'(')) {
+        let close = c
+            .closing(c.at)
+            .ok_or_else(|| syntax("The column list of the INSERT is not closed"))?;
+        let mut names = Vec::new();
+        for piece in c.pieces(c.at, close) {
+            let mut column = Cursor::new(piece);
+            let name = column.ident().ok().filter(|_| column.done());
+            match name {
+                Some(name) => names.push(name),
+                None => {
+                    return Err(HouseError::from(ChError::not_implemented(format!(
+                        "INSERT into a lake table names its columns one by one; {piece:?} is \
+                         not a column name"
+                    ))));
+                }
+            }
+        }
+        c.at = close + 1;
+        columns = Some(names);
+    }
+    let mut settings = Vec::new();
+    if c.eat("SETTINGS") {
+        loop {
+            let name = c.ident()?;
+            if !c.eat_symbol(b'=') {
+                return Err(syntax(format!("Expected = after the setting {name}")));
+            }
+            let mut value = String::new();
+            if c.eat_symbol(b'-') {
+                value.push('-');
+            }
+            let t = c
+                .peek()
+                .ok_or_else(|| syntax(format!("Expected a value for the setting {name}")))?;
+            let raw = c.raw(&t);
+            value.push_str(&if raw.starts_with('\'') {
+                unquote(raw)
+            } else if t.word {
+                raw.to_string()
+            } else {
+                return Err(syntax(format!("Expected a value for the setting {name}")));
+            });
+            c.at += 1;
+            settings.push((name, value));
+            if !c.eat_symbol(b',') {
+                break;
+            }
+        }
+    }
+    let rest = match c.peek() {
+        None => InsertRest::Nothing,
+        Some(t) if t.word && c.raw(&t).eq_ignore_ascii_case("VALUES") => InsertRest::Values(t.end),
+        Some(t)
+            if (t.word
+                && (c.raw(&t).eq_ignore_ascii_case("SELECT")
+                    || c.raw(&t).eq_ignore_ascii_case("WITH")))
+                || c.is_symbol(&t, b'(') =>
+        {
+            InsertRest::Select(t.start)
+        }
+        Some(t) => {
+            return Err(syntax(format!(
+                "Expected VALUES, FORMAT or a query after the INSERT's table, found {:?}",
+                c.raw(&t)
+            )));
+        }
+    };
+    Ok(InsertHead {
+        target,
+        columns,
+        settings,
+        rest,
+    })
+}
+
+/// `TRUNCATE [TABLE] [IF EXISTS] [db.]t [ON CLUSTER c]`: the table and `IF
+/// EXISTS` (HS1 Task 12).
+pub fn parse_truncate(text: &str) -> Option<(QualifiedName, bool)> {
+    let mut c = Cursor::new(text);
+    if !c.eat("TRUNCATE") {
+        return None;
+    }
+    if c.is_word_at(c.at, "TEMPORARY")
+        || c.is_word_at(c.at, "DATABASE")
+        || c.is_word_at(c.at, "ALL")
+    {
+        return None;
+    }
+    c.eat("TABLE");
+    let if_exists = c.eat_all(&["IF", "EXISTS"]);
+    let name = c.qualified().ok()?;
+    c.skip_on_cluster().ok()?;
+    c.done().then_some((name, if_exists))
 }
 
 /// `USE db`.
@@ -2010,28 +2160,9 @@ pub async fn execute(
             }
             None => Ok(Answer::PassThrough),
         },
-        Kind::Insert => {
-            let Some((db, name)) = insert_target(text) else {
-                return Ok(Answer::PassThrough);
-            };
-            let database = db_of(&db);
-            if !lake.database_exists(namespace, &database).await? {
-                return Ok(Answer::PassThrough);
-            }
-            match lake.load(namespace, &database, &name).await? {
-                None => Ok(Answer::PassThrough),
-                Some(table) => match class_of(&table.metadata) {
-                    TableClass::External => Err(HouseError::from(ChError::access_denied(format!(
-                        "INSERT INTO {database}.{name}: the table belongs to another writer (an \
-                         external table), so the House reads it and never changes it"
-                    )))),
-                    _ => Err(HouseError::from(ChError::not_implemented(
-                        "INSERT into a lake table is served from HS1 Task 12; this House does \
-                         not serve it yet",
-                    ))),
-                },
-            }
-        }
+        // `gate::catalog_answer` gives an `INSERT` naming a lake table to
+        // `insert::target` (HS1 Task 12) before it gets here.
+        Kind::Insert => Ok(Answer::PassThrough),
     }
 }
 
@@ -2216,6 +2347,62 @@ mod tests {
                 .ttl
         );
         assert!(parse_create_table("CREATE TABLE t (a UInt8) BANANA").is_err());
+    }
+
+    #[test]
+    fn truncate_names_its_table() {
+        assert_eq!(
+            parse_truncate("TRUNCATE TABLE IF EXISTS d.t ON CLUSTER c"),
+            Some(((Some("d".to_string()), "t".to_string()), true))
+        );
+        assert_eq!(
+            parse_truncate("truncate t"),
+            Some(((None, "t".to_string()), false))
+        );
+        assert_eq!(parse_truncate("TRUNCATE TEMPORARY TABLE t"), None);
+        assert_eq!(parse_truncate("TRUNCATE ALL TABLES FROM d"), None);
+        assert_eq!(parse_truncate("TRUNCATE t; DROP TABLE x"), None);
+    }
+
+    #[test]
+    fn insert_heads_are_read() {
+        let head = parse_insert(
+            "INSERT INTO TABLE d.`my t` (a, `b c`) SETTINGS x = 1, y = 'z' VALUES (1)",
+        )
+        .expect("parses");
+        assert_eq!(head.target, (Some("d".to_string()), "my t".to_string()));
+        assert_eq!(head.columns, Some(vec!["a".to_string(), "b c".to_string()]));
+        assert_eq!(
+            head.settings,
+            vec![
+                ("x".to_string(), "1".to_string()),
+                ("y".to_string(), "z".to_string())
+            ]
+        );
+        let text = "INSERT INTO t VALUES (1), (2)";
+        let InsertRest::Values(at) = parse_insert(text).expect("values").rest else {
+            panic!("values");
+        };
+        assert_eq!(&text[at..], " (1), (2)");
+        let text = "insert into t (k) with 1 as x select x";
+        let InsertRest::Select(at) = parse_insert(text).expect("select").rest else {
+            panic!("select");
+        };
+        assert_eq!(&text[at..], "with 1 as x select x");
+        assert_eq!(
+            parse_insert("INSERT INTO t").expect("bare").rest,
+            InsertRest::Nothing
+        );
+        // Column lists of plain names only; nothing else after the head.
+        for bad in [
+            "INSERT INTO t (* EXCEPT (a)) VALUES (1)",
+            "INSERT INTO t (COLUMNS('a')) VALUES (1)",
+            "INSERT INTO t (a + 1) VALUES (1)",
+            "INSERT INTO t DROP TABLE x",
+            "INSERT INTO FUNCTION null('a UInt8') VALUES (1)",
+        ] {
+            assert!(parse_insert(bad).is_err(), "{bad}");
+        }
     }
 
     #[test]

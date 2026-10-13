@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use bytes::Bytes;
 use iceberg::io::FileIO;
 use iceberg::spec::{
-    DataContentType, DataFileBuilder, DataFileFormat, FormatVersion, ManifestList,
+    DataContentType, DataFile, DataFileBuilder, DataFileFormat, FormatVersion, ManifestList,
     ManifestListWriter, ManifestWriterBuilder, Operation, Snapshot, SnapshotReference,
     SnapshotRetention, Struct, Summary, TableMetadata,
 };
@@ -84,11 +84,47 @@ fn total(parent: Option<&Summary>, key: &str) -> u64 {
 /// (`None` when the table has no snapshot). The snapshot's time is
 /// `timestamp_ms`, or the table's last update when that is later (Iceberg
 /// refuses a snapshot older than its table's last change). Format v3 tables
-/// need row lineage, which HS1 Task 12 adds; they are refused here.
+/// need row lineage, which is not built yet; they are refused here.
 pub async fn fast_append(
     metadata: &TableMetadata,
     parent_manifest_list: Option<&[u8]>,
     files: Vec<NewDataFile>,
+    timestamp_ms: i64,
+) -> Result<Append, LakeError> {
+    let spec_id = metadata.default_partition_spec().spec_id();
+    let data_files = files
+        .into_iter()
+        .map(|file| {
+            DataFileBuilder::default()
+                .content(DataContentType::Data)
+                .file_path(file.location)
+                .file_format(DataFileFormat::Parquet)
+                .partition(file.partition)
+                .partition_spec_id(spec_id)
+                .record_count(file.record_count)
+                .file_size_in_bytes(file.size_bytes)
+                .build()
+                .map_err(|e| invalid("a data file", e))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    append_files(
+        metadata,
+        parent_manifest_list,
+        data_files,
+        Vec::new(),
+        timestamp_ms,
+    )
+    .await
+}
+
+/// [`fast_append`] of data files with their statistics (what
+/// [`crate::write::DataWriter`] makes), with `summary` added to the snapshot's
+/// summary (HS1 Task 12: the House's deduplication keys and commit id).
+pub async fn append_files(
+    metadata: &TableMetadata,
+    parent_manifest_list: Option<&[u8]>,
+    files: Vec<DataFile>,
+    summary: Vec<(String, String)>,
     timestamp_ms: i64,
 ) -> Result<Append, LakeError> {
     let version = metadata.format_version();
@@ -122,19 +158,9 @@ pub async fn fast_append(
         ManifestWriterBuilder::new(output, Some(snapshot_id), schema.clone(), spec.clone())
             .build_v2_data();
     let added_files = files.len() as u64;
-    for file in files {
-        added_records += file.record_count;
-        added_bytes += file.size_bytes;
-        let data_file = DataFileBuilder::default()
-            .content(DataContentType::Data)
-            .file_path(file.location)
-            .file_format(DataFileFormat::Parquet)
-            .partition(file.partition)
-            .partition_spec_id(spec.spec_id())
-            .record_count(file.record_count)
-            .file_size_in_bytes(file.size_bytes)
-            .build()
-            .map_err(|e| invalid("a data file", e))?;
+    for data_file in files {
+        added_records += data_file.record_count();
+        added_bytes += data_file.file_size_in_bytes();
         writer
             .add_file(data_file, sequence_number)
             .map_err(|e| invalid("a data file", e))?;
@@ -181,7 +207,7 @@ pub async fn fast_append(
         .map_err(|e| invalid("the manifest list", e))?;
 
     let previous = parent.map(|p| p.summary());
-    let mut properties = HashMap::new();
+    let mut properties: HashMap<String, String> = summary.into_iter().collect();
     let mut put = |key: &str, value: u64| {
         properties.insert(key.to_string(), value.to_string());
     };
@@ -240,4 +266,98 @@ pub async fn fast_append(
             },
         ],
     })
+}
+
+/// `TRUNCATE` (§49 §6.3): a `delete` snapshot on `main` whose manifest list is
+/// empty, so the table reads no rows and keeps its history (time travel and
+/// `RestoreTable` still see the files, which the retention of HS1 Task 15
+/// frees). `None` when the table has no snapshot, so nothing to remove.
+pub async fn truncate(
+    metadata: &TableMetadata,
+    timestamp_ms: i64,
+) -> Result<Option<Append>, LakeError> {
+    let Some(parent) = metadata.current_snapshot() else {
+        return Ok(None);
+    };
+    let version = metadata.format_version();
+    if version != FormatVersion::V2 {
+        return Err(LakeError::Invalid(format!(
+            "TRUNCATE of a format {version} table is not supported yet"
+        )));
+    }
+    let snapshot_id = fresh_snapshot_id(metadata);
+    let sequence_number = metadata.next_sequence_number();
+    let base = format!("{}/metadata", metadata.location().trim_end_matches('/'));
+    let list_location = format!("{base}/snap-{snapshot_id}-1-{}.avro", uuid::Uuid::new_v4());
+    let io = FileIO::new_with_memory();
+    let list_output = io
+        .new_output(&list_location)
+        .map_err(|e| invalid("the manifest list", e))?;
+    let list = ManifestListWriter::v2(
+        list_output
+            .writer()
+            .await
+            .map_err(|e| invalid("the manifest list", e))?,
+        snapshot_id,
+        Some(parent.snapshot_id()),
+        sequence_number,
+    );
+    list.close()
+        .await
+        .map_err(|e| invalid("the manifest list", e))?;
+    let list_bytes = io
+        .new_input(&list_location)
+        .map_err(|e| invalid("the manifest list", e))?
+        .read()
+        .await
+        .map_err(|e| invalid("the manifest list", e))?;
+    let previous = Some(parent.summary());
+    let mut properties = HashMap::new();
+    for (deleted, total_key) in [
+        ("deleted-data-files", "total-data-files"),
+        ("deleted-records", "total-records"),
+        ("removed-files-size", "total-files-size"),
+    ] {
+        properties.insert(deleted.to_string(), total(previous, total_key).to_string());
+    }
+    for key in [
+        "total-data-files",
+        "total-records",
+        "total-files-size",
+        "total-delete-files",
+        "total-position-deletes",
+        "total-equality-deletes",
+    ] {
+        properties.insert(key.to_string(), "0".to_string());
+    }
+    let snapshot = Snapshot::builder()
+        .with_snapshot_id(snapshot_id)
+        .with_parent_snapshot_id(Some(parent.snapshot_id()))
+        .with_sequence_number(sequence_number)
+        .with_timestamp_ms(timestamp_ms.max(metadata.last_updated_ms()))
+        .with_manifest_list(list_location.clone())
+        .with_summary(Summary {
+            operation: Operation::Delete,
+            additional_properties: properties,
+        })
+        .with_schema_id(metadata.current_schema().schema_id())
+        .build();
+    Ok(Some(Append {
+        snapshot_id,
+        files: vec![(list_location, list_bytes)],
+        requirements: vec![TableRequirement::RefSnapshotIdMatch {
+            r#ref: MAIN.to_string(),
+            snapshot_id: Some(parent.snapshot_id()),
+        }],
+        updates: vec![
+            TableUpdate::AddSnapshot { snapshot },
+            TableUpdate::SetSnapshotRef {
+                ref_name: MAIN.to_string(),
+                reference: SnapshotReference::new(
+                    snapshot_id,
+                    SnapshotRetention::branch(None, None, None),
+                ),
+            },
+        ],
+    }))
 }
