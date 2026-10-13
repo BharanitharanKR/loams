@@ -3,6 +3,10 @@
 //   node sdks/conformance/check-languages.mjs --list
 //   node sdks/conformance/check-languages.mjs --check typescript
 //   node sdks/conformance/check-languages.mjs --drift [--strict]
+//   node sdks/conformance/check-languages.mjs --toolchain
+//
+// `--toolchain` (also `node --test sdks/conformance/check-languages.mjs`) runs
+// `toolchain_table_has_row_per_language` over `docs/sdk/toolchain-2026-10.md`.
 //
 // ## Two different questions
 //
@@ -97,6 +101,84 @@ function readFileSyncSafe(file) {
 }
 
 const known = Object.keys(LANGUAGES).filter((language) => existsSync(join(root, LANGUAGES[language].dir)));
+
+/** The toolchain table of API2 Task 0 (SDK1 Task 0), dated in its name. */
+const TOOLCHAIN = 'docs/sdk/toolchain-2026-10.md';
+
+/** The columns the table must have, in order. */
+const TOOLCHAIN_COLUMNS = [
+  'Language',
+  'Key',
+  'Protocol (2026-10-13)',
+  'Library',
+  'Latest release (date)',
+  'Remote plugins, latest version (date added to `bufbuild/plugins`)',
+  'Registry',
+  'Trusted publishing',
+  'Change from §44 §9',
+];
+
+/**
+ * The rows of the table under `## The table`: the header's cells, and each row's
+ * cells keyed by the `Key` column with its backticks removed.
+ */
+export function toolchainRows(markdown) {
+  const section = markdown.split(/^## The table$/m)[1];
+  if (section === undefined) {
+    return { header: [], rows: [] };
+  }
+  const lines = section.split('\n');
+  const start = lines.findIndex((line) => line.startsWith('|'));
+  const table = [];
+  for (const line of lines.slice(start)) {
+    if (!line.startsWith('|')) {
+      break;
+    }
+    table.push(
+      line
+        .slice(1, line.endsWith('|') ? -1 : undefined)
+        .split('|')
+        .map((cell) => cell.trim()),
+    );
+  }
+  const [header = [], , ...body] = table;
+  return {
+    header,
+    rows: body.map((cells) => ({ key: (cells[1] ?? '').replaceAll('`', ''), cells })),
+  };
+}
+
+// `--toolchain`, or `node --test sdks/conformance/check-languages.mjs`: the test
+// of API2 Task 0 step 2. The table is prose a human keeps, so the test checks
+// only what a human gets wrong silently: a language with no row, a language with
+// two, a row for a language `required.mjs` does not know, and an empty cell.
+const toolchainMode = has('toolchain') || process.env.NODE_TEST_CONTEXT !== undefined;
+if (toolchainMode) {
+  const { test } = await import('node:test');
+  const assert = (await import('node:assert/strict')).default;
+
+  test('toolchain_table_has_row_per_language', () => {
+    const path = join(root, TOOLCHAIN);
+    assert.ok(existsSync(path), `${TOOLCHAIN} is missing`);
+    const { header, rows } = toolchainRows(readFileSync(path, 'utf8'));
+    assert.deepEqual(header, TOOLCHAIN_COLUMNS, `${TOOLCHAIN}: the table's columns changed`);
+
+    const keys = rows.map((row) => row.key);
+    const duplicated = keys.filter((key, at) => keys.indexOf(key) !== at);
+    assert.deepEqual(duplicated, [], `${TOOLCHAIN}: more than one row for ${duplicated.join(', ')}`);
+    const unknown = keys.filter((key) => !(key in LANGUAGES));
+    assert.deepEqual(unknown, [], `${TOOLCHAIN}: rows for languages required.mjs does not know`);
+    const missing = Object.keys(LANGUAGES).filter((language) => !keys.includes(language));
+    assert.deepEqual(missing, [], `${TOOLCHAIN}: no row for ${missing.join(', ')}`);
+
+    for (const { key, cells } of rows) {
+      assert.equal(cells.length, TOOLCHAIN_COLUMNS.length, `${key}: ${cells.length} cells`);
+      cells.forEach((cell, at) => {
+        assert.notEqual(cell, '', `${key}: the "${TOOLCHAIN_COLUMNS[at]}" cell is empty`);
+      });
+    }
+  });
+}
 
 if (has('list')) {
   for (const language of known) {
@@ -230,5 +312,7 @@ if (has('drift')) {
   process.exit(0);
 }
 
-console.error('usage: check-languages.mjs --list | --check <language> | --drift [--strict]');
-process.exit(2);
+if (!toolchainMode) {
+  console.error('usage: check-languages.mjs --list | --check <language> | --drift [--strict] | --toolchain');
+  process.exit(2);
+}
