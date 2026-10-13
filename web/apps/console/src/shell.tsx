@@ -67,6 +67,9 @@ function useCurrentProject(projects: Schemas['Project'][]): Schemas['Project'] |
 export function Shell() {
   const { session, projects, instance } = useSession();
   const current = useCurrentProject(projects);
+  // On org pages (Teams, Members, Audit, Settings, All projects) no project is open:
+  // the project section stays for one-click return, marked as the last one opened.
+  const inProject = Boolean(useParams().project);
   const [open, setOpen] = useState(false);
   const location = useLocation();
 
@@ -104,12 +107,15 @@ export function Shell() {
             </button>
           </div>
 
-          <ProjectSwitcher projects={projects} current={current} />
+          <ProjectSwitcher projects={projects} current={current} idle={!inProject} />
 
           <nav className="side-nav" aria-label="Console">
             {current && (
-              <div className="side-group">
-                <h2>{current.name}</h2>
+              <div className="side-group" data-idle={inProject ? undefined : ''}>
+                <h2>
+                  {current.name}
+                  {!inProject && <span className="side-group-note"> · last opened</span>}
+                </h2>
                 <NavItem to={`/projects/${current.slug}`} end icon={<LayoutGrid size={16} />}>
                   Overview
                 </NavItem>
@@ -223,15 +229,18 @@ function NavItem({
 function ProjectSwitcher({
   projects,
   current,
+  idle,
 }: {
   projects: Schemas['Project'][];
   current: Schemas['Project'] | undefined;
+  /** No project is open (an org page): the switcher shows the last one, dimmed. */
+  idle?: boolean;
 }) {
   const navigate = useNavigate();
   if (!current) return null;
   return (
-    <label className="switcher">
-      <span className="sr-only">Project</span>
+    <label className="switcher" data-idle={idle ? '' : undefined}>
+      <span className="sr-only">{idle ? 'Open a project (last opened shown)' : 'Project'}</span>
       <span className="switcher-mark" aria-hidden="true">
         {current.name.slice(0, 1)}
       </span>

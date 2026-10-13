@@ -26,10 +26,14 @@ pub const CONTRACT: &str = include_str!("../../../api/console/openapi.json");
 /// The seed data, with relative times unresolved.
 pub const SEED: &str = include_str!("../seed/seed.json");
 
-/// Loads [`SEED`] and resolves its relative times against `now`.
+/// Loads [`SEED`] and resolves its relative times against `now`. The instance
+/// reports this build's version, so the console's footer never shows a stale one.
 pub fn load_seed(now: SystemTime) -> Result<Value> {
     let mut seed: Value = serde_json::from_str(SEED).context("parsing seed/seed.json")?;
     resolve(&mut seed, now)?;
+    if let Some(instance) = seed.get_mut("instance").and_then(Value::as_object_mut) {
+        instance.insert("version".into(), Value::from(env!("CARGO_PKG_VERSION")));
+    }
     Ok(seed)
 }
 
@@ -917,4 +921,15 @@ pub async fn register(server: &MockServer, routes: &[Route]) -> Result<()> {
             .await;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_seed_reports_this_builds_version() {
+        let seed = load_seed(SystemTime::now()).unwrap();
+        assert_eq!(seed["instance"]["version"], env!("CARGO_PKG_VERSION"));
+    }
 }

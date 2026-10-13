@@ -8,22 +8,23 @@ import type { SlotRegistry } from '@loams/slots';
 import { Layout } from './layout.js';
 import { HashRouter } from './router.js';
 
-export { Layout, navSections, SECTIONS } from './layout.js';
+export { Layout, navSections, SECTIONS, THEME_KEY, useTheme } from './layout.js';
 
 export { compile, HashRouter, type HashSource, windowHash } from './router.js';
 
 const plugin: PluginModule = {
   name: 'shell',
-  inject: ['slots', 'session'],
+  inject: ['slots', 'session', 'flags'],
   apply(ctx: Context) {
     const slots = service(ctx, 'slots') as SlotRegistry;
     const session = service(ctx, 'session');
+    const flags = service(ctx, 'flags');
     const router = new HashRouter(slots);
     ctx.effect(() => () => router.dispose(), 'router');
     ctx.provide('router', router);
     ctx.effect(() =>
       slots.register({ name: 'root', plugin: 'shell' }, () => (
-        <Layout router={router} session={session} />
+        <Layout router={router} session={session} flags={flags} />
       )),
     );
   },

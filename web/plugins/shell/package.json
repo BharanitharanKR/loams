@@ -20,7 +20,8 @@
       "tier": "core",
       "inject": [
         "slots",
-        "session"
+        "session",
+        "flags"
       ],
       "provides": [
         "router"

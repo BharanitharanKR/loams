@@ -1,6 +1,7 @@
 import {
   Activity,
   Boxes,
+  ChartColumn,
   Circle,
   Cloud,
   Database,
@@ -12,6 +13,7 @@ import {
   type LucideIcon,
   Network,
   Plug,
+  Puzzle,
   Radio,
   Rocket,
   Route,
@@ -46,6 +48,9 @@ const ICONS: Record<string, LucideIcon> = {
   deployments: Rocket,
   canvas: Shapes,
   metrics: Activity,
+  chart: ChartColumn,
+  analytics: ChartColumn,
+  plugin: Puzzle,
 };
 
 export const ICON_NAMES = Object.keys(ICONS);

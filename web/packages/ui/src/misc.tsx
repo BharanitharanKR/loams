@@ -42,7 +42,7 @@ export function Notice({
     >
       <div>
         <strong>{title}</strong>
-        {children && <p>{children}</p>}
+        {children && <div className="loams-notice-body">{children}</div>}
       </div>
     </div>
   );

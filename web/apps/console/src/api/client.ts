@@ -27,6 +27,19 @@ function connect(baseUrl: string) {
   return client;
 }
 
+/**
+ * The Loams server an SDK or another client should talk to: the one `config.json`
+ * names, else this origin. In development the console's origin is the Vite dev
+ * server, so it is the server the dev server proxies to instead (vite.config.ts).
+ */
+export function serverUrl(): string {
+  if (configured) return configured;
+  const dev = import.meta.env.DEV ? (import.meta.env.LOAMS_DEV_SERVER as string | undefined) : '';
+  return dev || window.location.origin;
+}
+
+let configured: string | undefined;
+
 /** Typed client for the console API. Paths are absolute: `/api/v1/...`. */
 export let api = connect(server);
 
@@ -36,6 +49,7 @@ export let api = connect(server);
  * `api` is a live binding, so importers see the new client.
  */
 export function setServer(origin: string | undefined) {
+  configured = origin;
   server = origin ?? window.location.origin;
   api = connect(server);
 }

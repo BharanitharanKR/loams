@@ -14,7 +14,7 @@ import {
   StackCard,
   StreamsCard,
 } from '../src/cards.js';
-import { loadDurable, loadStreams, type Net, useLoad } from '../src/load.js';
+import { loadDurable, loadStreams, type Net, NotServedError, useLoad } from '../src/load.js';
 import { OverviewPage } from '../src/overview-page.js';
 import { fakeDesktop } from './fake.js';
 
@@ -146,6 +146,23 @@ describe('overview cards', () => {
 
 describe('overview loaders', () => {
   const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+
+  it('a server without the streams API is not served, not unreachable', async () => {
+    const net: Net = {
+      baseUrl: 'http://x',
+      fetch: async () =>
+        new Response(JSON.stringify({ code: 'unimplemented', message: 'method not found' }), {
+          status: 404,
+        }),
+    };
+    await expect(loadStreams(net)).rejects.toBeInstanceOf(NotServedError);
+    render(<StreamsCard where={up} load={{ state: 'error', message: 'x', notServed: true }} />);
+    expect(screen.getByText('Not on this server')).toBeTruthy();
+    expect(screen.getByText('This server does not serve streams and links.')).toBeTruthy();
+    cleanup();
+    render(<DurableCard where={up} load={{ state: 'loading' }} local={false} />);
+    expect(screen.getByText('Local only')).toBeTruthy();
+  });
 
   it('streams_hide_internal_and_find_max_lag', async () => {
     const net: Net = {

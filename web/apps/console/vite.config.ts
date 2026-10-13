@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
@@ -52,6 +54,34 @@ function sandboxAssets(base: string): Plugin {
 }
 
 /**
+ * The desktop preview (`cordis.html?desktop`) reads the connector catalog the
+ * desktop app ships, apps/desktop-electron/resources/connectors.json, which is
+ * generated and not checked in. The dev server builds it on start when it is
+ * missing (about half a second), so the Connectors page works without a manual
+ * step; if that fails, the page explains how to build it.
+ */
+function connectorCatalog(): Plugin {
+  const desktop = fileURLToPath(new URL('../../../apps/desktop-electron/', import.meta.url));
+  return {
+    name: 'loams-connector-catalog',
+    apply: 'serve',
+    configResolved(config) {
+      if (config.mode === 'test') return;
+      if (existsSync(`${desktop}resources/connectors.json`)) return;
+      try {
+        execFileSync(process.execPath, [`${desktop}scripts/connectors-catalog.mjs`], {
+          cwd: desktop,
+          stdio: 'ignore',
+          timeout: 30_000,
+        });
+      } catch (e) {
+        config.logger.warn(`connectors.json was not generated: ${(e as Error).message}`);
+      }
+    },
+  };
+}
+
+/**
  * The console's CSP, in production builds only (Vite's dev server injects
  * inline scripts): no `unsafe-eval` and no remote source (§37 §6.3).
  */
@@ -79,12 +109,18 @@ function cspMeta(): Plugin {
 
 export default defineConfig({
   base,
-  plugins: [react(), tailwindcss(), sandboxAssets(base), cspMeta()],
+  // The server the dev server proxies to, for copy that shows a client where to connect.
+  define: { 'import.meta.env.LOAMS_DEV_SERVER': JSON.stringify(api) },
+  plugins: [react(), tailwindcss(), sandboxAssets(base), cspMeta(), connectorCatalog()],
   server: {
     port: 5173,
     proxy: {
       '/api': api,
       '/v1': api,
+      // The app protos over Connect (`/loams.<package>.<Service>/<Method>`), as the
+      // desktop shell proxies them: the `?desktop` preview's pages read them here.
+      '^/loams\\.[a-z0-9_.]+\\.[A-Za-z0-9]+/': api,
+      '/grpc.health.': api,
       '/.well-known': api,
       '/health': api,
       '/ready': api,
