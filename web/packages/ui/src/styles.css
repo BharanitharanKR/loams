@@ -277,11 +277,15 @@
   font-weight: 540;
 }
 
-.loams-empty p {
+.loams-empty-body {
   margin: 0;
   max-width: 42ch;
   font-size: 0.86rem;
   color: var(--op-muted);
+}
+
+.loams-empty-body p {
+  margin: 0;
 }
 
 .loams-empty .loams-grain {
@@ -497,9 +501,13 @@ textarea.loams-input {
   font-weight: 560;
 }
 
-.loams-notice p {
+.loams-notice-body {
   margin: 2px 0 0;
   color: var(--op-muted);
+}
+
+.loams-notice-body p {
+  margin: 0;
 }
 
 .loams-notice-warn {
@@ -533,8 +541,9 @@ textarea.loams-input {
 .loams-snippet code {
   flex: 1;
   min-width: 0;
-  overflow-x: auto;
-  white-space: pre;
+  /* Long lines wrap rather than hide behind a scrollbar-less overflow. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .loams-snippet-prompt {

@@ -194,6 +194,8 @@ export function SelectMenu<V extends string>({
   label,
   placeholder = 'Choose…',
   className,
+  leading,
+  icon = '▾',
 }: {
   value: V | null;
   onValueChange: (value: V) => void;
@@ -201,7 +203,12 @@ export function SelectMenu<V extends string>({
   /** The visible or accessible label. */
   label: string;
   placeholder?: string;
+  /** Classes for the trigger; it defaults to the input look. */
   className?: string;
+  /** Shown before the value in the trigger (a mark, a dot). */
+  leading?: ReactNode;
+  /** The trigger's affordance; a chevron by default. */
+  icon?: ReactNode;
 }) {
   return (
     <BaseSelect.Root
@@ -210,12 +217,13 @@ export function SelectMenu<V extends string>({
       items={options.map((o) => ({ value: o.value, label: o.label }))}
     >
       <BaseSelect.Trigger
-        className={cx('loams-input inline-flex items-center justify-between gap-2', className)}
+        className={className ?? 'loams-input inline-flex items-center justify-between gap-2'}
         aria-label={label}
       >
-        <BaseSelect.Value placeholder={placeholder} />
-        <BaseSelect.Icon className="text-faint" aria-hidden="true">
-          ▾
+        {leading}
+        <BaseSelect.Value placeholder={placeholder} className="min-w-0 flex-1 truncate text-left" />
+        <BaseSelect.Icon className="flex text-faint" aria-hidden="true">
+          {icon}
         </BaseSelect.Icon>
       </BaseSelect.Trigger>
       <BaseSelect.Portal>
