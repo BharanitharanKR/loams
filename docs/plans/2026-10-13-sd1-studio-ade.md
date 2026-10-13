@@ -1257,4 +1257,9 @@ These are §53 §15's questions, with the task that needs each answer. Every one
 
 ## Rulings made during execution
 
-(None yet. Task 0 starts this section.)
+| # | Ruling | Why | Cost if wrong |
+|---|---|---|---|
+| T8-1 | **The Mock's turn number comes from the file.** `n` in `mock edit <n>` is one more than the `mock edit` lines the file already holds; tool ids are `mock-edit-t<n>-<i>` (`i` = the path's index in the knob) | The Mock keeps no state between runs and is shared by every chat; counting lines keeps it deterministic and restart-proof | A test that edits a file by hand with `mock edit` lines shifts `n` |
+| T8-2 | **`LOAMS_DESKTOP_MOCK_APPROVE` asks through `RunControls::request_input`** (a question `mock-approve-t<n>-<i>`, header `Approval`, options `Allow`/`Deny`), not an `ApprovalRequested` event. A denial or a dropped question leaves the file untouched and the result is an error | DD1 Task 24's approval events and `ResolveApproval` haven't landed (agentd has only the role gate); `request_input` is the one blocking host bridge a harness has today | Task 13 moves the Mock onto the approval contract when it lands it; the knob and its order (call, ask, write, result) stay |
+| T8-3 | **The Playwright fixture (`web/apps/console/test/e2e/fixtures/agentd.ts`) and `agentd_fixture_starts_and_stops` move to Task 29** | The console has no Playwright setup; adding `@playwright/test` needs a pinned, licence-gated dependency (Task 2) and a web build. Task 8 stays in the agentd crates; Task 29 builds the e2e harness and its fixture together | Task 29 grows by one fixture |
+| T8-4 | **The knobs live in `mock.rs`, not in `registry.rs`'s default script.** They apply to any script: the edits are spliced in before the script's `Done`. `MockHarness::run_with(request, controls, MockEdits)` takes them explicitly for tests; `run` reads the environment; title runs never edit. Absolute paths, `..`, and symlinks out of the cwd are refused with an error result | Existing `MockHarness { script }` literals stay valid; harness tests need no process-global env | None |
