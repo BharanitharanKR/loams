@@ -281,7 +281,9 @@ HAND_ASSIGNED_IDS: dict[str, str] = {
 # paths, so they are written verbatim rather than derived.
 STARRED_RUNTIME: dict[str, tuple[str, str]] = {
     "kafka": ("native", "loams_flow::connectors::kafka"),  # §8 #1, rdkafka 0.39
-    "postgresql": ("native", "loams_flow::connectors::postgres"),  # §8 #2, tokio-postgres + ADBC
+    # §8 #2. CN1's loams_flow::connectors::postgres was never built; CN2 Task 10 built the
+    # Postgres family on the SDK (R0.2), and R10.9 asks Task 2 to point the ★ at it.
+    "postgresql": ("native", "loams_connector_postgres::PostgresFactory"),
     "mysql": ("native", "loams_flow::connectors::mysql"),  # §8 #3, mysql_async
     "debezium-postgres": ("debezium", "io.debezium.connector.postgresql.PostgresConnector"),  # §8 #4
     "debezium-mysql": ("debezium", "io.debezium.connector.mysql.MySqlConnector"),  # §8 #5
@@ -375,6 +377,7 @@ HANDWRITTEN_PREVIEW = set(HANDWRITTEN_UNSTARRED)
 # names the same ids (`HAND_WRITTEN_UNSTARRED_P2`).
 HAND_WRITTEN_FAMILY_ROWS: dict[str, tuple[str, ...]] = {
     "kafka": ("azure-event-hubs", "redpanda"),  # R9.7
+    "postgres": ("aurora", "cockroachdb", "pgvector"),  # R10.9
     "kv": ("cassandra", "dynamodb", "dynamodb-streams", "redis-streams", "valkey"),  # R14.1
     "search": ("opensearch", "qdrant"),  # R15.5
     "brokers": (  # R18.1
@@ -504,14 +507,14 @@ NATIVE_FIRST: dict[str, dict] = {
             "transactional sink and no __loams_checkpoints topic (CN2 R0.19, R7.3, R9.7)",
         ],
     },
-    # Task 10 — the Postgres family.
+    # Task 10 — the Postgres family: one PostgresFactory serves the four manifests (R10.9).
     "cockroachdb": {
-        "ref": family_ref("postgres", "postgres"),
+        "ref": family_ref("postgres", "PostgresFactory"),
         "profile": "cockroachdb",
         "position": "changefeed-cursor",
     },
     "aurora": {
-        "ref": family_ref("postgres", "postgres"),
+        "ref": family_ref("postgres", "PostgresFactory"),
         "profile": "aurora-postgres",
         "position": "pg-lsn or mysql-gtid, by engine",
         "notes": [
@@ -520,7 +523,7 @@ NATIVE_FIRST: dict[str, dict] = {
             "loams_connector_mysql::mysql with profile `aurora-mysql` (CN2 Tasks 10, 11)",
         ],
     },
-    "pgvector": {"ref": family_ref("postgres", "postgres"), "profile": "pgvector"},
+    "pgvector": {"ref": family_ref("postgres", "PostgresFactory"), "profile": "pgvector"},
     # Task 11 — the MySQL family (R0.7: MariaDB GTID in the family crate).
     "mariadb": {
         "ref": family_ref("mysql", "mysql"),

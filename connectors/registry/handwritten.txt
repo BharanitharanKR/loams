@@ -1,6 +1,7 @@
 activemq-jms
 adbc
 arrow
+aurora
 avro
 aws-sns
 aws-sqs
@@ -10,6 +11,7 @@ azure-service-bus
 bigquery
 cassandra
 clickhouse
+cockroachdb
 debezium-mysql
 debezium-postgres
 dynamodb
@@ -31,6 +33,7 @@ nats
 opensearch
 opentelemetry
 parquet
+pgvector
 postgresql
 pulsar
 qdrant

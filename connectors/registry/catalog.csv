@@ -19,16 +19,16 @@ websocket,WebSocket,messaging,P2,false,planned,native,loams_connector_brokers::w
 sse,SSE,messaging,P3,false,planned,openapi,openapi:sse,Y,,Y,,,,key|jwt,,,,,,
 webhooks,Webhooks,messaging,P1,true,preview,native,loams_flow::connectors::webhook,Y,Y,Y,,,Y,hmac|key,webhook|platform-http,core (Webhook trigger),native:loams_flow::connectors::webhook,native:loams_flow::connectors::webhook,,
 grpc,gRPC,messaging,P2,false,planned,native,loams_connector_protocols::grpc,Y,Y,Y,,,,mtls|jwt,grpc,,native:loams_connector_protocols::grpc,native:loams_connector_protocols::grpc,,
-postgresql,PostgreSQL,relational,P1,true,preview,native,loams_flow::connectors::postgres,Y,Y,Y,Y,Y,,basic|mtls|iam,sql|jdbc|pg-replication-slot|debezium-postgres,plugin-jdbc (postgres)|plugin-debezium,native:loams_flow::connectors::postgres,native:loams_flow::connectors::postgres,,iggy:postgres:source+sink:CN2 Task 10
+postgresql,PostgreSQL,relational,P1,true,preview,native,loams_connector_postgres::PostgresFactory,Y,Y,Y,Y,Y,,basic|mtls|iam,sql|jdbc|pg-replication-slot|debezium-postgres,plugin-jdbc (postgres)|plugin-debezium,native:loams_connector_postgres::PostgresFactory,native:loams_connector_postgres::PostgresFactory,,iggy:postgres:source+sink:CN2 Task 10
 mysql,MySQL,relational,P1,true,preview,native,loams_flow::connectors::mysql,Y,Y,Y,Y,Y,,basic|mtls|iam,sql|jdbc|debezium-mysql,plugin-jdbc (mysql)|plugin-debezium,native:loams_flow::connectors::mysql,native:loams_flow::connectors::mysql,,debezium:io.debezium.connector.mysql.MySqlConnector:source:CN2 Task 11
 mariadb,MariaDB,relational,P2,false,planned,native,loams_connector_mysql::mysql,Y,Y,Y,Y,Y,,basic|mtls,sql|jdbc,plugin-jdbc (mariadb)|plugin-debezium,native:loams_connector_mysql::mysql,native:loams_connector_mysql::mysql,mariadb,debezium:io.debezium.connector.mariadb.MariaDbConnector:source:CN2 Task 11
 sql-server,SQL Server,relational,P2,false,planned,native,loams_connector_sqlserver::sqlserver,Y,Y,Y,Y,Y,,basic|aad,sql|jdbc|debezium-sqlserver,plugin-jdbc (sqlserver)|plugin-debezium,native:loams_connector_sqlserver::sqlserver,native:loams_connector_sqlserver::sqlserver,,debezium:io.debezium.connector.sqlserver.SqlServerConnector:source:CN2 Task 12
 oracle,Oracle,relational,P2,false,planned,camel,sql,Y,Y,Y,Y,Y,,basic|kerb,sql|jdbc|debezium-oracle,plugin-jdbc (oracle)|plugin-debezium,camel:sql,camel:sql,,
 sqlite,SQLite,relational,P3,false,planned,camel,sql,Y,Y,,Y,,,none,sql|jdbc,plugin-jdbc (sqlite),,,,
-cockroachdb,CockroachDB,relational,P2,false,planned,native,loams_connector_postgres::postgres,Y,Y,Y,Y,Y,,basic|mtls,sql|jdbc,plugin-jdbc (postgres),native:loams_connector_postgres::postgres,native:loams_connector_postgres::postgres,cockroachdb,
+cockroachdb,CockroachDB,relational,P2,false,planned,native,loams_connector_postgres::PostgresFactory,Y,Y,Y,Y,Y,,basic|mtls,sql|jdbc,plugin-jdbc (postgres),native:loams_connector_postgres::PostgresFactory,native:loams_connector_postgres::PostgresFactory,cockroachdb,
 tidb,TiDB,relational,P3,false,planned,camel,sql,Y,Y,Y,Y,Y,,basic|mtls,sql|jdbc,plugin-jdbc (mysql),,,,
 yugabytedb,YugabyteDB,relational,P3,false,planned,camel,sql,Y,Y,Y,Y,Y,,basic|mtls,sql|jdbc,plugin-jdbc (postgres),,,,
-aurora,Aurora,relational,P2,false,planned,native,loams_connector_postgres::postgres,Y,Y,Y,Y,Y,,basic|iam,sql|jdbc|debezium-postgres|debezium-mysql,plugin-jdbc,native:loams_connector_postgres::postgres,native:loams_connector_postgres::postgres,aurora-postgres,
+aurora,Aurora,relational,P2,false,planned,native,loams_connector_postgres::PostgresFactory,Y,Y,Y,Y,Y,,basic|iam,sql|jdbc|debezium-postgres|debezium-mysql,plugin-jdbc,native:loams_connector_postgres::PostgresFactory,native:loams_connector_postgres::PostgresFactory,aurora-postgres,
 alloydb,AlloyDB,relational,P3,false,planned,camel,sql,Y,Y,Y,Y,Y,,basic|sa,sql|jdbc|debezium-postgres,plugin-jdbc (postgres),,,,
 azure-sql,Azure SQL,relational,P2,false,planned,native,loams_connector_sqlserver::sqlserver,Y,Y,Y,Y,Y,,basic|aad,sql|jdbc|debezium-sqlserver,plugin-jdbc (sqlserver),native:loams_connector_sqlserver::sqlserver,native:loams_connector_sqlserver::sqlserver,azure-sql,
 cloud-sql,Cloud SQL,relational,P3,false,planned,camel,sql,Y,Y,Y,Y,Y,,basic|sa,sql|jdbc,plugin-jdbc,,,,
@@ -53,7 +53,7 @@ qdrant,Qdrant,vector,P2,false,planned,native,loams_connector_search::qdrant,Y,Y,
 pinecone,Pinecone,vector,P3,false,planned,camel,pinecone,,Y,,Y,,,key,pinecone,plugin-pinecone,,,,
 weaviate,Weaviate,vector,P3,false,planned,camel,weaviate,,Y,,Y,,,key,weaviate,plugin-weaviate,,,,
 milvus,Milvus,vector,P3,false,planned,camel,milvus,,Y,,Y,,,basic|key,milvus,,,,,
-pgvector,pgvector,vector,P2,false,planned,native,loams_connector_postgres::postgres,Y,Y,,Y,,,basic,pgvector,plugin-jdbc (postgres),native:loams_connector_postgres::postgres,native:loams_connector_postgres::postgres,pgvector,
+pgvector,pgvector,vector,P2,false,planned,native,loams_connector_postgres::PostgresFactory,Y,Y,,Y,,,basic,pgvector,plugin-jdbc (postgres),native:loams_connector_postgres::PostgresFactory,native:loams_connector_postgres::PostgresFactory,pgvector,
 neo4j,Neo4j,graph,P2,false,planned,native,loams_connector_protocols::neo4j,Y,Y,,Y,,,basic,neo4j,plugin-neo4j,native:loams_connector_protocols::neo4j,native:loams_connector_protocols::neo4j,,
 grafeo,Grafeo,graph,P2,false,planned,native,loams_connector_protocols::grafeo,Y,Y,,Y,,,none,,,native:loams_connector_protocols::grafeo,native:loams_connector_protocols::grafeo,,
 snowflake,Snowflake,warehouse,P1,true,preview,native,loams_flow::connectors::adbc,Y,Y,,Y,,,key|oauth2|basic,sql|jdbc,plugin-jdbc (snowflake),native:loams_flow::connectors::adbc,native:loams_flow::connectors::adbc,,
