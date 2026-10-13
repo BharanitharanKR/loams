@@ -1,0 +1,231 @@
+syntax = "proto3";
+
+// Projects (design §53 §5.2, §6.4; plan SD1 Task 4): the daemon's spaces (a
+// device and a folder), the repositories it knows, and each project's actions
+// (setup, dev, test). See studio.proto for the package's rules.
+package loams.agentd.v1;
+
+import "loams/agentd/v1/terminals.proto";
+import "loams/options/v1/options.proto";
+
+service ProjectService {
+  option (loams.options.v1.module) = {
+    name: "agentd.projects"
+    summary: "Loams Studio's projects: spaces, repositories and project actions."
+    unstable: true
+  };
+
+  // The projects, then the whole list again on each change (ndjson:
+  // `WatchSpaces`).
+  rpc WatchProjects(WatchProjectsRequest) returns (stream WatchProjectsResponse);
+  // ndjson: `Mutate` op `createSpace`.
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse);
+  // ndjson: `Mutate` op `renameSpace`.
+  rpc RenameProject(RenameProjectRequest) returns (RenameProjectResponse);
+  // Deletes the project and its threads, interrupting their runs (ndjson:
+  // `Mutate` op `deleteSpace`).
+  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse);
+
+  // ndjson: `ListRepos`.
+  rpc ListRepos(ListReposRequest) returns (ListReposResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ndjson: `AddRepo`.
+  rpc AddRepo(AddRepoRequest) returns (AddRepoResponse);
+  // ndjson: `CloneRepo`.
+  rpc CloneRepo(CloneRepoRequest) returns (CloneRepoResponse);
+  // ndjson: `CreateRepo`.
+  rpc CreateRepo(CreateRepoRequest) returns (CreateRepoResponse);
+
+  // ndjson: `ListProjectActions`.
+  rpc ListProjectActions(ListProjectActionsRequest) returns (ListProjectActionsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ndjson: `UpsertProjectAction`.
+  rpc UpsertProjectAction(UpsertProjectActionRequest) returns (UpsertProjectActionResponse);
+  // ndjson: `DeleteProjectAction`.
+  rpc DeleteProjectAction(DeleteProjectActionRequest) returns (DeleteProjectActionResponse);
+  // Runs an action in a new terminal (ndjson: `RunProjectAction`).
+  rpc RunProjectAction(RunProjectActionRequest) returns (RunProjectActionResponse);
+  // The setup action a new worktree's first turn started, once (ndjson:
+  // `TakeProjectActionSetup`).
+  rpc TakeProjectActionSetup(TakeProjectActionSetupRequest) returns (TakeProjectActionSetupResponse);
+}
+
+// A project: a folder on a device (ndjson `Space`).
+message Space {
+  string id = 1;
+  string device_id = 2;
+  string path = 3;
+  optional string name = 4;
+  bool git_detected = 5;
+  optional int64 git_checked_at_ms = 6;
+  optional string checkout_id = 7;
+  int64 created_at_ms = 8;
+}
+
+message Repo {
+  string path = 1;
+  string name = 2;
+  optional string default_branch = 3;
+}
+
+enum ProjectActionIcon {
+  PROJECT_ACTION_ICON_UNSPECIFIED = 0;
+  PROJECT_ACTION_ICON_PLAY = 1;
+  PROJECT_ACTION_ICON_TEST = 2;
+  PROJECT_ACTION_ICON_LINT = 3;
+  PROJECT_ACTION_ICON_CONFIGURE = 4;
+  PROJECT_ACTION_ICON_BUILD = 5;
+  PROJECT_ACTION_ICON_DEBUG = 6;
+}
+
+message ProjectAction {
+  string id = 1;
+  string name = 2;
+  string command = 3;
+  ProjectActionIcon icon = 4;
+  bool run_on_worktree_create = 5;
+}
+
+message ProjectActionDraft {
+  string name = 1;
+  string command = 2;
+  ProjectActionIcon icon = 3;
+  bool run_on_worktree_create = 4;
+}
+
+message ProjectActionsSnapshot {
+  string space_id = 1;
+  repeated ProjectAction actions = 2;
+  // Actions found in the project's own files that can be imported.
+  repeated ProjectActionDraft importable_actions = 3;
+  optional string project_file_issue = 4;
+}
+
+message ProjectActionRun {
+  string action_id = 1;
+  string action_name = 2;
+  TerminalSession terminal = 3;
+}
+
+message ProjectActionSetup {
+  bool ready = 1;
+  ProjectActionRun setup_action = 2;
+  optional string setup_error = 3;
+}
+
+message WatchProjectsRequest {}
+
+message WatchProjectsResponse {
+  repeated Space spaces = 1;
+}
+
+message CreateProjectRequest {
+  string space_id = 1;
+  string device_id = 2;
+  string path = 3;
+  optional string name = 4;
+  bool git_detected = 5;
+}
+
+message CreateProjectResponse {
+  bool ok = 1;
+}
+
+message RenameProjectRequest {
+  string space_id = 1;
+  // Unset clears the name, so the folder's name shows.
+  optional string name = 2;
+}
+
+message RenameProjectResponse {
+  bool ok = 1;
+}
+
+message DeleteProjectRequest {
+  string space_id = 1;
+}
+
+message DeleteProjectResponse {
+  bool ok = 1;
+}
+
+message ListReposRequest {}
+
+message ListReposResponse {
+  repeated Repo repos = 1;
+}
+
+message AddRepoRequest {
+  string path = 1;
+}
+
+message AddRepoResponse {
+  Repo repo = 1;
+}
+
+message CloneRepoRequest {
+  string url = 1;
+}
+
+message CloneRepoResponse {
+  Repo repo = 1;
+}
+
+message CreateRepoRequest {
+  string name = 1;
+}
+
+message CreateRepoResponse {
+  Repo repo = 1;
+}
+
+message ListProjectActionsRequest {
+  string space_id = 1;
+}
+
+message ListProjectActionsResponse {
+  ProjectActionsSnapshot snapshot = 1;
+}
+
+message UpsertProjectActionRequest {
+  string space_id = 1;
+  // Unset creates a new action.
+  optional string action_id = 2;
+  ProjectActionDraft action = 3;
+}
+
+message UpsertProjectActionResponse {
+  ProjectActionsSnapshot snapshot = 1;
+}
+
+message DeleteProjectActionRequest {
+  string space_id = 1;
+  string action_id = 2;
+}
+
+message DeleteProjectActionResponse {
+  ProjectActionsSnapshot snapshot = 1;
+}
+
+message RunProjectActionRequest {
+  string space_id = 1;
+  string chat_id = 2;
+  string action_id = 3;
+  uint32 cols = 4;
+  uint32 rows = 5;
+}
+
+message RunProjectActionResponse {
+  ProjectActionRun run = 1;
+}
+
+message TakeProjectActionSetupRequest {
+  string chat_id = 1;
+  string command_id = 2;
+}
+
+message TakeProjectActionSetupResponse {
+  ProjectActionSetup setup = 1;
+}

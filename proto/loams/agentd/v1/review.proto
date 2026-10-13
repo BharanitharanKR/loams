@@ -1,0 +1,124 @@
+syntax = "proto3";
+
+// Review comments (design §53 §5.6, §6.5 G8–G11; plan SD1 Task 4): comments
+// on a checkout's diff, stored by the daemon and keyed by checkout, sent to a
+// thread as one turn or posted to the pull request. Declared here; every RPC
+// answers `unimplemented` until SD1 Task 11. See studio.proto for the
+// package's rules.
+package loams.agentd.v1;
+
+import "loams/options/v1/options.proto";
+
+service ReviewService {
+  option (loams.options.v1.module) = {
+    name: "agentd.review"
+    summary: "Loams Studio's review comments on a checkout's diff."
+    unstable: true
+  };
+
+  // G8: the checkout's comments as a reset, then upserts and removals.
+  rpc WatchReviewComments(WatchReviewCommentsRequest) returns (stream WatchReviewCommentsResponse);
+  // G9.
+  rpc UpsertReviewComment(UpsertReviewCommentRequest) returns (UpsertReviewCommentResponse);
+  // G9.
+  rpc DeleteReviewComment(DeleteReviewCommentRequest) returns (DeleteReviewCommentResponse);
+  // G9.
+  rpc ResolveReviewComment(ResolveReviewCommentRequest) returns (ResolveReviewCommentResponse);
+  // G10: queues one turn built from a fixed template; the bodies are quoted
+  // as data.
+  rpc SendReviewToThread(SendReviewToThreadRequest) returns (SendReviewToThreadResponse);
+  // G11: posts the comments as a Forgejo or GitHub review.
+  rpc PostReviewToChangeRequest(PostReviewToChangeRequestRequest) returns (PostReviewToChangeRequestResponse);
+}
+
+enum DiffSide {
+  DIFF_SIDE_UNSPECIFIED = 0;
+  DIFF_SIDE_OLD = 1;
+  DIFF_SIDE_NEW = 2;
+}
+
+message ReviewComment {
+  string id = 1;
+  string checkout_id = 2;
+  string path = 3;
+  DiffSide side = 4;
+  uint32 line = 5;
+  optional uint32 end_line = 6;
+  string body = 7;
+  // The diff the comment was written against.
+  string diff_checksum = 8;
+  int64 created_at_ms = 9;
+  bool resolved = 10;
+}
+
+message WatchReviewCommentsRequest {
+  string checkout_id = 1;
+}
+
+message WatchReviewCommentsResponse {
+  oneof frame {
+    ReviewCommentsReset reset = 1;
+    ReviewCommentsDelta delta = 2;
+  }
+}
+
+message ReviewCommentsReset {
+  repeated ReviewComment comments = 1;
+}
+
+message ReviewCommentsDelta {
+  repeated ReviewComment upsert = 1;
+  repeated string remove = 2;
+}
+
+message UpsertReviewCommentRequest {
+  ReviewComment comment = 1;
+}
+
+message UpsertReviewCommentResponse {
+  string id = 1;
+}
+
+message DeleteReviewCommentRequest {
+  string checkout_id = 1;
+  string id = 2;
+}
+
+message DeleteReviewCommentResponse {
+  string id = 1;
+}
+
+message ResolveReviewCommentRequest {
+  string checkout_id = 1;
+  string id = 2;
+  bool resolved = 3;
+}
+
+message ResolveReviewCommentResponse {
+  string id = 1;
+}
+
+message SendReviewToThreadRequest {
+  string chat_id = 1;
+  repeated string comment_ids = 2;
+}
+
+message SendReviewToThreadResponse {
+  string command_id = 1;
+}
+
+enum ReviewEvent {
+  REVIEW_EVENT_UNSPECIFIED = 0;
+  REVIEW_EVENT_COMMENT = 1;
+  REVIEW_EVENT_REQUEST_CHANGES = 2;
+}
+
+message PostReviewToChangeRequestRequest {
+  string checkout_id = 1;
+  repeated string comment_ids = 2;
+  ReviewEvent event = 3;
+}
+
+message PostReviewToChangeRequestResponse {
+  string url = 1;
+}

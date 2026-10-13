@@ -2,7 +2,7 @@
   "name": "@loams/proto",
   "version": "0.1.0",
   "private": true,
-  "description": "Generated protobuf-es messages and Connect service descriptors for the Loams app protos (design §37 §8): loams.instance, devices, approvals, operations, notifications and errors v1, plus the collection, live, graph and house data planes.",
+  "description": "Generated protobuf-es messages and Connect service descriptors for the Loams app protos (design §37 §8): loams.instance, devices, approvals, operations, notifications and errors v1, plus the collection, live, graph and house data planes, and loams-agentd's loams.agentd.v1 for Loams Studio.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -16,6 +16,7 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./agentd": "./src/agentd.ts",
     "./approvals": "./src/gen/loams/approvals/v1/approvals_pb.ts",
     "./collection": "./src/gen/loams/collection/v1/collection_pb.ts",
     "./documents": "./src/gen/loams/collection/v1/document_pb.ts",

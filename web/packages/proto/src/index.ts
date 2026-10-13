@@ -6,6 +6,9 @@
 // Each package is also exported on its own path (`@loams/proto/approvals`),
 // which keeps a plugin's bundle to the services it uses.
 
+// loams-agentd's Connect surface for Loams Studio (SD1 Task 4). Not an app API
+// package of the Loams server, so not in APP_API_PACKAGES.
+export * as agentd from './agentd.js';
 export * as approvals from './gen/loams/approvals/v1/approvals_pb.js';
 export * as collection from './gen/loams/collection/v1/collection_pb.js';
 export * as documents from './gen/loams/collection/v1/document_pb.js';

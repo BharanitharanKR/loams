@@ -114,6 +114,42 @@ The generic rows (`invalid_argument` and below) are the code-to-class mapping of
 - **`cursor_expired`** is not an error: a watch stream whose cursor the server no longer has resets with a fresh snapshot instead (§37 §8.3).
 - A **`Deprecated`** RPC (a removed REST route behind `--legacy-rest`, §44 §5.3) answers `308`/`410` with `{"error":"moved","rpc":…}`, not an `ErrorInfo`.
 
+## agentd reasons (daemon-only)
+
+`loams.agentd.v1` (design §53 §6.1, plan SD1 Task 4) is served by `loams-agentd`, the per-user daemon, and never by the Loams server or an SDK (Q816). Its errors carry the same `loams.errors.v1.ErrorInfo`, whose `reason` is the daemon's ndjson `{err}` prefix (`loams_agentd_proto::rpc::ERROR_REASONS`) or one of SD1's additions, under the Connect code below (`crates/loams-agentd-connect/src/error.rs`). An error without a known prefix answers `unknown` with no `ErrorInfo`.
+
+These are **not registry rows**: the names are written without backticks, so neither `reasons_are_snake_case_and_unique` nor the SDK generator reads them, and no SDK grows a type for a daemon it cannot call. `unauthenticated`, `not_found` and `limit_exceeded` mean what the rows above mean.
+
+| Reason | Connect code | When |
+|---|---|---|
+| unauthenticated | unauthenticated | No token, or a wrong one, on a listener |
+| forbidden_role | permission_denied | The caller's role may not call the method (§50 §7); also the remote `studio` role (SD1 Task 7) |
+| protocol_mismatch | failed_precondition | ndjson only: a `Hello` with another protocol |
+| agentd_draining | unavailable | The daemon is draining before a stop or an upgrade |
+| unknown_method | unimplemented | ndjson only |
+| bad_params | invalid_argument | A request the daemon cannot parse or map (an unset required field, an unknown enum value) |
+| key_required | failed_precondition | A harness needs a key first |
+| unknown_provider | invalid_argument | |
+| invalid_url | invalid_argument | |
+| tool_unavailable_remote_server | failed_precondition | |
+| not_found | not_found | |
+| engine_not_ready | unavailable | The sessions engine is still starting |
+| keyring_unavailable | unavailable | The OS keyring cannot be reached |
+| limit_exceeded | resource_exhausted | Too many streams on one connection |
+| harness_unsupported | failed_precondition | A harness this daemon does not ship |
+| not_implemented | unimplemented | A §53 §6.5 gap (G1–G23) before its SD1 task lands |
+| stale_diff | failed_precondition | A checksum does not match (commit, discard, restore; SD1 Tasks 9, 10) |
+| merge_conflict | aborted | `MergeBranch` stopped on conflicts (SD1 Task 9) |
+| nothing_to_commit | failed_precondition | SD1 Task 9 |
+| push_rejected | failed_precondition | A non-fast-forward or a lease failure (SD1 Task 9) |
+| provider_not_configured | failed_precondition | No Forgejo or GitHub credential for `CreateChangeRequest` (SD1 Task 9) |
+| checkpoint_missing | not_found | SD1 Task 10 |
+| group_not_ready | failed_precondition | `ResolveRunGroup` while members still run (SD1 Task 12) |
+| approval_not_pending | failed_precondition | SD1 Task 13 |
+| origin_not_allowed | permission_denied | The remote listener, for an origin it was not given (SD1 Task 7) |
+
+The desktop's protocol proxy answers two codes of its own as a JSON body, not as an `ErrorInfo`: `forbidden_method` (403, a method the renderer may not call) and `agentd_unavailable` (503, no daemon running).
+
 ## Adding one
 
 1. Add the row here, with the Connect code it is raised under and the RPC that raises it.
