@@ -70,6 +70,12 @@ MANIFESTS = [
      r'^loams-proto = \{ path = "\.\./\.\./crates/loams-proto", version = "([^"]+)"'),
     ("rust dep loams-live-proto", "sdks/rust/Cargo.toml", "root",
      r'^loams-live-proto = \{ path = "\.\./\.\./crates/loams-live-proto", version = "([^"]+)"'),
+    # The lock file records the path dependencies' versions too, and
+    # `--locked` fails when they drift from the root workspace.
+    ("rust Cargo.lock loams-proto", "sdks/rust/Cargo.lock", "root",
+     r'^name = "loams-proto"\nversion = "([^"]+)"$'),
+    ("rust Cargo.lock loams-live-proto", "sdks/rust/Cargo.lock", "root",
+     r'^name = "loams-live-proto"\nversion = "([^"]+)"$'),
     ("csharp Loams", "sdks/csharp/src/Loams/Loams.csproj", "semver",
      r"^    <Version>([^<]+)</Version>$"),
     ("cpp loams (LOAMS_SDK_VERSION)", "sdks/cpp/CMakeLists.txt", "semver",
