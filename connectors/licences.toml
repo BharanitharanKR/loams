@@ -92,7 +92,7 @@ spdx = "Apache-2.0"
 kind = "runtime"
 # Unmodified Debezium Server 3.7 with its HTTP sink posting CloudEvents to loams-fabric ingest
 # (D357); one container per source database (CN1 Ruling 6).
-used_by = ["debezium-postgres", "debezium-mysql"]
+used_by = ["debezium-postgres", "debezium-mysql", "debezium-sql-server-oracle", "debezium-mongodb"]
 source = "https://github.com/debezium/debezium-server"
 
 [components.kafka]
@@ -122,7 +122,7 @@ source = "https://github.com/kestra-io/kestra"
 name = "rdkafka"
 spdx = "MIT"
 kind = "library"
-used_by = ["kafka"]
+used_by = ["kafka", "redpanda", "azure-event-hubs"]
 source = "https://crates.io/crates/rdkafka"
 
 [components.librdkafka]
@@ -131,28 +131,37 @@ spdx = "BSD-2-Clause"
 kind = "library"
 # The C client behind the rdkafka crate, built statically with cmake-build and ssl-vendored
 # (§33 Q348; CN1 Global Constraints' build-machine note).
-used_by = ["kafka"]
+used_by = ["kafka", "redpanda", "azure-event-hubs"]
 source = "https://github.com/farsightsec/librdkafka"
 
 [components.tokio-postgres]
 name = "tokio-postgres"
 spdx = "MIT"
 kind = "library"
-used_by = ["postgresql"]
+used_by = ["postgresql", "cockroachdb", "aurora", "pgvector"]
 source = "https://crates.io/crates/tokio-postgres"
 
 [components.mysql_async]
 name = "mysql_async"
 spdx = "MIT"
 kind = "library"
-used_by = ["mysql"]
+used_by = ["mysql", "mariadb", "aurora"]
 source = "https://crates.io/crates/mysql_async"
 
 [components.object_store]
 name = "object_store"
 spdx = "Apache-2.0"
 kind = "library"
-used_by = ["s3"]
+used_by = [
+  "s3",
+  "minio-rustfs",
+  "cloudflare-r2",
+  "gcs",
+  "azure-blob",
+  "adls-gen2",
+  "delta-lake",
+  "redshift",
+]
 source = "https://crates.io/crates/object_store"
 
 [components.iceberg-rust]
@@ -166,7 +175,13 @@ source = "https://crates.io/crates/iceberg"
 name = "parquet"
 spdx = "Apache-2.0"
 kind = "library"
-used_by = ["parquet", "iceberg", "s3"]
+used_by = [
+  "parquet",
+  "iceberg",
+  "s3",
+  "delta-lake",
+  "redshift",
+]
 source = "https://crates.io/crates/parquet"
 
 [components.arrow]
@@ -175,7 +190,18 @@ spdx = "Apache-2.0"
 kind = "library"
 # Arrow is the bulk path everywhere: ADBC reads, Parquet and Iceberg objects and the Postgres
 # batch reader all produce Arrow IPC batches (D356, CN1 Ruling 3).
-used_by = ["arrow", "parquet", "iceberg", "adbc", "snowflake", "bigquery", "postgresql"]
+used_by = [
+  "arrow",
+  "parquet",
+  "iceberg",
+  "adbc",
+  "snowflake",
+  "bigquery",
+  "postgresql",
+  "csv-ndjson",
+  "delta-lake",
+  "duckdb",
+]
 source = "https://crates.io/crates/arrow"
 
 [components.apache-avro]
@@ -216,14 +242,48 @@ source = "https://crates.io/crates/clickhouse"
 name = "redis"
 spdx = "BSD-3-Clause"
 kind = "library"
-used_by = ["redis"]
+used_by = ["redis", "valkey", "redis-streams"]
 source = "https://crates.io/crates/redis"
 
 [components.reqwest]
 name = "reqwest"
 spdx = "MIT"
 kind = "library"
-used_by = ["http", "webhooks"]
+used_by = [
+  "http",
+  "webhooks",
+  "opensearch",
+  "databricks",
+  "trino",
+  "neo4j",
+  "graphql",
+  "azure-event-grid",
+  "openai",
+  "anthropic",
+  "prometheus",
+  "lambda-cloud-run-azure-functions",
+  "kestra-companion",
+  "segment",
+  "sendgrid",
+  "posthog",
+  "hubspot",
+  "shopify",
+  "gitlab",
+  "amazon-ses",
+  "twilio-sms",
+  "salesforce",
+  "zendesk",
+  "servicenow",
+  "stripe",
+  "github",
+  "jira",
+  "slack",
+  "google-workspace",
+  "keycloak",
+  "vault",
+  "splunk",
+  "adls-gen2",
+]
 source = "https://crates.io/crates/reqwest"
 
 [components.opentelemetry-proto]
@@ -441,7 +501,17 @@ name = "floci"
 spdx = "MIT"
 kind = "service"
 # Local Kinesis and S3-event emulation for Kinesis and the S3 event notifications (D60).
-used_by = ["kinesis", "s3"]
+used_by = [
+  "kinesis",
+  "s3",
+  "aws-sqs",
+  "aws-sns",
+  "eventbridge",
+  "dynamodb",
+  "dynamodb-streams",
+  "lambda-cloud-run-azure-functions",
+  "amazon-ses",
+]
 source = "https://github.com/cloudlib/floci"
 
 [components.debezium-postgres]
@@ -507,6 +577,697 @@ kind = "service"
 # minted before the sink can run.
 used_by = ["forgejo"]
 source = "https://codeberg.org/forgejo/forgejo"
+
+# ----------------------------------------------------------------------------------------
+# CN2 Task 0 (2026-10-13): the protocol crates of the native family crates (OR-1, OR-6).
+# Versions, release dates and SPDX ids were read from the crates.io API on 2026-10-13; the
+# evidence is docs/plans/cn2-dependency-spike.md section 1. `spdx` is the single id Loams
+# relies on, and `expression` is the crate's full licence expression where it is dual
+# licensed (the gate's spdx field takes one SPDX token). Pins are recorded in `version`.
+# ----------------------------------------------------------------------------------------
+
+[components.lapin]
+name = "lapin"
+spdx = "MIT"
+kind = "library"
+version = "4.12.0"
+# AMQP 0-9-1 for RabbitMQ (CN2 Task 18): publisher confirms, basic.qos, manual acks.
+used_by = ["rabbitmq-amqp"]
+source = "https://crates.io/crates/lapin"
+
+[components.fe2o3-amqp]
+name = "fe2o3-amqp"
+spdx = "Apache-2.0"
+expression = "MIT OR Apache-2.0"
+kind = "library"
+version = "0.18.2"
+# AMQP 1.0 for ActiveMQ Artemis and Classic and Azure Service Bus (OR-22, CN2 Task 18).
+# crates.io publishes the legacy form "MIT/Apache-2.0".
+used_by = ["activemq-jms", "azure-service-bus"]
+source = "https://crates.io/crates/fe2o3-amqp"
+
+[components.fe2o3-amqp-cbs]
+name = "fe2o3-amqp-cbs"
+spdx = "Apache-2.0"
+expression = "MIT OR Apache-2.0"
+kind = "library"
+version = "0.18.0"
+# AMQP claims-based security: the SAS and Entra ID put-token exchange for Service Bus.
+used_by = ["azure-service-bus"]
+source = "https://crates.io/crates/fe2o3-amqp-cbs"
+
+[components.async-nats]
+name = "async-nats"
+spdx = "Apache-2.0"
+kind = "library"
+version = "0.50.0"
+used_by = ["nats"]
+source = "https://crates.io/crates/async-nats"
+
+[components.rumqttc]
+name = "rumqttc"
+spdx = "Apache-2.0"
+kind = "library"
+version = "0.25.1"
+# Built without default features and with use-native-tls: the default rustls feature pins
+# rustls-webpki 0.102, which open RustSec advisories affect (CN2 ruling R0.9).
+used_by = ["mqtt"]
+source = "https://crates.io/crates/rumqttc"
+
+[components.pulsar]
+name = "pulsar"
+spdx = "Apache-2.0"
+expression = "MIT OR Apache-2.0"
+kind = "library"
+version = "6.9.0"
+# Built without default features (no async-std) and with tokio-runtime (CN2 ruling R0.17).
+used_by = ["pulsar"]
+source = "https://crates.io/crates/pulsar"
+
+[components.tokio-tungstenite]
+name = "tokio-tungstenite"
+spdx = "MIT"
+kind = "library"
+version = "0.30.0"
+used_by = ["websocket", "graphql"]
+source = "https://crates.io/crates/tokio-tungstenite"
+
+[components.postgres-protocol]
+name = "postgres-protocol"
+spdx = "Apache-2.0"
+expression = "MIT OR Apache-2.0"
+kind = "library"
+version = "0.6.12"
+# Floor 0.6.12: RUSTSEC-2026-0179 (unbounded SCRAM iterations) and RUSTSEC-2026-0180.
+used_by = ["postgresql", "cockroachdb", "aurora", "pgvector"]
+source = "https://crates.io/crates/postgres-protocol"
+
+[components.pg_walstream]
+name = "pg_walstream"
+spdx = "BSD-3-Clause"
+kind = "library"
+version = "0.9.0"
+# The pgoutput logical replication client (OR-24, CN2 ruling R0.6): EXPORT_SNAPSHOT slots,
+# protocol 2+ streaming of in-progress transactions, and Standby Status Updates with an
+# explicit flush LSN. Default features only (the libpq feature is not enabled).
+used_by = ["postgresql", "aurora"]
+source = "https://crates.io/crates/pg_walstream"
+
+[components.mysql_common]
+name = "mysql_common"
+spdx = "Apache-2.0"
+expression = "MIT OR Apache-2.0"
+kind = "library"
+version = "0.37.3"
+# The binlog event decoder behind mysql_async's binlog feature (TABLE_MAP, row events,
+# binlog_row_metadata=FULL column names).
+used_by = ["mysql", "mariadb", "aurora"]
+source = "https://crates.io/crates/mysql_common"
+
+[components.tiberius]
+name = "tiberius"
+spdx = "Apache-2.0"
+expression = "MIT OR Apache-2.0"
+kind = "library"
+version = "0.13.0"
+# TDS for SQL Server and Azure SQL (CN2 Task 12). crates.io publishes "MIT/Apache-2.0".
+used_by = ["sql-server", "azure-sql"]
+source = "https://crates.io/crates/tiberius"
+
+[components.mongodb]
+name = "mongodb"
+spdx = "Apache-2.0"
+kind = "library"
+version = "3.9.1"
+# The driver is Apache-2.0; the MongoDB server image it is tested against is SSPL
+# (components.mongodb-server below).
+used_by = ["mongodb"]
+source = "https://crates.io/crates/mongodb"
+
+[components.scylla]
+name = "scylla"
+spdx = "Apache-2.0"
+expression = "MIT OR Apache-2.0"
+kind = "library"
+version = "1.9.0"
+used_by = ["cassandra"]
+source = "https://crates.io/crates/scylla"
+
+[components.aws-sdk-sqs]
+name = "aws-sdk-sqs"
+spdx = "Apache-2.0"
+kind = "library"
+version = "1.113.0"
+used_by = ["aws-sqs", "eventbridge"]
+source = "https://crates.io/crates/aws-sdk-sqs"
+
+[components.aws-sdk-sns]
+name = "aws-sdk-sns"
+spdx = "Apache-2.0"
+kind = "library"
+version = "1.115.0"
+used_by = ["aws-sns"]
+source = "https://crates.io/crates/aws-sdk-sns"
+
+[components.aws-sdk-eventbridge]
+name = "aws-sdk-eventbridge"
+spdx = "Apache-2.0"
+kind = "library"
+version = "1.121.0"
+used_by = ["eventbridge"]
+source = "https://crates.io/crates/aws-sdk-eventbridge"
+
+[components.aws-sdk-dynamodb]
+name = "aws-sdk-dynamodb"
+spdx = "Apache-2.0"
+kind = "library"
+version = "1.128.0"
+used_by = ["dynamodb"]
+source = "https://crates.io/crates/aws-sdk-dynamodb"
+
+[components.aws-sdk-dynamodbstreams]
+name = "aws-sdk-dynamodbstreams"
+spdx = "Apache-2.0"
+kind = "library"
+version = "1.115.0"
+used_by = ["dynamodb-streams"]
+source = "https://crates.io/crates/aws-sdk-dynamodbstreams"
+
+[components.aws-sdk-lambda]
+name = "aws-sdk-lambda"
+spdx = "Apache-2.0"
+kind = "library"
+version = "1.148.0"
+used_by = ["lambda-cloud-run-azure-functions"]
+source = "https://crates.io/crates/aws-sdk-lambda"
+
+[components.aws-sdk-redshiftdata]
+name = "aws-sdk-redshiftdata"
+spdx = "Apache-2.0"
+kind = "library"
+version = "1.120.0"
+used_by = ["redshift"]
+source = "https://crates.io/crates/aws-sdk-redshiftdata"
+
+[components.aws-sdk-sesv2]
+name = "aws-sdk-sesv2"
+spdx = "Apache-2.0"
+kind = "library"
+version = "1.139.0"
+# Optional: CN2 Task 20 may sign SES calls with aws-sigv4 alone instead.
+used_by = ["amazon-ses"]
+source = "https://crates.io/crates/aws-sdk-sesv2"
+
+[components.aws-config]
+name = "aws-config"
+spdx = "Apache-2.0"
+kind = "library"
+version = "1.12.0"
+used_by = [
+  "aws-sqs",
+  "aws-sns",
+  "eventbridge",
+  "dynamodb",
+  "dynamodb-streams",
+  "kinesis",
+  "lambda-cloud-run-azure-functions",
+  "redshift",
+  "amazon-ses",
+]
+source = "https://crates.io/crates/aws-config"
+
+[components.google-cloud-pubsub]
+name = "google-cloud-pubsub"
+spdx = "Apache-2.0"
+kind = "library"
+version = "1.5.0"
+# Google's crate (googleapis/google-cloud-rust). Versions 0.1.0 to 0.30.0 of this name were
+# yoshidan's MIT code, now published as gcloud-pubsub; only 1.x is meant here (R0.12).
+used_by = ["google-pub-sub", "gcs"]
+source = "https://crates.io/crates/google-cloud-pubsub"
+
+[components.russh]
+name = "russh"
+spdx = "Apache-2.0"
+kind = "library"
+version = "0.63.3"
+used_by = ["sftp"]
+source = "https://crates.io/crates/russh"
+
+[components.russh-sftp]
+name = "russh-sftp"
+spdx = "Apache-2.0"
+kind = "library"
+version = "3.0.1"
+used_by = ["sftp"]
+source = "https://crates.io/crates/russh-sftp"
+
+[components.qdrant-client]
+name = "qdrant-client"
+spdx = "Apache-2.0"
+kind = "library"
+version = "1.19.0"
+used_by = ["qdrant"]
+source = "https://crates.io/crates/qdrant-client"
+
+[components.deltalake]
+name = "deltalake"
+spdx = "Apache-2.0"
+kind = "library"
+version = "1.1.0"
+# The Delta Lake source and exactly-once sink (OR-18). The change data feed source needs
+# the datafusion feature, kept behind a family-crate feature (R0.14).
+used_by = ["delta-lake"]
+source = "https://crates.io/crates/deltalake"
+
+[components.arrow-csv]
+name = "arrow-csv"
+spdx = "Apache-2.0"
+kind = "library"
+version = "59.3.0"
+used_by = ["csv-ndjson"]
+source = "https://crates.io/crates/arrow-csv"
+
+[components.arrow-json]
+name = "arrow-json"
+spdx = "Apache-2.0"
+kind = "library"
+version = "59.3.0"
+used_by = ["csv-ndjson"]
+source = "https://crates.io/crates/arrow-json"
+
+[components.prost-reflect]
+name = "prost-reflect"
+spdx = "Apache-2.0"
+expression = "MIT OR Apache-2.0"
+kind = "library"
+version = "0.16.5"
+used_by = ["protobuf", "grpc"]
+source = "https://crates.io/crates/prost-reflect"
+
+[components.prost]
+name = "prost"
+spdx = "Apache-2.0"
+kind = "library"
+version = "0.14.4"
+used_by = ["protobuf", "grpc", "prometheus"]
+source = "https://crates.io/crates/prost"
+
+[components.tonic]
+name = "tonic"
+spdx = "MIT"
+kind = "library"
+version = "0.14.6"
+used_by = ["grpc"]
+source = "https://crates.io/crates/tonic"
+
+[components.tonic-reflection]
+name = "tonic-reflection"
+spdx = "MIT"
+kind = "library"
+version = "0.14.6"
+# The server-reflection client, for gRPC instances without a FileDescriptorSet (OR-12).
+used_by = ["grpc"]
+source = "https://crates.io/crates/tonic-reflection"
+
+[components.snap]
+name = "snap"
+spdx = "BSD-3-Clause"
+kind = "library"
+version = "1.1.2"
+# Snappy for Prometheus remote-write (CN2 Task 21).
+used_by = ["prometheus"]
+source = "https://crates.io/crates/snap"
+
+[components.kube]
+name = "kube"
+spdx = "Apache-2.0"
+kind = "library"
+version = "4.2.0"
+# The connector fleet on Kubernetes (CN2 Task 26), not a connector: used_by is empty.
+used_by = []
+source = "https://crates.io/crates/kube"
+
+[components.k8s-openapi]
+name = "k8s-openapi"
+spdx = "Apache-2.0"
+kind = "library"
+version = "0.28.0"
+# With the v1_32 feature (clusters 1.32 and newer, R0.16).
+used_by = []
+source = "https://crates.io/crates/k8s-openapi"
+
+# ----------------------------------------------------------------------------------------
+# CN2 Task 0: drivers and fallback components (OR-4)
+# ----------------------------------------------------------------------------------------
+
+[components.oracle-jdbc]
+name = "Oracle JDBC driver (ojdbc11, ojdbc17)"
+spdx = "LicenseRef-Oracle-FUTC"
+kind = "driver"
+# Oracle Free Use Terms and Conditions. user-supplied (CN1 Ruling 8, OR-3): never in an
+# image Loams builds. Debezium Server 3.7.0.Final's dist archive bundles ojdbc11 and ojdbc17
+# 23.26.0.0.0 in lib/, so a Debezium image Loams renders must delete them (R0.26).
+used_by = ["oracle", "debezium-sql-server-oracle"]
+source = "https://repo1.maven.org/maven2/com/oracle/database/jdbc/ojdbc11/23.26.0.0.0/ojdbc11-23.26.0.0.0.pom"
+
+[components.debezium-sqlserver]
+name = "Debezium SQL Server connector"
+spdx = "Apache-2.0"
+kind = "service"
+# Run inside debezium-server 3.7.0.Final as the opt-in fallback of CN2 Task 12 (OR-13).
+used_by = ["debezium-sql-server-oracle"]
+source = "https://github.com/debezium/debezium/tree/main/debezium-connector-sqlserver"
+
+[components.debezium-oracle]
+name = "Debezium Oracle connector"
+spdx = "Apache-2.0"
+kind = "service"
+# Oracle default CDC (OR-9), database.connection.adapter=logminer; needs oracle-jdbc.
+used_by = ["debezium-sql-server-oracle"]
+source = "https://github.com/debezium/debezium/tree/main/debezium-connector-oracle"
+
+[components.debezium-mongodb]
+name = "Debezium MongoDB connector"
+spdx = "Apache-2.0"
+kind = "service"
+used_by = ["debezium-mongodb"]
+source = "https://github.com/debezium/debezium/tree/main/debezium-connector-mongodb"
+
+# ----------------------------------------------------------------------------------------
+# CN2 Task 0: real systems for tests (OR-2, OR-3). Tags as of 2026-10-13; digests are pinned
+# by each family task. `ci_only = true` marks what OR-3 calls a ci-service (proprietary,
+# source-available or EULA): it runs only in a connectors-ci-only compose profile and in CI,
+# never in an image Loams builds or the default profile. Task 3 turns these into
+# kind = "ci-service"; until then they are kind = "service", and a refused id on them is
+# D359's service carve-out.
+# ----------------------------------------------------------------------------------------
+
+[components.redpanda]
+name = "Redpanda"
+spdx = "BUSL-1.1"
+kind = "service"
+ci_only = true
+image = "redpandadata/redpanda:v26.2.4"
+# Core under BSL 1.1, enterprise features under the Redpanda Community License.
+used_by = ["redpanda"]
+source = "https://github.com/redpanda-data/redpanda/blob/dev/licenses/README.md"
+
+[components.rabbitmq]
+name = "RabbitMQ"
+spdx = "MPL-2.0"
+kind = "service"
+image = "rabbitmq:4.3-management"
+used_by = ["rabbitmq-amqp"]
+source = "https://github.com/rabbitmq/rabbitmq-server"
+
+[components.artemis]
+name = "Apache Artemis (formerly ActiveMQ Artemis)"
+spdx = "Apache-2.0"
+kind = "service"
+image = "apache/artemis:2.57.0"
+used_by = ["activemq-jms"]
+source = "https://github.com/apache/artemis"
+
+[components.activemq-classic]
+name = "Apache ActiveMQ Classic"
+spdx = "Apache-2.0"
+kind = "service"
+image = "apache/activemq:6.3.2"
+used_by = ["activemq-jms"]
+source = "https://github.com/apache/activemq"
+
+[components.nats-server]
+name = "NATS Server"
+spdx = "Apache-2.0"
+kind = "service"
+image = "nats:2.15.1"
+used_by = ["nats"]
+source = "https://github.com/nats-io/nats-server"
+
+[components.mosquitto]
+name = "Eclipse Mosquitto"
+spdx = "EPL-2.0"
+expression = "EPL-2.0 OR BSD-3-Clause"
+kind = "service"
+image = "eclipse-mosquitto:2.0.22"
+used_by = ["mqtt"]
+source = "https://github.com/eclipse-mosquitto/mosquitto/blob/master/LICENSE.txt"
+
+[components.pulsar-server]
+name = "Apache Pulsar"
+spdx = "Apache-2.0"
+kind = "service"
+image = "apachepulsar/pulsar:4.0.14"
+used_by = ["pulsar"]
+source = "https://github.com/apache/pulsar"
+
+[components.eventhubs-emulator]
+name = "Azure Event Hubs emulator"
+spdx = "LicenseRef-Microsoft-Emulator-EULA"
+kind = "service"
+ci_only = true
+image = "mcr.microsoft.com/azure-messaging/eventhubs-emulator:2.2.1"
+# Development and testing only, ACCEPT_EULA=Y; Kafka on 9092 without transactions; needs
+# Azurite beside it.
+used_by = ["azure-event-hubs"]
+source = "https://github.com/Azure/azure-event-hubs-emulator-installer/blob/main/EMULATOR_EULA.md"
+
+[components.servicebus-emulator]
+name = "Azure Service Bus emulator"
+spdx = "LicenseRef-Microsoft-Emulator-EULA"
+kind = "service"
+ci_only = true
+image = "mcr.microsoft.com/azure-messaging/servicebus-emulator:2.0.1"
+# AMQP 1.0 on 5672; needs a SQL Server or Azure SQL Edge sidecar (components.mssql-server).
+used_by = ["azure-service-bus"]
+source = "https://github.com/Azure/azure-service-bus-emulator-installer"
+
+[components.pubsub-emulator]
+name = "Google Cloud Pub/Sub emulator"
+spdx = "Apache-2.0"
+kind = "service"
+ci_only = true
+image = "gcr.io/google.com/cloudsdktool/google-cloud-cli:588.0.0-emulators"
+# The Cloud SDK is Apache-2.0, but the emulator jar is closed source with no licence
+# statement found, so it is treated as CI-only until verified (R0.27).
+used_by = ["google-pub-sub"]
+source = "https://github.com/GoogleCloudPlatform/cloud-sdk-docker"
+
+[components.postgres-pgvector]
+name = "PostgreSQL 17 with pgvector"
+spdx = "PostgreSQL"
+kind = "service"
+image = "pgvector/pgvector:pg17"
+used_by = ["postgresql", "pgvector", "aurora"]
+source = "https://github.com/pgvector/pgvector/blob/master/LICENSE"
+
+[components.mysql-server]
+name = "MySQL Community Server"
+spdx = "GPL-2.0-only"
+expression = "GPL-2.0-only WITH Universal-FOSS-exception-1.0"
+kind = "service"
+image = "mysql:8.4"
+used_by = ["mysql", "aurora"]
+source = "https://github.com/mysql/mysql-server"
+
+[components.mariadb-server]
+name = "MariaDB Server"
+spdx = "GPL-2.0-only"
+kind = "service"
+image = "mariadb:11.8"
+used_by = ["mariadb"]
+source = "https://github.com/MariaDB/server"
+
+[components.cockroachdb]
+name = "CockroachDB"
+spdx = "LicenseRef-CockroachDB-Software-License"
+kind = "service"
+ci_only = true
+image = "cockroachdb/cockroach:v26.2.7"
+# Run as start-single-node: no licence key needed and not throttled (R0.20).
+used_by = ["cockroachdb"]
+source = "https://github.com/cockroachdb/cockroach/blob/master/LICENSE"
+
+[components.mssql-server]
+name = "Microsoft SQL Server Developer"
+spdx = "LicenseRef-Microsoft-SQL-Server-EULA"
+kind = "service"
+ci_only = true
+image = "mcr.microsoft.com/mssql/server:2022-latest"
+# Developer edition, non-production, ACCEPT_EULA=Y; also the Service Bus emulator sidecar.
+used_by = ["sql-server", "azure-sql", "azure-service-bus"]
+source = "https://learn.microsoft.com/en-us/sql/linux/sql-server-linux-docker-container-deployment"
+
+[components.oracle-free]
+name = "Oracle Database Free"
+spdx = "LicenseRef-Oracle-FUTC"
+kind = "service"
+ci_only = true
+image = "gvenzl/oracle-free:23.26.3"
+used_by = ["oracle", "debezium-sql-server-oracle"]
+source = "https://github.com/gvenzl/oci-oracle-free"
+
+[components.mongodb-server]
+name = "MongoDB Community Server"
+spdx = "SSPL-1.0"
+kind = "service"
+ci_only = true
+image = "mongo:8.0"
+# Run as a replica set for change streams and transactions.
+used_by = ["mongodb", "debezium-mongodb"]
+source = "https://github.com/mongodb/mongo/blob/master/LICENSE-Community.txt"
+
+[components.cassandra]
+name = "Apache Cassandra"
+spdx = "Apache-2.0"
+kind = "service"
+image = "cassandra:5.0.9"
+used_by = ["cassandra"]
+source = "https://github.com/apache/cassandra"
+
+[components.redis-server]
+name = "Redis 8"
+spdx = "AGPL-3.0-only"
+expression = "AGPL-3.0-only OR LicenseRef-RSALv2 OR SSPL-1.0"
+kind = "service"
+ci_only = true
+image = "redis:8.10"
+used_by = ["redis", "redis-streams"]
+source = "https://github.com/redis/redis/blob/unstable/LICENSE.txt"
+
+[components.dynamodb-local]
+name = "Amazon DynamoDB Local"
+spdx = "LicenseRef-AWS-DynamoDB-Local-License"
+kind = "service"
+ci_only = true
+image = "amazon/dynamodb-local:3.3.1"
+# Only if floci's DynamoDB Streams fall short (R0.23); its licence ties use to an AWS account.
+used_by = ["dynamodb", "dynamodb-streams"]
+source = "https://repo1.maven.org/maven2/software/amazon/dynamodb/DynamoDBLocal/3.3.1/"
+
+[components.elasticsearch]
+name = "Elasticsearch"
+spdx = "Elastic-2.0"
+expression = "AGPL-3.0-only OR SSPL-1.0 OR Elastic-2.0"
+kind = "service"
+ci_only = true
+image = "docker.elastic.co/elasticsearch/elasticsearch:9.5.5"
+# The default distribution binaries are under Elastic-2.0.
+used_by = ["elasticsearch"]
+source = "https://github.com/elastic/elasticsearch/blob/main/LICENSE.txt"
+
+[components.qdrant]
+name = "Qdrant"
+spdx = "Apache-2.0"
+kind = "service"
+image = "qdrant/qdrant:v1.19.2"
+used_by = ["qdrant"]
+source = "https://github.com/qdrant/qdrant"
+
+[components.clickhouse-server]
+name = "ClickHouse"
+spdx = "Apache-2.0"
+kind = "service"
+image = "clickhouse/clickhouse-server:26.9"
+used_by = ["clickhouse"]
+source = "https://github.com/ClickHouse/ClickHouse"
+
+[components.trino]
+name = "Trino"
+spdx = "Apache-2.0"
+kind = "service"
+image = "trinodb/trino:483"
+used_by = ["trino"]
+source = "https://github.com/trinodb/trino"
+
+[components.minio]
+name = "MinIO"
+spdx = "AGPL-3.0-only"
+kind = "service"
+ci_only = true
+image = "none: no community image is published (Docker Hub minio/minio is 404)"
+# Archived and distributed as source only since RELEASE.2025-10-15T17-29-55Z; a CI-built
+# image from that release, never published, or dropped (R0.28).
+used_by = ["minio-rustfs"]
+source = "https://github.com/minio/minio"
+
+[components.fake-gcs-server]
+name = "fake-gcs-server"
+spdx = "BSD-2-Clause"
+kind = "service"
+image = "fsouza/fake-gcs-server:1.56.1"
+used_by = ["gcs"]
+source = "https://github.com/fsouza/fake-gcs-server"
+
+[components.azurite]
+name = "Azurite"
+spdx = "MIT"
+kind = "service"
+image = "mcr.microsoft.com/azure-storage/azurite:3.37.0"
+# Blob only: no DFS or hierarchical namespace (R0.21). Also the Event Hubs emulator's store.
+used_by = ["azure-blob", "adls-gen2", "azure-event-hubs"]
+source = "https://github.com/Azure/Azurite"
+
+[components.atmoz-sftp]
+name = "atmoz/sftp"
+spdx = "MIT"
+kind = "service"
+image = "atmoz/sftp:alpine"
+used_by = ["sftp"]
+source = "https://github.com/atmoz/sftp"
+
+[components.neo4j-community]
+name = "Neo4j Community Edition"
+spdx = "GPL-3.0-only"
+kind = "service"
+image = "neo4j:5.26-community"
+# Reached only over the HTTP Query API (5.19+), never linked (OR-14, D634 (c)).
+used_by = ["neo4j"]
+source = "https://github.com/neo4j/neo4j"
+
+[components.prometheus]
+name = "Prometheus"
+spdx = "Apache-2.0"
+kind = "service"
+image = "prom/prometheus:v3.15.0"
+used_by = ["prometheus"]
+source = "https://github.com/prometheus/prometheus"
+
+[components.openbao]
+name = "OpenBao"
+spdx = "MPL-2.0"
+kind = "service"
+image = "openbao/openbao:2.7.1"
+# The test target of the vault profile (CN2 Task 20).
+used_by = ["vault"]
+source = "https://github.com/openbao/openbao"
+
+[components.keycloak]
+name = "Keycloak"
+spdx = "Apache-2.0"
+kind = "service"
+image = "quay.io/keycloak/keycloak:26.8.0"
+used_by = ["keycloak"]
+source = "https://github.com/keycloak/keycloak"
+
+[components.stripe-mock]
+name = "stripe-mock"
+spdx = "MIT"
+kind = "service"
+image = "stripe/stripe-mock:v0.206.0"
+used_by = ["stripe"]
+source = "https://github.com/stripe/stripe-mock"
+
+[components.splunk]
+name = "Splunk Enterprise"
+spdx = "LicenseRef-Splunk-General-Terms"
+kind = "service"
+ci_only = true
+image = "splunk/splunk:10.6.0"
+# Needs SPLUNK_START_ARGS=--accept-license and SPLUNK_GENERAL_TERMS; 60-day trial.
+used_by = ["splunk"]
+source = "https://hub.docker.com/r/splunk/splunk"
 
 # ----------------------------------------------------------------------------------------
 # D359's carve-outs, in prose. The gate reads [deny] and [components]; this stanza is for the
