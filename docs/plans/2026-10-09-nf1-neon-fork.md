@@ -1479,3 +1479,41 @@ Fork PR ostrium-labs/loams-postgres#7 (branch `loams/nf1-build-tools`, `bd5dcda5
    - `pin-build-tools.sh` changes exactly that line and refuses bad references.
 
    This is the plan's G0 grep check; it runs in `loams-hygiene.yml` until Task 16. "The workflow builds on PR" waits for Actions (owner). `actionlint` is clean.
+
+### Task 10 rulings (2026-10-13, at `dev` `f8fc9f1b`)
+
+Fork PR ostrium-labs/loams-postgres#8 (branch `loams/nf1-storage`, `468ad273`, LP-0010) merged into `main` as `bde73437`; CodeRabbit was rate-limited after the retry (one review an hour on the plan), so it was self-reviewed.
+
+1. **`loams-build-storage.yml`** builds the `Dockerfile` for amd64 and arm64.
+   - **Runners:** `vars.RUNNER_HEAVY` and `vars.RUNNER_HEAVY_ARM`, defaulting to the standard `ubuntu-24.04` and `ubuntu-24.04-arm` (Q721 is open).
+   - **BuildKit's root on `/mnt`** when the runner has more than 40 GB free there. Docker's `data-root` moves; `daemon.json` is merged with `jq`.
+   - **Build args:** `GIT_VERSION=<sha>` and `BUILD_TAG` (`<sha12>`, or the release passed by `workflow_call`).
+   - **Cache:** `loams-postgres-buildcache:storage-<arch>`, written from `main` only.
+   - **Push by digest.** `index` creates `:<sha12>` and `:edge` and attests the provenance.
+   - **`smoke`:**
+     - `labels_present`: the revision label equals the commit, on both platforms;
+     - the licence files are present;
+     - `smoke_select_1`.
+   - **`audit`:** `storage_image_audit_clean`, `audit-image.sh` exits 0.
+   - A pull request builds both architectures and pushes nothing.
+2. **The smoke stack is `scripts/loams/smoke/` in the fork** (deviation; the plan only says "a `deploy/loams-postgres-dev`-shaped stack"). It is Loams' `deploy/loams-postgres-dev` without published ports: RustFS by index digest `8cc98017…`, broker, pageserver, one safekeeper and a compute. `run.sh` drives it:
+   - a random compose project `loams-smoke-<hex>`;
+   - a tenant and timeline created through the pageserver API (`curl` inside the pageserver container);
+   - `SELECT 1`, and a check of the server's major version;
+   - optional SQL files;
+   - `pageserver --version` compared against `EXPECT_COMMIT`;
+   - `down -v` of its own project only.
+
+   The smoke spec preloads `pgaudit`, which Task 11's core smoke needs.
+   **Run locally** with podman on Neon's 77e22e4b images: `SELECT 1` on 170005, `EXPECT_COMMIT` checked both ways, nothing left behind.
+3. **The smoke's compute** is `vars.SMOKE_COMPUTE_IMAGE`. It defaults to the neon-archive mirror of Neon's compute-node-v17 (test only, never shipped; it needs package read access) until our compute-v17 exists.
+4. **`audit-image.sh` and `audit_image.py` are vendored** from `scripts/nf1` (same contract). The skopeo image is pinned inline. The tests are `test_audit_image.py` (9 tests).
+5. **`THIRD_PARTY_LICENSES.html`** comes from cargo-about 0.9.2 (sha256-checked per architecture), using `about.toml` and `about.hbs`.
+   - **Accepted licences:** deny.toml's allow list plus its exceptions. MIT is first, so a dual-licensed crate is listed with its own copyright notice; Apache-2.0 first would have dropped `tokio-epoll-uring`'s MIT notice.
+   - **`tokio-epoll-uring`:** a `clarify` entry points it at the repository-root texts, with checksums.
+   - The image build fails if the notice is missing.
+   - `third_party_licences_include_tokio_epoll_uring` (Task 8's test) is in `test_hygiene.sh`, and `loams-hygiene.yml` installs cargo-about.
+6. **`.dockerignore` fixed a broken build.** `fuzz/` has been a workspace member since LP-0008 (Task 6), but `.dockerignore` left it out of the build context. Cargo could not load the workspace in the image build, so the storage and compute images could not be built from `main`. `test_docker_context.py` now runs `cargo metadata --locked` on exactly what `.dockerignore` lets through.
+7. **Labels:** `org.opencontainers.image.{title,description,source,revision,version,vendor,licenses}`. **Files:** `/usr/share/doc/loams-postgres/{LICENSE,NOTICE,LOAMS_PATCHES.md,THIRD_PARTY_LICENSES.html}`.
+8. **Not measured:** the build times for §51 §5.2 (Q721) need Actions. The workflow writes each architecture's job time to the run summary.
+9. **Pre-existing, not changed:** the final stage downloads the AWS CLI from `awscli.amazonaws.com` without a checksum. That breaks "every downloaded source by sha256". Left for Task 20 or a follow-up.
