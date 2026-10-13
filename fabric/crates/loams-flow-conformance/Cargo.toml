@@ -1,0 +1,39 @@
+[package]
+name = "loams-flow-conformance"
+description = "The Loams connector conformance kit (CN1's name; CN2 Task 6): the suites every connector runs against its real system, the OR-2 service checks over conformance/connectors/systems.toml, the record-and-replay fixture proxy, and the crash harness for exactly-once sinks."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+# Not published: it reads `conformance/connectors/systems.toml`,
+# `deploy/fabric/compose.yaml` and `connectors/registry/` from the repository
+# at run time, as `loams-flow` does.
+publish = false
+
+[dependencies]
+async-trait = "0.1.89"
+bytes.workspace = true
+# The fixture proxy serves recorded exchanges over HTTP/1.1 on loopback with
+# the workspace's hyper pins (the SDK already links hyper's client half).
+http.workspace = true
+http-body-util.workspace = true
+hyper = { workspace = true, features = ["server", "http1"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+loams-connector-sdk = { path = "../loams-connector-sdk" }
+# `ConnectorSpec`, the registry and `repository_root` (CN1 Task 1).
+loams-flow = { path = "../loams-flow" }
+serde.workspace = true
+serde_json.workspace = true
+# `deploy/fabric/compose.yaml`, read to check the estate the suites run on.
+serde_norway.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "io-util"] }
+# `conformance/connectors/systems.toml`.
+toml.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "io-util", "test-util"] }
+
+[lints]
+workspace = true
