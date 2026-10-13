@@ -69,6 +69,8 @@ constexpr Row kRows[] = {
     {Reason::kLiveBadCursor, "live_bad_cursor"},
     {Reason::kLiveWorkerCrashed, "live_worker_crashed"},
     {Reason::kLiveDeployConflict, "live_deploy_conflict"},
+    {Reason::kLiveSchemaViolation, "live_schema_violation"},
+    {Reason::kLiveIndexNotReady, "live_index_not_ready"},
     {Reason::kInvalidArgument, "invalid_argument"},
     {Reason::kNotFound, "not_found"},
     {Reason::kAlreadyExists, "already_exists"},

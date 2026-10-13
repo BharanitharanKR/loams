@@ -105,6 +105,10 @@ pub enum Reason {
     LiveWorkerCrashed,
     /// Another Live deploy activated first, so `expected_active` no longer matches.
     LiveDeployConflict,
+    /// A write did not match its Live table's validator; the message names the table and field paths.
+    LiveSchemaViolation,
+    /// A Live function read an index a deploy is still backfilling.
+    LiveIndexNotReady,
     /// An argument is missing, malformed or out of range.
     InvalidArgument,
     /// The thing the call names does not exist.
@@ -174,6 +178,8 @@ impl Reason {
         Reason::LiveBadCursor,
         Reason::LiveWorkerCrashed,
         Reason::LiveDeployConflict,
+        Reason::LiveSchemaViolation,
+        Reason::LiveIndexNotReady,
         Reason::InvalidArgument,
         Reason::NotFound,
         Reason::AlreadyExists,
@@ -232,6 +238,8 @@ impl Reason {
             Reason::LiveBadCursor => "live_bad_cursor",
             Reason::LiveWorkerCrashed => "live_worker_crashed",
             Reason::LiveDeployConflict => "live_deploy_conflict",
+            Reason::LiveSchemaViolation => "live_schema_violation",
+            Reason::LiveIndexNotReady => "live_index_not_ready",
             Reason::InvalidArgument => "invalid_argument",
             Reason::NotFound => "not_found",
             Reason::AlreadyExists => "already_exists",
@@ -274,6 +282,7 @@ impl Reason {
             | Reason::LsnOutOfRetention
             | Reason::SecretAlreadyIssued
             | Reason::LiveDeployConflict
+            | Reason::LiveIndexNotReady
             | Reason::FailedPrecondition => Code::FailedPrecondition,
             Reason::RequesterCannotApprove
             | Reason::DecisionProofInvalid
@@ -288,6 +297,7 @@ impl Reason {
             | Reason::InvalidDecision
             | Reason::HouseSyntaxError
             | Reason::LiveBadCursor
+            | Reason::LiveSchemaViolation
             | Reason::InvalidArgument => Code::InvalidArgument,
             Reason::PushTargetUnknown
             | Reason::HouseUnknownTable
@@ -355,7 +365,7 @@ mod tests {
 
     #[test]
     fn every_reason_round_trips_through_its_wire_form() {
-        assert!(Reason::ALL.len() >= 52, "the registry has 52 rows");
+        assert!(Reason::ALL.len() >= 54, "the registry has 54 rows");
         for reason in Reason::ALL {
             assert_eq!(Reason::parse(reason.as_str()), Some(*reason));
         }

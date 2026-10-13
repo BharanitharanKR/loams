@@ -1950,6 +1950,22 @@ const UNPRODUCIBLE_REASONS = [
       'deploys nothing (LV1 Task 6).',
     standIn: null,
   },
+  {
+    reason: 'live_schema_violation',
+    code: 'invalid_argument',
+    why:
+      'Needs a deployed Live table with a validator; the recorder deploys ' +
+      'no bundle (LV1 Task 8).',
+    standIn: null,
+  },
+  {
+    reason: 'live_index_not_ready',
+    code: 'failed_precondition',
+    why:
+      'Needs a deploy still backfilling an index that a function reads; the ' +
+      'recorder deploys nothing (LV1 Task 9).',
+    standIn: null,
+  },
 ];
 
 /**

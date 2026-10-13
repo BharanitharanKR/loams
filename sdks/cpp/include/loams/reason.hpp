@@ -78,6 +78,8 @@ enum class Reason {
   kLiveBadCursor,
   kLiveWorkerCrashed,
   kLiveDeployConflict,
+  kLiveSchemaViolation,
+  kLiveIndexNotReady,
   kInvalidArgument,
   kNotFound,
   kAlreadyExists,

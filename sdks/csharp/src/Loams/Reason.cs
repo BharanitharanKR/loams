@@ -180,6 +180,12 @@ public enum Reason
     /// <summary>Another Live deploy activated first, so <c>expected_active</c> no longer matches.</summary>
     LiveDeployConflict = 52,
 
+    /// <summary>A write did not match its Live table's validator; the message names the table and field paths.</summary>
+    LiveSchemaViolation = 53,
+
+    /// <summary>A Live function read an index a deploy is still backfilling.</summary>
+    LiveIndexNotReady = 54,
+
     /// <summary>A malformed field or an unparseable value.</summary>
     InvalidArgument = 15,
 
@@ -286,6 +292,8 @@ public static class ReasonRegistry
         Reason.LiveBadCursor,
         Reason.LiveWorkerCrashed,
         Reason.LiveDeployConflict,
+        Reason.LiveSchemaViolation,
+        Reason.LiveIndexNotReady,
         Reason.InvalidArgument,
         Reason.NotFound,
         Reason.AlreadyExists,
@@ -343,6 +351,8 @@ public static class ReasonRegistry
             [Reason.LiveBadCursor] = "live_bad_cursor",
             [Reason.LiveWorkerCrashed] = "live_worker_crashed",
             [Reason.LiveDeployConflict] = "live_deploy_conflict",
+            [Reason.LiveSchemaViolation] = "live_schema_violation",
+            [Reason.LiveIndexNotReady] = "live_index_not_ready",
             [Reason.InvalidArgument] = "invalid_argument",
             [Reason.NotFound] = "not_found",
             [Reason.AlreadyExists] = "already_exists",
@@ -425,6 +435,8 @@ public static class ReasonRegistry
             [Reason.LiveBadCursor] = Code.InvalidArgument,
             [Reason.LiveWorkerCrashed] = Code.Internal,
             [Reason.LiveDeployConflict] = Code.FailedPrecondition,
+            [Reason.LiveSchemaViolation] = Code.InvalidArgument,
+            [Reason.LiveIndexNotReady] = Code.FailedPrecondition,
             [Reason.InvalidArgument] = Code.InvalidArgument,
             [Reason.NotFound] = Code.NotFound,
             [Reason.AlreadyExists] = Code.AlreadyExists,

@@ -56,6 +56,8 @@ const (
 	ReasonLiveBadCursor           Reason = "live_bad_cursor"
 	ReasonLiveWorkerCrashed       Reason = "live_worker_crashed"
 	ReasonLiveDeployConflict      Reason = "live_deploy_conflict"
+	ReasonLiveSchemaViolation     Reason = "live_schema_violation"
+	ReasonLiveIndexNotReady       Reason = "live_index_not_ready"
 	ReasonInvalidArgument         Reason = "invalid_argument"
 	ReasonNotFound                Reason = "not_found"
 	ReasonAlreadyExists           Reason = "already_exists"
@@ -119,6 +121,8 @@ var Reasons = []Reason{
 	ReasonLiveBadCursor,
 	ReasonLiveWorkerCrashed,
 	ReasonLiveDeployConflict,
+	ReasonLiveSchemaViolation,
+	ReasonLiveIndexNotReady,
 	ReasonInvalidArgument,
 	ReasonNotFound,
 	ReasonAlreadyExists,
@@ -177,6 +181,8 @@ var ReasonCodes = map[Reason]string{
 	ReasonLiveBadCursor:           "invalid_argument",
 	ReasonLiveWorkerCrashed:       "internal",
 	ReasonLiveDeployConflict:      "failed_precondition",
+	ReasonLiveSchemaViolation:     "invalid_argument",
+	ReasonLiveIndexNotReady:       "failed_precondition",
 	ReasonInvalidArgument:         "invalid_argument",
 	ReasonNotFound:                "not_found",
 	ReasonAlreadyExists:           "already_exists",
