@@ -283,7 +283,9 @@ pub fn config_xml(args: &WorkerArgs) -> String {
 
 /// `users.xml`: `default` redefined with R-ACL.1's grants and the `worker`
 /// profile. A profile named `default` must exist too, or connect fails with `180`.
-pub fn users_xml(args: &WorkerArgs) -> String {
+/// Private: [`write_files`] is the way in, and it refuses `open_acl` outside a
+/// test build.
+fn users_xml(args: &WorkerArgs) -> String {
     let grants: String = if args.open_acl { OPEN_GRANTS } else { GRANTS }
         .iter()
         .map(|query| format!("        <query>{}</query>\n", xml_text(query)))
@@ -367,12 +369,28 @@ fn xml_text(text: &str) -> String {
 }
 
 /// Writes `config.xml` and `users.xml` and creates the directories.
+///
+/// `open_acl` is refused unless this is a test build (`TEST_HOOKS`): `WorkerArgs`
+/// is a public struct, so a caller could set it without [`WorkerArgs::parse`]
+/// (PR #480 review).
 pub fn write_files(args: &WorkerArgs) -> std::io::Result<()> {
+    open_acl_allowed(args, loams_house_ipc::TEST_HOOKS)?;
     for dir in [&args.tmp_dir, &args.data_dir(), &args.files_dir()] {
         std::fs::create_dir_all(dir)?;
     }
     write(&args.config_file(), &config_xml(args))?;
     write(&args.users_file(), &users_xml(args))
+}
+
+/// `InvalidInput` for `open_acl` in a build without the test hooks.
+fn open_acl_allowed(args: &WorkerArgs, test_hooks: bool) -> std::io::Result<()> {
+    if args.open_acl && !test_hooks {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "open_acl is for test builds only (HS1 R-ACL.1)",
+        ));
+    }
+    Ok(())
 }
 
 fn write(path: &Path, text: &str) -> std::io::Result<()> {
@@ -481,6 +499,13 @@ mod tests {
             ..args()
         };
         let parsed = WorkerArgs::parse(open.to_args());
+        // `write_files` refuses it in a shipped build, whatever built the args.
+        assert_eq!(
+            open_acl_allowed(&open, false).expect_err("refused").kind(),
+            std::io::ErrorKind::InvalidInput
+        );
+        assert!(open_acl_allowed(&open, true).is_ok());
+        assert!(open_acl_allowed(&args(), false).is_ok());
         if loams_house_ipc::TEST_HOOKS {
             assert_eq!(parsed, Ok(open.clone()));
             let users = users_xml(&open);
