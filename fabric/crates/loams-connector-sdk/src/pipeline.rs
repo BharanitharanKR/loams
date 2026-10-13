@@ -1153,7 +1153,7 @@ async fn run_split(
                 }
                 continue;
             }
-            lease = shared.pool.acquire() => lease,
+            lease = acquire_reporting_wait(&shared) => lease,
         };
         tokio::select! {
             _ = split_halted(&shared, &mut stop) => break,
@@ -1236,6 +1236,35 @@ async fn run_split(
         let msg = shared.scrub(&e.message);
         tracing::warn!(instance = %shared.instance, split = %split.id, "closing the split: {msg}");
     }
+}
+
+/// Reserve a source batch's budget. When none is free the source task is
+/// paused by backpressure, and the time it waits is reported to the observer
+/// (`loams_flow_connector_budget_wait_seconds_total`, CN2 Task 24) — also
+/// when the wait is cut short by an ack or a stop.
+async fn acquire_reporting_wait(shared: &Shared) -> BudgetLease {
+    if let Some(lease) = shared.pool.try_acquire() {
+        return lease;
+    }
+    struct Waiting<'a> {
+        shared: &'a Shared,
+        since: Instant,
+    }
+    impl Drop for Waiting<'_> {
+        fn drop(&mut self) {
+            let waited = self.since.elapsed();
+            if !waited.is_zero() {
+                self.shared
+                    .observer
+                    .budget_wait(&self.shared.instance, waited);
+            }
+        }
+    }
+    let _waiting = Waiting {
+        shared,
+        since: Instant::now(),
+    };
+    shared.pool.acquire().await
 }
 
 /// The Fabric acknowledged a batch: checkpoint (fenced), then commit
