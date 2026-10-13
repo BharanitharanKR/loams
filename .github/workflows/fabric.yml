@@ -20,6 +20,13 @@ name: Fabric
 #                        accounts, with repository secrets (OR-3, OR-23)
 #   connectors-alerts  — promtool rule tests of the connector alerts and the
 #                        metrics/activity tests that run them (Task 24)
+#   connectors-bench   — scheduled: the reference pipeline's and each family's
+#                        benches against their real systems, checked against
+#                        conformance/connectors/bench/baselines.toml (Task 27)
+#   crate-upkeep       — scheduled: advisories and outdated dependencies per
+#                        connector family crate, one issue per family (Task 27)
+#   camel-bump         — by hand, with a Camel version: the fallback-only Camel
+#                        bump procedure (Task 27, CN-R5)
 # Jobs FL1 owns and adds here separately: connectors-it (the ★ contract suites
 # against the `connectors` compose profile, from CN1 Tasks 3–13), and the
 # `fabric` workspace's own build/publish steps. Keep this file minimal and
@@ -29,6 +36,11 @@ on:
     branches: [main, dev]
   pull_request:
   workflow_dispatch:
+    inputs:
+      camel_version:
+        description: "camel-bump only: the Camel version to check a fallback bump to (MAJOR.MINOR.PATCH); empty skips the job"
+        required: false
+        default: ""
   schedule:
     # Weekly: the two catalog drift scripts need the network (CN1 plan Task 2:
     # "both run weekly and on demand, not on every PR"), so they cannot be a
@@ -38,6 +50,11 @@ on:
     # different cron string, so each scheduled job can tell its run apart
     # (`github.event.schedule`).
     - cron: "23 4 * * *"
+    # Weekly, Sunday: connectors-bench (CN2 Task 27). Benchmarks need a quiet
+    # runner and real systems, so they never gate a pull request.
+    - cron: "5 5 * * 0"
+    # Weekly, Monday: crate-upkeep (CN2 Task 27).
+    - cron: "29 5 * * 1"
 
 permissions:
   contents: read
@@ -137,6 +154,11 @@ jobs:
               - "conformance/connectors/**"
               - "deploy/fabric/**"
               - "connectors/**"
+              # CN2 Task 27: the bench tests read the chart's budgets, and run
+              # the upkeep scripts' dry runs and self-tests.
+              - "deploy/helm/loams-connectors/**"
+              - "scripts/connectors/camel_bump.py"
+              - "scripts/connectors/crate_upkeep.py"
             # One filter per family crate (OR-6): a change to one family runs
             # that family's shard only.
             family-http: [*conformance, "fabric/crates/loams-connector-http/**"]
@@ -614,6 +636,149 @@ jobs:
       - name: metrics and activity tests
         working-directory: fabric
         run: cargo test -p loams-flow --test activity --locked
+
+  # CN2 owns this job (plan 2026-10-10-cn2-connectors, Task 27): the
+  # performance budgets. The reference pipeline (no I/O) and each family's
+  # benches against their real systems write one report per connector and
+  # direction; `loams-connectors-bench check` fails the run when any is more
+  # than 15 % worse than its calibrated baseline, misses a batch size, broke
+  # its memory budget, or has no baseline entry. Uncalibrated baselines never
+  # fail on speed: their reports, kept as artifacts, are the calibration runs
+  # (conformance/connectors/bench/baselines.toml says how). Release builds on
+  # one runner class only: a baseline is never compared across classes.
+  connectors-bench:
+    name: connector performance budgets
+    if: ${{ !cancelled() && ((github.event_name == 'schedule' && github.event.schedule == '5 5 * * 0') || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      LOAMS_BENCH_RUNNER: ubuntu-24.04
+      # The families whose benches are written (baselines.toml lists the rest
+      # as pending, with their owning tasks).
+      BENCH_FAMILIES: "postgres search"
+      LOAMS_AURORA_POSTGRES_URL: ${{ secrets.LOAMS_AURORA_POSTGRES_URL }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fabric -> target
+          key: connectors-bench
+      - name: build the bench tool (release)
+        working-directory: fabric
+        run: cargo build --release --locked -p loams-flow-conformance --bin loams-connectors-bench
+      - name: reference pipeline
+        run: |
+          echo "LOAMS_BENCH_OUT=$RUNNER_TEMP/bench" >> "$GITHUB_ENV"
+          fabric/target/release/loams-connectors-bench reference --out "$RUNNER_TEMP/bench"
+      - name: family benches against their real systems
+        env:
+          LOAMS_CONNECTORS_BENCH: "1"
+          LOAMS_CONNECTORS_P2_STACK: "1"
+          LOAMS_CONNECTORS_CI_ONLY_STACK: "1"
+        run: |
+          docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only \
+            config --format json > "$RUNNER_TEMP/compose.json"
+          for family in $BENCH_FAMILIES; do
+            services=""
+            for p in connectors-p2 connectors-ci-only; do
+              services="$services $(python3 scripts/connectors/compose_services.py \
+                --profile "$p" --family "$family" --compose-json "$RUNNER_TEMP/compose.json")"
+            done
+            if [ -n "${services// /}" ]; then
+              # shellcheck disable=SC2086 # the service list is space-separated on purpose
+              docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only \
+                up -d --wait --wait-timeout 900 $services
+            fi
+            (cd fabric && cargo test --release --locked -p "loams-connector-$family" --test bench -- --test-threads=1)
+            docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only down -v
+          done
+      - name: check against the baselines (15 % regression budget)
+        run: fabric/target/release/loams-connectors-bench check --reports "$RUNNER_TEMP/bench"
+      # The reports are the calibration runs. actions/upload-artifact is Apache-2.0.
+      - name: the bench reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: connector-bench-${{ github.run_id }}
+          path: ${{ runner.temp }}/bench/*.json
+          if-no-files-found: ignore
+          retention-days: 90
+
+  # CN2 owns this job (Task 27): crate upkeep per connector family crate. One
+  # issue per family (label crate-upkeep) lists the RustSec advisories in its
+  # dependency graph and its outdated direct dependencies, each marked update
+  # or hold (the 14-day rule); a clean family's issue is closed.
+  crate-upkeep:
+    name: connector crate upkeep (advisories, outdated)
+    if: ${{ !cancelled() && ((github.event_name == 'schedule' && github.event.schedule == '29 5 * * 1') || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # taiki-e/install-action is the pin connectors-unit uses; cargo-outdated
+      # is MIT, cargo-deny MIT OR Apache-2.0.
+      - uses: taiki-e/install-action@badb8c3638e0b773c6c17a6025c2306a8f1c4303 # nextest, 2026-10-02
+        with:
+          tool: cargo-deny,cargo-outdated
+      - name: self-test
+        run: python3 scripts/connectors/crate_upkeep.py --self-test
+      - name: reports and issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/connectors/crate_upkeep.py --out "$RUNNER_TEMP/upkeep" --open-issues
+      - name: the upkeep reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: connector-crate-upkeep
+          path: ${{ runner.temp }}/upkeep/
+          if-no-files-found: ignore
+
+  # CN2 owns this job (Task 27): the Camel bump procedure, fallbacks only
+  # (OR-4, CN-R5), run by hand with the candidate version. It downloads that
+  # version's camel-catalog from Maven Central, checks it against Central's
+  # published SHA-1, plans every step (a dry run), then runs the steps that
+  # are ready. It stays red while a step is deferred to an unbuilt task
+  # (camel_bump.py exits 3): a bump is complete only when every step ran.
+  camel-bump:
+    name: Camel bump (fallback runtime)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.camel_version != '' }}
+    runs-on: ubuntu-24.04
+    env:
+      CAMEL_VERSION: ${{ inputs.camel_version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: plan (dry run)
+        run: python3 scripts/connectors/camel_bump.py --to "$CAMEL_VERSION" --dry-run --json "$RUNNER_TEMP/camel-bump-plan.json"
+      - name: camel-catalog
+        run: |
+          dir="$RUNNER_TEMP/camel"
+          mkdir -p "$dir"
+          base="https://repo1.maven.org/maven2/org/apache/camel/camel-catalog/${CAMEL_VERSION}/camel-catalog-${CAMEL_VERSION}.jar"
+          curl -sSfL --retry 3 -o "$dir/camel-catalog.jar" "$base"
+          echo "$(curl -sSfL --retry 3 "$base.sha1" | cut -c1-40)  $dir/camel-catalog.jar" | sha1sum -c -
+          echo "LOAMS_CAMEL_CATALOG=$dir/camel-catalog.jar" >> "$GITHUB_ENV"
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - name: run the ready steps
+        run: python3 scripts/connectors/camel_bump.py --to "$CAMEL_VERSION" --json "$RUNNER_TEMP/camel-bump.json"
+      - name: the bump plan and results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: camel-bump-${{ github.run_id }}
+          path: ${{ runner.temp }}/camel-bump*.json
+          if-no-files-found: ignore
 
   # CN1 Task 2's drift checks (design §33 CN-R1): the appendix is regenerated
   # from connectors/registry/catalog.csv and diffed against the design doc, and

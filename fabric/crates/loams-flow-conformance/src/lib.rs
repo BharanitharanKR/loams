@@ -22,6 +22,9 @@
 //! - [`crash`] injects a crash at each [`FaultPoint`] of the delivery path.
 //! - [`reference`] is the kit's self-test harness over the SDK's reference
 //!   connector (`loams_connector_sdk::testing::reference`).
+//! - [`bench`] holds the performance budgets of CN2 Task 27: the reference
+//!   pipeline's bench, the harness bench every family's bench is built on,
+//!   the baselines and the 15 % regression budget, and the chart's density.
 //!
 //! A suite that could not run is **skipped**, and a skipped suite never
 //! counts as green ([`SuiteReport::green`]): a connector is `preview` only
@@ -32,6 +35,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
+pub mod bench;
 pub mod capabilities;
 pub mod crash;
 pub mod fixture;

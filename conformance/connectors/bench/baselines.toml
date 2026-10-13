@@ -1,0 +1,156 @@
+# Performance baselines of the native connectors (CN2 plan Task 27).
+#
+# One entry per connector and direction. `loams-flow-conformance`'s
+# `bench` module reads this file:
+#
+#   status = "recorded"      calibrated: the scheduled `connectors-bench` job
+#                            fails a run that is more than `budget.regression`
+#                            worse on any metric (throughput in events and
+#                            MiB/s, p99 latency, peak memory, CPU per 10k
+#                            events), that misses a batch size listed here,
+#                            or that ran on another runner class or profile.
+#   status = "uncalibrated"  the bench (`bench`, `<file>::<fn>`) is written and
+#                            runs in `connectors-bench`; its runs are
+#                            calibration candidates and never fail on speed.
+#   status = "pending"       no bench yet; `owner` writes it, with the
+#                            harness the family exposes to the kit.
+#
+# Whatever the status, a run whose peak in-flight memory exceeds the
+# instance's memory budget fails (Review Focus 5).
+#
+# No number below was measured on a developer machine. Calibration
+# (ruling R27.2): after `calibration_runs` consecutive green scheduled runs on
+# CI's runner class (`ubuntu-24.04`, release build), download their
+# `connector-bench-*` artifacts, one directory per run, and run
+#
+#   cargo run --release -p loams-flow-conformance --bin loams-connectors-bench -- \
+#     calibrate --runs run1 --runs run2 ... --recorded-on YYYY-MM-DD
+#
+# It prints the median of the runs as `[[connector]]` entries; replace the
+# uncalibrated ones with them, then regenerate the chart's budgets
+# (`... -- budgets`, `budget_values_match_measurements`). Recalibrate when the
+# runner class changes, and only with a reason in the commit message when a
+# change is meant to make a connector slower.
+#
+# Every connector with a `harness` in conformance/connectors/systems.toml has
+# an entry here (`every_harness_has_a_bench_baseline`).
+
+[budget]
+regression = 0.15
+calibration_runs = 5
+
+# --- the SDK's reference pipeline (no I/O; the SDK's own overhead) ---------
+
+[[connector]]
+id = "reference"
+direction = "source"
+family = "sdk"
+status = "uncalibrated"
+bench = "fabric/crates/loams-flow-conformance/src/bin/loams-connectors-bench.rs::reference"
+notes = ["Counter source into the in-memory Fabric at batch sizes 1, 100 and 10 000; p99 is a batch's read-to-ack time."]
+
+[[connector]]
+id = "reference"
+direction = "roundtrip"
+family = "sdk"
+status = "uncalibrated"
+bench = "fabric/crates/loams-flow-conformance/src/bin/loams-connectors-bench.rs::reference"
+notes = ["The kit's reference harness (counter → Fabric → transactional map sink) through the harness bench."]
+
+# --- postgres (CN2 Task 10) -------------------------------------------------
+
+[[connector]]
+id = "postgresql"
+direction = "source"
+family = "postgres"
+status = "uncalibrated"
+bench = "fabric/crates/loams-connector-postgres/tests/bench.rs::bench_postgresql_cdc"
+
+[[connector]]
+id = "postgresql"
+direction = "sink"
+family = "postgres"
+status = "uncalibrated"
+bench = "fabric/crates/loams-connector-postgres/tests/bench.rs::bench_postgresql_sink"
+
+[[connector]]
+id = "pgvector"
+direction = "source"
+family = "postgres"
+status = "uncalibrated"
+bench = "fabric/crates/loams-connector-postgres/tests/bench.rs::bench_pgvector_batch"
+
+[[connector]]
+id = "cockroachdb"
+direction = "source"
+family = "postgres"
+status = "uncalibrated"
+bench = "fabric/crates/loams-connector-postgres/tests/bench.rs::bench_cockroachdb_cdc"
+
+[[connector]]
+id = "aurora"
+direction = "source"
+family = "postgres"
+status = "uncalibrated"
+bench = "fabric/crates/loams-connector-postgres/tests/bench.rs::bench_aurora_cdc"
+notes = ["A real account: runs only where connectors-bench has LOAMS_AURORA_POSTGRES_URL."]
+
+# --- search (CN2 Task 15) ---------------------------------------------------
+
+[[connector]]
+id = "opensearch"
+direction = "roundtrip"
+family = "search"
+status = "uncalibrated"
+bench = "fabric/crates/loams-connector-search/tests/bench.rs::bench_opensearch"
+
+[[connector]]
+id = "qdrant"
+direction = "roundtrip"
+family = "search"
+status = "uncalibrated"
+bench = "fabric/crates/loams-connector-search/tests/bench.rs::bench_qdrant"
+
+[[connector]]
+id = "elasticsearch"
+direction = "roundtrip"
+family = "search"
+status = "uncalibrated"
+bench = "fabric/crates/loams-connector-search/tests/bench.rs::bench_elasticsearch"
+
+# --- key-value (CN2 Task 14): harnesses exist; benches pending (R27.5) ------
+
+[[connector]]
+id = "valkey"
+direction = "source"
+family = "kv"
+status = "pending"
+owner = "CN2 Task 14"
+
+[[connector]]
+id = "redis-streams"
+direction = "source"
+family = "kv"
+status = "pending"
+owner = "CN2 Task 14"
+
+[[connector]]
+id = "cassandra"
+direction = "source"
+family = "kv"
+status = "pending"
+owner = "CN2 Task 14"
+
+[[connector]]
+id = "dynamodb"
+direction = "source"
+family = "kv"
+status = "pending"
+owner = "CN2 Task 14"
+
+[[connector]]
+id = "dynamodb-streams"
+direction = "source"
+family = "kv"
+status = "pending"
+owner = "CN2 Task 14"
