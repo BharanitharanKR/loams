@@ -10,7 +10,15 @@
 
 import type { Client, Transport } from '@connectrpc/connect';
 import type { Context } from '@loams/cordis';
-import type { approvals, devices, instance, notifications, operations } from '@loams/proto';
+import type {
+  admin,
+  approvals,
+  auth,
+  devices,
+  instance,
+  notifications,
+  operations,
+} from '@loams/proto';
 import type { EnvironmentRef, SlotRegistry } from '@loams/slots';
 import type { ComponentType } from 'react';
 import type { ActionRegistry } from './actions.js';
@@ -22,9 +30,20 @@ export interface PlatformService {
   fetch: typeof globalThis.fetch;
   /** The Connect base URL of the active environment. */
   baseUrl: string;
+  /**
+   * The server an SDK or another client should talk to, when it is not `baseUrl`:
+   * in development the console's origin is the dev server, which proxies to it.
+   */
+  serverUrl?: string;
   openExternal(url: string): Promise<void>;
   notify(n: { title: string; body: string; route?: string }): Promise<void>;
   clipboardWrite(text: string): Promise<void>;
+  /**
+   * Optional: the CSRF token of a cookie session (design §19 §6, API2 ruling 6/7.9).
+   * The platform sends it as `X-CSRF-Token` on every request that is not a GET;
+   * `undefined` stops sending it. A bearer-token platform ignores it.
+   */
+  setCsrfToken?(token: string | undefined): void;
   /**
    * Optional: the platform calls back when GetInstance may now answer differently
    * (the desktop's local engine became ready). The host re-reads `flags` then.
@@ -39,6 +58,8 @@ export interface FlagsService {
   serverVersion: string;
   features: Record<string, boolean>;
   apiVersions: string[];
+  /** True until first-run setup has created the org and its owner. */
+  setupRequired?: boolean;
   has(api: string): boolean;
 }
 
@@ -51,6 +72,10 @@ export interface PageSpec {
   nav?: { group: string; order: number; label?: string };
   /** The registering plugin's id, for the error boundary and diagnostics. */
   plugin?: string;
+  /** A full-screen page without the console's chrome (sign-in, setup, consent). */
+  bare?: boolean;
+  /** Open without a session: the shell does not send a signed-out visitor away from it. */
+  public?: boolean;
 }
 
 export interface PageProps {
@@ -62,6 +87,8 @@ export interface Location {
   path: string;
   pageId?: string;
   params: Record<string, string>;
+  /** The route's query (`#/sign-in?next=/teams` → `{ next: '/teams' }`). */
+  query?: Record<string, string>;
 }
 
 /** The `router` service (@loams/plugin-shell). */
@@ -71,7 +98,22 @@ export interface RouterService {
   navigate(to: string): void;
   current(): Location;
   subscribe(listener: () => void): () => void;
+  /**
+   * A page's own breadcrumbs in place of the shell's (an org, a project, the record
+   * it shows); the last crumb is also the tab title. Cleared when the route changes.
+   */
+  setTrail?(trail: { label: string; href?: string }[] | undefined): void;
 }
+
+/**
+ * Where the console's sign-in stands, from `AuthService/GetSession` (API2 Task 10):
+ * `ready` signed in; `signed-out` and `setup` send the shell to the sign-in or setup
+ * page; `none` when the instance has no console sign-in (`loams.auth.v1` not served).
+ */
+export type SessionGate = 'ready' | 'signed-out' | 'setup' | 'none';
+
+/** The signed-in person's console session (`loams.auth.v1.Session`). */
+export type ConsoleAccount = auth.Session;
 
 export interface SessionService {
   principal(): instance.Principal | undefined;
@@ -81,6 +123,14 @@ export interface SessionService {
   /** When the session last authenticated the person (step-up, AP0 Ruling 7). */
   authenticatedAt(): Date | undefined;
   subscribe(listener: () => void): () => void;
+  /** The console session: the person, their org and role. Unset without one. */
+  account?(): ConsoleAccount | undefined;
+  /** Where sign-in stands; see `SessionGate`. */
+  gate?(): SessionGate;
+  /** Ends the console session (`AuthService/DeleteSession`). */
+  signOut?(): Promise<void>;
+  /** Re-reads the session, after sign-in or setup. */
+  refresh?(): Promise<void>;
 }
 
 /** The typed Connect clients `@loams/plugin-rpc` provides, gated on `api_versions`. */
@@ -90,6 +140,13 @@ export interface RpcServices {
   'rpc.operations': Client<typeof operations.OperationsService>;
   'rpc.devices': Client<typeof devices.DeviceService>;
   'rpc.notifications': Client<typeof notifications.NotificationService>;
+  /** The console API (API2 Tasks 6, 7): gated on `loams.auth.v1` and `loams.admin.v1`. */
+  'rpc.auth': Client<typeof auth.AuthService>;
+  'rpc.org': Client<typeof admin.OrgService>;
+  'rpc.projects': Client<typeof admin.ProjectService>;
+  'rpc.agents': Client<typeof admin.AgentService>;
+  'rpc.keys': Client<typeof admin.KeyService>;
+  'rpc.audit': Client<typeof admin.AuditService>;
 }
 
 export interface Services extends RpcServices {

@@ -1,5 +1,6 @@
 import {
   Activity,
+  Bot,
   Boxes,
   ChartColumn,
   Circle,
@@ -9,6 +10,7 @@ import {
   GitBranch,
   Layers,
   LayoutDashboard,
+  LayoutGrid,
   ListChecks,
   type LucideIcon,
   Network,
@@ -17,10 +19,14 @@ import {
   Radio,
   Rocket,
   Route,
+  ScrollText,
   Settings,
   Shapes,
+  Shield,
   ShieldCheck,
   Table2,
+  UserRound,
+  Users,
   Waypoints,
   Workflow,
 } from 'lucide-react';
@@ -51,6 +57,13 @@ const ICONS: Record<string, LucideIcon> = {
   chart: ChartColumn,
   analytics: ChartColumn,
   plugin: Puzzle,
+  // The org's pages (API2 Task 10), as the original console drew them.
+  projects: LayoutGrid,
+  teams: Users,
+  members: UserRound,
+  audit: ScrollText,
+  agents: Bot,
+  access: Shield,
 };
 
 export const ICON_NAMES = Object.keys(ICONS);

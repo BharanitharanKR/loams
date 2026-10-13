@@ -34,6 +34,11 @@ export interface SlotMap {
   'shell.dock.right': { kind: 'single'; props: Record<string, never> };
   /** The server switcher, in the header. */
   'shell.header.server': { kind: 'list'; props: Record<string, never> };
+  /**
+   * The sidebar's context above the nav: the project switcher and the open project's
+   * pages (API2 Task 10). While it has an entry, it replaces the environment switcher.
+   */
+  'shell.nav.context': { kind: 'list'; props: Record<string, never> };
 }
 
 export type SlotName = keyof SlotMap;

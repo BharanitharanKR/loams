@@ -35,6 +35,17 @@ export function compile(path: string): { pattern: RegExp; keys: string[] } {
   return { pattern: new RegExp(`^${source}/?$`), keys };
 }
 
+/** A route's query string as a plain record; a malformed escape is kept as written. */
+export function parseQuery(search: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  try {
+    for (const [k, v] of new URLSearchParams(search)) out[k] = v;
+  } catch {
+    // URLSearchParams does not throw on bad escapes; nothing to do.
+  }
+  return out;
+}
+
 export interface HashSource {
   get(): string;
   set(path: string): void;
@@ -54,10 +65,17 @@ export const windowHash: HashSource = {
   },
 };
 
+/** One breadcrumb; the last is the current page. */
+export interface Crumb {
+  label: string;
+  href?: string;
+}
+
 export class HashRouter implements RouterService {
   #routes: Route[] = [];
   #listeners = new Set<() => void>();
   #current: Location;
+  #trail: Crumb[] | undefined;
   readonly #unlisten: () => void;
 
   constructor(
@@ -112,7 +130,26 @@ export class HashRouter implements RouterService {
 
   /** The title of the current page, for the document title. */
   title(): string | undefined {
-    return this.#routes.find((r) => r.spec.id === this.#current.pageId)?.spec.title;
+    return this.spec()?.title;
+  }
+
+  /**
+   * A page's own breadcrumbs (an org, a project, the record it shows), in place of
+   * the shell's; the last crumb is also the tab title. Cleared when the route changes.
+   */
+  setTrail(trail: Crumb[] | undefined): void {
+    if (JSON.stringify(trail) === JSON.stringify(this.#trail)) return;
+    this.#trail = trail;
+    for (const listener of this.#listeners) listener();
+  }
+
+  trail(): Crumb[] | undefined {
+    return this.#trail;
+  }
+
+  /** The current page's spec (its title, and whether it is bare or public). */
+  spec(): PageSpec | undefined {
+    return this.#routes.find((r) => r.spec.id === this.#current.pageId)?.spec;
   }
 
   readonly subscribe = (listener: () => void): (() => void) => {
@@ -125,7 +162,16 @@ export class HashRouter implements RouterService {
     this.#listeners.clear();
   }
 
-  #resolve(path: string): Location {
+  #resolve(raw: string): Location {
+    // `/sign-in?next=%2Fteams`: the route is matched without its query.
+    const q = raw.indexOf('?');
+    const path = q < 0 ? raw : raw.slice(0, q);
+    const query = q < 0 ? {} : parseQuery(raw.slice(q + 1));
+    const located = this.#match(path);
+    return Object.keys(query).length > 0 ? { ...located, query } : located;
+  }
+
+  #match(path: string): Location {
     for (const route of this.#routes) {
       const match = route.pattern.exec(path);
       if (!match) continue;
@@ -149,8 +195,10 @@ export class HashRouter implements RouterService {
     const same =
       next.path === this.#current.path &&
       next.pageId === this.#current.pageId &&
-      JSON.stringify(next.params) === JSON.stringify(this.#current.params);
+      JSON.stringify(next.params) === JSON.stringify(this.#current.params) &&
+      JSON.stringify(next.query) === JSON.stringify(this.#current.query);
     if (same) return;
+    if (next.path !== this.#current.path) this.#trail = undefined;
     this.#current = next;
     for (const listener of this.#listeners) listener();
   }
