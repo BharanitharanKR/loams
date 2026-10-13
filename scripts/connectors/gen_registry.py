@@ -474,6 +474,9 @@ NATIVE_FIRST: dict[str, dict] = {
             "never exactly_once: the Event Hubs emulator has no Kafka transactions and the "
             "cloud offers them only in preview on Premium and Dedicated (CN2 R0.19); if "
             "Task 9 finds enable.idempotence refused, the sink narrows to at_least_once",
+            "narrows: sink.transactional (profile azure-event-hubs): no Kafka transactions on "
+            "the emulator, and only in preview on Premium and Dedicated in the cloud, so no "
+            "transactional sink and no __loams_checkpoints topic (CN2 R0.19, R7.3, R9.7)",
         ],
     },
     # Task 10 — the Postgres family.
