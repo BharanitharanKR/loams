@@ -490,6 +490,12 @@ impl ServerConfig {
         self.validate_auth()?;
         #[cfg(feature = "graph")]
         self.validate_graph()?;
+        #[cfg(feature = "git")]
+        if self.git.purge_every.is_zero() || self.git.watch_heartbeat.is_zero() {
+            return Err(ServerError::Config(
+                "git.purge_every and git.watch_heartbeat must be greater than zero".to_string(),
+            ));
+        }
         #[cfg(feature = "live")]
         if let Some(live) = &self.live {
             if self.cluster.is_some() {
@@ -1395,9 +1401,19 @@ impl GitRuntimeHandle {
         }
     }
 
+    /// Stops the purge (abandoning a pass that outlasts `PURGE_STOP_WAIT`), then every
+    /// sequencer.
     async fn stop(self) {
+        const PURGE_STOP_WAIT: Duration = Duration::from_secs(5);
         self.stop.cancel();
-        let _ = self.purge.await;
+        let mut purge = self.purge;
+        if tokio::time::timeout(PURGE_STOP_WAIT, &mut purge)
+            .await
+            .is_err()
+        {
+            tracing::warn!("a repository purge pass outlasted the shutdown wait; abandoned");
+            purge.abort();
+        }
         self.runtime.sequencers.shutdown().await;
     }
 }
@@ -2538,17 +2554,18 @@ impl Server {
             )?),
             false => None,
         };
-        // Loams Git on every gateway node (GT1 Task 13): sequencers are fenced by the bucket, so
-        // a node needs no lease to write (placement is GT1 Task 14).
-        #[cfg(feature = "git")]
-        let git = (roles.gateway && config.git.enabled)
-            .then(|| GitRuntimeHandle::start(&config.git, meta_store.clone(), store.clone()));
         let house = match roles.gateway {
             true => crate::api::house_proxy::HouseProxy::start(&config.house).map_err(|err| {
                 ServerError::Config(format!("the House proxy's HTTP client: {err}"))
             })?,
             false => None,
         };
+        // Loams Git on every gateway node (GT1 Task 13), after the last fallible step so its
+        // purge task never outlives a failed start: sequencers are fenced by the bucket, so a
+        // node needs no lease to write (placement is GT1 Task 14).
+        #[cfg(feature = "git")]
+        let git = (roles.gateway && config.git.enabled)
+            .then(|| GitRuntimeHandle::start(&config.git, meta_store.clone(), store.clone()));
         let state = AppState {
             meta: meta_store.clone(),
             writer: writer.clone(),

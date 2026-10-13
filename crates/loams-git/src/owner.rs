@@ -13,7 +13,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use loams_store::Store;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OnceCell};
 
 use crate::blob::StoreBlobStore;
 use crate::clock::Clock;
@@ -23,11 +23,16 @@ use crate::reflog::RefError;
 use crate::sequencer::{BucketRefLog, SequencerConfig};
 use crate::wal::StoreWalStore;
 
+/// A repository's sequencer, opened once by whichever call gets there first.
+type LogCell = Arc<OnceCell<BucketRefLog>>;
+
 /// The open sequencers of this node, by repository.
 pub struct RepoSequencers {
     store: Store,
     clock: Arc<dyn Clock>,
-    logs: Mutex<HashMap<(NamespaceId, RepoId), BucketRefLog>>,
+    /// One cell per repository: the map's lock is held only to find or add
+    /// a cell, so a slow cold open of one repository never blocks another.
+    logs: Mutex<HashMap<(NamespaceId, RepoId), LogCell>>,
 }
 
 impl fmt::Debug for RepoSequencers {
@@ -55,44 +60,62 @@ impl RepoSequencers {
         tenant: &str,
         repo: &RepoId,
     ) -> Result<BucketRefLog, RefError> {
-        let mut logs = self.logs.lock().await;
-        if let Some(log) = logs.get(&(ns, repo.clone())) {
-            return Ok(log.clone());
-        }
-        let paths = RepoPaths::new(ns, repo);
-        let wal =
-            StoreWalStore::new(self.store.clone(), paths.clone()).with_clock(self.clock.clone());
-        let log = BucketRefLog::open(
-            Arc::new(wal),
-            Arc::new(StoreBlobStore::new(self.store.clone(), paths)),
-            SequencerConfig::new(tenant, ns, repo.clone()),
-            self.clock.clone(),
-        )
-        .await?;
-        logs.insert((ns, repo.clone()), log.clone());
-        Ok(log)
+        let cell = Arc::clone(
+            self.logs
+                .lock()
+                .await
+                .entry((ns, repo.clone()))
+                .or_default(),
+        );
+        // A failed open leaves the cell empty: the next call tries again.
+        let log = cell
+            .get_or_try_init(|| async {
+                let paths = RepoPaths::new(ns, repo);
+                let wal = StoreWalStore::new(self.store.clone(), paths.clone())
+                    .with_clock(self.clock.clone());
+                BucketRefLog::open(
+                    Arc::new(wal),
+                    Arc::new(StoreBlobStore::new(self.store.clone(), paths)),
+                    SequencerConfig::new(tenant, ns, repo.clone()),
+                    self.clock.clone(),
+                )
+                .await
+            })
+            .await?;
+        Ok(log.clone())
     }
 
     /// Stops `repo`'s sequencer, if this node runs one (the repository was
     /// deleted). Calls that still hold its handle are answered `Unavailable`.
     pub async fn close(&self, ns: NamespaceId, repo: &RepoId) {
-        let log = self.logs.lock().await.remove(&(ns, repo.clone()));
-        if let Some(log) = log {
-            log.shutdown().await;
+        let cell = self.logs.lock().await.remove(&(ns, repo.clone()));
+        if let Some(log) = cell.as_deref().and_then(OnceCell::get) {
+            log.clone().shutdown().await;
         }
     }
 
     /// Stops every sequencer (server shutdown).
     pub async fn shutdown(&self) {
-        let logs: Vec<BucketRefLog> = self.logs.lock().await.drain().map(|(_, log)| log).collect();
-        for log in logs {
-            log.shutdown().await;
+        let cells: Vec<_> = self
+            .logs
+            .lock()
+            .await
+            .drain()
+            .map(|(_, cell)| cell)
+            .collect();
+        for log in cells.iter().filter_map(|cell| cell.get()) {
+            log.clone().shutdown().await;
         }
     }
 
     /// How many sequencers this node runs.
     pub async fn len(&self) -> usize {
-        self.logs.lock().await.len()
+        self.logs
+            .lock()
+            .await
+            .values()
+            .filter(|cell| cell.initialized())
+            .count()
     }
 
     /// Whether this node runs no sequencer.
