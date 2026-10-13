@@ -22,7 +22,11 @@ import { createAgentdService } from "./agentd/setup";
 import { appPaths } from "./app-paths";
 import { ConnectorCatalog, catalogPath } from "./connectors/catalog";
 import { registerConnectorsIpc } from "./connectors/ipc.electron";
-import { findEngineBinary, probeLiveSupport } from "./engine/binary";
+import {
+	findEngineBinary,
+	probeLiveOnMainPort,
+	probeLiveSupport,
+} from "./engine/binary";
 import { registerEngineIpc } from "./engine/ipc.electron";
 import { EngineSupervisor } from "./engine/supervisor";
 import { FactoryEmbed } from "./factory/embed.electron";
@@ -235,6 +239,7 @@ const singleInstance = initSingleInstance({
 				now: Date.now,
 				sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
 				liveSupported: probeLiveSupport,
+				liveOnMainPort: probeLiveOnMainPort,
 			});
 			engine.on("state", (st: EngineState) => {
 				registry.setLocalUrl(st.phase === "ready" ? st.url : "");

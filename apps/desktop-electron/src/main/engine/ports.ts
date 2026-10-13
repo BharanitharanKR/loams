@@ -30,3 +30,18 @@ export async function reservePorts(n: number): Promise<number[]> {
 		await Promise.all(held.map((h) => h.close()));
 	}
 }
+
+/**
+ * The address Live's own listener binds when the engine is not given `--live-listen`
+ * (`LIVE_LISTEN_DEFAULT` in crates/loams/src/main.rs).
+ */
+export const LIVE_DEFAULT_PORT = 7710;
+
+/** Whether a loopback port can be bound right now. */
+export function portFree(port: number): Promise<boolean> {
+	return new Promise((resolve) => {
+		const s = createServer();
+		s.once("error", () => resolve(false));
+		s.listen(port, "127.0.0.1", () => s.close(() => resolve(true)));
+	});
+}

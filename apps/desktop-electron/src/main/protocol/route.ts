@@ -20,10 +20,13 @@ const reject = (status: number, code: string, message: string): Route => ({
 });
 
 /**
- * Per-prefix target routing. `/durable/` and `/loams.live.v1.` are served by
- * the local engine's own listeners (not the main API port); everything else
- * goes to the active server. A remote server has no durable surface until a
- * control plane serves it, so `/durable/` is a 404 there.
+ * Per-prefix target routing. `/durable/` is served by the local engine's own
+ * durable listener (not the main API port). `/loams.live.v1.` goes to
+ * `engine.liveUrl`, which is the main API port on an engine that serves Live
+ * there (LV1 Task 12) and Live's own listener on an older one; it is a 503
+ * while Live is not running. Everything else goes to the active server. A
+ * remote server has no durable surface until a control plane serves it, so
+ * `/durable/` is a 404 there.
  */
 export function routeRequest(
 	pathname: string,

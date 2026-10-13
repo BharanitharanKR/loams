@@ -4,7 +4,7 @@ import { EventEmitter } from "node:events";
 import type { EngineState } from "../../shared/contracts";
 import { engineArgs, type LiveSupport } from "./binary";
 import { RotatingLog } from "./log-rotate";
-import { reservePorts } from "./ports";
+import { LIVE_DEFAULT_PORT, portFree, reservePorts } from "./ports";
 
 export interface SupervisorDeps {
 	spawn: typeof spawnFn;
@@ -20,6 +20,18 @@ export interface SupervisorDeps {
 	 */
 	liveSupported?: (bin: string) => Promise<LiveSupport | boolean>;
 	livePd?: string | null;
+	/**
+	 * Whether the binary serves Live on its main port (`probeLiveOnMainPort`, LV1 Task 12). Then
+	 * `/loams.live.v1.` goes to `--listen` and `--live-listen` is not passed (ruling T12-4).
+	 * Default: no, an older engine whose Live is only on its own listener.
+	 */
+	liveOnMainPort?: (bin: string) => Promise<boolean>;
+	/**
+	 * Whether Live's own listener can take its default address (127.0.0.1:7710). When it cannot
+	 * (another engine has it), the deprecated `--live-listen` moves it to a free port, so this
+	 * engine still starts. Default: try binding it.
+	 */
+	liveDefaultPortFree?: () => Promise<boolean>;
 	platform?: NodeJS.Platform;
 	env?: NodeJS.ProcessEnv;
 	graceMs?: number;
@@ -176,6 +188,10 @@ export class EngineSupervisor extends EventEmitter {
 		let ports: number[];
 		let support: LiveSupport = "none";
 		let pd: string | undefined;
+		// Live on the main port (LV1 Task 12); its own listener on the default
+		// address unless another engine holds it.
+		let onMainPort = false;
+		let defaultListener = false;
 		// Live runs on TiKV when a PD is set and the engine can, and on the
 		// embedded store of an engine that has one (LV1 Task 23).
 		const liveOn = (): boolean =>
@@ -190,6 +206,16 @@ export class EngineSupervisor extends EventEmitter {
 			pd = tikvOk ? wanted : undefined;
 			this.engineNotice =
 				wanted && !pd && support !== "none" ? ENGINE_WITHOUT_TIKV : null;
+			onMainPort = liveOn() && ((await d.liveOnMainPort?.(bin)) ?? false);
+			if (onMainPort) {
+				const free =
+					d.liveDefaultPortFree ?? (() => portFree(LIVE_DEFAULT_PORT));
+				defaultListener = await free();
+				if (!defaultListener)
+					this.log.write(
+						`[supervisor] 127.0.0.1:${LIVE_DEFAULT_PORT} is in use; moving Live's own listener with --live-listen\n`,
+					);
+			}
 			ports = await reservePorts(liveOn() ? 5 : 4);
 		} catch (e) {
 			if (!alive()) return;
@@ -211,6 +237,7 @@ export class EngineSupervisor extends EventEmitter {
 				supported: support !== "none",
 				embedded: support.startsWith("embedded"),
 				pd,
+				defaultListener,
 			},
 		});
 		const url = `http://127.0.0.1:${http}`;
@@ -279,7 +306,7 @@ export class EngineSupervisor extends EventEmitter {
 				flightUrl: `grpc://127.0.0.1:${flight}`,
 				durableUrl: `http://127.0.0.1:${durable}`,
 				...(live !== undefined && liveOn()
-					? { liveUrl: `http://127.0.0.1:${live}` }
+					? { liveUrl: onMainPort ? url : `http://127.0.0.1:${live}` }
 					: {}),
 				...(live !== undefined &&
 				liveOn() &&
