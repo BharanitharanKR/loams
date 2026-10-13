@@ -320,7 +320,10 @@ jobs:
         working-directory: sdks/python
         run: |
           set -euo pipefail
-          uvx twine@6.2.0 check --strict dist/*
+          # The twine pypa/gh-action-pypi-publish v1.14.2 uploads with, so the
+          # check accepts what the upload accepts (hatchling writes Metadata-Version
+          # 2.5, which twine 6.x rejects).
+          uvx twine@7.0.0 check --strict dist/*
           uv venv -q "$RUNNER_TEMP/smoke"
           uv pip install -q --python "$RUNNER_TEMP/smoke/bin/python" dist/*.whl
           "$RUNNER_TEMP/smoke/bin/python" -c 'import importlib.metadata as m, loams; assert loams.Loams; print("loams", m.version("loams"))'
