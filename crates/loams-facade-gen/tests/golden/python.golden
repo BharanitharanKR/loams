@@ -23,8 +23,10 @@ from connectrpc.method import IdempotencyLevel, MethodInfo
 from google.protobuf.message import Message
 from loams.instance.v1.instance_pb2 import GetInstanceRequest, GetInstanceResponse, WhoAmIRequest, WhoAmIResponse
 from loams.instance.v1.instance_connect import InstanceServiceClient, InstanceServiceClientSync
-from loams.live.v1.live_pb2 import ActivateDeploymentRequest, ActivateDeploymentResponse, DeployRequest, DeployResponse, GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse, ListDeploymentsRequest, ListDeploymentsResponse, ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, TailLogsRequest, TailLogsResponse, Transition, WatchRequest
-from loams.live.v1.live_connect import LiveAdminServiceClient, LiveAdminServiceClientSync, LiveServiceClient, LiveServiceClientSync
+from loams.live.v1.live_pb2 import ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition, WatchRequest
+from loams.live.v1.admin_pb2 import ActivateDeploymentRequest, ActivateDeploymentResponse, DeployRequest, DeployResponse, GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse, ListDeploymentsRequest, ListDeploymentsResponse, TailLogsRequest, TailLogsResponse
+from loams.live.v1.live_connect import LiveServiceClient, LiveServiceClientSync
+from loams.live.v1.admin_connect import LiveAdminServiceClient, LiveAdminServiceClientSync
 
 PROTO_REV: Final[str] = "v1"
 """The proto revision this SDK was generated from (`LOAMS_PROTO_REV`,
@@ -776,60 +778,60 @@ class LiveAdminModule(Protocol):
     """
     async def activate_deployment(
         self,
-        request: loams.live.v1.live_pb2.ActivateDeploymentRequest,
+        request: loams.live.v1.admin_pb2.ActivateDeploymentRequest,
         *,
         options: CallOptions | None = None,
-    ) -> loams.live.v1.live_pb2.ActivateDeploymentResponse:
+    ) -> loams.live.v1.admin_pb2.ActivateDeploymentResponse:
         ...
 
     """`loams.live.v1.LiveAdminService/Deploy`, retried: manual.
     """
     async def deploy(
         self,
-        request: loams.live.v1.live_pb2.DeployRequest,
+        request: loams.live.v1.admin_pb2.DeployRequest,
         *,
         options: CallOptions | None = None,
-    ) -> loams.live.v1.live_pb2.DeployResponse:
+    ) -> loams.live.v1.admin_pb2.DeployResponse:
         ...
 
     """`loams.live.v1.LiveAdminService/GetDeployment`, retried: safe.
     """
     async def get_deployment(
         self,
-        request: loams.live.v1.live_pb2.GetDeploymentRequest,
+        request: loams.live.v1.admin_pb2.GetDeploymentRequest,
         *,
         options: CallOptions | None = None,
-    ) -> loams.live.v1.live_pb2.GetDeploymentResponse:
+    ) -> loams.live.v1.admin_pb2.GetDeploymentResponse:
         ...
 
     """`loams.live.v1.LiveAdminService/GetIndexStatus`, retried: safe.
     """
     async def get_index_status(
         self,
-        request: loams.live.v1.live_pb2.GetIndexStatusRequest,
+        request: loams.live.v1.admin_pb2.GetIndexStatusRequest,
         *,
         options: CallOptions | None = None,
-    ) -> loams.live.v1.live_pb2.GetIndexStatusResponse:
+    ) -> loams.live.v1.admin_pb2.GetIndexStatusResponse:
         ...
 
     """`loams.live.v1.LiveAdminService/ListDeployments`, retried: safe. AIP-158: page with `deployments` and follow `next_page_token` through `loams.paginate`.
     """
     async def list_deployments(
         self,
-        request: loams.live.v1.live_pb2.ListDeploymentsRequest,
+        request: loams.live.v1.admin_pb2.ListDeploymentsRequest,
         *,
         options: CallOptions | None = None,
-    ) -> loams.live.v1.live_pb2.ListDeploymentsResponse:
+    ) -> loams.live.v1.admin_pb2.ListDeploymentsResponse:
         ...
 
     """`loams.live.v1.LiveAdminService/TailLogs`, retried: manual.
     """
     def tail_logs(
         self,
-        request: loams.live.v1.live_pb2.TailLogsRequest,
+        request: loams.live.v1.admin_pb2.TailLogsRequest,
         *,
         options: CallOptions | None = None,
-    ) -> AsyncIterator[loams.live.v1.live_pb2.TailLogsResponse]:
+    ) -> AsyncIterator[loams.live.v1.admin_pb2.TailLogsResponse]:
         ...
 
 
@@ -847,60 +849,60 @@ class LiveAdminModuleSync(Protocol):
     """
     def activate_deployment(
         self,
-        request: loams.live.v1.live_pb2.ActivateDeploymentRequest,
+        request: loams.live.v1.admin_pb2.ActivateDeploymentRequest,
         *,
         options: CallOptions | None = None,
-    ) -> loams.live.v1.live_pb2.ActivateDeploymentResponse:
+    ) -> loams.live.v1.admin_pb2.ActivateDeploymentResponse:
         ...
 
     """`loams.live.v1.LiveAdminService/Deploy`, retried: manual.
     """
     def deploy(
         self,
-        request: loams.live.v1.live_pb2.DeployRequest,
+        request: loams.live.v1.admin_pb2.DeployRequest,
         *,
         options: CallOptions | None = None,
-    ) -> loams.live.v1.live_pb2.DeployResponse:
+    ) -> loams.live.v1.admin_pb2.DeployResponse:
         ...
 
     """`loams.live.v1.LiveAdminService/GetDeployment`, retried: safe.
     """
     def get_deployment(
         self,
-        request: loams.live.v1.live_pb2.GetDeploymentRequest,
+        request: loams.live.v1.admin_pb2.GetDeploymentRequest,
         *,
         options: CallOptions | None = None,
-    ) -> loams.live.v1.live_pb2.GetDeploymentResponse:
+    ) -> loams.live.v1.admin_pb2.GetDeploymentResponse:
         ...
 
     """`loams.live.v1.LiveAdminService/GetIndexStatus`, retried: safe.
     """
     def get_index_status(
         self,
-        request: loams.live.v1.live_pb2.GetIndexStatusRequest,
+        request: loams.live.v1.admin_pb2.GetIndexStatusRequest,
         *,
         options: CallOptions | None = None,
-    ) -> loams.live.v1.live_pb2.GetIndexStatusResponse:
+    ) -> loams.live.v1.admin_pb2.GetIndexStatusResponse:
         ...
 
     """`loams.live.v1.LiveAdminService/ListDeployments`, retried: safe. AIP-158: page with `deployments` and follow `next_page_token` through `loams.paginate`.
     """
     def list_deployments(
         self,
-        request: loams.live.v1.live_pb2.ListDeploymentsRequest,
+        request: loams.live.v1.admin_pb2.ListDeploymentsRequest,
         *,
         options: CallOptions | None = None,
-    ) -> loams.live.v1.live_pb2.ListDeploymentsResponse:
+    ) -> loams.live.v1.admin_pb2.ListDeploymentsResponse:
         ...
 
     """`loams.live.v1.LiveAdminService/TailLogs`, retried: manual.
     """
     def tail_logs(
         self,
-        request: loams.live.v1.live_pb2.TailLogsRequest,
+        request: loams.live.v1.admin_pb2.TailLogsRequest,
         *,
         options: CallOptions | None = None,
-    ) -> Iterator[loams.live.v1.live_pb2.TailLogsResponse]:
+    ) -> Iterator[loams.live.v1.admin_pb2.TailLogsResponse]:
         ...
 
 
