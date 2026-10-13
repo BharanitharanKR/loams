@@ -73,36 +73,59 @@ func writeReport(endpoint: String) {
     }
 }
 
-func getEndpoint() -> String {
+/// The fixture server this run started, kept so it is stopped when the tests end.
+nonisolated(unsafe) var fixtureServer: Process?
+
+/// The endpoint the suite talks to: `LOAMS_TEST_ENDPOINT` when set, otherwise a
+/// fixture server started here.
+///
+/// `node` is found on PATH through `/usr/bin/env`, because macOS runners do not
+/// have it at `/usr/bin/node`. The server's first stdout line is read with a
+/// deadline and the parent's copy of the pipe's write end is closed, so a server
+/// that fails to start ends the read with EOF instead of blocking the run until
+/// the CI job times out.
+func getEndpoint() throws -> String {
     if let env = ProcessInfo.processInfo.environment["LOAMS_TEST_ENDPOINT"], !env.isEmpty {
         lastEndpoint = env
         return env
+    }
+    if fixtureServer?.isRunning == true {
+        return lastEndpoint
     }
 
     let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     let fixtureScript = cwd.deletingLastPathComponent().appendingPathComponent("conformance/fixture-server.mjs").path
 
     let proc = Process()
-    proc.executableURL = URL(fileURLWithPath: "/usr/bin/node")
-    proc.arguments = [fixtureScript, "--port", "0"]
+    proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    proc.arguments = ["node", fixtureScript, "--port", "0"]
     let pipe = Pipe()
     proc.standardOutput = pipe
-    proc.standardError = Pipe()
-    try? proc.run()
+    proc.standardError = FileHandle.standardError
+    try proc.run()
+    try? pipe.fileHandleForWriting.close()
+    fixtureServer = proc
+    atexit { fixtureServer?.terminate() }
 
     let handle = pipe.fileHandleForReading
-    let data = handle.availableData
-    if let str = String(data: data, encoding: .utf8),
-       let match = str.range(of: "\"url\":\"[^\"]+\"", options: .regularExpression) {
-        let sub = String(str[match])
-        let parts = sub.components(separatedBy: "\"")
-        if parts.count >= 4 {
-            lastEndpoint = parts[3]
-            return lastEndpoint
+    var output = ""
+    let deadline = Date().addingTimeInterval(30)
+    while Date() < deadline {
+        let chunk = handle.availableData
+        if chunk.isEmpty { break }
+        output += String(decoding: chunk, as: UTF8.self)
+        if let match = output.range(of: "\"url\":\"[^\"]+\"", options: .regularExpression) {
+            let parts = String(output[match]).components(separatedBy: "\"")
+            if parts.count >= 4 {
+                lastEndpoint = parts[3]
+                return lastEndpoint
+            }
         }
     }
-
-    return lastEndpoint
+    proc.terminate()
+    throw NSError(domain: "LoamsObjCTests", code: 1, userInfo: [
+        NSLocalizedDescriptionKey: "the fixture server did not print its url: \(output)",
+    ])
 }
 
 final class ConformanceTests: XCTestCase {
@@ -112,7 +135,7 @@ final class ConformanceTests: XCTestCase {
     }
 
     func test_objc_conformance_all_required_fixtures() async throws {
-        let endpoint = getEndpoint()
+        let endpoint = try getEndpoint()
         let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let fixturesDir = cwd.deletingLastPathComponent().appendingPathComponent("fixtures")
         let manifestFile = fixturesDir.appendingPathComponent("manifest.json")

@@ -1715,6 +1715,8 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-objc == 'true') }}
     runs-on: macos-latest
+    # A hung suite must not hold a macOS runner for six hours.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - name: the Objective-C SDK builds
