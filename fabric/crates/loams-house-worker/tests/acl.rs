@@ -138,32 +138,32 @@ fn user_cases(url: &str) -> Vec<String> {
     ]
 }
 
-/// Statements on the control connection (a statement's `views`), which may
-/// make the read views and nothing else. The control connection takes no
-/// per-statement settings, so on an open worker the statements that connect
-/// carry their own (a sealed worker refuses before reading them).
+/// Statements on the control connection (a statement's `views`) in the shapes
+/// R11.11's check lets through, which the grants must still confine to the read
+/// views (`acl_engine.rs` covers the statements that check stops first). The
+/// control connection takes no per-statement settings, so on an open worker the
+/// statements that connect carry their own (a sealed worker refuses before
+/// reading them).
 fn control_cases(url: &str, acl: Acl) -> Vec<String> {
     let fast = match acl {
         Acl::Sealed => "",
         Acl::Open => " SETTINGS http_max_tries = 1, http_retry_max_backoff_ms = 10",
     };
     vec![
-        format!("SELECT * FROM url('{url}/x', LineAsString){fast}"),
-        format!(
-            "CREATE DICTIONARY default.dct (k UInt64, v String) PRIMARY KEY k \
-             SOURCE(HTTP(url '{url}/d' format 'TSV')) LAYOUT(FLAT()) LIFETIME(0)"
-        ),
-        "CREATE FUNCTION loams_acl_f AS (x) -> x + 1".to_string(),
-        "CREATE TABLE default.loams_acl_t (a UInt8) ENGINE = Memory".to_string(),
-        "SYSTEM DROP DNS CACHE".to_string(),
-        "CREATE VIEW system.loams_acl_v AS SELECT 1".to_string(),
-        "DROP DATABASE information_schema".to_string(),
         // A view that does not name its columns is analysed at creation, and its
         // source needs a grant.
         format!(
-            "CREATE VIEW default.loams_acl_u AS SELECT * FROM url('{url}/x', LineAsString){fast}"
+            "CREATE OR REPLACE VIEW default.loams_acl_u AS\n\
+             SELECT * FROM url('{url}/x', LineAsString){fast}"
         ),
-        "SET max_rows_to_group_by = 1".to_string(),
+        // No view or database DDL in the engine's own databases.
+        "CREATE OR REPLACE VIEW system.loams_acl_v AS\nSELECT 1".to_string(),
+        "CREATE OR REPLACE VIEW information_schema.loams_acl_v AS\nSELECT 1".to_string(),
+        "DROP TABLE IF EXISTS system.one".to_string(),
+        // The profile binds the control connection too.
+        "CREATE OR REPLACE VIEW default.loams_acl_s (a UInt8) SQL SECURITY NONE AS\n\
+         SELECT 1 SETTINGS max_rows_to_group_by = 1"
+            .to_string(),
     ]
 }
 
@@ -369,7 +369,7 @@ async fn only_the_views_reach_the_bucket() {
         let views = vec![
             "CREATE DATABASE IF NOT EXISTS d ENGINE = Memory".to_string(),
             format!(
-                "CREATE OR REPLACE VIEW d.t (n UInt64) SQL SECURITY NONE AS \
+                "CREATE OR REPLACE VIEW d.t (n UInt64) SQL SECURITY NONE AS\n\
                  SELECT n FROM s3('{own}', 'dummy', 'dummy', Parquet)"
             ),
         ];

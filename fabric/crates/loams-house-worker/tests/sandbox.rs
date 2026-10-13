@@ -321,7 +321,7 @@ async fn worker_reaches_only_its_forwarder() {
     execute.views = vec![
         "CREATE DATABASE IF NOT EXISTS d ENGINE = Memory".to_string(),
         format!(
-            "CREATE OR REPLACE VIEW d.object (line String) SQL SECURITY NONE AS SELECT * FROM \
+            "CREATE OR REPLACE VIEW d.object (line String) SQL SECURITY NONE AS\nSELECT * FROM \
              s3('http://127.0.0.1:{FORWARDER_PORT}/bucket/key.txt', 'dummy', 'dummy', \
              LineAsString)"
         ),
