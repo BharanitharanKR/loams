@@ -309,6 +309,13 @@ services:
       MSSQL_AGENT_ENABLED: "true"
       MSSQL_SA_PASSWORD: Loams-Test-Pass-1
     ports: ["1433:1433"]
+    # Ready once a login answers, so `up --wait` means the suites can connect
+    # (the image ships sqlcmd under mssql-tools18; -C trusts its self-signed
+    # certificate).
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-C", "-S", "localhost", "-U", "sa", "-P", "Loams-Test-Pass-1", "-Q", "SELECT 1"]
+      interval: 3s
+      retries: 60
 
   oracle:
     image: gvenzl/oracle-free:23.26.3-slim@sha256:6d61d267a3b978c24c5ac1790e62e927416a0aec446bd86e4b3a1527562757bd
