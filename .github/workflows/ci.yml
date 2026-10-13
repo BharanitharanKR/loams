@@ -2188,6 +2188,33 @@ jobs:
       - name: the manifests render
         working-directory: .
         run: kubectl kustomize deploy/dapr > /dev/null
+  # Windows: the engine must keep compiling there (the Windows CLI zip and the
+  # desktop app ship it), and no other pull request job builds for Windows.
+  # Full tier: pull requests into main, a push to main, dispatch, the nightly.
+  windows-check:
+    name: "Rust: Windows check"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && needs.changes.outputs.engine == 'true')) }}
+    runs-on: windows-2025
+    timeout-minutes: 90
+    env:
+      # aws-lc-sys's prebuilt NASM objects: no NASM install needed for a check.
+      AWS_LC_SYS_PREBUILT_NASM: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: protoc
+        shell: pwsh
+        run: |
+          choco install --no-progress -y protoc
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
+      - name: cargo check (the loams binary)
+        run: cargo check -p loams --bin loams --locked
+
   # The unconditional light checks, one job (one runner slot instead of four:
   # the org's concurrent-job limit, not minutes, is what queues pull requests).
   # Each has no path filter on purpose; see the comment on each step group.
@@ -2245,6 +2272,7 @@ jobs:
       - changes
       - repo-checks
       - check
+      - windows-check
       - rust-build
       - rust-tests
       - agentd

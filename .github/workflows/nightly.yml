@@ -13,6 +13,10 @@ on:
         description: "Branch to run the full tier on."
         default: dev
 
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   actions: write
   contents: read

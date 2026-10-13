@@ -6,6 +6,10 @@ name: Git nightly
 on:
   workflow_dispatch:
 
+concurrency:
+  group: git-nightly-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
