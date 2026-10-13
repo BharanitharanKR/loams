@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+// Preview (design §53 §5.8, §6.4; plan SD1 Task 4): the dev servers a
+// thread's project runs, behind the daemon's preview proxy. See studio.proto
+// for the package's rules.
+package loams.agentd.v1;
+
+import "loams/options/v1/options.proto";
+
+service PreviewService {
+  option (loams.options.v1.module) = {
+    name: "agentd.preview"
+    summary: "Loams Studio's preview: the dev servers a thread's project runs."
+    unstable: true
+  };
+
+  // The thread's preview list, then again on each change (ndjson:
+  // `WatchPreviews`).
+  rpc WatchPreviews(WatchPreviewsRequest) returns (stream WatchPreviewsResponse);
+}
+
+// A dev server (ndjson `PreviewService`; renamed here, as the service owns
+// the name).
+message PreviewServer {
+  string id = 1;
+  string project_id = 2;
+  string project_name = 3;
+  string project_cwd = 4;
+  string device_id = 5;
+  string device_name = 6;
+  string hostname = 7;
+  string name = 8;
+  uint32 port = 9;
+  uint32 pid = 10;
+  string cwd = 11;
+  // The process's creation time.
+  uint64 started_at_ms = 12;
+  bool loams_desktop_owned = 13;
+}
+
+message PreviewSnapshot {
+  repeated PreviewServer services = 1;
+  uint32 proxy_port = 2;
+  optional string error = 3;
+  optional string project_name = 4;
+  bool remote = 5;
+}
+
+message WatchPreviewsRequest {
+  string chat_id = 1;
+}
+
+message WatchPreviewsResponse {
+  PreviewSnapshot snapshot = 1;
+}

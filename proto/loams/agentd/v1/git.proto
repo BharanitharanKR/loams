@@ -1,0 +1,389 @@
+syntax = "proto3";
+
+// Git (design §53 §5.4, §6.4; plan SD1 Task 4): branches, refs, history,
+// worktrees, status and the checkout's pull request. The §53 §6.5 git writes
+// G1–G5 are declared here and answer `unimplemented` until SD1 Task 9; a push
+// never force-pushes without a lease, and a merge stops on conflicts with a
+// clean tree. See studio.proto for the package's rules.
+package loams.agentd.v1;
+
+import "loams/agentd/v1/projects.proto";
+import "loams/agentd/v1/studio.proto";
+import "loams/options/v1/options.proto";
+
+service GitService {
+  option (loams.options.v1.module) = {
+    name: "agentd.git"
+    summary: "Loams Studio's git: branches, history, worktrees, status, commits, pushes and merges."
+    unstable: true
+  };
+
+  // The default branch first (ndjson: `ListBranches`).
+  rpc ListBranches(ListBranchesRequest) returns (ListBranchesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ndjson: `ListRefs`.
+  rpc ListRefs(ListRefsRequest) returns (ListRefsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ndjson: `ListGitHistory`.
+  rpc ListGitHistory(ListGitHistoryRequest) returns (ListGitHistoryResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Fuzzy subject and SHA search (ndjson: `SearchGitHistory`).
+  rpc SearchGitHistory(SearchGitHistoryRequest) returns (SearchGitHistoryResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ndjson: `ResolveGitAvatars`.
+  rpc ResolveGitAvatars(ResolveGitAvatarsRequest) returns (ResolveGitAvatarsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ndjson: `SwitchRef`.
+  rpc SwitchRef(SwitchRefRequest) returns (SwitchRefResponse);
+  // Updates remote-tracking refs only (ndjson: `FetchAll`).
+  rpc FetchAll(FetchAllRequest) returns (FetchAllResponse);
+  // ndjson: `CreateWorktree`.
+  rpc CreateWorktree(CreateWorktreeRequest) returns (CreateWorktreeResponse);
+  // ndjson: `DeleteWorktree`.
+  rpc DeleteWorktree(DeleteWorktreeRequest) returns (DeleteWorktreeResponse);
+  // The checkout's status, then again on each change; an unset status means
+  // none is available (ndjson: `WatchWorkspaceGitStatus`).
+  rpc WatchStatus(WatchStatusRequest) returns (stream WatchStatusResponse);
+  // The checkout's current pull request (ndjson:
+  // `WatchCheckoutChangeRequest`).
+  rpc WatchChangeRequest(WatchChangeRequestRequest) returns (stream WatchChangeRequestResponse);
+
+  // G1: the repository's worktrees (SD1 Task 9).
+  rpc ListWorktrees(ListWorktreesRequest) returns (ListWorktreesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // G2: commits; `stale_diff` when the checksum is stale (SD1 Task 9).
+  rpc CommitWorktree(CommitWorktreeRequest) returns (CommitWorktreeResponse);
+  // G3: pushes; never a plain `--force` (SD1 Task 9).
+  rpc PushBranch(PushBranchRequest) returns (PushBranchResponse);
+  // G4: opens a pull request on Forgejo or GitHub (SD1 Task 9).
+  rpc CreateChangeRequest(CreateChangeRequestRequest) returns (CreateChangeRequestResponse);
+  // G5: merges; stops on conflicts with a clean tree (SD1 Task 9).
+  rpc MergeBranch(MergeBranchRequest) returns (MergeBranchResponse);
+}
+
+message RepoRef {
+  string name = 1;
+  bool current = 2;
+  optional string worktree_path = 3;
+}
+
+enum GitHistoryRefKind {
+  GIT_HISTORY_REF_KIND_UNSPECIFIED = 0;
+  GIT_HISTORY_REF_KIND_BRANCH = 1;
+  GIT_HISTORY_REF_KIND_REMOTE = 2;
+  GIT_HISTORY_REF_KIND_TAG = 3;
+}
+
+message GitHistoryRef {
+  GitHistoryRefKind kind = 1;
+  string label = 2;
+}
+
+message GitHistoryCommit {
+  string sha = 1;
+  repeated string parent_shas = 2;
+  string subject = 3;
+  string author_name = 4;
+  string author_email = 5;
+  // As git prints it (strict ISO 8601).
+  string authored_at = 6;
+  repeated GitHistoryRef refs = 7;
+}
+
+message GitHistoryComparison {
+  string base = 1;
+  uint64 ahead = 2;
+  uint64 behind = 3;
+}
+
+message GitHistoryPage {
+  repeated GitHistoryCommit commits = 1;
+  repeated GitHistoryCommit branch_tips = 2;
+  optional string head_sha = 3;
+  optional uint64 next_cursor = 4;
+  optional uint64 total_count = 5;
+  optional uint64 head_commit_count = 6;
+  GitHistoryComparison comparison = 7;
+}
+
+message GitAvatarAuthor {
+  string sha = 1;
+  string email = 2;
+}
+
+message CreateWorktreeOutcome {
+  string repo_path = 1;
+  string path = 2;
+  string branch = 3;
+  string name = 4;
+  optional string checkout_id = 5;
+  ProjectActionRun setup_action = 6;
+  optional string setup_error = 7;
+}
+
+enum GitFileState {
+  GIT_FILE_STATE_UNSPECIFIED = 0;
+  GIT_FILE_STATE_UNCHANGED = 1;
+  GIT_FILE_STATE_ADDED = 2;
+  GIT_FILE_STATE_MODIFIED = 3;
+  GIT_FILE_STATE_DELETED = 4;
+  GIT_FILE_STATE_RENAMED = 5;
+  GIT_FILE_STATE_COPIED = 6;
+  GIT_FILE_STATE_UNMERGED = 7;
+  GIT_FILE_STATE_UNTRACKED = 8;
+  GIT_FILE_STATE_TYPE_CHANGED = 9;
+}
+
+message GitFileStatus {
+  string path = 1;
+  optional string old_path = 2;
+  GitFileState index = 3;
+  GitFileState worktree = 4;
+}
+
+message CheckoutGitStatus {
+  string checkout_id = 1;
+  string device_id = 2;
+  string revision = 3;
+  bool complete = 4;
+  repeated GitFileStatus files = 5;
+}
+
+enum ChangeRequestState {
+  CHANGE_REQUEST_STATE_UNSPECIFIED = 0;
+  CHANGE_REQUEST_STATE_OPEN = 1;
+  CHANGE_REQUEST_STATE_CLOSED = 2;
+  CHANGE_REQUEST_STATE_MERGED = 3;
+}
+
+message ChangeRequestSummary {
+  string provider = 1;
+  uint64 number = 2;
+  string title = 3;
+  string url = 4;
+  ChangeRequestState state = 5;
+  string base_ref = 6;
+  string head_ref = 7;
+}
+
+message CheckoutChangeRequestStatus {
+  string checkout_id = 1;
+  string device_id = 2;
+  string cwd = 3;
+  string branch = 4;
+  ChangeRequestSummary change_request = 5;
+  int64 updated_at_ms = 6;
+}
+
+message ListBranchesRequest {
+  string repo_path = 1;
+}
+
+message ListBranchesResponse {
+  repeated string branches = 1;
+}
+
+message ListRefsRequest {
+  string repo_path = 1;
+}
+
+message ListRefsResponse {
+  repeated RepoRef refs = 1;
+}
+
+message ListGitHistoryRequest {
+  string cwd = 1;
+  uint64 cursor = 2;
+  // Unset means 100.
+  optional uint64 limit = 3;
+}
+
+message ListGitHistoryResponse {
+  GitHistoryPage page = 1;
+}
+
+message SearchGitHistoryRequest {
+  string cwd = 1;
+  string query = 2;
+  uint64 cursor = 3;
+  // Unset means 100.
+  optional uint64 limit = 4;
+}
+
+message SearchGitHistoryResponse {
+  GitHistoryPage page = 1;
+}
+
+message ResolveGitAvatarsRequest {
+  string cwd = 1;
+  repeated GitAvatarAuthor authors = 2;
+  uint64 cursor = 3;
+  // Unset means 100.
+  optional uint64 limit = 4;
+}
+
+message ResolveGitAvatarsResponse {
+  // Commit SHA to avatar URL.
+  map<string, string> avatars = 1;
+}
+
+message SwitchRefRequest {
+  string repo_path = 1;
+  string ref_name = 2;
+}
+
+message SwitchRefResponse {
+  string branch = 1;
+}
+
+message FetchAllRequest {
+  string repo_path = 1;
+}
+
+message FetchAllResponse {
+  bool ok = 1;
+}
+
+message CreateWorktreeRequest {
+  string repo_path = 1;
+  string branch = 2;
+  optional string space_id = 3;
+}
+
+message CreateWorktreeResponse {
+  CreateWorktreeOutcome outcome = 1;
+}
+
+message DeleteWorktreeRequest {
+  string repo_path = 1;
+  string worktree_path = 2;
+}
+
+message DeleteWorktreeResponse {
+  bool ok = 1;
+}
+
+message WatchStatusRequest {
+  WorkspaceTarget target = 1;
+}
+
+message WatchStatusResponse {
+  CheckoutGitStatus status = 1;
+}
+
+message WatchChangeRequestRequest {
+  string cwd = 1;
+  optional string branch = 2;
+}
+
+message WatchChangeRequestResponse {
+  CheckoutChangeRequestStatus status = 1;
+}
+
+// G1: one worktree of a repository.
+message WorktreeInfo {
+  string path = 1;
+  string branch = 2;
+  string head = 3;
+  optional string checkout_id = 4;
+  repeated string chat_ids = 5;
+  bool dirty = 6;
+  uint32 ahead = 7;
+  uint32 behind = 8;
+  int64 last_activity_ms = 9;
+}
+
+message ListWorktreesRequest {
+  string repo_path = 1;
+}
+
+message ListWorktreesResponse {
+  repeated WorktreeInfo worktrees = 1;
+}
+
+message CommitWorktreeRequest {
+  string checkout_id = 1;
+  string cwd = 2;
+  string message = 3;
+  // Unset with `all` commits every change; otherwise only these paths.
+  repeated string paths = 4;
+  bool all = 5;
+  bool amend = 6;
+  bool signoff = 7;
+  string expected_checksum = 8;
+}
+
+message CommitWorktreeResponse {
+  string sha = 1;
+  string summary = 2;
+}
+
+message PushBranchRequest {
+  string cwd = 1;
+  // Unset means "origin".
+  optional string remote = 2;
+  string branch = 3;
+  bool set_upstream = 4;
+  bool force_with_lease = 5;
+}
+
+message PushBranchResponse {
+  string remote = 1;
+  string ref = 2;
+  optional string url = 3;
+}
+
+enum ChangeRequestProvider {
+  CHANGE_REQUEST_PROVIDER_UNSPECIFIED = 0;
+  CHANGE_REQUEST_PROVIDER_FORGEJO = 1;
+  CHANGE_REQUEST_PROVIDER_GITHUB = 2;
+}
+
+message CreateChangeRequestRequest {
+  string cwd = 1;
+  ChangeRequestProvider provider = 2;
+  string base = 3;
+  string head = 4;
+  string title = 5;
+  string body = 6;
+  bool draft = 7;
+  optional string link_issue = 8;
+}
+
+message CreateChangeRequestResponse {
+  ChangeRequestProvider provider = 1;
+  uint64 number = 2;
+  string url = 3;
+  ChangeRequestState state = 4;
+}
+
+enum MergeStrategy {
+  MERGE_STRATEGY_UNSPECIFIED = 0;
+  MERGE_STRATEGY_MERGE = 1;
+  MERGE_STRATEGY_SQUASH = 2;
+  MERGE_STRATEGY_REBASE = 3;
+  MERGE_STRATEGY_FAST_FORWARD = 4;
+}
+
+message MergeBranchRequest {
+  string repo_path = 1;
+  string source = 2;
+  string target = 3;
+  MergeStrategy strategy = 4;
+  optional string message = 5;
+  bool delete_source = 6;
+  bool remove_worktree = 7;
+  string expected_source_head = 8;
+}
+
+message MergeBranchResponse {
+  string sha = 1;
+  // Set when the merge stopped; the tree is left clean.
+  repeated string conflicts = 2;
+}

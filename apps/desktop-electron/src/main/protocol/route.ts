@@ -1,4 +1,5 @@
 import type { EngineState, ServerEntry } from "../../shared/contracts";
+import { rendererMayCall } from "../agentd/allowlist";
 
 /** Where a proxied loams-app://console request goes. Pure: no electron. */
 export type Route =
@@ -64,4 +65,31 @@ export function routeRequest(
 	}
 
 	return { kind: "forward", target: server.url };
+}
+
+/**
+ * Where a loams-app://console/loams.agentd.v1.* request goes (SD1 Task 5,
+ * §53 §6.2): the daemon's loopback Connect listener, whatever server is
+ * active. A method the renderer may not call is a 403 `forbidden_method`,
+ * decided before the daemon is looked up; no running daemon is a 503
+ * `agentd_unavailable`.
+ */
+export function routeAgentd(
+	pathname: string,
+	connectUrl: () => string | null,
+): Route {
+	if (!rendererMayCall(pathname))
+		return reject(
+			403,
+			"forbidden_method",
+			"This daemon method is not available to the console.",
+		);
+	const target = connectUrl();
+	if (!target)
+		return reject(
+			503,
+			"agentd_unavailable",
+			"Background agents are not running.",
+		);
+	return { kind: "forward", target };
 }

@@ -41,6 +41,15 @@ const FACADE_EXTENSION: u32 = 50002;
 /// `google.protobuf.MethodOptions.idempotency_level`, field 34.
 const IDEMPOTENCY_LEVEL: u32 = 34;
 
+/// Proto packages in `proto/` that no SDK speaks, so they are left out of
+/// [`Model::packages`] (`PROTO_PACKAGES` in every SDK).
+///
+/// `loams.agentd.v1` is Loams Studio's surface of the per-user daemon
+/// `loams-agentd`, never served by the Loams server (design §53 §6.1, Q816).
+/// Its methods carry no `FacadeOptions` either, so no module is generated for
+/// it; `tests/agentd_catalogue.rs` checks both.
+pub const NOT_SDK_PACKAGES: &[&str] = &["loams.agentd.v1"];
+
 /// `google.protobuf.MethodOptions.IdempotencyLevel`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Idempotency {
@@ -325,7 +334,9 @@ pub fn model_from_request(
             continue;
         };
         let file_name = string_field(&file, 1)?.unwrap_or_default();
-        packages.push(package.clone());
+        if !NOT_SDK_PACKAGES.contains(&package.as_str()) {
+            packages.push(package.clone());
+        }
         for mut service in repeated_messages(&file, 6)? {
             let service = service.fields()?;
             let Some(name) = string_field(&service, 1)? else {

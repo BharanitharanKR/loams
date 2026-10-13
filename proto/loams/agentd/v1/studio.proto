@@ -1,0 +1,165 @@
+syntax = "proto3";
+
+// `loams.agentd.v1`: the Connect surface of `loams-agentd` for Loams Studio
+// (design §53 §6.1, D907; plan SD1 Task 4). This file holds the package's
+// shared types and `StudioService`; the other files hold one service each.
+//
+// Rules the whole package keeps:
+//
+// - **Beside ndjson, never instead of it.** The daemon's loopback ndjson wire
+//   (§50 §8), its roles and the renderer allowlist are unchanged (DD1 Ruling
+//   2). Every RPC here has an ndjson twin — the method, or the `Mutate` op or
+//   `QueueCommand` kind, that `loams-agentd-connect` calls for it — except the
+//   §53 §6.5 gaps (G1–G23), which are declared here so later tasks only
+//   implement them, and answer `unimplemented` until they land.
+// - **Same behaviour, same types.** The server maps each request to the
+//   ndjson twin's params type and each result from the twin's result type
+//   (`loams-agentd-connect` `map`), so the two wires cannot answer
+//   differently; Task 6's parity suite checks it.
+// - **Unstable.** Each service carries `ModuleOptions.unstable`, so `buf
+//   breaking` skips the package (buf.yaml) until SD1 Task 32.
+// - **Not in the SDK catalogue** (Q816). No method carries a
+//   `loams.options.v1.FacadeOptions`, so `protoc-gen-loams-facade` emits no
+//   module for it (`agentd_v1_not_in_sdk_catalogue`).
+// - **No idempotency keys.** The daemon serves one user; its mutations are
+//   checked by checksum, lease or id instead.
+// - **Timestamps** are `int64` milliseconds since the Unix epoch, named
+//   `*_ms`, as on the ndjson wire. Instants the ndjson wire writes as RFC 3339
+//   strings are converted to milliseconds.
+// - **Tagged unions.** Each internally tagged ndjson enum (`{"kind": …}`,
+//   `{"op": …}`, `{"status": …}`, …) is a message with a `oneof`, one field per
+//   variant.
+// - **Streams** are server streams. A `Watch*` stream sends the current state
+//   first, then a new state (or, for the transcript, a delta) on each change,
+//   as the ndjson `Watch*` methods do.
+// - **Optional lists.** Where the ndjson wire distinguishes a missing list
+//   from an empty one, the list is wrapped in a message so presence survives.
+// - **Errors** carry a `loams.errors.v1.ErrorInfo` whose `reason` is the
+//   ndjson `{err}` prefix (`docs/api/reasons.md`, "agentd reasons").
+package loams.agentd.v1;
+
+import "loams/options/v1/options.proto";
+
+// The daemon itself: who it is and the settings that are not per thread.
+service StudioService {
+  option (loams.options.v1.module) = {
+    name: "agentd.studio"
+    summary: "Loams Studio's daemon: identity, version, features and title settings."
+    unstable: true
+  };
+
+  // The daemon's identity, version and features (ndjson: `EngineInfo` plus
+  // what `Hello` reports).
+  rpc GetHost(GetHostRequest) returns (GetHostResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ndjson: `GetTitleSettings`.
+  rpc GetTitleSettings(GetTitleSettingsRequest) returns (GetTitleSettingsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // ndjson: `SetTitleSettings`. Answers the stored settings.
+  rpc SetTitleSettings(SetTitleSettingsRequest) returns (SetTitleSettingsResponse);
+}
+
+// An agent CLI the daemon can drive (ndjson `HarnessId`).
+enum HarnessId {
+  HARNESS_ID_UNSPECIFIED = 0;
+  HARNESS_ID_CLAUDE_CODE = 1;
+  HARNESS_ID_CODEX = 2;
+  HARNESS_ID_DEVIN = 3;
+  HARNESS_ID_GROK = 4;
+  HARNESS_ID_HERMES = 5;
+  HARNESS_ID_PI = 6;
+  HARNESS_ID_OPENCODE = 7;
+  HARNESS_ID_ANTIGRAVITY = 8;
+  HARNESS_ID_LOAMS_BOT = 9;
+  HARNESS_ID_MOCK = 10;
+  // A harness this daemon does not know (a newer client's).
+  HARNESS_ID_UNSUPPORTED = 11;
+}
+
+enum ReasoningLevel {
+  REASONING_LEVEL_UNSPECIFIED = 0;
+  REASONING_LEVEL_MINIMAL = 1;
+  REASONING_LEVEL_LOW = 2;
+  REASONING_LEVEL_MEDIUM = 3;
+  REASONING_LEVEL_HIGH = 4;
+  REASONING_LEVEL_XHIGH = 5;
+  REASONING_LEVEL_MAX = 6;
+  REASONING_LEVEL_ULTRA = 7;
+  REASONING_LEVEL_ULTRACODE = 8;
+  REASONING_LEVEL_ULTRATHINK = 9;
+}
+
+enum SandboxLevel {
+  SANDBOX_LEVEL_UNSPECIFIED = 0;
+  SANDBOX_LEVEL_READ_ONLY = 1;
+  SANDBOX_LEVEL_WORKSPACE_WRITE = 2;
+  SANDBOX_LEVEL_DANGER_FULL_ACCESS = 3;
+}
+
+// How the daemon runs (§50 §5.1).
+enum DaemonMode {
+  DAEMON_MODE_UNSPECIFIED = 0;
+  // A per-user OS service (systemd, launchd, a Windows service).
+  DAEMON_MODE_SERVICE = 1;
+  // A child of Loams Desktop.
+  DAEMON_MODE_CHILD = 2;
+}
+
+enum WorkspaceScope {
+  WORKSPACE_SCOPE_UNSPECIFIED = 0;
+  WORKSPACE_SCOPE_LOCAL = 1;
+}
+
+// Names the checkout a file call works in: a thread's, a project's, or a
+// checkout path inside a known project. The daemon resolves it and refuses
+// any other path (ndjson `WorkspaceTarget`).
+message WorkspaceTarget {
+  optional string chat_id = 1;
+  optional string space_id = 2;
+  optional string checkout_path = 3;
+}
+
+message Host {
+  // This engine's device id.
+  string device_id = 1;
+  WorkspaceScope workspace_scope = 2;
+  // The engine's capability strings (ndjson `EngineInfo.capabilities`).
+  repeated string capabilities = 3;
+  // The ndjson protocol (`AGENTD_PROTOCOL`).
+  uint32 protocol = 4;
+  string version = 5;
+  string build_sha = 6;
+  DaemonMode mode = 7;
+  uint32 pid = 8;
+  int64 started_at_ms = 9;
+  // The daemon's features, for example "studio.v1" (SD1 Shared contracts).
+  repeated string features = 10;
+}
+
+message GetHostRequest {}
+
+message GetHostResponse {
+  Host host = 1;
+}
+
+// The harness and model that name new threads (ndjson `TitleSettings`).
+message TitleSettings {
+  optional HarnessId harness = 1;
+  optional string model = 2;
+}
+
+message GetTitleSettingsRequest {}
+
+message GetTitleSettingsResponse {
+  TitleSettings settings = 1;
+}
+
+message SetTitleSettingsRequest {
+  TitleSettings settings = 1;
+}
+
+message SetTitleSettingsResponse {
+  TitleSettings settings = 1;
+}

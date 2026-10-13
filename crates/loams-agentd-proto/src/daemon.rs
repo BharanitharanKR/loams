@@ -27,6 +27,11 @@ pub struct Discovery {
     pub port: u16,
     pub started_at_ms: i64,
     pub mode: DaemonMode,
+    /// The loopback port of the `loams.agentd.v1` Connect listener
+    /// (`127.0.0.1`; design §53 §6.2, plan SD1 Task 5). Absent in a file an
+    /// older daemon wrote.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connect_port: Option<u16>,
 }
 
 #[cfg(test)]
@@ -42,13 +47,21 @@ mod tests {
             port: 50217,
             started_at_ms: 1_791_500_000_000,
             mode: DaemonMode::Service,
+            connect_port: Some(50218),
         };
         assert_eq!(
             serde_json::to_value(&discovery).expect("serialize"),
             serde_json::json!({
                 "protocol": 1, "version": "0.2.1", "pid": 41234, "port": 50217,
-                "startedAtMs": 1_791_500_000_000_i64, "mode": "service"
+                "startedAtMs": 1_791_500_000_000_i64, "mode": "service", "connectPort": 50218
             })
         );
+        // A file an older daemon wrote has no `connectPort`.
+        let older: Discovery = serde_json::from_value(serde_json::json!({
+            "protocol": 1, "version": "0.2.1", "pid": 41234, "port": 50217,
+            "startedAtMs": 1, "mode": "child"
+        }))
+        .expect("parse");
+        assert_eq!(older.connect_port, None);
     }
 }
