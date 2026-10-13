@@ -1550,3 +1550,43 @@ Fork PR ostrium-labs/loams-postgres#9 (branch `loams/nf1-compute`, LP-0011) merg
 6. **Timings (`heavy_stage_jobs_under_limit`)** go to each job's summary. The cold and warm durations per major and architecture, and the Q721 budget check, need the first runs (Actions: owner).
 7. **The smoke's storage image** is `vars.SMOKE_STORAGE_IMAGE`, defaulting to `loams-postgres-storage:edge` from Task 10.
 8. **LP-0032 takes effect with these images.** Our `compute_ctl` creates spec roles with least privilege (Task 4 ruling 4). Loams switches to them in Task 14.
+
+### Task 12 rulings (2026-10-13, at `dev` `4e9e715f`)
+
+Fork PR ostrium-labs/loams-postgres#10 (branch `loams/nf1-sign`, LP-0012) merged into `main` as `233f02d1`; CodeRabbit was rate-limited after the retry, so it was self-reviewed. Here: `scripts/nf1/verify-pins.sh`, `verify_pins.py`, `tests/test_verify_pins.sh` and `nf1-pins.yml`.
+
+1. **`loams-sign.yml`** (reusable; inputs `image`, `digest`, `sources`, `pg-version`, `debian`):
+   - `cosign sign --yes` (keyless);
+   - `actions/attest-build-provenance`, pushed to the registry;
+   - an SPDX SBOM **per platform** (Syft through `anchore/sbom-action` with a `platform:` config; both are attested against the index digest with `actions/attest-sbom`);
+   - with `sources: true`, the compute sources: `oras attach --artifact-type application/vnd.loams.sources.v1 … sources.tar:application/x-tar`, and the attached artifact is signed too.
+
+   Callers: `loams-release.yml` (Task 13) and `loams-build-tools.yml`, whose inline attestation (Task 9) moved here. Edge builds keep their inline provenance attestation and stay unsigned.
+2. **The sources before Task 20 (deviation).** The plan lists `sources.tar` "from the manifest", but the manifest (Task 20) does not exist yet. `scripts/loams/compute-sources.py` appends two generated stages to the compute Dockerfile instead.
+   - **`loams-sources`** takes, from every `-src` stage (38 today), the downloaded tarballs and the patches applied (`<stage>--<file>`), plus Postgres' tree as `postgres-v<N>.tar.gz`. It adds `SHA256SUMS`, and `GIT-SOURCES` listing each `git clone` with its URL and tag (plv8's stage already packs its clone as `plv8.tar.gz`).
+   - **`loams-sources-out`** outputs those files alone.
+
+   Every GPL component (PostGIS, pgRouting, postgresql-unit; SFCGAL is LGPL) arrives as a tarball. A new `-src` stage is covered without an edit. Tests: `test_compute_sources.py`. Task 20 can switch the list to the manifest.
+3. **`verify-pins.sh`** (a wrapper for `verify_pins.py`, stdlib).
+   - For each pin with a fork source:
+     - **`cosign verify`** with the shared identity: issuer `https://token.actions.githubusercontent.com`, and `^https://github.com/ostrium-labs/loams-postgres/\.github/workflows/loams-(release|sign)\.yml@refs/heads/main$`.
+     - **`gh attestation verify --owner ostrium-labs`.**
+     - **The SBOM attestation** (`--predicate-type https://spdx.dev/Document/v2.3`):
+       - SPDX expressions are evaluated: `OR` needs one allowed side, `AND` needs all;
+       - CDDL fails anywhere, Debian packages included;
+       - outside `pkg:deb/` packages, only the plan's allowlist plus deny.toml's `0BSD`, `CC0-1.0` and `Unicode-3.0` pass;
+       - Debian packages' licences are listed separately;
+       - `NOASSERTION` is counted, not refused.
+     - **For `compute-v<N>`:** `oras discover` must find the sources artifact.
+   - `mirror:` pins print a `::notice::` and call no tool. Today's pin file passes this way.
+4. **Tests:** `test_verify_pins.sh` uses stub `cosign`, `gh` and `oras` that answer from fixtures. The stub cosign applies the script's `--certificate-identity-regexp` itself, so the identity is what gets tested. Cases:
+   - `unsigned_digest_fails_verify`;
+   - `wrong_identity_fails_verify`: a `dev` branch, the old name `ostrium-labs/neon`, and `loams-build-storage.yml` all fail;
+   - `sbom_has_no_forbidden_licence`: CDDL, SSPL, CDDL in a Debian package, and a missing SBOM all fail; `MIT OR SSPL-1.0` passes;
+   - `gpl_sources_attached`;
+   - `mirror_pin_skipped_with_notice`;
+   - `signed_pins_pass`.
+
+   Two mutations (accepting any branch; ignoring CDDL) each made the suite fail.
+5. **`nf1-pins.yml`.** The `checks` job installs cosign v3.0.6 (`sigstore/cosign-installer` v4.1.2) and oras (`setup-oras` v2.0.1), then runs `verify-pins.sh` and `test_verify_pins.sh`. These are steps in the existing job, not a separate `verify` job, to keep to one runner slot, as its comment asks.
+6. **Not run against real images:** no fork image is signed until Actions are enabled (owner). The Fulcio `job_workflow_ref` claim the plan asks to confirm (that a reusable workflow's certificate names `loams-sign.yml`) is checked on the first release.
