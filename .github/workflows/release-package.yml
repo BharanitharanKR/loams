@@ -234,7 +234,7 @@ jobs:
           set -euo pipefail
           out="$RUNNER_TEMP/packages"
           mkdir -p "$out"
-          nfpm package --version | tail -1
+          nfpm --version | tail -1
 
           args=(--version "$VERSION" --binary target/release/loams
                 --format deb --format rpm --format archlinux
