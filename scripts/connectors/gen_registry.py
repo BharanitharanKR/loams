@@ -287,7 +287,9 @@ STARRED_RUNTIME: dict[str, tuple[str, str]] = {
     "mysql": ("native", "loams_flow::connectors::mysql"),  # §8 #3, mysql_async
     "debezium-postgres": ("debezium", "io.debezium.connector.postgresql.PostgresConnector"),  # §8 #4
     "debezium-mysql": ("debezium", "io.debezium.connector.mysql.MySqlConnector"),  # §8 #5
-    "s3": ("native", "loams_flow::connectors::s3"),  # §8 #6, object_store 0.14
+    # §8 #6. CN2 Task 13 built the objects family on object_store 0.13.2 (R0.13); R13.1
+    # points the ★ at it, as CN1's loams_flow::connectors::s3 was never built.
+    "s3": ("native", "loams_connector_objects::s3"),
     "iceberg": ("native", "loams_flow::connectors::iceberg"),  # §8 #7, iceberg-rust 0.10
     "parquet": ("native", "loams_flow::formats::parquet"),  # §8 #8
     "avro": ("native", "loams_flow::formats::avro"),  # §8 #9
@@ -378,6 +380,7 @@ HANDWRITTEN_PREVIEW = set(HANDWRITTEN_UNSTARRED)
 HAND_WRITTEN_FAMILY_ROWS: dict[str, tuple[str, ...]] = {
     "kafka": ("azure-event-hubs", "redpanda"),  # R9.7
     "postgres": ("aurora", "cockroachdb", "pgvector"),  # R10.9
+    "objects": ("adls-gen2", "azure-blob", "cloudflare-r2", "gcs", "minio-rustfs", "sftp"),  # R13.1
     "kv": ("cassandra", "dynamodb", "dynamodb-streams", "redis-streams", "valkey"),  # R14.1
     "search": ("opensearch", "qdrant"),  # R15.5
     "brokers": (  # R18.1

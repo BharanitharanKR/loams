@@ -1,16 +1,19 @@
 activemq-jms
 adbc
+adls-gen2
 arrow
 aurora
 avro
 aws-sns
 aws-sqs
+azure-blob
 azure-event-grid
 azure-event-hubs
 azure-service-bus
 bigquery
 cassandra
 clickhouse
+cloudflare-r2
 cockroachdb
 debezium-mysql
 debezium-postgres
@@ -19,6 +22,7 @@ dynamodb-streams
 elasticsearch
 eventbridge
 forgejo
+gcs
 google-pub-sub
 grafeo
 http
@@ -27,6 +31,7 @@ itsplane
 jdbc
 kafka
 kinesis
+minio-rustfs
 mqtt
 mysql
 nats
@@ -42,6 +47,7 @@ redis
 redis-streams
 redpanda
 s3
+sftp
 snowflake
 valkey
 webhooks

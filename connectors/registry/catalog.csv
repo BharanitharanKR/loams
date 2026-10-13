@@ -76,7 +76,7 @@ hive,Hive,warehouse,P3,false,planned,camel,sql,Y,Y,,Y,,,kerb|basic,sql|jdbc,,,,,
 spark,Spark,warehouse,P3,false,planned,openapi,openapi:spark,Y,Y,,Y,,,none,,plugin-spark,,,,
 flink,Flink,warehouse,P3,false,planned,camel,flink,,Y,,Y,,,none,flink,plugin-flink,,,,
 teradata,Teradata,warehouse,P3,false,planned,camel,sql,Y,Y,,Y,,,basic,sql|jdbc,,,,,
-s3,S3,object-storage,P1,true,preview,native,loams_flow::connectors::s3,Y,Y,Y,Y,,Y,iam,aws2-s3,plugin-aws (s3),native:loams_flow::connectors::s3,native:loams_flow::connectors::s3,,iggy:s3:sink:CN2 Task 13
+s3,S3,object-storage,P1,true,preview,native,loams_connector_objects::s3,Y,Y,Y,Y,,Y,iam,aws2-s3,plugin-aws (s3),native:loams_connector_objects::s3,native:loams_connector_objects::s3,,iggy:s3:sink:CN2 Task 13
 minio-rustfs,MinIO / RustFS,object-storage,P2,false,planned,native,loams_connector_objects::s3,Y,Y,,Y,,Y,key,minio|aws2-s3,plugin-minio,native:loams_connector_objects::s3,native:loams_connector_objects::s3,minio-rustfs,
 cloudflare-r2,Cloudflare R2,object-storage,P2,false,planned,native,loams_connector_objects::s3,Y,Y,,Y,,,key,aws2-s3,plugin-cloudflare,native:loams_connector_objects::s3,native:loams_connector_objects::s3,cloudflare-r2,
 gcs,GCS,object-storage,P2,false,planned,native,loams_connector_objects::gcs,Y,Y,Y,Y,,Y,sa,google-storage,plugin-gcp (gcs),native:loams_connector_objects::gcs,native:loams_connector_objects::gcs,,
