@@ -9,6 +9,13 @@ name: Fabric
 # Jobs owned by CN2 (plan 2026-10-10-cn2-connectors):
 #   sdk-unit         — fmt, clippy and tests of `loams-connector-sdk` (Task 4)
 #                      and `loams-connector-http`'s profile engine (Task 7)
+#   connectors-p2    — family suites against open images in
+#                      deploy/fabric/compose.yaml (Task 6; Task 9 adds the
+#                      Kafka shard, on the ★ `connectors` profile)
+#   connectors-ci-only — family suites against `ci-service` images (Task 6;
+#                      Task 9 adds Redpanda and the Event Hubs emulator)
+#   connectors-nightly — family suites against real cloud accounts, with
+#                      repository secrets (Task 6; Task 9 adds Event Hubs)
 # Jobs FL1 owns and adds here separately: connectors-it (the ★ contract suites
 # against the `connectors` compose profile, from CN1 Tasks 3–13), and the
 # `fabric` workspace's own build/publish steps. Keep this file minimal and
@@ -23,6 +30,9 @@ on:
     # "both run weekly and on demand, not on every PR"), so they cannot be a
     # pull-request gate. Off the hour ci.yml's nightly runs on (17 2 * * *).
     - cron: "41 3 * * 1"
+    # Nightly: the real-account connector suites (CN2 OR-3, Task 6's
+    # `connectors-nightly`). The drift job keys on the weekly schedule only.
+    - cron: "23 4 * * *"
 
 permissions:
   contents: read
@@ -51,6 +61,7 @@ jobs:
       drift: ${{ steps.filter.outputs.drift }}
       connect-routes: ${{ steps.filter.outputs.connect-routes }}
       sdk: ${{ steps.filter.outputs.sdk }}
+      kafka: ${{ steps.filter.outputs.kafka }}
     steps:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
@@ -97,6 +108,20 @@ jobs:
               - "fabric/Cargo.lock"
               - "fabric/crates/loams-connector-sdk/**"
               - "fabric/crates/loams-connector-http/**"
+            # The Kafka-protocol family (CN2 Task 9): its crate, the SDK it
+            # builds on, its profiles and manifests, and the compose services.
+            kafka:
+              - *toolchain
+              - "fabric/Cargo.toml"
+              - "fabric/Cargo.lock"
+              - "fabric/crates/loams-connector-sdk/**"
+              - "fabric/crates/loams-connector-kafka/**"
+              - "connectors/profiles/redpanda.yaml"
+              - "connectors/profiles/azure-event-hubs.yaml"
+              - "connectors/registry/kafka.yaml"
+              - "connectors/registry/redpanda.yaml"
+              - "connectors/registry/azure-event-hubs.yaml"
+              - "deploy/fabric/**"
 
   # CN1 owns this job. FL1 owns the `lints_match_root` test that proves the
   # fabric workspace's lint table equals the root workspace's; it runs in FL1's
@@ -163,6 +188,135 @@ jobs:
         working-directory: fabric
         run: cargo test -p loams-connector-sdk -p loams-connector-http --locked
 
+  # CN2 Task 6's job, sharded by family; Task 9 adds the Kafka shard: the
+  # family's suites against Apache Kafka itself (OR-2), with the crate's unit,
+  # mock-cluster and registry tests alongside. librdkafka and OpenSSL are
+  # built from source by the crate (R9.1): the runner's C toolchain and perl.
+  connectors-p2:
+    name: connector suites, open images (${{ matrix.family }})
+    needs: changes
+    if: ${{ !cancelled() && github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.kafka == 'true') }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - family: kafka
+            crate: loams-connector-kafka
+            profile: connectors
+            services: kafka
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fabric -> target
+          key: connectors-${{ matrix.family }}
+      - name: services
+        run: docker compose -f deploy/fabric/compose.yaml --profile ${{ matrix.profile }} up -d --wait ${{ matrix.services }}
+      - name: unit, mock and real-system tests
+        working-directory: fabric
+        env:
+          LOAMS_CONNECTORS_STACK: "1"
+        run: cargo test -p ${{ matrix.crate }} --locked
+      - name: service logs
+        if: failure()
+        run: docker compose -f deploy/fabric/compose.yaml --profile ${{ matrix.profile }} logs --tail 300
+      - name: services down
+        if: always()
+        run: docker compose -f deploy/fabric/compose.yaml --profile ${{ matrix.profile }} down -v
+
+  # CN2 Task 6's job for `ci-service` images (OR-3): proprietary or
+  # source-available systems that run in CI only, never in an image Loams
+  # builds. Task 9: Redpanda (BSL) and the Event Hubs emulator (Microsoft
+  # EULA, with Azurite).
+  connectors-ci-only:
+    name: connector suites, CI-only images (${{ matrix.family }})
+    needs: changes
+    if: ${{ !cancelled() && github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.kafka == 'true') }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - family: redpanda
+            crate: loams-connector-kafka
+            services: redpanda
+            tests: --test redpanda
+          - family: azure-event-hubs
+            crate: loams-connector-kafka
+            services: eventhubs
+            tests: --test eventhubs
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fabric -> target
+          key: connectors-${{ matrix.family }}
+      # Started before the build, so the emulator's slow start overlaps it.
+      - name: services
+        run: docker compose -f deploy/fabric/compose.yaml --profile connectors-ci-only up -d ${{ matrix.services }}
+      - name: compile the tests
+        working-directory: fabric
+        run: cargo test -p ${{ matrix.crate }} --locked ${{ matrix.tests }} --no-run
+      - name: wait for the services
+        run: |
+          case "${{ matrix.services }}" in
+            redpanda)
+              docker compose -f deploy/fabric/compose.yaml --profile connectors-ci-only up -d --wait redpanda ;;
+            eventhubs)
+              # The emulator image has no health check.
+              for i in $(seq 1 90); do
+                if docker compose -f deploy/fabric/compose.yaml --profile connectors-ci-only logs eventhubs 2>&1 | grep -q "Emulator Service is Successfully Up"; then exit 0; fi
+                sleep 2
+              done
+              echo "the Event Hubs emulator did not come up"; exit 1 ;;
+          esac
+      - name: real-system tests
+        working-directory: fabric
+        env:
+          LOAMS_CONNECTORS_CI_ONLY_STACK: "1"
+        run: cargo test -p ${{ matrix.crate }} --locked ${{ matrix.tests }}
+      - name: service logs
+        if: failure()
+        run: docker compose -f deploy/fabric/compose.yaml --profile connectors-ci-only logs --tail 300
+      - name: services down
+        if: always()
+        run: docker compose -f deploy/fabric/compose.yaml --profile connectors-ci-only down -v
+
+  # CN2 Task 6's scheduled job against real accounts (OR-3; OR-23's
+  # `stable`). Task 9: a real Event Hubs namespace through its Kafka endpoint.
+  # Without its secrets a suite says so and does not count.
+  connectors-nightly:
+    name: connector suites, real accounts (${{ matrix.family }})
+    if: ${{ !cancelled() && ((github.event_name == 'schedule' && github.event.schedule == '23 4 * * *') || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - family: azure-event-hubs
+            crate: loams-connector-kafka
+            tests: --test eventhubs
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fabric -> target
+          key: connectors-nightly-${{ matrix.family }}
+      - name: real-account tests
+        working-directory: fabric
+        env:
+          LOAMS_EVENTHUBS_NAMESPACE: ${{ secrets.LOAMS_EVENTHUBS_NAMESPACE }}
+          LOAMS_EVENTHUBS_CONNECTION_STRING: ${{ secrets.LOAMS_EVENTHUBS_CONNECTION_STRING }}
+          LOAMS_EVENTHUBS_HUB: ${{ vars.LOAMS_EVENTHUBS_HUB || 'loams-ci' }}
+          LOAMS_EVENTHUBS_GROUP: ${{ vars.LOAMS_EVENTHUBS_GROUP || '$Default' }}
+        run: |
+          if [ -z "$LOAMS_EVENTHUBS_NAMESPACE" ]; then
+            echo "skipped: no Event Hubs namespace configured (does not count toward stable)"
+            exit 0
+          fi
+          cargo test -p ${{ matrix.crate }} --locked ${{ matrix.tests }}
+
   # CN1 Task 2's drift checks (design §33 CN-R1): the appendix is regenerated
   # from connectors/registry/catalog.csv and diffed against the design doc, and
   # the Camel and Kestra columns are checked against those projects' own
@@ -171,7 +325,7 @@ jobs:
   # is not there.
   connectors-drift:
     name: connector catalog drift (Camel, Kestra, appendix)
-    if: ${{ !cancelled() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ !cancelled() && ((github.event_name == 'schedule' && github.event.schedule == '41 3 * * 1') || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-24.04
     env:
       # A literal path under the runner's temp directory, not `runner.temp` and

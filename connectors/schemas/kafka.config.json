@@ -96,6 +96,10 @@
           "description": "The CA bundle that verifies the broker, as PEM.",
           "type": "string"
         },
+        "cert_pem": {
+          "description": "The client certificate for mTLS, as PEM (not a secret).",
+          "type": "string"
+        },
         "key_pem": {
           "description": "The client private key for mTLS, as PEM. Resolved through the secret store (D189).",
           "type": "string",
@@ -107,6 +111,51 @@
           "default": true
         }
       }
+    },
+    "delivery": {
+      "description": "The sink's delivery (CN2 Task 9, OR-7): effectively_once is the idempotent producer; exactly_once writes each batch and its checkpoint in one Kafka transaction (transactional.id loams-<ns>-<instance>-<split>, checkpoint in checkpoint_topic). A target profile that narrows sink.transactional (Azure Event Hubs) refuses exactly_once.",
+      "type": "string",
+      "enum": ["effectively_once", "exactly_once"],
+      "default": "effectively_once"
+    },
+    "checkpoint_topic": {
+      "description": "The compacted topic the transactional sink keeps its checkpoint in (key <ns>/<instance>/<split>).",
+      "type": "string",
+      "minLength": 1,
+      "default": "__loams_checkpoints"
+    },
+    "create_checkpoint_topic": {
+      "description": "Create checkpoint_topic (compacted, one partition) when it is missing.",
+      "type": "boolean",
+      "default": true
+    },
+    "max_record_bytes": {
+      "description": "The largest record the sink writes (message.max.bytes); a larger event goes to the DLQ as poison.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 1000000
+    },
+    "transaction_timeout_ms": {
+      "description": "transaction.timeout.ms of the transactional producer.",
+      "type": "integer",
+      "minimum": 1000,
+      "default": 60000
+    },
+    "recover_timeout_ms": {
+      "description": "How long the transactional sink's recovery may read checkpoint_topic.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 60000
+    },
+    "poll_wait_ms": {
+      "description": "How long the source waits for a first record before it reports nothing.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 100
+    },
+    "pipeline": {
+      "description": "The connector SDK's per-instance pipeline overrides (max_batch_rows, max_batch_bytes, linger_ms, max_in_flight_batches, memory_budget_bytes, checkpoint_interval_ms, retry).",
+      "type": "object"
     },
     "schema_registry": {
       "description": "Confluent registry, for the Avro wire format at the Kafka boundary (D356). Optional because the manifest declares schema.registry: optional (§33 §4).",
