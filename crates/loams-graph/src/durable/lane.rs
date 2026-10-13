@@ -34,7 +34,7 @@ use grafeo_engine::transaction::IsolationLevel;
 
 use super::idempotency::Outcome;
 use super::{Commit, ConsistencyToken, Durable, Isolation, WriteOptions};
-use crate::changeset::capture::CdcCapture;
+use crate::changeset::capture::{CdcCapture, CommitEvents};
 use crate::changeset::{Counters, GraphChangeSet, GraphRecord, encode};
 use crate::classify::Access;
 use crate::engine::{
@@ -496,6 +496,8 @@ fn run(
     job: &LaneJob,
 ) -> Result<(Vec<GraphResult>, crate::changeset::capture::Captured, u64), Step> {
     let mut session = graph.session_for(job.access);
+    let commit = CommitEvents::default();
+    commit.listen(&session);
     let level = match job.options.isolation {
         Isolation::Snapshot => IsolationLevel::SnapshotIsolation,
         Isolation::Serializable => IsolationLevel::Serializable,
@@ -525,11 +527,29 @@ fn run(
             other => Step::Fatal(other),
         });
     }
-    // Under the lane no other explicit transaction commits, so the current epoch is this one's
-    // (R0.5).
-    let commit_epoch = graph.db().current_epoch().as_u64();
+    // The engine hands the commit's epoch and events to the session's listener as it commits
+    // (Grafeo fork patch LG-0001): the epoch is the transaction's own (R0.5) and the events cannot
+    // have been pruned from the CDC log before the capture reads them (R9.9).
+    let (commit_epoch, events) = commit.take().ok_or_else(|| {
+        Step::Fatal(GraphError::engine(
+            "change capture: the engine reported no commit",
+        ))
+    })?;
+    // A failed capture, injected for one graph by name (`durability.rs`,
+    // `a_refused_capture_reloads_and_hides`). The engine bug that used to provoke one (R9.8) is
+    // fixed by the fork's LG-0004.
+    #[cfg(feature = "failpoints")]
+    if fail::eval("loams_graph::capture", |target| {
+        target.as_deref() == Some(graph.name())
+    })
+    .unwrap_or(false)
+    {
+        return Err(Step::Fatal(GraphError::engine(
+            "change capture: injected failure",
+        )));
+    }
     let captured = CdcCapture::new(graph.db())
-        .and_then(|capture| capture.capture(commit_epoch))
+        .and_then(|capture| capture.capture_events(events))
         .map_err(Step::Fatal)?;
     let results = results
         .into_iter()

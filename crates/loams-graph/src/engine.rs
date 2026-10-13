@@ -2007,11 +2007,11 @@ fn poisoned(what: &str) -> GraphError {
 /// Runs one GQL statement on a session, the way Grafeo's own `execute_language` routes it:
 /// `execute` when there are no parameters, `execute_with_params` otherwise.
 ///
-/// The split matters for the time limit (review fix 1, I1): `execute_with_params` runs through
-/// the query processor with no deadline, so Grafeo's `query_timeout` never applies to it; only
-/// `execute` honours it. A statement with parameters therefore has no engine backstop until
-/// Grafeo threads the deadline through (upstream ask, R0.8; Task 6's Loams-side deadline still
-/// answers the client). Both paths enforce the session's role.
+/// Both paths enforce the session's role, and both honour Grafeo's `query_timeout` as the
+/// engine backstop (R0.8): upstream 0.5.43 ran `execute_with_params` with no deadline, which the
+/// fork's patch LG-0002 fixes. The split stays because `execute` is the path with the plan cache
+/// and the session and schema commands (R0.10), and `execute_with_params` the only one that binds
+/// parameters.
 pub(crate) fn run_on_session(
     session: &grafeo::Session,
     statement: &str,
