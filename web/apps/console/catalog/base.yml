@@ -24,9 +24,3 @@
     notify: false
 - id: deployments
   name: '@loams/plugin-deployments'
-
-# A sample third-party plugin: it runs in a sandboxed frame, and only when
-# the instance sets the `console.third_party_plugins` feature (off until the
-# unified auth plan can vend attenuated tokens; the demo mock turns it on).
-- id: hello
-  name: '@loams/example-plugin-hello'
