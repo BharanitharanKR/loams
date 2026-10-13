@@ -1,12 +1,10 @@
 // The Live admin client the Deployments and Functions views use.
 //
-// LV1 Task 10 adds `loams.live.v1.LiveAdminService { Deploy; ListDeployments;
-// GetDeployment; ActivateDeployment; GetIndexStatus; TailLogs }`. It is not in
-// proto/loams/live yet, so there are no generated stubs: this file defines the
-// typed interface the views need, shaped after the plan's records (Tasks 4-7,
-// 10), and `createMockAdminApi` serves it from fixtures. When the service lands,
-// a `createLiveAdminApi(transport)` over `@loams/proto` replaces the mock in
-// index.tsx and nothing in the views changes.
+// `loams.live.v1.LiveAdminService` (LV1 Task 10; proto/loams/live/v1/admin.proto)
+// is served on the engine's main port behind its authentication (LV1 Task 12).
+// This file defines the plain types the views need; `createLiveAdminApi`
+// (admin-client.ts) maps the generated stubs onto them, and `createMockAdminApi`
+// serves them from fixtures for the tests.
 
 import type { Json } from './value.js';
 
@@ -32,8 +30,6 @@ export interface Deployment {
   state: DeploymentState;
   /** `Failed { reason }`. */
   failureReason?: string;
-  /** Set when this deployment was activated by a rollback (Task 7). */
-  rolledBackFrom?: string;
 }
 
 /** The validator vocabulary of Task 4 (`v.null|int64|...|id(table)`). */
@@ -59,7 +55,10 @@ export interface DeploymentDetail {
   functions: FunctionInfo[];
 }
 
-/** One worker (one per node, app and deployment, Task 5). */
+/**
+ * One worker (one per node, app and deployment, Task 5). The engine has no RPC for
+ * this yet (worker health is LV1 Task 27's metrics), so only the fixtures have it.
+ */
 export interface WorkerHealth {
   node: string;
   deploymentId: string;
@@ -73,15 +72,24 @@ export interface WorkerHealth {
 
 export type LogLevel = 'log' | 'debug' | 'info' | 'warn' | 'error';
 
-/** One `logs::Ring` line (Task 10): `{ts, request_id, function, level, line}`. */
+/** One `logs::Ring` line (Task 10): `LogEntry { ts_ms, request_id, function, deployment, level, line }`. */
 export interface LogLine {
   ts: number;
   requestId: string;
   function: string;
+  /** The deployment that ran the call; absent for a built-in (`_system:*`) function. */
+  deployment?: string;
   level: LogLevel;
   line: string;
   truncated?: boolean;
 }
+
+/** Lines the engine's log ring overwrote before this tail read them (a slow follower). */
+export interface LogsSkipped {
+  skipped: number;
+}
+
+export const isSkipped = (e: LogLine | LogsSkipped): e is LogsSkipped => 'skipped' in e;
 
 /** `TailLogs{follow, since_ms, function?}` (Task 10). */
 export interface TailLogsRequest {
@@ -102,13 +110,18 @@ export class DeployConflictError extends Error {
 export interface LiveAdminApi {
   /** True while the API is served from fixtures rather than the engine. */
   readonly mocked: boolean;
-  /** Newest first. */
+  /** Newest first, every page. */
   listDeployments(signal?: AbortSignal): Promise<Deployment[]>;
   getDeployment(id: string, signal?: AbortSignal): Promise<DeploymentDetail>;
-  /** Activate an earlier (or later) deployment; a rollback is this (Task 7). */
+  /**
+   * Activate an earlier (or later) deployment; a rollback is this (Task 7). The engine
+   * accepts any recorded deployment, a failed one too; the page offers superseded ones.
+   */
   activateDeployment(id: string, expectedActive: string | undefined): Promise<Deployment>;
-  workerHealth(signal?: AbortSignal): Promise<WorkerHealth[]>;
-  tailLogs(req: TailLogsRequest, signal: AbortSignal): AsyncIterable<LogLine>;
+  /** Absent while the engine has no RPC for it (LV1 Task 27). */
+  workerHealth?(signal?: AbortSignal): Promise<WorkerHealth[]>;
+  /** Oldest first; with `follow`, then new lines as they come. */
+  tailLogs(req: TailLogsRequest, signal: AbortSignal): AsyncIterable<LogLine | LogsSkipped>;
 }
 
 /** A validator as source text, in the `v.*` builder form the SDK uses. */

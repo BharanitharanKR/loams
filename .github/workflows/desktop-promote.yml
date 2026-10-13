@@ -1,4 +1,4 @@
-name: Desktop update feed (promote)
+name: Desktop promote
 
 # Copies the update manifests of a PUBLISHED desktop-vX.Y.Z release onto the rolling `desktop-latest`
 # release, which is what LOAMS_UPDATE_FEED points at
@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   promote:
-    name: promote to desktop-latest
+    name: Promote to desktop-latest
     if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'desktop-v')
     # Same protected environment as the release: a reviewer approves what clients are offered.
     environment: desktop-release

@@ -325,11 +325,12 @@ fn no_secret_in_rendered_kube_objects() {
     let config = json!({
         "host": "db.example.com", "database": "orders", "user": "app",
         "password": "pg-creds/password",
-        "tls": {"key_pem": "pg-creds/tls_key"}
+        "auth": "iam", "aws": {"region": "eu-west-1", "access_key_id": "pg-creds/aws_key_id", "secret_access_key": "pg-creds/aws_secret"}
     });
     let refs = [
         SecretRef::new("pg-creds/password"),
-        SecretRef::new("pg-creds/tls_key"),
+        SecretRef::new("pg-creds/aws_key_id"),
+        SecretRef::new("pg-creds/aws_secret"),
         SecretRef::new("api-token"),
     ];
     let mounts = secret_mounts(&refs, "/etc/loams/secrets").unwrap();
@@ -339,8 +340,8 @@ fn no_secret_in_rendered_kube_objects() {
         json!({"file": "/etc/loams/secrets/pg-creds/password"})
     );
     assert_eq!(
-        rendered_config["tls"]["key_pem"],
-        json!({"file": "/etc/loams/secrets/pg-creds/tls_key"})
+        rendered_config["aws"]["secret_access_key"],
+        json!({"file": "/etc/loams/secrets/pg-creds/aws_secret"})
     );
     let np = render_network_policy(
         &EgressPolicy::for_cluster(&ClusterNetworks::default()),

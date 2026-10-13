@@ -31,7 +31,7 @@ pub use blob::{BlobError, BlobId, BlobStore, LpkWriter, Put, StoreBlobStore};
 pub use catalog::{
     BucketRepoCatalog, CatalogError, Created, RepoCatalog, RepoLifecycle, RepoRecord,
 };
-pub use checkpointer::{CheckpointPolicy, create_repo, state_at};
+pub use checkpointer::{CheckpointPolicy, create_repo, latest_state, state_at};
 pub use clock::{Clock, SystemClock};
 pub use error::IdError;
 pub use fork::{ForkError, fork_repo, open_fork_odb};

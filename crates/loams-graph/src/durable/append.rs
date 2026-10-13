@@ -268,6 +268,26 @@ impl GraphLog {
         })
     }
 
+    /// One fetch of `stream` from `offset`: the records there, or, at its end, those committed
+    /// within `max_wait` (none when nothing was). A follower's tail (GR1 Task 15).
+    pub(crate) async fn fetch(
+        &self,
+        stream: StreamId,
+        offset: u64,
+        max_wait: Duration,
+    ) -> Result<loams_log::FetchResponse, LogError> {
+        self.inner
+            .reader
+            .fetch(FetchRequest {
+                stream,
+                partition: 0,
+                offset,
+                max_bytes: REPLAY_FETCH_BYTES,
+                max_wait,
+            })
+            .await
+    }
+
     /// Every record of `stream` in `from..to`, in offset order. Blocks.
     pub(crate) fn read(
         &self,

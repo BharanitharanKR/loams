@@ -59,4 +59,4 @@ The `auth` suite runs `none`, and `basic` as an ACL user.
 
 ## Registry status
 
-`connectors/registry/redis-streams.yaml` is still the generated `planned` stub. The manifest this connector ships is `fabric/crates/loams-connector-kv/manifests/redis-streams.yaml`. CN2 Task 2 installs it (ruling R14.1).
+`connectors/registry/redis-streams.yaml` is the hand-written manifest this connector ships, with its config schema `connectors/schemas/redis-streams.config.json` (ruling R14.1). It stays `planned` until the family's suites are green in CI (OR-23).

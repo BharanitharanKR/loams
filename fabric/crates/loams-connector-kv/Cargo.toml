@@ -63,8 +63,7 @@ http.workspace = true
 
 loams-flow-conformance = { path = "../loams-flow-conformance", optional = true }
 loams-flow = { path = "../loams-flow", optional = true }
-# The proposed manifests under `manifests/` are YAML, read as `loams-flow`
-# reads the registry.
+# The family's registry manifests are YAML, read as `loams-flow` reads them.
 serde_norway = { workspace = true, optional = true }
 
 [dev-dependencies]

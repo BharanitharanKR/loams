@@ -281,11 +281,15 @@ HAND_ASSIGNED_IDS: dict[str, str] = {
 # paths, so they are written verbatim rather than derived.
 STARRED_RUNTIME: dict[str, tuple[str, str]] = {
     "kafka": ("native", "loams_flow::connectors::kafka"),  # §8 #1, rdkafka 0.39
-    "postgresql": ("native", "loams_flow::connectors::postgres"),  # §8 #2, tokio-postgres + ADBC
+    # §8 #2. CN1's loams_flow::connectors::postgres was never built; CN2 Task 10 built the
+    # Postgres family on the SDK (R0.2), and R10.9 asks Task 2 to point the ★ at it.
+    "postgresql": ("native", "loams_connector_postgres::PostgresFactory"),
     "mysql": ("native", "loams_flow::connectors::mysql"),  # §8 #3, mysql_async
     "debezium-postgres": ("debezium", "io.debezium.connector.postgresql.PostgresConnector"),  # §8 #4
     "debezium-mysql": ("debezium", "io.debezium.connector.mysql.MySqlConnector"),  # §8 #5
-    "s3": ("native", "loams_flow::connectors::s3"),  # §8 #6, object_store 0.14
+    # §8 #6. CN2 Task 13 built the objects family on object_store 0.13.2 (R0.13); R13.1
+    # points the ★ at it, as CN1's loams_flow::connectors::s3 was never built.
+    "s3": ("native", "loams_connector_objects::s3"),
     "iceberg": ("native", "loams_flow::connectors::iceberg"),  # §8 #7, iceberg-rust 0.10
     "parquet": ("native", "loams_flow::formats::parquet"),  # §8 #8
     "avro": ("native", "loams_flow::formats::avro"),  # §8 #9
@@ -301,7 +305,10 @@ STARRED_RUNTIME: dict[str, tuple[str, str]] = {
     "webhooks": ("native", "loams_flow::connectors::webhook"),  # §8 #17, signed webhook routes
     "jdbc": ("camel", "jdbc"),  # §8 #18, the jdbc/sql components in loams-connect
     "kinesis": ("native", "loams_flow::connectors::kinesis"),  # §8 #19, aws-sdk-kinesis
-    "redis": ("native", "loams_flow::connectors::redis"),  # §8 #20, the redis crate
+    # §8 #20, the redis crate. CN1 Task 13 never built loams_flow::connectors::redis, so
+    # CN2 Task 14 built it in the kv family (R0.2, R14.2); the registry follow-up points
+    # the ★ there, as Task 8 would have.
+    "redis": ("native", "loams_connector_kv::redis::RedisFactory"),
     "opentelemetry": ("native", "loams_flow::connectors::otlp"),  # §8 #21, OTLP receiver in ingest
     # Not in §8: Appendix A's A.8 lists the Camel runtime itself as a P1 row. It is a
     # runtime, not a Loams-owned connector, so it is not starred (D358 names 21 Loams-owned
@@ -361,7 +368,31 @@ HANDWRITTEN_PREVIEW = set(HANDWRITTEN_UNSTARRED)
 # stamp `preview` on A.3's Grafeo row and disagree with Appendix A, so the two sets are kept
 # apart: HANDWRITTEN_PREVIEW decides the status a hand-written row is given, and this set
 # decides which hand-written ids the check will accept at all.
-HAND_WRITTEN_UNSTARRED_IDS: set[str] = set(HANDWRITTEN_UNSTARRED) | {"grafeo"}
+#
+# CN2's family tasks (9 to 20) left their P2 rows' manifests and config schemas to Task 2,
+# which assigned the runtimes (NATIVE_FIRST below); the registry follow-up then replaced
+# each generated stub with the hand-written manifest its family built, keyed here by
+# family. They are unstarred and stay `planned` until their suites are green in CI
+# (OR-23): hand-written is not preview, as Grafeo's row already showed. Their CSV cells
+# (runtime, ref, profile, fallback) are still NATIVE_FIRST's, so `--check` and
+# loams-flow's `csv_and_manifests_agree` compare the two. loams-flow's registry test
+# names the same ids (`HAND_WRITTEN_UNSTARRED_P2`).
+HAND_WRITTEN_FAMILY_ROWS: dict[str, tuple[str, ...]] = {
+    "kafka": ("azure-event-hubs", "redpanda"),  # R9.7
+    "postgres": ("aurora", "cockroachdb", "pgvector"),  # R10.9
+    "objects": ("adls-gen2", "azure-blob", "cloudflare-r2", "gcs", "minio-rustfs", "sftp"),  # R13.1
+    "kv": ("cassandra", "dynamodb", "dynamodb-streams", "redis-streams", "valkey"),  # R14.1
+    "search": ("opensearch", "qdrant"),  # R15.5
+    "brokers": (  # R18.1
+        "activemq-jms", "azure-service-bus", "mqtt", "nats", "pulsar", "rabbitmq-amqp", "websocket",
+    ),
+    "cloud": ("aws-sns", "aws-sqs", "azure-event-grid", "eventbridge", "google-pub-sub"),  # R19.6
+}
+HAND_WRITTEN_UNSTARRED_IDS: set[str] = (
+    set(HANDWRITTEN_UNSTARRED)
+    | {"grafeo"}
+    | {cid for ids in HAND_WRITTEN_FAMILY_ROWS.values() for cid in ids}
+)
 
 # Which component in connectors/licences.toml each CSV runtime kind means, for the check that
 # every runtime the CSV names has a licence-gate entry. `native` and `openapi` are Loams's
@@ -479,14 +510,14 @@ NATIVE_FIRST: dict[str, dict] = {
             "transactional sink and no __loams_checkpoints topic (CN2 R0.19, R7.3, R9.7)",
         ],
     },
-    # Task 10 — the Postgres family.
+    # Task 10 — the Postgres family: one PostgresFactory serves the four manifests (R10.9).
     "cockroachdb": {
-        "ref": family_ref("postgres", "postgres"),
+        "ref": family_ref("postgres", "PostgresFactory"),
         "profile": "cockroachdb",
         "position": "changefeed-cursor",
     },
     "aurora": {
-        "ref": family_ref("postgres", "postgres"),
+        "ref": family_ref("postgres", "PostgresFactory"),
         "profile": "aurora-postgres",
         "position": "pg-lsn or mysql-gtid, by engine",
         "notes": [
@@ -495,7 +526,7 @@ NATIVE_FIRST: dict[str, dict] = {
             "loams_connector_mysql::mysql with profile `aurora-mysql` (CN2 Tasks 10, 11)",
         ],
     },
-    "pgvector": {"ref": family_ref("postgres", "postgres"), "profile": "pgvector"},
+    "pgvector": {"ref": family_ref("postgres", "PostgresFactory"), "profile": "pgvector"},
     # Task 11 — the MySQL family (R0.7: MariaDB GTID in the family crate).
     "mariadb": {
         "ref": family_ref("mysql", "mysql"),
@@ -521,12 +552,16 @@ NATIVE_FIRST: dict[str, dict] = {
     "azure-blob": {"ref": family_ref("objects", "azure_blob")},
     "adls-gen2": {"ref": family_ref("objects", "adls_gen2")},
     "sftp": {"ref": family_ref("objects", "sftp")},
-    # Task 14 — key-value and wide-column.
-    "valkey": {"ref": family_ref("kv", "redis"), "profile": "valkey"},
-    "redis-streams": {"ref": family_ref("kv", "redis_streams")},
-    "dynamodb": {"ref": family_ref("kv", "dynamodb"), "position": "dynamodb-stream-sequence"},
-    "dynamodb-streams": {"ref": family_ref("kv", "dynamodb_streams"), "position": "dynamodb-stream-sequence"},
-    "cassandra": {"ref": family_ref("kv", "cassandra")},
+    # Task 14 — key-value and wide-column. The refs name the factories the family's
+    # manifests name (R14.1): one RedisFactory serves redis, valkey and redis-streams.
+    "valkey": {"ref": family_ref("kv", "redis::RedisFactory"), "profile": "valkey"},
+    "redis-streams": {"ref": family_ref("kv", "redis::RedisFactory")},
+    "dynamodb": {"ref": family_ref("kv", "dynamodb::DynamoDbFactory"), "position": "dynamodb-stream-sequence"},
+    "dynamodb-streams": {
+        "ref": family_ref("kv", "ddbstreams::DynamoDbStreamsFactory"),
+        "position": "dynamodb-stream-sequence",
+    },
+    "cassandra": {"ref": family_ref("kv", "cassandra::CassandraFactory")},
     # Task 15 — search and vector.
     "opensearch": {"ref": family_ref("search", "elasticsearch"), "profile": "opensearch"},
     "qdrant": {"ref": family_ref("search", "qdrant")},
@@ -1177,6 +1212,15 @@ def check(rows_from_doc: list[dict], problems: list[str], notes: list[str]) -> N
                 f"handwritten.txt: {cid!r} is neither starred nor one of the hand-written "
                 "unstarred rows, so it is a generated stub's id (CN1 Ruling 1, D628, D634)"
             )
+    # The other way round for CN2's family rows: one missing from handwritten.txt would have
+    # its hand-written manifest and config schema overwritten by the next generator run.
+    for family, ids in sorted(HAND_WRITTEN_FAMILY_ROWS.items()):
+        for cid in ids:
+            if cid not in handwritten:
+                problems.append(
+                    f"{cid}: the {family} family's hand-written manifest is not in "
+                    "handwritten.txt, so the generator would overwrite it"
+                )
 
     # D353: a manifest declares the shape of its instance's settings, so every config.$ref must
     # resolve to a file that exists — the hand-written schemas and the generated placeholders

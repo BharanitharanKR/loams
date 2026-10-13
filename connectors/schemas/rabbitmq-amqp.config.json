@@ -1,9 +1,127 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/rabbitmq-amqp.config.json",
-  "title": "RabbitMQ / AMQP instance config (placeholder)",
-  "description": "Placeholder for a RabbitMQ / AMQP instance's settings. It is filled in when this connector is built: CN2 for the P2 rows, as first-party native connectors with declared fallbacks (CN2 OR-1, OR-4), and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "RabbitMQ (AMQP 0-9-1) connector instance config (loams.flow/v1)",
+  "description": "One RabbitMQ instance's settings (CN2 Task 18, loams_connector_brokers::amqp091): the broker URL, credentials by secret name, the queues a source consumes (one split each) and where a sink publishes. Deliveries are acknowledged only after the Fabric acknowledges them; the sink waits for publisher confirms.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "url"
+  ],
+  "properties": {
+    "url": {
+      "description": "amqp://host:5672/<vhost> or amqps://host:5671/<vhost>, without credentials.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^amqps?://[^@/]+(/.*)?$"
+    },
+    "username": {
+      "description": "The user name (not a secret).",
+      "type": "string",
+      "minLength": 1
+    },
+    "password": {
+      "description": "The password. A secret name, resolved through the namespace's secret store (D189); the value is never stored here.",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "tls": {
+      "description": "TLS settings: a CA bundle to trust instead of the webpki roots, and a client certificate for mTLS.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ca_pem": {
+          "description": "PEM CA bundle (not a secret).",
+          "type": "string",
+          "minLength": 1
+        },
+        "cert_pem": {
+          "description": "PEM client certificate chain for mTLS (not a secret).",
+          "type": "string",
+          "minLength": 1
+        },
+        "key_pem": {
+          "description": "The client's PEM private key, for mTLS. A secret name, resolved through the namespace's secret store (D189); the value is never stored here.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "source": {
+      "description": "The source: queues to consume.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "queues": {
+          "description": "Queues to consume; one split per queue.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "prefetch": {
+          "description": "basic.qos prefetch; by default the pipeline's in-flight budget.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "max_batch": {
+          "description": "Messages per batch at most (the pipeline's budget may be smaller).",
+          "type": "integer",
+          "minimum": 1,
+          "default": 1000
+        },
+        "poll_wait_ms": {
+          "description": "How long one read waits for the first message before reporting nothing.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 200
+        }
+      },
+      "required": [
+        "queues"
+      ]
+    },
+    "sink": {
+      "description": "The sink: where to publish.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exchange": {
+          "description": "The exchange; \"\" is the default exchange, which routes by queue name.",
+          "type": "string",
+          "default": ""
+        },
+        "routing_key": {
+          "description": "A fixed routing key; without it, the event's subject.",
+          "type": "string",
+          "minLength": 1
+        },
+        "persistent": {
+          "description": "delivery_mode 2 (persistent).",
+          "type": "boolean",
+          "default": true
+        },
+        "mandatory": {
+          "description": "Ask the broker to return an unroutable message; it is then poison.",
+          "type": "boolean",
+          "default": true
+        },
+        "confirm_timeout_ms": {
+          "description": "How long a batch waits for its publisher confirms.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 30000
+        }
+      }
+    },
+    "pipeline": {
+      "description": "The SDK's per-instance pipeline overrides (`PipelineConfig::with_overrides`): max_batch_rows, max_batch_bytes, linger_ms, max_in_flight_batches, memory_budget_bytes, checkpoint_interval_ms and retry. The broker-side window (prefetch, credit, Receive Maximum, max_ack_pending, receiver queue) is derived from them unless set.",
+      "type": "object"
+    }
+  }
 }

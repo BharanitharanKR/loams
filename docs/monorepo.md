@@ -90,7 +90,7 @@ The plugins' `bi.v1` namespace is preserved, with reproducible generation and dr
 
 ## CI and releases
 
-Root `.github/workflows/monorepo.yml` runs path-selected JS/plugin and native checks with separate Linux/macOS jobs and an always-running **monorepo CI summary**. Desktop CI currently covers Linux minimal checks/focused tests; its comprehensive core tests are manual opt-in. The imported desktop's former macOS/Windows CI coverage is not yet restored. macOS CI runs mobile iOS tests, not desktop tests. Existing engine CI remains intact, updated to the root JavaScript lockfile. Nested mobile workflows are historical templates, not active workflows.
+Root `.github/workflows/monorepo.yml` runs path-selected JS/plugin and native checks with separate Linux/macOS jobs and an always-running **Web and mobile required** gate. Desktop CI currently covers Linux minimal checks/focused tests; its comprehensive core tests are manual opt-in. The imported desktop's former macOS/Windows CI coverage is not yet restored. macOS CI runs mobile iOS tests, not desktop tests. Existing engine CI remains intact, updated to the root JavaScript lockfile. Nested mobile workflows are historical templates, not active workflows.
 
 No inherited desktop publishing, updater, signing, or Cloudflare deployment workflow was enabled. Existing engine releases and console deployment retain their existing behavior. Branch protection should require the new summary in addition to existing required engine checks; repository settings cannot be changed by these local file edits.
 

@@ -68,6 +68,11 @@ export async function clearSessionCookies(
 }
 
 export interface ServerHandlerDeps {
+	/**
+	 * Stops the requests still running against the server being left, so none of them stores
+	 * its cookies again after the clear. Optional: the unit tests without a protocol omit it.
+	 */
+	abortInFlight?: () => Promise<void>;
 	/** Clears the session of the server at `origin` (the one being left). */
 	clearCookies: (origin: string) => Promise<void>;
 	reload: () => void;
@@ -94,8 +99,10 @@ export function serverHandlers(registry: ServerRegistry, d: ServerHandlerDeps) {
 			const r = registry.activate(id);
 			if (!r.ok) return r;
 			// The old server's session must not ride along to the new one.
-			if (leaving.id !== id)
+			if (leaving.id !== id) {
+				await d.abortInFlight?.().catch(() => undefined);
 				await d.clearCookies(leaving.url).catch(() => undefined);
+			}
 			d.reload();
 			return r;
 		},
