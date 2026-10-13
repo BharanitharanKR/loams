@@ -168,3 +168,101 @@ async fn concurrent_pushes_never_lose_an_acked_push() {
     }
     env.ok(&check, &["fsck", "--no-progress"]);
 }
+
+/// §36 risk 8 (plan GT1 Task 14): serverless helpers and a server's
+/// sequencer write one repository at once. Each is fenced by the other's
+/// segments; every acknowledged write lands, and the log stays one line.
+#[tokio::test(flavor = "multi_thread")]
+async fn helper_and_server_race_one_repo() {
+    use loams_git::{
+        Expect, IdemKey, NamespaceId, ObjectId, Principal, ReadAt, RefLog, RefName, RefTxn,
+        RefUpdate, RepoId, RepoSequencers, SystemClock,
+    };
+
+    let Some(env) = Env::new("helper_and_server_race_one_repo") else {
+        return;
+    };
+    let env = Arc::new(env);
+    let repo = repo_id("race");
+    let clones = setup(&env, &repo).await;
+    let base = env.rev(&clones[0], "HEAD");
+    let base_oid = ObjectId::from_hex(base.as_bytes()).expect("oid");
+    let heads: Vec<String> = clones
+        .iter()
+        .enumerate()
+        .map(|(i, dir)| env.commit(dir, &format!("h{i}.txt"), "x\n"))
+        .collect();
+    let server = RepoSequencers::new(env.store(), Arc::new(SystemClock));
+    let id = RepoId::parse(&repo).expect("id");
+    let server_writes = {
+        let server = server.clone();
+        let id = id.clone();
+        tokio::spawn(async move {
+            for i in 0..30u32 {
+                let txn = RefTxn {
+                    key: IdemKey::parse(&format!("server-{i}")).expect("key"),
+                    request_digest: [i as u8; 32],
+                    updates: vec![RefUpdate {
+                        name: RefName::parse(&format!("refs/heads/s{i}")).expect("ref"),
+                        expect: Expect::Absent,
+                        new: Some(base_oid),
+                    }],
+                    packs: Vec::new(),
+                    principal: Principal::parse("server").expect("principal"),
+                    scope: None,
+                    trace: None,
+                    push_options: Vec::new(),
+                };
+                server
+                    .commit(NamespaceId(1), "local/1", &id, txn)
+                    .await
+                    .expect("server commit");
+            }
+        })
+    };
+    let pushes = {
+        let env = Arc::clone(&env);
+        let clones = clones.clone();
+        tokio::task::spawn_blocking(move || {
+            all_at_once(move |i| {
+                env.git(
+                    &clones[i],
+                    &["push", "-q", "origin", &format!("HEAD:refs/heads/h{i}")],
+                )
+            })
+        })
+        .await
+        .expect("pushers")
+    };
+    server_writes.await.expect("server");
+    for (i, out) in pushes.iter().enumerate() {
+        assert!(
+            out.status.success(),
+            "pusher {i}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    let log = server
+        .get(NamespaceId(1), "local/1", &id)
+        .await
+        .expect("log");
+    let snapshot = log.snapshot(ReadAt::Latest).await.expect("snapshot");
+    for i in 0..30 {
+        assert_eq!(
+            snapshot
+                .refs
+                .get(&RefName::parse(&format!("refs/heads/s{i}")).expect("ref")),
+            Some(&base_oid)
+        );
+    }
+    for (i, head) in heads.iter().enumerate() {
+        assert_eq!(
+            env.remote_ref(&repo, &format!("refs/heads/h{i}")).as_ref(),
+            Some(head)
+        );
+    }
+    // One line: every segment from 1 to the tail is there, each once.
+    let events = env.events(&repo).await;
+    assert_eq!(events.len(), 1 + 30 + PUSHERS, "seed push, server, helpers");
+    server.shutdown().await;
+}

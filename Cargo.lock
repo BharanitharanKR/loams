@@ -8134,6 +8134,7 @@ dependencies = [
  "loams-meta-conformance",
  "loams-store",
  "object_store 0.14.2",
+ "postcard",
  "proptest",
  "prost 0.14.4",
  "prost-build",
