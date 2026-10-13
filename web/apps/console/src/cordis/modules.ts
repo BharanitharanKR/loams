@@ -5,10 +5,15 @@
 
 import type { ModuleTable } from '@loams/console-host';
 import helloPkg from '@loams/example-plugin-hello/package.json';
+import accountPkg from '@loams/plugin-account/package.json';
+import agentsPkg from '@loams/plugin-agents/package.json';
 import approvalsPkg from '@loams/plugin-approvals/package.json';
+import auditPkg from '@loams/plugin-audit/package.json';
 import deploymentsPkg from '@loams/plugin-deployments/package.json';
 import identityPkg from '@loams/plugin-identity/package.json';
 import namespacesPkg from '@loams/plugin-namespaces/package.json';
+import orgPkg from '@loams/plugin-org/package.json';
+import projectsPkg from '@loams/plugin-projects/package.json';
 import rpcPkg from '@loams/plugin-rpc/package.json';
 import shellPkg from '@loams/plugin-shell/package.json';
 import stackStatusPkg from '@loams/plugin-stack-status/package.json';
@@ -21,6 +26,12 @@ export const modules: ModuleTable = {
   '@loams/plugin-namespaces': () => import('@loams/plugin-namespaces'),
   '@loams/plugin-approvals': () => import('@loams/plugin-approvals'),
   '@loams/plugin-deployments': () => import('@loams/plugin-deployments'),
+  // The console's own pages on loams.auth.v1 and loams.admin.v1 (API2 Task 10).
+  '@loams/plugin-account': () => import('@loams/plugin-account'),
+  '@loams/plugin-org': () => import('@loams/plugin-org'),
+  '@loams/plugin-projects': () => import('@loams/plugin-projects'),
+  '@loams/plugin-agents': () => import('@loams/plugin-agents'),
+  '@loams/plugin-audit': () => import('@loams/plugin-audit'),
 };
 
 export const manifests: unknown[] = [
@@ -31,6 +42,11 @@ export const manifests: unknown[] = [
   namespacesPkg,
   approvalsPkg,
   deploymentsPkg,
+  accountPkg,
+  orgPkg,
+  projectsPkg,
+  agentsPkg,
+  auditPkg,
   helloPkg,
 ];
 

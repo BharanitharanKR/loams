@@ -1,0 +1,77 @@
+{
+  "name": "@loams/plugin-audit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The org's audit log, live over AuditService/WatchAuditEvents (API2 Task 10, AP1a Task 5).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.tsx",
+      "default": "./src/index.tsx"
+    },
+    "./package.json": "./package.json"
+  },
+  "loams": {
+    "plugin": {
+      "kind": "console",
+      "entry": ".",
+      "tier": "first-party",
+      "inject": [
+        "router",
+        "slots",
+        "session",
+        "rpc.projects",
+        "rpc.audit"
+      ],
+      "provides": [],
+      "slots": [
+        "console.page",
+        "shell.nav.section"
+      ],
+      "permissions": [],
+      "requires": {
+        "console": "^0.1.0",
+        "api": [
+          "loams.admin.v1"
+        ]
+      },
+      "editions": [
+        "oss",
+        "desktop",
+        "cloud"
+      ]
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "2.16.0",
+    "@connectrpc/connect": "2.2.0",
+    "@connectrpc/connect-query": "catalog:",
+    "@loams/admin-ui": "workspace:*",
+    "@loams/console-host": "workspace:*",
+    "@loams/cordis": "workspace:*",
+    "@loams/proto": "workspace:*",
+    "@loams/slots": "workspace:*",
+    "@loams/ui": "workspace:*",
+    "@tanstack/react-query": "catalog:",
+    "lucide-react": "catalog:"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  },
+  "devDependencies": {
+    "@testing-library/react": "16.3.3",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "jsdom": "30.1.1",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "typescript": "5.9.3",
+    "vitest": "5.0.3"
+  }
+}
