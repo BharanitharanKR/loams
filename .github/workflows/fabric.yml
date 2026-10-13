@@ -30,15 +30,6 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
-  schedule:
-    # Weekly: the two catalog drift scripts need the network (CN1 plan Task 2:
-    # "both run weekly and on demand, not on every PR"), so they cannot be a
-    # pull-request gate. Off the hour ci.yml's nightly runs on (17 2 * * *).
-    - cron: "41 3 * * 1"
-    # Daily: connectors-nightly against real accounts (CN2 Task 6). A
-    # different cron string, so each scheduled job can tell its run apart
-    # (`github.event.schedule`).
-    - cron: "23 4 * * *"
 
 permissions:
   contents: read
@@ -54,7 +45,7 @@ env:
 jobs:
   # Which parts of the tree a pull request, or a push to dev (against the
   # previous dev head), touches; the jobs below run there only when their filter
-  # matches, and on a push to main, a dispatch or the schedule they all run
+  # matches, and on a push to main or a dispatch (the nightly) they all run
   # (this job is skipped there). A draft pull request skips the connector
   # stacks until it is ready for review (or carries the `ci:full` label). dorny/paths-filter is MIT-licensed; pinned to
   # v4.0.3, as in ci.yml.
@@ -67,6 +58,8 @@ jobs:
       pull-requests: read
     outputs:
       heavy: ${{ github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+      # 'true' on a pull request into main: the full tier.
+      full: ${{ github.base_ref == 'main' }}
       fabric: ${{ steps.filter.outputs.fabric }}
       drift: ${{ steps.filter.outputs.drift }}
       connect-routes: ${{ steps.filter.outputs.connect-routes }}
@@ -306,7 +299,7 @@ jobs:
   connectors-p2:
     name: "Connectors: ${{ matrix.family }}"
     needs: changes
-    if: ${{ !cancelled() && github.event_name != 'schedule' && (needs.changes.result == 'skipped' || needs.changes.outputs.families != '[]') && needs.changes.outputs.heavy != 'false' }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.families != '[]'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -379,7 +372,7 @@ jobs:
   connectors-ci-only:
     name: "Connectors: ${{ matrix.family }} (CI-only images)"
     needs: changes
-    if: ${{ !cancelled() && github.event_name != 'schedule' && (needs.changes.result == 'skipped' || needs.changes.outputs.families != '[]') && needs.changes.outputs.heavy != 'false' }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.families != '[]'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -453,7 +446,7 @@ jobs:
   # block below in step with systems.toml.
   connectors-nightly:
     name: "Connectors: ${{ matrix.family }} (nightly)"
-    if: ${{ !cancelled() && ((github.event_name == 'schedule' && github.event.schedule == '23 4 * * *') || github.event_name == 'workflow_dispatch') }}
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -595,7 +588,7 @@ jobs:
   connectors-alerts:
     name: "Connectors: alerts and activity"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.alerts == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.alerts == 'true'))) }}
     runs-on: ubuntu-24.04
     env:
       PROMETHEUS_VERSION: "3.5.0"
@@ -637,8 +630,7 @@ jobs:
   # is not there.
   connectors-drift:
     name: "Connectors: catalog drift"
-    # The weekly cron only; the daily one is connectors-nightly's.
-    if: ${{ !cancelled() && ((github.event_name == 'schedule' && github.event.schedule == '41 3 * * 1') || github.event_name == 'workflow_dispatch') }}
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     env:
       # A literal path under the runner's temp directory, not `runner.temp` and

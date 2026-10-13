@@ -10,22 +10,9 @@ name: Git
 
 on:
   workflow_dispatch:
-  push:
-    branches: [dev]
-    paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - "deny.toml"
-      - "crates/loams-git*/**"
-      - "crates/loams-fs/**"
-      - "crates/loams-store/**"
-      - "crates/loams-cloudevents/**"
-      - "bench/git-wal/**"
-      - "scripts/git/**"
-      - ".github/workflows/gt1.yml"
-      - ".github/workflows/gt1-nightly.yml"
+  # Full tier: pull requests into main (the release gate); the nightly dispatches it on dev.
   pull_request:
+    branches: [main]
     paths:
       - "Cargo.toml"
       - "Cargo.lock"

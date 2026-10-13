@@ -29,6 +29,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
+      # 'true' on a pull request into main or a push to main: the full tier.
+      full: ${{ github.base_ref == 'main' || github.ref == 'refs/heads/main' }}
       web: ${{ steps.filter.outputs.web }}
       plugins: ${{ steps.filter.outputs.plugins }}
       android: ${{ steps.filter.outputs.android }}
@@ -176,7 +178,7 @@ jobs:
   mobile-mock:
     name: "Mobile: mock"
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.mock == 'true'
+    if: github.event_name == 'workflow_dispatch' || (needs.changes.outputs.full == 'true' && needs.changes.outputs.mock == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -203,7 +205,7 @@ jobs:
   mobile-android:
     name: "Mobile: Android"
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.android == 'true'
+    if: github.event_name == 'workflow_dispatch' || (needs.changes.outputs.full == 'true' && needs.changes.outputs.android == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -242,7 +244,7 @@ jobs:
   mobile-conformance:
     name: "Mobile: conformance"
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.conformance == 'true'
+    if: github.event_name == 'workflow_dispatch' || (needs.changes.outputs.full == 'true' && needs.changes.outputs.conformance == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -295,7 +297,7 @@ jobs:
     name: "Mobile: iOS"
     needs: changes
     # macOS: a draft pull request waits until it is ready for review (or labelled ci:full).
-    if: github.event_name == 'workflow_dispatch' || (needs.changes.outputs.ios == 'true' && (github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full')))
+    if: github.event_name == 'workflow_dispatch' || (needs.changes.outputs.full == 'true' && needs.changes.outputs.ios == 'true' && (github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full')))
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -382,6 +384,9 @@ jobs:
                   selected = name == 'changes' or manual or filters.get(selections[name]) == 'true'
                   if name == 'mobile-ios' and os.environ['DRAFT_LIGHT'] == 'true':
                       selected = False
+                  # The mobile builds are the full tier (pull requests into main).
+                  if name in ('mobile-mock', 'mobile-android', 'mobile-conformance', 'mobile-ios') and filters.get('full') != 'true':
+                      selected = selected and manual
                   if result not in ('success', 'skipped') or (selected and result != 'success'):
                       failed.append(f'{name}: {result}')
           if failed:

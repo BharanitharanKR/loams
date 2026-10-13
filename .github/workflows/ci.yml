@@ -1,24 +1,30 @@
 name: CI
 
-# What runs (CI optimisation, 2026-10-13):
-# - pull request: only the jobs whose paths changed; a draft runs the light jobs
-#   only (label `ci:full`, then a push, runs everything). Docs-only changes still
-#   run the required CI summary.
-# - push to dev: only the jobs whose paths changed since the previous dev head
-#   (the pull request already ran them on the same commit; this keeps dev's
-#   caches warm for the next pull requests).
-# - push to main, the nightly schedule and a manual dispatch: everything.
+# What runs (owner, 2026-10-13): two tiers.
+# - fast tier, a pull request into dev and a push to dev: the jobs whose paths
+#   changed among DCO, repository checks, fmt and clippy, the Rust tests, the
+#   console, cargo-deny, the protos and the seven supported SDKs. A draft skips
+#   the heavy ones of those (label `ci:full`, then a push, runs them).
+# - full tier, a pull request into main (the dev -> main release gate): also
+#   the engine, TiKV, Live, durable, Graph, fuzzing, specs, browser, Dapr and
+#   the wave 2 and 3 SDKs, by path.
+# - push to main, a manual dispatch and the nightly on dev (nightly.yml):
+#   everything, regardless of paths.
 on:
   push:
     branches: [main, dev]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  # nightly.yml dispatches this on dev every night with nightly: true (a
+  # `schedule:` here would run on main, the default branch): the long
+  # simulation sweep, the tail-merge property test, the TiKV suites and the
+  # durable store on TiDB, on top of everything.
   workflow_dispatch:
-  schedule:
-    # Nightly: the long simulation sweep (M0.4 plan Task 6), the tail-merge
-    # property test (M1.2 plan Task 15), the TiKV suites (R1 plan Task 1) and
-    # the durable store on TiDB (D1 plan Task 5).
-    - cron: "17 2 * * *"
+    inputs:
+      nightly:
+        description: "Run the nightly-only suites too."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -52,6 +58,8 @@ jobs:
       # 'false' on a draft pull request without the `ci:full` label: the heavy
       # jobs (Blacksmith and macOS) wait until it is ready for review.
       heavy: ${{ github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+      # 'true' on a pull request into main: the full tier.
+      full: ${{ github.base_ref == 'main' }}
       rust: ${{ steps.filter.outputs.rust }}
       engine: ${{ steps.filter.outputs.engine }}
       es: ${{ steps.filter.outputs.es }}
@@ -547,7 +555,7 @@ jobs:
   agentd:
     name: "Agentd: guard, clippy and tests"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.agentd == 'true') && needs.changes.outputs.heavy != 'false' }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.agentd == 'true'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
     # PTY, shell and harness-fixture tests; a hung one fails the job.
     timeout-minutes: 60
@@ -588,7 +596,7 @@ jobs:
   feature-tests:
     name: "Rust: feature tests"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.rust == 'true') && needs.changes.outputs.heavy != 'false' }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.rust == 'true'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
     steps:
       - uses: actions/checkout@v7
@@ -668,7 +676,7 @@ jobs:
   qdrant-client:
     name: "Engine: Qdrant client"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.engine == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.engine == 'true'))) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -707,7 +715,7 @@ jobs:
   es-client:
     name: "Engine: Elasticsearch client"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.es == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.es == 'true'))) }}
     runs-on: ubuntu-24.04
     # The Elasticsearch 8.19 oracle (plan M1.5 Task 11, owner ruling
     # O-M15-6): a CI-only test oracle, never vendored or shipped (R14).
@@ -749,7 +757,7 @@ jobs:
   tla:
     name: "Spec: TLA+"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.spec == 'true' || needs.changes.outputs.router == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.spec == 'true' || needs.changes.outputs.router == 'true'))) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -764,10 +772,10 @@ jobs:
       - name: checker self-test
         run: scripts/spec/check.sh --self-test
       - name: specs (PR bounds)
-        if: github.event_name != 'schedule'
+        if: ${{ inputs.nightly != true }}
         run: scripts/spec/check.sh --all
       - name: specs (nightly bounds)
-        if: github.event_name == 'schedule'
+        if: ${{ inputs.nightly == true }}
         run: scripts/spec/check.sh --all --nightly
       - name: PgDog provenance
         run: scripts/spec/provenance.sh
@@ -778,7 +786,7 @@ jobs:
   lean:
     name: "Spec: Lean proofs"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.lean == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.lean == 'true'))) }}
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -820,7 +828,7 @@ jobs:
   specview:
     name: "Spec: specview"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.specview == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.specview == 'true'))) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -855,7 +863,7 @@ jobs:
   sim:
     name: "Engine: simulation"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sim == 'true') && needs.changes.outputs.heavy != 'false' }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sim == 'true'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -865,15 +873,15 @@ jobs:
         with:
           save-if: ${{ github.event_name != 'pull_request' }}
       - name: simulation (32 seeds x 300 steps)
-        if: github.event_name != 'schedule'
+        if: ${{ inputs.nightly != true }}
         run: cargo test -p loams-sim --release --locked
       - name: simulation (1000 seeds x 300 steps, nightly)
-        if: github.event_name == 'schedule'
+        if: ${{ inputs.nightly == true }}
         run: 'cargo test -p loams-sim --release --locked --test it sim::'
         env:
           SIM_SEEDS: "1000"
       - name: tail merge against a full rebuild (256 cases, nightly)
-        if: github.event_name == 'schedule'
+        if: ${{ inputs.nightly == true }}
         run: 'cargo test -p loams-query --release --locked --test it tail_vs_rebuild::'
         env:
           TAIL_PROP_CASES: "256"
@@ -885,7 +893,7 @@ jobs:
   tikv:
     name: "TiKV: suites"
     needs: changes
-    if: ${{ !cancelled() && github.event_name != 'schedule' && (needs.changes.result == 'skipped' || (github.base_ref == 'main' && needs.changes.outputs.tikv == 'true')) }}
+    if: ${{ !cancelled() && inputs.nightly != true && (needs.changes.result == 'skipped' || (github.base_ref == 'main' && needs.changes.outputs.tikv == 'true')) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -960,7 +968,7 @@ jobs:
   live-embedded:
     name: "Live: embedded store"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.live-embedded == 'true') && needs.changes.outputs.heavy != 'false' }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.live-embedded == 'true'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
     steps:
       - uses: actions/checkout@v7
@@ -982,7 +990,7 @@ jobs:
   # tasks add.
   tikv-nightly:
     name: "TiKV: suites (nightly)"
-    if: github.event_name == 'schedule'
+    if: ${{ inputs.nightly == true }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -1086,7 +1094,7 @@ jobs:
   durable:
     name: "Durable: SQLite linearizability"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'schedule' && (needs.changes.result == 'skipped' || needs.changes.outputs.durable == 'true')) && needs.changes.outputs.heavy != 'false' }}
+    if: ${{ !cancelled() && (inputs.nightly != true && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.durable == 'true')))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
     timeout-minutes: 120
     env:
@@ -1128,7 +1136,7 @@ jobs:
   # job summary shows how many there were.
   durable-tidb:
     name: "Durable: TiDB (nightly)"
-    if: github.event_name == 'schedule'
+    if: ${{ inputs.nightly == true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
@@ -1496,7 +1504,7 @@ jobs:
         run: swift test
       # API2 Task 19: a nightly failure opens or updates one issue per language.
       - name: open or update the nightly-failure issue
-        if: ${{ failure() && github.event_name == 'schedule' }}
+        if: ${{ failure() && inputs.nightly == true }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/sdk-nightly-issue.sh swift
@@ -1655,7 +1663,7 @@ jobs:
           }
       # API2 Task 19: a nightly failure opens or updates one issue per language.
       - name: open or update the nightly-failure issue
-        if: ${{ failure() && github.event_name == 'schedule' }}
+        if: ${{ failure() && inputs.nightly == true }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/sdk-nightly-issue.sh cpp
@@ -1717,7 +1725,7 @@ jobs:
           }
       # API2 Task 19: a nightly failure opens or updates one issue per language.
       - name: open or update the nightly-failure issue
-        if: ${{ failure() && github.event_name == 'schedule' }}
+        if: ${{ failure() && inputs.nightly == true }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/sdk-nightly-issue.sh csharp
@@ -1729,7 +1737,7 @@ jobs:
   sdk-java:
     name: "SDK: Java"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk-java == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sdk-java == 'true'))) }}
     runs-on: ubuntu-24.04
     # issues: write is for the nightly-failure issue step only (schedule only).
     permissions:
@@ -1746,7 +1754,7 @@ jobs:
         run: ./build.sh test
       # API2 Task 19: a nightly failure opens or updates one issue per language.
       - name: open or update the nightly-failure issue
-        if: ${{ failure() && github.event_name == 'schedule' }}
+        if: ${{ failure() && inputs.nightly == true }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/sdk-nightly-issue.sh java
@@ -1754,7 +1762,7 @@ jobs:
   sdk-kotlin:
     name: "SDK: Kotlin"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk-kotlin == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sdk-kotlin == 'true'))) }}
     runs-on: ubuntu-24.04
     # issues: write is for the nightly-failure issue step only (schedule only).
     permissions:
@@ -1780,7 +1788,7 @@ jobs:
         run: ./build.sh test
       # API2 Task 19: a nightly failure opens or updates one issue per language.
       - name: open or update the nightly-failure issue
-        if: ${{ failure() && github.event_name == 'schedule' }}
+        if: ${{ failure() && inputs.nightly == true }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/sdk-nightly-issue.sh kotlin
@@ -1788,7 +1796,7 @@ jobs:
   sdk-ruby:
     name: "SDK: Ruby"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk-ruby == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sdk-ruby == 'true'))) }}
     runs-on: ubuntu-24.04
     # issues: write is for the nightly-failure issue step only (schedule only).
     permissions:
@@ -1806,7 +1814,7 @@ jobs:
         run: bundle exec rake test
       # API2 Task 19: a nightly failure opens or updates one issue per language.
       - name: open or update the nightly-failure issue
-        if: ${{ failure() && github.event_name == 'schedule' }}
+        if: ${{ failure() && inputs.nightly == true }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/sdk-nightly-issue.sh ruby
@@ -1814,7 +1822,7 @@ jobs:
   sdk-php:
     name: "SDK: PHP"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk-php == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sdk-php == 'true'))) }}
     runs-on: ubuntu-24.04
     # issues: write is for the nightly-failure issue step only (schedule only).
     permissions:
@@ -1835,7 +1843,7 @@ jobs:
         run: vendor/bin/phpunit
       # API2 Task 19: a nightly failure opens or updates one issue per language.
       - name: open or update the nightly-failure issue
-        if: ${{ failure() && github.event_name == 'schedule' }}
+        if: ${{ failure() && inputs.nightly == true }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/sdk-nightly-issue.sh php
@@ -1843,7 +1851,7 @@ jobs:
   sdk-dart:
     name: "SDK: Dart"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk-dart == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sdk-dart == 'true'))) }}
     runs-on: ubuntu-24.04
     # issues: write is for the nightly-failure issue step only (schedule only).
     permissions:
@@ -1865,7 +1873,7 @@ jobs:
         run: dart test
       # API2 Task 19: a nightly failure opens or updates one issue per language.
       - name: open or update the nightly-failure issue
-        if: ${{ failure() && github.event_name == 'schedule' }}
+        if: ${{ failure() && inputs.nightly == true }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/sdk-nightly-issue.sh dart
@@ -1874,7 +1882,7 @@ jobs:
   sdk-objc:
     name: "SDK: Objective-C"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk-objc == 'true') && needs.changes.outputs.heavy != 'false' }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sdk-objc == 'true'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: macos-latest
     # issues: write is for the nightly-failure issue step only (schedule only).
     permissions:
@@ -1890,7 +1898,7 @@ jobs:
         run: swift test --disable-swift-testing
       # API2 Task 19: a nightly failure opens or updates one issue per language.
       - name: open or update the nightly-failure issue
-        if: ${{ failure() && github.event_name == 'schedule' }}
+        if: ${{ failure() && inputs.nightly == true }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/ci/sdk-nightly-issue.sh objc
@@ -1903,7 +1911,7 @@ jobs:
   graph:
     name: "Graph: tests"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.graph == 'true') && needs.changes.outputs.heavy != 'false' }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.graph == 'true'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
     steps:
       - uses: actions/checkout@v7
@@ -1947,7 +1955,7 @@ jobs:
   sqlgate-fuzz:
     name: "SQL gate: fuzzing"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sqlgate == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sqlgate == 'true'))) }}
     runs-on: ubuntu-24.04
     # Five targets x 60 s plus the build.
     timeout-minutes: 20
@@ -1989,7 +1997,7 @@ jobs:
   agentd-fuzz:
     name: "Agentd: RPC fuzzing"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.agentd == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.agentd == 'true'))) }}
     runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
     # Two targets x 60 s plus the build.
     timeout-minutes: 20
@@ -2102,7 +2110,7 @@ jobs:
   web-browser:
     name: "Console: Chrome (WebMCP)"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.web == 'true') && needs.changes.outputs.heavy != 'false' }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.web == 'true'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -2158,7 +2166,7 @@ jobs:
   dapr-edge:
     name: "Dapr: edge trigger"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.dapr-edge == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.dapr-edge == 'true'))) }}
     runs-on: ubuntu-24.04
     defaults:
       run:

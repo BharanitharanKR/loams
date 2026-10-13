@@ -30,11 +30,9 @@ name: Postgres e2e
 
 on:
   workflow_dispatch:
-  # Nightly instead of on every push to dev: the four stacks take up to 90
-  # minutes each, and the pull request that touched these paths already ran them.
-  schedule:
-    - cron: "5 3 * * *"
+  # Full tier: pull requests into main (the release gate); the nightly dispatches it on dev.
   pull_request:
+    branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       # loams-postgres and what it builds on

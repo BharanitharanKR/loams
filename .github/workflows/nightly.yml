@@ -1,0 +1,35 @@
+# The nightly full tier on dev. A `schedule:` runs on the default branch (main),
+# which moves only at a release, so this one scheduled workflow dispatches the
+# full suites on dev instead; a dispatch runs every job, regardless of paths.
+# A failing nightly is the signal to fix dev before the next dev -> main PR.
+name: Nightly
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch to run the full tier on."
+        default: dev
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    name: Dispatch the full tier
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REF: ${{ inputs.ref || 'dev' }}
+    steps:
+      - name: Dispatch
+        run: |
+          set -euo pipefail
+          gh workflow run ci.yml -R "$GITHUB_REPOSITORY" --ref "$REF" -f nightly=true
+          for wf in fabric.yml monorepo.yml pg2.yml pg2-e2e.yml gt1.yml gt1-nightly.yml; do
+            gh workflow run "$wf" -R "$GITHUB_REPOSITORY" --ref "$REF"
+          done
