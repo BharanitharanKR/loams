@@ -11,6 +11,7 @@
 
 mod collections;
 pub mod connect;
+mod connect_admin;
 mod connect_auth;
 mod connect_collections;
 mod connect_console;

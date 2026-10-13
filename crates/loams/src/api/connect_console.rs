@@ -1,5 +1,5 @@
 //! What `loams.auth.v1` ([`super::connect_auth`]) and `loams.admin.v1`
-//! (`connect_admin.rs`) share: the errors they raise over the
+//! ([`super::connect_admin`]) share: the errors they raise over the
 //! principal store, slugs, and the audit event of a mutation.
 
 use connectrpc::{ConnectError, ErrorCode};

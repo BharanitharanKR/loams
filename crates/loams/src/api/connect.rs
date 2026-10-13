@@ -141,6 +141,20 @@ const CATALOGUE: &[Package] = &[
         unstable: false,
     },
     Package {
+        // The org, projects, agents, API keys and the audit log (API2 Task 7,
+        // `super::connect_admin`), each RPC checked by the `Authorizer`.
+        package: "loams.admin.v1",
+        services: &[
+            "loams.admin.v1.OrgService",
+            "loams.admin.v1.ProjectService",
+            "loams.admin.v1.AgentService",
+            "loams.admin.v1.KeyService",
+            "loams.admin.v1.AuditService",
+        ],
+        available: true,
+        unstable: false,
+    },
+    Package {
         // The live sync engine is a `full`-variant engine (§30 §8.2) and R1's
         // `live` cargo feature has not merged, so no variant serves it yet.
         // R1 Task 12 adds the engine and flips this row on under that
@@ -568,6 +582,7 @@ pub(crate) fn routes(state: &AppState, hot_default: bool) -> AxumRouter {
     rpc = super::connect_documents::register(rpc, state);
     rpc = super::connect_query::register(rpc, state);
     rpc = super::connect_auth::register(rpc, &state.principals);
+    rpc = super::connect_admin::register(rpc, &state.principals);
     let (rpc, _health) = connectrpc_health::install_static(rpc, served_services(graph_served));
     let rpc = if state.reflection {
         // `loams.house.v1` is answered by the House layer around these
