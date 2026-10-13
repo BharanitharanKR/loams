@@ -1,0 +1,62 @@
+# ActiveMQ Artemis and Classic over AMQP 1.0 — CN2 plan Task 18 (OR-22),
+# loams_connector_brokers::amqp10 (fe2o3-amqp). Staged in the brokers crate (R18.1) until Task 2
+# (#477) lands the registry row; #477's Camel `jms` fallback block is kept when this replaces it.
+apiVersion: loams.flow/v1
+kind: Connector
+id: activemq-jms
+name: ActiveMQ / JMS
+specVersion: 0.3.0
+category: messaging
+priority: P2
+starred: false
+status: planned
+runtime:
+  kind: native
+  ref: loams_connector_brokers::amqp10
+  version: "loams-connector-brokers 0.0.1 / fe2o3-amqp 0.18.2"
+  fallback:
+    kind: camel
+    ref: jms
+    directions: [source, sink]
+    replaced_by: "CN2 Task 23"
+licence:
+  component: Apache-2.0
+  dependencies:
+    fe2o3-amqp: Apache-2.0
+capabilities:
+  source:
+    streaming: true
+    batch: false
+    cdc: false
+    webhook: false
+    resumable: true
+    position: the broker's unsettled deliveries; a delivery is accepted only after the Fabric acknowledges it, and the broker redelivers whatever a dropped link held
+  sink:
+    streaming: true
+    batch: false
+    transactional: false
+    upsert: false
+    delete: false
+    idempotent: false
+  delivery: { source: at_least_once, sink: at_least_once }
+  ordering: per_partition
+  formats: [cloudevents-binary, cloudevents-structured, json, bytes]
+  schema: { registry: none, evolution: none }
+  bulk: { arrow: false, max_batch_rows: 65536 }
+  backpressure: pull
+auth: [basic, mtls]
+config:
+  $ref: schemas/activemq-jms.config.json
+secrets: [password, tls.key_pem]
+envelope:
+  emits: io.loams.dev.flow.activemq-jms.message.v1
+  consumes: "*"
+  passthrough: true
+  stable_ids: false
+limits: {}
+conformance: [contract, roundtrip, kill-restart, backpressure, auth]
+notes:
+  - "fallback: JMS providers without AMQP 1.0 opt into the Camel `jms` fallback per instance (OR-4: JMS is a Java API); the replacement queue keeps it while Java is deferred (CN2 Task 23)"
+  - "settlement: both brokers force rcv-settle-mode first (spike §5.4); the connector never relies on second"
+  - "mtls: a client certificate on the TLS socket with SASL PLAIN or ANONYMOUS; SASL EXTERNAL is not offered (R18.8)"
+docs: docs/guides/connectors/activemq-jms.md

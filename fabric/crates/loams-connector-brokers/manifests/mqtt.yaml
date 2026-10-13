@@ -1,0 +1,55 @@
+# MQTT 5 — CN2 plan Task 18 (OR-1), loams_connector_brokers::mqtt: the family's own MQTT 5
+# client, not rumqttc (R18.3). Staged in the brokers crate (R18.1) until Task 2 (#477) lands the
+# registry row.
+apiVersion: loams.flow/v1
+kind: Connector
+id: mqtt
+name: MQTT
+specVersion: 0.3.0
+category: messaging
+priority: P2
+starred: false
+status: planned
+runtime:
+  kind: native
+  ref: loams_connector_brokers::mqtt
+  version: "loams-connector-brokers 0.0.1 (MQTT 5 client in-crate)"
+licence:
+  component: Apache-2.0
+  dependencies: {}
+capabilities:
+  source:
+    streaming: true
+    batch: false
+    cdc: false
+    webhook: false
+    resumable: true
+    position: the broker's persistent session (clean_start false); QoS 1 messages are PUBACKed only after the Fabric acknowledges them
+  sink:
+    streaming: true
+    batch: false
+    transactional: false
+    upsert: false
+    delete: false
+    idempotent: false
+  delivery: { source: at_least_once, sink: at_least_once }
+  ordering: per_key
+  formats: [cloudevents-binary, cloudevents-structured, json, bytes]
+  schema: { registry: none, evolution: none }
+  bulk: { arrow: false, max_batch_rows: 65536 }
+  backpressure: push-with-ack
+auth: [basic, mtls]
+config:
+  $ref: schemas/mqtt.config.json
+secrets: [password, tls.key_pem]
+envelope:
+  emits: io.loams.dev.flow.mqtt.message.v1
+  consumes: "*"
+  passthrough: true
+  stable_ids: false
+limits: {}
+conformance: [contract, roundtrip, kill-restart, backpressure, auth]
+notes:
+  - "backpressure: the CONNECT's Receive Maximum is the pipeline's in-flight budget (MQTT 5 flow control, R18.5)"
+  - "QoS 2 is never requested; subscriptions are QoS 1, so the broker downgrades"
+docs: docs/guides/connectors/mqtt.md

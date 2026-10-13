@@ -33,6 +33,11 @@ services:
     image: rabbitmq:4.3.5-management@sha256:57bddb6fbc3498b5d8b5a14dc6f4506073ebcf94c66ba2a7678c335faa8dd631
     profiles: [connectors-p2]
     labels: { io.loams.licence: "MPL-2.0", io.loams.ci-service: "false" }
+    # RabbitMQ's `guest` user may log in from loopback only, and the suites
+    # connect through the published port (CN2 Task 18, R18.10).
+    environment:
+      RABBITMQ_DEFAULT_USER: loams
+      RABBITMQ_DEFAULT_PASS: loams-test
     ports: ["5672:5672", "15672:15672"]
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
@@ -74,6 +79,14 @@ services:
     labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
     command: ["bin/pulsar", "standalone"]
     ports: ["6650:6650", "8081:8080"]
+    # Standalone opens its ports well before the broker serves topics, so
+    # `up --wait` waits for the admin health check (CN2 Task 18).
+    healthcheck:
+      test: ["CMD", "bin/pulsar-admin", "brokers", "healthcheck"]
+      interval: 10s
+      timeout: 30s
+      retries: 30
+      start_period: 30s
 
   # SQS, SNS, EventBridge, Kinesis, DynamoDB (+ Streams), Lambda and SES
   # (D60, R0.23). Lambda runs functions in real containers, hence the socket.

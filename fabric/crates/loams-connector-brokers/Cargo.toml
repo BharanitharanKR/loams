@@ -1,0 +1,72 @@
+[package]
+name = "loams-connector-brokers"
+description = "Loams' native brokers family (CN2 Task 18, OR-6): RabbitMQ over AMQP 0-9-1, AMQP 1.0 for ActiveMQ Artemis and Classic and Azure Service Bus, NATS and JetStream, MQTT 5, Apache Pulsar and WebSocket, as sources and sinks on loams-connector-sdk."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+async-trait = "0.1.89"
+base64.workspace = true
+bytes.workspace = true
+futures.workspace = true
+# The Entra ID token request for Service Bus goes through `sdk::http`.
+http.workspace = true
+loams-connector-sdk = { path = "../loams-connector-sdk" }
+serde.workspace = true
+serde_json.workspace = true
+# HMAC-SHA256 for Service Bus SAS tokens, written over sha2 (RFC 2104), as
+# loams-connector-http does (R7.9): the `hmac` crate is not in the lock.
+sha2.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "io-util"] }
+tracing.workspace = true
+# Client TLS for the families that dial through the SDK (a custom CA, mTLS):
+# the SDK's own rustls and webpki-roots pins, with ring only.
+rustls = { version = "0.23.27", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+webpki-roots = "1"
+
+# --- protocol crates (CN2 Task 0 spike §1.1, R0.5, R0.9, R0.17; R18.2) -------
+# RabbitMQ, AMQP 0-9-1. 4.12.0 (2026-09-18, MIT; 4.12.1 is under 14 days old).
+# Default features off: tokio through async-rs, and rustls with ring (the
+# default `rustls` feature selects aws-lc-rs), with the webpki roots the SDK
+# also uses.
+lapin = { version = "=4.12.0", default-features = false, features = ["tokio", "rustls--ring", "rustls-webpki-roots-certs"] }
+# AMQP 1.0 for ActiveMQ Artemis and Classic and Azure Service Bus (OR-22).
+# 0.18.2 (2026-09-29, MIT OR Apache-2.0). No TLS feature: the connection is
+# opened over the SDK's egress-checked socket (`sdk::net::connect_tls` for
+# amqps), and `open_with_stream` takes it.
+fe2o3-amqp = { version = "=0.18.2", default-features = false }
+# Service Bus claims-based security (put-token on `$cbs`). 0.18.0 (2026-09-08,
+# MIT OR Apache-2.0); the crate calls itself experimental (R0.17).
+fe2o3-amqp-cbs = "=0.18.0"
+# NATS and JetStream. 0.50.0 (2026-07-20, Apache-2.0), with only the features
+# the connector uses: ring, JetStream and nkeys (for nkey and JWT auth). No
+# websockets, object store, KV or service API.
+async-nats = { version = "=0.50.0", default-features = false, features = ["ring", "jetstream", "nkeys", "server_2_10"] }
+# Apache Pulsar. 6.9.0 (2026-08-24, MIT OR Apache-2.0). Default features off,
+# so neither async-std (RUSTSEC-2025-0052), native-tls (OpenSSL) nor the
+# compression C libraries are built; tokio with rustls on ring. Its build.rs
+# runs prost-build, so it needs protoc, as loams-flow-proto does.
+pulsar = { version = "=6.9.0", default-features = false, features = ["tokio-rustls-runtime-ring"] }
+# WebSocket (RFC 6455). 0.30.0 (2026-07-11, MIT). Only the handshake: the
+# socket is the SDK's egress-checked one (with TLS from `sdk::net`).
+tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["handshake"] }
+# MQTT 5 is a minimal client in this crate (src/mqtt/codec.rs), not rumqttc:
+# R18.3.
+
+[dev-dependencies]
+arrow-array.workspace = true
+arrow-schema.workspace = true
+# The staged manifests' example configs are checked against their config
+# schemas (tests/registry.rs); loams-flow already links it.
+jsonschema.workspace = true
+loams-flow = { path = "../loams-flow" }
+loams-flow-conformance = { path = "../loams-flow-conformance" }
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "io-util", "test-util"] }
+
+[lints]
+workspace = true
