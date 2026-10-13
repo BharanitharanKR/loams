@@ -7,6 +7,9 @@
 //! * [`validate`] — `connectors/schema/connector.schema.json`, CN1 Task 1's six
 //!   semantic rules, §33 §4 rule 1's refusal ([`validate::check_use`]) and D359's
 //!   licence gate.
+//! * [`profile`] — CN2 Task 7's target and HTTP-API profiles under
+//!   `connectors/profiles/`, their schema, R-CN2-2's module rule and a target's
+//!   effective capabilities.
 //! * [`registry`] — every manifest under `connectors/registry/`, indexed by id and by
 //!   category, with [`registry::Filter`] for the catalog page's queries.
 //!
@@ -36,6 +39,7 @@
 //! 2026-10-01).
 
 pub mod manifest;
+pub mod profile;
 pub mod registry;
 pub mod validate;
 
@@ -45,6 +49,10 @@ pub use manifest::{
     Licence, Limits, ManifestError, ManifestErrors, Ordering, Priority, ProtoError,
     RegistryRequirement, RuntimeKind, RuntimeOverride, RuntimeSpec, SchemaCaps, SinkCaps,
     SourceCaps, Status, Suite, load_manifest, load_manifest_value, load_manifest_with_schema, pb,
+};
+pub use profile::{
+    FAMILY_MODULES, Profile, ProfileError, ProfileKind, check_manifest_profile,
+    effective_capabilities, load_profiles,
 };
 pub use registry::{Filter, Registry, RegistryError};
 pub use validate::{

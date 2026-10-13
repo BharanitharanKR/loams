@@ -8,6 +8,7 @@ name: Fabric
 #   connect-routes   — declared, gated off until CN1 Task 12 lands
 # Jobs owned by CN2 (plan 2026-10-10-cn2-connectors):
 #   sdk-unit           — fmt, clippy and tests of `loams-connector-sdk` (Task 4)
+#                        and `loams-connector-http`'s profile engine (Task 7)
 #   conformance-kit    — fmt, clippy and tests of `loams-flow-conformance`
 #                        (Task 6: the suites, systems.toml, the compose estate)
 #   connectors-p2      — each family crate's suites against the open images of
@@ -111,6 +112,7 @@ jobs:
               - "fabric/Cargo.toml"
               - "fabric/Cargo.lock"
               - "fabric/crates/loams-connector-sdk/**"
+              - "fabric/crates/loams-connector-http/**"
             # The conformance kit and the real-system estate (CN2 Task 6).
             # Every family's suites depend on all of it.
             conformance: &conformance
@@ -198,6 +200,10 @@ jobs:
         run: |
           python3 scripts/connectors/crate_licences.py --self-test
           python3 scripts/connectors/crate_licences.py
+      # CN2 Task 7: every profile under connectors/profiles/ and every manifest's
+      # runtime.profile (the same rules as loams-flow's `profile` module).
+      - name: connector profiles
+        run: python3 scripts/connectors/profiles.py --check
 
   # CN2 owns this job (plan 2026-10-10-cn2-connectors, Task 4): the connector
   # SDK alone, the crate every native connector family builds on. It needs no
@@ -217,13 +223,13 @@ jobs:
           key: sdk-unit
       - name: rustfmt
         working-directory: fabric
-        run: cargo fmt -p loams-connector-sdk --check
+        run: cargo fmt -p loams-connector-sdk -p loams-connector-http --check
       - name: clippy
         working-directory: fabric
-        run: cargo clippy -p loams-connector-sdk --all-targets --locked -- -D warnings
+        run: cargo clippy -p loams-connector-sdk -p loams-connector-http --all-targets --locked -- -D warnings
       - name: tests
         working-directory: fabric
-        run: cargo test -p loams-connector-sdk --locked
+        run: cargo test -p loams-connector-sdk -p loams-connector-http --locked
 
   # CN2 owns this job (Task 6): the conformance kit alone — its suites run
   # against the SDK's reference connector, and its estate tests read

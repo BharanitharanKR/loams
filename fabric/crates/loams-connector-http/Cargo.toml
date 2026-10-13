@@ -1,0 +1,40 @@
+[package]
+name = "loams-connector-http"
+description = "The Loams HTTP connector family (CN2 OR-6): the declarative HTTP-API profile engine of CN2 Task 7 (OR-11), and from Task 8 the HTTP and webhooks ★ connectors."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+# Every family crate depends on the SDK and its protocol crates only (OR-6).
+loams-connector-sdk = { path = "../loams-connector-sdk" }
+# The SDK's own async-trait pin (0.1.92 in fabric/Cargo.lock).
+async-trait = "0.1.89"
+# HTTP Basic credentials and the SDK's client's types.
+base64.workspace = true
+bytes.workspace = true
+http.workspace = true
+# `Retry-After` given as an HTTP date. 1.0.3 is already in fabric/Cargo.lock
+# (through hyper). MIT OR Apache-2.0.
+httpdate = "1.0.3"
+serde.workspace = true
+serde_json.workspace = true
+# SigV4 and the digest of a batch's event ids (`Idempotency-Key`). HMAC-SHA256
+# is written over sha2 (RFC 2104) rather than taking the `hmac` crate, which is
+# not in fabric/Cargo.lock.
+sha2.workspace = true
+tokio = { workspace = true, features = ["sync", "time"] }
+
+[dev-dependencies]
+# The fake HTTP API the engine's tests run against: hyper's server, the
+# workspace's pin, as the SDK's own tests use it.
+http-body-util.workspace = true
+hyper = { workspace = true, features = ["server", "http1"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net"] }
+
+[lints]
+workspace = true

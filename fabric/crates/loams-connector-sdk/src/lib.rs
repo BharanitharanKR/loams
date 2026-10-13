@@ -61,7 +61,11 @@ pub use pipeline::{
     SinkPipeline, SourcePipeline,
 };
 pub use position::{InstanceKey, Position, SplitId};
-pub use profile::{HttpProfile, Profile, ProfileKind, SystemRef};
+pub use profile::{
+    AsyncJob, AuthScheme, CursorSpec, HttpAuth, HttpMethod, HttpProfile, HttpRateLimit,
+    HttpResource, JobPoll, ListOp, Profile, ProfileKind, RequestSpec, SystemRef, WebhookSpec,
+    WriteOp,
+};
 pub use ratelimit::{Rate, RateLimit, RateLimiter};
 pub use retry::{RetryDecision, RetryPolicy};
 pub use secrets::{Scrubber, ScrubbingResolver, Secret, SecretRef, SecretResolver, StaticSecrets};
