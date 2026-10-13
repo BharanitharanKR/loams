@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   compose:
-    name: compose config and scripts
+    name: Config and scripts
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7

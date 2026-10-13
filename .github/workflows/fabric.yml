@@ -1,4 +1,4 @@
-name: Fabric
+name: Connectors
 
 # This workflow file is shared with FL1 (issue #209), which introduces the
 # `fabric/` workspace; CN1 (issue #211, plan 2026-10-01-cn1-starred-connectors)
@@ -59,7 +59,7 @@ jobs:
   # stacks until it is ready for review (or carries the `ci:full` label). dorny/paths-filter is MIT-licensed; pinned to
   # v4.0.3, as in ci.yml.
   changes:
-    name: changed paths
+    name: Changed paths
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/dev')
     runs-on: ubuntu-24.04
     permissions:
@@ -172,7 +172,6 @@ jobs:
               - "fabric/crates/loams-connector-sdk/**"
               - "fabric/crates/loams-flow/**"
               - "deploy/observability/connectors/**"
-              - "scripts/ci/no-metering.*"
       # The changed families, as a JSON list for the shards' matrices. A
       # shard whose family has no service in its stack, or no crate yet,
       # finishes at once (scripts/connectors/compose_services.py).
@@ -186,7 +185,7 @@ jobs:
   # fabric workspace's lint table equals the root workspace's; it runs in FL1's
   # own job and is not repeated here.
   connectors-unit:
-    name: fabric workspace (fmt, clippy, tests, deny)
+    name: "Fabric: fmt, clippy, tests and deny"
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.fabric == 'true') }}
     runs-on: ubuntu-24.04
@@ -243,7 +242,7 @@ jobs:
   # serve its tests), so it stays fast; `connectors-unit` covers the crate
   # again inside the whole workspace, with cargo-deny.
   sdk-unit:
-    name: connector SDK (fmt, clippy, tests)
+    name: "Connector SDK: tests"
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk == 'true') }}
     runs-on: ubuntu-24.04
@@ -274,7 +273,7 @@ jobs:
   # conformance/connectors/systems.toml, deploy/fabric/compose.yaml and this
   # file. No services. It links `loams-flow`, hence protoc.
   conformance-kit:
-    name: conformance kit (fmt, clippy, tests)
+    name: "Conformance kit: tests"
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.conformance == 'true') }}
     runs-on: ubuntu-24.04
@@ -305,7 +304,7 @@ jobs:
   # A shard whose crate does not exist yet, or whose family has no service in
   # this stack, ends after checkout.
   connectors-p2:
-    name: connectors-p2 (${{ matrix.family }})
+    name: "Connectors: ${{ matrix.family }}"
     needs: changes
     if: ${{ !cancelled() && github.event_name != 'schedule' && (needs.changes.result == 'skipped' || needs.changes.outputs.families != '[]') && needs.changes.outputs.heavy != 'false' }}
     runs-on: ubuntu-24.04
@@ -378,7 +377,7 @@ jobs:
   # emulator). They run here only: never in an image Loams builds, never in
   # the default compose profile.
   connectors-ci-only:
-    name: connectors-ci-only (${{ matrix.family }})
+    name: "Connectors: ${{ matrix.family }} (CI-only images)"
     needs: changes
     if: ${{ !cancelled() && github.event_name != 'schedule' && (needs.changes.result == 'skipped' || needs.changes.outputs.families != '[]') && needs.changes.outputs.heavy != 'false' }}
     runs-on: ubuntu-24.04
@@ -453,7 +452,7 @@ jobs:
   # nightlies). `nightly_secrets_are_wired_into_the_nightly_job` keeps the env
   # block below in step with systems.toml.
   connectors-nightly:
-    name: connectors-nightly (${{ matrix.family }})
+    name: "Connectors: ${{ matrix.family }} (nightly)"
     if: ${{ !cancelled() && ((github.event_name == 'schedule' && github.event.schedule == '23 4 * * *') || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-24.04
     strategy:
@@ -592,9 +591,9 @@ jobs:
   # test. promtool comes from the Prometheus 3.5.0 release (Apache-2.0, LTS,
   # 2025-07-14), checked against its published SHA-256. The Rust test
   # `each_alert_fires_in_a_test` runs the same rule tests through
-  # LOAMS_PROMTOOL, beside the label, activity-observer and no-metering tests.
+  # LOAMS_PROMTOOL, beside the label and activity-observer tests.
   connectors-alerts:
-    name: connector alerts (promtool) and activity observer
+    name: "Connectors: alerts and activity"
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.alerts == 'true') }}
     runs-on: ubuntu-24.04
@@ -618,8 +617,6 @@ jobs:
         run: |
           "$LOAMS_PROMTOOL" check rules deploy/observability/connectors/alerts.yaml
           "$LOAMS_PROMTOOL" test rules deploy/observability/connectors/alerts.test.yaml
-      - name: no-metering guard
-        run: scripts/ci/no-metering.sh
       # loams-flow builds loams-flow-proto, which needs protoc.
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
@@ -639,7 +636,7 @@ jobs:
   # schedule and on demand only, and each script skips cleanly when its catalog
   # is not there.
   connectors-drift:
-    name: connector catalog drift (Camel, Kestra, appendix)
+    name: "Connectors: catalog drift"
     # The weekly cron only; the daily one is connectors-nightly's.
     if: ${{ !cancelled() && ((github.event_name == 'schedule' && github.event.schedule == '41 3 * * 1') || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-24.04
@@ -712,7 +709,7 @@ jobs:
   # declared and switched off rather than written as an empty shell: Loams
   # writes no Java (owner, 2026-10-01), so there is nothing to build here yet.
   connect-routes:
-    name: loams-connect routes (connect/**)
+    name: "Connect: routes"
     needs: changes
     if: false
     runs-on: ubuntu-24.04
@@ -727,7 +724,7 @@ jobs:
   # The nightly suites against real accounts and the weekly drift scripts are
   # not in it: they run on the schedule, not on a pull request.
   required:
-    name: Fabric required
+    name: Connectors required
     if: always()
     needs:
       - changes

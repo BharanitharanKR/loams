@@ -15,7 +15,7 @@
 #
 # mirror (Task 1): mirror-images.sh against a local registry, audit-image.sh on
 # fixture `.dep-v0` payloads, and the README runbook order.
-name: NF1 pins
+name: Postgres pins
 
 on:
   workflow_dispatch:
@@ -35,7 +35,7 @@ jobs:
   # org's concurrent-job limit is what queues pull requests). Every step runs,
   # so one failure does not hide another.
   checks:
-    name: names, pins and pinned revisions
+    name: Names, pins and revisions
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -63,7 +63,7 @@ jobs:
   # The slow job (it compiles rust-audit-info): only when the mirror scripts,
   # the pin file or this workflow change, and always on dev and on dispatch.
   mirror-changes:
-    name: mirror paths changed
+    name: Changed paths
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -83,7 +83,7 @@ jobs:
               - ".github/workflows/nf1-pins.yml"
 
   mirror:
-    name: mirror and audit scripts (Task 1)
+    name: Mirror and audit scripts
     needs: mirror-changes
     if: ${{ !cancelled() && (needs.mirror-changes.result == 'skipped' || needs.mirror-changes.outputs.mirror == 'true') }}
     runs-on: ubuntu-24.04

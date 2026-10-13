@@ -26,7 +26,7 @@
 # running; idle, it suspends).
 #
 # The images are pinned by digest in the compose files; nothing here uses a tag.
-name: PG2 e2e
+name: Postgres e2e
 
 on:
   workflow_dispatch:
@@ -75,7 +75,7 @@ env:
 jobs:
   neon-deploy:
     if: github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full')
-    name: loams-postgres against deploy/loams-postgres-dev (it_deploy_neon)
+    name: Deploy
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -117,7 +117,7 @@ jobs:
 
   pageserver-loams-wal:
     if: github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full')
-    name: the pageserver ingests from loams-wal (it-pageserver-loams-wal.sh)
+    name: Pageserver ingest
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -180,7 +180,7 @@ jobs:
 
   pg-control-deploy-neon:
     if: github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full')
-    name: pg-control against deploy/loams-postgres-dev and loams-wal (e2e_deploy_neon)
+    name: pg-control deploy
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -231,7 +231,7 @@ jobs:
 
   pg-control-compose-runtime:
     if: github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full')
-    name: pg-control's compose runtime and endpoint lifecycle against deploy/loams-postgres-dev (it_compose, it_endpoint)
+    name: Compose runtime
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:

@@ -1,4 +1,4 @@
-name: Release (SDKs)
+name: Release SDKs
 
 # Publishes the seven supported SDKs from one release tag, each to its own
 # registry, as a preview. The other SDKs under sdks/ (Java, Kotlin, Ruby, PHP,
@@ -86,7 +86,7 @@ env:
 jobs:
   # The version, the ref to build, and whether this run may publish at all.
   plan:
-    name: version and publish gate
+    name: "Plan: version and publish gate"
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
@@ -202,7 +202,7 @@ jobs:
 
   # ---------------------------------------------------------------- TypeScript
   typescript:
-    name: TypeScript (npm)
+    name: "TypeScript: build and pack"
     needs: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -246,7 +246,7 @@ jobs:
           if-no-files-found: error
 
   publish-npm:
-    name: publish to npm
+    name: "TypeScript: publish to npm"
     needs: [plan, typescript]
     if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_NPM == 'true'
     environment: npm
@@ -291,7 +291,7 @@ jobs:
 
   # ---------------------------------------------------------------- Python
   python:
-    name: Python (PyPI)
+    name: "Python: build and check"
     needs: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -334,7 +334,7 @@ jobs:
           if-no-files-found: error
 
   publish-pypi:
-    name: publish to PyPI
+    name: "Python: publish to PyPI"
     needs: [plan, python]
     if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_PYPI == 'true'
     environment: pypi
@@ -356,7 +356,7 @@ jobs:
 
   # ---------------------------------------------------------------- Rust
   rust:
-    name: Rust (crates.io)
+    name: "Rust: build and package"
     needs: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -394,7 +394,7 @@ jobs:
             --config 'patch.crates-io.loams-live-proto.path="../../crates/loams-live-proto"'
 
   publish-crates:
-    name: publish to crates.io
+    name: "Rust: publish to crates.io"
     needs: [plan, rust]
     if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_CRATES == 'true'
     # The same environment release-crates.yml uses; crates.io's trusted
@@ -456,7 +456,7 @@ jobs:
 
   # ---------------------------------------------------------------- C#
   csharp:
-    name: C# (NuGet)
+    name: "C#: build and pack"
     needs: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -499,7 +499,7 @@ jobs:
           if-no-files-found: error
 
   publish-nuget:
-    name: publish to NuGet
+    name: "C#: publish to NuGet"
     needs: [plan, csharp]
     if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_NUGET == 'true'
     environment: nuget
@@ -533,7 +533,7 @@ jobs:
 
   # ---------------------------------------------------------------- Go
   go:
-    name: Go (module tag)
+    name: "Go: test"
     needs: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -566,7 +566,7 @@ jobs:
           echo "loams.dev/go ${{ needs.plan.outputs.go_tag }}: $size bytes"
 
   publish-go:
-    name: tag the Go module
+    name: "Go: tag the module"
     needs: [plan, go]
     if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_GO == 'true'
     runs-on: ubuntu-24.04
@@ -614,7 +614,7 @@ jobs:
 
   # ---------------------------------------------------------------- Swift
   swift:
-    name: Swift (SwiftPM)
+    name: "Swift: build and test"
     needs: plan
     # Foundation's async URLSession, as ci.yml's sdk-swift job.
     runs-on: macos-latest
@@ -644,7 +644,7 @@ jobs:
 
   # ---------------------------------------------------------------- C++
   cpp:
-    name: C++ (source archive)
+    name: "C++: build the archive"
     needs: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -702,7 +702,7 @@ jobs:
           if-no-files-found: error
 
   publish-cpp:
-    name: attach the C++ archive to the release
+    name: "C++: attach the archive"
     needs: [plan, cpp]
     if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_CPP == 'true'
     runs-on: ubuntu-24.04

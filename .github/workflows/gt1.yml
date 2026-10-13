@@ -6,7 +6,7 @@
 # store-backed suite (tests/s3.rs) and the Q385 multipart probe. The first
 # step prints the runner's git, kernel and /dev/fuse (plan T0-23). The
 # nightly run (gt1-nightly.yml) takes 1024 seeds and the bench.
-name: GT1
+name: Git
 
 on:
   workflow_dispatch:
@@ -52,7 +52,7 @@ env:
 
 jobs:
   loams-git:
-    name: loams-git (suites, RustFS)
+    name: Suites
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7

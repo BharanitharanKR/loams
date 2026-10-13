@@ -1,7 +1,7 @@
 # GT1 nightly (docs/plans/2026-10-10-gt1-loams-git.md, Task 11): the
 # linearizability histories on 1024 seeds, and the bucket WAL bench in
 # memory and on RustFS. The bench's JSON lines are kept as an artifact.
-name: GT1 nightly
+name: Git nightly
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ env:
 
 jobs:
   loams-git-nightly:
-    name: loams-git (1024 seeds, bench)
+    name: Seeds and bench
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:

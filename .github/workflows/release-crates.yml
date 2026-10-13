@@ -1,4 +1,4 @@
-name: Release (crates.io)
+name: Release crates
 
 # The crates.io half of the release path (issue #254, D400). D292's cargo-dist
 # pipeline owns binaries, archives and the GitHub Release; this workflow owns the
@@ -69,7 +69,7 @@ jobs:
   # on the integration branch and whose version is the workspace version. The
   # code that runs is the branch's, never the tag's and never a pull request's.
   guard:
-    name: release tag guard
+    name: Tag guard
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -114,7 +114,7 @@ jobs:
   # Proves every crate in the list packages and compiles as crates.io will
   # compile it. This is the job a release always runs, publish or not.
   verify:
-    name: verify the crates
+    name: Verify the crates
     needs: guard
     # The owner's fast runner when there is one; release days can be long.
     runs-on: ubuntu-24.04
@@ -169,7 +169,7 @@ jobs:
   # Off by default. A release event never reaches this job; only a manual run
   # with publish: true does, and only after verify passed for the same tag.
   publish:
-    name: publish to crates.io
+    name: Publish to crates.io
     needs: [guard, verify]
     if: github.event_name == 'workflow_dispatch' && inputs.publish == true
     # The owner creates this environment with required reviewers, so the upload

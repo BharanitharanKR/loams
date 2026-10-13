@@ -20,7 +20,7 @@
 # pg-control-role (Task 9): the `loams pg-control` role (feature `postgres`):
 # authorization, audit, the API and upcall listeners, served-only
 # reflection, and that the default build links none of it.
-name: PG2
+name: Postgres
 
 on:
   workflow_dispatch:
@@ -48,8 +48,6 @@ on:
       - "crates/loams/src/api/connect_postgres.rs"
       - "crates/loams/src/api/postgres_messages.rs"
       - "crates/loams/tests/pg_control.rs"
-      - "scripts/ci/no-metering.py"
-      - "scripts/ci/test-no-metering.py"
       - "crates/loams-kv/**"
       - "scripts/pg2/**"
       - "proto/**"
@@ -81,8 +79,6 @@ on:
       - "crates/loams/src/api/connect_postgres.rs"
       - "crates/loams/src/api/postgres_messages.rs"
       - "crates/loams/tests/pg_control.rs"
-      - "scripts/ci/no-metering.py"
-      - "scripts/ci/test-no-metering.py"
       - "crates/loams-kv/**"
       - "scripts/pg2/**"
       - "proto/**"
@@ -112,7 +108,7 @@ env:
 
 jobs:
   postgres-protos:
-    name: loams.postgres.v1 (buf lint, buf breaking against dev, descriptor tests)
+    name: Protos
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -143,7 +139,7 @@ jobs:
         run: cargo test -p loams-proto --test postgres --locked
 
   neon-client:
-    name: loams-postgres (fixture tests)
+    name: Client fixtures
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -160,7 +156,7 @@ jobs:
         run: cargo clippy -p loams-postgres --all-targets --locked -- -D warnings
 
   wal-decoder:
-    name: loams-wal-decoder (golden tests against the fork's sender)
+    name: WAL decoder
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -213,7 +209,7 @@ jobs:
           cargo build --locked --bin loams-wal-interpreted --features tikv
 
   pg-control:
-    name: loams-pg-control (local store, clippy default, tikv, kubernetes and keyring)
+    name: pg-control
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -238,7 +234,7 @@ jobs:
         run: cargo clippy -p loams-pg-control --all-targets --features kubernetes,keyring --locked -- -D warnings
 
   pg-control-role:
-    name: loams pg-control (feature postgres, and the default build without it)
+    name: Engine with pg-control
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -254,5 +250,3 @@ jobs:
         run: cargo test -p loams --locked --test pg_control
       - name: clippy (postgres, postgres-kubernetes)
         run: cargo clippy -p loams --all-targets --features postgres-kubernetes --locked -- -D warnings
-      - name: the no-metering guard's own tests
-        run: python3 scripts/ci/test-no-metering.py
