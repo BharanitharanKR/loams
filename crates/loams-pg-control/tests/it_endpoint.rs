@@ -182,6 +182,17 @@ impl Drop for Stack {
     }
 }
 
+/// Each case's own host ports: the cases run in parallel, each with its own
+/// compose runtime (and `state/ports.json`), so a shared range would give
+/// both first endpoints the same port and one compute could not publish it.
+fn port_range(ns: &str) -> std::ops::Range<u16> {
+    match ns {
+        "it-ep" => 55_500..55_750,
+        "it-idle" => 55_750..56_000,
+        other => panic!("no port range for the case {other}"),
+    }
+}
+
 async fn stack(ns: &'static str) -> Stack {
     let bin = ComposeBin::from_path().expect("docker, podman or docker-compose on PATH");
     let project = ProjectId::new();
@@ -320,6 +331,7 @@ async fn stack(ns: &'static str) -> Stack {
                 extra_hosts: std::env::var("IT_EXTRA_HOSTS")
                     .map(|h| h.split(',').map(str::to_owned).collect())
                     .unwrap_or_default(),
+                port_range: port_range(ns),
                 ..ComposeConfig::new(
                     bin.clone(),
                     compose_dir.clone(),
