@@ -2233,6 +2233,14 @@ jobs:
         with:
           persist-credentials: false
       - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: no local working files (.superpowers) committed
+        run: |
+          if git ls-files --error-unmatch .superpowers >/dev/null 2>&1; then
+            git ls-files .superpowers
+            echo "::error::.superpowers/ is local working state (in .gitignore); untrack it with git rm --cached"
+            exit 1
+          fi
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
         name: Decision ID checker self-test
         run: scripts/docs/check-decision-ids.sh --self-test
       - if: ${{ !cancelled() }} # report every check, not only the first failure
