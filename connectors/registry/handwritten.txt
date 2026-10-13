@@ -1,7 +1,9 @@
+activemq-jms
 adbc
 arrow
 avro
 azure-event-hubs
+azure-service-bus
 bigquery
 cassandra
 clickhouse
@@ -18,12 +20,16 @@ itsplane
 jdbc
 kafka
 kinesis
+mqtt
 mysql
+nats
 opensearch
 opentelemetry
 parquet
 postgresql
+pulsar
 qdrant
+rabbitmq-amqp
 redis
 redis-streams
 redpanda
@@ -31,4 +37,5 @@ s3
 snowflake
 valkey
 webhooks
+websocket
 zulip

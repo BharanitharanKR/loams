@@ -377,6 +377,9 @@ HAND_WRITTEN_FAMILY_ROWS: dict[str, tuple[str, ...]] = {
     "kafka": ("azure-event-hubs", "redpanda"),  # R9.7
     "kv": ("cassandra", "dynamodb", "dynamodb-streams", "redis-streams", "valkey"),  # R14.1
     "search": ("opensearch", "qdrant"),  # R15.5
+    "brokers": (  # R18.1
+        "activemq-jms", "azure-service-bus", "mqtt", "nats", "pulsar", "rabbitmq-amqp", "websocket",
+    ),
 }
 HAND_WRITTEN_UNSTARRED_IDS: set[str] = (
     set(HANDWRITTEN_UNSTARRED)

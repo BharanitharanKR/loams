@@ -1,9 +1,163 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/nats.config.json",
-  "title": "NATS instance config (placeholder)",
-  "description": "Placeholder for a NATS instance's settings. It is filled in when this connector is built: CN2 for the P2 rows, as first-party native connectors with declared fallbacks (CN2 OR-1, OR-4), and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "NATS connector instance config (loams.flow/v1)",
+  "description": "One NATS instance's settings (CN2 Task 18, loams_connector_brokers::nats): JetStream durable pull consumers and Nats-Msg-Id publishes by default, or core NATS subjects (`mode: core`, not resumable, at most once).",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "servers"
+  ],
+  "properties": {
+    "servers": {
+      "description": "nats://host:4222 or tls://host:4222, without credentials. Servers the cluster advertises are ignored, so egress stays checked.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "auth": {
+      "description": "Credentials by secret name: an nkey seed (`key`) or a user credentials file's contents (`jwt`).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nkey_seed": {
+          "description": "An nkey seed. A secret name, resolved through the namespace's secret store (D189); the value is never stored here.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "credentials": {
+          "description": "A user credentials (.creds) file's contents: the user JWT and its nkey seed. A secret name, resolved through the namespace's secret store (D189); the value is never stored here.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "tls": {
+      "description": "TLS settings: a CA bundle to trust instead of the webpki roots, and a client certificate for mTLS.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ca_pem": {
+          "description": "PEM CA bundle (not a secret).",
+          "type": "string",
+          "minLength": 1
+        },
+        "cert_pem": {
+          "description": "PEM client certificate chain for mTLS (not a secret).",
+          "type": "string",
+          "minLength": 1
+        },
+        "key_pem": {
+          "description": "The client's PEM private key, for mTLS. A secret name, resolved through the namespace's secret store (D189); the value is never stored here.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "source": {
+      "description": "The source.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "description": "jetstream (a durable pull consumer, resumable) or core (subscriptions, not resumable).",
+          "type": "string",
+          "enum": [
+            "jetstream",
+            "core"
+          ],
+          "default": "jetstream"
+        },
+        "stream": {
+          "description": "JetStream: the stream.",
+          "type": "string",
+          "minLength": 1
+        },
+        "durable": {
+          "description": "JetStream: the durable consumer; loams-<instance> by default.",
+          "type": "string",
+          "minLength": 1
+        },
+        "filter_subject": {
+          "description": "JetStream: a filter subject.",
+          "type": "string",
+          "minLength": 1
+        },
+        "ack_wait_s": {
+          "description": "JetStream: seconds before an unacknowledged message is redelivered.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 30
+        },
+        "max_ack_pending": {
+          "description": "JetStream: max_ack_pending; by default the pipeline's in-flight budget.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "subjects": {
+          "description": "Core: subjects to subscribe to; one split each.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "queue_group": {
+          "description": "Core: a queue group.",
+          "type": "string",
+          "minLength": 1
+        },
+        "max_batch": {
+          "description": "Messages per batch at most (the pipeline's budget may be smaller).",
+          "type": "integer",
+          "minimum": 1,
+          "default": 1000
+        },
+        "poll_wait_ms": {
+          "description": "How long one read waits for the first message before reporting nothing.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 200
+        }
+      }
+    },
+    "sink": {
+      "description": "The sink.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "description": "jetstream (publish acks, Nats-Msg-Id = the event id: effectively once within the stream's duplicate window) or core (at most once).",
+          "type": "string",
+          "enum": [
+            "jetstream",
+            "core"
+          ],
+          "default": "jetstream"
+        },
+        "subject": {
+          "description": "A fixed subject; without it, the event's subject.",
+          "type": "string",
+          "minLength": 1
+        },
+        "ack_timeout_ms": {
+          "description": "How long a batch waits for its publish acks.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 10000
+        }
+      }
+    },
+    "pipeline": {
+      "description": "The SDK's per-instance pipeline overrides (`PipelineConfig::with_overrides`): max_batch_rows, max_batch_bytes, linger_ms, max_in_flight_batches, memory_budget_bytes, checkpoint_interval_ms and retry. The broker-side window (prefetch, credit, Receive Maximum, max_ack_pending, receiver queue) is derived from them unless set.",
+      "type": "object"
+    }
+  }
 }
