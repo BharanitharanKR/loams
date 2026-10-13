@@ -3,7 +3,7 @@
 
 Sources of truth, and what each one fixes:
 
-  docs/design/33-connectors.md Appendix A   the 204-row matrix (D352, D358, D628, D634, CN-R1)
+  docs/design/33-connectors.md Appendix A   the 205-row matrix (D352, D358, D628, D634, CN-R1)
   docs/design/33-connectors.md section 8    the 21 starred connectors and their runtime (§8, D358)
   connectors/schema/connector.schema.json   the manifest shape and the category/priority/status enums (CN1 Task 1)
   connectors/registry/catalog.csv           the one CSV the registry is generated from (CN1 Ruling 1)
@@ -47,6 +47,10 @@ Rules this file encodes, with the authority for each:
     OpenAPI-generated native connector (Ruling 1; §5's `openapi` row). A.18's three are the
     exception: Camel 4.22.1 has no component for any of them, so CN1 Task 15 pins them to
     native Rust in loams-flow (D628). Kestra is a companion, never a runtime (D354, Q356);
+  * CN2 Task 2 (OR-1, OR-4): every P1 and P2 row's runtime comes from NATIVE_FIRST (or §8's
+    STARRED_RUNTIME), native in each declared direction unless a `fallback-only:` note names
+    an OR-4 reason; P1/P2 stubs declare their directions, profiles and fallbacks, and the
+    profile placeholders under connectors/profiles/ are written beside them;
   * every licence id in connectors/licences.toml must be an SPDX id outside the refused set
     (D359; CN1 Global Constraints; the licence_gate_refuses_flagged test), with the carve-out
     that the deny list gates what Loams ships or links: a `kind = "service"` row is an API
@@ -100,6 +104,13 @@ CSV_COLUMNS = [
     "auth",
     "camel",
     "kestra",
+    # CN2 Task 2: each P1 and P2 direction's default runtime as `kind:ref` (empty when the
+    # row declares no such direction, and for P3, whose runtimes are CN3's), the profile
+    # id, and OR-4's fallback block as `kind:ref:directions:replaced_by`.
+    "source_runtime",
+    "sink_runtime",
+    "profile",
+    "fallback",
 ]
 
 # The Appendix A columns after Connector: Source, Sink, Streaming, Batch, CDC, Webhook,
@@ -117,7 +128,8 @@ APPENDIX_COLUMNS = [
     "priority",
 ]
 
-EXPECTED_ROW_COUNT = 204  # Appendix A's own "Totals: 204 connectors" line: 203 from CN1 Task 15 (D628) plus Grafeo (D634). CN1 Task 2's registry gate, with its count bumped to match.
+EXPECTED_ROW_COUNT = 205  # Appendix A's own "Totals: 205 connectors" line: 203 from CN1 Task 15 (D628), Grafeo (D634) and the Debezium SQL Server / Oracle split (CN2 OR-13).
+EXPECTED_P2_COUNT = 73  # CN2 OR-15: after the split and MCP's move to P3
 EXPECTED_STARRED_COUNT = 21  # §8's 21 and D358's number, unchanged by A.18 (D628, CN1 Ruling 11)
 
 # §33 Appendix A's subsection id, its heading title (without the count, which is computed),
@@ -149,9 +161,8 @@ SUBSECTIONS: list[tuple[str, str, str | None, str | None]] = [
     ("A.18", "Loams's own applications", "saas", None),
 ]
 
-# Appendix A's table header and its closing line, verbatim from the design document. The
-# totals line is fixed rather than interpolated: the document leaves the P2 and P3 counts to
-# CN1 Task 2's generator, so a rendered count the document does not carry would be drift.
+# Appendix A's table header. Its closing totals line is computed from the rows
+# (`totals_line`), the same way scripts/connectors/appendix.py renders it.
 APPENDIX_HEADER_CELLS = [
     "Connector",
     "Source",
@@ -165,9 +176,16 @@ APPENDIX_HEADER_CELLS = [
     "Kestra",
     "Priority",
 ]
-TOTALS_LINE = (
-    "Totals: 204 connectors; 21 ★ (P1), and the P2 and P3 counts are computed by CN1 Task 2's generator."
-)
+
+
+def totals_line(rows: list[dict]) -> str:
+    """`Totals: 205 connectors; 25 P1, of which 21 ★; 73 P2; 107 P3.` (CN2 Task 2)."""
+    count = {level: sum(1 for row in rows if row["priority"] == level) for level in ("P1", "P2", "P3")}
+    starred = sum(1 for row in rows if row["starred"] == "true")
+    return (
+        f"Totals: {len(rows)} connectors; {count['P1']} P1, of which {starred} ★; "
+        f"{count['P2']} P2; {count['P3']} P3."
+    )
 
 # Per-row categories for the two mixed subsections. A.3's four families are named in
 # §33 §4's category comment (nosql, search, vector, graph). A.4's warehouse/lakehouse split
@@ -180,8 +198,8 @@ TOTALS_LINE = (
 # empty Camel cell in Appendix A, which the non-star rule below would otherwise resolve to
 # `openapi:<id>` -- an OpenAPI-generated connector, which is the wrong runtime for a
 # database Loams links into its own process.
+# Grafeo left this table in CN2 Task 2: NATIVE_FIRST puts it in the `protocols` family.
 LOAMS_OWNED_NATIVE: dict[str, str] = {
-    "grafeo": "graph",
     "zulip": "zulip",
     "itsplane": "itsplane",
     "forgejo": "forgejo",
@@ -252,6 +270,10 @@ HAND_ASSIGNED_IDS: dict[str, str] = {
     "HTTP / REST": "http",
     "ADBC (generic)": "adbc",
     "Airbyte (licence flag, D359)": "airbyte",
+    # CN2 OR-13 splits A.7's "Debezium-SQL Server / Oracle" and names the halves
+    # `debezium-sqlserver` and `debezium-oracle`; the mechanical slug of the first would be
+    # `debezium-sql-server`.
+    "Debezium-SQL Server": "debezium-sqlserver",
 }
 
 # §8's "Runtime and implementation" column, resolved to the two runtime columns of the CSV.
@@ -268,7 +290,9 @@ STARRED_RUNTIME: dict[str, tuple[str, str]] = {
     "parquet": ("native", "loams_flow::formats::parquet"),  # §8 #8
     "avro": ("native", "loams_flow::formats::avro"),  # §8 #9
     "arrow": ("native", "loams_flow::formats::arrow"),  # §8 #10, arrow-ipc + arrow-flight
-    "elasticsearch": ("iggy", "elasticsearch_sink"),  # §8 #11
+    # §33 §8 #11 ran on Iggy's elasticsearch_sink; CN2 OR-8 makes it native (Task 15),
+    # with the Iggy plugins as its declared fallback (STAR_FALLBACKS).
+    "elasticsearch": ("native", "loams_connector_search::elasticsearch"),
     "clickhouse": ("native", "loams_flow::connectors::clickhouse"),  # §8 #12
     "snowflake": ("native", "loams_flow::connectors::adbc"),  # §8 #13, ADBC Snowflake driver
     "bigquery": ("native", "loams_flow::connectors::adbc"),  # §8 #14, ADBC BigQuery driver
@@ -388,6 +412,248 @@ SPDX_PATTERN = re.compile(r"^[A-Za-z0-9.+-]+$")  # connector.schema.json's licen
 
 class Problem(Exception):
     """A disagreement between the design document, the CSV and the manifests."""
+
+
+# --------------------------------------------------------------------------------------
+# CN2 Task 2: the native-first runtime assignment (OR-1, OR-4, OR-8 to OR-15).
+# --------------------------------------------------------------------------------------
+
+# CN2 OR-6's connector families, one crate `loams-connector-<family>` each. A native
+# `runtime.ref` written here is `loams_connector_<family>::<module>`; the two P2 format
+# rows are the SDK's codecs (CN2 Task 5).
+FAMILIES = (
+    "analytics", "brokers", "cloud", "http", "kafka", "kv", "lakehouse", "mongodb",
+    "mysql", "objects", "postgres", "protocols", "search", "sqlserver",
+)
+SDK_CODECS = "loams_connector_sdk::codecs"
+
+
+def family_ref(family: str, module: str) -> str:
+    if family not in FAMILIES:
+        raise Problem(f"{family!r} is not one of CN2 OR-6's families")
+    return f"loams_connector_{family}::{module}"
+
+
+# The fallback-only note's reasons must contain one of validate.rs's
+# OR4_FALLBACK_REASONS; `replaced_by:` names the task, because a manifest whose default
+# runtime *is* the fallback has no `runtime.fallback` block to carry it (CN2 Ruling R2.4).
+def fallback_only(reason: str, task: str) -> str:
+    return f"fallback-only: {reason}; replaced_by: CN2 Task {task}"
+
+
+# One entry per P1 and P2 row whose runtime CN2 Task 2 sets. Keys:
+#   kind, ref   the default runtime of every declared direction (default kind: native)
+#   profile     a profile id under connectors/profiles/ (target or http-api)
+#   fallback    (kind, ref, directions, replaced_by) — OR-4's declared fallback block
+#   notes       manifest notes
+#   position    the source's checkpoint, for a CDC source (CN1's rule 2 needs one)
+#   sink_idempotent, delivery_sink   R0.19's Event Hubs narrowing
+# The ★ rows keep their CN1 refs (CN2 Task 8 moves them into the family crates); only
+# the ones whose runtime CN2 Task 2 changes, or that gain a fallback, are listed.
+SAAS_PROFILES = (
+    "kestra-companion", "segment", "sendgrid", "posthog", "hubspot", "shopify", "gitlab",
+    "amazon-ses", "twilio-sms", "salesforce", "zendesk", "servicenow", "stripe", "github",
+    "jira", "slack", "google-workspace", "keycloak", "vault", "splunk",
+)
+
+NATIVE_FIRST: dict[str, dict] = {
+    # Task 9 — the Kafka-protocol family (OR-22; R0.19 narrows Event Hubs).
+    "redpanda": {"ref": family_ref("kafka", "kafka"), "profile": "redpanda"},
+    "azure-event-hubs": {
+        "ref": family_ref("kafka", "kafka"),
+        "profile": "azure-event-hubs",
+        "sink_idempotent": True,
+        "delivery_sink": "effectively_once",
+        "notes": [
+            "narrows: delivery.sink is effectively_once through the idempotent producer, "
+            "never exactly_once: the Event Hubs emulator has no Kafka transactions and the "
+            "cloud offers them only in preview on Premium and Dedicated (CN2 R0.19); if "
+            "Task 9 finds enable.idempotence refused, the sink narrows to at_least_once",
+        ],
+    },
+    # Task 10 — the Postgres family.
+    "cockroachdb": {
+        "ref": family_ref("postgres", "postgres"),
+        "profile": "cockroachdb",
+        "position": "changefeed-cursor",
+    },
+    "aurora": {
+        "ref": family_ref("postgres", "postgres"),
+        "profile": "aurora-postgres",
+        "position": "pg-lsn or mysql-gtid, by engine",
+        "notes": [
+            "engine: the instance's `engine` setting chooses the family; `postgresql` runs "
+            "this manifest's ref with profile `aurora-postgres`, and `mysql` runs "
+            "loams_connector_mysql::mysql with profile `aurora-mysql` (CN2 Tasks 10, 11)",
+        ],
+    },
+    "pgvector": {"ref": family_ref("postgres", "postgres"), "profile": "pgvector"},
+    # Task 11 — the MySQL family (R0.7: MariaDB GTID in the family crate).
+    "mariadb": {
+        "ref": family_ref("mysql", "mysql"),
+        "profile": "mariadb",
+        "position": "mariadb-gtid",
+        "fallback": ("debezium", "io.debezium.connector.mariadb.MariaDbConnector", ["source"], "CN2 Task 11"),
+    },
+    # Task 12 — the SQL Server family.
+    "sql-server": {
+        "ref": family_ref("sqlserver", "sqlserver"),
+        "position": "sqlserver-lsn",
+        "fallback": ("debezium", "io.debezium.connector.sqlserver.SqlServerConnector", ["source"], "CN2 Task 12"),
+    },
+    "azure-sql": {
+        "ref": family_ref("sqlserver", "sqlserver"),
+        "profile": "azure-sql",
+        "position": "sqlserver-lsn",
+    },
+    # Task 13 — the objects family.
+    "minio-rustfs": {"ref": family_ref("objects", "s3"), "profile": "minio-rustfs"},
+    "cloudflare-r2": {"ref": family_ref("objects", "s3"), "profile": "cloudflare-r2"},
+    "gcs": {"ref": family_ref("objects", "gcs")},
+    "azure-blob": {"ref": family_ref("objects", "azure_blob")},
+    "adls-gen2": {"ref": family_ref("objects", "adls_gen2")},
+    "sftp": {"ref": family_ref("objects", "sftp")},
+    # Task 14 — key-value and wide-column.
+    "valkey": {"ref": family_ref("kv", "redis"), "profile": "valkey"},
+    "redis-streams": {"ref": family_ref("kv", "redis_streams")},
+    "dynamodb": {"ref": family_ref("kv", "dynamodb"), "position": "dynamodb-stream-sequence"},
+    "dynamodb-streams": {"ref": family_ref("kv", "dynamodb_streams"), "position": "dynamodb-stream-sequence"},
+    "cassandra": {"ref": family_ref("kv", "cassandra")},
+    # Task 15 — search and vector.
+    "opensearch": {"ref": family_ref("search", "elasticsearch"), "profile": "opensearch"},
+    "qdrant": {"ref": family_ref("search", "qdrant")},
+    # Task 16 — MongoDB (the Debezium fallback is debezium-mongodb's own manifest).
+    "mongodb": {
+        "ref": family_ref("mongodb", "mongodb"),
+        "position": "mongodb-resume-token",
+        "fallback": ("iggy", "mongodb", ["sink"], "CN2 Task 16"),
+    },
+    # Task 17 — analytics and lakehouse.
+    "redshift": {"ref": family_ref("analytics", "redshift")},
+    "databricks": {"ref": family_ref("analytics", "databricks")},
+    "trino": {"ref": family_ref("analytics", "trino")},
+    "duckdb": {"ref": family_ref("analytics", "adbc"), "profile": "duckdb"},
+    "delta-lake": {"ref": family_ref("lakehouse", "delta")},
+    # Task 18 — brokers.
+    "rabbitmq-amqp": {"ref": family_ref("brokers", "amqp091")},
+    "activemq-jms": {
+        "ref": family_ref("brokers", "amqp10"),
+        "fallback": ("camel", "jms", ["source", "sink"], "CN2 Task 23"),
+        "notes": [
+            "fallback: JMS providers without AMQP 1.0 opt into the Camel `jms` fallback per "
+            "instance (OR-4: JMS is a Java API); the replacement queue keeps it while Java is "
+            "deferred (CN2 Task 23)",
+        ],
+    },
+    "azure-service-bus": {"ref": family_ref("brokers", "amqp10")},
+    "nats": {"ref": family_ref("brokers", "nats")},
+    "mqtt": {"ref": family_ref("brokers", "mqtt")},
+    "pulsar": {"ref": family_ref("brokers", "pulsar")},
+    "websocket": {"ref": family_ref("brokers", "websocket")},
+    # Task 19 — cloud messaging.
+    "aws-sqs": {"ref": family_ref("cloud", "sqs")},
+    "aws-sns": {"ref": family_ref("cloud", "sns")},
+    "eventbridge": {"ref": family_ref("cloud", "eventbridge")},
+    "google-pub-sub": {"ref": family_ref("cloud", "pubsub")},
+    "azure-event-grid": {"ref": family_ref("cloud", "event_grid")},
+    # Task 21 — protocols, graph, observability, functions and AI.
+    "grpc": {"ref": family_ref("protocols", "grpc")},
+    "graphql": {"ref": family_ref("protocols", "graphql")},
+    "neo4j": {"ref": family_ref("protocols", "neo4j")},
+    "grafeo": {"ref": family_ref("protocols", "grafeo")},
+    "prometheus": {"ref": family_ref("protocols", "prometheus")},
+    "lambda-cloud-run-azure-functions": {"ref": family_ref("protocols", "functions")},
+    "openai": {"ref": family_ref("protocols", "openai")},
+    "anthropic": {"ref": family_ref("protocols", "anthropic")},
+    # Task 5 — the SDK's codecs.
+    "csv-ndjson": {"ref": f"{SDK_CODECS}::csv"},
+    "protobuf": {"ref": f"{SDK_CODECS}::protobuf"},
+    # Task 22 — the rows whose default runtime is a fallback (OR-4, OR-9, OR-13).
+    "oracle": {
+        "kind": "camel",
+        "ref": "sql",
+        "position": "oracle-scn",
+        "notes": [
+            fallback_only("Oracle client is proprietary (OR-4); batch and MERGE upsert run on "
+                          "the Camel `sql` component with the user-supplied ojdbc", "23"),
+            "cdc: Oracle's change capture runs on `debezium-oracle` (LogMiner) until CN2 "
+            "Task 23's verdict (OR-9, OR-13)",
+        ],
+    },
+    "debezium-sqlserver": {
+        "kind": "debezium",
+        "ref": "io.debezium.connector.sqlserver.SqlServerConnector",
+        "position": "sqlserver-lsn",
+        "notes": [fallback_only("Debezium Server CDC, the opt-in fallback of `sql-server`'s "
+                                "native CDC (OR-4, OR-13)", "12")],
+    },
+    "debezium-oracle": {
+        "kind": "debezium",
+        "ref": "io.debezium.connector.oracle.OracleConnector",
+        "position": "oracle-scn",
+        "notes": [fallback_only("Debezium Server is `oracle`'s default CDC, because LogMiner "
+                                "needs Oracle's proprietary client (OR-4, OR-9, OR-13); the "
+                                "image strips the bundled ojdbc (R0.26)", "23")],
+    },
+    "debezium-mongodb": {
+        "kind": "debezium",
+        "ref": "io.debezium.connector.mongodb.MongoDbConnector",
+        "position": "mongodb-resume-token",
+        "notes": [fallback_only("Debezium Server CDC, the opt-in fallback of `mongodb`'s "
+                                "native change streams (OR-4)", "16")],
+    },
+    # P1, not ★: the Camel runtime row is OR-4's fallback runtime itself.
+    "camel-runtime": {
+        "kind": "camel",
+        "ref": "camel",
+        "notes": [fallback_only("the Camel runtime itself, which OR-4 keeps only as the "
+                                "fallback runtime for the rows it names", "23")],
+    },
+}
+for _id in SAAS_PROFILES:
+    NATIVE_FIRST[_id] = {"ref": family_ref("http", "http"), "profile": _id}
+NATIVE_FIRST["salesforce"].update(
+    position="replay-id",
+    fallback=("camel", "salesforce", ["source"], "CN2 Task 23"),
+    notes=["fallback: Salesforce CDC runs on the Camel `salesforce` fallback until CN2 "
+           "Task 23 replaces it over the Pub/Sub API; REST and Bulk API 2.0 are native"],
+)
+
+# The ★ rows CN2 Task 2 changes: Elasticsearch moves to native (OR-8), and the declared
+# fallbacks of the native ★ connectors (OR-4). These are hand-written manifests; --check
+# asserts the CSV, and the Rust registry tests assert the manifests agree.
+STAR_FALLBACKS: dict[str, tuple[str, str, list[str], str]] = {
+    "postgresql": ("iggy", "postgres", ["source", "sink"], "CN2 Task 10"),
+    "mysql": ("debezium", "io.debezium.connector.mysql.MySqlConnector", ["source"], "CN2 Task 11"),
+    "s3": ("iggy", "s3", ["sink"], "CN2 Task 13"),
+    "elasticsearch": ("iggy", "elasticsearch", ["source", "sink"], "CN2 Task 15"),
+    "clickhouse": ("iggy", "clickhouse", ["sink"], "CN2 Task 17"),
+    "iceberg": ("iggy", "iceberg", ["sink"], "CN2 Task 17"),
+}
+
+# Profiles: a manifest's `runtime.profile`, plus Aurora's MySQL engine, which the aurora
+# manifest names in a note (one manifest, two engines; CN2 Task 2's table).
+EXTRA_PROFILES: dict[str, tuple[str, str]] = {
+    "aurora-mysql": ("mysql", "Aurora MySQL"),
+}
+PROFILE_SYSTEM_NAMES = {"aurora-postgres": "Aurora PostgreSQL"}
+PROFILE_DIR = REPO_ROOT / "connectors" / "profiles"
+PROFILE_GENERATED_BY = "# Generated by scripts/connectors/gen_registry.py (CN2 Task 2)."
+
+
+def render_fallback(fallback) -> str:
+    """The CSV's `fallback` cell: `kind:ref:directions:replaced_by`, directions `+`-joined."""
+    if not fallback:
+        return ""
+    kind, ref, directions, replaced_by = fallback
+    return f"{kind}:{ref}:{'+'.join(directions)}:{replaced_by}"
+
+
+def parse_fallback(cell: str):
+    if not cell:
+        return None
+    kind, ref, directions, replaced_by = cell.split(":", 3)
+    return kind, ref, directions.split("+"), replaced_by
 
 
 # --------------------------------------------------------------------------------------
@@ -596,6 +862,10 @@ def runtime_for(row: dict) -> tuple[str, str]:
     cid = row["id"]
     if cid in STARRED_RUNTIME:
         return STARRED_RUNTIME[cid]
+    # CN2 Task 2: every P1 and P2 row's runtime is assigned by hand (OR-1, OR-4).
+    if cid in NATIVE_FIRST and row["priority"] in ("P1", "P2"):
+        entry = NATIVE_FIRST[cid]
+        return entry.get("kind", "native"), entry["ref"]
     if cid in HANDWRITTEN_UNSTARRED:
         return HANDWRITTEN_UNSTARRED[cid]
     if row["camel"]:
@@ -689,6 +959,23 @@ def build_rows(lines: list[str]) -> tuple[list[dict], list[str], list[str]]:
             problems.append(
                 f"{row['id']}: Appendix A marks it with a star but section 8 does not list it"
             )
+        source_runtime = sink_runtime = profile = fallback = ""
+        if row["priority"] in ("P1", "P2"):
+            if (
+                row["id"] not in STARRED_RUNTIME
+                and row["id"] not in HANDWRITTEN_UNSTARRED
+                and row["id"] not in NATIVE_FIRST
+            ):
+                problems.append(f"{row['id']}: a {row['priority']} row with no CN2 Task 2 runtime assignment")
+            if row["priority"] == "P2" and runtime == "openapi":
+                problems.append(f"{row['id']}: a P2 row on openapi (CN2 OR-1, OR-11)")
+            if yes_no(row["source"]):
+                source_runtime = f"{runtime}:{ref}"
+            if yes_no(row["sink"]):
+                sink_runtime = f"{runtime}:{ref}"
+            entry = NATIVE_FIRST.get(row["id"], {})
+            profile = entry.get("profile", "")
+            fallback = render_fallback(entry.get("fallback") or STAR_FALLBACKS.get(row["id"]))
         rows.append(
             {
                 "id": row["id"],
@@ -708,6 +995,10 @@ def build_rows(lines: list[str]) -> tuple[list[dict], list[str], list[str]]:
                 "auth": "|".join(auth_slugs(row["auth"])),
                 "camel": "|".join(split_multi(row["camel"])),
                 "kestra": "|".join(split_multi(row["kestra"])),
+                "source_runtime": source_runtime,
+                "sink_runtime": sink_runtime,
+                "profile": profile,
+                "fallback": fallback,
                 "subsection": row["subsection"],
             }
         )
@@ -796,6 +1087,9 @@ def check(rows_from_doc: list[dict], problems: list[str], notes: list[str]) -> N
         )
     if len(rows_from_doc) != EXPECTED_ROW_COUNT:
         problems.append(f"Appendix A: {len(rows_from_doc)} rows, expected {EXPECTED_ROW_COUNT}")
+    p2_count = sum(1 for row in csv_rows if row["priority"] == "P2")
+    if p2_count != EXPECTED_P2_COUNT:
+        problems.append(f"catalog.csv: {p2_count} P2 rows, expected {EXPECTED_P2_COUNT} (CN2 OR-15)")
 
     by_id = {row["id"]: row for row in csv_rows}
     if len(by_id) != len(csv_rows):
@@ -837,7 +1131,7 @@ def check(rows_from_doc: list[dict], problems: list[str], notes: list[str]) -> N
         if csv_row is None:
             problems.append(f"{cid}: Appendix A row {doc_row['name']!r} is missing from catalog.csv")
             continue
-        for column in ["name", "priority", "source", "sink", "streaming", "batch", "cdc", "webhook", "auth", "camel", "kestra", "category", "starred", "status", "runtime", "ref"]:
+        for column in ["name", "priority", "source", "sink", "streaming", "batch", "cdc", "webhook", "auth", "camel", "kestra", "category", "starred", "status", "runtime", "ref", "source_runtime", "sink_runtime", "profile", "fallback"]:
             if csv_row[column] != doc_row[column]:
                 problems.append(
                     f"{cid}: {column}: appendix/doc {doc_row[column]!r} != csv {csv_row[column]!r}"
@@ -867,6 +1161,90 @@ def check(rows_from_doc: list[dict], problems: list[str], notes: list[str]) -> N
 
     # CN-R1: the licences of the components the CSV's runtimes name must be in the gate input.
     check_licences(problems, notes)
+
+    # CN2 Task 2: every generated stub is what the generator writes now, and every profile
+    # a row names (and Aurora's MySQL engine) has its file.
+    check_stubs_current(csv_rows, handwritten, problems)
+    check_profiles(csv_rows, problems)
+
+
+def check_stubs_current(csv_rows: list[dict], handwritten: set[str], problems: list[str]) -> None:
+    """A generated stub that differs from `stub_yaml(row)` is drift: rerun the generator."""
+    for row in csv_rows:
+        if row["id"] in handwritten:
+            continue
+        target = REGISTRY_DIR / f"{row['id']}.yaml"
+        if not target.exists():
+            problems.append(f"{row['id']}: no manifest; run gen_registry.py to write its stub")
+        elif target.read_text(encoding="utf-8") != stub_yaml(row):
+            problems.append(f"{row['id']}: the generated stub is stale; run gen_registry.py")
+
+
+def check_profiles(csv_rows: list[dict], problems: list[str]) -> None:
+    """Every profile the CSV names exists, and a generated one is current."""
+    for pid, (module, name) in wanted_profiles(csv_rows).items():
+        target = PROFILE_DIR / f"{pid}.yaml"
+        if not target.exists():
+            problems.append(f"profiles/{pid}.yaml does not exist; run gen_registry.py (R-CN2-2)")
+            continue
+        text = target.read_text(encoding="utf-8")
+        if text.startswith(PROFILE_GENERATED_BY) and text != profile_yaml(pid, module, name):
+            problems.append(f"profiles/{pid}.yaml is a stale placeholder; run gen_registry.py")
+        if not re.search(rf"^module: {re.escape(module)}$", text, re.MULTILINE):
+            problems.append(f"profiles/{pid}.yaml: module must be {module!r} (R-CN2-2)")
+
+
+def wanted_profiles(csv_rows: list[dict]) -> dict[str, tuple[str, str]]:
+    """Profile id -> (module, system name), from the CSV and EXTRA_PROFILES."""
+    wanted: dict[str, tuple[str, str]] = {}
+    for row in csv_rows:
+        pid = row["profile"]
+        if not pid:
+            continue
+        crate = row["ref"].split("::")[0]
+        module = crate.removeprefix("loams_connector_")
+        wanted[pid] = (module, PROFILE_SYSTEM_NAMES.get(pid, row["name"]))
+    wanted.update(EXTRA_PROFILES)
+    return dict(sorted(wanted.items()))
+
+
+def profile_yaml(pid: str, module: str, name: str) -> str:
+    """A placeholder profile (CN2 Task 2), in Shared contracts' shape."""
+    kind = "http-api" if module == "http" else "target"
+    lines = [
+        PROFILE_GENERATED_BY,
+        "# A placeholder so the manifest's runtime.profile resolves (R-CN2-2): CN2 Task 7 adds",
+        "# connectors/schema/profile.schema.json and its loader, and the family task (CN2 Tasks",
+        "# 9-21) fills in system.service, defaults, narrows and, for an http-api profile, the",
+        "# http block. Delete this header when a person takes the file over; the generator then",
+        "# leaves it alone.",
+        "apiVersion: loams.flow/v1",
+        "kind: Profile",
+        f"id: {pid}",
+        f"profile_kind: {kind}",
+        f"module: {module}",
+        "system:",
+        f"  name: {yaml_scalar(name)}",
+        "defaults: {}",
+        "narrows: []",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def write_profiles(rows: list[dict]) -> int:
+    """Write every wanted profile that is absent or still this generator's placeholder."""
+    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    written = 0
+    for pid, (module, name) in wanted_profiles(rows).items():
+        target = PROFILE_DIR / f"{pid}.yaml"
+        content = profile_yaml(pid, module, name)
+        if target.exists():
+            existing = target.read_text(encoding="utf-8")
+            if existing == content or not existing.startswith(PROFILE_GENERATED_BY):
+                continue
+        target.write_text(content, encoding="utf-8")
+        written += 1
+    return written
 
 
 def manifest_config_ref(manifest: Path) -> str | None:
@@ -1093,6 +1471,7 @@ def stub_yaml(row: dict) -> str:
     hand-written manifest replaces it (D353), and a stub that guessed a source position would
     break CN1's semantic rule that `cdc: true` implies a non-empty position.
     """
+    assigned = row["priority"] in ("P1", "P2")
     lines: list[str] = [
         "# Generated by scripts/connectors/gen_registry.py from connectors/registry/catalog.csv.",
         "# Do not edit by hand: the CSV is the registry's one source of truth (CN1 Ruling 1),",
@@ -1100,6 +1479,11 @@ def stub_yaml(row: dict) -> str:
         f"# {row['id']}: a planned stub with no capability detail (D353); a hand-written manifest",
         "# replaces it, and the generator never rewrites an id listed in handwritten.txt.",
     ]
+    if assigned:
+        lines.append(
+            "# CN2 Task 2 declares its directions and each one's default runtime (OR-1, R-CN2-6);"
+        )
+        lines.append("# its family task fills in the rest.")
     if row["starred"] == "true":
         # A placeholder for a starred id, written before its id reached handwritten.txt.
         # It says so, so nobody reads it as the starred manifest §8 requires.
@@ -1114,7 +1498,8 @@ def stub_yaml(row: dict) -> str:
         "kind: Connector",
         f"id: {row['id']}",
         f"name: {yaml_scalar(row['name'])}",
-        f"specVersion: {yaml_scalar('0.1.0')}",
+        # CN2 Task 2 adds fields to every P1 and P2 stub, a minor bump (Shared contracts).
+        f"specVersion: {yaml_scalar('0.2.0' if assigned else '0.1.0')}",
         f"category: {row['category']}",
         f"priority: {row['priority']}",
         # A stub is never starred and never preview: the starred manifests are hand-written and
@@ -1126,14 +1511,57 @@ def stub_yaml(row: dict) -> str:
         "runtime:",
         f"  kind: {row['runtime']}",
         f"  ref: {yaml_scalar(row['ref'])}",
+    ]
+    entry = NATIVE_FIRST.get(row["id"], {}) if assigned else {}
+    default = f"{row['runtime']}:{row['ref']}"
+    for direction in ("source", "sink"):
+        cell = row[f"{direction}_runtime"]
+        if cell and cell != default:
+            kind, ref = cell.split(":", 1)
+            lines += [f"  {direction}:", f"    kind: {kind}", f"    ref: {yaml_scalar(ref)}"]
+    if row["profile"]:
+        lines.append(f"  profile: {row['profile']}")
+    fallback = parse_fallback(row["fallback"])
+    if fallback:
+        kind, ref, directions, replaced_by = fallback
+        lines += ["  fallback:", f"    kind: {kind}", f"    ref: {yaml_scalar(ref)}", "    directions:"]
+        lines += [f"      - {direction}" for direction in directions]
+        lines.append(f"    replaced_by: {yaml_scalar(replaced_by)}")
+    lines += [
         "licence:",
         # D359: the gate refuses AGPL, BSL, SSPL, ELv2 and unlicensed components; every runtime
         # §5 approves is Apache-2.0, and `native`/`openapi` are Loams's own Apache-2.0 code.
         "  component: Apache-2.0",
         "capabilities:",
+    ]
+    if assigned and row["source"]:
+        position = entry.get("position", "")
+        if row["cdc"] and not position:
+            raise Problem(f"{row['id']}: a CDC source needs a position in NATIVE_FIRST (CN1 rule 2)")
+        lines += [
+            "  source:",
+            f"    streaming: {str(bool(row['streaming'])).lower()}",
+            f"    batch: {str(bool(row['batch'])).lower()}",
+            f"    cdc: {str(bool(row['cdc'])).lower()}",
+            f"    webhook: {str(bool(row['webhook'])).lower()}",
+            # A stub resumes only where Task 2 names its position (the CDC sources).
+            f"    resumable: {str(bool(position)).lower()}",
+            f"    position: {yaml_scalar(position)}",
+        ]
+    if assigned and row["sink"]:
+        lines += [
+            "  sink:",
+            f"    streaming: {str(bool(row['streaming'])).lower()}",
+            f"    batch: {str(bool(row['batch'])).lower()}",
+            "    transactional: false",
+            "    upsert: false",
+            "    delete: false",
+            f"    idempotent: {str(bool(entry.get('sink_idempotent'))).lower()}",
+        ]
+    lines += [
         "  delivery:",
         "    source: at_least_once",
-        "    sink: at_least_once",
+        f"    sink: {entry.get('delivery_sink', 'at_least_once')}",
         "  ordering: none",
         "  formats:",
         "    - json",
@@ -1164,6 +1592,9 @@ def stub_yaml(row: dict) -> str:
     lines.append("limits: {}")
     lines.append("conformance: []")
     lines.append("docs: null")
+    if entry.get("notes"):
+        lines.append("notes:")
+        lines.extend(f"  - {yaml_scalar(note)}" for note in entry["notes"])
     return "\n".join(lines) + "\n"
 
 
@@ -1225,9 +1656,9 @@ def placeholder_config_schema(row: dict) -> str:
         "title": f"{row['name']} instance config (placeholder)",
         "description": (
             f"Placeholder for a {row['name']} instance's settings. It is filled in when this "
-            "connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel "
-            "components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, "
-            "through OpenAPI-generated native connectors (design §33 D354, §5). Until then it "
+            "connector is built: CN2 for the P2 rows, as first-party native connectors with "
+            "declared fallbacks (CN2 OR-1, OR-4), and CN3 for the P3 long tail, through "
+            "OpenAPI-generated native connectors (design §33 D354, §5). Until then it "
             "declares no field and requires none, and additionalProperties is true so an "
             "operator can already pass settings for an unimplemented connector; nothing reads "
             "them until the connector ships (design §33 D353; CN1 Task 2)."
@@ -1379,7 +1810,7 @@ def render_docs(rows: list[dict]) -> str:
             out.extend([note, ""])
         out.extend(render_table(sub_rows))
         out.append("")
-    return "\n".join(out) + "\n" + TOTALS_LINE + "\n"
+    return "\n".join(out) + "\n" + totals_line(rows) + "\n"
 
 
 # --------------------------------------------------------------------------------------
@@ -1514,6 +1945,8 @@ def main(argv: list[str]) -> int:
 
     written, skipped = write_stubs(rows, problems)
     schemas_written, schemas_skipped = write_config_schemas(rows, problems)
+    profiles_written = write_profiles(rows)
+    print(f"gen_registry: {profiles_written} profile placeholder(s) written")
     for problem in problems:
         print(f"gen_registry: {problem}", file=sys.stderr)
     starred = sum(1 for row in rows if row["starred"] == "true")

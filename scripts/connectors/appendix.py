@@ -35,17 +35,19 @@ STAR = "★"  # P1, the CN1 set (design §33 D358)
 HEADER_CELLS = ("Connector", "Source", "Sink", "Streaming", "Batch", "CDC",
                 "Webhook", "Auth", "Camel", "Kestra", "Priority")
 
-# The closing line of the appendix. The counts are the registry's own, so they
-# are computed; the P2 and P3 counts are deliberately left to CN1 Task 2's
-# generator to state, so that tail is fixed prose.
-TOTALS_TAIL = "and the P2 and P3 counts are computed by CN1 Task 2's generator."
+# The closing line of the appendix. Every count is the registry's own, so all of
+# them are computed (CN2 Task 2 states the P2 and P3 counts the line used to leave
+# to the generator).
 
 
 def totals_line(rows):
-    """`Totals: 203 connectors; 21 ★ (P1), …` — the counts are the registry's."""
+    """`Totals: 205 connectors; 25 P1, of which 21 ★; 73 P2; 107 P3.`"""
     rows = list(rows)
     starred = sum(1 for row in rows if row.starred)
-    return (f"Totals: {len(rows)} connectors; {starred} \u2605 (P1), {TOTALS_TAIL}")
+    count = {level: sum(1 for row in rows if row.priority == level)
+             for level in ("P1", "P2", "P3")}
+    return (f"Totals: {len(rows)} connectors; {count['P1']} P1, of which {starred} "
+            f"\u2605; {count['P2']} P2; {count['P3']} P3.")
 
 # The appendix's seventeen sections, in document order. The section titles are
 # editorial (they are prose, not registry data), so they live beside the
@@ -111,13 +113,14 @@ CATEGORY_SECTION = {
 # notes this is editorial prose from the design doc, not registry data.
 SECTION_EPILOGUES = {
     "applications": "Each is a `native` sink whose credential comes from the `SecretStore` (D189) and whose upstream is reached only over its public HTTP API. That is D359's carve-out, and it is why no upstream application's own licence is a gate here: Loams neither ships nor links any of them. ItPlane's upstream is AGPL-3.0 and Forgejo's is MIT; both are read as API surfaces, and `connectors/licences.toml` records that explicitly rather than leaving it implicit. Forgejo's write capability is a **provisioning** fact, not a code fact: Forgejo derives the token scope from the HTTP method, so a `write:issue` token must be minted before the sink can run (its read scopes and its write scopes cannot live in one token).",
-    # A.3's paragraph after its table (D634, 2026-10-04), which is the second section to
-    # carry one. It says why the Neo4j row's source direction is native — `camel-catalog`
-    # 4.22.1 marks both graph components Camel ships `producerOnly: true` — and why Grafeo
-    # joined A.3 as its own row: a Rust engine embedded in the Fabric, reached over
-    # Connect-RPC with GQL (ISO/IEC 39075) as its query surface. The section key is `nosql`
-    # because A.3 prints nosql, search, vector and graph as one table.
-    "nosql": "`Neo4j`'s source direction is served by a **native** connector over the engine's gRPC Query Service, not by `camel-neo4j`: `camel-catalog` 4.22.1 marks `camel-neo4j` (and `camel-arangodb`) `producerOnly: true`, so Camel can write to a graph and cannot read from one (D634). `Grafeo` is Loams’ own graph engine, a Rust database embedded in the Fabric and reached over Connect-RPC with **GQL** — ISO/IEC 39075 — as its query surface, so the connector is not tied to one vendor's dialect. Both are P2 and neither is ★.",
+    # A.3's paragraph after its table (D634, 2026-10-04; CN2 OR-14, 2026-10-10), the
+    # second section to carry one. It says Neo4j is native in both directions over its
+    # HTTP Query API, with no Bolt and no `camel-neo4j` (which `camel-catalog` 4.22.1
+    # marks `producerOnly: true` anyway), and why Grafeo joined A.3 as its own row: a
+    # Rust engine embedded in the Fabric, reached over Connect-RPC with GQL (ISO/IEC
+    # 39075) as its query surface. The section key is `nosql` because A.3 prints nosql,
+    # search, vector and graph as one table.
+    "nosql": "`Neo4j` is **native** in both directions over the Neo4j HTTP Query API (`POST /db/{db}/query/v2`), with no Bolt anywhere in the path (D634 (c), CN2 OR-14); `camel-neo4j` is not used, and `camel-catalog` 4.22.1 marks it (and `camel-arangodb`) `producerOnly: true` in any case, so Camel could write to a graph and could not read from one (D634). `Grafeo` is Loams’ own graph engine, a Rust database embedded in the Fabric and reached over Connect-RPC with **GQL** — ISO/IEC 39075 — as its query surface, so the connector is not tied to one vendor's dialect. Both are P2 and neither is ★.",
 }
 
 SECTION_NOTES = {

@@ -92,7 +92,7 @@ spdx = "Apache-2.0"
 kind = "runtime"
 # Unmodified Debezium Server 3.7 with its HTTP sink posting CloudEvents to loams-fabric ingest
 # (D357); one container per source database (CN1 Ruling 6).
-used_by = ["debezium-postgres", "debezium-mysql", "debezium-sql-server-oracle", "debezium-mongodb"]
+used_by = ["debezium-postgres", "debezium-mysql", "debezium-sqlserver", "debezium-oracle", "debezium-mongodb"]
 source = "https://github.com/debezium/debezium-server"
 
 [components.kafka]
@@ -928,7 +928,7 @@ kind = "driver"
 # Oracle Free Use Terms and Conditions. user-supplied (CN1 Ruling 8, OR-3): never in an
 # image Loams builds. Debezium Server 3.7.0.Final's dist archive bundles ojdbc11 and ojdbc17
 # 23.26.0.0.0 in lib/, so a Debezium image Loams renders must delete them (R0.26).
-used_by = ["oracle", "debezium-sql-server-oracle"]
+used_by = ["oracle", "debezium-oracle"]
 source = "https://repo1.maven.org/maven2/com/oracle/database/jdbc/ojdbc11/23.26.0.0.0/ojdbc11-23.26.0.0.0.pom"
 
 [components.debezium-sqlserver]
@@ -936,7 +936,7 @@ name = "Debezium SQL Server connector"
 spdx = "Apache-2.0"
 kind = "service"
 # Run inside debezium-server 3.7.0.Final as the opt-in fallback of CN2 Task 12 (OR-13).
-used_by = ["debezium-sql-server-oracle"]
+used_by = ["debezium-sqlserver"]
 source = "https://github.com/debezium/debezium/tree/main/debezium-connector-sqlserver"
 
 [components.debezium-oracle]
@@ -944,7 +944,7 @@ name = "Debezium Oracle connector"
 spdx = "Apache-2.0"
 kind = "service"
 # Oracle default CDC (OR-9), database.connection.adapter=logminer; needs oracle-jdbc.
-used_by = ["debezium-sql-server-oracle"]
+used_by = ["debezium-oracle"]
 source = "https://github.com/debezium/debezium/tree/main/debezium-connector-oracle"
 
 [components.debezium-mongodb]
@@ -1105,7 +1105,7 @@ spdx = "LicenseRef-Oracle-FUTC"
 kind = "service"
 ci_only = true
 image = "gvenzl/oracle-free:23.26.3"
-used_by = ["oracle", "debezium-sql-server-oracle"]
+used_by = ["oracle", "debezium-oracle"]
 source = "https://github.com/gvenzl/oci-oracle-free"
 
 [components.mongodb-server]

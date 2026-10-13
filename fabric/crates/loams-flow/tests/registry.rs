@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use buffa::{EnumValue, Message};
-use loams_flow::manifest::{Category, ConnectorSpec, Priority, RuntimeKind, Status, pb};
+use loams_flow::manifest::{Category, Choice, ConnectorSpec, Priority, RuntimeKind, Status, pb};
 use loams_flow::registry::{Filter, Registry};
 use loams_flow::validate::{Direction, LicenceGate};
 use serde_json::Value;
@@ -43,7 +43,7 @@ fn registry() -> Registry {
 // The registry
 // -------------------------------------------------------------------------------------
 
-/// CN1 Task 2's gate: 204 manifests, 21 of them ★.
+/// CN1 Task 2's gate, as CN2 Task 2 leaves it: 205 manifests, 21 of them ★.
 ///
 /// **The two numbers differ on purpose, twice over.** CN1's "Rulings made during
 /// execution" row 11 (with D628, 2026-10-04) raised the catalog from Appendix A's
@@ -55,15 +55,17 @@ fn registry() -> Registry {
 /// the gate a second time — the same way, because Grafeo is likewise **P2 and unstarred**:
 /// it is the engine D634 embeds in the Fabric, and adding it must not read as adding a
 /// star. D358's ★ count is untouched at 21 across both rulings, and a reader must not read
-/// 204 as "25 ★".
+/// 204 as "25 ★". CN2 OR-13 then split §33 A.7's `Debezium-SQL Server / Oracle` row into
+/// `debezium-sqlserver` and `debezium-oracle` (CN2 Task 2), which is the 205th manifest;
+/// MCP's move to P3 (OR-15) changes no count but P2's, which stays 73.
 #[test]
-fn registry_has_204_entries_and_21_starred() {
+fn registry_has_205_entries_and_21_starred() {
     let registry = registry();
     assert_eq!(
         registry.len(),
         CATALOG_ROWS,
-        "§33 Appendix A's totals line, CN1 Ruling 11 (D628) and D634 say 204 rows — 203 \
-         from D628 plus Grafeo; a shortfall names the manifests that have not been written"
+        "§33 Appendix A's totals line says 205 rows — 203 from D628, Grafeo (D634) and the \
+         Debezium split (CN2 OR-13); a shortfall names the manifests that have not been written"
     );
     assert_eq!(
         registry.starred().len(),
@@ -73,8 +75,8 @@ fn registry_has_204_entries_and_21_starred() {
     );
 
     // D634's own row, asserted field by field, because "it is in the registry" is not the
-    // claim being made. A.3's row is P2 and unstarred, and the runtime is **native** at
-    // `loams_flow::connectors::graph` — the engine is embedded in the Fabric (D634(b)),
+    // claim being made. A.3's row is P2 and unstarred, and the runtime is **native**, in
+    // the `protocols` family since CN2 Task 2 (Task 21 builds it) — the engine is embedded in the Fabric (D634(b)),
     // not run beside it, and there is no Bolt anywhere in the path (D634(c)). Before the
     // generator's `LOAMS_OWNED_NATIVE` table named `grafeo`, A.3's empty Camel and Kestra
     // cells fell through its non-★ runtime rule to `openapi:grafeo` — an OpenAPI-generated
@@ -86,7 +88,10 @@ fn registry_has_204_entries_and_21_starred() {
     assert!(!grafeo.starred, "grafeo is P2, not one of D358's 21 (D634)");
     assert_eq!(grafeo.priority, Priority::P2);
     assert_eq!(grafeo.runtime.kind, RuntimeKind::Native);
-    assert_eq!(grafeo.runtime.reference, "loams_flow::connectors::graph");
+    assert_eq!(
+        grafeo.runtime.reference,
+        "loams_connector_protocols::grafeo"
+    );
 
     for spec in registry.starred() {
         assert!(spec.starred, "{} is in the starred list", spec.id);
@@ -175,8 +180,8 @@ fn registry_has_204_entries_and_21_starred() {
                 ..Filter::default()
             })
             .len(),
-        6,
-        "§33 A.7 counts 6 CDC connectors"
+        7,
+        "§33 A.7 counts 7 CDC connectors after the Debezium split (CN2 OR-13)"
     );
     assert_eq!(
         registry
@@ -185,9 +190,9 @@ fn registry_has_204_entries_and_21_starred() {
                 ..Filter::default()
             })
             .len(),
-        2,
-        "§33 A.7's six CDC connectors, but only CN1's two run on the Debezium Server; the \
-         other four are Camel components CN2 would ship"
+        DEBEZIUM_ROWS.len(),
+        "§33 A.7's seven CDC connectors: the five Debezium rows run on Debezium Server \
+         (CN2 Task 2); the embedded engine (P3) and DynamoDB Streams (native) do not"
     );
     assert!(
         registry
@@ -288,8 +293,9 @@ impl CsvRow {
     }
 }
 
-/// The CSV's 17 columns, in `scripts/connectors/gen_registry.py`'s order.
-const CSV_COLUMNS: [&str; 17] = [
+/// The CSV's 21 columns, in `scripts/connectors/gen_registry.py`'s order: CN1's 17 and
+/// CN2 Task 2's four (`source_runtime`, `sink_runtime`, `profile`, `fallback`).
+const CSV_COLUMNS: [&str; 21] = [
     "id",
     "name",
     "category",
@@ -307,6 +313,10 @@ const CSV_COLUMNS: [&str; 17] = [
     "auth",
     "camel",
     "kestra",
+    "source_runtime",
+    "sink_runtime",
+    "profile",
+    "fallback",
 ];
 
 /// §33 A.18's three Loams applications (D628, CN1 Ruling 11): they have a CSV row and an
@@ -330,9 +340,9 @@ const A18: [&str; 3] = ["forgejo", "itsplane", "zulip"];
 /// to notice, which is why the id is named rather than the rule loosened.
 const HAND_WRITTEN_UNSTARRED_P2: [&str; 1] = ["grafeo"];
 
-/// Ruling 11's row count, after D628 added A.18's three to the précis' 200 and D634 added
-/// §33 A.3's Grafeo row.
-const CATALOG_ROWS: usize = 204;
+/// Ruling 11's row count, after D628 added A.18's three to the précis' 200, D634 added
+/// §33 A.3's Grafeo row and CN2 OR-13 split A.7's Debezium SQL Server / Oracle row.
+const CATALOG_ROWS: usize = 205;
 
 /// §33 §8 and D358's ★ count, which D628 and D634 both deliberately did not change.
 const STARRED_ROWS: usize = 21;
@@ -567,6 +577,40 @@ fn appendix_matches_csv() {
         missing.is_empty(),
         "the CSV has rows Appendix A does not: {missing:?}"
     );
+
+    // CN2 Task 2's prose around the tables: the totals line counts every priority from
+    // the CSV, the legend says P2 is first-party native, and A.3's note says Neo4j is
+    // native over its HTTP Query API (OR-14).
+    let count = |priority: &str| {
+        rows.iter()
+            .filter(|row| row.get("priority") == priority)
+            .count()
+    };
+    let starred = rows
+        .iter()
+        .filter(|row| row.get("starred") == "true")
+        .count();
+    let totals = format!(
+        "Totals: {} connectors; {} P1, of which {starred} ★; {} P2; {} P3.",
+        rows.len(),
+        count("P1"),
+        count("P2"),
+        count("P3")
+    );
+    let doc = std::fs::read_to_string(repo_root().join("docs/design/33-connectors.md"))
+        .expect("docs/design/33-connectors.md is readable");
+    assert!(
+        doc.lines().any(|line| line == totals),
+        "Appendix A's totals line must read {totals:?}"
+    );
+    assert!(
+        doc.contains("P2 = CN2 (first-party native, with declared fallbacks)"),
+        "Appendix A's legend for P2 (CN2 OR-1, OR-4)"
+    );
+    assert!(
+        doc.contains("Neo4j HTTP Query API"),
+        "A.3's note says Neo4j is native over the HTTP Query API (OR-14)"
+    );
 }
 
 /// §33 Appendix A's table rows, as `(first cell, all cells)`, in document order.
@@ -722,6 +766,9 @@ fn connector_id(name: &str) -> String {
         "HTTP / REST" => "http".to_string(),
         "ADBC (generic)" => "adbc".to_string(),
         "Airbyte (licence flag, D359)" => "airbyte".to_string(),
+        // CN2 OR-13 names the split row's id; the mechanical slug would be
+        // `debezium-sql-server`.
+        "Debezium-SQL Server" => "debezium-sqlserver".to_string(),
         other => {
             let mut slug = String::with_capacity(other.len());
             let mut in_run = false;
@@ -842,11 +889,14 @@ fn licence_gate_refuses_flagged() {
     // `library` row is the honest kind and `check_components` really does licence-check them.
     // GR1 Task 1 (D741) added the sixth, `grafeo-storage` (Apache-2.0), which 0.5.43 links and
     // the 2026-10-04 reading missed; `crates/loams-graph/tests/licences.rs` now checks the
-    // Grafeo stanzas against the lockfiles.
+    // Grafeo stanzas against the lockfiles. CN2 Task 0 (R0.30) added a stanza for every
+    // protocol crate and test image its spike found, 74 more, which CN2 Task 3's gate
+    // reclassifies; CN2 Task 2 recorded the new total here (CN2 ruling R2.8).
     assert_eq!(
         components.len(),
-        48,
-        "D359 records 42 components after CN1 Task 15, plus D634's six Grafeo crates"
+        122,
+        "D359 records 42 components after CN1 Task 15, D634's six Grafeo crates and CN2 \
+         Task 0's 74 crates and images"
     );
     gate.check_components(&text, "connectors/licences.toml")
         .unwrap_or_else(|error| panic!("no component may be refused: {error}"));
@@ -1213,12 +1263,12 @@ fn cn2_fields_manifest() -> ConnectorSpec {
         .unwrap_or_else(|errors| panic!("the CN2 case must validate: {errors:?}"))
 }
 
-/// CN2 Task 1: the manifest additions are optional, so the registry as built — 204
-/// manifests, none of which carries them yet — still loads, and R-CN2-6 reports the
-/// non-native P1 and P2 rows as warnings rather than refusing them until CN2 Task 2
-/// assigns the runtimes.
+/// CN2 Task 1's check, as CN2 Task 2 leaves it: every one of the 205 manifests renders
+/// back to a manifest the schema and every rule accept, R-CN2-6 included now that it is
+/// an error ([`loams_flow::validate::NATIVE_FIRST_ENFORCED`]), so the registry carries no
+/// warning; and the two filters Task 1 added see the fallbacks Task 2 declared.
 #[test]
-fn existing_204_manifests_still_validate() {
+fn existing_205_manifests_still_validate() {
     let registry = registry();
     assert_eq!(registry.len(), CATALOG_ROWS);
 
@@ -1234,8 +1284,9 @@ fn existing_204_manifests_still_validate() {
         let again = loams_flow::validate::validate_manifest(&value, schema.validator())
             .unwrap_or_else(|errors| panic!("{id}: must still validate: {errors:?}"));
         assert_eq!(again.runtime, spec.runtime, "{id}: runtime survives");
-        // The defaults of the new fields hold on every manifest that omits them.
-        assert!(spec.runtime.fallback.is_none(), "{id}: no fallback yet");
+        assert_eq!(again.notes, spec.notes, "{id}: notes survive");
+        // No manifest claims a reply yet: OR-19's `sink.reply` needs a `reply_topic`
+        // in the config schema (R-CN2-3), which Task 21 writes.
         assert!(
             spec.capabilities
                 .sink
@@ -1245,46 +1296,17 @@ fn existing_204_manifests_still_validate() {
         );
     }
 
-    // R-CN2-6 is a warning until Task 2: the registry carries P1 rows whose declared
-    // directions run on Camel, Debezium or Iggy (jdbc, debezium-postgres,
-    // debezium-mysql, elasticsearch as built) and still loads, and every warning is
-    // about a runtime. The generated P2 stubs declare no direction yet, so the rule
-    // has nothing to read on them until Task 2 and the family tasks fill them in.
-    let warnings = registry.warnings();
-    let warned: BTreeSet<&str> = warnings.iter().map(|file| file.file.as_str()).collect();
-    for expected in [
-        "jdbc.yaml",
-        "debezium-postgres.yaml",
-        "debezium-mysql.yaml",
-        "elasticsearch.yaml",
-    ] {
+    // R-CN2-6 is an error since Task 2, so nothing is left for the warning channel.
+    const {
         assert!(
-            warned.contains(expected),
-            "{expected} runs a declared direction on a non-native runtime with no \
-             fallback-only note; R-CN2-6 must warn, got {warned:?}"
+            loams_flow::validate::NATIVE_FIRST_ENFORCED,
+            "CN2 Task 2 makes R-CN2-6 an error"
         );
     }
     assert!(
-        !warnings.is_empty(),
-        "the registry as built has non-native P1 and P2 rows, which R-CN2-6 names"
-    );
-    for file in warnings {
-        for warning in &file.errors {
-            assert!(
-                warning.path.starts_with("runtime"),
-                "{}: only R-CN2-6 warns, got {warning}",
-                file.file
-            );
-        }
-    }
-    assert!(
-        warnings.iter().all(|file| {
-            let id = file.file.trim_end_matches(".yaml");
-            registry
-                .get(id)
-                .is_some_and(|spec| matches!(spec.priority, Priority::P1 | Priority::P2))
-        }),
-        "R-CN2-6 covers P1 and P2 only"
+        registry.warnings().is_empty(),
+        "R-CN2-6 refuses rather than warns since CN2 Task 2, got {:?}",
+        registry.warnings()
     );
 
     // The two filters CN2 Task 1 adds.
@@ -1293,6 +1315,7 @@ fn existing_204_manifests_still_validate() {
         ..Filter::default()
     });
     assert!(native_sources.iter().any(|spec| spec.id == "kafka"));
+    assert!(native_sources.iter().any(|spec| spec.id == "redpanda"));
     assert!(
         native_sources
             .iter()
@@ -1308,6 +1331,19 @@ fn existing_204_manifests_still_validate() {
             .iter()
             .all(|spec| spec.capabilities.sink.is_some())
     );
+    let with_fallback: BTreeSet<&str> = registry
+        .list(&Filter {
+            has_fallback: Some(true),
+            ..Filter::default()
+        })
+        .iter()
+        .map(|spec| spec.id.as_str())
+        .collect();
+    assert_eq!(
+        with_fallback,
+        FALLBACK_BLOCKS.iter().copied().collect::<BTreeSet<_>>(),
+        "CN2 Task 2's fallback blocks (OR-4)"
+    );
     assert_eq!(
         registry
             .list(&Filter {
@@ -1315,16 +1351,7 @@ fn existing_204_manifests_still_validate() {
                 ..Filter::default()
             })
             .len(),
-        CATALOG_ROWS,
-        "no manifest declares a fallback before CN2 Task 2"
-    );
-    assert!(
-        registry
-            .list(&Filter {
-                has_fallback: Some(true),
-                ..Filter::default()
-            })
-            .is_empty()
+        CATALOG_ROWS - FALLBACK_BLOCKS.len()
     );
     let cn2 = cn2_fields_manifest();
     assert!(
@@ -1355,4 +1382,554 @@ fn proto_enum_name(slug: &str, prefix: &str) -> String {
         other => other.to_uppercase().replace(['-', '_'], "_"),
     };
     format!("{prefix}_{body}")
+}
+
+// -------------------------------------------------------------------------------------
+// CN2 Task 2: the native-first runtime assignment
+// -------------------------------------------------------------------------------------
+
+/// CN2 OR-15: P2 is 73 rows after the Debezium split and MCP's move to P3.
+const P2_ROWS: usize = 73;
+
+/// The P2 rows whose declared directions do **not** run native by default, each with a
+/// `fallback-only:` note naming one of OR-4's reasons (CN2 Task 2's table): Oracle on
+/// Camel `sql`, and the three Debezium Server rows that are P2.
+const NON_NATIVE_P2: [&str; 4] = [
+    "debezium-mongodb",
+    "debezium-oracle",
+    "debezium-sqlserver",
+    "oracle",
+];
+
+/// The five Debezium Server manifests after the split (CN2 OR-13): Oracle's default CDC
+/// path, and the opt-in fallbacks of the native CDC in Tasks 10, 11, 12 and 16.
+const DEBEZIUM_ROWS: [&str; 5] = [
+    "debezium-mongodb",
+    "debezium-mysql",
+    "debezium-oracle",
+    "debezium-postgres",
+    "debezium-sqlserver",
+];
+
+/// The manifests CN2 Task 2 gives a `runtime.fallback` block (OR-4), and the task each
+/// names in `replaced_by`.
+const FALLBACK_BLOCKS: [&str; 11] = [
+    "activemq-jms",
+    "clickhouse",
+    "elasticsearch",
+    "iceberg",
+    "mariadb",
+    "mongodb",
+    "mysql",
+    "postgresql",
+    "s3",
+    "salesforce",
+    "sql-server",
+];
+
+/// The connector families of CN2 OR-6, one crate `loams-connector-<family>` each.
+const FAMILIES: [&str; 14] = [
+    "analytics",
+    "brokers",
+    "cloud",
+    "http",
+    "kafka",
+    "kv",
+    "lakehouse",
+    "mongodb",
+    "mysql",
+    "objects",
+    "postgres",
+    "protocols",
+    "search",
+    "sqlserver",
+];
+
+/// The SDK's codecs, which serve the two P2 format rows (CN2 Task 5).
+const SDK_CODECS: &str = "loams_connector_sdk::codecs";
+
+/// The family a native `runtime.ref` points into: `loams_connector_kafka::kafka` is
+/// `kafka`. `None` for a ref outside the family crates (CN1's `loams_flow::…` modules,
+/// which CN2 Task 8 moves, and the SDK codecs).
+fn family_of(reference: &str) -> Option<&str> {
+    let crate_name = reference.split("::").next()?;
+    let family = crate_name.strip_prefix("loams_connector_")?;
+    FAMILIES.contains(&family).then_some(family)
+}
+
+/// A manifest's declared directions, in source-then-sink order.
+fn declared(spec: &ConnectorSpec) -> Vec<Direction> {
+    let mut directions = Vec::new();
+    if spec.capabilities.source.is_some() {
+        directions.push(Direction::Source);
+    }
+    if spec.capabilities.sink.is_some() {
+        directions.push(Direction::Sink);
+    }
+    directions
+}
+
+/// The `fallback-only:` note, if the manifest has one.
+fn fallback_only_note(spec: &ConnectorSpec) -> Option<&str> {
+    spec.notes
+        .iter()
+        .map(String::as_str)
+        .find(|note| note.trim_start().starts_with("fallback-only:"))
+}
+
+/// `CN2 Task <n>`: what a `replaced_by` names (R-CN2-8, OR-4).
+fn names_a_task(text: &str) -> bool {
+    text.trim()
+        .strip_prefix("CN2 Task ")
+        .is_some_and(|number| !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// The `replaced_by:` a `fallback-only:` note carries (CN2 Task 2's ruling: a manifest
+/// whose default runtime *is* the fallback has no block to put it in).
+fn note_replaced_by(note: &str) -> Option<&str> {
+    note.split_once("replaced_by:").map(|(_, task)| task.trim())
+}
+
+/// The CSV's `kind:ref` runtime cell, split.
+fn split_runtime_cell(cell: &str) -> Option<(&str, &str)> {
+    (!cell.is_empty()).then(|| cell.split_once(':').expect("a runtime cell is kind:ref"))
+}
+
+/// R-CN2-6 as CN2 Task 2 leaves it: every P1 and P2 manifest declares its directions,
+/// and each runs `native` by default unless a `fallback-only:` note names one of OR-4's
+/// reasons. The P2 exceptions are exactly Task 2's table's, and the CSV's per-direction
+/// columns say the same as the manifests.
+#[test]
+fn p2_rows_are_native_or_fallback_only_explained() {
+    const {
+        assert!(
+            loams_flow::validate::NATIVE_FIRST_ENFORCED,
+            "CN2 Task 2 flips R-CN2-6 to an error"
+        );
+    }
+    let registry = registry();
+    let p2: Vec<&ConnectorSpec> = registry
+        .all()
+        .filter(|spec| spec.priority == Priority::P2)
+        .collect();
+    assert_eq!(p2.len(), P2_ROWS, "CN2 OR-15: P2 is 73 rows");
+
+    let mut non_native_p2 = BTreeSet::new();
+    for spec in registry
+        .all()
+        .filter(|spec| matches!(spec.priority, Priority::P1 | Priority::P2))
+    {
+        let id = spec.id.as_str();
+        let directions = declared(spec);
+        assert!(
+            !directions.is_empty(),
+            "{id}: a P1 or P2 manifest declares its directions, or R-CN2-6 has nothing to read"
+        );
+        for direction in directions {
+            let (kind, _) = spec
+                .runtime
+                .for_direction(direction, Choice::Default)
+                .expect("the default runtime always exists");
+            if kind == RuntimeKind::Native {
+                continue;
+            }
+            let note = fallback_only_note(spec).unwrap_or_else(|| {
+                panic!("{id}: its {direction} runs on {kind} with no fallback-only note")
+            });
+            let lower = note.to_lowercase();
+            assert!(
+                loams_flow::validate::OR4_FALLBACK_REASONS
+                    .iter()
+                    .any(|reason| lower.contains(reason)),
+                "{id}: {note:?} names none of OR-4's reasons"
+            );
+            if spec.priority == Priority::P2 {
+                non_native_p2.insert(id);
+            }
+        }
+    }
+    assert_eq!(
+        non_native_p2,
+        NON_NATIVE_P2.iter().copied().collect::<BTreeSet<_>>(),
+        "CN2 Task 2's table: only Oracle and the Debezium rows run non-native by default"
+    );
+
+    // The CSV's `source_runtime` and `sink_runtime` are the manifests' defaults, for every
+    // direction a P1 or P2 manifest declares; P3 rows are CN3's and leave them empty.
+    for row in read_catalog_csv() {
+        let id = row.get("id");
+        let spec = registry.get(id).expect("every CSV row has a manifest");
+        if spec.priority == Priority::P3 {
+            assert!(
+                row.get("source_runtime").is_empty() && row.get("sink_runtime").is_empty(),
+                "{id}: P3 per-direction runtimes are CN3's"
+            );
+            continue;
+        }
+        for direction in declared(spec) {
+            let column = match direction {
+                Direction::Source => "source_runtime",
+                Direction::Sink => "sink_runtime",
+            };
+            let (kind, reference) = spec
+                .runtime
+                .for_direction(direction, Choice::Default)
+                .expect("the default runtime always exists");
+            let cell = row.get(column);
+            assert_eq!(
+                split_runtime_cell(cell),
+                Some((kind.slug(), reference)),
+                "{id}: the CSV's {column} and the manifest's default {direction} runtime disagree"
+            );
+        }
+    }
+}
+
+/// OR-1 and OR-11: no P2 row is an OpenAPI-generated connector any more; the nine P2
+/// rows with no Camel component and the SaaS rows Camel covers are HTTP-API profiles on
+/// the native HTTP family. `openapi` is CN3's, for P3.
+#[test]
+fn p2_has_no_openapi_runtime() {
+    let registry = registry();
+    for spec in registry.all().filter(|spec| spec.priority == Priority::P2) {
+        let id = spec.id.as_str();
+        assert_ne!(
+            spec.runtime.kind,
+            RuntimeKind::Openapi,
+            "{id}: runtime.kind"
+        );
+        for direction in [Direction::Source, Direction::Sink] {
+            for choice in [Choice::Default, Choice::Fallback] {
+                if let Some((kind, _)) = spec.runtime.for_direction(direction, choice) {
+                    assert_ne!(
+                        kind,
+                        RuntimeKind::Openapi,
+                        "{id}: the {direction} direction ({choice:?}) is openapi"
+                    );
+                }
+            }
+        }
+    }
+    for row in read_catalog_csv()
+        .iter()
+        .filter(|row| row.get("priority") == "P2")
+    {
+        assert_ne!(row.get("runtime"), "openapi", "{}: the CSV", row.get("id"));
+    }
+    // MCP left P2 for P3 (OR-15), where its generated runtime is still legal.
+    assert_eq!(
+        registry.get("mcp").map(|spec| spec.priority),
+        Some(Priority::P3)
+    );
+}
+
+/// A manifest's `runtime.profile` names a file under `connectors/profiles/`, whose
+/// `module` is the family the manifest's native `ref` points into: `target` profiles
+/// for the protocol-compatible systems (OR-2), `http-api` profiles on the `http`
+/// family for the SaaS rows (OR-11). Every native P2 `ref` names a CN2 family crate,
+/// and every profile file is used.
+#[test]
+fn every_target_names_an_existing_family_and_profile() {
+    let registry = registry();
+    let profiles_dir = connectors_root().join("profiles");
+    let mut used: BTreeSet<String> = BTreeSet::new();
+    let csv: BTreeMap<String, CsvRow> = read_catalog_csv()
+        .into_iter()
+        .map(|row| (row.get("id").to_string(), row))
+        .collect();
+
+    for spec in registry.all() {
+        let id = spec.id.as_str();
+        assert_eq!(
+            csv[id].get("profile"),
+            spec.runtime.profile.as_deref().unwrap_or_default(),
+            "{id}: the CSV's profile and the manifest's disagree"
+        );
+        // Every native P2 direction points into a family crate (or the SDK's codecs).
+        if spec.priority == Priority::P2 {
+            for direction in declared(spec) {
+                let (kind, reference) = spec
+                    .runtime
+                    .for_direction(direction, Choice::Default)
+                    .expect("the default runtime always exists");
+                if kind == RuntimeKind::Native {
+                    assert!(
+                        family_of(reference).is_some() || reference.starts_with(SDK_CODECS),
+                        "{id}: the native {direction} ref {reference:?} names no CN2 family \
+                         crate (OR-6)"
+                    );
+                }
+            }
+        }
+        let Some(profile) = spec.runtime.profile.as_deref() else {
+            continue;
+        };
+        used.insert(profile.to_string());
+        let path = profiles_dir.join(format!("{profile}.yaml"));
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("{id}: profile {profile}: {error}"));
+        let document: Value = serde_norway::from_str(&text)
+            .unwrap_or_else(|error| panic!("{id}: profiles/{profile}.yaml: {error}"));
+        assert_eq!(document["kind"], "Profile", "{id}: profiles/{profile}.yaml");
+        assert_eq!(
+            document["id"], profile,
+            "{id}: the profile's id is its file name"
+        );
+        let module = document["module"].as_str().unwrap_or_default();
+        assert!(
+            FAMILIES.contains(&module),
+            "{id}: profile {profile}'s module {module:?} is not a CN2 family"
+        );
+        let family = family_of(&spec.runtime.reference).unwrap_or_else(|| {
+            panic!(
+                "{id}: a profiled manifest's ref {:?} names no family crate",
+                spec.runtime.reference
+            )
+        });
+        assert_eq!(
+            module, family,
+            "{id}: profile {profile} runs on the family the manifest's ref names"
+        );
+        let expected_kind = if module == "http" {
+            "http-api"
+        } else {
+            "target"
+        };
+        assert_eq!(
+            document["profile_kind"], expected_kind,
+            "{id}: a profile on `http` is an HTTP-API profile, any other is a target (R-CN2-2)"
+        );
+    }
+
+    // Every profile file is named by a manifest, or by a note of the one manifest that
+    // serves two engines (Aurora's MySQL engine, chosen by its `engine` setting).
+    let noted: String = registry
+        .all()
+        .flat_map(|spec| spec.notes.iter())
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut files = 0;
+    for entry in std::fs::read_dir(&profiles_dir).expect("connectors/profiles exists") {
+        let path = entry.expect("a directory entry").path();
+        if path.extension().is_none_or(|suffix| suffix != "yaml") {
+            continue;
+        }
+        files += 1;
+        let stem = path.file_stem().unwrap().to_string_lossy().to_string();
+        assert!(
+            used.contains(&stem) || noted.contains(&format!("`{stem}`")),
+            "profiles/{stem}.yaml is named by no manifest"
+        );
+    }
+    // Task 2's table: 12 target profiles a manifest names, Aurora's `aurora-mysql`, and
+    // the 20 HTTP-API profiles of Task 20.
+    assert_eq!(files, 33, "CN2 Task 2's profile set");
+    assert_eq!(
+        used.len(),
+        32,
+        "every profile but aurora-mysql is a manifest's own"
+    );
+}
+
+/// R-CN2-8 and OR-4: a fallback is temporary, so it names its replacement. A
+/// `runtime.fallback` block names it in `replaced_by`; a manifest whose *default*
+/// runtime is the fallback (the Debezium rows, Oracle, JDBC ★ and the Camel runtime)
+/// names it in its `fallback-only:` note. The CSV's `fallback` column is the block.
+#[test]
+fn every_fallback_has_replaced_by() {
+    let registry = registry();
+    let csv: BTreeMap<String, CsvRow> = read_catalog_csv()
+        .into_iter()
+        .map(|row| (row.get("id").to_string(), row))
+        .collect();
+    let mut blocks = BTreeSet::new();
+    for spec in registry.all() {
+        let id = spec.id.as_str();
+        let cell = csv[id].get("fallback");
+        match spec.runtime.fallback.as_ref() {
+            Some(fallback) => {
+                blocks.insert(id);
+                assert!(
+                    names_a_task(&fallback.replaced_by),
+                    "{id}: replaced_by {:?} names no CN2 task",
+                    fallback.replaced_by
+                );
+                assert!(
+                    matches!(
+                        fallback.kind,
+                        RuntimeKind::Camel | RuntimeKind::Debezium | RuntimeKind::Iggy
+                    ),
+                    "{id}: a fallback runs on Camel, Debezium or Iggy (OR-4)"
+                );
+                let directions: Vec<&str> = fallback
+                    .directions
+                    .iter()
+                    .map(|direction| match direction {
+                        Direction::Source => "source",
+                        Direction::Sink => "sink",
+                    })
+                    .collect();
+                assert_eq!(
+                    cell,
+                    format!(
+                        "{}:{}:{}:{}",
+                        fallback.kind.slug(),
+                        fallback.reference,
+                        directions.join("+"),
+                        fallback.replaced_by
+                    ),
+                    "{id}: the CSV's fallback column and the manifest's block disagree"
+                );
+            }
+            None => assert!(
+                cell.is_empty(),
+                "{id}: the CSV names a fallback the manifest lacks"
+            ),
+        }
+
+        // The manifests that *are* fallbacks by default.
+        if !matches!(spec.priority, Priority::P1 | Priority::P2) {
+            continue;
+        }
+        let defaults_off_native = declared(spec).into_iter().any(|direction| {
+            spec.runtime
+                .for_direction(direction, Choice::Default)
+                .is_some_and(|(kind, _)| kind != RuntimeKind::Native)
+        });
+        if defaults_off_native {
+            let note = fallback_only_note(spec)
+                .unwrap_or_else(|| panic!("{id}: runs off native with no fallback-only note"));
+            let task = note_replaced_by(note)
+                .unwrap_or_else(|| panic!("{id}: {note:?} has no `replaced_by:`"));
+            assert!(
+                names_a_task(task),
+                "{id}: replaced_by {task:?} names no CN2 task"
+            );
+        }
+    }
+    assert_eq!(
+        blocks,
+        FALLBACK_BLOCKS.iter().copied().collect::<BTreeSet<_>>(),
+        "CN2 Task 2's fallback blocks"
+    );
+
+    // Spot checks from the table.
+    let postgres = registry.get("postgresql").unwrap();
+    let fallback = postgres.runtime.fallback.as_ref().unwrap();
+    assert_eq!(
+        (fallback.kind, fallback.replaced_by.as_str()),
+        (RuntimeKind::Iggy, "CN2 Task 10")
+    );
+    assert_eq!(
+        postgres
+            .runtime
+            .for_direction(Direction::Sink, Choice::Fallback)
+            .map(|(_, reference)| reference),
+        Some("postgres")
+    );
+    let elasticsearch = registry.get("elasticsearch").unwrap();
+    assert_eq!(elasticsearch.runtime.kind, RuntimeKind::Native, "OR-8");
+    assert_eq!(
+        elasticsearch
+            .runtime
+            .fallback
+            .as_ref()
+            .map(|fallback| fallback.replaced_by.as_str()),
+        Some("CN2 Task 15")
+    );
+    let salesforce = registry.get("salesforce").unwrap();
+    assert_eq!(
+        salesforce
+            .runtime
+            .for_direction(Direction::Source, Choice::Fallback),
+        Some((RuntimeKind::Camel, "salesforce")),
+        "Salesforce CDC stays on Camel until Task 23"
+    );
+    assert_eq!(
+        salesforce
+            .runtime
+            .for_direction(Direction::Sink, Choice::Fallback),
+        None
+    );
+}
+
+/// CN2 OR-13 and Task 2's table: the five Debezium rows run on Debezium Server with a
+/// Debezium connector class, each is a declared fallback of a native CDC source (or, for
+/// Oracle, its default CDC until Task 23), and no other P1 or P2 row runs on Debezium.
+#[test]
+fn debezium_rows_run_on_debezium_server() {
+    let registry = registry();
+    // The native CDC each Debezium row is the fallback of, and the task that built it.
+    let replaces: BTreeMap<&str, (&str, &str)> = [
+        ("debezium-postgres", ("postgresql", "CN2 Task 10")),
+        ("debezium-mysql", ("mysql", "CN2 Task 11")),
+        ("debezium-sqlserver", ("sql-server", "CN2 Task 12")),
+        ("debezium-mongodb", ("mongodb", "CN2 Task 16")),
+        ("debezium-oracle", ("oracle", "CN2 Task 23")),
+    ]
+    .into_iter()
+    .collect();
+    for id in DEBEZIUM_ROWS {
+        let spec = registry
+            .get(id)
+            .unwrap_or_else(|| panic!("{id} is in the registry (OR-13)"));
+        assert_eq!(spec.runtime.kind, RuntimeKind::Debezium, "{id}");
+        assert!(
+            spec.runtime.reference.starts_with("io.debezium.connector."),
+            "{id}: a Debezium connector class, got {:?}",
+            spec.runtime.reference
+        );
+        assert_eq!(
+            declared(spec),
+            vec![Direction::Source],
+            "{id}: a CDC source only"
+        );
+        assert!(
+            spec.capabilities
+                .source
+                .as_ref()
+                .is_some_and(|source| source.cdc),
+            "{id}: cdc"
+        );
+        assert!(spec.runtime.fallback.is_none(), "{id}: it is the fallback");
+        let note =
+            fallback_only_note(spec).unwrap_or_else(|| panic!("{id}: needs a fallback-only note"));
+        let (native, task) = replaces[id];
+        assert_eq!(note_replaced_by(note), Some(task), "{id}: {note:?}");
+        assert!(
+            note.contains(native),
+            "{id}: the note names {native}: {note:?}"
+        );
+
+        // The native manifest it stands behind declares CDC on its default runtime,
+        // except Oracle, whose CDC *is* this row until Task 23's verdict (OR-9).
+        let target = registry.get(native).unwrap();
+        let source = target.capabilities.source.as_ref().unwrap();
+        assert!(source.cdc, "{native}: declares cdc");
+        let default_kind = target
+            .runtime
+            .for_direction(Direction::Source, Choice::Default)
+            .map(|(kind, _)| kind);
+        if native == "oracle" {
+            assert_eq!(default_kind, Some(RuntimeKind::Camel));
+        } else {
+            assert_eq!(default_kind, Some(RuntimeKind::Native), "{native}: OR-9");
+        }
+    }
+    let on_debezium: BTreeSet<&str> = registry
+        .all()
+        .filter(|spec| spec.runtime.kind == RuntimeKind::Debezium)
+        .map(|spec| spec.id.as_str())
+        .collect();
+    assert_eq!(
+        on_debezium,
+        DEBEZIUM_ROWS.iter().copied().collect::<BTreeSet<_>>(),
+        "only the five Debezium rows default to Debezium Server"
+    );
+    // The split's two halves are §33 A.7 rows of their own.
+    for id in ["debezium-sqlserver", "debezium-oracle"] {
+        assert_eq!(registry.get(id).unwrap().category, Category::Cdc);
+    }
+    assert!(registry.get("debezium-sql-server-oracle").is_none());
 }
