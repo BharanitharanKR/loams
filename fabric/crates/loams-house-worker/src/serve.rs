@@ -791,20 +791,80 @@ fn after_name(text: &str) -> Option<&str> {
     }
 }
 
+/// `<name> <type>, …)`, a read view's column list after its `(` (HS1 R-ACL.1),
+/// returning the text after the `)`. Each type is held to the form
+/// `loams_house::views` prints: names, numbers, `( ) , = - + .`, spaces and
+/// string literals with no quote, backslash or line break in them; never `--`.
+fn after_columns(text: &str) -> Option<&str> {
+    let mut rest = text;
+    loop {
+        rest = after_name(rest)?.strip_prefix(' ')?;
+        rest = after_type(rest)?;
+        if let Some(next) = rest.strip_prefix(", ") {
+            rest = next;
+        } else {
+            return rest.strip_prefix(')');
+        }
+    }
+}
+
+/// One column type, returning the text from the `,` or `)` that ends it. At the
+/// top level only a name and its parenthesised arguments; inside them also
+/// spaces, `, = - + .` and string literals.
+fn after_type(text: &str) -> Option<&str> {
+    let mut depth = 0usize;
+    let mut in_literal = false;
+    let mut previous = ' ';
+    for (at, ch) in text.char_indices() {
+        if in_literal {
+            match ch {
+                '\'' => in_literal = false,
+                '\\' | '\n' | '\r' => return None,
+                _ => {}
+            }
+            continue;
+        }
+        match ch {
+            '\'' if depth > 0 => in_literal = true,
+            '(' => depth += 1,
+            ')' | ',' if depth == 0 => return (at > 0).then(|| &text[at..]),
+            ')' => depth -= 1,
+            '-' if previous == '-' => return None,
+            // At the top a type is one name, or a name and its arguments: a
+            // space there would start something else (`DEFAULT …`).
+            c if c.is_ascii_alphanumeric() || c == '_' => {}
+            c if depth > 0 && " ,=-+.".contains(c) => {}
+            _ => return None,
+        }
+        previous = ch;
+    }
+    None
+}
+
 /// `<name>.<name>`, returning the text after it.
 fn after_qualified(text: &str) -> Option<&str> {
     after_name(after_name(text)?.strip_prefix('.')?)
 }
 
 /// The shapes of the front's view DDL (`loams_house::views`, `system`): `CREATE
-/// DATABASE IF NOT EXISTS d ENGINE = Memory`, `CREATE OR REPLACE VIEW d.v AS\n…`
-/// and `DROP TABLE IF EXISTS d.t`, exactly.
+/// DATABASE IF NOT EXISTS d ENGINE = Memory`, `CREATE OR REPLACE VIEW d.v AS\n…`,
+/// a read view of the bucket `CREATE OR REPLACE VIEW d.v (<name> <type>, …) SQL
+/// SECURITY NONE AS\n…` (HS1 R-ACL.1), and `DROP TABLE IF EXISTS d.t`, exactly.
 pub fn control_ddl_shape(sql: &str) -> bool {
     if let Some(rest) = sql.strip_prefix("CREATE DATABASE IF NOT EXISTS ") {
         return after_name(rest) == Some(" ENGINE = Memory");
     }
     if let Some(rest) = sql.strip_prefix("CREATE OR REPLACE VIEW ") {
-        return after_qualified(rest).is_some_and(|body| body.starts_with(" AS\n"));
+        let Some(after) = after_qualified(rest) else {
+            return false;
+        };
+        if after.starts_with(" AS\n") {
+            return true;
+        }
+        return after
+            .strip_prefix(" (")
+            .and_then(after_columns)
+            .is_some_and(|body| body.starts_with(" SQL SECURITY NONE AS\n"));
     }
     if let Some(rest) = sql.strip_prefix("DROP TABLE IF EXISTS ") {
         return after_qualified(rest) == Some("");
@@ -1092,6 +1152,9 @@ mod tests {
             "CREATE OR REPLACE VIEW d.v AS\nSELECT 1",
             "CREATE OR REPLACE VIEW `__loams_system`.`tables` AS\nSELECT 1",
             "DROP TABLE IF EXISTS d.`t`",
+            "CREATE OR REPLACE VIEW d.v (a UInt8) SQL SECURITY NONE AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.`t` (k UInt64, `s t` Nullable(String), \
+             e Enum8('a b' = 1, 'c' = -2), d DateTime64(3, 'UTC')) SQL SECURITY NONE AS\nSELECT 1",
         ] {
             assert!(control_ddl_shape(ok), "{ok}");
         }
@@ -1101,6 +1164,15 @@ mod tests {
             "CREATE DATABASE IF NOT EXISTS `d ENGINE = Memory",
             "CREATE OR REPLACE VIEW v AS\nSELECT 1",
             "CREATE OR REPLACE VIEW d.v (a UInt8) AS SELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a UInt8) AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a UInt8) SQL SECURITY NONE AS SELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a UInt8) SQL SECURITY DEFINER AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a UInt8 -- x\n) SQL SECURITY NONE AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a Enum8('x\\' = 1)) SQL SECURITY NONE AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a UInt8 DEFAULT file('/etc/passwd')) SQL SECURITY NONE \
+             AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.v () SQL SECURITY NONE AS\nSELECT 1",
+            "CREATE OR REPLACE VIEW d.v (a UInt8; DROP DATABASE d) SQL SECURITY NONE AS\nSELECT 1",
             "CREATE TABLE d.t (a UInt8) ENGINE = Memory",
             "DROP TABLE IF EXISTS d.t; DROP DATABASE d",
             "DROP DATABASE d",
