@@ -8203,6 +8203,7 @@ dependencies = [
  "loams-log",
  "loams-meta",
  "loams-proto",
+ "loams-sim",
  "loams-store",
  "parquet",
  "proptest",

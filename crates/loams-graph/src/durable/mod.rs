@@ -17,6 +17,7 @@
 //! never from its local files.
 
 pub mod append;
+pub mod faults;
 pub mod idempotency;
 pub mod lane;
 pub mod visibility;

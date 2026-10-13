@@ -258,6 +258,9 @@ pub struct GraphCatalog {
     /// The last document read per namespace, keyed by the pointer version it was read at
     /// (review I4): a load whose pointer has not moved does not GET the document again.
     cache: Arc<std::sync::Mutex<std::collections::HashMap<NamespaceId, (u64, Document)>>>,
+    /// The namespace ids read so far by name: with `cache`, what [`GraphCatalog::last_read`]
+    /// answers while the metastore is unavailable (GR1 Task 16).
+    names: Arc<std::sync::Mutex<std::collections::HashMap<String, NamespaceId>>>,
     #[cfg(feature = "test-hooks")]
     ack_hook: Arc<std::sync::Mutex<Option<AckHook>>>,
 }
@@ -322,6 +325,7 @@ impl GraphCatalog {
             store,
             counters: Arc::default(),
             cache: Arc::default(),
+            names: Arc::default(),
             #[cfg(feature = "test-hooks")]
             ack_hook: Arc::default(),
         }
@@ -567,6 +571,23 @@ impl GraphCatalog {
             .filter(|g| !g.is_deleting())
             .cloned()
             .ok_or_else(|| not_found(namespace, name))
+    }
+
+    /// Graph `namespace`/`name` as this process last read it, without the metastore: possibly
+    /// stale, and `None` when it was never read here or was being deleted then. Only for a read
+    /// that may be served stale (`eventual`, by a follower) while the metastore is unavailable
+    /// (GR1 Task 16's `metastore_unavailable_stops_writes_not_reads`).
+    #[must_use]
+    pub fn last_read(&self, namespace: &str, name: &str) -> Option<GraphMeta> {
+        let id = *self.names.lock().ok()?.get(namespace)?;
+        let cache = self.cache.lock().ok()?;
+        cache
+            .get(&id)?
+            .1
+            .graphs
+            .get(name)
+            .filter(|g| !g.is_deleting())
+            .cloned()
     }
 
     /// The graph with id `id` in `namespace`, deleting ones included.
@@ -825,12 +846,16 @@ impl GraphCatalog {
         &self,
         namespace: &str,
     ) -> Result<Option<NamespaceId>, CatalogError> {
-        Ok(self
+        let id = self
             .meta
             .namespace_by_name(Consistency::Linearizable, namespace)
             .await
             .map_err(unavailable)?
-            .map(|ns| ns.id))
+            .map(|ns| ns.id);
+        if let (Some(id), Ok(mut names)) = (id, self.names.lock()) {
+            names.insert(namespace.to_string(), id);
+        }
+        Ok(id)
     }
 
     async fn ensure_namespace(&self, namespace: &str) -> Result<NamespaceId, CatalogError> {

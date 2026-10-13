@@ -204,8 +204,16 @@ async fn tail(
             tokio::time::sleep(Duration::from_millis(20)).await;
             continue;
         }
+        let fetching = tokio::time::Instant::now();
         match log.fetch(stream, from, FOLLOW_WAIT).await {
-            Ok(fetched) if fetched.records.is_empty() => {}
+            // An empty answer before the wait was up: the metastore stopped (nothing will
+            // change) or the read raced its end. Back off rather than spin, which would also
+            // hold a runtime worker (GR1 Task 16).
+            Ok(fetched) if fetched.records.is_empty() => {
+                if fetching.elapsed() < FOLLOW_WAIT / 2 {
+                    tokio::time::sleep(RETRY_AFTER).await;
+                }
+            }
             Ok(fetched) => {
                 // A fetch that was waiting when the tail was paused applies nothing.
                 #[cfg(feature = "test-hooks")]

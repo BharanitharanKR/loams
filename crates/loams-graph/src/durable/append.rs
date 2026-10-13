@@ -72,6 +72,8 @@ struct Inner {
     group: GroupCommit,
     #[cfg(feature = "test-hooks")]
     fault: std::sync::Mutex<Option<AppendFault>>,
+    #[cfg(feature = "test-hooks")]
+    kill: std::sync::Mutex<Option<super::faults::KillHook>>,
 }
 
 impl std::fmt::Debug for GraphLog {
@@ -101,6 +103,8 @@ impl GraphLog {
                 group: GroupCommit::default(),
                 #[cfg(feature = "test-hooks")]
                 fault: std::sync::Mutex::new(None),
+                #[cfg(feature = "test-hooks")]
+                kill: std::sync::Mutex::new(None),
             }),
         }
     }
@@ -118,6 +122,8 @@ impl GraphLog {
                 group,
                 #[cfg(feature = "test-hooks")]
                 fault: std::sync::Mutex::new(None),
+                #[cfg(feature = "test-hooks")]
+                kill: std::sync::Mutex::new(None),
             }),
         }
     }
@@ -161,6 +167,56 @@ impl GraphLog {
             .fault
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = fault;
+    }
+
+    /// **Tests only** (feature `test-hooks`): sets the hook awaited at every kill point this
+    /// node reaches (GR1 Task 16, [`super::faults`]).
+    #[cfg(feature = "test-hooks")]
+    #[doc(hidden)]
+    pub fn set_kill_hook(&self, hook: Option<super::faults::KillHook>) {
+        *self
+            .inner
+            .kill
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = hook;
+    }
+
+    /// Reaches kill point `point` from async code: awaits the node's kill hook, if any. Nothing
+    /// without `test-hooks`.
+    #[allow(clippy::unused_async)]
+    pub(crate) async fn reach(&self, point: super::faults::KillPoint) {
+        #[cfg(feature = "test-hooks")]
+        {
+            let hook = self
+                .inner
+                .kill
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            if let Some(hook) = hook {
+                hook(point).await;
+            }
+        }
+        #[cfg(not(feature = "test-hooks"))]
+        let _ = point;
+    }
+
+    /// [`GraphLog::reach`] from the write lane, which runs off the runtime: blocks.
+    pub(crate) fn reach_blocking(&self, point: super::faults::KillPoint) {
+        #[cfg(feature = "test-hooks")]
+        {
+            let hooked = self
+                .inner
+                .kill
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_some();
+            if hooked {
+                self.wait(self.reach(point));
+            }
+        }
+        #[cfg(not(feature = "test-hooks"))]
+        let _ = point;
     }
 
     /// Runs `future` to its end from a thread that is not one of the runtime's.

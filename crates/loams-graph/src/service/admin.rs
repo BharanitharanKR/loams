@@ -154,6 +154,8 @@ pub struct GraphAdmin {
     replicas: Option<Arc<Replicas>>,
     /// How long an `at_least` read waits for its replica (§48 §7.2; default 5 s).
     consistency_wait: Duration,
+    /// When a replica read last found the catalog unavailable (GR1 Task 16).
+    catalog_down: Arc<CatalogDown>,
     #[cfg(feature = "test-hooks")]
     after_open_hook: Arc<std::sync::Mutex<Option<crate::catalog::AckHook>>>,
 }
@@ -306,6 +308,7 @@ impl GraphAdmin {
             evictor: Arc::default(),
             replicas: None,
             consistency_wait: DEFAULT_CONSISTENCY_WAIT,
+            catalog_down: Arc::default(),
             #[cfg(feature = "test-hooks")]
             after_open_hook: Arc::default(),
         }
@@ -624,11 +627,7 @@ impl GraphAdmin {
         if self.is_shutting_down() {
             return Err(shutting_down());
         }
-        let meta = self
-            .catalog
-            .get_by_name(namespace, name)
-            .await
-            .map_err(map_catalog)?;
+        let meta = self.record(namespace, name, serve.follower).await?;
         let limits = self.limits.for_graph(&meta.limits);
         let timeout = limits.timeout_for(timeout_ms, self.timeout_ceiling());
         let mut deadline = started + timeout;
@@ -1511,10 +1510,8 @@ impl GraphAdmin {
             return Err(shutting_down());
         }
         let meta = self
-            .catalog
-            .get_by_name(namespace, name)
-            .await
-            .map_err(map_catalog)?;
+            .record(namespace, name, consistency.any_replica() && reads)
+            .await?;
         let id = meta.graph_id().map_err(map_catalog)?;
         if consistency.any_replica()
             && reads
@@ -1537,9 +1534,45 @@ impl GraphAdmin {
         })
     }
 
+    /// The catalog record of graph `namespace`/`name`. A read a follower may serve takes the
+    /// record this process last read when the catalog is unavailable, or was within
+    /// [`CATALOG_RETRY_AFTER`] (`stale_ok`; GR1 Task 16):
+    /// a follower serves what it has applied anyway, so a metastore outage stops writes and
+    /// `strong` reads, not `eventual` ones.
+    async fn record(
+        &self,
+        namespace: &str,
+        name: &str,
+        stale_ok: bool,
+    ) -> Result<GraphMeta, ConnectError> {
+        // A catalog that just failed is not waited for again (each metastore call retries for
+        // seconds): a replica read takes the record it last read for a while.
+        if stale_ok
+            && self.catalog_down.recently()
+            && let Some(meta) = self.catalog.last_read(namespace, name)
+        {
+            return Ok(meta);
+        }
+        match self.catalog.get_by_name(namespace, name).await {
+            Ok(meta) => Ok(meta),
+            Err(CatalogError::Unavailable(err)) if stale_ok => {
+                self.catalog_down.mark();
+                match self.catalog.last_read(namespace, name) {
+                    Some(meta) => {
+                        tracing::debug!(%namespace, %name, error = %err, "the graph catalog is unavailable; a follower read uses the record last read");
+                        Ok(meta)
+                    }
+                    None => Err(map_catalog(CatalogError::Unavailable(err))),
+                }
+            }
+            Err(err) => Err(map_catalog(err)),
+        }
+    }
+
     /// Opens this node's follower of catalog graph `meta`, or answers the one open (GR1 Task
     /// 15): in memory, from the manifest's newest usable snapshot and the stream after it (or
-    /// the whole stream), with no lease, and tailed from then on.
+    /// the whole stream), with no lease, and tailed from then on. One already open and serving
+    /// is answered without the metastore (GR1 Task 16).
     async fn open_follower(&self, meta: &GraphMeta) -> Result<Arc<Graph>, ConnectError> {
         let (namespace, name) = (meta.namespace.as_str(), meta.name.as_str());
         let (Some(replicas), Some(log)) = (self.replicas.clone(), self.log.clone()) else {
@@ -1556,6 +1589,16 @@ impl GraphAdmin {
             }));
         }
         let id = meta.graph_id().map_err(map_catalog)?;
+        if let Some(open) = replicas
+            .engine()
+            .list(Some(namespace))
+            .ok()
+            .and_then(|open| open.into_iter().find(|g| g.name() == name))
+            .filter(|g| g.id() == Some(id) && !g.is_poisoned_or_failed())
+        {
+            replicas.follow(&open, &log);
+            return Ok(open);
+        }
         let stream = meta.stream.ok_or_else(|| {
             refuse(
                 ErrorCode::Unavailable,
@@ -2739,6 +2782,30 @@ struct Waiting(Watch);
 impl Drop for Waiting {
     fn drop(&mut self) {
         self.0.abandon();
+    }
+}
+
+/// How long replica reads use the catalog record they last read, without asking, after the
+/// catalog was found unavailable (GR1 Task 16).
+pub const CATALOG_RETRY_AFTER: Duration = Duration::from_secs(5);
+
+/// When the catalog was last found unavailable by a replica read.
+#[derive(Debug, Default)]
+struct CatalogDown(std::sync::Mutex<Option<std::time::Instant>>);
+
+impl CatalogDown {
+    fn mark(&self) {
+        *self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(std::time::Instant::now());
+    }
+
+    fn recently(&self) -> bool {
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some_and(|at| at.elapsed() < CATALOG_RETRY_AFTER)
     }
 }
 

@@ -238,6 +238,8 @@ The token is D76's `{(stream, partition, offset)}` over the graph's implicit str
 - Every answer carries a token: the write's own, or the serving replica's position after a read. The request header follows `loams.collection.v1`'s rule.
 - `consistency_wait` is server configuration (default 5 s).
 
+*Measured by GR1 Task 16 (R16.1–R16.5):* the owner killed at each of §6.2's steps, the checkpoint upload, the manifest CAS or the log trim loses no acknowledged write, and no client ever saw a value later lost. A metastore outage stops writes and `strong` reads; followers keep serving `eventual` reads from the catalog record they last read.
+
 ### 7.3 Transactions
 
 - One statement is one transaction. `ExecuteBatch { atomic: true }` runs every statement in one Grafeo transaction, produces one change set and is acknowledged once; `atomic: false` runs each statement as its own transaction and reports per-statement results, with `committed_through` saying how far it got.
