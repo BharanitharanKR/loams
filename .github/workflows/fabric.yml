@@ -18,6 +18,8 @@ name: Fabric
 #                        connectors-ci-only; OR-3: CI only, never shipped)
 #   connectors-nightly — scheduled: the suites against real cloud and SaaS
 #                        accounts, with repository secrets (OR-3, OR-23)
+#   connectors-alerts  — promtool rule tests of the connector alerts and the
+#                        metrics/activity tests that run them (Task 24)
 # Jobs FL1 owns and adds here separately: connectors-it (the ★ contract suites
 # against the `connectors` compose profile, from CN1 Tasks 3–13), and the
 # `fabric` workspace's own build/publish steps. Keep this file minimal and
@@ -67,6 +69,7 @@ jobs:
       conformance: ${{ steps.filter.outputs.conformance }}
       # A JSON list of the families whose suites a pull request must run.
       families: ${{ steps.families.outputs.list }}
+      alerts: ${{ steps.filter.outputs.alerts }}
     steps:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
@@ -142,6 +145,16 @@ jobs:
             family-brokers: [*conformance, "fabric/crates/loams-connector-brokers/**"]
             family-cloud: [*conformance, "fabric/crates/loams-connector-cloud/**"]
             family-protocols: [*conformance, "fabric/crates/loams-connector-protocols/**"]
+            # The connector alerts and dashboard (CN2 Task 24) and the code
+            # that writes the series they read.
+            alerts:
+              - *toolchain
+              - "fabric/Cargo.toml"
+              - "fabric/Cargo.lock"
+              - "fabric/crates/loams-connector-sdk/**"
+              - "fabric/crates/loams-flow/**"
+              - "deploy/observability/connectors/**"
+              - "scripts/ci/no-metering.*"
       # The changed families, as a JSON list for the shards' matrices. A
       # shard whose family has no service in its stack, or no crate yet,
       # finishes at once (scripts/connectors/compose_services.py).
@@ -496,6 +509,50 @@ jobs:
       - name: down
         if: always() && steps.plan.outputs.run == 'true'
         run: docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only down -v
+
+  # CN2 owns this job (plan 2026-10-10-cn2-connectors, Task 24): every alert in
+  # deploy/observability/connectors/alerts.yaml must fire in a promtool rule
+  # test. promtool comes from the Prometheus 3.5.0 release (Apache-2.0, LTS,
+  # 2025-07-14), checked against its published SHA-256. The Rust test
+  # `each_alert_fires_in_a_test` runs the same rule tests through
+  # LOAMS_PROMTOOL, beside the label, activity-observer and no-metering tests.
+  connectors-alerts:
+    name: connector alerts (promtool) and activity observer
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.alerts == 'true') }}
+    runs-on: ubuntu-24.04
+    env:
+      PROMETHEUS_VERSION: "3.5.0"
+      PROMETHEUS_SHA256: e811827af26d822afb09a4f28314f61b618b12cff5369835a67f674d8b46f39a
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: promtool
+        run: |
+          dir="$RUNNER_TEMP/prometheus"
+          mkdir -p "$dir"
+          curl -sSfL --retry 3 -o "$dir/p.tgz" \
+            "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz"
+          echo "${PROMETHEUS_SHA256}  $dir/p.tgz" | sha256sum -c -
+          tar -xzf "$dir/p.tgz" -C "$dir" --strip-components=1 "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool"
+          echo "LOAMS_PROMTOOL=$dir/promtool" >> "$GITHUB_ENV"
+      - name: promtool check and test rules
+        run: |
+          "$LOAMS_PROMTOOL" check rules deploy/observability/connectors/alerts.yaml
+          "$LOAMS_PROMTOOL" test rules deploy/observability/connectors/alerts.test.yaml
+      - name: no-metering guard
+        run: scripts/ci/no-metering.sh
+      # loams-flow builds loams-flow-proto, which needs protoc.
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fabric -> target
+          key: connectors-alerts
+      - name: metrics and activity tests
+        working-directory: fabric
+        run: cargo test -p loams-flow --test activity --locked
 
   # CN1 Task 2's drift checks (design §33 CN-R1): the appendix is regenerated
   # from connectors/registry/catalog.csv and diffed against the design doc, and
