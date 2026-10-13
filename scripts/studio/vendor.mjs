@@ -9,7 +9,9 @@
 //   import --from <scratch>/<top> --group <g> --map <upstream>=<local> … [--verdict as-is|adapt|rewrite]
 //          [--rewrite <specifier>=<specifier> …] [--change <what changed>] [--note <note>]
 //          [--commit <sha>] [--package <dir>]
-//          Copies upstream files into the package, writes the §53 §9.2 header, rewrites import
+//          Copies upstream files into the package (web/packages/studio-ui by default, or
+//          web/packages/ui for the primitives), writes the §53 §9.2 header naming the package's
+//          own LICENSE.t3code, rewrites import
 //          specifiers (as-is files only, by the explicit --rewrite map) and upserts provenance rows.
 //   check  [--package <dir>]
 //          Every file under src/ carrying the header has a provenance row; every row's file exists
@@ -217,11 +219,22 @@ function saveProvenance(pkg, prov) {
 
 // ---------- header ----------
 
-export function headerFor({ upstreamPath, commit, change }) {
+/**
+ * Where a package's copy of the MIT text lives, as the header names it: the package's own
+ * LICENSE.t3code when it is in the repository (`@loams/studio-ui`, `@loams/ui`), else
+ * Studio's (a package outside the repository, as in the tool's own tests).
+ */
+export function licencePathFor(pkg = DEFAULT_PACKAGE) {
+  const dir = resolve(pkg);
+  const base = within(REPO_ROOT, dir) ? dir : DEFAULT_PACKAGE;
+  return `${relative(REPO_ROOT, base).split(sep).join('/')}/LICENSE.t3code`;
+}
+
+export function headerFor({ upstreamPath, commit, change, licence = licencePathFor() }) {
   return [
     HEADER_MARK,
     `// ${upstreamPath} at commit ${shortSha(commit)}, ${COPYRIGHT}, MIT licence`,
-    '// (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:',
+    `// (see ${licence}). Modified by The Loams Authors:`,
     `// ${change}. Loams' changes are Apache-2.0.`,
     '',
   ].join('\n');
@@ -357,7 +370,7 @@ function cmdImport(opts) {
     if (body.startsWith(HEADER_MARK)) fail(`${upstreamPath} already carries a header`);
     const fileRewrites = rewrites.filter(([spec]) => body.includes(spec));
     if (fileRewrites.length) body = rewriteSpecifiers(body, fileRewrites);
-    const text = headerFor({ upstreamPath, commit, change }) + body;
+    const text = headerFor({ upstreamPath, commit, change, licence: licencePathFor(pkg) }) + body;
     const target = join(pkg, localPath);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, text);
