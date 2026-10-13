@@ -1420,6 +1420,10 @@ jobs:
     # macOS, not the Linux runner: the SDK is written against Foundation's
     # async URLSession, and macos-latest ships a Swift toolchain preinstalled.
     runs-on: macos-latest
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
       - name: the Swift toolchain's version
@@ -1435,6 +1439,12 @@ jobs:
         if: ${{ hashFiles('sdks/swift/Package.swift') != '' }}
         working-directory: sdks/swift
         run: swift test
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && github.event_name == 'schedule' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh swift
 
   # SDK2 Task 2: the Go SDK, whose module sits outside the web workspace.
   sdk-go:
@@ -1472,6 +1482,10 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-cpp == 'true') }}
     runs-on: ubuntu-24.04
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
       # `pkg-config` is what protobuf's link line comes from: the SDK parses
@@ -1558,6 +1572,12 @@ jobs:
           git diff --exit-code -- sdks/cpp/gen || {
             echo "sdks/cpp/gen is stale: regenerate with sdks/cpp/buf.gen.yaml and commit"; exit 1;
           }
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && github.event_name == 'schedule' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh cpp
 
   # SDK2 Task 7 (#297): the C# SDK. `setup-dotnet` installs the channel, not the
   # patch, so `global.json` pins the exact SDK: `TreatWarningsAsErrors` is on, and
@@ -1574,6 +1594,10 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-csharp == 'true') }}
     runs-on: ubuntu-24.04
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v5
@@ -1610,6 +1634,12 @@ jobs:
           git diff --exit-code -- sdks/csharp/src/Loams/Gen || {
             echo "the committed stubs are stale: regenerate with sdks/csharp/buf.gen.proto.yaml"; exit 1;
           }
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && github.event_name == 'schedule' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh csharp
 
   # API2 Task 19: a job for each SDK that had none (Java, Kotlin, Ruby, PHP,
   # Dart, Objective-C). They run on a PR that touches their paths, on pushes to
@@ -1620,6 +1650,10 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-java == 'true') }}
     runs-on: ubuntu-24.04
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v5
@@ -1629,12 +1663,22 @@ jobs:
       - name: the Java SDK's tests
         working-directory: sdks/java
         run: ./build.sh test
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && github.event_name == 'schedule' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh java
 
   sdk-kotlin:
     name: the Kotlin SDK and its conformance suite
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-kotlin == 'true') }}
     runs-on: ubuntu-24.04
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
     env:
       KOTLIN_VERSION: '2.2.20'
     steps:
@@ -1653,12 +1697,22 @@ jobs:
       - name: the Kotlin SDK's tests
         working-directory: sdks/kotlin
         run: ./build.sh test
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && github.event_name == 'schedule' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh kotlin
 
   sdk-ruby:
     name: the Ruby SDK and its conformance suite
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-ruby == 'true') }}
     runs-on: ubuntu-24.04
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
       - uses: ruby/setup-ruby@v1
@@ -1669,12 +1723,22 @@ jobs:
       - name: the Ruby SDK's tests
         working-directory: sdks/ruby
         run: bundle exec rake test
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && github.event_name == 'schedule' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh ruby
 
   sdk-php:
     name: the PHP SDK and its conformance suite
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-php == 'true') }}
     runs-on: ubuntu-24.04
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
@@ -1688,12 +1752,22 @@ jobs:
       - name: the PHP SDK's tests
         working-directory: sdks/php
         run: vendor/bin/phpunit
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && github.event_name == 'schedule' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh php
 
   sdk-dart:
     name: the Dart SDK and its conformance suite
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-dart == 'true') }}
     runs-on: ubuntu-24.04
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
       - uses: dart-lang/setup-dart@v1
@@ -1708,6 +1782,12 @@ jobs:
       - name: the Dart SDK's tests
         working-directory: sdks/dart
         run: dart test
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && github.event_name == 'schedule' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh dart
 
   # Objective-C builds through SwiftPM (D614: no CocoaPods), so macOS.
   sdk-objc:
@@ -1715,6 +1795,10 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-objc == 'true') }}
     runs-on: macos-latest
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
       - name: the Objective-C SDK builds
@@ -1723,6 +1807,12 @@ jobs:
       - name: the Objective-C SDK's tests
         working-directory: sdks/objc
         run: swift test --disable-swift-testing
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && github.event_name == 'schedule' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh objc
 
   # GR1 Task 1 (design §48, D741): Loams Graph's engine crate, and the rule
   # that `loams` links Grafeo only with the `graph` feature (GR1 Global
@@ -2016,6 +2106,13 @@ jobs:
         run: python3 scripts/ci/test-no-metering.py
       - name: audit all tracked files and Cargo packages
         run: scripts/ci/no-metering.sh
+      # API2 Task 19's every_sdk_dir_has_a_job and only_wave1_is_required. Here
+      # because this job is unconditional and light, so a new sdks/<lang>
+      # without a job fails every pull request that adds it.
+      - name: every SDK has a CI job; only wave 1 is required
+        run: |
+          python3 scripts/ci/check-sdk-jobs.py --self-test
+          python3 scripts/ci/check-sdk-jobs.py
 
   # The Linux signing scope (issue #253, PR: SignPath). scripts/ci/
   # signpath-artifacts.py is what refuses to submit a Windows or macOS artifact
