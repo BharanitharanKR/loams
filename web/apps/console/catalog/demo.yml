@@ -5,9 +5,6 @@
 
 - id: deployments
   disabled: false
-- id: live
-  config:
-    deployments: true
 - insert:
     - id: sql
       name: '@loams/plugin-sql'

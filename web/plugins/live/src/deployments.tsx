@@ -1,6 +1,6 @@
 // The Live Deployments page: deploy history with the active deployment and
 // rollback, the functions of a deployment with their argument validators,
-// worker health, and a tail of function logs.
+// worker health (where the API has it), and a tail of function logs.
 
 import {
   Badge,
@@ -21,6 +21,7 @@ import {
   type Deployment,
   type DeploymentDetail,
   type DeploymentState,
+  isSkipped,
   type LiveAdminApi,
   type LogLine,
   validatorText,
@@ -29,7 +30,7 @@ import {
 import { errorText } from './pages.js';
 
 export const PREVIEW_NOTICE =
-  'LiveAdminService is not served yet (LV1 Task 10). This page shows sample data, and actions here change nothing on the engine.';
+  'This page shows sample data, not your engine, and actions here change nothing.';
 /** The most log lines kept on screen; older lines drop off the top. */
 export const LOG_CAP = 500;
 
@@ -178,11 +179,6 @@ export function DeploymentsTable({
             <span className="flex flex-col gap-1">
               <DeploymentStateTag state={d.state} />
               {d.failureReason && <span className="text-danger text-xs">{d.failureReason}</span>}
-              {d.rolledBackFrom && (
-                <span className="text-muted text-xs">
-                  Rolled back from <Mono>{shortId(d.rolledBackFrom)}</Mono>
-                </span>
-              )}
             </span>
           ),
         },
@@ -306,12 +302,14 @@ export function LogsCard({
   const [lines, setLines] = useState<KeyedLine[]>([]);
   const [error, setError] = useState<string>();
   const [received, setReceived] = useState(0);
+  const [skipped, setSkipped] = useState(0);
   const dropped = Math.max(0, received - lines.length);
 
   useEffect(() => {
     const ctl = new AbortController();
     setLines([]);
     setReceived(0);
+    setSkipped(0);
     setError(undefined);
     // A line's key is its arrival order in this tail: one request can log the
     // same text twice in a millisecond, so no field of the line is unique.
@@ -320,6 +318,10 @@ export function LogsCard({
       try {
         for await (const l of api.tailLogs({ follow, function: fn || undefined }, ctl.signal)) {
           if (ctl.signal.aborted) return;
+          if (isSkipped(l)) {
+            setSkipped((n) => n + l.skipped);
+            continue;
+          }
           const row = { ...l, key: seq++ };
           setReceived((n) => n + 1);
           setLines((prev) => (prev.length < LOG_CAP ? [...prev, row] : [...prev.slice(1), row]));
@@ -359,6 +361,7 @@ export function LogsCard({
             onClick={() => {
               setLines([]);
               setReceived(0);
+              setSkipped(0);
             }}
           >
             Clear
@@ -368,6 +371,12 @@ export function LogsCard({
           <Notice tone="danger" title="Could not tail logs">
             {error}
           </Notice>
+        )}
+        {skipped > 0 && (
+          <p className="m-0 text-muted text-xs">
+            {skipped} {skipped === 1 ? 'line was' : 'lines were'} overwritten in the engine's log
+            buffer before this view read {skipped === 1 ? 'it' : 'them'}.
+          </p>
         )}
         {dropped > 0 && (
           <p className="m-0 text-muted text-xs">
@@ -392,7 +401,10 @@ export function LogsCard({
                 <li key={l.key} className={LEVEL_CLASS[l.level]}>
                   <span className="text-muted">{new Date(l.ts).toLocaleTimeString()}</span>{' '}
                   <span className="uppercase">{l.level}</span> <span>{l.function}</span>{' '}
-                  <span className="text-muted">{l.requestId}</span> {l.line}
+                  <span className="text-muted" title={l.deployment && `deployment ${l.deployment}`}>
+                    {l.requestId}
+                  </span>{' '}
+                  {l.line}
                   {l.truncated && <span className="text-muted"> (truncated)</span>}
                 </li>
               ))}
@@ -409,7 +421,7 @@ export function LogsCard({
 type Loaded =
   | { state: 'loading' }
   | { state: 'error'; message: string }
-  | { state: 'ready'; deployments: Deployment[]; workers: WorkerHealth[] };
+  | { state: 'ready'; deployments: Deployment[]; workers?: WorkerHealth[] };
 
 export function DeploymentsPage({
   api,
@@ -434,7 +446,7 @@ export function DeploymentsPage({
   // biome-ignore lint/correctness/useExhaustiveDependencies: `tick` is the reload trigger
   useEffect(() => {
     const ctl = new AbortController();
-    Promise.all([api.listDeployments(ctl.signal), api.workerHealth(ctl.signal)])
+    Promise.all([api.listDeployments(ctl.signal), api.workerHealth?.(ctl.signal)])
       .then(([deployments, workers]) => {
         if (ctl.signal.aborted) return;
         setLoaded({ state: 'ready', deployments, workers });
@@ -495,7 +507,7 @@ export function DeploymentsPage({
         <div>
           <h1 className="m-0">Live deployments</h1>
           <p className="text-muted m-0">
-            Deploy history, the functions each deployment serves, worker health and function logs.
+            Deploy history, the functions each deployment serves and function logs.
           </p>
         </div>
         <div className="flex gap-2">
@@ -544,7 +556,7 @@ export function DeploymentsPage({
               <span className="text-muted">No deployment is active.</span>
             )}
           </section>
-          <WorkerHealthCard workers={loaded.workers} />
+          {loaded.workers && <WorkerHealthCard workers={loaded.workers} />}
           <Card title="Deploy history" flush>
             <DeploymentsTable
               deployments={loaded.deployments}

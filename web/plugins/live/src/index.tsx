@@ -5,7 +5,7 @@
 import { type PluginModule, service } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
 import type { LoamsDesktopApi } from '@loams/platform-electron';
-import { createMockAdminApi } from './admin-mock.js';
+import { createLiveAdminApi } from './admin-client.js';
 import { createLiveApi } from './client.js';
 import { DeploymentsPage } from './deployments.js';
 import { LivePage } from './pages.js';
@@ -13,6 +13,7 @@ import { liveTransport } from './transport.js';
 
 export type { LiveAdminApi } from './admin.js';
 export { validatorText } from './admin.js';
+export { createLiveAdminApi } from './admin-client.js';
 export { createMockAdminApi } from './admin-mock.js';
 export { createLiveApi } from './client.js';
 export { DeploymentsPage } from './deployments.js';
@@ -23,8 +24,7 @@ export { fromJs, toJs } from './value.js';
 /** Catalog config. */
 export interface LiveConfig {
   /**
-   * Register the Deployments page, which runs on sample data until LiveAdminService is
-   * served (default true). A browser console turns it on only under "Demo data".
+   * Register the Deployments page, over the engine's LiveAdminService (default true).
    */
   deployments?: boolean;
 }
@@ -41,10 +41,11 @@ const plugin: PluginModule = {
       service(ctx, 'platform').kind === 'desktop'
         ? (service(ctx, 'desktop') as LoamsDesktopApi)
         : undefined;
-    const api = createLiveApi(liveTransport({ transport: service(ctx, 'transport') }));
-    // LiveAdminService (LV1 Task 10) is not served yet: the Deployments page
-    // runs on fixtures until it is, then this becomes a client over the transport.
-    const admin = createMockAdminApi();
+    const transport = liveTransport({ transport: service(ctx, 'transport') });
+    const api = createLiveApi(transport);
+    // LiveAdminService beside LiveService: on the engine's main port (LV1 Task 12),
+    // and through the desktop's proxy, which routes the whole `loams.live.v1.` prefix.
+    const admin = createLiveAdminApi(transport);
     const go = (to: string) => router.navigate(to);
     const deployments = config?.deployments ?? true;
     // The router takes the first match: the longer path goes first.
