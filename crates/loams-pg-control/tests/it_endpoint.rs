@@ -658,6 +658,10 @@ async fn it_idle_long_query_is_activity_then_suspends() {
         assert_eq!(now.compute_id.as_deref(), Some(compute_id.as_str()));
         match ctl.status(&compute).await.unwrap().last_active {
             Activity::At(at) => seen.push(at),
+            // compute_ctl's activity monitor samples on its own period, so
+            // the first passes can come before it has seen the query; once it
+            // has, or after a few seconds, the query must show.
+            Activity::NotYet if seen.is_empty() && begun.elapsed() < Duration::from_secs(5) => {}
             other => panic!("compute_ctl's last_active during a query: {other:?}"),
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
