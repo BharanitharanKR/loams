@@ -379,14 +379,26 @@ async fn two_nodes_one_writer() {
             .admin
             .clone();
         tasks.push(tokio::spawn(async move {
-            admin
-                .execute(request(
-                    "kg",
-                    &format!("INSERT (:N {{k: {i}, v: 'w{i}'}})"),
-                    &format!("w{i}"),
-                ))
-                .await
-                .expect("a write through either node")
+            // Sixteen at once can pass the namespace's statement cap (an
+            // eighth of the process slots is kept back, so a small runner
+            // admits fewer): the refusal says retry, and the key makes it safe.
+            let mut attempt = 0;
+            loop {
+                match admin
+                    .execute(request(
+                        "kg",
+                        &format!("INSERT (:N {{k: {i}, v: 'w{i}'}})"),
+                        &format!("w{i}"),
+                    ))
+                    .await
+                {
+                    Err(err) if err.code == ErrorCode::ResourceExhausted && attempt < 100 => {
+                        attempt += 1;
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                    other => break other.expect("a write through either node"),
+                }
+            }
         }));
     }
     let mut offsets = Vec::new();
