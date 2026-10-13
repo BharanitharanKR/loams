@@ -19,8 +19,10 @@ name: Release packages (Linux, Windows, macOS)
 #            loams-<v>-1-x86_64.pkg.tar.zst  (+ .sig when a GPG key exists)
 #   Windows  loams-<v>-windows-x86_64.zip, holding loams.exe and the console
 #   macOS    loams-<v>-macos-arm64.tar.gz, loams-<v>-macos-x86_64.tar.gz, holding
-#            loams and the console. Both are built on Apple Silicon (x86_64 is a
-#            cross build, smoke-tested under Rosetta), stripped and ad-hoc signed:
+#            loams and the console. arm64 builds on macos-15, x86_64 on
+#            macos-15-intel (variables MACOS_ARM64_RUNNER / MACOS_X64_RUNNER swap
+#            them; a runner of the other architecture cross-compiles), stripped
+#            and ad-hoc signed:
 #            Apple Silicon will not run an arm64 binary with no signature at all.
 #            There is no Developer ID signature or notarization (no Apple
 #            certificate in this project yet), so a downloaded copy is quarantined
@@ -448,20 +450,21 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # The macOS tarballs. Both architectures build on an Apple Silicon runner: the
-  # Intel runners took over 90 minutes for a comparable build and timed out
-  # (desktop run 38280683907), and x86_64-apple-darwin cross-compiles cleanly.
+  # The macOS tarballs. The runners are repository variables so either macOS pool
+  # can be swapped when GitHub's capacity runs short; a runner of the other
+  # architecture cross-compiles (x86_64 on Apple Silicon is smoke-tested under
+  # Rosetta; arm64 on Intel cannot be run there).
   macos:
     name: macOS tarball (${{ matrix.arch }})
     needs: [guard]
-    runs-on: macos-15
-    timeout-minutes: 120
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { arch: arm64, target: aarch64-apple-darwin }
-          - { arch: x86_64, target: x86_64-apple-darwin }
+          - { arch: arm64, target: aarch64-apple-darwin, runner: "${{ vars.MACOS_ARM64_RUNNER || 'macos-15' }}" }
+          - { arch: x86_64, target: x86_64-apple-darwin, runner: "${{ vars.MACOS_X64_RUNNER || 'macos-15-intel' }}" }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -507,11 +510,17 @@ jobs:
           codesign --verify --strict --verbose=2 "$bin"
           file "$bin"
           ls -l "$bin"
-          if [ "$TARGET" = x86_64-apple-darwin ]; then
+          host=$(uname -m)
+          if [ "$TARGET" = "$host-apple-darwin" ] || { [ "$host" = arm64 ] && [ "$TARGET" = aarch64-apple-darwin ]; }; then
+            "$bin" --version
+          elif [ "$TARGET" = x86_64-apple-darwin ]; then
+            # Cross-built on Apple Silicon: run it under Rosetta, which the image may lack.
             arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
             arch -x86_64 "$bin" --version
           else
-            "$bin" --version
+            # Cross-built on Intel, which cannot run it: check the architecture only.
+            echo "::notice::arm64 binary cross-built on an Intel runner; not executed here"
+            [ "$(lipo -archs "$bin")" = arm64 ]
           fi
 
       - name: build the macOS tarball
