@@ -51,6 +51,10 @@ namespace live {
 namespace v1 {
 enum DeploymentState : int;
 extern const uint32_t DeploymentState_internal_data_[];
+enum IndexState : int;
+extern const uint32_t IndexState_internal_data_[];
+enum TableJobKind : int;
+extern const uint32_t TableJobKind_internal_data_[];
 class AppDef;
 struct AppDefGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -67,6 +71,14 @@ extern const ::google::protobuf::internal::ClassDataFull DeploymentRecord_class_
 #else
 extern const DeploymentRecordGlobalsTypeInternal DeploymentRecord_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class EnforcingValidator;
+struct EnforcingValidatorGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern EnforcingValidatorGlobalsTypeInternal EnforcingValidator_globals_;
+extern const ::google::protobuf::internal::ClassDataFull EnforcingValidator_class_data_;
+#else
+extern const EnforcingValidatorGlobalsTypeInternal EnforcingValidator_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class IndexDef;
 struct IndexDefGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -74,6 +86,14 @@ extern IndexDefGlobalsTypeInternal IndexDef_globals_;
 extern const ::google::protobuf::internal::ClassDataFull IndexDef_class_data_;
 #else
 extern const IndexDefGlobalsTypeInternal IndexDef_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class JobFinding;
+struct JobFindingGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern JobFindingGlobalsTypeInternal JobFinding_globals_;
+extern const ::google::protobuf::internal::ClassDataFull JobFinding_class_data_;
+#else
+extern const JobFindingGlobalsTypeInternal JobFinding_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class TableDef;
 struct TableDefGlobalsTypeInternal;
@@ -83,6 +103,14 @@ extern const ::google::protobuf::internal::ClassDataFull TableDef_class_data_;
 #else
 extern const TableDefGlobalsTypeInternal TableDef_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class TableJobRecord;
+struct TableJobRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TableJobRecordGlobalsTypeInternal TableJobRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TableJobRecord_class_data_;
+#else
+extern const TableJobRecordGlobalsTypeInternal TableJobRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 }  // namespace v1
 }  // namespace live
 }  // namespace loams
@@ -91,12 +119,101 @@ namespace protobuf {
 template <>
 internal::EnumTraitsT<::loams::live::v1::DeploymentState_internal_data_>
     internal::EnumTraitsImpl::value<::loams::live::v1::DeploymentState>;
+template <>
+internal::EnumTraitsT<::loams::live::v1::IndexState_internal_data_>
+    internal::EnumTraitsImpl::value<::loams::live::v1::IndexState>;
+template <>
+internal::EnumTraitsT<::loams::live::v1::TableJobKind_internal_data_>
+    internal::EnumTraitsImpl::value<::loams::live::v1::TableJobKind>;
 }  // namespace protobuf
 }  // namespace google
 
 namespace loams {
 namespace live {
 namespace v1 {
+enum TableJobKind : int {
+  TABLE_JOB_KIND_UNSPECIFIED = 0,
+  TABLE_JOB_KIND_VALIDATE = 1,
+  TABLE_JOB_KIND_BACKFILL = 2,
+  TableJobKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  TableJobKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t TableJobKind_internal_data_[];
+inline constexpr TableJobKind TableJobKind_MIN =
+    static_cast<TableJobKind>(0);
+inline constexpr TableJobKind TableJobKind_MAX =
+    static_cast<TableJobKind>(2);
+[[nodiscard]] inline bool TableJobKind_IsValid(int value) {
+  return 0 <= value && value <= 2;
+}
+inline constexpr int TableJobKind_ARRAYSIZE = 2 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TableJobKind_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TableJobKind) {
+  return TableJobKind_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& TableJobKind_Name(T value) {
+  static_assert(::std::is_same<T, TableJobKind>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to TableJobKind_Name().");
+  return TableJobKind_Name(static_cast<TableJobKind>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& TableJobKind_Name(TableJobKind value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<TableJobKind_descriptor, 0, 2>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool TableJobKind_Parse(
+    ::absl::string_view name, TableJobKind* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<TableJobKind>(TableJobKind_descriptor(), name,
+                                           value);
+}
+enum IndexState : int {
+  INDEX_STATE_UNSPECIFIED = 0,
+  INDEX_STATE_BACKFILLING = 1,
+  INDEX_STATE_READY = 2,
+  INDEX_STATE_DROPPING = 3,
+  IndexState_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  IndexState_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t IndexState_internal_data_[];
+inline constexpr IndexState IndexState_MIN =
+    static_cast<IndexState>(0);
+inline constexpr IndexState IndexState_MAX =
+    static_cast<IndexState>(3);
+[[nodiscard]] inline bool IndexState_IsValid(int value) {
+  return 0 <= value && value <= 3;
+}
+inline constexpr int IndexState_ARRAYSIZE = 3 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+IndexState_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(IndexState) {
+  return IndexState_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& IndexState_Name(T value) {
+  static_assert(::std::is_same<T, IndexState>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to IndexState_Name().");
+  return IndexState_Name(static_cast<IndexState>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& IndexState_Name(IndexState value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<IndexState_descriptor, 0, 3>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool IndexState_Parse(
+    ::absl::string_view name, IndexState* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<IndexState>(IndexState_descriptor(), name,
+                                           value);
+}
 enum DeploymentState : int {
   DEPLOYMENT_STATE_UNSPECIFIED = 0,
   DEPLOYMENT_STATE_PENDING = 1,
@@ -149,6 +266,229 @@ using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED JobFinding final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:loams.live.v1.JobFinding) */ {
+  using Super_ = ::google::protobuf::Message;
+
+ public:
+  inline JobFinding() : JobFinding(nullptr) {}
+  ~JobFinding() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(JobFinding* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(JobFinding));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr JobFinding(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline JobFinding(const JobFinding& from) : JobFinding(nullptr, from) {}
+  inline JobFinding(JobFinding&& from) noexcept : JobFinding(nullptr, ::std::move(from)) {}
+  inline JobFinding& operator=(const JobFinding& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline JobFinding& operator=(JobFinding&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const JobFinding& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<JobFinding>(&JobFinding_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 3;
+  friend void swap(JobFinding& a, JobFinding& b) { a.Swap(&b); }
+  inline void Swap(JobFinding* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(JobFinding* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] JobFinding* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return Super_::DefaultConstruct<JobFinding>(arena);
+  }
+  using Super_::CopyFrom;
+  void CopyFrom(const JobFinding& from);
+  using Super_::MergeFrom;
+  void MergeFrom(const JobFinding& from) { JobFinding::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(JobFinding* PROTOBUF_NONNULL other);
+ private:
+  static ::absl::string_view FullMessageName() { return "loams.live.v1.JobFinding"; }
+
+  explicit JobFinding(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  JobFinding(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const JobFinding& from);
+  JobFinding(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, JobFinding&& from) noexcept
+      : JobFinding(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kDocIdFieldNumber = 1,
+    kDetailFieldNumber = 2,
+  };
+  // bytes doc_id = 1 [json_name = "docId"];
+  void clear_doc_id() ;
+  [[nodiscard]] const ::std::string& doc_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_doc_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_doc_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_doc_id();
+  void set_allocated_doc_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_doc_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_doc_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_doc_id();
+
+  public:
+  // string detail = 2 [json_name = "detail"];
+  void clear_detail() ;
+  [[nodiscard]] const ::std::string& detail() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_detail(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_detail();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_detail();
+  void set_allocated_detail(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_detail() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_detail(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_detail();
+
+  public:
+  // @@protoc_insertion_point(class_scope:loams.live.v1.JobFinding)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 39,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const JobFinding& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr doc_id_;
+    ::google::protobuf::internal::ArenaStringPtr detail_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_loams_2flive_2fv1_2fcatalog_2eproto;
+};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IndexDef final : public ::google::protobuf::Message
@@ -209,7 +549,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IndexDef final : public ::google::p
   [[nodiscard]] static const IndexDef& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<IndexDef>(&IndexDef_globals_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(IndexDef& a, IndexDef& b) { a.Swap(&b); }
   inline void Swap(IndexDef* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -301,7 +641,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IndexDef final : public ::google::p
   enum : int {
     kFieldsFieldNumber = 3,
     kNameFieldNumber = 2,
+    kDeploymentFieldNumber = 5,
     kIdFieldNumber = 1,
+    kStateFieldNumber = 4,
   };
   // repeated string fields = 3 [json_name = "fields"];
   [[nodiscard]] int fields_size() const;
@@ -344,6 +686,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IndexDef final : public ::google::p
   ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
 
   public:
+  // bytes deployment = 5 [json_name = "deployment"];
+  void clear_deployment() ;
+  [[nodiscard]] const ::std::string& deployment() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_deployment(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_deployment();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_deployment();
+  void set_allocated_deployment(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_deployment() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_deployment(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_deployment();
+
+  public:
   // uint32 id = 1 [json_name = "id"];
   void clear_id() ;
   [[nodiscard]] ::uint32_t id() const;
@@ -354,11 +711,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IndexDef final : public ::google::p
   void _internal_set_id(::uint32_t value);
 
   public:
+  // .loams.live.v1.IndexState state = 4 [json_name = "state"];
+  void clear_state() ;
+  [[nodiscard]] ::loams::live::v1::IndexState state() const;
+  void set_state(::loams::live::v1::IndexState value);
+
+  private:
+  ::loams::live::v1::IndexState _internal_state() const;
+  void _internal_set_state(::loams::live::v1::IndexState value);
+
+  public:
   // @@protoc_insertion_point(class_scope:loams.live.v1.IndexDef)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           0, 41,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -389,7 +756,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IndexDef final : public ::google::p
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField<::std::string> fields_;
     ::google::protobuf::internal::ArenaStringPtr name_;
+    ::google::protobuf::internal::ArenaStringPtr deployment_;
     ::uint32_t id_;
+    int state_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -455,7 +824,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AppDef final : public ::google::pro
   [[nodiscard]] static const AppDef& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AppDef>(&AppDef_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(AppDef& a, AppDef& b) { a.Swap(&b); }
   inline void Swap(AppDef* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -603,6 +972,563 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AppDef final : public ::google::pro
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t format_;
     ::uint32_t journal_shards_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_loams_2flive_2fv1_2fcatalog_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TableJobRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:loams.live.v1.TableJobRecord) */ {
+  using Super_ = ::google::protobuf::Message;
+
+ public:
+  inline TableJobRecord() : TableJobRecord(nullptr) {}
+  ~TableJobRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TableJobRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TableJobRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TableJobRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TableJobRecord(const TableJobRecord& from) : TableJobRecord(nullptr, from) {}
+  inline TableJobRecord(TableJobRecord&& from) noexcept : TableJobRecord(nullptr, ::std::move(from)) {}
+  inline TableJobRecord& operator=(const TableJobRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TableJobRecord& operator=(TableJobRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TableJobRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TableJobRecord>(&TableJobRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 2;
+  friend void swap(TableJobRecord& a, TableJobRecord& b) { a.Swap(&b); }
+  inline void Swap(TableJobRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TableJobRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TableJobRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return Super_::DefaultConstruct<TableJobRecord>(arena);
+  }
+  using Super_::CopyFrom;
+  void CopyFrom(const TableJobRecord& from);
+  using Super_::MergeFrom;
+  void MergeFrom(const TableJobRecord& from) { TableJobRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TableJobRecord* PROTOBUF_NONNULL other);
+ private:
+  static ::absl::string_view FullMessageName() { return "loams.live.v1.TableJobRecord"; }
+
+  explicit TableJobRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TableJobRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TableJobRecord& from);
+  TableJobRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TableJobRecord&& from) noexcept
+      : TableJobRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kFindingsFieldNumber = 10,
+    kDeploymentFieldNumber = 4,
+    kOwnerFieldNumber = 5,
+    kCheckpointFieldNumber = 7,
+    kFormatFieldNumber = 1,
+    kKindFieldNumber = 2,
+    kLeaseExpiresMsFieldNumber = 6,
+    kTableIdFieldNumber = 3,
+    kDoneFieldNumber = 9,
+    kScannedFieldNumber = 8,
+  };
+  // repeated .loams.live.v1.JobFinding findings = 10 [json_name = "findings"];
+  [[nodiscard]] int findings_size() const;
+  private:
+  int _internal_findings_size() const;
+
+  public:
+  void clear_findings() ;
+  [[nodiscard]] const ::loams::live::v1::JobFinding& findings(int index) const;
+  [[nodiscard]] ::loams::live::v1::JobFinding* PROTOBUF_NONNULL mutable_findings(int index);
+  ::loams::live::v1::JobFinding* PROTOBUF_NONNULL add_findings();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::loams::live::v1::JobFinding>&
+  findings() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::loams::live::v1::JobFinding>* PROTOBUF_NONNULL
+  mutable_findings();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::loams::live::v1::JobFinding>& _internal_findings() const;
+  ::google::protobuf::RepeatedPtrField<::loams::live::v1::JobFinding>* PROTOBUF_NONNULL _internal_mutable_findings();
+
+  public:
+  // bytes deployment = 4 [json_name = "deployment"];
+  void clear_deployment() ;
+  [[nodiscard]] const ::std::string& deployment() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_deployment(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_deployment();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_deployment();
+  void set_allocated_deployment(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_deployment() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_deployment(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_deployment();
+
+  public:
+  // string owner = 5 [json_name = "owner"];
+  void clear_owner() ;
+  [[nodiscard]] const ::std::string& owner() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_owner(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_owner();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_owner();
+  void set_allocated_owner(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_owner() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_owner(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_owner();
+
+  public:
+  // bytes checkpoint = 7 [json_name = "checkpoint"];
+  void clear_checkpoint() ;
+  [[nodiscard]] const ::std::string& checkpoint() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_checkpoint(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_checkpoint();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_checkpoint();
+  void set_allocated_checkpoint(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_checkpoint() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_checkpoint(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_checkpoint();
+
+  public:
+  // uint32 format = 1 [json_name = "format"];
+  void clear_format() ;
+  [[nodiscard]] ::uint32_t format() const;
+  void set_format(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_format() const;
+  void _internal_set_format(::uint32_t value);
+
+  public:
+  // .loams.live.v1.TableJobKind kind = 2 [json_name = "kind"];
+  void clear_kind() ;
+  [[nodiscard]] ::loams::live::v1::TableJobKind kind() const;
+  void set_kind(::loams::live::v1::TableJobKind value);
+
+  private:
+  ::loams::live::v1::TableJobKind _internal_kind() const;
+  void _internal_set_kind(::loams::live::v1::TableJobKind value);
+
+  public:
+  // uint64 lease_expires_ms = 6 [json_name = "leaseExpiresMs"];
+  void clear_lease_expires_ms() ;
+  [[nodiscard]] ::uint64_t lease_expires_ms() const;
+  void set_lease_expires_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_lease_expires_ms() const;
+  void _internal_set_lease_expires_ms(::uint64_t value);
+
+  public:
+  // uint32 table_id = 3 [json_name = "tableId"];
+  void clear_table_id() ;
+  [[nodiscard]] ::uint32_t table_id() const;
+  void set_table_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_table_id() const;
+  void _internal_set_table_id(::uint32_t value);
+
+  public:
+  // bool done = 9 [json_name = "done"];
+  void clear_done() ;
+  [[nodiscard]] bool done() const;
+  void set_done(bool value);
+
+  private:
+  bool _internal_done() const;
+  void _internal_set_done(bool value);
+
+  public:
+  // uint64 scanned = 8 [json_name = "scanned"];
+  void clear_scanned() ;
+  [[nodiscard]] ::uint64_t scanned() const;
+  void set_scanned(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_scanned() const;
+  void _internal_set_scanned(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:loams.live.v1.TableJobRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 10,
+                          1, 50,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TableJobRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::loams::live::v1::JobFinding > findings_;
+    ::google::protobuf::internal::ArenaStringPtr deployment_;
+    ::google::protobuf::internal::ArenaStringPtr owner_;
+    ::google::protobuf::internal::ArenaStringPtr checkpoint_;
+    ::uint32_t format_;
+    int kind_;
+    ::uint64_t lease_expires_ms_;
+    ::uint32_t table_id_;
+    bool done_;
+    ::uint64_t scanned_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_loams_2flive_2fv1_2fcatalog_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnforcingValidator final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:loams.live.v1.EnforcingValidator) */ {
+  using Super_ = ::google::protobuf::Message;
+
+ public:
+  inline EnforcingValidator() : EnforcingValidator(nullptr) {}
+  ~EnforcingValidator() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(EnforcingValidator* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(EnforcingValidator));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr EnforcingValidator(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline EnforcingValidator(const EnforcingValidator& from) : EnforcingValidator(nullptr, from) {}
+  inline EnforcingValidator(EnforcingValidator&& from) noexcept : EnforcingValidator(nullptr, ::std::move(from)) {}
+  inline EnforcingValidator& operator=(const EnforcingValidator& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline EnforcingValidator& operator=(EnforcingValidator&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const EnforcingValidator& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EnforcingValidator>(&EnforcingValidator_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 1;
+  friend void swap(EnforcingValidator& a, EnforcingValidator& b) { a.Swap(&b); }
+  inline void Swap(EnforcingValidator* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(EnforcingValidator* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] EnforcingValidator* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return Super_::DefaultConstruct<EnforcingValidator>(arena);
+  }
+  using Super_::CopyFrom;
+  void CopyFrom(const EnforcingValidator& from);
+  using Super_::MergeFrom;
+  void MergeFrom(const EnforcingValidator& from) { EnforcingValidator::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(EnforcingValidator* PROTOBUF_NONNULL other);
+ private:
+  static ::absl::string_view FullMessageName() { return "loams.live.v1.EnforcingValidator"; }
+
+  explicit EnforcingValidator(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  EnforcingValidator(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const EnforcingValidator& from);
+  EnforcingValidator(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, EnforcingValidator&& from) noexcept
+      : EnforcingValidator(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kDeploymentFieldNumber = 2,
+    kValidatorFieldNumber = 1,
+  };
+  // bytes deployment = 2 [json_name = "deployment"];
+  void clear_deployment() ;
+  [[nodiscard]] const ::std::string& deployment() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_deployment(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_deployment();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_deployment();
+  void set_allocated_deployment(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_deployment() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_deployment(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_deployment();
+
+  public:
+  // .loams.live.v1.Validator validator = 1 [json_name = "validator"];
+  [[nodiscard]] bool has_validator() const;
+  void clear_validator() ;
+  [[nodiscard]] const ::loams::live::v1::Validator& validator() const;
+  [[nodiscard]] ::loams::live::v1::Validator* PROTOBUF_NULLABLE release_validator();
+  ::loams::live::v1::Validator* PROTOBUF_NONNULL mutable_validator();
+  void set_allocated_validator(::loams::live::v1::Validator* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_validator(::loams::live::v1::Validator* PROTOBUF_NULLABLE value);
+  ::loams::live::v1::Validator* PROTOBUF_NULLABLE unsafe_arena_release_validator();
+
+  private:
+  const ::loams::live::v1::Validator& _internal_validator() const;
+  ::loams::live::v1::Validator* PROTOBUF_NONNULL _internal_mutable_validator();
+
+  public:
+  // @@protoc_insertion_point(class_scope:loams.live.v1.EnforcingValidator)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const EnforcingValidator& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr deployment_;
+    ::loams::live::v1::Validator* PROTOBUF_NULLABLE validator_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -760,6 +1686,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TableDef final : public ::google::p
   enum : int {
     kIndexesFieldNumber = 4,
     kNameFieldNumber = 3,
+    kValidatorFieldNumber = 6,
+    kEnforcingFieldNumber = 7,
     kFormatFieldNumber = 1,
     kIdFieldNumber = 2,
     kNextIndexIdFieldNumber = 5,
@@ -799,6 +1727,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TableDef final : public ::google::p
   ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
 
   public:
+  // .loams.live.v1.Validator validator = 6 [json_name = "validator"];
+  [[nodiscard]] bool has_validator() const;
+  void clear_validator() ;
+  [[nodiscard]] const ::loams::live::v1::Validator& validator() const;
+  [[nodiscard]] ::loams::live::v1::Validator* PROTOBUF_NULLABLE release_validator();
+  ::loams::live::v1::Validator* PROTOBUF_NONNULL mutable_validator();
+  void set_allocated_validator(::loams::live::v1::Validator* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_validator(::loams::live::v1::Validator* PROTOBUF_NULLABLE value);
+  ::loams::live::v1::Validator* PROTOBUF_NULLABLE unsafe_arena_release_validator();
+
+  private:
+  const ::loams::live::v1::Validator& _internal_validator() const;
+  ::loams::live::v1::Validator* PROTOBUF_NONNULL _internal_mutable_validator();
+
+  public:
+  // .loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];
+  [[nodiscard]] bool has_enforcing() const;
+  void clear_enforcing() ;
+  [[nodiscard]] const ::loams::live::v1::EnforcingValidator& enforcing() const;
+  [[nodiscard]] ::loams::live::v1::EnforcingValidator* PROTOBUF_NULLABLE release_enforcing();
+  ::loams::live::v1::EnforcingValidator* PROTOBUF_NONNULL mutable_enforcing();
+  void set_allocated_enforcing(::loams::live::v1::EnforcingValidator* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_enforcing(::loams::live::v1::EnforcingValidator* PROTOBUF_NULLABLE value);
+  ::loams::live::v1::EnforcingValidator* PROTOBUF_NULLABLE unsafe_arena_release_enforcing();
+
+  private:
+  const ::loams::live::v1::EnforcingValidator& _internal_enforcing() const;
+  ::loams::live::v1::EnforcingValidator* PROTOBUF_NONNULL _internal_mutable_enforcing();
+
+  public:
   // uint32 format = 1 [json_name = "format"];
   void clear_format() ;
   [[nodiscard]] ::uint32_t format() const;
@@ -833,8 +1791,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TableDef final : public ::google::p
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
-                          1, 35,
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          3, 35,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -864,6 +1822,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TableDef final : public ::google::p
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::loams::live::v1::IndexDef > indexes_;
     ::google::protobuf::internal::ArenaStringPtr name_;
+    ::loams::live::v1::Validator* PROTOBUF_NULLABLE validator_;
+    ::loams::live::v1::EnforcingValidator* PROTOBUF_NULLABLE enforcing_;
     ::uint32_t format_;
     ::uint32_t id_;
     ::uint32_t next_index_id_;
@@ -932,7 +1892,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeploymentRecord final : public ::g
   [[nodiscard]] static const DeploymentRecord& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DeploymentRecord>(&DeploymentRecord_globals_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(DeploymentRecord& a, DeploymentRecord& b) { a.Swap(&b); }
   inline void Swap(DeploymentRecord* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1237,7 +2197,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeploymentRecord final : public ::g
 inline void TableDef::clear_format() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.format_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t TableDef::format() const {
   // @@protoc_insertion_point(field_get:loams.live.v1.TableDef.format)
@@ -1245,7 +2205,7 @@ inline ::uint32_t TableDef::format() const {
 }
 inline void TableDef::set_format(::uint32_t value) {
   _internal_set_format(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:loams.live.v1.TableDef.format)
 }
 inline ::uint32_t TableDef::_internal_format() const {
@@ -1261,7 +2221,7 @@ inline void TableDef::_internal_set_format(::uint32_t value) {
 inline void TableDef::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t TableDef::id() const {
   // @@protoc_insertion_point(field_get:loams.live.v1.TableDef.id)
@@ -1269,7 +2229,7 @@ inline ::uint32_t TableDef::id() const {
 }
 inline void TableDef::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:loams.live.v1.TableDef.id)
 }
 inline ::uint32_t TableDef::_internal_id() const {
@@ -1404,7 +2364,7 @@ TableDef::_internal_mutable_indexes() {
 inline void TableDef::clear_next_index_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.next_index_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t TableDef::next_index_id() const {
   // @@protoc_insertion_point(field_get:loams.live.v1.TableDef.next_index_id)
@@ -1412,7 +2372,7 @@ inline ::uint32_t TableDef::next_index_id() const {
 }
 inline void TableDef::set_next_index_id(::uint32_t value) {
   _internal_set_next_index_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:loams.live.v1.TableDef.next_index_id)
 }
 inline ::uint32_t TableDef::_internal_next_index_id() const {
@@ -1424,6 +2384,885 @@ inline void TableDef::_internal_set_next_index_id(::uint32_t value) {
   _impl_.next_index_id_ = value;
 }
 
+// .loams.live.v1.Validator validator = 6 [json_name = "validator"];
+inline bool TableDef::has_validator() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.validator_ != nullptr);
+  return value;
+}
+inline const ::loams::live::v1::Validator& TableDef::_internal_validator() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::loams::live::v1::Validator* p = _impl_.validator_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::loams::live::v1::Validator>(&::loams::live::v1::Validator_globals_);
+}
+inline const ::loams::live::v1::Validator& TableDef::validator() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.TableDef.validator)
+  return _internal_validator();
+}
+inline void TableDef::unsafe_arena_set_allocated_validator(
+    ::loams::live::v1::Validator* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.validator_);
+  }
+  _impl_.validator_ = reinterpret_cast<::loams::live::v1::Validator*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.live.v1.TableDef.validator)
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NULLABLE TableDef::release_validator() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::loams::live::v1::Validator* released = _impl_.validator_;
+  _impl_.validator_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NULLABLE TableDef::unsafe_arena_release_validator() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.TableDef.validator)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::loams::live::v1::Validator* temp = _impl_.validator_;
+  _impl_.validator_ = nullptr;
+  return temp;
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NONNULL TableDef::_internal_mutable_validator() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.validator_ == nullptr) {
+    auto* p = Super_::DefaultConstruct<::loams::live::v1::Validator>(GetArena());
+    _impl_.validator_ = reinterpret_cast<::loams::live::v1::Validator*>(p);
+  }
+  return _impl_.validator_;
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NONNULL TableDef::mutable_validator()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::loams::live::v1::Validator* _msg = _internal_mutable_validator();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.TableDef.validator)
+  return _msg;
+}
+inline void TableDef::set_allocated_validator(::loams::live::v1::Validator* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.validator_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.validator_ = reinterpret_cast<::loams::live::v1::Validator*>(value);
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.TableDef.validator)
+}
+
+// .loams.live.v1.EnforcingValidator enforcing = 7 [json_name = "enforcing"];
+inline bool TableDef::has_enforcing() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.enforcing_ != nullptr);
+  return value;
+}
+inline void TableDef::clear_enforcing() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.enforcing_ != nullptr) _impl_.enforcing_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::loams::live::v1::EnforcingValidator& TableDef::_internal_enforcing() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::loams::live::v1::EnforcingValidator* p = _impl_.enforcing_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::loams::live::v1::EnforcingValidator>(&::loams::live::v1::EnforcingValidator_globals_);
+}
+inline const ::loams::live::v1::EnforcingValidator& TableDef::enforcing() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.TableDef.enforcing)
+  return _internal_enforcing();
+}
+inline void TableDef::unsafe_arena_set_allocated_enforcing(
+    ::loams::live::v1::EnforcingValidator* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.enforcing_);
+  }
+  _impl_.enforcing_ = reinterpret_cast<::loams::live::v1::EnforcingValidator*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.live.v1.TableDef.enforcing)
+}
+inline ::loams::live::v1::EnforcingValidator* PROTOBUF_NULLABLE TableDef::release_enforcing() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::loams::live::v1::EnforcingValidator* released = _impl_.enforcing_;
+  _impl_.enforcing_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::loams::live::v1::EnforcingValidator* PROTOBUF_NULLABLE TableDef::unsafe_arena_release_enforcing() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.TableDef.enforcing)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::loams::live::v1::EnforcingValidator* temp = _impl_.enforcing_;
+  _impl_.enforcing_ = nullptr;
+  return temp;
+}
+inline ::loams::live::v1::EnforcingValidator* PROTOBUF_NONNULL TableDef::_internal_mutable_enforcing() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.enforcing_ == nullptr) {
+    auto* p = Super_::DefaultConstruct<::loams::live::v1::EnforcingValidator>(GetArena());
+    _impl_.enforcing_ = reinterpret_cast<::loams::live::v1::EnforcingValidator*>(p);
+  }
+  return _impl_.enforcing_;
+}
+inline ::loams::live::v1::EnforcingValidator* PROTOBUF_NONNULL TableDef::mutable_enforcing()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::loams::live::v1::EnforcingValidator* _msg = _internal_mutable_enforcing();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.TableDef.enforcing)
+  return _msg;
+}
+inline void TableDef::set_allocated_enforcing(::loams::live::v1::EnforcingValidator* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.enforcing_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.enforcing_ = reinterpret_cast<::loams::live::v1::EnforcingValidator*>(value);
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.TableDef.enforcing)
+}
+
+// -------------------------------------------------------------------
+
+// EnforcingValidator
+
+// .loams.live.v1.Validator validator = 1 [json_name = "validator"];
+inline bool EnforcingValidator::has_validator() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.validator_ != nullptr);
+  return value;
+}
+inline const ::loams::live::v1::Validator& EnforcingValidator::_internal_validator() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::loams::live::v1::Validator* p = _impl_.validator_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::loams::live::v1::Validator>(&::loams::live::v1::Validator_globals_);
+}
+inline const ::loams::live::v1::Validator& EnforcingValidator::validator() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.EnforcingValidator.validator)
+  return _internal_validator();
+}
+inline void EnforcingValidator::unsafe_arena_set_allocated_validator(
+    ::loams::live::v1::Validator* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.validator_);
+  }
+  _impl_.validator_ = reinterpret_cast<::loams::live::v1::Validator*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.live.v1.EnforcingValidator.validator)
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NULLABLE EnforcingValidator::release_validator() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::loams::live::v1::Validator* released = _impl_.validator_;
+  _impl_.validator_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NULLABLE EnforcingValidator::unsafe_arena_release_validator() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.EnforcingValidator.validator)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::loams::live::v1::Validator* temp = _impl_.validator_;
+  _impl_.validator_ = nullptr;
+  return temp;
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NONNULL EnforcingValidator::_internal_mutable_validator() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.validator_ == nullptr) {
+    auto* p = Super_::DefaultConstruct<::loams::live::v1::Validator>(GetArena());
+    _impl_.validator_ = reinterpret_cast<::loams::live::v1::Validator*>(p);
+  }
+  return _impl_.validator_;
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NONNULL EnforcingValidator::mutable_validator()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::loams::live::v1::Validator* _msg = _internal_mutable_validator();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.EnforcingValidator.validator)
+  return _msg;
+}
+inline void EnforcingValidator::set_allocated_validator(::loams::live::v1::Validator* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.validator_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.validator_ = reinterpret_cast<::loams::live::v1::Validator*>(value);
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.EnforcingValidator.validator)
+}
+
+// bytes deployment = 2 [json_name = "deployment"];
+inline void EnforcingValidator::clear_deployment() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deployment_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& EnforcingValidator::deployment() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.EnforcingValidator.deployment)
+  return _internal_deployment();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void EnforcingValidator::set_deployment(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.deployment_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:loams.live.v1.EnforcingValidator.deployment)
+}
+inline ::std::string* PROTOBUF_NONNULL EnforcingValidator::mutable_deployment()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_deployment();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.EnforcingValidator.deployment)
+  return _s;
+}
+inline const ::std::string& EnforcingValidator::_internal_deployment() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.deployment_.Get();
+}
+inline void EnforcingValidator::_internal_set_deployment(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deployment_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL EnforcingValidator::_internal_mutable_deployment() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.deployment_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE EnforcingValidator::release_deployment() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.EnforcingValidator.deployment)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.deployment_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.deployment_.Set("", GetArena());
+  }
+  return released;
+}
+inline void EnforcingValidator::set_allocated_deployment(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.deployment_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.deployment_.IsDefault()) {
+    _impl_.deployment_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.EnforcingValidator.deployment)
+}
+
+// -------------------------------------------------------------------
+
+// TableJobRecord
+
+// uint32 format = 1 [json_name = "format"];
+inline void TableJobRecord::clear_format() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.format_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t TableJobRecord::format() const {
+  // @@protoc_insertion_point(field_get:loams.live.v1.TableJobRecord.format)
+  return _internal_format();
+}
+inline void TableJobRecord::set_format(::uint32_t value) {
+  _internal_set_format(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:loams.live.v1.TableJobRecord.format)
+}
+inline ::uint32_t TableJobRecord::_internal_format() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.format_;
+}
+inline void TableJobRecord::_internal_set_format(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.format_ = value;
+}
+
+// .loams.live.v1.TableJobKind kind = 2 [json_name = "kind"];
+inline void TableJobRecord::clear_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kind_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::loams::live::v1::TableJobKind TableJobRecord::kind() const {
+  // @@protoc_insertion_point(field_get:loams.live.v1.TableJobRecord.kind)
+  return _internal_kind();
+}
+inline void TableJobRecord::set_kind(::loams::live::v1::TableJobKind value) {
+  _internal_set_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:loams.live.v1.TableJobRecord.kind)
+}
+inline ::loams::live::v1::TableJobKind TableJobRecord::_internal_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::loams::live::v1::TableJobKind>(_impl_.kind_);
+}
+inline void TableJobRecord::_internal_set_kind(::loams::live::v1::TableJobKind value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kind_ = value;
+}
+
+// uint32 table_id = 3 [json_name = "tableId"];
+inline void TableJobRecord::clear_table_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.table_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t TableJobRecord::table_id() const {
+  // @@protoc_insertion_point(field_get:loams.live.v1.TableJobRecord.table_id)
+  return _internal_table_id();
+}
+inline void TableJobRecord::set_table_id(::uint32_t value) {
+  _internal_set_table_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:loams.live.v1.TableJobRecord.table_id)
+}
+inline ::uint32_t TableJobRecord::_internal_table_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.table_id_;
+}
+inline void TableJobRecord::_internal_set_table_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.table_id_ = value;
+}
+
+// bytes deployment = 4 [json_name = "deployment"];
+inline void TableJobRecord::clear_deployment() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deployment_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& TableJobRecord::deployment() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.TableJobRecord.deployment)
+  return _internal_deployment();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TableJobRecord::set_deployment(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.deployment_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:loams.live.v1.TableJobRecord.deployment)
+}
+inline ::std::string* PROTOBUF_NONNULL TableJobRecord::mutable_deployment()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_deployment();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.TableJobRecord.deployment)
+  return _s;
+}
+inline const ::std::string& TableJobRecord::_internal_deployment() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.deployment_.Get();
+}
+inline void TableJobRecord::_internal_set_deployment(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deployment_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TableJobRecord::_internal_mutable_deployment() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.deployment_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TableJobRecord::release_deployment() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.TableJobRecord.deployment)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.deployment_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.deployment_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TableJobRecord::set_allocated_deployment(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.deployment_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.deployment_.IsDefault()) {
+    _impl_.deployment_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.TableJobRecord.deployment)
+}
+
+// string owner = 5 [json_name = "owner"];
+inline void TableJobRecord::clear_owner() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owner_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& TableJobRecord::owner() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.TableJobRecord.owner)
+  return _internal_owner();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TableJobRecord::set_owner(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.owner_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:loams.live.v1.TableJobRecord.owner)
+}
+inline ::std::string* PROTOBUF_NONNULL TableJobRecord::mutable_owner()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_owner();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.TableJobRecord.owner)
+  return _s;
+}
+inline const ::std::string& TableJobRecord::_internal_owner() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.owner_.Get();
+}
+inline void TableJobRecord::_internal_set_owner(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owner_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TableJobRecord::_internal_mutable_owner() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.owner_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TableJobRecord::release_owner() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.TableJobRecord.owner)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.owner_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.owner_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TableJobRecord::set_allocated_owner(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.owner_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.owner_.IsDefault()) {
+    _impl_.owner_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.TableJobRecord.owner)
+}
+
+// uint64 lease_expires_ms = 6 [json_name = "leaseExpiresMs"];
+inline void TableJobRecord::clear_lease_expires_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lease_expires_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t TableJobRecord::lease_expires_ms() const {
+  // @@protoc_insertion_point(field_get:loams.live.v1.TableJobRecord.lease_expires_ms)
+  return _internal_lease_expires_ms();
+}
+inline void TableJobRecord::set_lease_expires_ms(::uint64_t value) {
+  _internal_set_lease_expires_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:loams.live.v1.TableJobRecord.lease_expires_ms)
+}
+inline ::uint64_t TableJobRecord::_internal_lease_expires_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.lease_expires_ms_;
+}
+inline void TableJobRecord::_internal_set_lease_expires_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lease_expires_ms_ = value;
+}
+
+// bytes checkpoint = 7 [json_name = "checkpoint"];
+inline void TableJobRecord::clear_checkpoint() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.checkpoint_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& TableJobRecord::checkpoint() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.TableJobRecord.checkpoint)
+  return _internal_checkpoint();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TableJobRecord::set_checkpoint(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.checkpoint_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:loams.live.v1.TableJobRecord.checkpoint)
+}
+inline ::std::string* PROTOBUF_NONNULL TableJobRecord::mutable_checkpoint()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_checkpoint();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.TableJobRecord.checkpoint)
+  return _s;
+}
+inline const ::std::string& TableJobRecord::_internal_checkpoint() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.checkpoint_.Get();
+}
+inline void TableJobRecord::_internal_set_checkpoint(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.checkpoint_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TableJobRecord::_internal_mutable_checkpoint() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.checkpoint_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TableJobRecord::release_checkpoint() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.TableJobRecord.checkpoint)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.checkpoint_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.checkpoint_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TableJobRecord::set_allocated_checkpoint(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.checkpoint_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.checkpoint_.IsDefault()) {
+    _impl_.checkpoint_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.TableJobRecord.checkpoint)
+}
+
+// uint64 scanned = 8 [json_name = "scanned"];
+inline void TableJobRecord::clear_scanned() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scanned_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint64_t TableJobRecord::scanned() const {
+  // @@protoc_insertion_point(field_get:loams.live.v1.TableJobRecord.scanned)
+  return _internal_scanned();
+}
+inline void TableJobRecord::set_scanned(::uint64_t value) {
+  _internal_set_scanned(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:loams.live.v1.TableJobRecord.scanned)
+}
+inline ::uint64_t TableJobRecord::_internal_scanned() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.scanned_;
+}
+inline void TableJobRecord::_internal_set_scanned(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.scanned_ = value;
+}
+
+// bool done = 9 [json_name = "done"];
+inline void TableJobRecord::clear_done() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.done_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline bool TableJobRecord::done() const {
+  // @@protoc_insertion_point(field_get:loams.live.v1.TableJobRecord.done)
+  return _internal_done();
+}
+inline void TableJobRecord::set_done(bool value) {
+  _internal_set_done(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:loams.live.v1.TableJobRecord.done)
+}
+inline bool TableJobRecord::_internal_done() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.done_;
+}
+inline void TableJobRecord::_internal_set_done(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.done_ = value;
+}
+
+// repeated .loams.live.v1.JobFinding findings = 10 [json_name = "findings"];
+inline int TableJobRecord::_internal_findings_size() const {
+  return _internal_findings().size();
+}
+inline int TableJobRecord::findings_size() const {
+  return _internal_findings_size();
+}
+inline void TableJobRecord::clear_findings() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.findings_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::loams::live::v1::JobFinding& TableJobRecord::findings(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.TableJobRecord.findings)
+  return _internal_findings().Get(index);
+}
+inline ::loams::live::v1::JobFinding* PROTOBUF_NONNULL TableJobRecord::mutable_findings(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.TableJobRecord.findings)
+  return _internal_mutable_findings()->Mutable(index);
+}
+inline ::loams::live::v1::JobFinding* PROTOBUF_NONNULL TableJobRecord::add_findings()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::loams::live::v1::JobFinding* _add =
+      _internal_mutable_findings()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:loams.live.v1.TableJobRecord.findings)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::loams::live::v1::JobFinding>& TableJobRecord::findings() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:loams.live.v1.TableJobRecord.findings)
+  return _internal_findings();
+}
+inline ::google::protobuf::RepeatedPtrField<::loams::live::v1::JobFinding>* PROTOBUF_NONNULL
+TableJobRecord::mutable_findings() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:loams.live.v1.TableJobRecord.findings)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_findings();
+}
+inline const ::google::protobuf::RepeatedPtrField<::loams::live::v1::JobFinding>&
+TableJobRecord::_internal_findings() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.findings_;
+}
+inline ::google::protobuf::RepeatedPtrField<::loams::live::v1::JobFinding>* PROTOBUF_NONNULL
+TableJobRecord::_internal_mutable_findings() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.findings_;
+}
+
+// -------------------------------------------------------------------
+
+// JobFinding
+
+// bytes doc_id = 1 [json_name = "docId"];
+inline void JobFinding::clear_doc_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.doc_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& JobFinding::doc_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.JobFinding.doc_id)
+  return _internal_doc_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void JobFinding::set_doc_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.doc_id_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:loams.live.v1.JobFinding.doc_id)
+}
+inline ::std::string* PROTOBUF_NONNULL JobFinding::mutable_doc_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_doc_id();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.JobFinding.doc_id)
+  return _s;
+}
+inline const ::std::string& JobFinding::_internal_doc_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.doc_id_.Get();
+}
+inline void JobFinding::_internal_set_doc_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.doc_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL JobFinding::_internal_mutable_doc_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.doc_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE JobFinding::release_doc_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.JobFinding.doc_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.doc_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.doc_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void JobFinding::set_allocated_doc_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.doc_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.doc_id_.IsDefault()) {
+    _impl_.doc_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.JobFinding.doc_id)
+}
+
+// string detail = 2 [json_name = "detail"];
+inline void JobFinding::clear_detail() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.detail_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& JobFinding::detail() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.JobFinding.detail)
+  return _internal_detail();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void JobFinding::set_detail(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.detail_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:loams.live.v1.JobFinding.detail)
+}
+inline ::std::string* PROTOBUF_NONNULL JobFinding::mutable_detail()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_detail();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.JobFinding.detail)
+  return _s;
+}
+inline const ::std::string& JobFinding::_internal_detail() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.detail_.Get();
+}
+inline void JobFinding::_internal_set_detail(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.detail_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL JobFinding::_internal_mutable_detail() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.detail_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE JobFinding::release_detail() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.JobFinding.detail)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.detail_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.detail_.Set("", GetArena());
+  }
+  return released;
+}
+inline void JobFinding::set_allocated_detail(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.detail_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.detail_.IsDefault()) {
+    _impl_.detail_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.JobFinding.detail)
+}
+
 // -------------------------------------------------------------------
 
 // IndexDef
@@ -1432,7 +3271,7 @@ inline void TableDef::_internal_set_next_index_id(::uint32_t value) {
 inline void IndexDef::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t IndexDef::id() const {
   // @@protoc_insertion_point(field_get:loams.live.v1.IndexDef.id)
@@ -1440,7 +3279,7 @@ inline ::uint32_t IndexDef::id() const {
 }
 inline void IndexDef::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:loams.live.v1.IndexDef.id)
 }
 inline ::uint32_t IndexDef::_internal_id() const {
@@ -1586,6 +3425,94 @@ inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
 IndexDef::_internal_mutable_fields() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.fields_;
+}
+
+// .loams.live.v1.IndexState state = 4 [json_name = "state"];
+inline void IndexDef::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::loams::live::v1::IndexState IndexDef::state() const {
+  // @@protoc_insertion_point(field_get:loams.live.v1.IndexDef.state)
+  return _internal_state();
+}
+inline void IndexDef::set_state(::loams::live::v1::IndexState value) {
+  _internal_set_state(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:loams.live.v1.IndexDef.state)
+}
+inline ::loams::live::v1::IndexState IndexDef::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::loams::live::v1::IndexState>(_impl_.state_);
+}
+inline void IndexDef::_internal_set_state(::loams::live::v1::IndexState value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.state_ = value;
+}
+
+// bytes deployment = 5 [json_name = "deployment"];
+inline void IndexDef::clear_deployment() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deployment_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& IndexDef::deployment() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.IndexDef.deployment)
+  return _internal_deployment();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void IndexDef::set_deployment(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.deployment_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:loams.live.v1.IndexDef.deployment)
+}
+inline ::std::string* PROTOBUF_NONNULL IndexDef::mutable_deployment()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_deployment();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.IndexDef.deployment)
+  return _s;
+}
+inline const ::std::string& IndexDef::_internal_deployment() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.deployment_.Get();
+}
+inline void IndexDef::_internal_set_deployment(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.deployment_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL IndexDef::_internal_mutable_deployment() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.deployment_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE IndexDef::release_deployment() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.IndexDef.deployment)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.deployment_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.deployment_.Set("", GetArena());
+  }
+  return released;
+}
+inline void IndexDef::set_allocated_deployment(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.deployment_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.deployment_.IsDefault()) {
+    _impl_.deployment_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.IndexDef.deployment)
 }
 
 // -------------------------------------------------------------------
@@ -2206,6 +4133,18 @@ inline void DeploymentRecord::set_allocated_failure_reason(::std::string* PROTOB
 namespace google {
 namespace protobuf {
 
+template <>
+struct is_proto_enum<::loams::live::v1::TableJobKind> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::loams::live::v1::TableJobKind>() {
+  return ::loams::live::v1::TableJobKind_descriptor();
+}
+template <>
+struct is_proto_enum<::loams::live::v1::IndexState> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::loams::live::v1::IndexState>() {
+  return ::loams::live::v1::IndexState_descriptor();
+}
 template <>
 struct is_proto_enum<::loams::live::v1::DeploymentState> : std::true_type {};
 template <>

@@ -8,7 +8,7 @@
 
 import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Schema } from "./live_pb.js";
+import type { Schema, Validator } from "./live_pb.js";
 import { file_loams_live_v1_live } from "./live_pb.js";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -16,7 +16,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file loams/live/v1/catalog.proto.
  */
 export const file_loams_live_v1_catalog: GenFile = /*@__PURE__*/
-  fileDesc("Chtsb2Ftcy9saXZlL3YxL2NhdGFsb2cucHJvdG8SDWxvYW1zLmxpdmUudjEidQoIVGFibGVEZWYSDgoGZm9ybWF0GAEgASgNEgoKAmlkGAIgASgNEgwKBG5hbWUYAyABKAkSKAoHaW5kZXhlcxgEIAMoCzIXLmxvYW1zLmxpdmUudjEuSW5kZXhEZWYSFQoNbmV4dF9pbmRleF9pZBgFIAEoDSI0CghJbmRleERlZhIKCgJpZBgBIAEoDRIMCgRuYW1lGAIgASgJEg4KBmZpZWxkcxgDIAMoCSIwCgZBcHBEZWYSDgoGZm9ybWF0GAEgASgNEhYKDmpvdXJuYWxfc2hhcmRzGAIgASgNIv8BChBEZXBsb3ltZW50UmVjb3JkEg4KBmZvcm1hdBgBIAEoDRIKCgJpZBgCIAEoDBIVCg1idW5kbGVfc2hhMjU2GAMgASgMEiUKBnNjaGVtYRgEIAEoCzIVLmxvYW1zLmxpdmUudjEuU2NoZW1hEhUKDWNyZWF0ZWRfYXRfbXMYBSABKAQSEgoKY3JlYXRlZF9ieRgGIAEoCRIPCgdtZXNzYWdlGAcgASgJEg4KBnBhcmVudBgIIAEoDBItCgVzdGF0ZRgJIAEoDjIeLmxvYW1zLmxpdmUudjEuRGVwbG95bWVudFN0YXRlEhYKDmZhaWx1cmVfcmVhc29uGAogASgJKo4CCg9EZXBsb3ltZW50U3RhdGUSIAocREVQTE9ZTUVOVF9TVEFURV9VTlNQRUNJRklFRBAAEhwKGERFUExPWU1FTlRfU1RBVEVfUEVORElORxABEh8KG0RFUExPWU1FTlRfU1RBVEVfVkFMSURBVElORxACEiAKHERFUExPWU1FTlRfU1RBVEVfQkFDS0ZJTExJTkcQAxIbChdERVBMT1lNRU5UX1NUQVRFX0FDVElWRRAEEh8KG0RFUExPWU1FTlRfU1RBVEVfU1VQRVJTRURFRBAFEhsKF0RFUExPWU1FTlRfU1RBVEVfRkFJTEVEEAYSHQoZREVQTE9ZTUVOVF9TVEFURV9ERUdSQURFRBAHYgZwcm90bzM", [file_loams_live_v1_live]);
+  fileDesc("Chtsb2Ftcy9saXZlL3YxL2NhdGFsb2cucHJvdG8SDWxvYW1zLmxpdmUudjEi2AEKCFRhYmxlRGVmEg4KBmZvcm1hdBgBIAEoDRIKCgJpZBgCIAEoDRIMCgRuYW1lGAMgASgJEigKB2luZGV4ZXMYBCADKAsyFy5sb2Ftcy5saXZlLnYxLkluZGV4RGVmEhUKDW5leHRfaW5kZXhfaWQYBSABKA0SKwoJdmFsaWRhdG9yGAYgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3ISNAoJZW5mb3JjaW5nGAcgASgLMiEubG9hbXMubGl2ZS52MS5FbmZvcmNpbmdWYWxpZGF0b3IiVQoSRW5mb3JjaW5nVmFsaWRhdG9yEisKCXZhbGlkYXRvchgBIAEoCzIYLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yEhIKCmRlcGxveW1lbnQYAiABKAwi+gEKDlRhYmxlSm9iUmVjb3JkEg4KBmZvcm1hdBgBIAEoDRIpCgRraW5kGAIgASgOMhsubG9hbXMubGl2ZS52MS5UYWJsZUpvYktpbmQSEAoIdGFibGVfaWQYAyABKA0SEgoKZGVwbG95bWVudBgEIAEoDBINCgVvd25lchgFIAEoCRIYChBsZWFzZV9leHBpcmVzX21zGAYgASgEEhIKCmNoZWNrcG9pbnQYByABKAwSDwoHc2Nhbm5lZBgIIAEoBBIMCgRkb25lGAkgASgIEisKCGZpbmRpbmdzGAogAygLMhkubG9hbXMubGl2ZS52MS5Kb2JGaW5kaW5nIiwKCkpvYkZpbmRpbmcSDgoGZG9jX2lkGAEgASgMEg4KBmRldGFpbBgCIAEoCSJyCghJbmRleERlZhIKCgJpZBgBIAEoDRIMCgRuYW1lGAIgASgJEg4KBmZpZWxkcxgDIAMoCRIoCgVzdGF0ZRgEIAEoDjIZLmxvYW1zLmxpdmUudjEuSW5kZXhTdGF0ZRISCgpkZXBsb3ltZW50GAUgASgMIjAKBkFwcERlZhIOCgZmb3JtYXQYASABKA0SFgoOam91cm5hbF9zaGFyZHMYAiABKA0i/wEKEERlcGxveW1lbnRSZWNvcmQSDgoGZm9ybWF0GAEgASgNEgoKAmlkGAIgASgMEhUKDWJ1bmRsZV9zaGEyNTYYAyABKAwSJQoGc2NoZW1hGAQgASgLMhUubG9hbXMubGl2ZS52MS5TY2hlbWESFQoNY3JlYXRlZF9hdF9tcxgFIAEoBBISCgpjcmVhdGVkX2J5GAYgASgJEg8KB21lc3NhZ2UYByABKAkSDgoGcGFyZW50GAggASgMEi0KBXN0YXRlGAkgASgOMh4ubG9hbXMubGl2ZS52MS5EZXBsb3ltZW50U3RhdGUSFgoOZmFpbHVyZV9yZWFzb24YCiABKAkqaAoMVGFibGVKb2JLaW5kEh4KGlRBQkxFX0pPQl9LSU5EX1VOU1BFQ0lGSUVEEAASGwoXVEFCTEVfSk9CX0tJTkRfVkFMSURBVEUQARIbChdUQUJMRV9KT0JfS0lORF9CQUNLRklMTBACKncKCkluZGV4U3RhdGUSGwoXSU5ERVhfU1RBVEVfVU5TUEVDSUZJRUQQABIbChdJTkRFWF9TVEFURV9CQUNLRklMTElORxABEhUKEUlOREVYX1NUQVRFX1JFQURZEAISGAoUSU5ERVhfU1RBVEVfRFJPUFBJTkcQAyqOAgoPRGVwbG95bWVudFN0YXRlEiAKHERFUExPWU1FTlRfU1RBVEVfVU5TUEVDSUZJRUQQABIcChhERVBMT1lNRU5UX1NUQVRFX1BFTkRJTkcQARIfChtERVBMT1lNRU5UX1NUQVRFX1ZBTElEQVRJTkcQAhIgChxERVBMT1lNRU5UX1NUQVRFX0JBQ0tGSUxMSU5HEAMSGwoXREVQTE9ZTUVOVF9TVEFURV9BQ1RJVkUQBBIfChtERVBMT1lNRU5UX1NUQVRFX1NVUEVSU0VERUQQBRIbChdERVBMT1lNRU5UX1NUQVRFX0ZBSUxFRBAGEh0KGURFUExPWU1FTlRfU1RBVEVfREVHUkFERUQQB2IGcHJvdG8z", [file_loams_live_v1_live]);
 
 /**
  * A table: the value of its catalog record `0x01 ‖ 0x02 ‖ id:u32 BE`. The
@@ -59,6 +59,24 @@ export type TableDef = Message<"loams.live.v1.TableDef"> & {
    * @generated from field: uint32 next_index_id = 5;
    */
   nextIndexId: number;
+
+  /**
+   * The validator every write to the table must match (design §45 §4.1;
+   * LV1 plan Task 8), as the active deployment's schema declares it.
+   * Absent: none.
+   *
+   * @generated from field: loams.live.v1.Validator validator = 6;
+   */
+  validator?: Validator | undefined;
+
+  /**
+   * A stricter validator a deploy is checking the table's documents
+   * against: until that deploy activates or fails, every write must match
+   * it as well as `validator`. Absent: none.
+   *
+   * @generated from field: loams.live.v1.EnforcingValidator enforcing = 7;
+   */
+  enforcing?: EnforcingValidator | undefined;
 };
 
 /**
@@ -67,6 +85,143 @@ export type TableDef = Message<"loams.live.v1.TableDef"> & {
  */
 export const TableDefSchema: GenMessage<TableDef> = /*@__PURE__*/
   messageDesc(file_loams_live_v1_catalog, 0);
+
+/**
+ * A validator being enforced ahead of its deploy (LV1 plan Task 8).
+ *
+ * @generated from message loams.live.v1.EnforcingValidator
+ */
+export type EnforcingValidator = Message<"loams.live.v1.EnforcingValidator"> & {
+  /**
+   * @generated from field: loams.live.v1.Validator validator = 1;
+   */
+  validator?: Validator | undefined;
+
+  /**
+   * The deployment whose deploy is checking it (16 bytes).
+   *
+   * @generated from field: bytes deployment = 2;
+   */
+  deployment: Uint8Array;
+};
+
+/**
+ * Describes the message loams.live.v1.EnforcingValidator.
+ * Use `create(EnforcingValidatorSchema)` to create a new message.
+ */
+export const EnforcingValidatorSchema: GenMessage<EnforcingValidator> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_catalog, 1);
+
+/**
+ * A leased, checkpointed scan of one table's documents (LV1 plan Task 8):
+ * the value of catalog record `0x01 ‖ 0x07 ‖ table_id:u32 BE ‖ kind:u8`.
+ * Every batch is one transaction that reads this record, checks the lease,
+ * visits the documents after `checkpoint` and writes the record back.
+ *
+ * @generated from message loams.live.v1.TableJobRecord
+ */
+export type TableJobRecord = Message<"loams.live.v1.TableJobRecord"> & {
+  /**
+   * The encoding version; 1 in LV1.
+   *
+   * @generated from field: uint32 format = 1;
+   */
+  format: number;
+
+  /**
+   * @generated from field: loams.live.v1.TableJobKind kind = 2;
+   */
+  kind: TableJobKind;
+
+  /**
+   * @generated from field: uint32 table_id = 3;
+   */
+  tableId: number;
+
+  /**
+   * The deployment the job works for (16 bytes).
+   *
+   * @generated from field: bytes deployment = 4;
+   */
+  deployment: Uint8Array;
+
+  /**
+   * Who holds the lease, and until when (TSO physical time, ms). Another
+   * owner may take the job over once the lease has expired.
+   *
+   * @generated from field: string owner = 5;
+   */
+  owner: string;
+
+  /**
+   * @generated from field: uint64 lease_expires_ms = 6;
+   */
+  leaseExpiresMs: bigint;
+
+  /**
+   * The last document key done; empty before the first batch.
+   *
+   * @generated from field: bytes checkpoint = 7;
+   */
+  checkpoint: Uint8Array;
+
+  /**
+   * Documents visited so far.
+   *
+   * @generated from field: uint64 scanned = 8;
+   */
+  scanned: bigint;
+
+  /**
+   * The scan reached the end of the table.
+   *
+   * @generated from field: bool done = 9;
+   */
+  done: boolean;
+
+  /**
+   * What the job found (a validation: the offending documents), at most
+   * 100.
+   *
+   * @generated from field: repeated loams.live.v1.JobFinding findings = 10;
+   */
+  findings: JobFinding[];
+};
+
+/**
+ * Describes the message loams.live.v1.TableJobRecord.
+ * Use `create(TableJobRecordSchema)` to create a new message.
+ */
+export const TableJobRecordSchema: GenMessage<TableJobRecord> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_catalog, 2);
+
+/**
+ * One document a table job found.
+ *
+ * @generated from message loams.live.v1.JobFinding
+ */
+export type JobFinding = Message<"loams.live.v1.JobFinding"> & {
+  /**
+   * The document id, 16 bytes.
+   *
+   * @generated from field: bytes doc_id = 1;
+   */
+  docId: Uint8Array;
+
+  /**
+   * What is wrong, without values (field paths and types).
+   *
+   * @generated from field: string detail = 2;
+   */
+  detail: string;
+};
+
+/**
+ * Describes the message loams.live.v1.JobFinding.
+ * Use `create(JobFindingSchema)` to create a new message.
+ */
+export const JobFindingSchema: GenMessage<JobFinding> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_catalog, 3);
 
 /**
  * A user index of a table. `_creationTime` and then `_id` are appended to
@@ -93,6 +248,22 @@ export type IndexDef = Message<"loams.live.v1.IndexDef"> & {
    * @generated from field: repeated string fields = 3;
    */
   fields: string[];
+
+  /**
+   * Where the index is in its life (LV1 plan Task 9). Unspecified: ready
+   * (an index defined before Task 9).
+   *
+   * @generated from field: loams.live.v1.IndexState state = 4;
+   */
+  state: IndexState;
+
+  /**
+   * The deployment whose deploy is backfilling it (16 bytes), while
+   * `state` is `INDEX_STATE_BACKFILLING`.
+   *
+   * @generated from field: bytes deployment = 5;
+   */
+  deployment: Uint8Array;
 };
 
 /**
@@ -100,7 +271,7 @@ export type IndexDef = Message<"loams.live.v1.IndexDef"> & {
  * Use `create(IndexDefSchema)` to create a new message.
  */
 export const IndexDefSchema: GenMessage<IndexDef> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_catalog, 1);
+  messageDesc(file_loams_live_v1_catalog, 4);
 
 /**
  * The app's own settings: the value of its catalog record `0x01 ‖ 0x05`
@@ -131,7 +302,7 @@ export type AppDef = Message<"loams.live.v1.AppDef"> & {
  * Use `create(AppDefSchema)` to create a new message.
  */
 export const AppDefSchema: GenMessage<AppDef> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_catalog, 2);
+  messageDesc(file_loams_live_v1_catalog, 5);
 
 /**
  * One deployment of the app (design §45 §3.3, D683; LV1 plan Task 6): the
@@ -167,8 +338,8 @@ export type DeploymentRecord = Message<"loams.live.v1.DeploymentRecord"> & {
   bundleSha256: Uint8Array;
 
   /**
-   * The schema the deployment declares (only additive table creation in
-   * Task 6; validators and index changes in Tasks 8 and 9).
+   * The schema the deployment declares (additive table creation in Task 6,
+   * validators in Task 8, index changes in Task 9).
    *
    * @generated from field: loams.live.v1.Schema schema = 4;
    */
@@ -219,7 +390,80 @@ export type DeploymentRecord = Message<"loams.live.v1.DeploymentRecord"> & {
  * Use `create(DeploymentRecordSchema)` to create a new message.
  */
 export const DeploymentRecordSchema: GenMessage<DeploymentRecord> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_catalog, 3);
+  messageDesc(file_loams_live_v1_catalog, 6);
+
+/**
+ * @generated from enum loams.live.v1.TableJobKind
+ */
+export enum TableJobKind {
+  /**
+   * @generated from enum value: TABLE_JOB_KIND_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * A validation scan of a stricter validator (LV1 plan Task 8).
+   *
+   * @generated from enum value: TABLE_JOB_KIND_VALIDATE = 1;
+   */
+  VALIDATE = 1,
+
+  /**
+   * The backfill of the table's new indexes (LV1 plan Task 9).
+   *
+   * @generated from enum value: TABLE_JOB_KIND_BACKFILL = 2;
+   */
+  BACKFILL = 2,
+}
+
+/**
+ * Describes the enum loams.live.v1.TableJobKind.
+ */
+export const TableJobKindSchema: GenEnum<TableJobKind> = /*@__PURE__*/
+  enumDesc(file_loams_live_v1_catalog, 0);
+
+/**
+ * Where a user index is in its life (LV1 plan Task 9, design §45 §4.2).
+ *
+ * @generated from enum loams.live.v1.IndexState
+ */
+export enum IndexState {
+  /**
+   * Ready (a record written before Task 9).
+   *
+   * @generated from enum value: INDEX_STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Every write maintains it and a backfill job writes the entries of the
+   * documents already there; no query reads it.
+   *
+   * @generated from enum value: INDEX_STATE_BACKFILLING = 1;
+   */
+  BACKFILLING = 1,
+
+  /**
+   * Queries read it; every write maintains it.
+   *
+   * @generated from enum value: INDEX_STATE_READY = 2;
+   */
+  READY = 2,
+
+  /**
+   * No write maintains it and no query reads it; its entries are being
+   * deleted, then the definition goes.
+   *
+   * @generated from enum value: INDEX_STATE_DROPPING = 3;
+   */
+  DROPPING = 3,
+}
+
+/**
+ * Describes the enum loams.live.v1.IndexState.
+ */
+export const IndexStateSchema: GenEnum<IndexState> = /*@__PURE__*/
+  enumDesc(file_loams_live_v1_catalog, 1);
 
 /**
  * Where a deployment is in its life (design §45 §3.3).
@@ -240,7 +484,8 @@ export enum DeploymentState {
   PENDING = 1,
 
   /**
-   * A stricter validator scans existing data (LV1 plan Task 8).
+   * A stricter validator scans existing data (LV1 plan Task 8): it is
+   * enforced on new writes, and the table's documents are checked.
    *
    * @generated from enum value: DEPLOYMENT_STATE_VALIDATING = 2;
    */
@@ -287,5 +532,5 @@ export enum DeploymentState {
  * Describes the enum loams.live.v1.DeploymentState.
  */
 export const DeploymentStateSchema: GenEnum<DeploymentState> = /*@__PURE__*/
-  enumDesc(file_loams_live_v1_catalog, 0);
+  enumDesc(file_loams_live_v1_catalog, 2);
 

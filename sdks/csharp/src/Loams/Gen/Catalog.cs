@@ -25,33 +25,57 @@ namespace Loams.Live.V1 {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
             "Chtsb2Ftcy9saXZlL3YxL2NhdGFsb2cucHJvdG8SDWxvYW1zLmxpdmUudjEa",
-            "GGxvYW1zL2xpdmUvdjEvbGl2ZS5wcm90byKdAQoIVGFibGVEZWYSFgoGZm9y",
+            "GGxvYW1zL2xpdmUvdjEvbGl2ZS5wcm90byKWAgoIVGFibGVEZWYSFgoGZm9y",
             "bWF0GAEgASgNUgZmb3JtYXQSDgoCaWQYAiABKA1SAmlkEhIKBG5hbWUYAyAB",
             "KAlSBG5hbWUSMQoHaW5kZXhlcxgEIAMoCzIXLmxvYW1zLmxpdmUudjEuSW5k",
             "ZXhEZWZSB2luZGV4ZXMSIgoNbmV4dF9pbmRleF9pZBgFIAEoDVILbmV4dElu",
-            "ZGV4SWQiRgoISW5kZXhEZWYSDgoCaWQYASABKA1SAmlkEhIKBG5hbWUYAiAB",
-            "KAlSBG5hbWUSFgoGZmllbGRzGAMgAygJUgZmaWVsZHMiRwoGQXBwRGVmEhYK",
-            "BmZvcm1hdBgBIAEoDVIGZm9ybWF0EiUKDmpvdXJuYWxfc2hhcmRzGAIgASgN",
-            "Ug1qb3VybmFsU2hhcmRzIuACChBEZXBsb3ltZW50UmVjb3JkEhYKBmZvcm1h",
-            "dBgBIAEoDVIGZm9ybWF0Eg4KAmlkGAIgASgMUgJpZBIjCg1idW5kbGVfc2hh",
-            "MjU2GAMgASgMUgxidW5kbGVTaGEyNTYSLQoGc2NoZW1hGAQgASgLMhUubG9h",
-            "bXMubGl2ZS52MS5TY2hlbWFSBnNjaGVtYRIiCg1jcmVhdGVkX2F0X21zGAUg",
-            "ASgEUgtjcmVhdGVkQXRNcxIdCgpjcmVhdGVkX2J5GAYgASgJUgljcmVhdGVk",
-            "QnkSGAoHbWVzc2FnZRgHIAEoCVIHbWVzc2FnZRIWCgZwYXJlbnQYCCABKAxS",
-            "BnBhcmVudBI0CgVzdGF0ZRgJIAEoDjIeLmxvYW1zLmxpdmUudjEuRGVwbG95",
-            "bWVudFN0YXRlUgVzdGF0ZRIlCg5mYWlsdXJlX3JlYXNvbhgKIAEoCVINZmFp",
-            "bHVyZVJlYXNvbiqOAgoPRGVwbG95bWVudFN0YXRlEiAKHERFUExPWU1FTlRf",
-            "U1RBVEVfVU5TUEVDSUZJRUQQABIcChhERVBMT1lNRU5UX1NUQVRFX1BFTkRJ",
-            "TkcQARIfChtERVBMT1lNRU5UX1NUQVRFX1ZBTElEQVRJTkcQAhIgChxERVBM",
-            "T1lNRU5UX1NUQVRFX0JBQ0tGSUxMSU5HEAMSGwoXREVQTE9ZTUVOVF9TVEFU",
-            "RV9BQ1RJVkUQBBIfChtERVBMT1lNRU5UX1NUQVRFX1NVUEVSU0VERUQQBRIb",
-            "ChdERVBMT1lNRU5UX1NUQVRFX0ZBSUxFRBAGEh0KGURFUExPWU1FTlRfU1RB",
-            "VEVfREVHUkFERUQQB2IGcHJvdG8z"));
+            "ZGV4SWQSNgoJdmFsaWRhdG9yGAYgASgLMhgubG9hbXMubGl2ZS52MS5WYWxp",
+            "ZGF0b3JSCXZhbGlkYXRvchI/CgllbmZvcmNpbmcYByABKAsyIS5sb2Ftcy5s",
+            "aXZlLnYxLkVuZm9yY2luZ1ZhbGlkYXRvclIJZW5mb3JjaW5nImwKEkVuZm9y",
+            "Y2luZ1ZhbGlkYXRvchI2Cgl2YWxpZGF0b3IYASABKAsyGC5sb2Ftcy5saXZl",
+            "LnYxLlZhbGlkYXRvclIJdmFsaWRhdG9yEh4KCmRlcGxveW1lbnQYAiABKAxS",
+            "CmRlcGxveW1lbnQi2QIKDlRhYmxlSm9iUmVjb3JkEhYKBmZvcm1hdBgBIAEo",
+            "DVIGZm9ybWF0Ei8KBGtpbmQYAiABKA4yGy5sb2Ftcy5saXZlLnYxLlRhYmxl",
+            "Sm9iS2luZFIEa2luZBIZCgh0YWJsZV9pZBgDIAEoDVIHdGFibGVJZBIeCgpk",
+            "ZXBsb3ltZW50GAQgASgMUgpkZXBsb3ltZW50EhQKBW93bmVyGAUgASgJUgVv",
+            "d25lchIoChBsZWFzZV9leHBpcmVzX21zGAYgASgEUg5sZWFzZUV4cGlyZXNN",
+            "cxIeCgpjaGVja3BvaW50GAcgASgMUgpjaGVja3BvaW50EhgKB3NjYW5uZWQY",
+            "CCABKARSB3NjYW5uZWQSEgoEZG9uZRgJIAEoCFIEZG9uZRI1CghmaW5kaW5n",
+            "cxgKIAMoCzIZLmxvYW1zLmxpdmUudjEuSm9iRmluZGluZ1IIZmluZGluZ3Mi",
+            "OwoKSm9iRmluZGluZxIVCgZkb2NfaWQYASABKAxSBWRvY0lkEhYKBmRldGFp",
+            "bBgCIAEoCVIGZGV0YWlsIpcBCghJbmRleERlZhIOCgJpZBgBIAEoDVICaWQS",
+            "EgoEbmFtZRgCIAEoCVIEbmFtZRIWCgZmaWVsZHMYAyADKAlSBmZpZWxkcxIv",
+            "CgVzdGF0ZRgEIAEoDjIZLmxvYW1zLmxpdmUudjEuSW5kZXhTdGF0ZVIFc3Rh",
+            "dGUSHgoKZGVwbG95bWVudBgFIAEoDFIKZGVwbG95bWVudCJHCgZBcHBEZWYS",
+            "FgoGZm9ybWF0GAEgASgNUgZmb3JtYXQSJQoOam91cm5hbF9zaGFyZHMYAiAB",
+            "KA1SDWpvdXJuYWxTaGFyZHMi4AIKEERlcGxveW1lbnRSZWNvcmQSFgoGZm9y",
+            "bWF0GAEgASgNUgZmb3JtYXQSDgoCaWQYAiABKAxSAmlkEiMKDWJ1bmRsZV9z",
+            "aGEyNTYYAyABKAxSDGJ1bmRsZVNoYTI1NhItCgZzY2hlbWEYBCABKAsyFS5s",
+            "b2Ftcy5saXZlLnYxLlNjaGVtYVIGc2NoZW1hEiIKDWNyZWF0ZWRfYXRfbXMY",
+            "BSABKARSC2NyZWF0ZWRBdE1zEh0KCmNyZWF0ZWRfYnkYBiABKAlSCWNyZWF0",
+            "ZWRCeRIYCgdtZXNzYWdlGAcgASgJUgdtZXNzYWdlEhYKBnBhcmVudBgIIAEo",
+            "DFIGcGFyZW50EjQKBXN0YXRlGAkgASgOMh4ubG9hbXMubGl2ZS52MS5EZXBs",
+            "b3ltZW50U3RhdGVSBXN0YXRlEiUKDmZhaWx1cmVfcmVhc29uGAogASgJUg1m",
+            "YWlsdXJlUmVhc29uKmgKDFRhYmxlSm9iS2luZBIeChpUQUJMRV9KT0JfS0lO",
+            "RF9VTlNQRUNJRklFRBAAEhsKF1RBQkxFX0pPQl9LSU5EX1ZBTElEQVRFEAES",
+            "GwoXVEFCTEVfSk9CX0tJTkRfQkFDS0ZJTEwQAip3CgpJbmRleFN0YXRlEhsK",
+            "F0lOREVYX1NUQVRFX1VOU1BFQ0lGSUVEEAASGwoXSU5ERVhfU1RBVEVfQkFD",
+            "S0ZJTExJTkcQARIVChFJTkRFWF9TVEFURV9SRUFEWRACEhgKFElOREVYX1NU",
+            "QVRFX0RST1BQSU5HEAMqjgIKD0RlcGxveW1lbnRTdGF0ZRIgChxERVBMT1lN",
+            "RU5UX1NUQVRFX1VOU1BFQ0lGSUVEEAASHAoYREVQTE9ZTUVOVF9TVEFURV9Q",
+            "RU5ESU5HEAESHwobREVQTE9ZTUVOVF9TVEFURV9WQUxJREFUSU5HEAISIAoc",
+            "REVQTE9ZTUVOVF9TVEFURV9CQUNLRklMTElORxADEhsKF0RFUExPWU1FTlRf",
+            "U1RBVEVfQUNUSVZFEAQSHwobREVQTE9ZTUVOVF9TVEFURV9TVVBFUlNFREVE",
+            "EAUSGwoXREVQTE9ZTUVOVF9TVEFURV9GQUlMRUQQBhIdChlERVBMT1lNRU5U",
+            "X1NUQVRFX0RFR1JBREVEEAdiBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Loams.Live.V1.LiveReflection.Descriptor, },
-          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Loams.Live.V1.DeploymentState), }, null, new pbr::GeneratedClrTypeInfo[] {
-            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.TableDef), global::Loams.Live.V1.TableDef.Parser, new[]{ "Format", "Id", "Name", "Indexes", "NextIndexId" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.IndexDef), global::Loams.Live.V1.IndexDef.Parser, new[]{ "Id", "Name", "Fields" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Loams.Live.V1.TableJobKind), typeof(global::Loams.Live.V1.IndexState), typeof(global::Loams.Live.V1.DeploymentState), }, null, new pbr::GeneratedClrTypeInfo[] {
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.TableDef), global::Loams.Live.V1.TableDef.Parser, new[]{ "Format", "Id", "Name", "Indexes", "NextIndexId", "Validator", "Enforcing" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.EnforcingValidator), global::Loams.Live.V1.EnforcingValidator.Parser, new[]{ "Validator", "Deployment" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.TableJobRecord), global::Loams.Live.V1.TableJobRecord.Parser, new[]{ "Format", "Kind", "TableId", "Deployment", "Owner", "LeaseExpiresMs", "Checkpoint", "Scanned", "Done", "Findings" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.JobFinding), global::Loams.Live.V1.JobFinding.Parser, new[]{ "DocId", "Detail" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.IndexDef), global::Loams.Live.V1.IndexDef.Parser, new[]{ "Id", "Name", "Fields", "State", "Deployment" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.AppDef), global::Loams.Live.V1.AppDef.Parser, new[]{ "Format", "JournalShards" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.DeploymentRecord), global::Loams.Live.V1.DeploymentRecord.Parser, new[]{ "Format", "Id", "BundleSha256", "Schema", "CreatedAtMs", "CreatedBy", "Message", "Parent", "State", "FailureReason" }, null, null, null, null)
           }));
@@ -60,6 +84,42 @@ namespace Loams.Live.V1 {
 
   }
   #region Enums
+  public enum TableJobKind {
+    [pbr::OriginalName("TABLE_JOB_KIND_UNSPECIFIED")] Unspecified = 0,
+    /// <summary>
+    /// A validation scan of a stricter validator (LV1 plan Task 8).
+    /// </summary>
+    [pbr::OriginalName("TABLE_JOB_KIND_VALIDATE")] Validate = 1,
+    /// <summary>
+    /// The backfill of the table's new indexes (LV1 plan Task 9).
+    /// </summary>
+    [pbr::OriginalName("TABLE_JOB_KIND_BACKFILL")] Backfill = 2,
+  }
+
+  /// <summary>
+  /// Where a user index is in its life (LV1 plan Task 9, design §45 §4.2).
+  /// </summary>
+  public enum IndexState {
+    /// <summary>
+    /// Ready (a record written before Task 9).
+    /// </summary>
+    [pbr::OriginalName("INDEX_STATE_UNSPECIFIED")] Unspecified = 0,
+    /// <summary>
+    /// Every write maintains it and a backfill job writes the entries of the
+    /// documents already there; no query reads it.
+    /// </summary>
+    [pbr::OriginalName("INDEX_STATE_BACKFILLING")] Backfilling = 1,
+    /// <summary>
+    /// Queries read it; every write maintains it.
+    /// </summary>
+    [pbr::OriginalName("INDEX_STATE_READY")] Ready = 2,
+    /// <summary>
+    /// No write maintains it and no query reads it; its entries are being
+    /// deleted, then the definition goes.
+    /// </summary>
+    [pbr::OriginalName("INDEX_STATE_DROPPING")] Dropping = 3,
+  }
+
   /// <summary>
   /// Where a deployment is in its life (design §45 §3.3).
   /// </summary>
@@ -70,7 +130,8 @@ namespace Loams.Live.V1 {
     /// </summary>
     [pbr::OriginalName("DEPLOYMENT_STATE_PENDING")] Pending = 1,
     /// <summary>
-    /// A stricter validator scans existing data (LV1 plan Task 8).
+    /// A stricter validator scans existing data (LV1 plan Task 8): it is
+    /// enforced on new writes, and the table's documents are checked.
     /// </summary>
     [pbr::OriginalName("DEPLOYMENT_STATE_VALIDATING")] Validating = 2,
     /// <summary>
@@ -144,6 +205,8 @@ namespace Loams.Live.V1 {
       name_ = other.name_;
       indexes_ = other.indexes_.Clone();
       nextIndexId_ = other.nextIndexId_;
+      validator_ = other.validator_ != null ? other.validator_.Clone() : null;
+      enforcing_ = other.enforcing_ != null ? other.enforcing_.Clone() : null;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -225,6 +288,40 @@ namespace Loams.Live.V1 {
       }
     }
 
+    /// <summary>Field number for the "validator" field.</summary>
+    public const int ValidatorFieldNumber = 6;
+    private global::Loams.Live.V1.Validator validator_;
+    /// <summary>
+    /// The validator every write to the table must match (design §45 §4.1;
+    /// LV1 plan Task 8), as the active deployment's schema declares it.
+    /// Absent: none.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Loams.Live.V1.Validator Validator {
+      get { return validator_; }
+      set {
+        validator_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "enforcing" field.</summary>
+    public const int EnforcingFieldNumber = 7;
+    private global::Loams.Live.V1.EnforcingValidator enforcing_;
+    /// <summary>
+    /// A stricter validator a deploy is checking the table's documents
+    /// against: until that deploy activates or fails, every write must match
+    /// it as well as `validator`. Absent: none.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Loams.Live.V1.EnforcingValidator Enforcing {
+      get { return enforcing_; }
+      set {
+        enforcing_ = value;
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -245,6 +342,8 @@ namespace Loams.Live.V1 {
       if (Name != other.Name) return false;
       if(!indexes_.Equals(other.indexes_)) return false;
       if (NextIndexId != other.NextIndexId) return false;
+      if (!object.Equals(Validator, other.Validator)) return false;
+      if (!object.Equals(Enforcing, other.Enforcing)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -257,6 +356,8 @@ namespace Loams.Live.V1 {
       if (Name.Length != 0) hash ^= Name.GetHashCode();
       hash ^= indexes_.GetHashCode();
       if (NextIndexId != 0) hash ^= NextIndexId.GetHashCode();
+      if (validator_ != null) hash ^= Validator.GetHashCode();
+      if (enforcing_ != null) hash ^= Enforcing.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -292,6 +393,14 @@ namespace Loams.Live.V1 {
         output.WriteRawTag(40);
         output.WriteUInt32(NextIndexId);
       }
+      if (validator_ != null) {
+        output.WriteRawTag(50);
+        output.WriteMessage(Validator);
+      }
+      if (enforcing_ != null) {
+        output.WriteRawTag(58);
+        output.WriteMessage(Enforcing);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -319,6 +428,14 @@ namespace Loams.Live.V1 {
         output.WriteRawTag(40);
         output.WriteUInt32(NextIndexId);
       }
+      if (validator_ != null) {
+        output.WriteRawTag(50);
+        output.WriteMessage(Validator);
+      }
+      if (enforcing_ != null) {
+        output.WriteRawTag(58);
+        output.WriteMessage(Enforcing);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -341,6 +458,12 @@ namespace Loams.Live.V1 {
       size += indexes_.CalculateSize(_repeated_indexes_codec);
       if (NextIndexId != 0) {
         size += 1 + pb::CodedOutputStream.ComputeUInt32Size(NextIndexId);
+      }
+      if (validator_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Validator);
+      }
+      if (enforcing_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Enforcing);
       }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
@@ -366,6 +489,18 @@ namespace Loams.Live.V1 {
       indexes_.Add(other.indexes_);
       if (other.NextIndexId != 0) {
         NextIndexId = other.NextIndexId;
+      }
+      if (other.validator_ != null) {
+        if (validator_ == null) {
+          Validator = new global::Loams.Live.V1.Validator();
+        }
+        Validator.MergeFrom(other.Validator);
+      }
+      if (other.enforcing_ != null) {
+        if (enforcing_ == null) {
+          Enforcing = new global::Loams.Live.V1.EnforcingValidator();
+        }
+        Enforcing.MergeFrom(other.Enforcing);
       }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
@@ -404,6 +539,20 @@ namespace Loams.Live.V1 {
           }
           case 40: {
             NextIndexId = input.ReadUInt32();
+            break;
+          }
+          case 50: {
+            if (validator_ == null) {
+              Validator = new global::Loams.Live.V1.Validator();
+            }
+            input.ReadMessage(Validator);
+            break;
+          }
+          case 58: {
+            if (enforcing_ == null) {
+              Enforcing = new global::Loams.Live.V1.EnforcingValidator();
+            }
+            input.ReadMessage(Enforcing);
             break;
           }
         }
@@ -445,6 +594,1063 @@ namespace Loams.Live.V1 {
             NextIndexId = input.ReadUInt32();
             break;
           }
+          case 50: {
+            if (validator_ == null) {
+              Validator = new global::Loams.Live.V1.Validator();
+            }
+            input.ReadMessage(Validator);
+            break;
+          }
+          case 58: {
+            if (enforcing_ == null) {
+              Enforcing = new global::Loams.Live.V1.EnforcingValidator();
+            }
+            input.ReadMessage(Enforcing);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// A validator being enforced ahead of its deploy (LV1 plan Task 8).
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class EnforcingValidator : pb::IMessage<EnforcingValidator>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<EnforcingValidator> _parser = new pb::MessageParser<EnforcingValidator>(() => new EnforcingValidator());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<EnforcingValidator> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Loams.Live.V1.CatalogReflection.Descriptor.MessageTypes[1]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public EnforcingValidator() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public EnforcingValidator(EnforcingValidator other) : this() {
+      validator_ = other.validator_ != null ? other.validator_.Clone() : null;
+      deployment_ = other.deployment_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public EnforcingValidator Clone() {
+      return new EnforcingValidator(this);
+    }
+
+    /// <summary>Field number for the "validator" field.</summary>
+    public const int ValidatorFieldNumber = 1;
+    private global::Loams.Live.V1.Validator validator_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Loams.Live.V1.Validator Validator {
+      get { return validator_; }
+      set {
+        validator_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "deployment" field.</summary>
+    public const int DeploymentFieldNumber = 2;
+    private pb::ByteString deployment_ = pb::ByteString.Empty;
+    /// <summary>
+    /// The deployment whose deploy is checking it (16 bytes).
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pb::ByteString Deployment {
+      get { return deployment_; }
+      set {
+        deployment_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as EnforcingValidator);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(EnforcingValidator other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (!object.Equals(Validator, other.Validator)) return false;
+      if (Deployment != other.Deployment) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (validator_ != null) hash ^= Validator.GetHashCode();
+      if (Deployment.Length != 0) hash ^= Deployment.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (validator_ != null) {
+        output.WriteRawTag(10);
+        output.WriteMessage(Validator);
+      }
+      if (Deployment.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteBytes(Deployment);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (validator_ != null) {
+        output.WriteRawTag(10);
+        output.WriteMessage(Validator);
+      }
+      if (Deployment.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteBytes(Deployment);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (validator_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Validator);
+      }
+      if (Deployment.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeBytesSize(Deployment);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(EnforcingValidator other) {
+      if (other == null) {
+        return;
+      }
+      if (other.validator_ != null) {
+        if (validator_ == null) {
+          Validator = new global::Loams.Live.V1.Validator();
+        }
+        Validator.MergeFrom(other.Validator);
+      }
+      if (other.Deployment.Length != 0) {
+        Deployment = other.Deployment;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            if (validator_ == null) {
+              Validator = new global::Loams.Live.V1.Validator();
+            }
+            input.ReadMessage(Validator);
+            break;
+          }
+          case 18: {
+            Deployment = input.ReadBytes();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            if (validator_ == null) {
+              Validator = new global::Loams.Live.V1.Validator();
+            }
+            input.ReadMessage(Validator);
+            break;
+          }
+          case 18: {
+            Deployment = input.ReadBytes();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// A leased, checkpointed scan of one table's documents (LV1 plan Task 8):
+  /// the value of catalog record `0x01 ‖ 0x07 ‖ table_id:u32 BE ‖ kind:u8`.
+  /// Every batch is one transaction that reads this record, checks the lease,
+  /// visits the documents after `checkpoint` and writes the record back.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class TableJobRecord : pb::IMessage<TableJobRecord>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<TableJobRecord> _parser = new pb::MessageParser<TableJobRecord>(() => new TableJobRecord());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<TableJobRecord> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Loams.Live.V1.CatalogReflection.Descriptor.MessageTypes[2]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public TableJobRecord() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public TableJobRecord(TableJobRecord other) : this() {
+      format_ = other.format_;
+      kind_ = other.kind_;
+      tableId_ = other.tableId_;
+      deployment_ = other.deployment_;
+      owner_ = other.owner_;
+      leaseExpiresMs_ = other.leaseExpiresMs_;
+      checkpoint_ = other.checkpoint_;
+      scanned_ = other.scanned_;
+      done_ = other.done_;
+      findings_ = other.findings_.Clone();
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public TableJobRecord Clone() {
+      return new TableJobRecord(this);
+    }
+
+    /// <summary>Field number for the "format" field.</summary>
+    public const int FormatFieldNumber = 1;
+    private uint format_;
+    /// <summary>
+    /// The encoding version; 1 in LV1.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Format {
+      get { return format_; }
+      set {
+        format_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "kind" field.</summary>
+    public const int KindFieldNumber = 2;
+    private global::Loams.Live.V1.TableJobKind kind_ = global::Loams.Live.V1.TableJobKind.Unspecified;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Loams.Live.V1.TableJobKind Kind {
+      get { return kind_; }
+      set {
+        kind_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "table_id" field.</summary>
+    public const int TableIdFieldNumber = 3;
+    private uint tableId_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint TableId {
+      get { return tableId_; }
+      set {
+        tableId_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "deployment" field.</summary>
+    public const int DeploymentFieldNumber = 4;
+    private pb::ByteString deployment_ = pb::ByteString.Empty;
+    /// <summary>
+    /// The deployment the job works for (16 bytes).
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pb::ByteString Deployment {
+      get { return deployment_; }
+      set {
+        deployment_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "owner" field.</summary>
+    public const int OwnerFieldNumber = 5;
+    private string owner_ = "";
+    /// <summary>
+    /// Who holds the lease, and until when (TSO physical time, ms). Another
+    /// owner may take the job over once the lease has expired.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Owner {
+      get { return owner_; }
+      set {
+        owner_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "lease_expires_ms" field.</summary>
+    public const int LeaseExpiresMsFieldNumber = 6;
+    private ulong leaseExpiresMs_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong LeaseExpiresMs {
+      get { return leaseExpiresMs_; }
+      set {
+        leaseExpiresMs_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "checkpoint" field.</summary>
+    public const int CheckpointFieldNumber = 7;
+    private pb::ByteString checkpoint_ = pb::ByteString.Empty;
+    /// <summary>
+    /// The last document key done; empty before the first batch.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pb::ByteString Checkpoint {
+      get { return checkpoint_; }
+      set {
+        checkpoint_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "scanned" field.</summary>
+    public const int ScannedFieldNumber = 8;
+    private ulong scanned_;
+    /// <summary>
+    /// Documents visited so far.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong Scanned {
+      get { return scanned_; }
+      set {
+        scanned_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "done" field.</summary>
+    public const int DoneFieldNumber = 9;
+    private bool done_;
+    /// <summary>
+    /// The scan reached the end of the table.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Done {
+      get { return done_; }
+      set {
+        done_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "findings" field.</summary>
+    public const int FindingsFieldNumber = 10;
+    private static readonly pb::FieldCodec<global::Loams.Live.V1.JobFinding> _repeated_findings_codec
+        = pb::FieldCodec.ForMessage(82, global::Loams.Live.V1.JobFinding.Parser);
+    private readonly pbc::RepeatedField<global::Loams.Live.V1.JobFinding> findings_ = new pbc::RepeatedField<global::Loams.Live.V1.JobFinding>();
+    /// <summary>
+    /// What the job found (a validation: the offending documents), at most
+    /// 100.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Loams.Live.V1.JobFinding> Findings {
+      get { return findings_; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as TableJobRecord);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(TableJobRecord other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Format != other.Format) return false;
+      if (Kind != other.Kind) return false;
+      if (TableId != other.TableId) return false;
+      if (Deployment != other.Deployment) return false;
+      if (Owner != other.Owner) return false;
+      if (LeaseExpiresMs != other.LeaseExpiresMs) return false;
+      if (Checkpoint != other.Checkpoint) return false;
+      if (Scanned != other.Scanned) return false;
+      if (Done != other.Done) return false;
+      if(!findings_.Equals(other.findings_)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Format != 0) hash ^= Format.GetHashCode();
+      if (Kind != global::Loams.Live.V1.TableJobKind.Unspecified) hash ^= Kind.GetHashCode();
+      if (TableId != 0) hash ^= TableId.GetHashCode();
+      if (Deployment.Length != 0) hash ^= Deployment.GetHashCode();
+      if (Owner.Length != 0) hash ^= Owner.GetHashCode();
+      if (LeaseExpiresMs != 0UL) hash ^= LeaseExpiresMs.GetHashCode();
+      if (Checkpoint.Length != 0) hash ^= Checkpoint.GetHashCode();
+      if (Scanned != 0UL) hash ^= Scanned.GetHashCode();
+      if (Done != false) hash ^= Done.GetHashCode();
+      hash ^= findings_.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Format != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Format);
+      }
+      if (Kind != global::Loams.Live.V1.TableJobKind.Unspecified) {
+        output.WriteRawTag(16);
+        output.WriteEnum((int) Kind);
+      }
+      if (TableId != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(TableId);
+      }
+      if (Deployment.Length != 0) {
+        output.WriteRawTag(34);
+        output.WriteBytes(Deployment);
+      }
+      if (Owner.Length != 0) {
+        output.WriteRawTag(42);
+        output.WriteString(Owner);
+      }
+      if (LeaseExpiresMs != 0UL) {
+        output.WriteRawTag(48);
+        output.WriteUInt64(LeaseExpiresMs);
+      }
+      if (Checkpoint.Length != 0) {
+        output.WriteRawTag(58);
+        output.WriteBytes(Checkpoint);
+      }
+      if (Scanned != 0UL) {
+        output.WriteRawTag(64);
+        output.WriteUInt64(Scanned);
+      }
+      if (Done != false) {
+        output.WriteRawTag(72);
+        output.WriteBool(Done);
+      }
+      findings_.WriteTo(output, _repeated_findings_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Format != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Format);
+      }
+      if (Kind != global::Loams.Live.V1.TableJobKind.Unspecified) {
+        output.WriteRawTag(16);
+        output.WriteEnum((int) Kind);
+      }
+      if (TableId != 0) {
+        output.WriteRawTag(24);
+        output.WriteUInt32(TableId);
+      }
+      if (Deployment.Length != 0) {
+        output.WriteRawTag(34);
+        output.WriteBytes(Deployment);
+      }
+      if (Owner.Length != 0) {
+        output.WriteRawTag(42);
+        output.WriteString(Owner);
+      }
+      if (LeaseExpiresMs != 0UL) {
+        output.WriteRawTag(48);
+        output.WriteUInt64(LeaseExpiresMs);
+      }
+      if (Checkpoint.Length != 0) {
+        output.WriteRawTag(58);
+        output.WriteBytes(Checkpoint);
+      }
+      if (Scanned != 0UL) {
+        output.WriteRawTag(64);
+        output.WriteUInt64(Scanned);
+      }
+      if (Done != false) {
+        output.WriteRawTag(72);
+        output.WriteBool(Done);
+      }
+      findings_.WriteTo(ref output, _repeated_findings_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Format != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Format);
+      }
+      if (Kind != global::Loams.Live.V1.TableJobKind.Unspecified) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Kind);
+      }
+      if (TableId != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(TableId);
+      }
+      if (Deployment.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeBytesSize(Deployment);
+      }
+      if (Owner.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Owner);
+      }
+      if (LeaseExpiresMs != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(LeaseExpiresMs);
+      }
+      if (Checkpoint.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeBytesSize(Checkpoint);
+      }
+      if (Scanned != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(Scanned);
+      }
+      if (Done != false) {
+        size += 1 + 1;
+      }
+      size += findings_.CalculateSize(_repeated_findings_codec);
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(TableJobRecord other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Format != 0) {
+        Format = other.Format;
+      }
+      if (other.Kind != global::Loams.Live.V1.TableJobKind.Unspecified) {
+        Kind = other.Kind;
+      }
+      if (other.TableId != 0) {
+        TableId = other.TableId;
+      }
+      if (other.Deployment.Length != 0) {
+        Deployment = other.Deployment;
+      }
+      if (other.Owner.Length != 0) {
+        Owner = other.Owner;
+      }
+      if (other.LeaseExpiresMs != 0UL) {
+        LeaseExpiresMs = other.LeaseExpiresMs;
+      }
+      if (other.Checkpoint.Length != 0) {
+        Checkpoint = other.Checkpoint;
+      }
+      if (other.Scanned != 0UL) {
+        Scanned = other.Scanned;
+      }
+      if (other.Done != false) {
+        Done = other.Done;
+      }
+      findings_.Add(other.findings_);
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Format = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Kind = (global::Loams.Live.V1.TableJobKind) input.ReadEnum();
+            break;
+          }
+          case 24: {
+            TableId = input.ReadUInt32();
+            break;
+          }
+          case 34: {
+            Deployment = input.ReadBytes();
+            break;
+          }
+          case 42: {
+            Owner = input.ReadString();
+            break;
+          }
+          case 48: {
+            LeaseExpiresMs = input.ReadUInt64();
+            break;
+          }
+          case 58: {
+            Checkpoint = input.ReadBytes();
+            break;
+          }
+          case 64: {
+            Scanned = input.ReadUInt64();
+            break;
+          }
+          case 72: {
+            Done = input.ReadBool();
+            break;
+          }
+          case 82: {
+            findings_.AddEntriesFrom(input, _repeated_findings_codec);
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Format = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Kind = (global::Loams.Live.V1.TableJobKind) input.ReadEnum();
+            break;
+          }
+          case 24: {
+            TableId = input.ReadUInt32();
+            break;
+          }
+          case 34: {
+            Deployment = input.ReadBytes();
+            break;
+          }
+          case 42: {
+            Owner = input.ReadString();
+            break;
+          }
+          case 48: {
+            LeaseExpiresMs = input.ReadUInt64();
+            break;
+          }
+          case 58: {
+            Checkpoint = input.ReadBytes();
+            break;
+          }
+          case 64: {
+            Scanned = input.ReadUInt64();
+            break;
+          }
+          case 72: {
+            Done = input.ReadBool();
+            break;
+          }
+          case 82: {
+            findings_.AddEntriesFrom(ref input, _repeated_findings_codec);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// One document a table job found.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class JobFinding : pb::IMessage<JobFinding>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<JobFinding> _parser = new pb::MessageParser<JobFinding>(() => new JobFinding());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<JobFinding> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Loams.Live.V1.CatalogReflection.Descriptor.MessageTypes[3]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public JobFinding() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public JobFinding(JobFinding other) : this() {
+      docId_ = other.docId_;
+      detail_ = other.detail_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public JobFinding Clone() {
+      return new JobFinding(this);
+    }
+
+    /// <summary>Field number for the "doc_id" field.</summary>
+    public const int DocIdFieldNumber = 1;
+    private pb::ByteString docId_ = pb::ByteString.Empty;
+    /// <summary>
+    /// The document id, 16 bytes.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pb::ByteString DocId {
+      get { return docId_; }
+      set {
+        docId_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "detail" field.</summary>
+    public const int DetailFieldNumber = 2;
+    private string detail_ = "";
+    /// <summary>
+    /// What is wrong, without values (field paths and types).
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Detail {
+      get { return detail_; }
+      set {
+        detail_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as JobFinding);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(JobFinding other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (DocId != other.DocId) return false;
+      if (Detail != other.Detail) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (DocId.Length != 0) hash ^= DocId.GetHashCode();
+      if (Detail.Length != 0) hash ^= Detail.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (DocId.Length != 0) {
+        output.WriteRawTag(10);
+        output.WriteBytes(DocId);
+      }
+      if (Detail.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Detail);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (DocId.Length != 0) {
+        output.WriteRawTag(10);
+        output.WriteBytes(DocId);
+      }
+      if (Detail.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Detail);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (DocId.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeBytesSize(DocId);
+      }
+      if (Detail.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Detail);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(JobFinding other) {
+      if (other == null) {
+        return;
+      }
+      if (other.DocId.Length != 0) {
+        DocId = other.DocId;
+      }
+      if (other.Detail.Length != 0) {
+        Detail = other.Detail;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            DocId = input.ReadBytes();
+            break;
+          }
+          case 18: {
+            Detail = input.ReadString();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            DocId = input.ReadBytes();
+            break;
+          }
+          case 18: {
+            Detail = input.ReadString();
+            break;
+          }
         }
       }
     }
@@ -471,7 +1677,7 @@ namespace Loams.Live.V1 {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Loams.Live.V1.CatalogReflection.Descriptor.MessageTypes[1]; }
+      get { return global::Loams.Live.V1.CatalogReflection.Descriptor.MessageTypes[4]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -494,6 +1700,8 @@ namespace Loams.Live.V1 {
       id_ = other.id_;
       name_ = other.name_;
       fields_ = other.fields_.Clone();
+      state_ = other.state_;
+      deployment_ = other.deployment_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -544,6 +1752,38 @@ namespace Loams.Live.V1 {
       get { return fields_; }
     }
 
+    /// <summary>Field number for the "state" field.</summary>
+    public const int StateFieldNumber = 4;
+    private global::Loams.Live.V1.IndexState state_ = global::Loams.Live.V1.IndexState.Unspecified;
+    /// <summary>
+    /// Where the index is in its life (LV1 plan Task 9). Unspecified: ready
+    /// (an index defined before Task 9).
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Loams.Live.V1.IndexState State {
+      get { return state_; }
+      set {
+        state_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "deployment" field.</summary>
+    public const int DeploymentFieldNumber = 5;
+    private pb::ByteString deployment_ = pb::ByteString.Empty;
+    /// <summary>
+    /// The deployment whose deploy is backfilling it (16 bytes), while
+    /// `state` is `INDEX_STATE_BACKFILLING`.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pb::ByteString Deployment {
+      get { return deployment_; }
+      set {
+        deployment_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -562,6 +1802,8 @@ namespace Loams.Live.V1 {
       if (Id != other.Id) return false;
       if (Name != other.Name) return false;
       if(!fields_.Equals(other.fields_)) return false;
+      if (State != other.State) return false;
+      if (Deployment != other.Deployment) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -572,6 +1814,8 @@ namespace Loams.Live.V1 {
       if (Id != 0) hash ^= Id.GetHashCode();
       if (Name.Length != 0) hash ^= Name.GetHashCode();
       hash ^= fields_.GetHashCode();
+      if (State != global::Loams.Live.V1.IndexState.Unspecified) hash ^= State.GetHashCode();
+      if (Deployment.Length != 0) hash ^= Deployment.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -599,6 +1843,14 @@ namespace Loams.Live.V1 {
         output.WriteString(Name);
       }
       fields_.WriteTo(output, _repeated_fields_codec);
+      if (State != global::Loams.Live.V1.IndexState.Unspecified) {
+        output.WriteRawTag(32);
+        output.WriteEnum((int) State);
+      }
+      if (Deployment.Length != 0) {
+        output.WriteRawTag(42);
+        output.WriteBytes(Deployment);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -618,6 +1870,14 @@ namespace Loams.Live.V1 {
         output.WriteString(Name);
       }
       fields_.WriteTo(ref output, _repeated_fields_codec);
+      if (State != global::Loams.Live.V1.IndexState.Unspecified) {
+        output.WriteRawTag(32);
+        output.WriteEnum((int) State);
+      }
+      if (Deployment.Length != 0) {
+        output.WriteRawTag(42);
+        output.WriteBytes(Deployment);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -635,6 +1895,12 @@ namespace Loams.Live.V1 {
         size += 1 + pb::CodedOutputStream.ComputeStringSize(Name);
       }
       size += fields_.CalculateSize(_repeated_fields_codec);
+      if (State != global::Loams.Live.V1.IndexState.Unspecified) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) State);
+      }
+      if (Deployment.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeBytesSize(Deployment);
+      }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -654,6 +1920,12 @@ namespace Loams.Live.V1 {
         Name = other.Name;
       }
       fields_.Add(other.fields_);
+      if (other.State != global::Loams.Live.V1.IndexState.Unspecified) {
+        State = other.State;
+      }
+      if (other.Deployment.Length != 0) {
+        Deployment = other.Deployment;
+      }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -683,6 +1955,14 @@ namespace Loams.Live.V1 {
           }
           case 26: {
             fields_.AddEntriesFrom(input, _repeated_fields_codec);
+            break;
+          }
+          case 32: {
+            State = (global::Loams.Live.V1.IndexState) input.ReadEnum();
+            break;
+          }
+          case 42: {
+            Deployment = input.ReadBytes();
             break;
           }
         }
@@ -716,6 +1996,14 @@ namespace Loams.Live.V1 {
             fields_.AddEntriesFrom(ref input, _repeated_fields_codec);
             break;
           }
+          case 32: {
+            State = (global::Loams.Live.V1.IndexState) input.ReadEnum();
+            break;
+          }
+          case 42: {
+            Deployment = input.ReadBytes();
+            break;
+          }
         }
       }
     }
@@ -742,7 +2030,7 @@ namespace Loams.Live.V1 {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Loams.Live.V1.CatalogReflection.Descriptor.MessageTypes[2]; }
+      get { return global::Loams.Live.V1.CatalogReflection.Descriptor.MessageTypes[5]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -994,7 +2282,7 @@ namespace Loams.Live.V1 {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Loams.Live.V1.CatalogReflection.Descriptor.MessageTypes[3]; }
+      get { return global::Loams.Live.V1.CatalogReflection.Descriptor.MessageTypes[6]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -1082,8 +2370,8 @@ namespace Loams.Live.V1 {
     public const int SchemaFieldNumber = 4;
     private global::Loams.Live.V1.Schema schema_;
     /// <summary>
-    /// The schema the deployment declares (only additive table creation in
-    /// Task 6; validators and index changes in Tasks 8 and 9).
+    /// The schema the deployment declares (additive table creation in Task 6,
+    /// validators in Task 8, index changes in Task 9).
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]

@@ -69,34 +69,57 @@ namespace Loams.Live.V1 {
             "dmUudjEuU2NoZW1hUgZzY2hlbWEiNQoORGVwbG95UmVzcG9uc2USIwoNZGVw",
             "bG95bWVudF9pZBgBIAEoCVIMZGVwbG95bWVudElkIjwKBlNjaGVtYRIyCgZ0",
             "YWJsZXMYASADKAsyGi5sb2Ftcy5saXZlLnYxLlRhYmxlU2NoZW1hUgZ0YWJs",
-            "ZXMiVwoLVGFibGVTY2hlbWESEgoEbmFtZRgBIAEoCVIEbmFtZRI0CgdpbmRl",
-            "eGVzGAIgAygLMhoubG9hbXMubGl2ZS52MS5JbmRleFNjaGVtYVIHaW5kZXhl",
-            "cyI5CgtJbmRleFNjaGVtYRISCgRuYW1lGAEgASgJUgRuYW1lEhYKBmZpZWxk",
-            "cxgCIAMoCVIGZmllbGRzIlMKCUxpdmVFcnJvchIsCgRjb2RlGAEgASgOMhgu",
-            "bG9hbXMubGl2ZS52MS5FcnJvckNvZGVSBGNvZGUSGAoHbWVzc2FnZRgCIAEo",
-            "CVIHbWVzc2FnZSrFAgoJRXJyb3JDb2RlEhoKFkVSUk9SX0NPREVfVU5TUEVD",
-            "SUZJRUQQABIfChtFUlJPUl9DT0RFX0lOVkFMSURfQVJHVU1FTlQQARIYChRF",
-            "UlJPUl9DT0RFX05PVF9GT1VORBACEiIKHkVSUk9SX0NPREVfRkFJTEVEX1BS",
-            "RUNPTkRJVElPThADEiEKHUVSUk9SX0NPREVfUkVTT1VSQ0VfRVhIQVVTVEVE",
-            "EAQSHQoZRVJST1JfQ09ERV9GVU5DVElPTl9FUlJPUhAFEh8KG0VSUk9SX0NP",
-            "REVfRlVOQ1RJT05fVElNRU9VVBAGEiUKIUVSUk9SX0NPREVfRlVOQ1RJT05f",
-            "T1VUX09GX01FTU9SWRAHEhoKFkVSUk9SX0NPREVfVU5BVkFJTEFCTEUQCBIX",
-            "ChNFUlJPUl9DT0RFX0lOVEVSTkFMEAkypwQKC0xpdmVTZXJ2aWNlEk4KBVdh",
-            "dGNoEhsubG9hbXMubGl2ZS52MS5XYXRjaFJlcXVlc3QaGS5sb2Ftcy5saXZl",
-            "LnYxLlRyYW5zaXRpb24iC5K1GAcSBXdhdGNoMAEScwoOTW9kaWZ5UXVlcnlT",
-            "ZXQSJC5sb2Ftcy5saXZlLnYxLk1vZGlmeVF1ZXJ5U2V0UmVxdWVzdBolLmxv",
-            "YW1zLmxpdmUudjEuTW9kaWZ5UXVlcnlTZXRSZXNwb25zZSIUkrUYEBIObW9k",
-            "aWZ5UXVlcnlTZXQSVwoFUXVlcnkSGy5sb2Ftcy5saXZlLnYxLlF1ZXJ5UmVx",
-            "dWVzdBocLmxvYW1zLmxpdmUudjEuUXVlcnlSZXNwb25zZSITkrUYDwoGdGFi",
-            "bGVzEgVxdWVyeRJbCgZNdXRhdGUSHC5sb2Ftcy5saXZlLnYxLk11dGF0ZVJl",
-            "cXVlc3QaHS5sb2Ftcy5saXZlLnYxLk11dGF0ZVJlc3BvbnNlIhSStRgQCgZ0",
-            "YWJsZXMSBm11dGF0ZRJbCgZEZXBsb3kSHC5sb2Ftcy5saXZlLnYxLkRlcGxv",
-            "eVJlcXVlc3QaHS5sb2Ftcy5saXZlLnYxLkRlcGxveVJlc3BvbnNlIhSStRgQ",
-            "CgZ0YWJsZXMSBmRlcGxveRpAirUYPAoEbGl2ZRIyTGl2ZSBzeW5jOiB3YXRj",
-            "aCBhIHF1ZXJ5IHNldCBvdmVyIGEgc2VydmVyIHN0cmVhbS4YAWIGcHJvdG8z"));
+            "ZXMi1wEKC1RhYmxlU2NoZW1hEhIKBG5hbWUYASABKAlSBG5hbWUSNAoHaW5k",
+            "ZXhlcxgCIAMoCzIaLmxvYW1zLmxpdmUudjEuSW5kZXhTY2hlbWFSB2luZGV4",
+            "ZXMSNgoJdmFsaWRhdG9yGAMgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0",
+            "b3JSCXZhbGlkYXRvchIwChFzY2hlbWFfdmFsaWRhdGlvbhgEIAEoCEgAUhBz",
+            "Y2hlbWFWYWxpZGF0aW9uiAEBQhQKEl9zY2hlbWFfdmFsaWRhdGlvbiI5CgtJ",
+            "bmRleFNjaGVtYRISCgRuYW1lGAEgASgJUgRuYW1lEhYKBmZpZWxkcxgCIAMo",
+            "CVIGZmllbGRzIvUCCglWYWxpZGF0b3ISQQoJcHJpbWl0aXZlGAEgASgOMiEu",
+            "bG9hbXMubGl2ZS52MS5WYWxpZGF0b3JQcmltaXRpdmVIAFIJcHJpbWl0aXZl",
+            "EjAKBWFycmF5GAIgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3JIAFIF",
+            "YXJyYXkSOAoGb2JqZWN0GAMgASgLMh4ubG9hbXMubGl2ZS52MS5WYWxpZGF0",
+            "b3JPYmplY3RIAFIGb2JqZWN0EjAKB2xpdGVyYWwYBCABKAsyFC5sb2Ftcy5s",
+            "aXZlLnYxLlZhbHVlSABSB2xpdGVyYWwSNQoFdW5pb24YBSABKAsyHS5sb2Ft",
+            "cy5saXZlLnYxLlZhbGlkYXRvclVuaW9uSABSBXVuaW9uEjYKCG9wdGlvbmFs",
+            "GAYgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3JIAFIIb3B0aW9uYWwS",
+            "EAoCaWQYByABKAlIAFICaWRCBgoEa2luZCKqAQoPVmFsaWRhdG9yT2JqZWN0",
+            "EkIKBmZpZWxkcxgBIAMoCzIqLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yT2Jq",
+            "ZWN0LkZpZWxkc0VudHJ5UgZmaWVsZHMaUwoLRmllbGRzRW50cnkSEAoDa2V5",
+            "GAEgASgJUgNrZXkSLgoFdmFsdWUYAiABKAsyGC5sb2Ftcy5saXZlLnYxLlZh",
+            "bGlkYXRvclIFdmFsdWU6AjgBIkQKDlZhbGlkYXRvclVuaW9uEjIKB21lbWJl",
+            "cnMYASADKAsyGC5sb2Ftcy5saXZlLnYxLlZhbGlkYXRvclIHbWVtYmVycyJT",
+            "CglMaXZlRXJyb3ISLAoEY29kZRgBIAEoDjIYLmxvYW1zLmxpdmUudjEuRXJy",
+            "b3JDb2RlUgRjb2RlEhgKB21lc3NhZ2UYAiABKAlSB21lc3NhZ2UqlAIKElZh",
+            "bGlkYXRvclByaW1pdGl2ZRIjCh9WQUxJREFUT1JfUFJJTUlUSVZFX1VOU1BF",
+            "Q0lGSUVEEAASHAoYVkFMSURBVE9SX1BSSU1JVElWRV9OVUxMEAESHQoZVkFM",
+            "SURBVE9SX1BSSU1JVElWRV9JTlQ2NBACEh8KG1ZBTElEQVRPUl9QUklNSVRJ",
+            "VkVfRkxPQVQ2NBADEh8KG1ZBTElEQVRPUl9QUklNSVRJVkVfQk9PTEVBThAE",
+            "Eh4KGlZBTElEQVRPUl9QUklNSVRJVkVfU1RSSU5HEAUSHQoZVkFMSURBVE9S",
+            "X1BSSU1JVElWRV9CWVRFUxAGEhsKF1ZBTElEQVRPUl9QUklNSVRJVkVfQU5Z",
+            "EAcqxQIKCUVycm9yQ29kZRIaChZFUlJPUl9DT0RFX1VOU1BFQ0lGSUVEEAAS",
+            "HwobRVJST1JfQ09ERV9JTlZBTElEX0FSR1VNRU5UEAESGAoURVJST1JfQ09E",
+            "RV9OT1RfRk9VTkQQAhIiCh5FUlJPUl9DT0RFX0ZBSUxFRF9QUkVDT05ESVRJ",
+            "T04QAxIhCh1FUlJPUl9DT0RFX1JFU09VUkNFX0VYSEFVU1RFRBAEEh0KGUVS",
+            "Uk9SX0NPREVfRlVOQ1RJT05fRVJST1IQBRIfChtFUlJPUl9DT0RFX0ZVTkNU",
+            "SU9OX1RJTUVPVVQQBhIlCiFFUlJPUl9DT0RFX0ZVTkNUSU9OX09VVF9PRl9N",
+            "RU1PUlkQBxIaChZFUlJPUl9DT0RFX1VOQVZBSUxBQkxFEAgSFwoTRVJST1Jf",
+            "Q09ERV9JTlRFUk5BTBAJMqcECgtMaXZlU2VydmljZRJOCgVXYXRjaBIbLmxv",
+            "YW1zLmxpdmUudjEuV2F0Y2hSZXF1ZXN0GhkubG9hbXMubGl2ZS52MS5UcmFu",
+            "c2l0aW9uIguStRgHEgV3YXRjaDABEnMKDk1vZGlmeVF1ZXJ5U2V0EiQubG9h",
+            "bXMubGl2ZS52MS5Nb2RpZnlRdWVyeVNldFJlcXVlc3QaJS5sb2Ftcy5saXZl",
+            "LnYxLk1vZGlmeVF1ZXJ5U2V0UmVzcG9uc2UiFJK1GBASDm1vZGlmeVF1ZXJ5",
+            "U2V0ElcKBVF1ZXJ5EhsubG9hbXMubGl2ZS52MS5RdWVyeVJlcXVlc3QaHC5s",
+            "b2Ftcy5saXZlLnYxLlF1ZXJ5UmVzcG9uc2UiE5K1GA8KBnRhYmxlcxIFcXVl",
+            "cnkSWwoGTXV0YXRlEhwubG9hbXMubGl2ZS52MS5NdXRhdGVSZXF1ZXN0Gh0u",
+            "bG9hbXMubGl2ZS52MS5NdXRhdGVSZXNwb25zZSIUkrUYEAoGdGFibGVzEgZt",
+            "dXRhdGUSWwoGRGVwbG95EhwubG9hbXMubGl2ZS52MS5EZXBsb3lSZXF1ZXN0",
+            "Gh0ubG9hbXMubGl2ZS52MS5EZXBsb3lSZXNwb25zZSIUkrUYEAoGdGFibGVz",
+            "EgZkZXBsb3kaQIq1GDwKBGxpdmUSMkxpdmUgc3luYzogd2F0Y2ggYSBxdWVy",
+            "eSBzZXQgb3ZlciBhIHNlcnZlciBzdHJlYW0uGAFiBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Loams.Live.V1.ValueReflection.Descriptor, global::Loams.Options.V1.OptionsReflection.Descriptor, },
-          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Loams.Live.V1.ErrorCode), }, null, new pbr::GeneratedClrTypeInfo[] {
+          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Loams.Live.V1.ValidatorPrimitive), typeof(global::Loams.Live.V1.ErrorCode), }, null, new pbr::GeneratedClrTypeInfo[] {
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.StateVersion), global::Loams.Live.V1.StateVersion.Parser, new[]{ "QuerySet", "Identity", "Ts" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.WatchRequest), global::Loams.Live.V1.WatchRequest.Parser, new[]{ "Initial", "Resume" }, new[]{ "Start" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.Resume), global::Loams.Live.V1.Resume.Parser, new[]{ "LastVersion", "QuerySet" }, null, null, null, null),
@@ -115,8 +138,11 @@ namespace Loams.Live.V1 {
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.DeployRequest), global::Loams.Live.V1.DeployRequest.Parser, new[]{ "Bundle", "Schema" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.DeployResponse), global::Loams.Live.V1.DeployResponse.Parser, new[]{ "DeploymentId" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.Schema), global::Loams.Live.V1.Schema.Parser, new[]{ "Tables" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.TableSchema), global::Loams.Live.V1.TableSchema.Parser, new[]{ "Name", "Indexes" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.TableSchema), global::Loams.Live.V1.TableSchema.Parser, new[]{ "Name", "Indexes", "Validator", "SchemaValidation" }, new[]{ "SchemaValidation" }, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.IndexSchema), global::Loams.Live.V1.IndexSchema.Parser, new[]{ "Name", "Fields" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.Validator), global::Loams.Live.V1.Validator.Parser, new[]{ "Primitive", "Array", "Object", "Literal", "Union", "Optional", "Id" }, new[]{ "Kind" }, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.ValidatorObject), global::Loams.Live.V1.ValidatorObject.Parser, new[]{ "Fields" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { null, }),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.ValidatorUnion), global::Loams.Live.V1.ValidatorUnion.Parser, new[]{ "Members" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.LiveError), global::Loams.Live.V1.LiveError.Parser, new[]{ "Code", "Message" }, null, null, null, null)
           }));
     }
@@ -124,6 +150,17 @@ namespace Loams.Live.V1 {
 
   }
   #region Enums
+  public enum ValidatorPrimitive {
+    [pbr::OriginalName("VALIDATOR_PRIMITIVE_UNSPECIFIED")] Unspecified = 0,
+    [pbr::OriginalName("VALIDATOR_PRIMITIVE_NULL")] Null = 1,
+    [pbr::OriginalName("VALIDATOR_PRIMITIVE_INT64")] Int64 = 2,
+    [pbr::OriginalName("VALIDATOR_PRIMITIVE_FLOAT64")] Float64 = 3,
+    [pbr::OriginalName("VALIDATOR_PRIMITIVE_BOOLEAN")] Boolean = 4,
+    [pbr::OriginalName("VALIDATOR_PRIMITIVE_STRING")] String = 5,
+    [pbr::OriginalName("VALIDATOR_PRIMITIVE_BYTES")] Bytes = 6,
+    [pbr::OriginalName("VALIDATOR_PRIMITIVE_ANY")] Any = 7,
+  }
+
   public enum ErrorCode {
     [pbr::OriginalName("ERROR_CODE_UNSPECIFIED")] Unspecified = 0,
     /// <summary>
@@ -4715,7 +4752,7 @@ namespace Loams.Live.V1 {
   }
 
   /// <summary>
-  /// A deployed schema: tables and their indexes (validators arrive in R2).
+  /// A deployed schema: tables, their indexes and their validators.
   /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class Schema : pb::IMessage<Schema>
@@ -4912,6 +4949,7 @@ namespace Loams.Live.V1 {
   {
     private static readonly pb::MessageParser<TableSchema> _parser = new pb::MessageParser<TableSchema>(() => new TableSchema());
     private pb::UnknownFieldSet _unknownFields;
+    private int _hasBits0;
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pb::MessageParser<TableSchema> Parser { get { return _parser; } }
@@ -4939,8 +4977,11 @@ namespace Loams.Live.V1 {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public TableSchema(TableSchema other) : this() {
+      _hasBits0 = other._hasBits0;
       name_ = other.name_;
       indexes_ = other.indexes_.Clone();
+      validator_ = other.validator_ != null ? other.validator_.Clone() : null;
+      schemaValidation_ = other.schemaValidation_;
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -4976,6 +5017,55 @@ namespace Loams.Live.V1 {
       get { return indexes_; }
     }
 
+    /// <summary>Field number for the "validator" field.</summary>
+    public const int ValidatorFieldNumber = 3;
+    private global::Loams.Live.V1.Validator validator_;
+    /// <summary>
+    /// The validator every write to the table must match (design §45 §4.1,
+    /// D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+    /// own fields (not `_id` or `_creationTime`). Absent: any document.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Loams.Live.V1.Validator Validator {
+      get { return validator_; }
+      set {
+        validator_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "schema_validation" field.</summary>
+    public const int SchemaValidationFieldNumber = 4;
+    private readonly static bool SchemaValidationDefaultValue = false;
+
+    private bool schemaValidation_;
+    /// <summary>
+    /// Whether a deploy that makes the validator stricter checks the table's
+    /// existing documents first (absent: true). With `false` the new validator
+    /// applies at once to new writes only, as Convex's `schemaValidation`.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool SchemaValidation {
+      get { if ((_hasBits0 & 1) != 0) { return schemaValidation_; } else { return SchemaValidationDefaultValue; } }
+      set {
+        _hasBits0 |= 1;
+        schemaValidation_ = value;
+      }
+    }
+    /// <summary>Gets whether the "schema_validation" field is set</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool HasSchemaValidation {
+      get { return (_hasBits0 & 1) != 0; }
+    }
+    /// <summary>Clears the value of the "schema_validation" field</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void ClearSchemaValidation() {
+      _hasBits0 &= ~1;
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -4993,6 +5083,8 @@ namespace Loams.Live.V1 {
       }
       if (Name != other.Name) return false;
       if(!indexes_.Equals(other.indexes_)) return false;
+      if (!object.Equals(Validator, other.Validator)) return false;
+      if (SchemaValidation != other.SchemaValidation) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -5002,6 +5094,8 @@ namespace Loams.Live.V1 {
       int hash = 1;
       if (Name.Length != 0) hash ^= Name.GetHashCode();
       hash ^= indexes_.GetHashCode();
+      if (validator_ != null) hash ^= Validator.GetHashCode();
+      if (HasSchemaValidation) hash ^= SchemaValidation.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -5025,6 +5119,14 @@ namespace Loams.Live.V1 {
         output.WriteString(Name);
       }
       indexes_.WriteTo(output, _repeated_indexes_codec);
+      if (validator_ != null) {
+        output.WriteRawTag(26);
+        output.WriteMessage(Validator);
+      }
+      if (HasSchemaValidation) {
+        output.WriteRawTag(32);
+        output.WriteBool(SchemaValidation);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -5040,6 +5142,14 @@ namespace Loams.Live.V1 {
         output.WriteString(Name);
       }
       indexes_.WriteTo(ref output, _repeated_indexes_codec);
+      if (validator_ != null) {
+        output.WriteRawTag(26);
+        output.WriteMessage(Validator);
+      }
+      if (HasSchemaValidation) {
+        output.WriteRawTag(32);
+        output.WriteBool(SchemaValidation);
+      }
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -5054,6 +5164,12 @@ namespace Loams.Live.V1 {
         size += 1 + pb::CodedOutputStream.ComputeStringSize(Name);
       }
       size += indexes_.CalculateSize(_repeated_indexes_codec);
+      if (validator_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Validator);
+      }
+      if (HasSchemaValidation) {
+        size += 1 + 1;
+      }
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -5070,6 +5186,15 @@ namespace Loams.Live.V1 {
         Name = other.Name;
       }
       indexes_.Add(other.indexes_);
+      if (other.validator_ != null) {
+        if (validator_ == null) {
+          Validator = new global::Loams.Live.V1.Validator();
+        }
+        Validator.MergeFrom(other.Validator);
+      }
+      if (other.HasSchemaValidation) {
+        SchemaValidation = other.SchemaValidation;
+      }
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -5097,6 +5222,17 @@ namespace Loams.Live.V1 {
             indexes_.AddEntriesFrom(input, _repeated_indexes_codec);
             break;
           }
+          case 26: {
+            if (validator_ == null) {
+              Validator = new global::Loams.Live.V1.Validator();
+            }
+            input.ReadMessage(Validator);
+            break;
+          }
+          case 32: {
+            SchemaValidation = input.ReadBool();
+            break;
+          }
         }
       }
     #endif
@@ -5122,6 +5258,17 @@ namespace Loams.Live.V1 {
           }
           case 18: {
             indexes_.AddEntriesFrom(ref input, _repeated_indexes_codec);
+            break;
+          }
+          case 26: {
+            if (validator_ == null) {
+              Validator = new global::Loams.Live.V1.Validator();
+            }
+            input.ReadMessage(Validator);
+            break;
+          }
+          case 32: {
+            SchemaValidation = input.ReadBool();
             break;
           }
         }
@@ -5359,6 +5506,976 @@ namespace Loams.Live.V1 {
   }
 
   /// <summary>
+  /// A validator (design §45 §4.1, D684): the `v.*` vocabulary of
+  /// `loams:server`. Values match strictly: `int64` takes only an int64 and
+  /// `float64` only a double; an object has exactly its fields, except that an
+  /// `optional` field may be missing.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class Validator : pb::IMessage<Validator>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<Validator> _parser = new pb::MessageParser<Validator>(() => new Validator());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<Validator> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[20]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public Validator() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public Validator(Validator other) : this() {
+      switch (other.KindCase) {
+        case KindOneofCase.Primitive:
+          Primitive = other.Primitive;
+          break;
+        case KindOneofCase.Array:
+          Array = other.Array.Clone();
+          break;
+        case KindOneofCase.Object:
+          Object = other.Object.Clone();
+          break;
+        case KindOneofCase.Literal:
+          Literal = other.Literal.Clone();
+          break;
+        case KindOneofCase.Union:
+          Union = other.Union.Clone();
+          break;
+        case KindOneofCase.Optional:
+          Optional = other.Optional.Clone();
+          break;
+        case KindOneofCase.Id:
+          Id = other.Id;
+          break;
+      }
+
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public Validator Clone() {
+      return new Validator(this);
+    }
+
+    /// <summary>Field number for the "primitive" field.</summary>
+    public const int PrimitiveFieldNumber = 1;
+    /// <summary>
+    /// `v.null()`, `v.int64()`, `v.float64()`, `v.boolean()`, `v.string()`,
+    /// `v.bytes()` or `v.any()`.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Loams.Live.V1.ValidatorPrimitive Primitive {
+      get { return HasPrimitive ? (global::Loams.Live.V1.ValidatorPrimitive) kind_ : global::Loams.Live.V1.ValidatorPrimitive.Unspecified; }
+      set {
+        kind_ = value;
+        kindCase_ = KindOneofCase.Primitive;
+      }
+    }
+    /// <summary>Gets whether the "primitive" field is set</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool HasPrimitive {
+      get { return kindCase_ == KindOneofCase.Primitive; }
+    }
+    /// <summary> Clears the value of the oneof if it's currently set to "primitive" </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void ClearPrimitive() {
+      if (HasPrimitive) {
+        ClearKind();
+      }
+    }
+
+    /// <summary>Field number for the "array" field.</summary>
+    public const int ArrayFieldNumber = 2;
+    /// <summary>
+    /// `v.array(element)`: every element matches.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Loams.Live.V1.Validator Array {
+      get { return kindCase_ == KindOneofCase.Array ? (global::Loams.Live.V1.Validator) kind_ : null; }
+      set {
+        kind_ = value;
+        kindCase_ = value == null ? KindOneofCase.None : KindOneofCase.Array;
+      }
+    }
+
+    /// <summary>Field number for the "object" field.</summary>
+    public const int ObjectFieldNumber = 3;
+    /// <summary>
+    /// `v.object(fields)`.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Loams.Live.V1.ValidatorObject Object {
+      get { return kindCase_ == KindOneofCase.Object ? (global::Loams.Live.V1.ValidatorObject) kind_ : null; }
+      set {
+        kind_ = value;
+        kindCase_ = value == null ? KindOneofCase.None : KindOneofCase.Object;
+      }
+    }
+
+    /// <summary>Field number for the "literal" field.</summary>
+    public const int LiteralFieldNumber = 4;
+    /// <summary>
+    /// `v.literal(value)`: exactly this scalar (null, boolean, int64, a
+    /// finite double or a string).
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Loams.Live.V1.Value Literal {
+      get { return kindCase_ == KindOneofCase.Literal ? (global::Loams.Live.V1.Value) kind_ : null; }
+      set {
+        kind_ = value;
+        kindCase_ = value == null ? KindOneofCase.None : KindOneofCase.Literal;
+      }
+    }
+
+    /// <summary>Field number for the "union" field.</summary>
+    public const int UnionFieldNumber = 5;
+    /// <summary>
+    /// `v.union(...members)`: at least one member matches.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Loams.Live.V1.ValidatorUnion Union {
+      get { return kindCase_ == KindOneofCase.Union ? (global::Loams.Live.V1.ValidatorUnion) kind_ : null; }
+      set {
+        kind_ = value;
+        kindCase_ = value == null ? KindOneofCase.None : KindOneofCase.Union;
+      }
+    }
+
+    /// <summary>Field number for the "optional" field.</summary>
+    public const int OptionalFieldNumber = 6;
+    /// <summary>
+    /// `v.optional(inner)`: an object field that may be missing; only valid
+    /// as a field of `object`.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Loams.Live.V1.Validator Optional {
+      get { return kindCase_ == KindOneofCase.Optional ? (global::Loams.Live.V1.Validator) kind_ : null; }
+      set {
+        kind_ = value;
+        kindCase_ = value == null ? KindOneofCase.None : KindOneofCase.Optional;
+      }
+    }
+
+    /// <summary>Field number for the "id" field.</summary>
+    public const int IdFieldNumber = 7;
+    /// <summary>
+    /// `v.id(table)`: a document id (its text form) of the named table.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Id {
+      get { return HasId ? (string) kind_ : ""; }
+      set {
+        kind_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+        kindCase_ = KindOneofCase.Id;
+      }
+    }
+    /// <summary>Gets whether the "id" field is set</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool HasId {
+      get { return kindCase_ == KindOneofCase.Id; }
+    }
+    /// <summary> Clears the value of the oneof if it's currently set to "id" </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void ClearId() {
+      if (HasId) {
+        ClearKind();
+      }
+    }
+
+    private object kind_;
+    /// <summary>Enum of possible cases for the "kind" oneof.</summary>
+    public enum KindOneofCase {
+      None = 0,
+      Primitive = 1,
+      Array = 2,
+      Object = 3,
+      Literal = 4,
+      Union = 5,
+      Optional = 6,
+      Id = 7,
+    }
+    private KindOneofCase kindCase_ = KindOneofCase.None;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public KindOneofCase KindCase {
+      get { return kindCase_; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void ClearKind() {
+      kindCase_ = KindOneofCase.None;
+      kind_ = null;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as Validator);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(Validator other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Primitive != other.Primitive) return false;
+      if (!object.Equals(Array, other.Array)) return false;
+      if (!object.Equals(Object, other.Object)) return false;
+      if (!object.Equals(Literal, other.Literal)) return false;
+      if (!object.Equals(Union, other.Union)) return false;
+      if (!object.Equals(Optional, other.Optional)) return false;
+      if (Id != other.Id) return false;
+      if (KindCase != other.KindCase) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (HasPrimitive) hash ^= Primitive.GetHashCode();
+      if (kindCase_ == KindOneofCase.Array) hash ^= Array.GetHashCode();
+      if (kindCase_ == KindOneofCase.Object) hash ^= Object.GetHashCode();
+      if (kindCase_ == KindOneofCase.Literal) hash ^= Literal.GetHashCode();
+      if (kindCase_ == KindOneofCase.Union) hash ^= Union.GetHashCode();
+      if (kindCase_ == KindOneofCase.Optional) hash ^= Optional.GetHashCode();
+      if (HasId) hash ^= Id.GetHashCode();
+      hash ^= (int) kindCase_;
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (HasPrimitive) {
+        output.WriteRawTag(8);
+        output.WriteEnum((int) Primitive);
+      }
+      if (kindCase_ == KindOneofCase.Array) {
+        output.WriteRawTag(18);
+        output.WriteMessage(Array);
+      }
+      if (kindCase_ == KindOneofCase.Object) {
+        output.WriteRawTag(26);
+        output.WriteMessage(Object);
+      }
+      if (kindCase_ == KindOneofCase.Literal) {
+        output.WriteRawTag(34);
+        output.WriteMessage(Literal);
+      }
+      if (kindCase_ == KindOneofCase.Union) {
+        output.WriteRawTag(42);
+        output.WriteMessage(Union);
+      }
+      if (kindCase_ == KindOneofCase.Optional) {
+        output.WriteRawTag(50);
+        output.WriteMessage(Optional);
+      }
+      if (HasId) {
+        output.WriteRawTag(58);
+        output.WriteString(Id);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (HasPrimitive) {
+        output.WriteRawTag(8);
+        output.WriteEnum((int) Primitive);
+      }
+      if (kindCase_ == KindOneofCase.Array) {
+        output.WriteRawTag(18);
+        output.WriteMessage(Array);
+      }
+      if (kindCase_ == KindOneofCase.Object) {
+        output.WriteRawTag(26);
+        output.WriteMessage(Object);
+      }
+      if (kindCase_ == KindOneofCase.Literal) {
+        output.WriteRawTag(34);
+        output.WriteMessage(Literal);
+      }
+      if (kindCase_ == KindOneofCase.Union) {
+        output.WriteRawTag(42);
+        output.WriteMessage(Union);
+      }
+      if (kindCase_ == KindOneofCase.Optional) {
+        output.WriteRawTag(50);
+        output.WriteMessage(Optional);
+      }
+      if (HasId) {
+        output.WriteRawTag(58);
+        output.WriteString(Id);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (HasPrimitive) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Primitive);
+      }
+      if (kindCase_ == KindOneofCase.Array) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Array);
+      }
+      if (kindCase_ == KindOneofCase.Object) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Object);
+      }
+      if (kindCase_ == KindOneofCase.Literal) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Literal);
+      }
+      if (kindCase_ == KindOneofCase.Union) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Union);
+      }
+      if (kindCase_ == KindOneofCase.Optional) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(Optional);
+      }
+      if (HasId) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Id);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(Validator other) {
+      if (other == null) {
+        return;
+      }
+      switch (other.KindCase) {
+        case KindOneofCase.Primitive:
+          Primitive = other.Primitive;
+          break;
+        case KindOneofCase.Array:
+          if (Array == null) {
+            Array = new global::Loams.Live.V1.Validator();
+          }
+          Array.MergeFrom(other.Array);
+          break;
+        case KindOneofCase.Object:
+          if (Object == null) {
+            Object = new global::Loams.Live.V1.ValidatorObject();
+          }
+          Object.MergeFrom(other.Object);
+          break;
+        case KindOneofCase.Literal:
+          if (Literal == null) {
+            Literal = new global::Loams.Live.V1.Value();
+          }
+          Literal.MergeFrom(other.Literal);
+          break;
+        case KindOneofCase.Union:
+          if (Union == null) {
+            Union = new global::Loams.Live.V1.ValidatorUnion();
+          }
+          Union.MergeFrom(other.Union);
+          break;
+        case KindOneofCase.Optional:
+          if (Optional == null) {
+            Optional = new global::Loams.Live.V1.Validator();
+          }
+          Optional.MergeFrom(other.Optional);
+          break;
+        case KindOneofCase.Id:
+          Id = other.Id;
+          break;
+      }
+
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            kind_ = input.ReadEnum();
+            kindCase_ = KindOneofCase.Primitive;
+            break;
+          }
+          case 18: {
+            global::Loams.Live.V1.Validator subBuilder = new global::Loams.Live.V1.Validator();
+            if (kindCase_ == KindOneofCase.Array) {
+              subBuilder.MergeFrom(Array);
+            }
+            input.ReadMessage(subBuilder);
+            Array = subBuilder;
+            break;
+          }
+          case 26: {
+            global::Loams.Live.V1.ValidatorObject subBuilder = new global::Loams.Live.V1.ValidatorObject();
+            if (kindCase_ == KindOneofCase.Object) {
+              subBuilder.MergeFrom(Object);
+            }
+            input.ReadMessage(subBuilder);
+            Object = subBuilder;
+            break;
+          }
+          case 34: {
+            global::Loams.Live.V1.Value subBuilder = new global::Loams.Live.V1.Value();
+            if (kindCase_ == KindOneofCase.Literal) {
+              subBuilder.MergeFrom(Literal);
+            }
+            input.ReadMessage(subBuilder);
+            Literal = subBuilder;
+            break;
+          }
+          case 42: {
+            global::Loams.Live.V1.ValidatorUnion subBuilder = new global::Loams.Live.V1.ValidatorUnion();
+            if (kindCase_ == KindOneofCase.Union) {
+              subBuilder.MergeFrom(Union);
+            }
+            input.ReadMessage(subBuilder);
+            Union = subBuilder;
+            break;
+          }
+          case 50: {
+            global::Loams.Live.V1.Validator subBuilder = new global::Loams.Live.V1.Validator();
+            if (kindCase_ == KindOneofCase.Optional) {
+              subBuilder.MergeFrom(Optional);
+            }
+            input.ReadMessage(subBuilder);
+            Optional = subBuilder;
+            break;
+          }
+          case 58: {
+            Id = input.ReadString();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            kind_ = input.ReadEnum();
+            kindCase_ = KindOneofCase.Primitive;
+            break;
+          }
+          case 18: {
+            global::Loams.Live.V1.Validator subBuilder = new global::Loams.Live.V1.Validator();
+            if (kindCase_ == KindOneofCase.Array) {
+              subBuilder.MergeFrom(Array);
+            }
+            input.ReadMessage(subBuilder);
+            Array = subBuilder;
+            break;
+          }
+          case 26: {
+            global::Loams.Live.V1.ValidatorObject subBuilder = new global::Loams.Live.V1.ValidatorObject();
+            if (kindCase_ == KindOneofCase.Object) {
+              subBuilder.MergeFrom(Object);
+            }
+            input.ReadMessage(subBuilder);
+            Object = subBuilder;
+            break;
+          }
+          case 34: {
+            global::Loams.Live.V1.Value subBuilder = new global::Loams.Live.V1.Value();
+            if (kindCase_ == KindOneofCase.Literal) {
+              subBuilder.MergeFrom(Literal);
+            }
+            input.ReadMessage(subBuilder);
+            Literal = subBuilder;
+            break;
+          }
+          case 42: {
+            global::Loams.Live.V1.ValidatorUnion subBuilder = new global::Loams.Live.V1.ValidatorUnion();
+            if (kindCase_ == KindOneofCase.Union) {
+              subBuilder.MergeFrom(Union);
+            }
+            input.ReadMessage(subBuilder);
+            Union = subBuilder;
+            break;
+          }
+          case 50: {
+            global::Loams.Live.V1.Validator subBuilder = new global::Loams.Live.V1.Validator();
+            if (kindCase_ == KindOneofCase.Optional) {
+              subBuilder.MergeFrom(Optional);
+            }
+            input.ReadMessage(subBuilder);
+            Optional = subBuilder;
+            break;
+          }
+          case 58: {
+            Id = input.ReadString();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class ValidatorObject : pb::IMessage<ValidatorObject>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<ValidatorObject> _parser = new pb::MessageParser<ValidatorObject>(() => new ValidatorObject());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<ValidatorObject> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[21]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ValidatorObject() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ValidatorObject(ValidatorObject other) : this() {
+      fields_ = other.fields_.Clone();
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ValidatorObject Clone() {
+      return new ValidatorObject(this);
+    }
+
+    /// <summary>Field number for the "fields" field.</summary>
+    public const int FieldsFieldNumber = 1;
+    private static readonly pbc::MapField<string, global::Loams.Live.V1.Validator>.Codec _map_fields_codec
+        = new pbc::MapField<string, global::Loams.Live.V1.Validator>.Codec(pb::FieldCodec.ForString(10, ""), pb::FieldCodec.ForMessage(18, global::Loams.Live.V1.Validator.Parser), 10);
+    private readonly pbc::MapField<string, global::Loams.Live.V1.Validator> fields_ = new pbc::MapField<string, global::Loams.Live.V1.Validator>();
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::MapField<string, global::Loams.Live.V1.Validator> Fields {
+      get { return fields_; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as ValidatorObject);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(ValidatorObject other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (!Fields.Equals(other.Fields)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      hash ^= Fields.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      fields_.WriteTo(output, _map_fields_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      fields_.WriteTo(ref output, _map_fields_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      size += fields_.CalculateSize(_map_fields_codec);
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(ValidatorObject other) {
+      if (other == null) {
+        return;
+      }
+      fields_.MergeFrom(other.fields_);
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            fields_.AddEntriesFrom(input, _map_fields_codec);
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            fields_.AddEntriesFrom(ref input, _map_fields_codec);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class ValidatorUnion : pb::IMessage<ValidatorUnion>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<ValidatorUnion> _parser = new pb::MessageParser<ValidatorUnion>(() => new ValidatorUnion());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<ValidatorUnion> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[22]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ValidatorUnion() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ValidatorUnion(ValidatorUnion other) : this() {
+      members_ = other.members_.Clone();
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ValidatorUnion Clone() {
+      return new ValidatorUnion(this);
+    }
+
+    /// <summary>Field number for the "members" field.</summary>
+    public const int MembersFieldNumber = 1;
+    private static readonly pb::FieldCodec<global::Loams.Live.V1.Validator> _repeated_members_codec
+        = pb::FieldCodec.ForMessage(10, global::Loams.Live.V1.Validator.Parser);
+    private readonly pbc::RepeatedField<global::Loams.Live.V1.Validator> members_ = new pbc::RepeatedField<global::Loams.Live.V1.Validator>();
+    /// <summary>
+    /// At least one.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Loams.Live.V1.Validator> Members {
+      get { return members_; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as ValidatorUnion);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(ValidatorUnion other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if(!members_.Equals(other.members_)) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      hash ^= members_.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      members_.WriteTo(output, _repeated_members_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      members_.WriteTo(ref output, _repeated_members_codec);
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      size += members_.CalculateSize(_repeated_members_codec);
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(ValidatorUnion other) {
+      if (other == null) {
+        return;
+      }
+      members_.Add(other.members_);
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 10: {
+            members_.AddEntriesFrom(input, _repeated_members_codec);
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 10: {
+            members_.AddEntriesFrom(ref input, _repeated_members_codec);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
   /// An error for one query in a Transition. Call errors use the Connect error
   /// codes; this carries the same meaning inside a stream that stays open.
   /// </summary>
@@ -5377,7 +6494,7 @@ namespace Loams.Live.V1 {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public static pbr::MessageDescriptor Descriptor {
-      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[20]; }
+      get { return global::Loams.Live.V1.LiveReflection.Descriptor.MessageTypes[23]; }
     }
 
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]

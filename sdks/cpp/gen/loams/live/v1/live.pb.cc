@@ -69,6 +69,14 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
         // ::loams::live::v1::IndexSchema
         {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
+        // ::loams::live::v1::Validator
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
+        // ::loams::live::v1::ValidatorObject_FieldsEntry_DoNotUse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
+        // ::loams::live::v1::ValidatorObject
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
+        // ::loams::live::v1::ValidatorUnion
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
         // ::loams::live::v1::LiveError
         {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
 };
@@ -581,7 +589,7 @@ constexpr auto LiveError::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[20],
+      &file_reflection_data[24],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -934,78 +942,100 @@ const ::_pbi::ClassData* DeployResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
-class TableSchema::_Internal {
+class Validator::_Internal {
  public:
-  using HasBits = decltype(::std::declval<TableSchema>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(TableSchema, _impl_._has_bits_);
+  static constexpr ::int32_t kOneofCaseOffset =
+      PROTOBUF_FIELD_OFFSET(::loams::live::v1::Validator, _impl_._oneof_case_);
 };
 
-constexpr TableSchema::ParseTableT_ TableSchema::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+constexpr Validator::ParseTableT_ Validator::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
   return ParseTableT_{
     {
-      PROTOBUF_FIELD_OFFSET(TableSchema, _impl_._has_bits_),
+      PROTOBUF_FIELD_OFFSET(Validator,
+                            _impl_._cached_size_),  // no hasbits
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      7, 0,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967168,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
-      1,  // num_aux_entries
+      7,  // num_field_entries
+      5,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
       ::_pbi::TcParser::MpUnknownFields,  // fallback
       #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::loams::live::v1::TableSchema>(),  // to_prefetch
+      ::_pbi::TcParser::GetTable<::loams::live::v1::Validator>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .loams.live.v1.IndexSchema indexes = 2 [json_name = "indexes"];
-      {::_pbi::TcParser::FastMtR1,
-       {18, 0, 0,
-        PROTOBUF_FIELD_OFFSET(TableSchema, _impl_.indexes_)}},
-      // string name = 1 [json_name = "name"];
-      {::_pbi::TcParser::FastUS1,
-       {10, 1, 0,
-        PROTOBUF_FIELD_OFFSET(TableSchema, _impl_.name_)}},
+      // .loams.live.v1.Value literal = 4 [json_name = "literal"];
+      {::_pbi::TcParser::FastMiniParse1,
+       {34, ::uint8_t{6},
+        ::uint32_t{
+            PROTOBUF_FIELD_OFFSET(ParseTableT_, field_entries) +
+            sizeof(_pbi::TcParseTableBase::FieldEntry) * 3}}},
     }}, {{
       65535, 65535
     }}, {{
-      // string name = 1 [json_name = "name"];
-      {PROTOBUF_FIELD_OFFSET(TableSchema, _impl_.name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-      // repeated .loams.live.v1.IndexSchema indexes = 2 [json_name = "indexes"];
-      {PROTOBUF_FIELD_OFFSET(TableSchema, _impl_.indexes_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .loams.live.v1.ValidatorPrimitive primitive = 1 [json_name = "primitive"];
+      {PROTOBUF_FIELD_OFFSET(Validator, _impl_.kind_.primitive_), _Internal::kOneofCaseOffset + 0, 0, (0 | ::_fl::kFcOneof | ::_fl::kOpenEnum)},
+      // .loams.live.v1.Validator array = 2 [json_name = "array"];
+      {PROTOBUF_FIELD_OFFSET(Validator, _impl_.kind_.array_), _Internal::kOneofCaseOffset + 0, 0, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .loams.live.v1.ValidatorObject object = 3 [json_name = "object"];
+      {PROTOBUF_FIELD_OFFSET(Validator, _impl_.kind_.object_), _Internal::kOneofCaseOffset + 0, 1, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .loams.live.v1.Value literal = 4 [json_name = "literal"];
+      {PROTOBUF_FIELD_OFFSET(Validator, _impl_.kind_.literal_), _Internal::kOneofCaseOffset + 0, 2, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .loams.live.v1.ValidatorUnion union = 5 [json_name = "union"];
+      {PROTOBUF_FIELD_OFFSET(Validator, _impl_.kind_.union__), _Internal::kOneofCaseOffset + 0, 3, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .loams.live.v1.Validator optional = 6 [json_name = "optional"];
+      {PROTOBUF_FIELD_OFFSET(Validator, _impl_.kind_.optional_), _Internal::kOneofCaseOffset + 0, 4, (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+      // string id = 7 [json_name = "id"];
+      {PROTOBUF_FIELD_OFFSET(Validator, _impl_.kind_.id_), _Internal::kOneofCaseOffset + 0, 0, (0 | ::_fl::kFcOneof | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::loams::live::v1::IndexSchema>()},
+        {::_pbi::TcParser::GetTable<::loams::live::v1::Validator>()},
         #else
-        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::IndexSchema_globals_},
+        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::Validator_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::loams::live::v1::ValidatorObject>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::ValidatorObject_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::loams::live::v1::Value>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::Value_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::loams::live::v1::ValidatorUnion>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::ValidatorUnion_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::loams::live::v1::Validator>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::Validator_globals_},
         #endif
     }},
     {{
-      "\31\4\0\0\0\0\0\0"
-      "loams.live.v1.TableSchema"
-      "name"
+      "\27\0\0\0\0\0\0\2"
+      "loams.live.v1.Validator"
+      "id"
     }},
   };
 }
 
 
-inline constexpr TableSchema::Impl_::Impl_(
+inline constexpr Validator::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
-      : indexes_ { visibility, ::_pbi::InternalMetadataOffset::Build<
-            ::loams::live::v1::TableSchema,
-            PROTOBUF_FIELD_OFFSET(::loams::live::v1::TableSchema, _impl_.indexes_)>()
-         }
-        ,
-        name_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()) {}
+      : kind_{},
+        _oneof_case_{} {}
 
 template <typename>
-constexpr TableSchema::TableSchema(::_pbi::ConstantInitialized,
+constexpr Validator::Validator(::_pbi::ConstantInitialized,
                        const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
     : Super_(
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -1014,15 +1044,15 @@ constexpr TableSchema::TableSchema(::_pbi::ConstantInitialized,
           ),
       _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
 }
-inline void* PROTOBUF_NONNULL TableSchema::PlacementNew_(
+inline void* PROTOBUF_NONNULL Validator::PlacementNew_(
     const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) TableSchema(arena);
+  return ::new (mem) Validator(arena);
 }
-constexpr auto TableSchema::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(TableSchema), alignof(TableSchema));
+constexpr auto Validator::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(Validator), alignof(Validator));
 }
-constexpr auto TableSchema::InternalGenerateClassData_(
+constexpr auto Validator::InternalGenerateClassData_(
     const MessageLite& prototype,
     const ::google::protobuf::internal::TcParseTableBase* tc_table) {
   return ::google::protobuf::internal::ClassDataFull{
@@ -1034,18 +1064,18 @@ constexpr auto TableSchema::InternalGenerateClassData_(
           tc_table,
 #endif
           nullptr,  // IsInitialized
-          &TableSchema::MergeImpl,
-          Super_::GetNewImpl<TableSchema>(),
+          &Validator::MergeImpl,
+          Super_::GetNewImpl<Validator>(),
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-          &TableSchema::SharedDtor,
-          Super_::GetClearImpl<TableSchema>(), &TableSchema::ByteSizeLong,
-              &TableSchema::_InternalSerialize,
+          &Validator::SharedDtor,
+          Super_::GetClearImpl<Validator>(), &Validator::ByteSizeLong,
+              &Validator::_InternalSerialize,
 #endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(TableSchema, _impl_._cached_size_),
+          PROTOBUF_FIELD_OFFSET(Validator, _impl_._cached_size_),
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[18],
+      &file_reflection_data[20],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -1053,60 +1083,358 @@ constexpr auto TableSchema::InternalGenerateClassData_(
 #endif  // PROTOBUF_MESSAGE_GLOBALS
   };
 }
-struct TableSchemaGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr TableSchemaGlobalsTypeInternal()
+struct ValidatorGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ValidatorGlobalsTypeInternal()
       :
 #ifndef PROTOBUF_MESSAGE_GLOBALS
         _default(::_pbi::ConstantInitialized{},
-                 TableSchema_class_data_.base())
+                 Validator_class_data_.base())
 #else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(TableSchema::InternalGenerateClassData_(
-            _default, &TableSchema_globals_._table.header)),
+        MessageGlobalsBase(Validator::InternalGenerateClassData_(
+            _default, &Validator_globals_._table.header)),
         _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<TableSchema>(
+        _table(::_pbi::PrivateAccess::GenerateParseTable<Validator>(
             GetClassData()))
 #endif  // PROTOBUF_MESSAGE_GLOBALS
   {
   }
-  ~TableSchemaGlobalsTypeInternal() {}
+  ~ValidatorGlobalsTypeInternal() {}
   union {
-    alignas(::_pbi::kMaxMessageAlignment) TableSchema _default;
+    alignas(::_pbi::kMaxMessageAlignment) Validator _default;
   };
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<TableSchema>(
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<Validator>(
       ::std::declval<const ::_pbi::ClassData*>())) _table;
 #endif
 };
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(TableSchemaGlobalsTypeInternal, _default) ==
+static_assert(PROTOBUF_FIELD_OFFSET(ValidatorGlobalsTypeInternal, _default) ==
               ::_pbi::MessageGlobalsBase::OffsetToDefault());
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST TableSchemaGlobalsTypeInternal TableSchema_globals_
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ValidatorGlobalsTypeInternal Validator_globals_
         PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
 #if defined(PROTOBUF_CUSTOM_VTABLE)
 namespace {
-const ::_pbi::ClassData* TableSchema_get_class_data() {
+const ::_pbi::ClassData* Validator_get_class_data() {
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-  return TableSchema_globals_.GetClassData();
+  return Validator_globals_.GetClassData();
 #else
-  return TableSchema_class_data_.base();
+  return Validator_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
-class Schema::_Internal {
+class ValidatorObject::_Internal {
  public:
-  using HasBits = decltype(::std::declval<Schema>()._impl_._has_bits_);
+  using HasBits = decltype(::std::declval<ValidatorObject>()._impl_._has_bits_);
   static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(Schema, _impl_._has_bits_);
+      8 * PROTOBUF_FIELD_OFFSET(ValidatorObject, _impl_._has_bits_);
 };
 
-constexpr Schema::ParseTableT_ Schema::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+constexpr ValidatorObject::ParseTableT_ ValidatorObject::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
   return ParseTableT_{
     {
-      PROTOBUF_FIELD_OFFSET(Schema, _impl_._has_bits_),
+      PROTOBUF_FIELD_OFFSET(ValidatorObject, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::MpUnknownFields,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::loams::live::v1::ValidatorObject>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // map<string, .loams.live.v1.Validator> fields = 1 [json_name = "fields"];
+      {::_pbi::TcParser::FastMiniParse1,
+       {10, ::uint8_t{7},
+        ::uint32_t{
+            PROTOBUF_FIELD_OFFSET(ParseTableT_, field_entries) +
+            sizeof(_pbi::TcParseTableBase::FieldEntry) * 0}}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // map<string, .loams.live.v1.Validator> fields = 1 [json_name = "fields"];
+      {PROTOBUF_FIELD_OFFSET(ValidatorObject, _impl_.fields_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+    }},
+    {{
+        {::_pbi::TcParser::GetMapAuxInfo(
+            1, 0, 9, 11, 0)},
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::loams::live::v1::Validator>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::Validator_globals_},
+        #endif
+    }},
+    {{
+      "\35\6\0\0\0\0\0\0"
+      "loams.live.v1.ValidatorObject"
+      "fields"
+    }},
+  };
+}
+
+
+inline constexpr ValidatorObject::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : fields_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::loams::live::v1::ValidatorObject,
+            PROTOBUF_FIELD_OFFSET(::loams::live::v1::ValidatorObject, _impl_.fields_)>()
+         }
+     {}
+
+template <typename>
+constexpr ValidatorObject::ValidatorObject(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : Super_(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL ValidatorObject::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ValidatorObject(arena);
+}
+constexpr auto ValidatorObject::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ValidatorObject), alignof(ValidatorObject));
+}
+constexpr auto ValidatorObject::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ValidatorObject::MergeImpl,
+          Super_::GetNewImpl<ValidatorObject>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ValidatorObject::SharedDtor,
+          Super_::GetClearImpl<ValidatorObject>(), &ValidatorObject::ByteSizeLong,
+              &ValidatorObject::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ValidatorObject, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[22],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ValidatorObjectGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ValidatorObjectGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ValidatorObject_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ValidatorObject::InternalGenerateClassData_(
+            _default, &ValidatorObject_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ValidatorObject>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ValidatorObjectGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ValidatorObject _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ValidatorObject>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ValidatorObjectGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ValidatorObjectGlobalsTypeInternal ValidatorObject_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ValidatorObject_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ValidatorObject_globals_.GetClassData();
+#else
+  return ValidatorObject_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+constexpr ValidatorObject_FieldsEntry_DoNotUse::ParseTableT_ ValidatorObject_FieldsEntry_DoNotUse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ValidatorObject_FieldsEntry_DoNotUse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::DiscardEverythingFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::loams::live::v1::ValidatorObject_FieldsEntry_DoNotUse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .loams.live.v1.Validator value = 2 [json_name = "value"];
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ValidatorObject_FieldsEntry_DoNotUse, _impl_.value_)}},
+      // string key = 1 [json_name = "key"];
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ValidatorObject_FieldsEntry_DoNotUse, _impl_.key_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string key = 1 [json_name = "key"];
+      {PROTOBUF_FIELD_OFFSET(ValidatorObject_FieldsEntry_DoNotUse, _impl_.key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // .loams.live.v1.Validator value = 2 [json_name = "value"];
+      {PROTOBUF_FIELD_OFFSET(ValidatorObject_FieldsEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::loams::live::v1::Validator>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::Validator_globals_},
+        #endif
+    }},
+    {{
+      "\51\3\0\0\0\0\0\0"
+      "loams.live.v1.ValidatorObject.FieldsEntry"
+      "key"
+    }},
+  };
+}
+
+template <typename>
+constexpr ValidatorObject_FieldsEntry_DoNotUse::ValidatorObject_FieldsEntry_DoNotUse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : Super_(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      ) {
+}
+inline void* PROTOBUF_NONNULL ValidatorObject_FieldsEntry_DoNotUse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) ValidatorObject_FieldsEntry_DoNotUse(arena);
+}
+constexpr auto ValidatorObject_FieldsEntry_DoNotUse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ValidatorObject_FieldsEntry_DoNotUse), alignof(ValidatorObject_FieldsEntry_DoNotUse));
+}
+constexpr auto ValidatorObject_FieldsEntry_DoNotUse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &ValidatorObject_FieldsEntry_DoNotUse::MergeImpl,
+          Super_::GetNewImpl<ValidatorObject_FieldsEntry_DoNotUse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &ValidatorObject_FieldsEntry_DoNotUse::SharedDtor,
+          static_cast<void (::google::protobuf::MessageLite::*)()>(&ValidatorObject_FieldsEntry_DoNotUse::ClearImpl),
+              Super_::ByteSizeLongImpl, Super_::_InternalSerializeImpl,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(ValidatorObject_FieldsEntry_DoNotUse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[21],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct ValidatorObject_FieldsEntry_DoNotUseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ValidatorObject_FieldsEntry_DoNotUseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 ValidatorObject_FieldsEntry_DoNotUse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(ValidatorObject_FieldsEntry_DoNotUse::InternalGenerateClassData_(
+            _default, &ValidatorObject_FieldsEntry_DoNotUse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ValidatorObject_FieldsEntry_DoNotUse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~ValidatorObject_FieldsEntry_DoNotUseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) ValidatorObject_FieldsEntry_DoNotUse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ValidatorObject_FieldsEntry_DoNotUse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(ValidatorObject_FieldsEntry_DoNotUseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ValidatorObject_FieldsEntry_DoNotUseGlobalsTypeInternal ValidatorObject_FieldsEntry_DoNotUse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* ValidatorObject_FieldsEntry_DoNotUse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return ValidatorObject_FieldsEntry_DoNotUse_globals_.GetClassData();
+#else
+  return ValidatorObject_FieldsEntry_DoNotUse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class ValidatorUnion::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<ValidatorUnion>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(ValidatorUnion, _impl_._has_bits_);
+};
+
+constexpr ValidatorUnion::ParseTableT_ ValidatorUnion::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(ValidatorUnion, _impl_._has_bits_),
       0, // no _extensions_
       1, 0,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
@@ -1119,24 +1447,24 @@ constexpr Schema::ParseTableT_ Schema::InternalGenerateParseTable_(const ::_pbi:
       nullptr,  // post_loop_handler
       ::_pbi::TcParser::MpUnknownFields,  // fallback
       #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::loams::live::v1::Schema>(),  // to_prefetch
+      ::_pbi::TcParser::GetTable<::loams::live::v1::ValidatorUnion>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated .loams.live.v1.TableSchema tables = 1 [json_name = "tables"];
+      // repeated .loams.live.v1.Validator members = 1 [json_name = "members"];
       {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
-        PROTOBUF_FIELD_OFFSET(Schema, _impl_.tables_)}},
+        PROTOBUF_FIELD_OFFSET(ValidatorUnion, _impl_.members_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // repeated .loams.live.v1.TableSchema tables = 1 [json_name = "tables"];
-      {PROTOBUF_FIELD_OFFSET(Schema, _impl_.tables_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .loams.live.v1.Validator members = 1 [json_name = "members"];
+      {PROTOBUF_FIELD_OFFSET(ValidatorUnion, _impl_.members_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::loams::live::v1::TableSchema>()},
+        {::_pbi::TcParser::GetTable<::loams::live::v1::Validator>()},
         #else
-        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::TableSchema_globals_},
+        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::Validator_globals_},
         #endif
     }},
     {{
@@ -1145,17 +1473,17 @@ constexpr Schema::ParseTableT_ Schema::InternalGenerateParseTable_(const ::_pbi:
 }
 
 
-inline constexpr Schema::Impl_::Impl_(
+inline constexpr ValidatorUnion::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
-      : tables_ { visibility, ::_pbi::InternalMetadataOffset::Build<
-            ::loams::live::v1::Schema,
-            PROTOBUF_FIELD_OFFSET(::loams::live::v1::Schema, _impl_.tables_)>()
+      : members_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::loams::live::v1::ValidatorUnion,
+            PROTOBUF_FIELD_OFFSET(::loams::live::v1::ValidatorUnion, _impl_.members_)>()
          }
      {}
 
 template <typename>
-constexpr Schema::Schema(::_pbi::ConstantInitialized,
+constexpr ValidatorUnion::ValidatorUnion(::_pbi::ConstantInitialized,
                        const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
     : Super_(
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -1164,15 +1492,15 @@ constexpr Schema::Schema(::_pbi::ConstantInitialized,
           ),
       _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
 }
-inline void* PROTOBUF_NONNULL Schema::PlacementNew_(
+inline void* PROTOBUF_NONNULL ValidatorUnion::PlacementNew_(
     const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) Schema(arena);
+  return ::new (mem) ValidatorUnion(arena);
 }
-constexpr auto Schema::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(Schema), alignof(Schema));
+constexpr auto ValidatorUnion::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ValidatorUnion), alignof(ValidatorUnion));
 }
-constexpr auto Schema::InternalGenerateClassData_(
+constexpr auto ValidatorUnion::InternalGenerateClassData_(
     const MessageLite& prototype,
     const ::google::protobuf::internal::TcParseTableBase* tc_table) {
   return ::google::protobuf::internal::ClassDataFull{
@@ -1184,18 +1512,18 @@ constexpr auto Schema::InternalGenerateClassData_(
           tc_table,
 #endif
           nullptr,  // IsInitialized
-          &Schema::MergeImpl,
-          Super_::GetNewImpl<Schema>(),
+          &ValidatorUnion::MergeImpl,
+          Super_::GetNewImpl<ValidatorUnion>(),
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-          &Schema::SharedDtor,
-          Super_::GetClearImpl<Schema>(), &Schema::ByteSizeLong,
-              &Schema::_InternalSerialize,
+          &ValidatorUnion::SharedDtor,
+          Super_::GetClearImpl<ValidatorUnion>(), &ValidatorUnion::ByteSizeLong,
+              &ValidatorUnion::_InternalSerialize,
 #endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(Schema, _impl_._cached_size_),
+          PROTOBUF_FIELD_OFFSET(ValidatorUnion, _impl_._cached_size_),
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[17],
+      &file_reflection_data[23],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -1203,45 +1531,45 @@ constexpr auto Schema::InternalGenerateClassData_(
 #endif  // PROTOBUF_MESSAGE_GLOBALS
   };
 }
-struct SchemaGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr SchemaGlobalsTypeInternal()
+struct ValidatorUnionGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr ValidatorUnionGlobalsTypeInternal()
       :
 #ifndef PROTOBUF_MESSAGE_GLOBALS
         _default(::_pbi::ConstantInitialized{},
-                 Schema_class_data_.base())
+                 ValidatorUnion_class_data_.base())
 #else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(Schema::InternalGenerateClassData_(
-            _default, &Schema_globals_._table.header)),
+        MessageGlobalsBase(ValidatorUnion::InternalGenerateClassData_(
+            _default, &ValidatorUnion_globals_._table.header)),
         _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<Schema>(
+        _table(::_pbi::PrivateAccess::GenerateParseTable<ValidatorUnion>(
             GetClassData()))
 #endif  // PROTOBUF_MESSAGE_GLOBALS
   {
   }
-  ~SchemaGlobalsTypeInternal() {}
+  ~ValidatorUnionGlobalsTypeInternal() {}
   union {
-    alignas(::_pbi::kMaxMessageAlignment) Schema _default;
+    alignas(::_pbi::kMaxMessageAlignment) ValidatorUnion _default;
   };
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<Schema>(
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<ValidatorUnion>(
       ::std::declval<const ::_pbi::ClassData*>())) _table;
 #endif
 };
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(SchemaGlobalsTypeInternal, _default) ==
+static_assert(PROTOBUF_FIELD_OFFSET(ValidatorUnionGlobalsTypeInternal, _default) ==
               ::_pbi::MessageGlobalsBase::OffsetToDefault());
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SchemaGlobalsTypeInternal Schema_globals_
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST ValidatorUnionGlobalsTypeInternal ValidatorUnion_globals_
         PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
 #if defined(PROTOBUF_CUSTOM_VTABLE)
 namespace {
-const ::_pbi::ClassData* Schema_get_class_data() {
+const ::_pbi::ClassData* ValidatorUnion_get_class_data() {
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-  return Schema_globals_.GetClassData();
+  return ValidatorUnion_globals_.GetClassData();
 #else
-  return Schema_class_data_.base();
+  return ValidatorUnion_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -2415,6 +2743,187 @@ const ::_pbi::ClassData* Transition_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class TableSchema::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<TableSchema>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(TableSchema, _impl_._has_bits_);
+};
+
+constexpr TableSchema::ParseTableT_ TableSchema::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(TableSchema, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::MpUnknownFields,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::loams::live::v1::TableSchema>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // optional bool schema_validation = 4 [json_name = "schemaValidation"];
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TableSchema, _impl_.schema_validation_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(TableSchema, _impl_.schema_validation_)}},
+      // string name = 1 [json_name = "name"];
+      {::_pbi::TcParser::FastUS1,
+       {10, 1, 0,
+        PROTOBUF_FIELD_OFFSET(TableSchema, _impl_.name_)}},
+      // repeated .loams.live.v1.IndexSchema indexes = 2 [json_name = "indexes"];
+      {::_pbi::TcParser::FastMtR1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(TableSchema, _impl_.indexes_)}},
+      // .loams.live.v1.Validator validator = 3 [json_name = "validator"];
+      {::_pbi::TcParser::FastMtS1,
+       {26, 2, 1,
+        PROTOBUF_FIELD_OFFSET(TableSchema, _impl_.validator_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string name = 1 [json_name = "name"];
+      {PROTOBUF_FIELD_OFFSET(TableSchema, _impl_.name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // repeated .loams.live.v1.IndexSchema indexes = 2 [json_name = "indexes"];
+      {PROTOBUF_FIELD_OFFSET(TableSchema, _impl_.indexes_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .loams.live.v1.Validator validator = 3 [json_name = "validator"];
+      {PROTOBUF_FIELD_OFFSET(TableSchema, _impl_.validator_), _Internal::kHasBitsOffset + 2, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // optional bool schema_validation = 4 [json_name = "schemaValidation"];
+      {PROTOBUF_FIELD_OFFSET(TableSchema, _impl_.schema_validation_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::loams::live::v1::IndexSchema>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::IndexSchema_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::loams::live::v1::Validator>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::Validator_globals_},
+        #endif
+    }},
+    {{
+      "\31\4\0\0\0\0\0\0"
+      "loams.live.v1.TableSchema"
+      "name"
+    }},
+  };
+}
+
+
+inline constexpr TableSchema::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : indexes_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::loams::live::v1::TableSchema,
+            PROTOBUF_FIELD_OFFSET(::loams::live::v1::TableSchema, _impl_.indexes_)>()
+         }
+        ,
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        validator_{nullptr},
+        schema_validation_{false} {}
+
+template <typename>
+constexpr TableSchema::TableSchema(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : Super_(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL TableSchema::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) TableSchema(arena);
+}
+constexpr auto TableSchema::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(TableSchema), alignof(TableSchema));
+}
+constexpr auto TableSchema::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &TableSchema::MergeImpl,
+          Super_::GetNewImpl<TableSchema>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &TableSchema::SharedDtor,
+          Super_::GetClearImpl<TableSchema>(), &TableSchema::ByteSizeLong,
+              &TableSchema::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(TableSchema, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[18],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct TableSchemaGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr TableSchemaGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 TableSchema_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(TableSchema::InternalGenerateClassData_(
+            _default, &TableSchema_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<TableSchema>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~TableSchemaGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) TableSchema _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<TableSchema>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(TableSchemaGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST TableSchemaGlobalsTypeInternal TableSchema_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* TableSchema_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return TableSchema_globals_.GetClassData();
+#else
+  return TableSchema_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class QuerySetChange::_Internal {
  public:
   static constexpr ::int32_t kOneofCaseOffset =
@@ -2723,53 +3232,47 @@ const ::_pbi::ClassData* QuerySet_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
-class DeployRequest::_Internal {
+class Schema::_Internal {
  public:
-  using HasBits = decltype(::std::declval<DeployRequest>()._impl_._has_bits_);
+  using HasBits = decltype(::std::declval<Schema>()._impl_._has_bits_);
   static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_._has_bits_);
+      8 * PROTOBUF_FIELD_OFFSET(Schema, _impl_._has_bits_);
 };
 
-constexpr DeployRequest::ParseTableT_ DeployRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+constexpr Schema::ParseTableT_ Schema::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
   return ParseTableT_{
     {
-      PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_._has_bits_),
+      PROTOBUF_FIELD_OFFSET(Schema, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      1, 0,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967294,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      1,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
       ::_pbi::TcParser::MpUnknownFields,  // fallback
       #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::loams::live::v1::DeployRequest>(),  // to_prefetch
+      ::_pbi::TcParser::GetTable<::loams::live::v1::Schema>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .loams.live.v1.Schema schema = 2 [json_name = "schema"];
-      {::_pbi::TcParser::FastMtS1,
-       {18, 1, 0,
-        PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_.schema_)}},
-      // bytes bundle = 1 [json_name = "bundle"];
-      {::_pbi::TcParser::FastBS1,
+      // repeated .loams.live.v1.TableSchema tables = 1 [json_name = "tables"];
+      {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
-        PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_.bundle_)}},
+        PROTOBUF_FIELD_OFFSET(Schema, _impl_.tables_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // bytes bundle = 1 [json_name = "bundle"];
-      {PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_.bundle_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
-      // .loams.live.v1.Schema schema = 2 [json_name = "schema"];
-      {PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_.schema_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated .loams.live.v1.TableSchema tables = 1 [json_name = "tables"];
+      {PROTOBUF_FIELD_OFFSET(Schema, _impl_.tables_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::loams::live::v1::Schema>()},
+        {::_pbi::TcParser::GetTable<::loams::live::v1::TableSchema>()},
         #else
-        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::Schema_globals_},
+        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::TableSchema_globals_},
         #endif
     }},
     {{
@@ -2778,16 +3281,17 @@ constexpr DeployRequest::ParseTableT_ DeployRequest::InternalGenerateParseTable_
 }
 
 
-inline constexpr DeployRequest::Impl_::Impl_(
+inline constexpr Schema::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
-      : bundle_(
-            &::google::protobuf::internal::fixed_address_empty_string,
-            ::_pbi::ConstantInitialized()),
-        schema_{nullptr} {}
+      : tables_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::loams::live::v1::Schema,
+            PROTOBUF_FIELD_OFFSET(::loams::live::v1::Schema, _impl_.tables_)>()
+         }
+     {}
 
 template <typename>
-constexpr DeployRequest::DeployRequest(::_pbi::ConstantInitialized,
+constexpr Schema::Schema(::_pbi::ConstantInitialized,
                        const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
     : Super_(
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -2796,15 +3300,15 @@ constexpr DeployRequest::DeployRequest(::_pbi::ConstantInitialized,
           ),
       _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
 }
-inline void* PROTOBUF_NONNULL DeployRequest::PlacementNew_(
+inline void* PROTOBUF_NONNULL Schema::PlacementNew_(
     const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) DeployRequest(arena);
+  return ::new (mem) Schema(arena);
 }
-constexpr auto DeployRequest::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(DeployRequest), alignof(DeployRequest));
+constexpr auto Schema::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(Schema), alignof(Schema));
 }
-constexpr auto DeployRequest::InternalGenerateClassData_(
+constexpr auto Schema::InternalGenerateClassData_(
     const MessageLite& prototype,
     const ::google::protobuf::internal::TcParseTableBase* tc_table) {
   return ::google::protobuf::internal::ClassDataFull{
@@ -2816,18 +3320,18 @@ constexpr auto DeployRequest::InternalGenerateClassData_(
           tc_table,
 #endif
           nullptr,  // IsInitialized
-          &DeployRequest::MergeImpl,
-          Super_::GetNewImpl<DeployRequest>(),
+          &Schema::MergeImpl,
+          Super_::GetNewImpl<Schema>(),
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-          &DeployRequest::SharedDtor,
-          Super_::GetClearImpl<DeployRequest>(), &DeployRequest::ByteSizeLong,
-              &DeployRequest::_InternalSerialize,
+          &Schema::SharedDtor,
+          Super_::GetClearImpl<Schema>(), &Schema::ByteSizeLong,
+              &Schema::_InternalSerialize,
 #endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_._cached_size_),
+          PROTOBUF_FIELD_OFFSET(Schema, _impl_._cached_size_),
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[15],
+      &file_reflection_data[17],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -2835,45 +3339,45 @@ constexpr auto DeployRequest::InternalGenerateClassData_(
 #endif  // PROTOBUF_MESSAGE_GLOBALS
   };
 }
-struct DeployRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr DeployRequestGlobalsTypeInternal()
+struct SchemaGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SchemaGlobalsTypeInternal()
       :
 #ifndef PROTOBUF_MESSAGE_GLOBALS
         _default(::_pbi::ConstantInitialized{},
-                 DeployRequest_class_data_.base())
+                 Schema_class_data_.base())
 #else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(DeployRequest::InternalGenerateClassData_(
-            _default, &DeployRequest_globals_._table.header)),
+        MessageGlobalsBase(Schema::InternalGenerateClassData_(
+            _default, &Schema_globals_._table.header)),
         _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<DeployRequest>(
+        _table(::_pbi::PrivateAccess::GenerateParseTable<Schema>(
             GetClassData()))
 #endif  // PROTOBUF_MESSAGE_GLOBALS
   {
   }
-  ~DeployRequestGlobalsTypeInternal() {}
+  ~SchemaGlobalsTypeInternal() {}
   union {
-    alignas(::_pbi::kMaxMessageAlignment) DeployRequest _default;
+    alignas(::_pbi::kMaxMessageAlignment) Schema _default;
   };
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<DeployRequest>(
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<Schema>(
       ::std::declval<const ::_pbi::ClassData*>())) _table;
 #endif
 };
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(DeployRequestGlobalsTypeInternal, _default) ==
+static_assert(PROTOBUF_FIELD_OFFSET(SchemaGlobalsTypeInternal, _default) ==
               ::_pbi::MessageGlobalsBase::OffsetToDefault());
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST DeployRequestGlobalsTypeInternal DeployRequest_globals_
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SchemaGlobalsTypeInternal Schema_globals_
         PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
 #if defined(PROTOBUF_CUSTOM_VTABLE)
 namespace {
-const ::_pbi::ClassData* DeployRequest_get_class_data() {
+const ::_pbi::ClassData* Schema_get_class_data() {
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-  return DeployRequest_globals_.GetClassData();
+  return Schema_globals_.GetClassData();
 #else
-  return DeployRequest_class_data_.base();
+  return Schema_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -3368,11 +3872,166 @@ const ::_pbi::ClassData* WatchRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class DeployRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<DeployRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_._has_bits_);
+};
+
+constexpr DeployRequest::ParseTableT_ DeployRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::MpUnknownFields,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::loams::live::v1::DeployRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .loams.live.v1.Schema schema = 2 [json_name = "schema"];
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 0,
+        PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_.schema_)}},
+      // bytes bundle = 1 [json_name = "bundle"];
+      {::_pbi::TcParser::FastBS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_.bundle_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // bytes bundle = 1 [json_name = "bundle"];
+      {PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_.bundle_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // .loams.live.v1.Schema schema = 2 [json_name = "schema"];
+      {PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_.schema_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::loams::live::v1::Schema>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::Schema_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr DeployRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : bundle_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        schema_{nullptr} {}
+
+template <typename>
+constexpr DeployRequest::DeployRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : Super_(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL DeployRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) DeployRequest(arena);
+}
+constexpr auto DeployRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(DeployRequest), alignof(DeployRequest));
+}
+constexpr auto DeployRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &DeployRequest::MergeImpl,
+          Super_::GetNewImpl<DeployRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &DeployRequest::SharedDtor,
+          Super_::GetClearImpl<DeployRequest>(), &DeployRequest::ByteSizeLong,
+              &DeployRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(DeployRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[15],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct DeployRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr DeployRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 DeployRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(DeployRequest::InternalGenerateClassData_(
+            _default, &DeployRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<DeployRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~DeployRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) DeployRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<DeployRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(DeployRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST DeployRequestGlobalsTypeInternal DeployRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* DeployRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return DeployRequest_globals_.GetClassData();
+#else
+  return DeployRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace v1
 }  // namespace live
 }  // namespace loams
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_loams_2flive_2fv1_2flive_2eproto[1];
+    file_level_enum_descriptors_loams_2flive_2fv1_2flive_2eproto[2];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_loams_2flive_2fv1_2flive_2eproto = nullptr;
 const ::uint32_t
@@ -3510,17 +4169,48 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::TableSchema, _impl_._has_bits_),
-        5, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::TableSchema, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::TableSchema, _impl_.indexes_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::TableSchema, _impl_.validator_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::TableSchema, _impl_.schema_validation_),
         1,
         0,
+        2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::IndexSchema, _impl_._has_bits_),
         5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::IndexSchema, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::IndexSchema, _impl_.fields_),
         1,
+        0,
+        0x004, // bitmap
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::Validator, _impl_._oneof_case_[0]),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::Validator, _impl_.kind_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::Validator, _impl_.kind_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::Validator, _impl_.kind_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::Validator, _impl_.kind_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::Validator, _impl_.kind_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::Validator, _impl_.kind_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::Validator, _impl_.kind_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::Validator, _impl_.kind_),
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::ValidatorObject_FieldsEntry_DoNotUse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::ValidatorObject_FieldsEntry_DoNotUse, _impl_.key_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::ValidatorObject_FieldsEntry_DoNotUse, _impl_.value_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::ValidatorObject, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::ValidatorObject, _impl_.fields_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::ValidatorUnion, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::ValidatorUnion, _impl_.members_),
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::LiveError, _impl_._has_bits_),
@@ -3552,8 +4242,12 @@ static const ::_pbi::MigrationSchema
         {120, sizeof(::loams::live::v1::DeployResponse)},
         {125, sizeof(::loams::live::v1::Schema)},
         {130, sizeof(::loams::live::v1::TableSchema)},
-        {137, sizeof(::loams::live::v1::IndexSchema)},
-        {144, sizeof(::loams::live::v1::LiveError)},
+        {141, sizeof(::loams::live::v1::IndexSchema)},
+        {148, sizeof(::loams::live::v1::Validator)},
+        {158, sizeof(::loams::live::v1::ValidatorObject_FieldsEntry_DoNotUse)},
+        {165, sizeof(::loams::live::v1::ValidatorObject)},
+        {170, sizeof(::loams::live::v1::ValidatorUnion)},
+        {175, sizeof(::loams::live::v1::LiveError)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3577,6 +4271,10 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::loams::live::v1::Schema_globals_,
         &::loams::live::v1::TableSchema_globals_,
         &::loams::live::v1::IndexSchema_globals_,
+        &::loams::live::v1::Validator_globals_,
+        &::loams::live::v1::ValidatorObject_FieldsEntry_DoNotUse_globals_,
+        &::loams::live::v1::ValidatorObject_globals_,
+        &::loams::live::v1::ValidatorUnion_globals_,
         &::loams::live::v1::LiveError_globals_,
 };
 const char descriptor_table_protodef_loams_2flive_2fv1_2flive_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
@@ -3631,35 +4329,61 @@ const char descriptor_table_protodef_loams_2flive_2fv1_2flive_2eproto[] ABSL_ATT
     "\025.loams.live.v1.SchemaR\006schema\"5\n\016Deploy"
     "Response\022#\n\rdeployment_id\030\001 \001(\tR\014deploym"
     "entId\"<\n\006Schema\0222\n\006tables\030\001 \003(\0132\032.loams."
-    "live.v1.TableSchemaR\006tables\"W\n\013TableSche"
-    "ma\022\022\n\004name\030\001 \001(\tR\004name\0224\n\007indexes\030\002 \003(\0132"
-    "\032.loams.live.v1.IndexSchemaR\007indexes\"9\n\013"
-    "IndexSchema\022\022\n\004name\030\001 \001(\tR\004name\022\026\n\006field"
-    "s\030\002 \003(\tR\006fields\"S\n\tLiveError\022,\n\004code\030\001 \001"
-    "(\0162\030.loams.live.v1.ErrorCodeR\004code\022\030\n\007me"
-    "ssage\030\002 \001(\tR\007message*\305\002\n\tErrorCode\022\032\n\026ER"
-    "ROR_CODE_UNSPECIFIED\020\000\022\037\n\033ERROR_CODE_INV"
-    "ALID_ARGUMENT\020\001\022\030\n\024ERROR_CODE_NOT_FOUND\020"
-    "\002\022\"\n\036ERROR_CODE_FAILED_PRECONDITION\020\003\022!\n"
-    "\035ERROR_CODE_RESOURCE_EXHAUSTED\020\004\022\035\n\031ERRO"
-    "R_CODE_FUNCTION_ERROR\020\005\022\037\n\033ERROR_CODE_FU"
-    "NCTION_TIMEOUT\020\006\022%\n!ERROR_CODE_FUNCTION_"
-    "OUT_OF_MEMORY\020\007\022\032\n\026ERROR_CODE_UNAVAILABL"
-    "E\020\010\022\027\n\023ERROR_CODE_INTERNAL\020\t2\247\004\n\013LiveSer"
-    "vice\022N\n\005Watch\022\033.loams.live.v1.WatchReque"
-    "st\032\031.loams.live.v1.Transition\"\013\222\265\030\007\022\005wat"
-    "ch0\001\022s\n\016ModifyQuerySet\022$.loams.live.v1.M"
-    "odifyQuerySetRequest\032%.loams.live.v1.Mod"
-    "ifyQuerySetResponse\"\024\222\265\030\020\022\016modifyQuerySe"
-    "t\022W\n\005Query\022\033.loams.live.v1.QueryRequest\032"
-    "\034.loams.live.v1.QueryResponse\"\023\222\265\030\017\n\006tab"
-    "les\022\005query\022[\n\006Mutate\022\034.loams.live.v1.Mut"
-    "ateRequest\032\035.loams.live.v1.MutateRespons"
-    "e\"\024\222\265\030\020\n\006tables\022\006mutate\022[\n\006Deploy\022\034.loam"
-    "s.live.v1.DeployRequest\032\035.loams.live.v1."
-    "DeployResponse\"\024\222\265\030\020\n\006tables\022\006deploy\032@\212\265"
-    "\030<\n\004live\0222Live sync: watch a query set o"
-    "ver a server stream.\030\001b\006proto3"
+    "live.v1.TableSchemaR\006tables\"\327\001\n\013TableSch"
+    "ema\022\022\n\004name\030\001 \001(\tR\004name\0224\n\007indexes\030\002 \003(\013"
+    "2\032.loams.live.v1.IndexSchemaR\007indexes\0226\n"
+    "\tvalidator\030\003 \001(\0132\030.loams.live.v1.Validat"
+    "orR\tvalidator\0220\n\021schema_validation\030\004 \001(\010"
+    "H\000R\020schemaValidation\210\001\001B\024\n\022_schema_valid"
+    "ation\"9\n\013IndexSchema\022\022\n\004name\030\001 \001(\tR\004name"
+    "\022\026\n\006fields\030\002 \003(\tR\006fields\"\365\002\n\tValidator\022A"
+    "\n\tprimitive\030\001 \001(\0162!.loams.live.v1.Valida"
+    "torPrimitiveH\000R\tprimitive\0220\n\005array\030\002 \001(\013"
+    "2\030.loams.live.v1.ValidatorH\000R\005array\0228\n\006o"
+    "bject\030\003 \001(\0132\036.loams.live.v1.ValidatorObj"
+    "ectH\000R\006object\0220\n\007literal\030\004 \001(\0132\024.loams.l"
+    "ive.v1.ValueH\000R\007literal\0225\n\005union\030\005 \001(\0132\035"
+    ".loams.live.v1.ValidatorUnionH\000R\005union\0226"
+    "\n\010optional\030\006 \001(\0132\030.loams.live.v1.Validat"
+    "orH\000R\010optional\022\020\n\002id\030\007 \001(\tH\000R\002idB\006\n\004kind"
+    "\"\252\001\n\017ValidatorObject\022B\n\006fields\030\001 \003(\0132*.l"
+    "oams.live.v1.ValidatorObject.FieldsEntry"
+    "R\006fields\032S\n\013FieldsEntry\022\020\n\003key\030\001 \001(\tR\003ke"
+    "y\022.\n\005value\030\002 \001(\0132\030.loams.live.v1.Validat"
+    "orR\005value:\0028\001\"D\n\016ValidatorUnion\0222\n\007membe"
+    "rs\030\001 \003(\0132\030.loams.live.v1.ValidatorR\007memb"
+    "ers\"S\n\tLiveError\022,\n\004code\030\001 \001(\0162\030.loams.l"
+    "ive.v1.ErrorCodeR\004code\022\030\n\007message\030\002 \001(\tR"
+    "\007message*\224\002\n\022ValidatorPrimitive\022#\n\037VALID"
+    "ATOR_PRIMITIVE_UNSPECIFIED\020\000\022\034\n\030VALIDATO"
+    "R_PRIMITIVE_NULL\020\001\022\035\n\031VALIDATOR_PRIMITIV"
+    "E_INT64\020\002\022\037\n\033VALIDATOR_PRIMITIVE_FLOAT64"
+    "\020\003\022\037\n\033VALIDATOR_PRIMITIVE_BOOLEAN\020\004\022\036\n\032V"
+    "ALIDATOR_PRIMITIVE_STRING\020\005\022\035\n\031VALIDATOR"
+    "_PRIMITIVE_BYTES\020\006\022\033\n\027VALIDATOR_PRIMITIV"
+    "E_ANY\020\007*\305\002\n\tErrorCode\022\032\n\026ERROR_CODE_UNSP"
+    "ECIFIED\020\000\022\037\n\033ERROR_CODE_INVALID_ARGUMENT"
+    "\020\001\022\030\n\024ERROR_CODE_NOT_FOUND\020\002\022\"\n\036ERROR_CO"
+    "DE_FAILED_PRECONDITION\020\003\022!\n\035ERROR_CODE_R"
+    "ESOURCE_EXHAUSTED\020\004\022\035\n\031ERROR_CODE_FUNCTI"
+    "ON_ERROR\020\005\022\037\n\033ERROR_CODE_FUNCTION_TIMEOU"
+    "T\020\006\022%\n!ERROR_CODE_FUNCTION_OUT_OF_MEMORY"
+    "\020\007\022\032\n\026ERROR_CODE_UNAVAILABLE\020\010\022\027\n\023ERROR_"
+    "CODE_INTERNAL\020\t2\247\004\n\013LiveService\022N\n\005Watch"
+    "\022\033.loams.live.v1.WatchRequest\032\031.loams.li"
+    "ve.v1.Transition\"\013\222\265\030\007\022\005watch0\001\022s\n\016Modif"
+    "yQuerySet\022$.loams.live.v1.ModifyQuerySet"
+    "Request\032%.loams.live.v1.ModifyQuerySetRe"
+    "sponse\"\024\222\265\030\020\022\016modifyQuerySet\022W\n\005Query\022\033."
+    "loams.live.v1.QueryRequest\032\034.loams.live."
+    "v1.QueryResponse\"\023\222\265\030\017\n\006tables\022\005query\022[\n"
+    "\006Mutate\022\034.loams.live.v1.MutateRequest\032\035."
+    "loams.live.v1.MutateResponse\"\024\222\265\030\020\n\006tabl"
+    "es\022\006mutate\022[\n\006Deploy\022\034.loams.live.v1.Dep"
+    "loyRequest\032\035.loams.live.v1.DeployRespons"
+    "e\"\024\222\265\030\020\n\006tables\022\006deploy\032@\212\265\030<\n\004live\0222Liv"
+    "e sync: watch a query set over a server "
+    "stream.\030\001b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_loams_2flive_2fv1_2flive_2eproto_deps[2] = {
@@ -3670,13 +4394,13 @@ static ::absl::once_flag descriptor_table_loams_2flive_2fv1_2flive_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_loams_2flive_2fv1_2flive_2eproto = {
     false,
     false,
-    3150,
+    4177,
     descriptor_table_protodef_loams_2flive_2fv1_2flive_2eproto,
     "loams/live/v1/live.proto",
     &descriptor_table_loams_2flive_2fv1_2flive_2eproto_once,
     descriptor_table_loams_2flive_2fv1_2flive_2eproto_deps,
     2,
-    21,
+    25,
     schemas,
     file_message_globals,
     TableStruct_loams_2flive_2fv1_2flive_2eproto::offsets,
@@ -3687,9 +4411,16 @@ namespace loams {
 namespace live {
 namespace v1 {
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
-ErrorCode_descriptor() {
+ValidatorPrimitive_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_loams_2flive_2fv1_2flive_2eproto);
   return file_level_enum_descriptors_loams_2flive_2fv1_2flive_2eproto[0];
+}
+PROTOBUF_CONSTINIT const uint32_t ValidatorPrimitive_internal_data_[] = {
+    524288u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+ErrorCode_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_loams_2flive_2fv1_2flive_2eproto);
+  return file_level_enum_descriptors_loams_2flive_2fv1_2flive_2eproto[1];
 }
 PROTOBUF_CONSTINIT const uint32_t ErrorCode_internal_data_[] = {
     655360u, 0u, };
@@ -8249,6 +8980,11 @@ TableSchema::TableSchema(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.validator_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                 ? Super_::CopyConstruct(arena, *from._impl_.validator_)
+                 : nullptr;
+  _impl_.schema_validation_ = from._impl_.schema_validation_;
 
   // @@protoc_insertion_point(copy_constructor:loams.live.v1.TableSchema)
 }
@@ -8264,6 +9000,12 @@ PROTOBUF_NDEBUG_INLINE TableSchema::Impl_::Impl_(
 
 inline void TableSchema::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, validator_),
+           0,
+           offsetof(Impl_, schema_validation_) -
+               offsetof(Impl_, validator_) +
+               sizeof(Impl_::schema_validation_));
 }
 TableSchema::~TableSchema() {
   // @@protoc_insertion_point(destructor:loams.live.v1.TableSchema)
@@ -8277,6 +9019,7 @@ inline void TableSchema::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.name_.Destroy();
+  delete this_._impl_.validator_;
   this_._impl_.~Impl_();
 }
 
@@ -8313,14 +9056,19 @@ PROTOBUF_NOINLINE void TableSchema::Clear() {
   ::uint32_t cached_has_bits [[maybe_unused]] = 0;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.indexes_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       this_._impl_.name_.ClearNonDefaultToEmpty();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(this_._impl_.validator_ != nullptr);
+      this_._impl_.validator_->Clear();
+    }
   }
+  this_._impl_.schema_validation_ = false;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -8366,6 +9114,20 @@ PROTOBUF_NOINLINE void TableSchema::Clear() {
     }
   }
 
+  // .loams.live.v1.Validator validator = 3 [json_name = "validator"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        3, *this_._impl_.validator_, this_._impl_.validator_->GetCachedSize(), target,
+        stream);
+  }
+
+  // optional bool schema_validation = 4 [json_name = "schemaValidation"];
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(
+        4, this_._internal_schema_validation(), target);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -8389,7 +9151,8 @@ PROTOBUF_NOINLINE void TableSchema::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  total_size += static_cast<bool>(0x00000008U & cached_has_bits) * 2;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // repeated .loams.live.v1.IndexSchema indexes = 2 [json_name = "indexes"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_indexes_size();
@@ -8403,6 +9166,11 @@ PROTOBUF_NOINLINE void TableSchema::Clear() {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_name());
       }
+    }
+    // .loams.live.v1.Validator validator = 3 [json_name = "validator"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.validator_);
     }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
@@ -8423,7 +9191,7 @@ void TableSchema::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_indexes()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -8437,6 +9205,17 @@ void TableSchema::MergeImpl(::google::protobuf::MessageLite& to_msg,
           _this->_internal_set_name("");
         }
       }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.validator_ != nullptr);
+      if (_this->_impl_.validator_ == nullptr) {
+        _this->_impl_.validator_ = Super_::CopyConstruct(arena, *from._impl_.validator_);
+      } else {
+        _this->_impl_.validator_->MergeFrom(*from._impl_.validator_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _this->_impl_.schema_validation_ = from._impl_.schema_validation_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -8460,6 +9239,12 @@ void TableSchema::InternalSwap(TableSchema* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.indexes_.InternalSwap(&other->_impl_.indexes_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(TableSchema, _impl_.schema_validation_)
+      + sizeof(TableSchema::_impl_.schema_validation_)
+      - PROTOBUF_FIELD_OFFSET(TableSchema, _impl_.validator_)>(
+          reinterpret_cast<char*>(&_impl_.validator_),
+          reinterpret_cast<char*>(&other->_impl_.validator_));
 }
 
 ::google::protobuf::Metadata TableSchema::GetMetadata() const {
@@ -8718,6 +9503,990 @@ void IndexSchema::InternalSwap(IndexSchema* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
 }
 
 ::google::protobuf::Metadata IndexSchema::GetMetadata() const {
+  return Super_::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void Validator::set_allocated_array(::loams::live::v1::Validator* PROTOBUF_NULLABLE array) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_kind();
+  if (array) {
+    ::google::protobuf::Arena* submessage_arena = array->GetArena();
+    if (message_arena != submessage_arena) {
+      array = ::google::protobuf::internal::GetOwnedMessage(message_arena, array, submessage_arena);
+    }
+    set_has_array();
+    _impl_.kind_.array_ = array;
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.Validator.array)
+}
+void Validator::set_allocated_object(::loams::live::v1::ValidatorObject* PROTOBUF_NULLABLE object) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_kind();
+  if (object) {
+    ::google::protobuf::Arena* submessage_arena = object->GetArena();
+    if (message_arena != submessage_arena) {
+      object = ::google::protobuf::internal::GetOwnedMessage(message_arena, object, submessage_arena);
+    }
+    set_has_object();
+    _impl_.kind_.object_ = object;
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.Validator.object)
+}
+void Validator::set_allocated_literal(::loams::live::v1::Value* PROTOBUF_NULLABLE literal) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_kind();
+  if (literal) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(literal)->GetArena();
+    if (message_arena != submessage_arena) {
+      literal = ::google::protobuf::internal::GetOwnedMessage(message_arena, literal, submessage_arena);
+    }
+    set_has_literal();
+    _impl_.kind_.literal_ = literal;
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.Validator.literal)
+}
+void Validator::clear_literal() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (kind_case() == kLiteral) {
+    if (GetArena() == nullptr) {
+      delete _impl_.kind_.literal_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.kind_.literal_);
+    }
+    clear_has_kind();
+  }
+}
+void Validator::set_allocated_union_(::loams::live::v1::ValidatorUnion* PROTOBUF_NULLABLE union_) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_kind();
+  if (union_) {
+    ::google::protobuf::Arena* submessage_arena = union_->GetArena();
+    if (message_arena != submessage_arena) {
+      union_ = ::google::protobuf::internal::GetOwnedMessage(message_arena, union_, submessage_arena);
+    }
+    set_has_union_();
+    _impl_.kind_.union__ = union_;
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.Validator.union)
+}
+void Validator::set_allocated_optional(::loams::live::v1::Validator* PROTOBUF_NULLABLE optional) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_kind();
+  if (optional) {
+    ::google::protobuf::Arena* submessage_arena = optional->GetArena();
+    if (message_arena != submessage_arena) {
+      optional = ::google::protobuf::internal::GetOwnedMessage(message_arena, optional, submessage_arena);
+    }
+    set_has_optional();
+    _impl_.kind_.optional_ = optional;
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.Validator.optional)
+}
+Validator::Validator(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : Super_(arena, Validator_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : Super_(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:loams.live.v1.Validator)
+}
+PROTOBUF_NDEBUG_INLINE Validator::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::loams::live::v1::Validator& from_msg)
+      : kind_{},
+        _oneof_case_{from._oneof_case_[0]} {}
+
+Validator::Validator(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const Validator& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : Super_(arena, Validator_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : Super_(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  Validator* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  switch (kind_case()) {
+    case KIND_NOT_SET:
+      break;
+      case kPrimitive:
+        _impl_.kind_.primitive_ = from._impl_.kind_.primitive_;
+        break;
+      case kArray:
+        _impl_.kind_.array_ = Super_::CopyConstruct(arena, *from._impl_.kind_.array_);
+        break;
+      case kObject:
+        _impl_.kind_.object_ = Super_::CopyConstruct(arena, *from._impl_.kind_.object_);
+        break;
+      case kLiteral:
+        _impl_.kind_.literal_ = Super_::CopyConstruct(arena, *from._impl_.kind_.literal_);
+        break;
+      case kUnion:
+        _impl_.kind_.union__ = Super_::CopyConstruct(arena, *from._impl_.kind_.union__);
+        break;
+      case kOptional:
+        _impl_.kind_.optional_ = Super_::CopyConstruct(arena, *from._impl_.kind_.optional_);
+        break;
+      case kId:
+        new (&_impl_.kind_.id_) decltype(_impl_.kind_.id_){arena, from._impl_.kind_.id_};
+        break;
+  }
+
+  // @@protoc_insertion_point(copy_constructor:loams.live.v1.Validator)
+}
+PROTOBUF_NDEBUG_INLINE Validator::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : kind_{},
+        _oneof_case_{} {}
+
+inline void Validator::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+Validator::~Validator() {
+  // @@protoc_insertion_point(destructor:loams.live.v1.Validator)
+  SharedDtor(*this);
+}
+inline void Validator::SharedDtor(MessageLite& self) {
+  Validator& this_ = static_cast<Validator&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  if (this_.has_kind()) {
+    this_.clear_kind();
+  }
+  this_._impl_.~Impl_();
+}
+
+void Validator::clear_kind() {
+// @@protoc_insertion_point(one_of_clear_start:loams.live.v1.Validator)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  switch (kind_case()) {
+    case kPrimitive: {
+      // No need to clear
+      break;
+    }
+    case kArray: {
+      if (GetArena() == nullptr) {
+        delete _impl_.kind_.array_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.kind_.array_);
+      }
+      break;
+    }
+    case kObject: {
+      if (GetArena() == nullptr) {
+        delete _impl_.kind_.object_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.kind_.object_);
+      }
+      break;
+    }
+    case kLiteral: {
+      if (GetArena() == nullptr) {
+        delete _impl_.kind_.literal_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.kind_.literal_);
+      }
+      break;
+    }
+    case kUnion: {
+      if (GetArena() == nullptr) {
+        delete _impl_.kind_.union__;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.kind_.union__);
+      }
+      break;
+    }
+    case kOptional: {
+      if (GetArena() == nullptr) {
+        delete _impl_.kind_.optional_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.kind_.optional_);
+      }
+      break;
+    }
+    case kId: {
+      _impl_.kind_.id_.Destroy();
+      break;
+    }
+    case KIND_NOT_SET: {
+      break;
+    }
+  }
+  _impl_._oneof_case_[0] = KIND_NOT_SET;
+}
+
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull Validator_class_data_ =
+        Validator::InternalGenerateClassData_(Validator_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+Validator::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&Validator_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(Validator_class_data_.tc_table);
+  return Validator_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+Validator::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&Validator_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&Validator_globals_));
+  return Validator_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const Validator::ParseTableT_
+    Validator::_table_ =
+        Validator::InternalGenerateParseTable_(Validator_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void Validator::Clear() {
+  auto& this_ [[maybe_unused]] = *this;
+  // @@protoc_insertion_point(message_clear_start:loams.live.v1.Validator)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
+
+  clear_kind();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL Validator::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const Validator& this_ = static_cast<const Validator&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL Validator::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const Validator& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:loams.live.v1.Validator)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  switch (this_.kind_case()) {
+    case kPrimitive: {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_primitive(), target);
+      break;
+    }
+    case kArray: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          2, *this_._impl_.kind_.array_, this_._impl_.kind_.array_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kObject: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          3, *this_._impl_.kind_.object_, this_._impl_.kind_.object_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kLiteral: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          4, *this_._impl_.kind_.literal_, this_._impl_.kind_.literal_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kUnion: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          5, *this_._impl_.kind_.union__, this_._impl_.kind_.union__->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kOptional: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          6, *this_._impl_.kind_.optional_, this_._impl_.kind_.optional_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kId: {
+      const ::std::string& _s = this_._internal_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "loams.live.v1.Validator.id");
+      target = stream->WriteStringMaybeAliased(7, _s, target);
+      break;
+    }
+    default:
+      break;
+  }
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:loams.live.v1.Validator)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t Validator::ByteSizeLong(const MessageLite& base) {
+  const Validator& this_ = static_cast<const Validator&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t Validator::ByteSizeLong() const {
+  const Validator& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:loams.live.v1.Validator)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
+
+  switch (this_.kind_case()) {
+    // .loams.live.v1.ValidatorPrimitive primitive = 1 [json_name = "primitive"];
+    case kPrimitive: {
+      total_size += 1 +
+                    ::_pbi::WireFormatLite::EnumSize(this_._internal_primitive());
+      break;
+    }
+    // .loams.live.v1.Validator array = 2 [json_name = "array"];
+    case kArray: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.kind_.array_);
+      break;
+    }
+    // .loams.live.v1.ValidatorObject object = 3 [json_name = "object"];
+    case kObject: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.kind_.object_);
+      break;
+    }
+    // .loams.live.v1.Value literal = 4 [json_name = "literal"];
+    case kLiteral: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.kind_.literal_);
+      break;
+    }
+    // .loams.live.v1.ValidatorUnion union = 5 [json_name = "union"];
+    case kUnion: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.kind_.union__);
+      break;
+    }
+    // .loams.live.v1.Validator optional = 6 [json_name = "optional"];
+    case kOptional: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.kind_.optional_);
+      break;
+    }
+    // string id = 7 [json_name = "id"];
+    case kId: {
+      total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                      this_._internal_id());
+      break;
+    }
+    case KIND_NOT_SET: {
+      break;
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void Validator::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<Validator*>(&to_msg);
+  auto& from = static_cast<const Validator&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:loams.live.v1.Validator)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  if (const uint32_t oneof_from_case =
+          from._impl_._oneof_case_[0]) {
+    const uint32_t oneof_to_case = _this->_impl_._oneof_case_[0];
+    const bool oneof_needs_init = oneof_to_case != oneof_from_case;
+    if (oneof_needs_init) {
+      if (oneof_to_case != 0) {
+        _this->clear_kind();
+      }
+      _this->_impl_._oneof_case_[0] = oneof_from_case;
+    }
+
+    switch (oneof_from_case) {
+      case kPrimitive: {
+        _this->_impl_.kind_.primitive_ = from._impl_.kind_.primitive_;
+        break;
+      }
+      case kArray: {
+        if (oneof_needs_init) {
+          _this->_impl_.kind_.array_ = Super_::CopyConstruct(arena, *from._impl_.kind_.array_);
+        } else {
+          _this->_impl_.kind_.array_->MergeFrom(*from._impl_.kind_.array_);
+        }
+        break;
+      }
+      case kObject: {
+        if (oneof_needs_init) {
+          _this->_impl_.kind_.object_ = Super_::CopyConstruct(arena, *from._impl_.kind_.object_);
+        } else {
+          _this->_impl_.kind_.object_->MergeFrom(*from._impl_.kind_.object_);
+        }
+        break;
+      }
+      case kLiteral: {
+        if (oneof_needs_init) {
+          _this->_impl_.kind_.literal_ = Super_::CopyConstruct(arena, *from._impl_.kind_.literal_);
+        } else {
+          _this->_impl_.kind_.literal_->MergeFrom(*from._impl_.kind_.literal_);
+        }
+        break;
+      }
+      case kUnion: {
+        if (oneof_needs_init) {
+          _this->_impl_.kind_.union__ = Super_::CopyConstruct(arena, *from._impl_.kind_.union__);
+        } else {
+          _this->_impl_.kind_.union__->MergeFrom(*from._impl_.kind_.union__);
+        }
+        break;
+      }
+      case kOptional: {
+        if (oneof_needs_init) {
+          _this->_impl_.kind_.optional_ = Super_::CopyConstruct(arena, *from._impl_.kind_.optional_);
+        } else {
+          _this->_impl_.kind_.optional_->MergeFrom(*from._impl_.kind_.optional_);
+        }
+        break;
+      }
+      case kId: {
+        if (oneof_needs_init) {
+          _this->_impl_.kind_.id_.InitDefault();
+        }
+        _this->_impl_.kind_.id_.Set(from._internal_id(), arena);
+        break;
+      }
+      case KIND_NOT_SET:
+        break;
+    }
+  }
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void Validator::CopyFrom(const Validator& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:loams.live.v1.Validator)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void Validator::InternalSwap(Validator* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_.kind_, other->_impl_.kind_);
+  swap(_impl_._oneof_case_[0], other->_impl_._oneof_case_[0]);
+}
+
+::google::protobuf::Metadata Validator::GetMetadata() const {
+  return Super_::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+ValidatorObject_FieldsEntry_DoNotUse::ValidatorObject_FieldsEntry_DoNotUse() : Super_(ValidatorObject_FieldsEntry_DoNotUse_get_class_data()) {}
+ValidatorObject_FieldsEntry_DoNotUse::ValidatorObject_FieldsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+    : Super_(arena, ValidatorObject_FieldsEntry_DoNotUse_get_class_data()) {}
+#else   // PROTOBUF_CUSTOM_VTABLE
+ValidatorObject_FieldsEntry_DoNotUse::ValidatorObject_FieldsEntry_DoNotUse() : Super_() {}
+ValidatorObject_FieldsEntry_DoNotUse::ValidatorObject_FieldsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena) : Super_(arena) {}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ValidatorObject_FieldsEntry_DoNotUse_class_data_ =
+        ValidatorObject_FieldsEntry_DoNotUse::InternalGenerateClassData_(ValidatorObject_FieldsEntry_DoNotUse_globals_._default);
+
+// including ~ all the vtables and everything they use become part
+// of the same ~ SCC.
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ValidatorObject_FieldsEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ValidatorObject_FieldsEntry_DoNotUse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ValidatorObject_FieldsEntry_DoNotUse_class_data_.tc_table);
+  return ValidatorObject_FieldsEntry_DoNotUse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ValidatorObject_FieldsEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ValidatorObject_FieldsEntry_DoNotUse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ValidatorObject_FieldsEntry_DoNotUse_globals_));
+  return ValidatorObject_FieldsEntry_DoNotUse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ValidatorObject_FieldsEntry_DoNotUse::ParseTableT_
+    ValidatorObject_FieldsEntry_DoNotUse::_table_ =
+        ValidatorObject_FieldsEntry_DoNotUse::InternalGenerateParseTable_(ValidatorObject_FieldsEntry_DoNotUse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+// ===================================================================
+
+ValidatorObject::ValidatorObject(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : Super_(arena, ValidatorObject_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : Super_(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:loams.live.v1.ValidatorObject)
+}
+PROTOBUF_NDEBUG_INLINE ValidatorObject::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::loams::live::v1::ValidatorObject& from_msg)
+      : _has_bits_{from._has_bits_},
+        fields_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::loams::live::v1::ValidatorObject,
+              PROTOBUF_FIELD_OFFSET(::loams::live::v1::ValidatorObject, _impl_.fields_)>()
+          , arena, from.fields_
+        }
+     {}
+
+ValidatorObject::ValidatorObject(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ValidatorObject& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : Super_(arena, ValidatorObject_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : Super_(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ValidatorObject* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:loams.live.v1.ValidatorObject)
+}
+PROTOBUF_NDEBUG_INLINE ValidatorObject::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : fields_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::loams::live::v1::ValidatorObject,
+            PROTOBUF_FIELD_OFFSET(::loams::live::v1::ValidatorObject, _impl_.fields_)>()
+         }
+     {}
+
+inline void ValidatorObject::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+ValidatorObject::~ValidatorObject() {
+  // @@protoc_insertion_point(destructor:loams.live.v1.ValidatorObject)
+  SharedDtor(*this);
+}
+inline void ValidatorObject::SharedDtor(MessageLite& self) {
+  ValidatorObject& this_ = static_cast<ValidatorObject&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ValidatorObject_class_data_ =
+        ValidatorObject::InternalGenerateClassData_(ValidatorObject_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ValidatorObject::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ValidatorObject_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ValidatorObject_class_data_.tc_table);
+  return ValidatorObject_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ValidatorObject::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ValidatorObject_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ValidatorObject_globals_));
+  return ValidatorObject_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ValidatorObject::ParseTableT_
+    ValidatorObject::_table_ =
+        ValidatorObject::InternalGenerateParseTable_(ValidatorObject_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ValidatorObject::Clear() {
+  auto& this_ [[maybe_unused]] = *this;
+  // @@protoc_insertion_point(message_clear_start:loams.live.v1.ValidatorObject)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.fields_.Clear();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ValidatorObject::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ValidatorObject& this_ = static_cast<const ValidatorObject&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ValidatorObject::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ValidatorObject& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:loams.live.v1.ValidatorObject)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // map<string, .loams.live.v1.Validator> fields = 1 [json_name = "fields"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_fields().empty()) {
+      using MapType = ::google::protobuf::Map<::std::string, ::loams::live::v1::Validator>;
+      using WireHelper = _pbi::MapEntryFuncs<::std::string, ::loams::live::v1::Validator,
+                                     _pbi::WireFormatLite::TYPE_STRING,
+                                     _pbi::WireFormatLite::TYPE_MESSAGE>;
+      const auto& field = this_._internal_fields();
+
+      if (stream->IsSerializationDeterministic() && field.size() > 1) {
+        for (const auto& entry : ::google::protobuf::internal::MapSorterPtr<MapType>(field)) {
+          target = WireHelper::InternalSerialize(
+              1, entry.first, entry.second, target, stream);
+          ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+              entry.first.data(), static_cast<int>(entry.first.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "loams.live.v1.ValidatorObject.fields");
+        }
+      } else {
+        for (const auto& entry : field) {
+          target = WireHelper::InternalSerialize(
+              1, entry.first, entry.second, target, stream);
+          ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+              entry.first.data(), static_cast<int>(entry.first.length()),
+ ::google::protobuf::internal::WireFormatLite::SERIALIZE, "loams.live.v1.ValidatorObject.fields");
+        }
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:loams.live.v1.ValidatorObject)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ValidatorObject::ByteSizeLong(const MessageLite& base) {
+  const ValidatorObject& this_ = static_cast<const ValidatorObject&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ValidatorObject::ByteSizeLong() const {
+  const ValidatorObject& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:loams.live.v1.ValidatorObject)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+   {
+    // map<string, .loams.live.v1.Validator> fields = 1 [json_name = "fields"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          1 * ::google::protobuf::internal::FromIntSize(this_._internal_fields_size());
+      for (const auto& entry : this_._internal_fields()) {
+        total_size += _pbi::MapEntryFuncs<::std::string, ::loams::live::v1::Validator,
+                                       _pbi::WireFormatLite::TYPE_STRING,
+                                       _pbi::WireFormatLite::TYPE_MESSAGE>::ByteSizeLong(entry.first, entry.second);
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ValidatorObject::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ValidatorObject*>(&to_msg);
+  auto& from = static_cast<const ValidatorObject&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:loams.live.v1.ValidatorObject)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _this->_impl_.fields_.MergeFrom(from._impl_.fields_);
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ValidatorObject::CopyFrom(const ValidatorObject& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:loams.live.v1.ValidatorObject)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ValidatorObject::InternalSwap(ValidatorObject* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.fields_.InternalSwap(&other->_impl_.fields_);
+}
+
+::google::protobuf::Metadata ValidatorObject::GetMetadata() const {
+  return Super_::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+ValidatorUnion::ValidatorUnion(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : Super_(arena, ValidatorUnion_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : Super_(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:loams.live.v1.ValidatorUnion)
+}
+PROTOBUF_NDEBUG_INLINE ValidatorUnion::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::loams::live::v1::ValidatorUnion& from_msg)
+      : _has_bits_{from._has_bits_},
+        members_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::loams::live::v1::ValidatorUnion,
+              PROTOBUF_FIELD_OFFSET(::loams::live::v1::ValidatorUnion, _impl_.members_)>()
+          , arena, from.members_
+        }
+     {}
+
+ValidatorUnion::ValidatorUnion(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const ValidatorUnion& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : Super_(arena, ValidatorUnion_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : Super_(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  ValidatorUnion* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:loams.live.v1.ValidatorUnion)
+}
+PROTOBUF_NDEBUG_INLINE ValidatorUnion::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : members_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::loams::live::v1::ValidatorUnion,
+            PROTOBUF_FIELD_OFFSET(::loams::live::v1::ValidatorUnion, _impl_.members_)>()
+         }
+     {}
+
+inline void ValidatorUnion::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+ValidatorUnion::~ValidatorUnion() {
+  // @@protoc_insertion_point(destructor:loams.live.v1.ValidatorUnion)
+  SharedDtor(*this);
+}
+inline void ValidatorUnion::SharedDtor(MessageLite& self) {
+  ValidatorUnion& this_ = static_cast<ValidatorUnion&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull ValidatorUnion_class_data_ =
+        ValidatorUnion::InternalGenerateClassData_(ValidatorUnion_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ValidatorUnion::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ValidatorUnion_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(ValidatorUnion_class_data_.tc_table);
+  return ValidatorUnion_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+ValidatorUnion::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&ValidatorUnion_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&ValidatorUnion_globals_));
+  return ValidatorUnion_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ValidatorUnion::ParseTableT_
+    ValidatorUnion::_table_ =
+        ValidatorUnion::InternalGenerateParseTable_(ValidatorUnion_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void ValidatorUnion::Clear() {
+  auto& this_ [[maybe_unused]] = *this;
+  // @@protoc_insertion_point(message_clear_start:loams.live.v1.ValidatorUnion)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.members_.Clear();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL ValidatorUnion::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const ValidatorUnion& this_ = static_cast<const ValidatorUnion&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL ValidatorUnion::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const ValidatorUnion& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:loams.live.v1.ValidatorUnion)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // repeated .loams.live.v1.Validator members = 1 [json_name = "members"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_members_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_members().Get(i);
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          1, repfield, repfield.GetCachedSize(), target,
+          stream);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:loams.live.v1.ValidatorUnion)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t ValidatorUnion::ByteSizeLong(const MessageLite& base) {
+  const ValidatorUnion& this_ = static_cast<const ValidatorUnion&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t ValidatorUnion::ByteSizeLong() const {
+  const ValidatorUnion& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:loams.live.v1.ValidatorUnion)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+   {
+    // repeated .loams.live.v1.Validator members = 1 [json_name = "members"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1UL * this_._internal_members_size();
+      for (const auto& msg : this_._internal_members()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void ValidatorUnion::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<ValidatorUnion*>(&to_msg);
+  auto& from = static_cast<const ValidatorUnion&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:loams.live.v1.ValidatorUnion)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _this->_internal_mutable_members()->InternalMergeFromWithArena(
+        ::google::protobuf::MessageLite::internal_visibility(), arena,
+        from._internal_members());
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void ValidatorUnion::CopyFrom(const ValidatorUnion& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:loams.live.v1.ValidatorUnion)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void ValidatorUnion::InternalSwap(ValidatorUnion* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.members_.InternalSwap(&other->_impl_.members_);
+}
+
+::google::protobuf::Metadata ValidatorUnion::GetMetadata() const {
   return Super_::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

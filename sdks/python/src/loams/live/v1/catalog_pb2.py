@@ -25,21 +25,31 @@ _sym_db = _symbol_database.Default()
 from loams.live.v1 import live_pb2 as loams_dot_live_dot_v1_dot_live__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1bloams/live/v1/catalog.proto\x12\rloams.live.v1\x1a\x18loams/live/v1/live.proto\"\x9d\x01\n\x08TableDef\x12\x16\n\x06\x66ormat\x18\x01 \x01(\rR\x06\x66ormat\x12\x0e\n\x02id\x18\x02 \x01(\rR\x02id\x12\x12\n\x04name\x18\x03 \x01(\tR\x04name\x12\x31\n\x07indexes\x18\x04 \x03(\x0b\x32\x17.loams.live.v1.IndexDefR\x07indexes\x12\"\n\rnext_index_id\x18\x05 \x01(\rR\x0bnextIndexId\"F\n\x08IndexDef\x12\x0e\n\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n\x06\x66ields\x18\x03 \x03(\tR\x06\x66ields\"G\n\x06\x41ppDef\x12\x16\n\x06\x66ormat\x18\x01 \x01(\rR\x06\x66ormat\x12%\n\x0ejournal_shards\x18\x02 \x01(\rR\rjournalShards\"\xe0\x02\n\x10\x44\x65ploymentRecord\x12\x16\n\x06\x66ormat\x18\x01 \x01(\rR\x06\x66ormat\x12\x0e\n\x02id\x18\x02 \x01(\x0cR\x02id\x12#\n\rbundle_sha256\x18\x03 \x01(\x0cR\x0c\x62undleSha256\x12-\n\x06schema\x18\x04 \x01(\x0b\x32\x15.loams.live.v1.SchemaR\x06schema\x12\"\n\rcreated_at_ms\x18\x05 \x01(\x04R\x0b\x63reatedAtMs\x12\x1d\n\ncreated_by\x18\x06 \x01(\tR\tcreatedBy\x12\x18\n\x07message\x18\x07 \x01(\tR\x07message\x12\x16\n\x06parent\x18\x08 \x01(\x0cR\x06parent\x12\x34\n\x05state\x18\t \x01(\x0e\x32\x1e.loams.live.v1.DeploymentStateR\x05state\x12%\n\x0e\x66\x61ilure_reason\x18\n \x01(\tR\rfailureReason*\x8e\x02\n\x0f\x44\x65ploymentState\x12 \n\x1c\x44\x45PLOYMENT_STATE_UNSPECIFIED\x10\x00\x12\x1c\n\x18\x44\x45PLOYMENT_STATE_PENDING\x10\x01\x12\x1f\n\x1b\x44\x45PLOYMENT_STATE_VALIDATING\x10\x02\x12 \n\x1c\x44\x45PLOYMENT_STATE_BACKFILLING\x10\x03\x12\x1b\n\x17\x44\x45PLOYMENT_STATE_ACTIVE\x10\x04\x12\x1f\n\x1b\x44\x45PLOYMENT_STATE_SUPERSEDED\x10\x05\x12\x1b\n\x17\x44\x45PLOYMENT_STATE_FAILED\x10\x06\x12\x1d\n\x19\x44\x45PLOYMENT_STATE_DEGRADED\x10\x07\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1bloams/live/v1/catalog.proto\x12\rloams.live.v1\x1a\x18loams/live/v1/live.proto\"\x96\x02\n\x08TableDef\x12\x16\n\x06\x66ormat\x18\x01 \x01(\rR\x06\x66ormat\x12\x0e\n\x02id\x18\x02 \x01(\rR\x02id\x12\x12\n\x04name\x18\x03 \x01(\tR\x04name\x12\x31\n\x07indexes\x18\x04 \x03(\x0b\x32\x17.loams.live.v1.IndexDefR\x07indexes\x12\"\n\rnext_index_id\x18\x05 \x01(\rR\x0bnextIndexId\x12\x36\n\tvalidator\x18\x06 \x01(\x0b\x32\x18.loams.live.v1.ValidatorR\tvalidator\x12?\n\tenforcing\x18\x07 \x01(\x0b\x32!.loams.live.v1.EnforcingValidatorR\tenforcing\"l\n\x12\x45nforcingValidator\x12\x36\n\tvalidator\x18\x01 \x01(\x0b\x32\x18.loams.live.v1.ValidatorR\tvalidator\x12\x1e\n\ndeployment\x18\x02 \x01(\x0cR\ndeployment\"\xd9\x02\n\x0eTableJobRecord\x12\x16\n\x06\x66ormat\x18\x01 \x01(\rR\x06\x66ormat\x12/\n\x04kind\x18\x02 \x01(\x0e\x32\x1b.loams.live.v1.TableJobKindR\x04kind\x12\x19\n\x08table_id\x18\x03 \x01(\rR\x07tableId\x12\x1e\n\ndeployment\x18\x04 \x01(\x0cR\ndeployment\x12\x14\n\x05owner\x18\x05 \x01(\tR\x05owner\x12(\n\x10lease_expires_ms\x18\x06 \x01(\x04R\x0eleaseExpiresMs\x12\x1e\n\ncheckpoint\x18\x07 \x01(\x0cR\ncheckpoint\x12\x18\n\x07scanned\x18\x08 \x01(\x04R\x07scanned\x12\x12\n\x04\x64one\x18\t \x01(\x08R\x04\x64one\x12\x35\n\x08\x66indings\x18\n \x03(\x0b\x32\x19.loams.live.v1.JobFindingR\x08\x66indings\";\n\nJobFinding\x12\x15\n\x06\x64oc_id\x18\x01 \x01(\x0cR\x05\x64ocId\x12\x16\n\x06\x64\x65tail\x18\x02 \x01(\tR\x06\x64\x65tail\"\x97\x01\n\x08IndexDef\x12\x0e\n\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n\x06\x66ields\x18\x03 \x03(\tR\x06\x66ields\x12/\n\x05state\x18\x04 \x01(\x0e\x32\x19.loams.live.v1.IndexStateR\x05state\x12\x1e\n\ndeployment\x18\x05 \x01(\x0cR\ndeployment\"G\n\x06\x41ppDef\x12\x16\n\x06\x66ormat\x18\x01 \x01(\rR\x06\x66ormat\x12%\n\x0ejournal_shards\x18\x02 \x01(\rR\rjournalShards\"\xe0\x02\n\x10\x44\x65ploymentRecord\x12\x16\n\x06\x66ormat\x18\x01 \x01(\rR\x06\x66ormat\x12\x0e\n\x02id\x18\x02 \x01(\x0cR\x02id\x12#\n\rbundle_sha256\x18\x03 \x01(\x0cR\x0c\x62undleSha256\x12-\n\x06schema\x18\x04 \x01(\x0b\x32\x15.loams.live.v1.SchemaR\x06schema\x12\"\n\rcreated_at_ms\x18\x05 \x01(\x04R\x0b\x63reatedAtMs\x12\x1d\n\ncreated_by\x18\x06 \x01(\tR\tcreatedBy\x12\x18\n\x07message\x18\x07 \x01(\tR\x07message\x12\x16\n\x06parent\x18\x08 \x01(\x0cR\x06parent\x12\x34\n\x05state\x18\t \x01(\x0e\x32\x1e.loams.live.v1.DeploymentStateR\x05state\x12%\n\x0e\x66\x61ilure_reason\x18\n \x01(\tR\rfailureReason*h\n\x0cTableJobKind\x12\x1e\n\x1aTABLE_JOB_KIND_UNSPECIFIED\x10\x00\x12\x1b\n\x17TABLE_JOB_KIND_VALIDATE\x10\x01\x12\x1b\n\x17TABLE_JOB_KIND_BACKFILL\x10\x02*w\n\nIndexState\x12\x1b\n\x17INDEX_STATE_UNSPECIFIED\x10\x00\x12\x1b\n\x17INDEX_STATE_BACKFILLING\x10\x01\x12\x15\n\x11INDEX_STATE_READY\x10\x02\x12\x18\n\x14INDEX_STATE_DROPPING\x10\x03*\x8e\x02\n\x0f\x44\x65ploymentState\x12 \n\x1c\x44\x45PLOYMENT_STATE_UNSPECIFIED\x10\x00\x12\x1c\n\x18\x44\x45PLOYMENT_STATE_PENDING\x10\x01\x12\x1f\n\x1b\x44\x45PLOYMENT_STATE_VALIDATING\x10\x02\x12 \n\x1c\x44\x45PLOYMENT_STATE_BACKFILLING\x10\x03\x12\x1b\n\x17\x44\x45PLOYMENT_STATE_ACTIVE\x10\x04\x12\x1f\n\x1b\x44\x45PLOYMENT_STATE_SUPERSEDED\x10\x05\x12\x1b\n\x17\x44\x45PLOYMENT_STATE_FAILED\x10\x06\x12\x1d\n\x19\x44\x45PLOYMENT_STATE_DEGRADED\x10\x07\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'loams.live.v1.catalog_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_DEPLOYMENTSTATE']._serialized_start=733
-  _globals['_DEPLOYMENTSTATE']._serialized_end=1003
+  _globals['_TABLEJOBKIND']._serialized_start=1454
+  _globals['_TABLEJOBKIND']._serialized_end=1558
+  _globals['_INDEXSTATE']._serialized_start=1560
+  _globals['_INDEXSTATE']._serialized_end=1679
+  _globals['_DEPLOYMENTSTATE']._serialized_start=1682
+  _globals['_DEPLOYMENTSTATE']._serialized_end=1952
   _globals['_TABLEDEF']._serialized_start=73
-  _globals['_TABLEDEF']._serialized_end=230
-  _globals['_INDEXDEF']._serialized_start=232
-  _globals['_INDEXDEF']._serialized_end=302
-  _globals['_APPDEF']._serialized_start=304
-  _globals['_APPDEF']._serialized_end=375
-  _globals['_DEPLOYMENTRECORD']._serialized_start=378
-  _globals['_DEPLOYMENTRECORD']._serialized_end=730
+  _globals['_TABLEDEF']._serialized_end=351
+  _globals['_ENFORCINGVALIDATOR']._serialized_start=353
+  _globals['_ENFORCINGVALIDATOR']._serialized_end=461
+  _globals['_TABLEJOBRECORD']._serialized_start=464
+  _globals['_TABLEJOBRECORD']._serialized_end=809
+  _globals['_JOBFINDING']._serialized_start=811
+  _globals['_JOBFINDING']._serialized_end=870
+  _globals['_INDEXDEF']._serialized_start=873
+  _globals['_INDEXDEF']._serialized_end=1024
+  _globals['_APPDEF']._serialized_start=1026
+  _globals['_APPDEF']._serialized_end=1097
+  _globals['_DEPLOYMENTRECORD']._serialized_start=1100
+  _globals['_DEPLOYMENTRECORD']._serialized_end=1452
 # @@protoc_insertion_point(module_scope)
