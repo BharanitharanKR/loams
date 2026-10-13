@@ -1,5 +1,5 @@
-//! The native Iceberg raw-topic sink (OR-8) waits on the owner's R0.15
-//! decision (R17.1): it refuses to start, naming the ruling.
+//! The native Iceberg raw-topic sink (OR-8) waits for an iceberg-rust release
+//! on arrow 59 (owner, R17.1): it refuses to start, naming the ruling.
 
 use std::sync::Arc;
 
@@ -28,10 +28,10 @@ fn iceberg_sink_refuses_to_start_naming_r0_15() {
     assert!(IcebergSink.source(&ctx()).expect("no source").is_none());
 }
 
-/// The plan's test. It needs the sink, which waits on the owner's R0.15
-/// decision (R17.1); its body is written when the decision lands.
+/// The plan's test. It needs the sink, which waits for an iceberg-rust release
+/// on arrow 59 (owner, R17.1); its body is written when that release is used.
 #[test]
-#[ignore = "CN2 R17.1: the Iceberg sink waits on the owner's R0.15 decision"]
+#[ignore = "CN2 R17.1: owner chose (a), wait for an iceberg-rust release on arrow 59"]
 fn iceberg_sink_snapshot_checkpoint_exactly_once() {
     assert!(IcebergSink.sink(&ctx()).is_ok());
 }
