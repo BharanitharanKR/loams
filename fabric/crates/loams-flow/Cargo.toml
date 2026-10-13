@@ -12,6 +12,12 @@ authors.workspace = true
 # D352; D359's gate input), and a crate archive would not carry them.
 publish = false
 
+[features]
+# R-CN2-4 (CN2 plan Task 1): Camel directions are checked against the vendored
+# Camel catalog snapshot, which is CN2 Task 22's. Off by default, where the rule
+# is a no-op; on before Task 22 lands, it refuses every Camel direction.
+camel-catalog = []
+
 [dependencies]
 indexmap.workspace = true
 jsonschema.workspace = true

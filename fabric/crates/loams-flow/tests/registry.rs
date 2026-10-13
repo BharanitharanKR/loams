@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use buffa::{EnumValue, Message};
 use loams_flow::manifest::{Category, ConnectorSpec, Priority, RuntimeKind, Status, pb};
 use loams_flow::registry::{Filter, Registry};
-use loams_flow::validate::LicenceGate;
+use loams_flow::validate::{Direction, LicenceGate};
 use serde_json::Value;
 
 fn repo_root() -> PathBuf {
@@ -884,7 +884,13 @@ fn proto_and_yaml_agree() {
     let starred = registry.starred();
     assert_eq!(starred.len(), 21, "§33 §8 counts 21 ★ (D358)");
 
-    for &spec in &starred {
+    // CN2 Task 1 extends the test to the new fields. No registry manifest carries
+    // them until CN2 Task 2, so one case is built that sets every one of them.
+    let cn2 = cn2_fields_manifest();
+    let mut cases: Vec<&ConnectorSpec> = starred.clone();
+    cases.push(&cn2);
+
+    for &spec in &cases {
         let id = spec.id.as_str();
 
         // --- YAML → protobuf, with every enum slug translated to its proto name. ---
@@ -1074,6 +1080,50 @@ fn proto_and_yaml_agree() {
             back.docs, spec.docs,
             "{id}: docs (an absent page is the wire's empty string)"
         );
+        // CN2 Task 1's fields, each named so a failure says which one drifted.
+        assert_eq!(
+            back.runtime.source, spec.runtime.source,
+            "{id}: runtime.source"
+        );
+        assert_eq!(back.runtime.sink, spec.runtime.sink, "{id}: runtime.sink");
+        assert_eq!(
+            back.runtime.profile, spec.runtime.profile,
+            "{id}: runtime.profile (an absent profile is the wire's empty string)"
+        );
+        assert_eq!(
+            back.runtime.fallback, spec.runtime.fallback,
+            "{id}: runtime.fallback (kind, ref, directions, replaced_by)"
+        );
+        assert_eq!(
+            back.capabilities.sink.as_ref().map(|sink| sink.reply),
+            spec.capabilities.sink.as_ref().map(|sink| sink.reply),
+            "{id}: capabilities.sink.reply"
+        );
+        assert_eq!(
+            back.envelope.stable_ids, spec.envelope.stable_ids,
+            "{id}: envelope.stable_ids"
+        );
+        assert_eq!(back.notes, spec.notes, "{id}: notes");
+        if let Some(fallback) = &spec.runtime.fallback {
+            assert_eq!(
+                json["runtime"]["fallback"]["kind"],
+                proto_enum_name(fallback.kind.slug(), "RUNTIME_KIND")
+            );
+            for (index, direction) in fallback.directions.iter().enumerate() {
+                // `Direction` is `instance.proto`'s enum, whose values carry no prefix.
+                assert_eq!(
+                    json["runtime"]["fallback"]["directions"][index],
+                    direction.to_string().to_uppercase(),
+                    "{id}: runtime.fallback.directions[{index}]"
+                );
+            }
+        }
+        if let Some(source) = &spec.runtime.source {
+            assert_eq!(
+                json["runtime"]["source"]["kind"],
+                proto_enum_name(source.kind.slug(), "RUNTIME_KIND")
+            );
+        }
         assert_eq!(back, *spec, "{id}: the whole manifest, as one value");
 
         // And the document form round-trips too: `to_yaml` writes `apiVersion` and
@@ -1086,20 +1136,213 @@ fn proto_and_yaml_agree() {
             yaml.contains("apiVersion: loams.flow/v1") && yaml.contains("kind: Connector"),
             "{id}: the rendered manifest must carry the two const keys"
         );
-        let reloaded = loams_flow::manifest::load_manifest_value(
-            &format!("{id}.yaml"),
-            &serde_norway::from_str::<Value>(&yaml)
-                .unwrap_or_else(|error| panic!("{id}: the rendered YAML must parse: {error}")),
-            &connectors_root(),
-            &loams_flow::validate::ManifestSchema::embedded()
-                .expect("the manifest schema compiles"),
-        )
+        let rendered = serde_norway::from_str::<Value>(&yaml)
+            .unwrap_or_else(|error| panic!("{id}: the rendered YAML must parse: {error}"));
+        let schema =
+            loams_flow::validate::ManifestSchema::embedded().expect("the manifest schema compiles");
+        let reloaded = if id == CN2_FIELDS_ID {
+            // The CN2 case names a profile no file under `connectors/profiles/` holds
+            // until CN2 Task 7, and has no config file of its own, so it is checked by
+            // the schema and the rules rather than by the loader.
+            loams_flow::validate::validate_manifest(&rendered, schema.validator())
+        } else {
+            loams_flow::manifest::load_manifest_value(
+                &format!("{id}.yaml"),
+                &rendered,
+                &connectors_root(),
+                &schema,
+            )
+        }
         .unwrap_or_else(|errors| panic!("{id}: the rendered manifest must load: {errors:?}"));
         assert_eq!(
             reloaded, *spec,
             "{id}: YAML → proto → YAML must be the same manifest"
         );
     }
+}
+
+/// The id of [`cn2_fields_manifest`].
+const CN2_FIELDS_ID: &str = "cn2-fields";
+
+/// `kafka.yaml` with every field CN2 Task 1 adds set to a value other than its
+/// default: both direction overrides, a profile, a fallback, `sink.reply`,
+/// `envelope.stable_ids`, `notes`, `effectively_once` and the four new suites. Built
+/// through the schema and the rules (with no config schema, so R-CN2-3's
+/// `reply_topic` half and CN1's secret rule do not apply), so it is a legal manifest.
+fn cn2_fields_manifest() -> ConnectorSpec {
+    let text = std::fs::read_to_string(registry_dir().join("kafka.yaml")).unwrap();
+    let mut value: Value = serde_norway::from_str(&text).unwrap();
+    value["id"] = Value::String(CN2_FIELDS_ID.to_string());
+    value["runtime"]["source"] = serde_json::json!({
+        "kind": "native",
+        "ref": "loams_connector_kafka::source::KafkaSource",
+    });
+    value["runtime"]["sink"] = serde_json::json!({
+        "kind": "native",
+        "ref": "loams_connector_kafka::sink::KafkaSink",
+    });
+    value["runtime"]["profile"] = Value::String("redpanda".to_string());
+    value["runtime"]["fallback"] = serde_json::json!({
+        "kind": "iggy",
+        "ref": "kafka_sink",
+        "directions": ["sink", "source"],
+        "replaced_by": "CN2 Task 9",
+    });
+    value["capabilities"]["sink"]["transactional"] = Value::Bool(true);
+    value["capabilities"]["sink"]["reply"] = Value::Bool(true);
+    value["capabilities"]["delivery"] = serde_json::json!({
+        "source": "effectively_once",
+        "sink": "exactly_once",
+    });
+    value["envelope"]["stable_ids"] = Value::Bool(true);
+    value["conformance"] = serde_json::json!([
+        "contract",
+        "roundtrip",
+        "schema-evolution",
+        "backpressure",
+        "exactly-once",
+        "auth",
+    ]);
+    value["notes"] = serde_json::json!([
+        "narrows: Event Hubs has no Kafka transactions",
+        "java-deferred: none",
+    ]);
+    let schema =
+        loams_flow::validate::ManifestSchema::embedded().expect("the manifest schema compiles");
+    loams_flow::validate::validate_manifest(&value, schema.validator())
+        .unwrap_or_else(|errors| panic!("the CN2 case must validate: {errors:?}"))
+}
+
+/// CN2 Task 1: the manifest additions are optional, so the registry as built — 204
+/// manifests, none of which carries them yet — still loads, and R-CN2-6 reports the
+/// non-native P1 and P2 rows as warnings rather than refusing them until CN2 Task 2
+/// assigns the runtimes.
+#[test]
+fn existing_204_manifests_still_validate() {
+    let registry = registry();
+    assert_eq!(registry.len(), CATALOG_ROWS);
+
+    let schema =
+        loams_flow::validate::ManifestSchema::embedded().expect("the manifest schema compiles");
+    for spec in registry.all() {
+        let id = spec.id.as_str();
+        // What the loader read renders as a manifest the schema and every rule,
+        // R-CN2-1 to R-CN2-8 included, accept again.
+        let value = spec
+            .to_json()
+            .unwrap_or_else(|error| panic!("{id}: renders: {error}"));
+        let again = loams_flow::validate::validate_manifest(&value, schema.validator())
+            .unwrap_or_else(|errors| panic!("{id}: must still validate: {errors:?}"));
+        assert_eq!(again.runtime, spec.runtime, "{id}: runtime survives");
+        // The defaults of the new fields hold on every manifest that omits them.
+        assert!(spec.runtime.fallback.is_none(), "{id}: no fallback yet");
+        assert!(
+            spec.capabilities
+                .sink
+                .as_ref()
+                .is_none_or(|sink| !sink.reply),
+            "{id}: reply defaults to false"
+        );
+    }
+
+    // R-CN2-6 is a warning until Task 2: the registry carries P1 rows whose declared
+    // directions run on Camel, Debezium or Iggy (jdbc, debezium-postgres,
+    // debezium-mysql, elasticsearch as built) and still loads, and every warning is
+    // about a runtime. The generated P2 stubs declare no direction yet, so the rule
+    // has nothing to read on them until Task 2 and the family tasks fill them in.
+    let warnings = registry.warnings();
+    let warned: BTreeSet<&str> = warnings.iter().map(|file| file.file.as_str()).collect();
+    for expected in [
+        "jdbc.yaml",
+        "debezium-postgres.yaml",
+        "debezium-mysql.yaml",
+        "elasticsearch.yaml",
+    ] {
+        assert!(
+            warned.contains(expected),
+            "{expected} runs a declared direction on a non-native runtime with no \
+             fallback-only note; R-CN2-6 must warn, got {warned:?}"
+        );
+    }
+    assert!(
+        !warnings.is_empty(),
+        "the registry as built has non-native P1 and P2 rows, which R-CN2-6 names"
+    );
+    for file in warnings {
+        for warning in &file.errors {
+            assert!(
+                warning.path.starts_with("runtime"),
+                "{}: only R-CN2-6 warns, got {warning}",
+                file.file
+            );
+        }
+    }
+    assert!(
+        warnings.iter().all(|file| {
+            let id = file.file.trim_end_matches(".yaml");
+            registry
+                .get(id)
+                .is_some_and(|spec| matches!(spec.priority, Priority::P1 | Priority::P2))
+        }),
+        "R-CN2-6 covers P1 and P2 only"
+    );
+
+    // The two filters CN2 Task 1 adds.
+    let native_sources = registry.list(&Filter {
+        runtime_for_direction: Some((Direction::Source, RuntimeKind::Native)),
+        ..Filter::default()
+    });
+    assert!(native_sources.iter().any(|spec| spec.id == "kafka"));
+    assert!(
+        native_sources
+            .iter()
+            .all(|spec| spec.capabilities.source.is_some()),
+        "a direction filter matches only manifests that declare the direction"
+    );
+    assert!(
+        registry
+            .list(&Filter {
+                runtime_for_direction: Some((Direction::Sink, RuntimeKind::Native)),
+                ..Filter::default()
+            })
+            .iter()
+            .all(|spec| spec.capabilities.sink.is_some())
+    );
+    assert_eq!(
+        registry
+            .list(&Filter {
+                has_fallback: Some(false),
+                ..Filter::default()
+            })
+            .len(),
+        CATALOG_ROWS,
+        "no manifest declares a fallback before CN2 Task 2"
+    );
+    assert!(
+        registry
+            .list(&Filter {
+                has_fallback: Some(true),
+                ..Filter::default()
+            })
+            .is_empty()
+    );
+    let cn2 = cn2_fields_manifest();
+    assert!(
+        Filter {
+            has_fallback: Some(true),
+            runtime_for_direction: Some((Direction::Sink, RuntimeKind::Native)),
+            ..Filter::default()
+        }
+        .matches(&cn2),
+        "the direction filter reads the default runtime, not the fallback"
+    );
+    assert!(
+        !Filter {
+            runtime_for_direction: Some((Direction::Sink, RuntimeKind::Iggy)),
+            ..Filter::default()
+        }
+        .matches(&cn2)
+    );
 }
 
 /// The proto name `connector.proto` gives a YAML slug: the slug upper-cased with its

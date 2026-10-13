@@ -38,6 +38,10 @@ syntax = "proto3";
 
 package loams.flow.v1;
 
+// `Direction` is CN1 Task 3's enum in `instance.proto`; the manifest's
+// fallback directions (CN2 Task 1) reuse it rather than declaring a second one.
+import "loams/flow/v1/instance.proto";
+
 // One connector's manifest: what it is, which runtime runs it (D354), what it
 // can do (D353) and what it is licensed under (D359).
 message ConnectorSpec {
@@ -52,8 +56,8 @@ message ConnectorSpec {
   // message: `semver` is a crate, not a wire type, and the loader parses it.
   string spec_version = 3;
   Category category = 4;
-  // P1 = the ★ set of CN1, P2 = CN2's stock Camel and Iggy connectors, P3 =
-  // CN3's long tail (§33 §8, D358).
+  // P1 = the ★ set of CN1, P2 = CN2's first-party native connectors with
+  // declared fallbacks (CN2 OR-1, OR-4), P3 = CN3's long tail (§33 §8, D358).
   Priority priority = 5;
   // True for the ★ connectors of §33 §8 (D358). CN1's semantic rules imply
   // `priority = P1` from `starred`.
@@ -93,6 +97,10 @@ message ConnectorSpec {
   repeated Suite conformance = 16;
   // `docs`: the guide page for this connector; empty when there is none.
   string docs = 17;
+  // `notes`: free-form notes (CN2 Task 1). Conventional prefixes are
+  // "narrows: …", "fallback-only: …" (which R-CN2-6 reads for one of CN2
+  // OR-4's reasons) and "java-deferred: …". Empty when the YAML omits it.
+  repeated string notes = 18;
 }
 
 // §33 §4's `category` comment: the kind of system the connector speaks to.
@@ -123,7 +131,7 @@ enum Category {
 enum Priority {
   PRIORITY_UNSPECIFIED = 0;
   PRIORITY_P1 = 1;            // `P1`: the 21 ★ connectors of CN1 (D358)
-  PRIORITY_P2 = 2;            // `P2`: CN2, through stock Camel components or Iggy plugins
+  PRIORITY_P2 = 2;            // `P2`: CN2, first-party native with declared fallbacks (CN2 OR-1)
   PRIORITY_P3 = 3;            // `P3`: CN3, the long tail through OpenAPI-generated connectors
 }
 
@@ -158,14 +166,18 @@ enum Ordering {
 }
 
 // The delivery guarantee one direction of a connector offers (§33 §4's
-// `capabilities.delivery`, D355). Every runtime is at-least-once underneath;
-// `EXACTLY_ONCE` is a claim only where the external system deduplicates
-// (§33 §2.2).
+// `capabilities.delivery`, D355). At-least-once is the floor;
+// `EFFECTIVELY_ONCE` is declared where the target dedupes by `ce_id` or a
+// natural key, or a source's ids are stable across re-reads, and
+// `EXACTLY_ONCE` only through a `TransactionalSink` (CN2 OR-7, R-CN2-7).
+// `effectively_once` is appended after `exactly_once` so the numbering keeps
+// the YAML declaration order and no existing value moves.
 enum Delivery {
   DELIVERY_UNSPECIFIED = 0;
   DELIVERY_AT_MOST_ONCE = 1;      // `at_most_once`
   DELIVERY_AT_LEAST_ONCE = 2;     // `at_least_once`
   DELIVERY_EXACTLY_ONCE = 3;      // `exactly_once`
+  DELIVERY_EFFECTIVELY_ONCE = 4;  // `effectively_once` (CN2 OR-7)
 }
 
 // The wire and payload formats a connector emits or consumes (§33 §4's
@@ -247,6 +259,10 @@ enum Suite {
   SUITE_DUP_CHECK = 4;        // `dup-check`: duplicates bounded by the declared delivery
   SUITE_BULK = 5;             // `bulk`: the Arrow path at 1 M rows
   SUITE_CDC = 6;              // `cdc`: inserts, updates, deletes, DDL, slot or binlog resume
+  SUITE_SCHEMA_EVOLUTION = 7; // `schema-evolution`: additive changes evolve, incompatible ones pause (CN2 Task 6)
+  SUITE_BACKPRESSURE = 8;     // `backpressure`: a slow sink pauses the source within its budget (CN2 Task 6)
+  SUITE_EXACTLY_ONCE = 9;     // `exactly-once`: a crash at every fault point of the two-phase write (CN2 Task 6)
+  SUITE_AUTH = 10;            // `auth`: every declared auth method against the real system (CN2 Task 6)
 }
 
 // §33 §4's `runtime`: which runtime runs the connector and what it points at.
@@ -263,6 +279,43 @@ message RuntimeRef {
   // spans crates and native builds, for example
   // "rdkafka 0.39 / librdkafka 2.x".
   string version = 3;
+  // `runtime.source`: overrides `kind` and `ref` for the source direction
+  // (CN2 OR-10). Absent when the source runs on the default; only on a
+  // manifest that declares a source (R-CN2-1).
+  RuntimeOverride source = 4;
+  // `runtime.sink`: the same for the sink direction.
+  RuntimeOverride sink = 5;
+  // `runtime.profile`: a target or HTTP-API profile id under
+  // `connectors/profiles/` (CN2 OR-2, OR-11); empty when there is none. Only
+  // when every declared direction runs native by default (R-CN2-2).
+  string profile = 6;
+  // `runtime.fallback`: the declared, temporary fallback (CN2 OR-4). Never the
+  // default; an instance opts in with `runtime: fallback`.
+  FallbackSpec fallback = 7;
+}
+
+// One direction's runtime (`runtime.source`, `runtime.sink`; CN2 OR-10),
+// overriding `RuntimeRef.kind` and `RuntimeRef.ref` for that direction.
+message RuntimeOverride {
+  RuntimeKind kind = 1;
+  // What `kind` points at, with `RuntimeRef.ref`'s per-kind meaning.
+  string ref = 2;
+}
+
+// `runtime.fallback` (CN2 OR-4): a Camel, Debezium or Iggy runtime an instance
+// may opt into, in declared directions, until the task named in
+// `replaced_by` replaces it (R-CN2-8).
+message FallbackSpec {
+  // `camel`, `debezium` or `iggy` (R-CN2-8).
+  RuntimeKind kind = 1;
+  // What `kind` points at, with `RuntimeRef.ref`'s per-kind meaning.
+  string ref = 2;
+  // The directions the fallback serves, each declared under `capabilities`.
+  // `SOURCE` and `SINK` only: `BIDIRECTIONAL` has no YAML spelling.
+  repeated Direction directions = 3;
+  // The task that made this a fallback, for example "CN2 Task 10", or
+  // "CN2 Task 23" for the replacement queue. Never empty.
+  string replaced_by = 4;
 }
 
 // §33 §4's `licence`, as the D359 gate reads it: the runtime component's own
@@ -326,9 +379,13 @@ message SinkCaps {
   // `delete`: the sink applies deletes, which CDC routes need.
   bool delete = 5;
   // `idempotent`: the sink dedupes retries itself, for example Kafka's
-  // idempotent producer. `delivery.sink = exactly_once` requires this or
-  // `transactional` (CN1 Task 1's semantic rules).
+  // idempotent producer. With `upsert`, what lets `delivery.sink` be
+  // `effectively_once`; `exactly_once` needs `transactional` (CN2 OR-7,
+  // R-CN2-7).
   bool idempotent = 6;
+  // `reply`: the sink emits one reply event per input event to a declared
+  // reply topic (CN2 OR-19). False when the YAML omits it.
+  bool reply = 7;
 }
 
 // §33 §4's `capabilities.delivery`, one guarantee per direction.
@@ -367,6 +424,10 @@ message EnvelopeDecl {
   // declares it, and its contract test checks both the pass-through and the
   // wrapped case.
   bool passthrough = 3;
+  // `stable_ids`: the source's ids are stable across re-reads, so ingest's
+  // `(source, id)` dedup (D334) makes it effectively once (CN2 OR-7). False
+  // when the YAML omits it.
+  bool stable_ids = 4;
 }
 
 // §33 §4's `limits`. Absent bounds mean the runtime's defaults apply.
