@@ -1583,6 +1583,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "loams-connector-cloud"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "http",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "loams-connector-sdk",
+ "ring",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "loams-connector-http"
 version = "0.0.1"
 dependencies = [
