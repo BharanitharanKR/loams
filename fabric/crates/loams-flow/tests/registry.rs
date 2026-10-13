@@ -935,12 +935,14 @@ fn licence_gate_refuses_flagged() {
     // the 2026-10-04 reading missed; `crates/loams-graph/tests/licences.rs` now checks the
     // Grafeo stanzas against the lockfiles. CN2 Task 0 (R0.30) added a stanza for every
     // protocol crate and test image its spike found, 74 more, which CN2 Task 3's gate
-    // reclassifies; CN2 Task 2 recorded the new total here (CN2 ruling R2.8).
+    // reclassifies; CN2 Task 2 recorded the new total here (CN2 ruling R2.8). CN2 Task 17
+    // added two: `buoyant_kernel` (the Delta kernel deltalake links, R0.14) and `libduckdb`
+    // (MIT), the DuckDB target's driver, loaded from the runtime's allowlist (R17.7).
     assert_eq!(
         components.len(),
-        122,
-        "D359 records 42 components after CN1 Task 15, D634's six Grafeo crates and CN2 \
-         Task 0's 74 crates and images"
+        124,
+        "D359 records 42 components after CN1 Task 15, D634's six Grafeo crates, CN2 \
+         Task 0's 74 crates and images and CN2 Task 17's two"
     );
     gate.check_components(&text, "connectors/licences.toml")
         .unwrap_or_else(|error| panic!("no component may be refused: {error}"));
