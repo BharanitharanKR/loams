@@ -93,6 +93,12 @@ on:
       - "docs/design/46-loams-postgres-production.md"
       - ".github/workflows/pg2.yml"
 
+# A newer push to the same pull request or branch supersedes the older run
+# (the runner pool is shared by every workflow); main runs to completion.
+concurrency:
+  group: pg2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 permissions:
   contents: read
 

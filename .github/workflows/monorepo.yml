@@ -3,6 +3,7 @@ name: Monorepo CI
 # Do not event-filter paths: branch protection always receives the summary check.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main, dev]
   workflow_dispatch:
@@ -12,7 +13,8 @@ permissions:
 
 concurrency:
   group: monorepo-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
+  # A newer dev head supersedes an older one; main runs to completion.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CI: 'true'
@@ -292,7 +294,8 @@ jobs:
   mobile-ios:
     name: monorepo mobile iOS simulator tests (macOS)
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ios == 'true'
+    # macOS: a draft pull request waits until it is ready for review (or labelled ci:full).
+    if: github.event_name == 'workflow_dispatch' || (needs.changes.outputs.ios == 'true' && (github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full')))
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -353,6 +356,8 @@ jobs:
       - name: Require selected jobs to pass
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
+          # A draft without ci:full skips the macOS job on purpose.
+          DRAFT_LIGHT: ${{ github.event.pull_request.draft == true && !contains(github.event.pull_request.labels.*.name, 'ci:full') }}
         run: |
           python3 - <<'PY'
           import json
@@ -375,6 +380,8 @@ jobs:
                   result = job['result']
                   report.write(f'| {name} | {result} |\n')
                   selected = name == 'changes' or manual or filters.get(selections[name]) == 'true'
+                  if name == 'mobile-ios' and os.environ['DRAFT_LIGHT'] == 'true':
+                      selected = False
                   if result not in ('success', 'skipped') or (selected and result != 'success'):
                       failed.append(f'{name}: {result}')
           if failed:

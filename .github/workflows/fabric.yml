@@ -28,6 +28,7 @@ on:
   push:
     branches: [main, dev]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
   schedule:
     # Weekly: the two catalog drift scripts need the network (CN1 plan Task 2:
@@ -44,24 +45,28 @@ permissions:
 
 concurrency:
   group: fabric-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
+  # A newer dev head supersedes an older one; main runs to completion.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Which parts of the tree a pull request touches; the jobs below run on a pull
-  # request only when their filter matches, and on a push to main they all run
-  # (this job is skipped there). dorny/paths-filter is MIT-licensed; pinned to
+  # Which parts of the tree a pull request, or a push to dev (against the
+  # previous dev head), touches; the jobs below run there only when their filter
+  # matches, and on a push to main, a dispatch or the schedule they all run
+  # (this job is skipped there). A draft pull request skips the connector
+  # stacks until it is ready for review (or carries the `ci:full` label). dorny/paths-filter is MIT-licensed; pinned to
   # v4.0.3, as in ci.yml.
   changes:
     name: changed paths
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/dev')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       pull-requests: read
     outputs:
+      heavy: ${{ github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
       fabric: ${{ steps.filter.outputs.fabric }}
       drift: ${{ steps.filter.outputs.drift }}
       connect-routes: ${{ steps.filter.outputs.connect-routes }}
@@ -71,9 +76,14 @@ jobs:
       families: ${{ steps.families.outputs.list }}
       alerts: ${{ steps.filter.outputs.alerts }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'push'
+        with:
+          persist-credentials: false
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
+          base: ${{ github.event_name == 'push' && github.event.before || '' }}
           filters: |
             # Every Rust filter includes these.
             toolchain: &toolchain
@@ -81,7 +91,7 @@ jobs:
               - "Cargo.lock"
               - "rust-toolchain*"
               - ".cargo/**"
-              - ".github/workflows/**"
+              - ".github/workflows/fabric.yml"
             # The fabric/ workspace, the registry data and its drift scripts.
             # A new crate under fabric/crates/** is covered by fabric/**.
             fabric: &fabric
@@ -104,7 +114,7 @@ jobs:
             # `connect/` holds the generated Camel YAML routes for
             # `loams-connect` (design §33 §10, Q353). Declared for CN1 Task 12.
             connect-routes:
-              - ".github/workflows/**"
+              - ".github/workflows/fabric.yml"
               - "connect/**"
               - "fabric/crates/loams-flow/**"
               - "fabric/crates/loams-fabric/**"
@@ -178,7 +188,7 @@ jobs:
   connectors-unit:
     name: fabric workspace (fmt, clippy, tests, deny)
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.fabric == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.fabric == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -188,6 +198,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           workspaces: fabric -> target
       - name: rustfmt
         working-directory: fabric
@@ -234,7 +245,7 @@ jobs:
   sdk-unit:
     name: connector SDK (fmt, clippy, tests)
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -245,6 +256,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           workspaces: fabric -> target
           key: sdk-unit
       - name: rustfmt
@@ -264,7 +276,7 @@ jobs:
   conformance-kit:
     name: conformance kit (fmt, clippy, tests)
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.conformance == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.conformance == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -272,6 +284,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           workspaces: fabric -> target
           key: conformance-kit
       - name: rustfmt
@@ -294,12 +307,12 @@ jobs:
   connectors-p2:
     name: connectors-p2 (${{ matrix.family }})
     needs: changes
-    if: ${{ !cancelled() && github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.families != '[]') }}
+    if: ${{ !cancelled() && github.event_name != 'schedule' && (needs.changes.result == 'skipped' || needs.changes.outputs.families != '[]') && needs.changes.outputs.heavy != 'false' }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        family: ${{ fromJSON(github.event_name == 'pull_request' && needs.changes.outputs.families || '["http","kafka","postgres","mysql","sqlserver","objects","kv","search","mongodb","analytics","lakehouse","brokers","cloud","protocols"]') }}
+        family: ${{ fromJSON(needs.changes.result == 'success' && needs.changes.outputs.families || '["http","kafka","postgres","mysql","sqlserver","objects","kv","search","mongodb","analytics","lakehouse","brokers","cloud","protocols"]') }}
     env:
       FAMILY: ${{ matrix.family }}
       PROFILE: connectors-p2
@@ -328,6 +341,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.plan.outputs.run == 'true'
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           workspaces: fabric -> target
           key: connectors-${{ matrix.family }}
       - name: build the family crate's tests
@@ -366,12 +380,12 @@ jobs:
   connectors-ci-only:
     name: connectors-ci-only (${{ matrix.family }})
     needs: changes
-    if: ${{ !cancelled() && github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.families != '[]') }}
+    if: ${{ !cancelled() && github.event_name != 'schedule' && (needs.changes.result == 'skipped' || needs.changes.outputs.families != '[]') && needs.changes.outputs.heavy != 'false' }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        family: ${{ fromJSON(github.event_name == 'pull_request' && needs.changes.outputs.families || '["http","kafka","postgres","mysql","sqlserver","objects","kv","search","mongodb","analytics","lakehouse","brokers","cloud","protocols"]') }}
+        family: ${{ fromJSON(needs.changes.result == 'success' && needs.changes.outputs.families || '["http","kafka","postgres","mysql","sqlserver","objects","kv","search","mongodb","analytics","lakehouse","brokers","cloud","protocols"]') }}
     env:
       FAMILY: ${{ matrix.family }}
       PROFILE: connectors-ci-only
@@ -397,6 +411,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.plan.outputs.run == 'true'
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           workspaces: fabric -> target
           key: connectors-${{ matrix.family }}
       - name: build the family crate's tests
@@ -546,6 +561,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.plan.outputs.run == 'true'
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           workspaces: fabric -> target
           key: connectors-${{ matrix.family }}
       - name: up
@@ -580,7 +596,7 @@ jobs:
   connectors-alerts:
     name: connector alerts (promtool) and activity observer
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.alerts == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.alerts == 'true') }}
     runs-on: ubuntu-24.04
     env:
       PROMETHEUS_VERSION: "3.5.0"
@@ -609,6 +625,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           workspaces: fabric -> target
           key: connectors-alerts
       - name: metrics and activity tests
@@ -704,3 +721,30 @@ jobs:
       # connect/routes/**/*.yaml, and `rendered_routes_are_valid_yaml_dsl`.
       - name: not implemented yet (CN1 Task 12)
         run: echo "connect-routes is declared for CN1 Task 12 and is switched off"
+
+  # One check for branch protection: it passes when every job this event
+  # selected passed and the rest were skipped (as ci.yml's `CI required`).
+  # The nightly suites against real accounts and the weekly drift scripts are
+  # not in it: they run on the schedule, not on a pull request.
+  required:
+    name: Fabric required
+    if: always()
+    needs:
+      - changes
+      - connectors-unit
+      - sdk-unit
+      - conformance-kit
+      - connectors-p2
+      - connectors-ci-only
+      - connectors-alerts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all selected fabric jobs to pass
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          if jq -e '[.[] | .result] | any(. == "failure" or . == "cancelled")' <<< "$NEEDS_JSON"; then
+            echo "A fabric job failed or was cancelled" >&2
+            exit 1
+          fi
