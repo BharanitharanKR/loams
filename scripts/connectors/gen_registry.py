@@ -390,8 +390,13 @@ REFUSED_LICENCE_IDS = [
 # own source licence is the operator's concern, not a gate failure. That is the same carve-out
 # the `saas_public_api` note in licences.toml states, and CN1 Task 15's `itsplane` stanza is
 # its first consequence: ItsPlane's upstream is AGPL-3.0 and Loams neither ships nor links it.
-SHIPPED_LICENCE_KINDS = ("runtime", "driver", "library")
-LICENCE_KINDS = SHIPPED_LICENCE_KINDS + ("service",)
+#
+# CN2 Task 3 adds two kinds. `ci-service` is a proprietary or source-available image that runs
+# only in CI (OR-3); it may carry a refused id, the D60 precedent, so its verdict is the
+# carve-out. `user-supplied` is a driver the operator mounts (CN1 Ruling 8); it is never shipped
+# but is gated like a driver. Where each may be placed is scripts/connectors/image_licences.py's.
+SHIPPED_LICENCE_KINDS = ("runtime", "driver", "library", "user-supplied")
+LICENCE_KINDS = SHIPPED_LICENCE_KINDS + ("service", "ci-service")
 
 # The licence families D359 refuses by name, so a spelling the [deny] list does not spell out
 # exactly (`AGPL-3.0` where the list says `AGPL-3.0-only`) is still the same licence and gets
@@ -1329,6 +1334,13 @@ def licence_gate_verdict(key: str, stanza: dict, denied: set[str]) -> tuple[str,
             f"components.{key} carries refused licence {spdx!r} on a kind={kind!r} component, "
             "which Loams ships or loads (D359; the gate refuses it)",
         )
+    if kind == "ci-service":
+        return (
+            "carve-out",
+            f"components.{key} carries refused licence {spdx!r} on a kind=ci-service component: it "
+            "runs only in CI and is never shipped (OR-3, the D60 precedent); the id is recorded, "
+            "not refused",
+        )
     if kind == "service":
         return (
             "carve-out",
@@ -1376,6 +1388,18 @@ def licence_gate_test() -> int:
             "service-agpl",
             {"spdx": "AGPL-3.0", "kind": "service", "source": "https://example.invalid/itsplane"},
             "carve-out",
+        ),
+        (
+            # CN2 Task 3: a BSL image that runs only in CI (OR-3, D60).
+            "ci-service-busl",
+            {"spdx": "BUSL-1.1", "kind": "ci-service", "source": "https://example.invalid/redpanda"},
+            "carve-out",
+        ),
+        (
+            # CN2 Task 3: a user-supplied driver is gated like a driver.
+            "user-supplied-agpl",
+            {"spdx": "AGPL-3.0-only", "kind": "user-supplied", "source": "https://example.invalid/driver"},
+            "refused",
         ),
         (
             "service-mit",

@@ -120,6 +120,21 @@ jobs:
       - name: licenses, advisories, sources
         working-directory: fabric
         run: cargo deny check
+      # CN2 Task 3's licence gate (design §33 D359; OR-3): no ci-service or
+      # user-supplied component in an image Loams builds or the default compose
+      # profile, and no denied or missing licence among the crates compiled into a
+      # loams-connector-* family crate. Each runs its shared-fixture self-test first.
+      # PyYAML reads the compose files (MIT; pinned here, unpinned in ci.yml).
+      - name: PyYAML
+        run: python3 -m pip install --quiet --disable-pip-version-check PyYAML==6.0.2
+      - name: image licences (ci-service, user-supplied)
+        run: |
+          python3 scripts/connectors/image_licences.py --self-test
+          python3 scripts/connectors/image_licences.py
+      - name: family crate licences
+        run: |
+          python3 scripts/connectors/crate_licences.py --self-test
+          python3 scripts/connectors/crate_licences.py
 
   # CN1 Task 2's drift checks (design §33 CN-R1): the appendix is regenerated
   # from connectors/registry/catalog.csv and diffed against the design doc, and

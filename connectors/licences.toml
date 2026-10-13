@@ -12,6 +12,22 @@
 # mounted directory or an allowlist), library (a Rust crate compiled into loams-flow),
 # service (a service the test stack or a companion runs).
 #
+# CN2 plan Task 3 adds two kinds (OR-3; CN1 Ruling 8):
+#   ci-service    a proprietary or source-available image that runs only in CI. Fields: image
+#                 (a reference without tag or digest), digest (sha256:<64 hex>), spdx (an SPDX
+#                 id or LicenseRef-<vendor>-EULA), reason, and profiles (the compose profiles it
+#                 runs in, each named connectors-*; never the default profile and never the bare
+#                 `connectors` profile). It may carry a [deny] id, the D60 precedent, because it
+#                 is never shipped.
+#   user-supplied a driver the operator supplies and mounts (Oracle's ojdbc and Instant Client).
+#                 Fields: driver (a file-name pattern such as ojdbc*.jar), spdx (an SPDX id or
+#                 LicenseRef-*) and mount (the documented absolute mount path). Gated like a
+#                 driver: a [deny] id is refused.
+# Neither may appear in an image Loams builds or in the default compose profile:
+# scripts/connectors/image_licences.py checks that, scripts/connectors/crate_licences.py checks
+# the crates compiled into each loams-connector-* family crate, and both mirror
+# loams_flow::validate::LicenceGate (fabric/crates/loams-flow/tests/licence_gate.rs).
+#
 # Names: Loams, loams-*, io.loams.dev.* (owner rulings, 2026-10-01).
 
 [deny]
