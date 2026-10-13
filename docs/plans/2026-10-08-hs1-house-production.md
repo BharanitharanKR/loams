@@ -399,6 +399,49 @@ FL2 Task 11's contract with the gate raised: the stateless manifest's selected t
 
 *Tests:* one CI job per Tier 1 client, all green; `bi_recorded_queries_replay`.
 
+### Task 33a: Arrow Flight SQL for House (owner, 2026-10-13)
+
+**Depends on:** Task 20 (TLS, authentication and authorization) and Task 8 (`loams.house.v1`, its `ARROW_IPC` result path).
+
+**Files:** `fabric/crates/loams-house/src/flight_sql.rs` (a Flight SQL service in front of the same session, classifier, deny list and worker pool as `HouseService`), the front's listener wiring, and the engine route map entry. Tests are in `fabric/crates/loams-house/tests/flight_sql.rs`.
+
+**Produces:** House reachable over Arrow Flight SQL, the open, gRPC-based standard the engine already serves for collections. Any Flight SQL or ADBC client, in Python, R, Go, Java, C or Rust, then gets Arrow results from House at full speed, with no ClickHouse-specific or Loams-specific client.
+- **Statements:** each statement goes through the same L1/L2/L3 layers and R-ACL.1 checks as the HTTP and Connect paths. Flight SQL is another front end, not another way past the classifier.
+- **Results:** results stream as Arrow record batches through the existing bounded result path, with the result cap and cancellation (kill = cancel) carried over.
+- **Auth:** credentials come from Task 20, as bearer tokens in Flight headers, with the same principal mapping as `HouseService`.
+- **Scope:** `CommandStatementQuery` and the metadata commands (`GetCatalogs`, `GetDbSchemas`, `GetTables`, `GetSqlInfo`) are in scope. Prepared statements map to parameterised queries only where the classifier can check them. Ingest through Flight SQL `DoPut` is out of scope here.
+
+*Tests:*
+- `flight_sql_query_streams_arrow`
+- `flight_sql_refuses_what_http_refuses` (it runs the deny corpus over Flight SQL)
+- `flight_sql_needs_auth`
+- `flight_sql_cancel_kills_worker`
+- `flight_sql_metadata_lists_only_own_namespace`
+- `adbc_flightsql_driver_roundtrip`, with the ADBC Flight SQL driver as the client
+
+### Task 33b: The ClickHouse ADBC driver as a supported client (owner, 2026-10-13)
+
+**Depends on:** Task 20 and Task 33.
+
+**Files:** `scripts/house/drivers_adbc.sh` and a job in `.github/workflows/fabric.yml`. The driver also gets a docs page under `docs/house/` titled "Connect with ADBC", next to the Flight SQL path.
+
+**Produces:** ClickHouse's official ADBC driver (`adbc_clickhouse`, Rust, over the ClickHouse HTTP interface) added to §49 §8.2's driver matrix as a **Tier 2** client. It runs against House's ClickHouse HTTP front end.
+- **Why Tier 2:** upstream describes the driver as early-stage, with many methods still `NotImplemented`. It moves to Tier 1 once upstream calls it production-ready.
+- **Before adding it:** check its licence and record it in `connectors/licences.toml` / NOTICE. It is a test-time client only, never linked into House.
+- **What the job records:** every format or endpoint the driver needs that the front end refuses or mishandles, each as a corpus case.
+
+*Tests:*
+- `adbc_clickhouse_select_roundtrip`
+- `adbc_clickhouse_arrow_types_match`
+- `adbc_clickhouse_auth`
+
+**Protocol stance (ruling, 2026-10-13):**
+- **Main Loams-native interface:** `loams.house.v1` over gRPC/Connect.
+- **Compatibility interface:** the ClickHouse HTTP interface, for existing ClickHouse tools and BI.
+- **Recommended fast open protocol:** Arrow Flight SQL, for Arrow and ADBC clients.
+- **ClickHouse native TCP (Task 31):** built only if there is demand from `clickhouse-client` and native-driver users.
+- **ClickHouse gRPC:** not a target, because few clients use it.
+
 ### Task 34: Performance gates
 
 **Files:** `scripts/house/bench/**`, `docs/house/performance.md`.
