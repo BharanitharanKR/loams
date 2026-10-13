@@ -29,6 +29,7 @@ jobs:
     outputs:
       web: ${{ steps.filter.outputs.web }}
       plugins: ${{ steps.filter.outputs.plugins }}
+      npm-licences: ${{ steps.filter.outputs.npm-licences }}
       android: ${{ steps.filter.outputs.android }}
       ios: ${{ steps.filter.outputs.ios }}
       mock: ${{ steps.filter.outputs.mock }}
@@ -74,6 +75,14 @@ jobs:
               - 'api/console/**'
               - 'proto/**'
               - 'buf*.yaml'
+              - 'scripts/studio/**'
+            npm-licences:
+              - '**/package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'deny.toml'
+              - 'scripts/ci/npm-licences*'
+              - '.github/workflows/monorepo.yml'
             plugins:
               - *workspace
               - 'plugins/**'
@@ -146,6 +155,38 @@ jobs:
         run: pnpm nx run @loams/console:test --outputStyle=static
       - name: Other web tests, including UI where a test target exists
         run: pnpm nx run-many --projects='@loams/*' --exclude='@loams/console' --targets=test --parallel=2 --outputStyle=static
+      # Design §53 §9 (D912, D913): the T3 Code vendoring tool and every vendored file's
+      # header and provenance row. The tool never downloads anything in CI.
+      - name: Studio vendoring tool tests and provenance check
+        run: |
+          node --test scripts/studio/vendor.test.mjs
+          node scripts/studio/vendor.mjs check
+
+  npm-licences:
+    name: monorepo npm licence gate
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.npm-licences == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.0
+        with:
+          version: 11.27.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # Design §53 §9.3 (D914): CONTRIBUTING rule 3 for the console, the desktop and
+      # @loams/studio-ui; no Tiptap Pro, no copyleft.
+      - name: Licence gate tests
+        run: node --test scripts/ci/npm-licences.test.mjs
+      - name: Licence gate on the production dependency tree
+        run: node scripts/ci/npm-licences.mjs
 
   plugins:
     name: monorepo plugin build and tests
@@ -346,7 +387,7 @@ jobs:
   summary:
     name: monorepo CI summary
     if: always()
-    needs: [changes, web, plugins, mobile-mock, mobile-android, mobile-conformance, mobile-ios, mobile-contracts]
+    needs: [changes, web, plugins, npm-licences, mobile-mock, mobile-android, mobile-conformance, mobile-ios, mobile-contracts]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -362,7 +403,7 @@ jobs:
           jobs = json.loads(os.environ['NEEDS_JSON'])
           filters = jobs['changes']['outputs']
           selections = {
-              'web': 'web', 'plugins': 'plugins',
+              'web': 'web', 'plugins': 'plugins', 'npm-licences': 'npm-licences',
               'mobile-mock': 'mock', 'mobile-android': 'android',
               'mobile-conformance': 'conformance', 'mobile-ios': 'ios',
               'mobile-contracts': 'contracts',
