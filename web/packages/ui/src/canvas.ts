@@ -8,8 +8,12 @@ export function rng(seed: number) {
   };
 }
 
-export function rgba(hex: string, a: number) {
-  const h = hex.replace('#', '');
+/** `color` at alpha `a`: a hex token as rgba(), any other CSS colour through color-mix(). */
+export function rgba(color: string, a: number) {
+  if (!/^#?[0-9a-f]{3}([0-9a-f]{3})?$/i.test(color)) {
+    return `color-mix(in srgb, ${color || 'currentColor'} ${Math.round(a * 100)}%, transparent)`;
+  }
+  const h = color.replace('#', '');
   const n = Number.parseInt(
     h.length === 3
       ? h
@@ -26,7 +30,8 @@ export type Tokens = { bg: string; ink: string; accent: string; grow: string };
 
 export function readTokens(): Tokens {
   const s = getComputedStyle(document.documentElement);
-  const v = (name: string) => s.getPropertyValue(name).trim() || '#888888';
+  // Without the token sheet (tests, early paint) a value is empty; rgba() then mixes currentColor.
+  const v = (name: string) => s.getPropertyValue(name).trim();
   return { bg: v('--op-bg'), ink: v('--op-ink'), accent: v('--op-accent'), grow: v('--op-grow') };
 }
 
