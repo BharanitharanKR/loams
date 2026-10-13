@@ -264,8 +264,9 @@ impl LiveRoutes {
 
 /// Runs the journal janitor and the deployment janitor every `interval`
 /// (the first run one interval after start), and refreshes the deployment
-/// this node serves, so it picks up a deploy made on another node (until
-/// LV1 plan Task 11 switches every node at the activation's tick).
+/// this node serves: a backstop for a deploy made on another node, which
+/// the subscription manager already picks up at the activation's tick
+/// from its catalog journal entry (LV1 plan Task 11).
 async fn janitor_loop(engine: AppEngine, interval: Duration, stop: CancellationToken) {
     let runner = engine.runner().clone();
     let mut every = tokio::time::interval_at(tokio::time::Instant::now() + interval, interval);

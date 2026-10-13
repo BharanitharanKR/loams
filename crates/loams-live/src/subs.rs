@@ -1320,6 +1320,20 @@ fn split(evaluated: Result<Queried, LiveError>) -> (Result<LiveValue, LiveError>
     }
 }
 
+/// Whether a catalog change reruns every subscription (LV1 plan Task 11): a
+/// table, index or validator change. An activation reruns them through the
+/// engine it switches; app settings change nothing a query reads.
+fn reruns_all(change: &pb::CatalogChange) -> bool {
+    use pb::CatalogChangeKind as K;
+    [
+        K::CATALOG_CHANGE_KIND_TABLE_CREATED,
+        K::CATALOG_CHANGE_KIND_INDEXES,
+        K::CATALOG_CHANGE_KIND_VALIDATOR,
+    ]
+    .into_iter()
+    .any(|k| change.kind == k)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -1375,18 +1389,4 @@ mod tests {
         assert_eq!(lagged(&ts, Duration::ZERO), ts);
         assert!(back.0 < ts.0);
     }
-}
-
-/// Whether a catalog change reruns every subscription (LV1 plan Task 11): a
-/// table, index or validator change. An activation reruns them through the
-/// engine it switches; app settings change nothing a query reads.
-fn reruns_all(change: &pb::CatalogChange) -> bool {
-    use pb::CatalogChangeKind as K;
-    [
-        K::CATALOG_CHANGE_KIND_TABLE_CREATED,
-        K::CATALOG_CHANGE_KIND_INDEXES,
-        K::CATALOG_CHANGE_KIND_VALIDATOR,
-    ]
-    .into_iter()
-    .any(|k| change.kind == k)
 }
