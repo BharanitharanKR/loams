@@ -1,4 +1,4 @@
-name: Release (GitHub release, SBOM, provenance)
+name: Release GitHub
 
 # The second half of a preview release. "Release images" (release-images.yml)
 # builds deploy/release/Containerfile.<name> on a v* tag and publishes
@@ -12,7 +12,13 @@ name: Release (GitHub release, SBOM, provenance)
 #      commit; a workflow_run's token would name the default branch's,
 #   3. creates the GitHub release as a pre-release (never "Latest") and attaches
 #      the compose bundle (deploy/release plus the Postgres stack it includes),
-#      the SBOMs and SHA256SUMS.
+#      the SBOMs and SHA256SUMS,
+#   4. dispatches the binary builds that attach to that release:
+#      release-package.yml (the `loams` CLI for Linux, Windows and macOS) and
+#      desktop-electron-release.yml (Loams Desktop for all three). A release
+#      created with this workflow's token raises no `release: published` event,
+#      so without this step neither would run (v0.1.0-preview.1 had to be
+#      packaged by hand).
 #
 # Everything is a preview: a tag such as v0.1.0-preview.1 gives images
 # :0.1.0-preview.1 and :preview (never :latest; release-images.yml owns the
@@ -39,7 +45,7 @@ env:
 
 jobs:
   guard:
-    name: release tag
+    name: Tag guard
     # A tag push's workflow_run carries the tag in head_branch; a branch run of
     # "Release images" (there is none today) is not a release.
     if: >-
@@ -87,7 +93,7 @@ jobs:
           echo "$TAG at $sha"
 
   attest:
-    name: ${{ matrix.image }} provenance and SBOM
+    name: Provenance and SBOM (${{ matrix.image }})
     needs: guard
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -153,6 +159,11 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+    outputs:
+      # false when a person had already published the release: that raised
+      # `release: published`, which started release-package.yml already.
+      # desktop-electron-release.yml has no release trigger, so it is always dispatched.
+      dispatch_cli: ${{ steps.publish.outputs.dispatch_cli }}
     steps:
       # No checkout: this job holds contents: write, so it never puts the
       # tag's tree where a later step could run it. The bundle is the commit's
@@ -192,6 +203,7 @@ jobs:
           (cd "$OUT" && sha256sum -- * > SHA256SUMS)
           ls -l "$OUT"; cat "$OUT/SHA256SUMS"
       - name: create the pre-release if needed, keep it a pre-release, attach
+        id: publish
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.guard.outputs.tag }}
@@ -200,6 +212,7 @@ jobs:
           OUT: ${{ runner.temp }}/assets
         run: |
           set -euo pipefail
+          dispatch_cli=true
           if ! gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             notes="$RUNNER_TEMP/notes.md"
             {
@@ -213,8 +226,39 @@ jobs:
             gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag --prerelease --latest=false \
               --title "Loams $VERSION (preview)" --notes-file "$notes"
           else
+            draft=$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json isDraft -q .isDraft)
+            [ "$draft" = true ] || dispatch_cli=false
             # A release drafted by hand for this tag is published, and stays a
             # preview: never the repository's "Latest" release.
             gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
           fi
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber "$OUT"/*
+          echo "dispatch_cli=$dispatch_cli" >> "$GITHUB_OUTPUT"
+
+  # The CLI binaries and the desktop app, built from the tag and attached to the
+  # release by their own workflows (dispatched at the tag, so each runs the
+  # tag's workflow file and checks out the tag's commit).
+  binaries:
+    name: Dispatch the CLI and desktop builds
+    needs: [guard, release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: release-package.yml and desktop-electron-release.yml
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.guard.outputs.tag }}
+          DISPATCH_CLI: ${{ needs.release.outputs.dispatch_cli }}
+        run: |
+          set -euo pipefail
+          echo "Dispatched for $TAG:" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$DISPATCH_CLI" = true ]; then
+            gh workflow run release-package.yml -R "$GITHUB_REPOSITORY" --ref "$TAG" -f tag="$TAG"
+            echo "- release-package.yml (loams CLI: Linux packages, Windows zip, macOS tarballs)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- release-package.yml: not dispatched; publishing the release already started it" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          gh workflow run desktop-electron-release.yml -R "$GITHUB_REPOSITORY" --ref "$TAG" -f tag="$TAG"
+          echo "- desktop-electron-release.yml (Loams Desktop: Linux, Windows, macOS)" >> "$GITHUB_STEP_SUMMARY"

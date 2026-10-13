@@ -1,0 +1,742 @@
+syntax = "proto3";
+
+// Threads (design §53 §5.3, §6.4; plan SD1 Task 4): the daemon's chats, their
+// live sessions, the sidebar's pins and sections, turns, and the transcript
+// stream. The §53 §6.5 gaps G6, G7 (checkpoints) and G20 (usage) are declared
+// here and answer `unimplemented` until SD1 Tasks 10 and 14. See studio.proto
+// for the package's rules.
+package loams.agentd.v1;
+
+import "google/protobuf/struct.proto";
+import "loams/agentd/v1/studio.proto";
+import "loams/options/v1/options.proto";
+
+service ThreadService {
+  option (loams.options.v1.module) = {
+    name: "agentd.threads"
+    summary: "Loams Studio's threads: chats, sessions, turns and the transcript."
+    unstable: true
+  };
+
+  // The threads, then the whole list again on each change (ndjson:
+  // `WatchChats`).
+  rpc WatchThreads(WatchThreadsRequest) returns (stream WatchThreadsResponse);
+  // Each thread's live status (ndjson: `WatchSessions`).
+  rpc WatchSessions(WatchSessionsRequest) returns (stream WatchSessionsResponse);
+  // The sidebar's pins and sections (ndjson: `WatchSidebarPreferences`).
+  rpc WatchSidebarPreferences(WatchSidebarPreferencesRequest) returns (stream WatchSidebarPreferencesResponse);
+
+  // ndjson: `Mutate` op `createChat`.
+  rpc CreateThread(CreateThreadRequest) returns (CreateThreadResponse);
+  // ndjson: `Mutate` op `renameChat`.
+  rpc RenameThread(RenameThreadRequest) returns (RenameThreadResponse);
+  // ndjson: `Mutate` op `setChatArchived`.
+  rpc SetThreadArchived(SetThreadArchivedRequest) returns (SetThreadArchivedResponse);
+  // ndjson: `Mutate` op `deleteChat`.
+  rpc DeleteThread(DeleteThreadRequest) returns (DeleteThreadResponse);
+  // ndjson: `Mutate` op `changeSidebarPin`. Answers the new preferences.
+  rpc ChangeSidebarPin(ChangeSidebarPinRequest) returns (ChangeSidebarPinResponse);
+  // ndjson: `Mutate` op `markChatSeen`.
+  rpc MarkThreadSeen(MarkThreadSeenRequest) returns (MarkThreadSeenResponse);
+  // ndjson: `Mutate` op `setChatConfig`.
+  rpc SetThreadConfig(SetThreadConfigRequest) returns (SetThreadConfigResponse);
+  // ndjson: `Mutate` op `setChatBranch`.
+  rpc SetThreadBranch(SetThreadBranchRequest) returns (SetThreadBranchResponse);
+  // ndjson: `Mutate` op `setChatCwd`.
+  rpc SetThreadCwd(SetThreadCwdRequest) returns (SetThreadCwdResponse);
+  // A side thread forked from another one (ndjson: `ForkSideChat`).
+  rpc ForkThread(ForkThreadRequest) returns (ForkThreadResponse);
+
+  // Starts a turn (ndjson: `QueueCommand` kind `run`).
+  rpc Send(SendRequest) returns (SendResponse);
+  // Steers the running turn (ndjson: `QueueCommand` kind `steer`).
+  rpc Steer(SteerRequest) returns (SteerResponse);
+  // Interrupts the running turn (ndjson: `QueueCommand` kind `interrupt`).
+  rpc Interrupt(InterruptRequest) returns (InterruptResponse);
+  // Answers the agent's question (ndjson: `QueueCommand` kind
+  // `respondInput`).
+  rpc AnswerQuestion(AnswerQuestionRequest) returns (AnswerQuestionResponse);
+
+  // The transcript: a reset frame, then deltas (ndjson: `WatchDocMessages`).
+  rpc WatchTranscript(WatchTranscriptRequest) returns (stream WatchTranscriptResponse);
+
+  // G6: the thread's per-turn restore points (SD1 Task 10).
+  rpc ListCheckpoints(ListCheckpointsRequest) returns (ListCheckpointsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // G7: restores a turn's checkpoint; `stale_diff` when the checkout moved
+  // (SD1 Task 10).
+  rpc RestoreCheckpoint(RestoreCheckpointRequest) returns (RestoreCheckpointResponse);
+  // G20: the thread's per-turn usage (SD1 Task 14).
+  rpc GetThreadUsage(GetThreadUsageRequest) returns (GetThreadUsageResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// A thread (ndjson `Chat`).
+message Chat {
+  string id = 1;
+  // The device that hosts the thread's runs.
+  string device_id = 2;
+  optional string title = 3;
+  bool archived = 4;
+  optional string cwd = 5;
+  optional string branch = 6;
+  optional string checkout_id = 7;
+  ConversationSourceContext source_context = 8;
+  ChatConfig config = 9;
+  optional string last_message_preview = 10;
+  optional int64 last_message_at_ms = 11;
+  int64 created_at_ms = 12;
+  optional string harness_session_id = 13;
+  optional string harness_session_cwd = 14;
+  optional string space_id = 15;
+  optional int64 last_seen_at_ms = 16;
+  optional uint32 room_gen = 17;
+  optional string parent_chat_id = 18;
+}
+
+// The harness, model and sandbox a thread runs with.
+message ChatConfig {
+  HarnessId harness = 1;
+  optional string model = 2;
+  optional ReasoningLevel reasoning = 3;
+  // Harness-specific model options, as JSON values.
+  map<string, google.protobuf.Value> model_options = 4;
+  SandboxLevel sandbox = 5;
+}
+
+// The checkout a thread was started from.
+message ConversationSourceContext {
+  string checkout_id = 1;
+  string repo_root = 2;
+  string cwd = 3;
+  string branch = 4;
+  optional string head_sha = 5;
+  int64 observed_at_ms = 6;
+}
+
+enum SessionStatus {
+  SESSION_STATUS_UNSPECIFIED = 0;
+  SESSION_STATUS_IDLE = 1;
+  SESSION_STATUS_WORKING = 2;
+  SESSION_STATUS_AWAITING_INPUT = 3;
+  SESSION_STATUS_ERRORED = 4;
+}
+
+// A thread's live status.
+message Session {
+  optional string last_completed_turn = 1;
+  string chat_id = 2;
+  string device_id = 3;
+  SessionStatus status = 4;
+  optional int64 started_at_ms = 5;
+  int64 updated_at_ms = 6;
+}
+
+message SidebarSection {
+  string id = 1;
+  string name = 2;
+  repeated string session_ids = 3;
+  bool collapsed = 4;
+}
+
+message SidebarPreferencesState {
+  uint64 revision = 1;
+  bool synced = 2;
+  bool initialized = 3;
+  repeated string pinned_session_ids = 4;
+  repeated SidebarSection sections = 5;
+}
+
+// One change to the sidebar (ndjson `SidebarPinChange`, tagged by `action`).
+message SidebarPinChange {
+  oneof change {
+    // ndjson `pin`.
+    SidebarPinPosition pin = 1;
+    // ndjson `move`.
+    SidebarPinPosition reorder = 2;
+    // ndjson `unpin`.
+    SidebarUnpin unpin = 3;
+    // ndjson `section`.
+    SidebarSectionChange section = 4;
+  }
+}
+
+// Where a pinned thread goes: after one pin, before another, or last.
+message SidebarPinPosition {
+  string session_id = 1;
+  optional string after = 2;
+  optional string before = 3;
+}
+
+message SidebarUnpin {
+  string session_id = 1;
+}
+
+// One change to the sidebar's sections (ndjson `SidebarSectionChange`).
+message SidebarSectionChange {
+  oneof change {
+    SidebarSectionCreate create = 1;
+    SidebarSectionRename rename = 2;
+    SidebarSectionCollapse collapse = 3;
+    // ndjson `delete`.
+    SidebarSectionRemove remove = 4;
+    SidebarSectionAssign assign = 5;
+    // ndjson `import`.
+    SidebarSectionImport import_sections = 6;
+  }
+}
+
+message SidebarSectionCreate {
+  string id = 1;
+  string name = 2;
+}
+
+message SidebarSectionRename {
+  string id = 1;
+  string name = 2;
+}
+
+message SidebarSectionCollapse {
+  string id = 1;
+  bool collapsed = 2;
+}
+
+message SidebarSectionRemove {
+  string id = 1;
+}
+
+message SidebarSectionAssign {
+  string session_id = 1;
+  // Unset takes the thread out of every section.
+  optional string section_id = 2;
+}
+
+message SidebarSectionImport {
+  repeated SidebarSection sections = 1;
+}
+
+enum MessageRole {
+  MESSAGE_ROLE_UNSPECIFIED = 0;
+  MESSAGE_ROLE_USER = 1;
+  MESSAGE_ROLE_ASSISTANT = 2;
+  MESSAGE_ROLE_SYSTEM = 3;
+}
+
+enum MessageStatus {
+  MESSAGE_STATUS_UNSPECIFIED = 0;
+  MESSAGE_STATUS_STREAMING = 1;
+  MESSAGE_STATUS_COMPLETE = 2;
+  MESSAGE_STATUS_ABORTED = 3;
+}
+
+enum SubagentStatus {
+  SUBAGENT_STATUS_UNSPECIFIED = 0;
+  SUBAGENT_STATUS_RUNNING = 1;
+  SUBAGENT_STATUS_DONE = 2;
+  SUBAGENT_STATUS_FAILED = 3;
+}
+
+// One transcript entry (ndjson `SessionMessageEntry`).
+message SessionMessageEntry {
+  string id = 1;
+  MessageRole role = 2;
+  repeated MessagePart parts = 3;
+  int64 created_at_ms = 4;
+  string device_id = 5;
+  optional MessageStatus status = 6;
+  optional string continuation_of = 7;
+  optional int64 duration_ms = 8;
+}
+
+// One part of an entry (ndjson `MessagePart`, tagged by `kind`). Model,
+// tool and file content is data: a client renders it as text (§53 D919).
+message MessagePart {
+  oneof part {
+    TextPart text = 1;
+    ImagePart image = 2;
+    ReasoningPart reasoning = 3;
+    ToolPart tool = 4;
+    InputPart input = 5;
+    ErrorPart error = 6;
+    ForkPart fork = 7;
+  }
+}
+
+message TextPart {
+  string id = 1;
+  string text = 2;
+}
+
+message ImagePart {
+  string id = 1;
+  string path = 2;
+  string name = 3;
+  string mime_type = 4;
+}
+
+message ReasoningPart {
+  string id = 1;
+  string text = 2;
+}
+
+message ToolPart {
+  string id = 1;
+  ToolCall call = 2;
+  bool is_error = 3;
+  bool resolved = 4;
+  optional string output = 5;
+  ToolDiff diff = 6;
+  // The full output in the daemon's tool-output store (`FetchToolBlob`).
+  optional string output_ref = 7;
+  optional uint64 output_bytes = 8;
+  optional string diff_ref = 9;
+  // Unset when the harness reported no per-file stats.
+  ToolDiffStats diff_stats = 10;
+  optional string subagent_ref = 11;
+  optional SubagentStatus subagent_status = 12;
+  optional string subagent_tail = 13;
+}
+
+message ToolDiffStats {
+  repeated ToolDiffStat stats = 1;
+}
+
+message ToolDiffStat {
+  string path = 1;
+  uint64 additions = 2;
+  uint64 deletions = 3;
+}
+
+message ToolDiff {
+  string path = 1;
+  optional string old_text = 2;
+  string new_text = 3;
+}
+
+message InputPart {
+  string id = 1;
+  string request_id = 2;
+  repeated UserInputQuestion questions = 3;
+  bool resolved = 4;
+}
+
+message ErrorPart {
+  string id = 1;
+  string message = 2;
+}
+
+message ForkPart {
+  string id = 1;
+  string source_chat_id = 2;
+  string source_title = 3;
+}
+
+// A tool call (ndjson `ToolCall`, tagged by `kind`).
+message ToolCall {
+  oneof call {
+    ExecCall exec = 1;
+    ReadFileCall read_file = 2;
+    WriteFileCall write_file = 3;
+    EditFileCall edit_file = 4;
+    ApplyPatchCall apply_patch = 5;
+    SearchCall search = 6;
+    GlobCall glob = 7;
+    WebFetchCall web_fetch = 8;
+    WebSearchCall web_search = 9;
+    TodoCall todo = 10;
+    McpCall mcp = 11;
+    UnknownCall unknown = 12;
+  }
+}
+
+message ExecCall {
+  string command = 1;
+}
+
+message ReadFileCall {
+  string path = 1;
+}
+
+message WriteFileCall {
+  string path = 1;
+  optional string content = 2;
+}
+
+message EditFileCall {
+  string path = 1;
+  optional string old_string = 2;
+  optional string new_string = 3;
+}
+
+message ApplyPatchCall {
+  optional string path = 1;
+}
+
+message SearchCall {
+  string pattern = 1;
+  optional string path = 2;
+}
+
+message GlobCall {
+  string pattern = 1;
+}
+
+message WebFetchCall {
+  string url = 1;
+  optional string prompt = 2;
+}
+
+message WebSearchCall {
+  string query = 1;
+}
+
+message TodoCall {
+  repeated TodoItem items = 1;
+}
+
+message TodoItem {
+  string text = 1;
+  bool done = 2;
+}
+
+message McpCall {
+  string server = 1;
+  string tool = 2;
+  google.protobuf.Value input = 3;
+}
+
+message UnknownCall {
+  string name = 1;
+  google.protobuf.Value input = 2;
+}
+
+message UserInputQuestion {
+  string id = 1;
+  string header = 2;
+  string question = 3;
+  repeated string options = 4;
+  bool multi_select = 5;
+  optional string prefill = 6;
+  bool multiline = 7;
+}
+
+message UserInputAnswer {
+  string question_id = 1;
+  repeated string labels = 2;
+}
+
+message ContextUsage {
+  optional uint64 tokens = 1;
+  optional uint64 window = 2;
+}
+
+// The streamed byte length of each part, per entry, that a replay starts
+// from (ndjson `TranscriptBaseline`).
+message TranscriptBaseline {
+  map<string, PartLengths> entries = 1;
+}
+
+message PartLengths {
+  map<string, uint64> parts = 1;
+}
+
+// One transcript frame (ndjson `TranscriptUpdate`): the whole transcript
+// (`reset`, first), or the entries that changed since the last frame.
+message TranscriptUpdate {
+  ContextUsage context_usage = 1;
+  TranscriptBaseline replay_baseline = 2;
+  // True while older history is still loading behind an opening tail.
+  bool history_pending = 3;
+  oneof frame {
+    TranscriptReset reset = 4;
+    TranscriptDelta delta = 5;
+  }
+}
+
+message TranscriptReset {
+  repeated SessionMessageEntry entries = 1;
+}
+
+message TranscriptDelta {
+  repeated TranscriptUpsert upsert = 1;
+  repeated TextAppend append = 2;
+  // Entry ids that are gone.
+  repeated string remove = 3;
+  // The number of entries after this frame, to detect a lost frame.
+  uint64 count = 4;
+}
+
+message TranscriptUpsert {
+  // The entry it follows; unset for the first.
+  optional string after = 1;
+  SessionMessageEntry entry = 2;
+}
+
+message TextAppend {
+  string entry = 1;
+  string part = 2;
+  string text = 3;
+  // The part's length after the append.
+  uint64 len = 4;
+}
+
+// What a turn runs (ndjson `RunRequest`).
+message RunRequest {
+  string prompt = 1;
+  optional HarnessId harness = 2;
+  optional string model = 3;
+  optional ReasoningLevel reasoning = 4;
+  map<string, google.protobuf.Value> model_options = 5;
+  string cwd = 6;
+  SandboxLevel sandbox = 7;
+  bool auto_approve = 8;
+  optional string resume = 9;
+  // Upload paths (`AttachmentService.UploadCommit`).
+  repeated string attachments = 10;
+  WorktreeSpec worktree = 11;
+  McpServer mcp = 12;
+}
+
+// A worktree the turn creates and runs in.
+message WorktreeSpec {
+  string repo_path = 1;
+  string base = 2;
+  optional string space_id = 3;
+}
+
+message McpServer {
+  string name = 1;
+  string command = 2;
+  repeated string args = 3;
+  map<string, string> env = 4;
+}
+
+message WatchThreadsRequest {}
+
+message WatchThreadsResponse {
+  repeated Chat chats = 1;
+}
+
+message WatchSessionsRequest {}
+
+message WatchSessionsResponse {
+  repeated Session sessions = 1;
+}
+
+message WatchSidebarPreferencesRequest {}
+
+message WatchSidebarPreferencesResponse {
+  SidebarPreferencesState preferences = 1;
+}
+
+message CreateThreadRequest {
+  string chat_id = 1;
+  optional string space_id = 2;
+  optional string device_id = 3;
+  ChatConfig config = 4;
+  optional string branch = 5;
+  optional string cwd = 6;
+  optional string parent_chat_id = 7;
+}
+
+message CreateThreadResponse {
+  bool ok = 1;
+}
+
+message RenameThreadRequest {
+  string chat_id = 1;
+  string title = 2;
+}
+
+message RenameThreadResponse {
+  bool ok = 1;
+}
+
+message SetThreadArchivedRequest {
+  string chat_id = 1;
+  bool archived = 2;
+}
+
+message SetThreadArchivedResponse {
+  bool ok = 1;
+}
+
+message DeleteThreadRequest {
+  string chat_id = 1;
+}
+
+message DeleteThreadResponse {
+  bool ok = 1;
+}
+
+message ChangeSidebarPinRequest {
+  SidebarPinChange change = 1;
+}
+
+message ChangeSidebarPinResponse {
+  bool ok = 1;
+  SidebarPreferencesState preferences = 2;
+}
+
+message MarkThreadSeenRequest {
+  string chat_id = 1;
+  // Unset means now.
+  optional int64 at_ms = 2;
+}
+
+message MarkThreadSeenResponse {
+  bool ok = 1;
+}
+
+message SetThreadConfigRequest {
+  string chat_id = 1;
+  ChatConfig config = 2;
+}
+
+message SetThreadConfigResponse {
+  bool ok = 1;
+}
+
+message SetThreadBranchRequest {
+  string chat_id = 1;
+  string branch = 2;
+}
+
+message SetThreadBranchResponse {
+  bool ok = 1;
+}
+
+message SetThreadCwdRequest {
+  string chat_id = 1;
+  string cwd = 2;
+}
+
+message SetThreadCwdResponse {
+  bool ok = 1;
+}
+
+message ForkThreadRequest {
+  // The new thread's id.
+  string chat_id = 1;
+  string source_chat_id = 2;
+  optional string parent_chat_id = 3;
+}
+
+message ForkThreadResponse {
+  Chat chat = 1;
+}
+
+message SendRequest {
+  string chat_id = 1;
+  RunRequest request = 2;
+  // The user entry's id, chosen by the client.
+  string message_id = 3;
+}
+
+message SendResponse {
+  string command_id = 1;
+}
+
+message SteerRequest {
+  string chat_id = 1;
+  string prompt = 2;
+  optional string message_id = 3;
+}
+
+message SteerResponse {
+  string command_id = 1;
+}
+
+message InterruptRequest {
+  string chat_id = 1;
+}
+
+message InterruptResponse {
+  string command_id = 1;
+}
+
+message AnswerQuestionRequest {
+  string chat_id = 1;
+  string request_id = 2;
+  repeated UserInputAnswer answers = 3;
+}
+
+message AnswerQuestionResponse {
+  string command_id = 1;
+}
+
+message WatchTranscriptRequest {
+  string chat_id = 1;
+  // Paint the local tail first and load older history after it.
+  bool opening_tail = 2;
+}
+
+message WatchTranscriptResponse {
+  TranscriptUpdate update = 1;
+}
+
+// G6: one restore point, at a turn's start or end (§53 §6.5).
+message Checkpoint {
+  string turn_id = 1;
+  // `refs/loams/checkpoints/<chatId>/turn/<n>/{pre,post}`.
+  string ref = 2;
+  int64 created_at_ms = 3;
+  uint32 files_changed = 4;
+}
+
+message ListCheckpointsRequest {
+  string chat_id = 1;
+}
+
+message ListCheckpointsResponse {
+  repeated Checkpoint checkpoints = 1;
+}
+
+enum CheckpointScope {
+  CHECKPOINT_SCOPE_UNSPECIFIED = 0;
+  // The checkout only.
+  CHECKPOINT_SCOPE_WORKTREE = 1;
+  // The checkout, and a fork of the thread at that turn (history is never
+  // deleted).
+  CHECKPOINT_SCOPE_WORKTREE_AND_TRANSCRIPT = 2;
+}
+
+message RestoreCheckpointRequest {
+  string chat_id = 1;
+  string turn_id = 2;
+  string expected_checksum = 3;
+  CheckpointScope scope = 4;
+}
+
+message RestoreCheckpointResponse {
+  string restored_to = 1;
+}
+
+// G20: one turn's usage. No billing meaning (§53 §6.5).
+message TurnUsage {
+  string turn_id = 1;
+  optional uint64 input_tokens = 2;
+  optional uint64 output_tokens = 3;
+  optional uint64 cache_tokens = 4;
+  optional double cost_usd = 5;
+  int64 duration_ms = 6;
+}
+
+message UsageTotals {
+  optional uint64 input_tokens = 1;
+  optional uint64 output_tokens = 2;
+  optional uint64 cache_tokens = 3;
+  optional double cost_usd = 4;
+  int64 duration_ms = 5;
+}
+
+message GetThreadUsageRequest {
+  string chat_id = 1;
+}
+
+message GetThreadUsageResponse {
+  repeated TurnUsage turns = 1;
+  UsageTotals totals = 2;
+}

@@ -16,6 +16,7 @@ import { VERSION_ARG } from "../shared/version";
 import { registerChatIpc } from "./agent/ipc.electron";
 import type { ChatService } from "./agent/service";
 import { registerTools } from "./agent/tools";
+import { agentdDir, readAgentdTarget } from "./agentd/discover";
 import { registerAgentdIpc } from "./agentd/ipc.electron";
 import { createAgentdService } from "./agentd/setup";
 import { appPaths } from "./app-paths";
@@ -289,6 +290,8 @@ const singleInstance = initSingleInstance({
 					{ version: app.getVersion(), username: userInfo().username },
 					() => registry.active().kind,
 				),
+				// SD1 Task 5: the daemon's loams.agentd.v1 listener; main alone reads its token.
+				agentd: () => readAgentdTarget(agentdDir(app.getPath("userData"))),
 			});
 			const open = (): BrowserWindow => {
 				const w = createWindow();

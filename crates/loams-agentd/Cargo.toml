@@ -22,6 +22,8 @@ loams-agentd-proto.workspace = true
 loams-agentd-rpc.workspace = true
 loams-agentd-mcp.workspace = true
 loams-agentd-link.workspace = true
+# loams.agentd.v1, the Connect listener beside the ndjson one (SD1 Task 5).
+loams-agentd-connect.workspace = true
 tokio.workspace = true
 clap.workspace = true
 anyhow.workspace = true

@@ -128,6 +128,11 @@ export class HashRouter implements RouterService {
     return this.#current;
   }
 
+  /** The route as the source holds it, query included (`/studio/t/c_1?panel=diff`). */
+  raw(): string {
+    return this.source.get();
+  }
+
   /** The title of the current page, for the document title. */
   title(): string | undefined {
     return this.spec()?.title;
@@ -163,19 +168,21 @@ export class HashRouter implements RouterService {
   }
 
   #resolve(raw: string): Location {
-    // `/sign-in?next=%2Fteams`: the route is matched without its query.
-    const q = raw.indexOf('?');
-    const path = q < 0 ? raw : raw.slice(0, q);
-    const query = q < 0 ? {} : parseQuery(raw.slice(q + 1));
-    const located = this.#match(path);
+    // `/sign-in?next=%2Fteams`, `/studio/t/c_1?panel=diff&host=h1` (§53 §4.4): the route is
+    // matched without its query. The query is kept as `query`, and its parameters also join
+    // the page's params, where route parameters win over them.
+    const at = raw.indexOf('?');
+    const path = at < 0 ? raw : raw.slice(0, at) || '/';
+    const query = at < 0 ? {} : parseQuery(raw.slice(at + 1));
+    const located = this.#match(path, query);
     return Object.keys(query).length > 0 ? { ...located, query } : located;
   }
 
-  #match(path: string): Location {
+  #match(path: string, query: Record<string, string>): Location {
     for (const route of this.#routes) {
       const match = route.pattern.exec(path);
       if (!match) continue;
-      const params: Record<string, string> = {};
+      const params: Record<string, string> = { ...query };
       try {
         route.keys.forEach((key, i) => {
           params[key] = decodeURIComponent(match[i + 1] ?? '');

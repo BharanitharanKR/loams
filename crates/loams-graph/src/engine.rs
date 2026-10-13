@@ -176,6 +176,20 @@ pub enum GraphError {
     /// (a forwarded call is never forwarded again); retry, and it reaches the owner (GR1 Task 12).
     #[error("{0}")]
     OwnerMoved(String),
+    /// An `at_least` read waited its `consistency_wait` and the replica serving it had not yet
+    /// applied the token's offset (GR1 Task 15, §48 §7.2); retry, or read `strong`.
+    #[error(
+        "the graph's replica has applied its stream up to offset {applied}, not the token's \
+         {wanted}, after waiting {waited_ms} ms; retry, or read strong"
+    )]
+    ConsistencyWaitTimeout {
+        /// The token's offset.
+        wanted: u64,
+        /// The offset the replica had applied when the wait ended.
+        applied: u64,
+        /// How long the read waited.
+        waited_ms: u64,
+    },
 }
 
 /// What the engine said about a statement it refused, besides its text (§48 §8.3, GR1 Task 7).
@@ -232,6 +246,7 @@ impl GraphError {
             Self::WriteConflict => "graph_write_conflict",
             Self::VersionMismatch { .. } => "graph_version_mismatch",
             Self::LogUnavailable(_) => "unavailable",
+            Self::ConsistencyWaitTimeout { .. } => "consistency_wait_timeout",
         }
     }
 }
@@ -253,6 +268,9 @@ pub struct OpenSpec {
     /// opens, and every write goes through the write lane. `None` is GR1a's engine-only mode
     /// (Grafeo's own files), which the engine-level service functions and the mock use.
     durable: Option<crate::durable::DurableSpec>,
+    /// A follower (GR1 Task 15): a durable graph's read-only replica, which tails its stream
+    /// ([`crate::replica`]) and never appends. Every writing statement is refused.
+    follower: bool,
 }
 
 impl OpenSpec {
@@ -272,6 +290,7 @@ impl OpenSpec {
             dir: Some(data_dir.join("graphs").join(id.to_string())),
             read_only: false,
             durable: None,
+            follower: false,
         })
     }
 
@@ -302,6 +321,13 @@ impl OpenSpec {
     #[must_use]
     pub fn durable(mut self, durable: crate::durable::DurableSpec) -> Self {
         self.durable = Some(durable);
+        self
+    }
+
+    /// The same spec, as a follower: read-only, and never appending (GR1 Task 15).
+    #[must_use]
+    pub fn follower(mut self) -> Self {
+        self.follower = true;
         self
     }
 
@@ -655,7 +681,9 @@ impl Graph {
             namespace: namespace.to_string(),
             name: name.to_string(),
             db,
-            read_only: spec.read_only,
+            // A follower refuses every write before it reaches the engine: its writes would be
+            // appended unfenced, beside its owner's (GR1 Task 15).
+            read_only: spec.read_only || spec.follower,
             persistent: spec.dir.is_some(),
             spec,
             poisoned: AtomicBool::new(false),
@@ -705,6 +733,29 @@ impl Graph {
             Some(durable) => durable.position.counts(),
             None => (self.db.node_count() as u64, self.db.edge_count() as u64),
         }
+    }
+
+    /// Whether this graph is a follower: a read-only replica tailing its stream (GR1 Task 15).
+    pub fn is_follower(&self) -> bool {
+        self.spec.follower
+    }
+
+    /// Applies the records a follower read from its stream (GR1 Task 15), under the exclusive
+    /// gate, so no read sees a record half applied. Answers how many it applied: records below
+    /// the follower's position are skipped (a fetch that overlapped the last one).
+    ///
+    /// # Errors
+    ///
+    /// [`GraphError::Engine`] for a record that does not decode or apply, or a gap; the caller
+    /// marks the follower for reload, since part of the batch may be in the engine already.
+    pub(crate) fn follow(&self, records: &[loams_log::OffsetRecord]) -> Result<u64, GraphError> {
+        let durable = self
+            .durable
+            .as_ref()
+            .filter(|_| self.spec.follower)
+            .ok_or_else(|| GraphError::engine("only a durable follower tails its stream"))?;
+        let _exclusive = self.gate.exclusive();
+        self.call(|| durable.follow(&self.db, records))
     }
 
     /// Whether writes to this graph are durable in Loams' log (GR1 Task 11).

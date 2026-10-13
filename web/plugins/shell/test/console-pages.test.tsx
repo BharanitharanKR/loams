@@ -148,7 +148,8 @@ describe('the console pages in the shell', () => {
     expect(router.current()).toEqual({
       path: '/consent',
       pageId: 'consent',
-      params: {},
+      // The query's parameters also join the page's params (SD1 T3-7).
+      params: { client_id: 'cc', scope: 'query mcp:tools' },
       query: { client_id: 'cc', scope: 'query mcp:tools' },
     });
     expect(router.spec()?.title).toBe('Allow access');

@@ -60,6 +60,8 @@ overrides:
   nx@23.2.1>axios: 1.20.0
   nx@23.2.1>smol-toml: 1.9.0
   nx@23.2.1>brace-expansion: 5.0.12
+  builder-util-runtime@9.7.0>sax: 1.4.1
+  js-yaml@4.3.2>argparse: '-'
 
 importers:
 
@@ -894,6 +896,9 @@ importers:
       '@loams/plugin-streams':
         specifier: workspace:*
         version: link:../../plugins/streams
+      '@loams/plugin-studio':
+        specifier: workspace:*
+        version: link:../../plugins/studio
       '@loams/plugin-wesql':
         specifier: workspace:*
         version: link:../../plugins/wesql
@@ -1274,6 +1279,36 @@ importers:
       vitest:
         specifier: 5.0.3
         version: 5.0.3(@types/node@24.10.1)(happy-dom@20.14.5)(jsdom@30.1.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@24.13.6)(typescript@5.9.3))(vite@8.3.1(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
+  web/packages/studio-ui:
+    devDependencies:
+      '@testing-library/react':
+        specifier: 16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+      '@types/react':
+        specifier: 19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: 19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      jsdom:
+        specifier: 30.1.1
+        version: 30.1.1(@noble/hashes@1.8.0)
+      react:
+        specifier: 19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 5.0.3
+        version: 5.0.3(@types/node@24.13.6)(happy-dom@20.14.5)(jsdom@30.1.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@24.13.6)(typescript@5.9.3))(vite@8.3.1(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   web/packages/ui:
     dependencies:
@@ -3023,6 +3058,64 @@ importers:
       '@loams/platform-electron':
         specifier: workspace:*
         version: link:../../packages/platform-electron
+      '@testing-library/react':
+        specifier: 16.3.3
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.3.0(@types/react@19.3.0)
+      jsdom:
+        specifier: 30.1.1
+        version: 30.1.1(@noble/hashes@1.8.0)
+      react:
+        specifier: 'catalog:'
+        version: 19.3.0
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.3.0(react@19.3.0)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 5.0.3
+        version: 5.0.3(@types/node@24.13.6)(happy-dom@20.14.5)(jsdom@30.1.1(@noble/hashes@1.8.0))(msw@2.15.0(@types/node@24.13.6)(typescript@5.9.3))(vite@8.3.1(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
+  web/plugins/studio:
+    dependencies:
+      '@loams/console-host':
+        specifier: workspace:*
+        version: link:../../packages/console-host
+      '@loams/cordis':
+        specifier: workspace:*
+        version: link:../../packages/cordis
+      '@loams/slots':
+        specifier: workspace:*
+        version: link:../../packages/slots
+      '@loams/studio-ui':
+        specifier: workspace:*
+        version: link:../../packages/studio-ui
+      '@loams/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      '@tanstack/react-query':
+        specifier: 'catalog:'
+        version: 5.104.0(react@19.3.0)
+      lucide-react:
+        specifier: 'catalog:'
+        version: 1.48.0(react@19.3.0)
+    devDependencies:
+      '@loams/desktop':
+        specifier: workspace:*
+        version: link:../../../apps/desktop-electron
+      '@loams/platform-electron':
+        specifier: workspace:*
+        version: link:../../packages/platform-electron
+      '@loams/plugin-desktop-agentd':
+        specifier: workspace:*
+        version: link:../desktop-agentd
       '@testing-library/react':
         specifier: 16.3.3
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -7576,9 +7669,8 @@ packages:
   sanitize-filename@1.6.4:
     resolution: {integrity: sha512-9ZyI08PsvdQl2r/bBIGubpVdR3RR9sY6RDiWFPreA21C/EFlQhmgo20UZlNjZMMZNubusLhAQozkA0Od5J21Eg==}
 
-  sax@1.6.1:
-    resolution: {integrity: sha512-42tBVwLWnaQvW5zc4HbZrTuWccECCZfBi92FDuwtqxasH+JbPB3/FOKb1m222K42R4WxuxzzMsTswfzgtSu64Q==}
-    engines: {node: '>=11.0.0'}
+  sax@1.4.1:
+    resolution: {integrity: sha512-+aWOz7yVScEGoKNd4PA10LZ8sk0A/z5+nXQG5giUO5rprX9jgYsTdov9qCchZiPIZezbZH+jRut8nPodFAX4Jg==}
 
   saxes@6.0.0:
     resolution: {integrity: sha512-xAg7SOnEhrm5zI3puOOKyy1OMcMlIJZYNJY7xLBwSze0UjhPLnWfj2GF2EpT0jmzaJKIWKHLsaSSajf35bcYnA==}
@@ -10496,7 +10588,7 @@ snapshots:
   builder-util-runtime@9.7.0(supports-color@10.2.2):
     dependencies:
       debug: 4.4.3(supports-color@10.2.2)
-      sax: 1.6.1
+      sax: 1.4.1
     transitivePeerDependencies:
       - supports-color
 
@@ -11575,9 +11667,7 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
-  js-yaml@4.3.2:
-    dependencies:
-      argparse: 2.0.1
+  js-yaml@4.3.2: {}
 
   jsdom@30.1.1(@noble/hashes@1.8.0):
     dependencies:
@@ -12754,7 +12844,7 @@ snapshots:
     dependencies:
       truncate-utf8-bytes: 1.0.2
 
-  sax@1.6.1: {}
+  sax@1.4.1: {}
 
   saxes@6.0.0:
     dependencies:

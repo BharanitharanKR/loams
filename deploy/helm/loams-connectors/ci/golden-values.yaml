@@ -1,0 +1,24 @@
+# The values `helm_lint_and_template_golden` (fabric/crates/loams-flow/tests/
+# kube.rs) renders the chart with. The digests are placeholders: the test
+# renders, it never pulls. The fleet.yaml they produce must equal
+# fabric/crates/loams-flow/tests/fixtures/kube/fleet.yaml.
+image:
+  flow:
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+servedNamespaces: [7, 9]
+cluster:
+  podCidrs: [10.244.0.0/16]
+  serviceCidrs: [10.96.0.0/12]
+  controlPlane:
+    cidrs: [10.0.0.10/32]
+    hosts: [loams-api.loams-system.svc]
+fallback:
+  camel:
+    image:
+      digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
+  debezium:
+    image:
+      digest: sha256:2222222222222222222222222222222222222222222222222222222222222222
+  iggy:
+    image:
+      digest: sha256:3333333333333333333333333333333333333333333333333333333333333333

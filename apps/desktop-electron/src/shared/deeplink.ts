@@ -34,6 +34,13 @@ export function parseDeepLink(raw: string): { path: string } | null {
 			return rest.length <= 1
 				? { path: `/factory${rest.map((s) => `/${s}`).join("")}` }
 				: null;
+		case "studio": {
+			// Loams Studio's thread and run-group links (§53 §4.4): `studio/t/<id>`, `studio/g/<id>`.
+			const [kind, id, ...extra] = rest;
+			return (kind === "t" || kind === "g") && id && extra.length === 0
+				? { path: `/studio/${kind}/${id}` }
+				: null;
+		}
 		case "servers":
 			// The console has no per-server route (only /settings/:section): open the list.
 			return { path: TRAY_ROUTES.servers };

@@ -18,8 +18,17 @@ import { instance } from '@loams/proto';
 import { SlotRegistry } from '@loams/slots';
 import { ActionRegistry, type Admission } from './actions.js';
 import { type CatalogEntry, CatalogError } from './catalog.js';
-import { guard } from './guard.js';
+import { guard, injectsAgentd } from './guard.js';
 import { type PluginManifest, type Tier, validateManifest } from './manifest.js';
+import {
+  chooseBootMode,
+  MODE_HOME,
+  MODES,
+  type Mode,
+  ModeController,
+  type ModeStorage,
+  readStoredMode,
+} from './mode.js';
 import type { Permission } from './permissions.js';
 import type { FlagsService, PlatformService } from './services.js';
 import { type PluginSource, tierOf } from './tiers.js';
@@ -33,7 +42,18 @@ export interface PluginModule<C = unknown> {
 
 export type ModuleTable = Record<string, () => Promise<PluginModule | { default: PluginModule }>>;
 
-export type PluginStatus = 'active' | 'pending' | 'loading' | 'failed' | 'disabled' | 'skipped';
+/**
+ * `deferred`: the plugin belongs to a mode that has not been entered yet; the first
+ * switch into that mode applies it (§53 §4.2).
+ */
+export type PluginStatus =
+  | 'active'
+  | 'pending'
+  | 'loading'
+  | 'failed'
+  | 'disabled'
+  | 'skipped'
+  | 'deferred';
 
 export interface PluginRecord {
   entry: CatalogEntry;
@@ -77,6 +97,17 @@ export interface BootOptions {
   grant?: (manifest: PluginManifest) => Permission[];
   /** Renders the `root` slot into this element. */
   root?: HTMLElement;
+  /** Where the last-used mode is kept; default `localStorage` (§53 §4.2). */
+  storage?: ModeStorage;
+  /** The route at boot, which may name a mode; default: the window's hash route. */
+  initialPath?: () => string;
+  /** How the `mode` service changes route; default: the `router` service, else the hash. */
+  navigate?: (to: string) => void;
+  /**
+   * A mode that needs an instance feature (GetInstance `features`) to be available,
+   * e.g. `{ studio: 'studio' }` in the browser edition until SD1 Task 32.
+   */
+  modeFlags?: Partial<Record<Mode, string>>;
 }
 
 export interface ConsoleHandle {
@@ -94,6 +125,19 @@ export interface ConsoleHandle {
 
 /** The instance feature that turns sandboxed third-party plugins on (Ruling 9). */
 export const THIRD_PARTY_FLAG = 'console.third_party_plugins';
+
+function defaultStorage(): ModeStorage | undefined {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    // Reading `localStorage` itself throws when site data is blocked.
+    return undefined;
+  }
+}
+
+function hashPath(): string {
+  return globalThis.location?.hash.replace(/^#/, '') || '/';
+}
 
 function unwrap(mod: PluginModule | { default: PluginModule }): PluginModule | undefined {
   if (!mod || typeof mod !== 'object') return undefined;
@@ -218,6 +262,72 @@ export async function boot(options: BootOptions): Promise<ConsoleHandle> {
   await ctx.plugin({ name: options.platform.name ?? 'platform', apply: options.platform.apply });
   ctx.plugin({ name: 'flags', inject: flagsPlugin.inject, apply: flagsPlugin.apply });
 
+  // The `mode` service (§53 §4.2, D900–D902). `available` comes from the catalog's
+  // manifests; a mode behind an instance flag waits for GetInstance's answer.
+  const modeFlags = Object.entries(options.modeFlags ?? {}) as [Mode, string][];
+  const flags =
+    modeFlags.length > 0
+      ? await new Promise<FlagsService>((resolve) => {
+          ctx.plugin({
+            name: 'mode-flags',
+            inject: ['flags'],
+            apply: (c: Context) => resolve((c as unknown as { flags: FlagsService }).flags),
+          });
+        })
+      : undefined;
+  const modesById = new Map<string, readonly Mode[]>();
+  for (const entry of options.catalog) {
+    const manifest = manifests.get(entry.name);
+    if (manifest && !entry.disabled) modesById.set(entry.id, manifest.modes);
+  }
+  const declared = new Set([...modesById.values()].flat());
+  const available = MODES.filter((m) => {
+    if (m !== 'console' && !declared.has(m)) return false;
+    const flag = modeFlags.find(([mode]) => mode === m)?.[1];
+    return !flag || flags?.features[flag] === true;
+  });
+  const storage = 'storage' in options ? options.storage : defaultStorage();
+  const path = (options.initialPath ?? hashPath)();
+  const platformKind = (ctx.get('platform', true) as PlatformService | undefined)?.kind ?? 'web';
+  const bootMode = chooseBootMode({
+    path,
+    stored: readStoredMode(storage),
+    kind: platformKind,
+    available,
+  });
+  const navigate =
+    options.navigate ??
+    ((to: string) => {
+      const router = ctx.get('router', true) as { navigate(to: string): void } | undefined;
+      if (router) router.navigate(to);
+      else globalThis.location.hash = to;
+    });
+  const deferred: PluginRecord[] = [];
+  const mode = new ModeController({
+    current: bootMode,
+    available,
+    modes: modesById,
+    storage,
+    navigate,
+    enter: (m) => {
+      for (const record of deferred.filter((r) => r.manifest?.modes.includes(m))) {
+        deferred.splice(deferred.indexOf(record), 1);
+        record.reason = undefined;
+        void load(record);
+      }
+    },
+  });
+  await ctx.plugin({
+    name: 'mode',
+    apply(c: Context) {
+      c.provide('mode', mode);
+    },
+  });
+  // A mode whose home is not the shared root opens at its home (the desktop's Studio).
+  if ((path.split(/[?#]/, 1)[0] || '/') === '/' && MODE_HOME[bootMode] !== '/') {
+    navigate(MODE_HOME[bootMode]);
+  }
+
   const thirdParty: PluginRecord[] = [];
 
   const load = async (record: PluginRecord) => {
@@ -283,6 +393,12 @@ export async function boot(options: BootOptions): Promise<ConsoleHandle> {
       continue;
     }
     if (record.tier === 'third-party') {
+      const agentd = injectsAgentd(entry.inject ?? manifest.inject);
+      if (agentd.length > 0) {
+        record.status = 'failed';
+        record.reason = `third-party plugins never get ${agentd.join(', ')}`;
+        continue;
+      }
       record.scriptUrl = options.sandboxScripts?.[entry.name];
       record.granted = (options.grant?.(manifest) ?? []).filter((p) =>
         manifest.permissions.includes(p),
@@ -290,6 +406,13 @@ export async function boot(options: BootOptions): Promise<ConsoleHandle> {
       record.status = 'skipped';
       record.reason = `third-party plugins need the "${THIRD_PARTY_FLAG}" instance feature`;
       thirdParty.push(record);
+      continue;
+    }
+    // Core plugins load in every mode; others wait for their mode's first entry.
+    if (record.tier !== 'core' && !manifest.modes.includes(bootMode)) {
+      record.status = 'deferred';
+      record.reason = `loads when ${manifest.modes.join(' or ')} mode is entered`;
+      deferred.push(record);
       continue;
     }
     await load(record);

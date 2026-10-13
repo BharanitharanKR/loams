@@ -1,22 +1,24 @@
-# S3 — ★ connector 6 of §33 §8; CN1 plan Task 9.
-# Runtime: native Rust, loams_flow::connectors::s3 (design §33 §5, D354).
-# object_store 0.14 listing with a high-water key for the source; for the sink,
-# Iggy's `s3_sink` for raw events or Loams's own Parquet writer for Arrow
-# batches (§33 §8 row 6, CN1 Task 9).  §33 §4 rule 2: the manifest names the
-# runtime Loams ships, which for S3 is the native task.
+# S3 — ★ connector 6 of §33 §8; CN1 plan Task 9, built natively in CN2 Task 13.
+# Runtime: native Rust, loams_connector_objects::s3 (OR-6, OR-8; design §33 §5, D354).
+# object_store 0.13.2 listing with a high-water key per prefix for the source;
+# for the sink, Parquet, NDJSON or raw files rolled by size or time, with
+# deterministic names and a conditional publish, each Fabric batch staged with
+# its checkpoint first (CN2 R13.2).  Iggy's `s3_sink` stays the declared
+# fallback of the sink (OR-4).  Minor bump: the sink's delivery widened to
+# effectively_once and the config moved to the native family's keys (R13.1).
 apiVersion: loams.flow/v1
 kind: Connector
 id: s3
 name: S3
-specVersion: 1.1.0
+specVersion: 1.2.0
 category: object-storage
 priority: P1
 starred: true
 status: preview
 runtime:
   kind: native
-  ref: loams_flow::connectors::s3
-  version: "object_store 0.14"
+  ref: loams_connector_objects::s3
+  version: "object_store 0.13.2"
   # CN2 OR-8: the sink is native (CN2 Task 13); Iggy's `s3_sink`, CN1's raw-event
   # sink (§33 §8 row 6), is its declared fallback (OR-4).
   fallback:
@@ -28,29 +30,33 @@ licence:
   component: Apache-2.0
   dependencies:
     object_store: Apache-2.0
+    reqwest: Apache-2.0               # object_store's HTTP client, built through the egress resolver (R13.3)
 capabilities:
   source:
-    streaming: true               # S3 event notifications through SQS for low latency (CN1 Task 9)
-    batch: true                   # object_store listing under a prefix with a high-water key
+    streaming: true               # S3 event notifications through SQS/SNS or EventBridge (nightly; the queue client is the cloud family's, R13.4)
+    batch: true                   # object_store listing per prefix with a high-water key
     cdc: false
     webhook: false
     resumable: true
-    position: the last fully emitted key
-    # §33 §6 / CN1 Task 9: an object event's id is "<bucket>/<key>@<etag>" and
-    # the listing position is the last key whose event was fully emitted.
+    position: the high-water key per prefix, plus the key, etag and next row of a partly emitted object
+    # §33 §6: an object event's id is "<bucket>/<key>@<etag>"; a decoded
+    # object's batches are "<bucket>/<key>@<etag>/<first>-<last>" (R13.10).
   sink:
     streaming: false              # the sink writes files, rolled by size or time
     batch: true
-    transactional: false          # S3 has no multi-object transaction
+    transactional: false          # the sink stages each batch with its checkpoint (R13.2), but exactly_once waits for the exactly-once suite on a real store
     upsert: false
     delete: false
-    idempotent: false             # a retried batch rolls a new object, so it is not deduped here
-  delivery: { source: at_least_once, sink: at_least_once }
+    idempotent: true              # deterministic names + If-None-Match: *, so a replayed file is refused, never written twice (R13.1)
+  delivery: { source: at_least_once, sink: effectively_once }
+    # The source's ids are stable, so ingest's (source, id) dedup collapses
+    # a re-read; the source still declares at_least_once because a decoded
+    # object resumed mid-object may be cut into different row ranges.
   ordering: per_key               # a lexicographic key high-water is only meaningful per key range
-  formats: [cloudevents-binary, cloudevents-structured, json, bytes, parquet]
-    # bytes because an object event may carry the object itself; parquet because
-    # the source decodes Parquet objects into Arrow batches and the sink writes
-    # Parquet (CN1 Task 9).
+  formats: [cloudevents-binary, cloudevents-structured, json, bytes, csv, ndjson, parquet, arrow]
+    # bytes because an object event may carry the object itself; csv, ndjson
+    # and parquet because the source decodes them into Arrow batches and the
+    # sink writes Parquet, NDJSON or raw files.
   schema: { registry: none, evolution: backward }
   bulk: { arrow: true, max_batch_rows: 65536 }
   backpressure: pull              # the lister pulls objects; the writer pulls Arrow batches
@@ -60,14 +66,18 @@ auth: [iam, key]
     # (CN1 plan Tech Stack).
 config:
   $ref: schemas/s3.config.json
-secrets: [access_key_id, secret_access_key]
+secrets: [auth.access_key_id, auth.secret_access_key, auth.session_token]
 envelope:
   emits: io.loams.dev.flow.s3.object.v1
-    # Ruling 2 also names `object-deleted` for S3.  CN1 emits `object` only, so
-    # `object-deleted` waits for the change that adds removal notifications.
-    # Reviewer decision noted.
+    # Notifications also emit io.loams.dev.flow.s3.object-deleted.v1 for a
+    # removal (R13.4); `emits` holds one type, so the second is named in notes.
   consumes: "*"
   passthrough: false
-limits: { batch_rows: 65536, batch_bytes: 8388608 }   # Ruling 3's defaults
-conformance: [contract, roundtrip, kill-restart, bulk]
+  stable_ids: true                # "<bucket>/<key>@<etag>" survives a re-read
+limits: { max_record_bytes: 67108864, batch_rows: 65536, batch_bytes: 8388608 }   # 64 MiB source.max_object_bytes; Ruling 3's defaults
+conformance: [contract, roundtrip, kill-restart, dup-check, bulk, schema-evolution, backpressure, auth]
 docs: docs/guides/connectors/s3.md
+notes:
+  - "envelope: notifications emit `object-deleted` (io.loams.dev.flow.s3.object-deleted.v1) for a removal, with the id `<bucket>/<key>@deleted:<sequencer>` (CN2 R13.4)"
+  - "sink: effectively_once holds while `sink.conditional_put` is on (the default); a store that refuses `If-None-Match: *` needs it off, which makes the sink at_least_once"
+  - "source: listing reads keys in lexicographic order, so an object written later below the high-water key is seen only through notifications (CN2 R13.10)"

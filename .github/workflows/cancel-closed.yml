@@ -1,0 +1,33 @@
+# When a pull request closes (merged or not), cancel the runs still queued or in
+# progress for it: they hold slots of the organisation's concurrent-job limit
+# that open pull requests are waiting for. pull_request_target, so it also runs
+# for pull requests from forks; it checks out nothing and runs no pull request code.
+name: Cancel closed PR runs
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  actions: write
+
+jobs:
+  cancel:
+    name: Cancel the runs of the closed pull request
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: ${{ github.event.pull_request.head.ref }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Cancel
+        run: |
+          set -euo pipefail
+          for status in queued in_progress waiting; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs?status=$status&event=pull_request&per_page=100" \
+              --jq ".workflow_runs[] | select(.head_branch == env.BRANCH or .head_sha == env.HEAD_SHA) | .id"
+          done | sort -u | while read -r id; do
+            echo "cancel run $id"
+            gh run cancel "$id" -R "$GITHUB_REPOSITORY" || true
+          done

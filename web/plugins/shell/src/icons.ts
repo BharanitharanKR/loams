@@ -24,6 +24,7 @@ import {
   Shapes,
   Shield,
   ShieldCheck,
+  SquareTerminal,
   Table2,
   UserRound,
   Users,
@@ -64,6 +65,7 @@ const ICONS: Record<string, LucideIcon> = {
   audit: ScrollText,
   agents: Bot,
   access: Shield,
+  studio: SquareTerminal,
 };
 
 export const ICON_NAMES = Object.keys(ICONS);

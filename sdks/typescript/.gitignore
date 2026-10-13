@@ -1,0 +1,2 @@
+# Staged npm packages and the pack smoke test (tools/pack.mjs). Build output.
+packages/*/build/

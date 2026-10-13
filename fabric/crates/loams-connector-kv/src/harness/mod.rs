@@ -504,18 +504,19 @@ pub fn crate_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).to_path_buf()
 }
 
-/// The manifest Task 2 installs for `id` (ruling R14.1), from this crate's
-/// `manifests/`: checked against `connector.schema.json`, every semantic
-/// rule, its config schema (`manifests/schemas/<id>.config.json`) and, when
-/// it names one, its profile under `connectors/profiles/`.
+/// The registry's manifest for `id` (ruling R14.1: staged in this crate, then
+/// installed as `connectors/registry/<id>.yaml`): checked against
+/// `connector.schema.json`, every semantic rule, its config schema
+/// (`connectors/schemas/<id>.config.json`) and, when it names one, its
+/// profile under `connectors/profiles/`.
 pub fn proposed_manifest(id: &str) -> Result<(ConnectorSpec, Option<Profile>), Vec<ManifestError>> {
-    let dir = crate_dir().join("manifests");
+    let connectors = loams_flow::manifest::repository_root().join("connectors");
     let err = |m: String| vec![ManifestError::new(id, m)];
-    let text =
-        std::fs::read_to_string(dir.join(format!("{id}.yaml"))).map_err(|e| err(e.to_string()))?;
+    let text = std::fs::read_to_string(connectors.join("registry").join(format!("{id}.yaml")))
+        .map_err(|e| err(e.to_string()))?;
     let value: Value = serde_norway::from_str(&text).map_err(|e| err(e.to_string()))?;
     let schema_text =
-        std::fs::read_to_string(dir.join("schemas").join(format!("{id}.config.json")))
+        std::fs::read_to_string(connectors.join("schemas").join(format!("{id}.config.json")))
             .map_err(|e| err(e.to_string()))?;
     let config_schema: Value =
         serde_json::from_str(&schema_text).map_err(|e| err(e.to_string()))?;

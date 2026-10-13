@@ -191,7 +191,18 @@ test("electron smoke", async () => {
 		expect(title).toBe("Loams Desktop");
 		expect(page.url()).toContain("loams-app://console/ui/");
 
-		// 2. The server switcher shows Local with a ready engine.
+		// 2. The desktop opens in Loams Studio on first run (SD1 Task 3, Q801); the
+		// switcher goes to Console, whose header has the server switcher.
+		await expect.poll(() => hash(page), { timeout: 60_000 }).toBe("#/studio");
+		const modes = page.getByRole("group", { name: "Mode" });
+		await expect(modes.getByRole("button", { name: "Studio" })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		await modes.getByRole("button", { name: "Console" }).click();
+		await expect.poll(() => hash(page)).toBe("#/");
+
+		// The server switcher shows Local with a ready engine.
 		const switcher = page.locator(".lc-server-switch");
 		await expect(switcher).toContainText("Local", { timeout: 60_000 });
 		await expect(switcher.getByRole("img", { name: /ready/i })).toBeVisible({
