@@ -42,19 +42,42 @@ deploy, and the House wired to the engine (and so to the console's House page).
 
 ## Desktop and CLI
 
-<!-- PLACEHOLDER(rel2-platforms): the desktop app and CLI binaries for macOS and Windows in
-v0.1.0-preview.2 (downloads, signing status, install steps). Filled in through the release
-controller; do not edit here. -->
+Download from the [GitHub release](https://github.com/ostrium-labs/loams/releases) and check
+the files against `DESKTOP-SHA256SUMS` (desktop) or the release checksums (CLI).
 
-_To be filled in before the tag: the desktop app and CLI for macOS and Windows._
+| Platform | Loams Desktop | `loams` CLI |
+|---|---|---|
+| Linux x64, arm64 | `.deb`, `.rpm`, `.pacman`, `.AppImage` | `.deb`, `.rpm`, `.pkg.tar.zst` |
+| macOS arm64, x64 | `.dmg`, `.zip` | `.tar.gz` |
+| Windows x64 | NSIS installer, `.zip` | `.zip` |
+
+Preview builds are not signed by a trusted certificate:
+
+- **macOS:** ad-hoc signed, not notarized. After installing, run
+  `xattr -dr com.apple.quarantine /Applications/Loams.app` (or the CLI binary) once.
+- **Windows:** unsigned. SmartScreen shows "Windows protected your PC": choose
+  **More info → Run anyway**.
+
+The server stack stays Linux containers: on macOS and Windows run `deploy/release` with Docker
+Desktop. The patched TiDB image is amd64-only and runs emulated on Apple silicon.
 
 ## SDKs
 
-<!-- PLACEHOLDER(rel2-sdks): which SDKs v0.1.0-preview.2 publishes to package registries, under
-which names, and how to install them. Filled in through the release controller; do not edit
-here. -->
+The seven supported SDKs are released from this tag by one workflow (`sdk-release.yml`). Each
+registry publishes once it is enabled for the project; until then use the SDK from the
+repository at the tag (`sdks/<language>`).
 
-_To be filled in before the tag: the SDKs published to package registries._
+| SDK | Install | Version |
+|---|---|---|
+| TypeScript | `npm i @loams/client@preview` (and `@loams/live`) | `0.1.0-preview.2` |
+| Python | `pip install --pre loams` | `0.1.0a2` |
+| Rust | `cargo add loams@0.1.0-preview.2` | `0.1.0-preview.2` |
+| C# | `dotnet add package Loams --prerelease` | `0.1.0-preview.2` |
+| Go | `go get loams.dev/go@v0.1.0-preview.2` (Go 1.25+) | `0.1.0-preview.2` |
+| Swift | SwiftPM: `https://github.com/ostrium-labs/loams`, from `0.1.0-preview.2` | `0.1.0-preview.2` |
+| C++ | `loams-cpp-0.1.0-preview.2.tar.gz` from the GitHub release (CMake `find_package(loams)`) | `0.1.0-preview.2` |
+
+Java, Kotlin, Ruby, PHP, Dart and Objective-C stay in the repository (coming soon).
 
 ## Architecture
 
@@ -308,10 +331,10 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
 
 ## Known limitations
 
-- **SDKs.** See [SDKs](#sdks) for what preview.2 publishes. <!-- PLACEHOLDER(rel2-sdks): replace
-  with the SDK limitations of preview.2. --> In preview.1 every SDK was used from the repository
-  (`sdks/<language>`), with TypeScript, Python, Go, Rust, C#, C++ and Swift tested in CI
-  against a live server.
+- **SDKs.** A registry package appears only once that registry is enabled for the project (see
+  [SDKs](#sdks)); the Go module needs `loams.dev/go` to serve its go-import tag. The C++ stubs
+  build against protobuf 36.1 exactly, so there are no vcpkg or Conan ports yet. Building
+  `loams-proto` from crates.io needs `protoc` installed.
 
 - **Loams Postgres:** the control plane can now provision computes and endpoints (PG2 Tasks
   10 to 12: the compose compute runtime, the endpoint lifecycle and idle suspend), but

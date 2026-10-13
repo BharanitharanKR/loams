@@ -37,10 +37,18 @@ stack (`docker compose down -v`) rather than reusing preview.1 volumes. Start wi
   logs (LV1 Task 10), schema validators enforced on writes and checked on deploy (Task 8), and
   online index changes with a journal fence and a leased backfill (Task 9). It is served on
   the Live listener, behind the engine's auth.
-- **Desktop and CLI on macOS and Windows.** <!-- PLACEHOLDER(rel2-platforms): the desktop
-  app and CLI binaries for macOS and Windows; filled in through the release controller. -->
-- **SDKs from package registries.** <!-- PLACEHOLDER(rel2-sdks): which SDKs are published to
-  which registries, and their package names; filled in through the release controller. -->
+- **Desktop and CLI on macOS and Windows.** Loams Desktop ships for macOS (arm64, x64) and
+  Windows (x64) beside Linux, and the `loams` CLI as macOS arm64/x86_64 tarballs and a Windows
+  zip beside the Linux packages. Preview builds are unsigned: macOS is ad-hoc signed, not
+  notarized; Windows is unsigned (SmartScreen warns). Fixed on the way: the Windows engine build,
+  the macOS x64 timeout, the missing arm64 signature ("damaged" on Apple silicon), the CLI Linux
+  packages, and a cookie race when leaving a server in the desktop app.
+- **SDK release pipeline.** One workflow builds, tests and publishes the seven supported SDKs
+  from the release tag: npm `@loams/client` and `@loams/live` (dist-tag `preview`), PyPI `loams`
+  (`0.1.0a2`), crates.io `loams-proto`, `loams-live-proto` and `loams`, NuGet `Loams`, the Go
+  module `loams.dev/go` (tag `sdks/go/v0.1.0-preview.2`), Swift Package Manager from this
+  repository's tag, and a C++ CMake source archive on the GitHub release. Each registry
+  publishes once it is enabled for the project; see the preview guide for which are live.
 
 ### Changed
 - Workspace and image version `0.1.0-preview.2`; `deploy/release` (compose, `.env.example`,
