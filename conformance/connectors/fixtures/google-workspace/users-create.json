@@ -1,0 +1,138 @@
+{
+  "recorded_from": "Google Workspace",
+  "synthetic": true,
+  "docs": [
+    "https://developers.google.com/workspace/admin/directory/reference/rest/v1/users/insert",
+    "https://developers.google.com/identity/protocols/oauth2/web-server#offline"
+  ],
+  "scenario": {
+    "direction": "sink",
+    "resource": "users",
+    "config": {
+      "base_url": "{proxy}",
+      "token_url": "{proxy}/token"
+    },
+    "secrets": {
+      "client_id": "synthetic-gw-client",
+      "client_secret": "synthetic-gw-secret",
+      "refresh_token": "synthetic-gw-refresh"
+    },
+    "input": [
+      {
+        "primaryEmail": "mary@example.test",
+        "name": {
+          "givenName": "Mary",
+          "familyName": "Test"
+        },
+        "changePasswordAtNextLogin": true
+      },
+      {
+        "primaryEmail": "ada@example.test",
+        "name": {
+          "givenName": "Ada",
+          "familyName": "Test"
+        },
+        "changePasswordAtNextLogin": true
+      }
+    ],
+    "expect": 2
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/token",
+        "headers": {},
+        "body": {
+          "text": "grant_type=refresh_token&refresh_token=<redacted>&client_id=<redacted>&client_secret=<redacted>&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fadmin.directory.user%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fadmin.directory.group.readonly"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "access_token": "<scrubbed>",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "scope": "https://www.googleapis.com/auth/admin.directory.user"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/users",
+        "headers": {},
+        "body": {
+          "json": {
+            "primaryEmail": "mary@example.test",
+            "name": {
+              "givenName": "Mary",
+              "familyName": "Test"
+            },
+            "changePasswordAtNextLogin": true
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "kind": "admin#directory#user",
+            "id": "104",
+            "primaryEmail": "mary@example.test",
+            "name": {
+              "givenName": "Mary",
+              "familyName": "Test"
+            },
+            "changePasswordAtNextLogin": true
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/users",
+        "headers": {},
+        "body": {
+          "json": {
+            "primaryEmail": "ada@example.test",
+            "name": {
+              "givenName": "Ada",
+              "familyName": "Test"
+            },
+            "changePasswordAtNextLogin": true
+          }
+        }
+      },
+      "response": {
+        "status": 409,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "error": {
+              "code": 409,
+              "message": "Entity already exists.",
+              "errors": [
+                {
+                  "reason": "duplicate",
+                  "domain": "global"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

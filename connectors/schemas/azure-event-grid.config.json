@@ -1,9 +1,105 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/azure-event-grid.config.json",
-  "title": "Azure Event Grid instance config (placeholder)",
-  "description": "Placeholder for a Azure Event Grid instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "Azure Event Grid connector instance config (loams.flow/v1)",
+  "description": "One Event Grid connector instance's settings, read by the native cloud family (`loams_connector_cloud::event_grid`, CN2 Task 19): a topic endpoint or a namespace topic for the sink, and a webhook or a namespace subscription's pull delivery for the source. `auth.key`, `auth.client_id`, `auth.client_secret` and `auth.webhook_key` hold the **names** of secrets (D189) and are exactly the manifest's `secrets` list; `auth.tenant_id` and `auth.authority` are not secret. See docs/guides/connectors/azure-event-grid.md.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "properties": {
+    "endpoint": {
+      "description": "Sink: a topic endpoint (the CloudEvents schema).",
+      "type": "string",
+      "minLength": 1
+    },
+    "namespace_endpoint": {
+      "description": "Sink or pull source: a namespace endpoint, with `topic`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "topic": {
+      "description": "The namespace topic (sink or pull source); for the webhook source, the resource name events carry.",
+      "type": "string",
+      "minLength": 1
+    },
+    "subscription": {
+      "description": "Pull source: the namespace topic's event subscription.",
+      "type": "string",
+      "minLength": 1
+    },
+    "delivery": {
+      "description": "Source: `webhook` (Event Grid pushes to the instance's route) or `pull` (a namespace subscription).",
+      "enum": [
+        "webhook",
+        "pull"
+      ],
+      "default": "webhook"
+    },
+    "auth": {
+      "description": "A topic or namespace access key (the `key` auth slug), or Entra ID client credentials (`aad`); and the webhook source's key.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "description": "The name of the secret holding the topic's access key (sent as aeg-sas-key) or the namespace's (SharedAccessKey). Resolved through the secret store (D189); never stored in the instance.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "tenant_id": {
+          "description": "Entra ID: the tenant id.",
+          "type": "string",
+          "minLength": 1
+        },
+        "client_id": {
+          "description": "Entra ID: the name of the secret holding the client id. Resolved through the secret store (D189); never stored in the instance.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "client_secret": {
+          "description": "Entra ID: the name of the secret holding the client secret. Resolved through the secret store (D189); never stored in the instance.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "authority": {
+          "description": "Entra ID: the authority, for sovereign clouds.",
+          "type": "string",
+          "minLength": 1,
+          "default": "https://login.microsoftonline.com"
+        },
+        "webhook_key": {
+          "description": "Webhook source: the name of the secret a request must carry as its `code` query parameter. Resolved through the secret store (D189); never stored in the instance.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "lock_seconds": {
+      "description": "Pull source: the lock; it is renewed at half this while an event waits for the Fabric.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 300,
+      "default": 60
+    },
+    "max_wait_seconds": {
+      "description": "Pull source: how long a receive waits.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 60,
+      "default": 10
+    },
+    "receivers": {
+      "description": "Pull source: receive loops run in parallel.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "default": 1
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }

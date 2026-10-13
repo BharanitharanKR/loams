@@ -19,6 +19,8 @@ buffa.workspace = true
 bytes.workspace = true
 # The connect-rust server of the sync API, mounted on axum (Task 12).
 connectrpc = { workspace = true, features = ["axum"] }
+# `grpc.reflection.v1` on the Live listener (LV1 Task 10).
+connectrpc-reflection.workspace = true
 crc.workspace = true
 data-encoding.workspace = true
 futures.workspace = true
@@ -56,6 +58,8 @@ tikv = ["loams-kv/tikv"]
 # The generated LiveServiceClient over connect-rust's HTTP client (Task 12's
 # service tests).
 connectrpc = { workspace = true, features = ["axum", "client"] }
+# The reflection client of `live_service_has_no_deploy` (LV1 Task 10).
+connectrpc-reflection = { workspace = true, features = ["client"] }
 loams-live-proto = { workspace = true, features = ["client"] }
 # The lost-acknowledgement tests put a FaultPlan on the store.
 loams-kv = { workspace = true, features = ["tikv", "faults"] }

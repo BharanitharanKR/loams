@@ -7,15 +7,18 @@
 //   VITE_LOAMS_DEV_BEARER=mock-access-usr_omar pnpm dev
 //                                               → against `cargo run -p loams-apps-mock`
 
+// First, so the page never paints in the wrong theme.
+import './theme.js';
 import '@fontsource-variable/archivo/standard.css';
 import '@fontsource-variable/martian-mono';
 import '@loams/ui/styles.css';
 import '../tailwind.css';
 import './console.css';
 
-import { THIRD_PARTY_FLAG } from '@loams/console-host';
+import { parsePatch, THIRD_PARTY_FLAG } from '@loams/console-host';
 import { createMockTransport } from '@loams/console-host/testing';
 import { createWebPlatform } from '@loams/platform-web';
+import samplesYml from '../../catalog/samples.yml?raw';
 import { startHosted } from '../hosted/start.js';
 import { loadRuntimeConfig } from '../runtime-config.js';
 import { startDesktop } from './desktop.js';
@@ -46,7 +49,15 @@ if (root) {
 
       const platform = createWebPlatform(
         demo
-          ? { transport: createMockTransport({ features: { [THIRD_PARTY_FLAG]: true } }) }
+          ? {
+              transport: createMockTransport({
+                // The dev server's demo also shows Studio (behind `studio` until SD1 Task 32).
+                features: {
+                  [THIRD_PARTY_FLAG]: true,
+                  ...(import.meta.env.DEV ? { studio: true } : {}),
+                },
+              }),
+            }
           : {
               baseUrl: appsUrl ?? config.server,
               devBearer: import.meta.env.DEV
@@ -58,6 +69,8 @@ if (root) {
       return startConsole({
         platform,
         root,
+        // Demo only: the sample third-party plugin (catalog/samples.yml).
+        patches: demo ? [parsePatch(samplesYml)] : undefined,
         // Demo only: grant a sandboxed plugin what it declares (start.ts).
         grant: demo ? (manifest) => manifest.permissions : undefined,
       });

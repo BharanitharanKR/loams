@@ -1,0 +1,36 @@
+[
+  {
+    "archived": false,
+    "branch": "main",
+    "checkoutId": "checkout-1",
+    "config": {
+      "harness": "claude-code",
+      "model": "claude-sonnet",
+      "modelOptions": {
+        "effort": "high"
+      },
+      "reasoning": "high",
+      "sandbox": "workspace-write"
+    },
+    "createdAt": "2026-10-12T09:30:00Z",
+    "cwd": "/home/dev/project",
+    "deviceId": "device-1",
+    "harnessSessionCwd": "/home/dev/project",
+    "harnessSessionId": "claude-session-1",
+    "id": "chat-1",
+    "lastMessageAt": "2026-10-12T09:30:00Z",
+    "lastMessagePreview": "Done.",
+    "lastSeenAt": "2026-10-12T09:30:00Z",
+    "roomGen": 2,
+    "sourceContext": {
+      "branch": "main",
+      "checkoutId": "checkout-1",
+      "cwd": "/home/dev/project",
+      "headSha": "0123abcd",
+      "observedAt": "2026-10-12T09:30:00Z",
+      "repoRoot": "/home/dev/project"
+    },
+    "spaceId": "space-1",
+    "title": "Fix the build"
+  }
+]

@@ -1,6 +1,7 @@
 //! Workspace lifecycle types shared by the engine and its clients.
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// Protocol features are advertised explicitly because personal/integration
 /// builds may share a semver with upstream while exposing a different RPC and
@@ -31,20 +32,18 @@ pub mod capabilities {
     }
 }
 
-/// The fixed data boundary selected when an engine runtime is assembled.
-///
-/// Authentication can change while a runtime is alive, but its workspace scope
-/// cannot. Switching scopes requires assembling a new runtime.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// The data boundary of the engine runtime. The daemon has one, `local`
+/// (plan DD1 rulings T2-2, T3-1): the fork's `synced` and `development`
+/// scopes went with the edge and WorkOS (trimmed in Task 9).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceScope {
+    #[default]
     Local,
-    Synced,
-    Development,
 }
 
 /// Stable information about the engine runtime reached by a client.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct EngineInfo {
     pub device_id: String,
@@ -65,16 +64,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn workspace_scope_uses_wire_safe_names() {
-        for (scope, encoded) in [
-            (WorkspaceScope::Local, "\"local\""),
-            (WorkspaceScope::Synced, "\"synced\""),
-            (WorkspaceScope::Development, "\"development\""),
-        ] {
-            assert_eq!(serde_json::to_string(&scope).unwrap(), encoded);
-            assert_eq!(
-                serde_json::from_str::<WorkspaceScope>(encoded).unwrap(),
-                scope
+    fn workspace_scope_is_local_only() {
+        assert_eq!(
+            serde_json::to_string(&WorkspaceScope::Local).unwrap(),
+            "\"local\""
+        );
+        for gone in ["\"synced\"", "\"development\""] {
+            assert!(
+                serde_json::from_str::<WorkspaceScope>(gone).is_err(),
+                "{gone}"
             );
         }
     }
@@ -108,7 +106,7 @@ mod tests {
     fn old_engine_info_defaults_to_no_capabilities() {
         let info: EngineInfo = serde_json::from_value(serde_json::json!({
             "deviceId": "old",
-            "workspaceScope": "synced"
+            "workspaceScope": "local"
         }))
         .unwrap();
         assert!(info.capabilities.is_empty());

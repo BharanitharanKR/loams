@@ -35,6 +35,8 @@ private static final long serialVersionUID = 0L;
     name_ = "";
     fields_ =
         com.google.protobuf.LazyStringArrayList.emptyList();
+    state_ = 0;
+    deployment_ = com.google.protobuf.ByteString.EMPTY;
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -157,6 +159,50 @@ private static final long serialVersionUID = 0L;
     return fields_.getByteString(index);
   }
 
+  public static final int STATE_FIELD_NUMBER = 4;
+  private int state_ = 0;
+  /**
+   * <pre>
+   * Where the index is in its life (LV1 plan Task 9). Unspecified: ready
+   * (an index defined before Task 9).
+   * </pre>
+   *
+   * <code>.loams.live.v1.IndexState state = 4 [json_name = "state"];</code>
+   * @return The enum numeric value on the wire for state.
+   */
+  @java.lang.Override public int getStateValue() {
+    return state_;
+  }
+  /**
+   * <pre>
+   * Where the index is in its life (LV1 plan Task 9). Unspecified: ready
+   * (an index defined before Task 9).
+   * </pre>
+   *
+   * <code>.loams.live.v1.IndexState state = 4 [json_name = "state"];</code>
+   * @return The state.
+   */
+  @java.lang.Override public dev.loams.gen.loams.live.v1.IndexState getState() {
+    dev.loams.gen.loams.live.v1.IndexState result = dev.loams.gen.loams.live.v1.IndexState.forNumber(state_);
+    return result == null ? dev.loams.gen.loams.live.v1.IndexState.UNRECOGNIZED : result;
+  }
+
+  public static final int DEPLOYMENT_FIELD_NUMBER = 5;
+  private com.google.protobuf.ByteString deployment_ = com.google.protobuf.ByteString.EMPTY;
+  /**
+   * <pre>
+   * The deployment whose deploy is backfilling it (16 bytes), while
+   * `state` is `INDEX_STATE_BACKFILLING`.
+   * </pre>
+   *
+   * <code>bytes deployment = 5 [json_name = "deployment"];</code>
+   * @return The deployment.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString getDeployment() {
+    return deployment_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -179,6 +225,12 @@ private static final long serialVersionUID = 0L;
     }
     for (int i = 0; i < fields_.size(); i++) {
       com.google.protobuf.GeneratedMessage.writeString(output, 3, fields_.getRaw(i));
+    }
+    if (state_ != dev.loams.gen.loams.live.v1.IndexState.INDEX_STATE_UNSPECIFIED.getNumber()) {
+      output.writeEnum(4, state_);
+    }
+    if (!deployment_.isEmpty()) {
+      output.writeBytes(5, deployment_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -204,6 +256,14 @@ private static final long serialVersionUID = 0L;
       size += dataSize;
       size += 1 * getFieldsList().size();
     }
+    if (state_ != dev.loams.gen.loams.live.v1.IndexState.INDEX_STATE_UNSPECIFIED.getNumber()) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeEnumSize(4, state_);
+    }
+    if (!deployment_.isEmpty()) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBytesSize(5, deployment_);
+    }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
     return size;
@@ -225,6 +285,9 @@ private static final long serialVersionUID = 0L;
         .equals(other.getName())) return false;
     if (!getFieldsList()
         .equals(other.getFieldsList())) return false;
+    if (state_ != other.state_) return false;
+    if (!getDeployment()
+        .equals(other.getDeployment())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -244,6 +307,10 @@ private static final long serialVersionUID = 0L;
       hash = (37 * hash) + FIELDS_FIELD_NUMBER;
       hash = (53 * hash) + getFieldsList().hashCode();
     }
+    hash = (37 * hash) + STATE_FIELD_NUMBER;
+    hash = (53 * hash) + state_;
+    hash = (37 * hash) + DEPLOYMENT_FIELD_NUMBER;
+    hash = (53 * hash) + getDeployment().hashCode();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -384,6 +451,8 @@ private static final long serialVersionUID = 0L;
       name_ = "";
       fields_ =
           com.google.protobuf.LazyStringArrayList.emptyList();
+      state_ = 0;
+      deployment_ = com.google.protobuf.ByteString.EMPTY;
       return this;
     }
 
@@ -427,6 +496,12 @@ private static final long serialVersionUID = 0L;
         fields_.makeImmutable();
         result.fields_ = fields_;
       }
+      if (((from_bitField0_ & 0x00000008) != 0)) {
+        result.state_ = state_;
+      }
+      if (((from_bitField0_ & 0x00000010) != 0)) {
+        result.deployment_ = deployment_;
+      }
     }
 
     @java.lang.Override
@@ -458,6 +533,12 @@ private static final long serialVersionUID = 0L;
           fields_.addAll(other.fields_);
         }
         onChanged();
+      }
+      if (other.state_ != 0) {
+        setStateValue(other.getStateValue());
+      }
+      if (other.getDeployment() != com.google.protobuf.ByteString.EMPTY) {
+        setDeployment(other.getDeployment());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -501,6 +582,16 @@ private static final long serialVersionUID = 0L;
               fields_.add(s);
               break;
             } // case 26
+            case 32: {
+              state_ = input.readEnum();
+              bitField0_ |= 0x00000008;
+              break;
+            } // case 32
+            case 42: {
+              deployment_ = input.readBytes();
+              bitField0_ |= 0x00000010;
+              break;
+            } // case 42
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -777,6 +868,131 @@ private static final long serialVersionUID = 0L;
       ensureFieldsIsMutable();
       fields_.add(value);
       bitField0_ |= 0x00000004;
+      onChanged();
+      return this;
+    }
+
+    private int state_ = 0;
+    /**
+     * <pre>
+     * Where the index is in its life (LV1 plan Task 9). Unspecified: ready
+     * (an index defined before Task 9).
+     * </pre>
+     *
+     * <code>.loams.live.v1.IndexState state = 4 [json_name = "state"];</code>
+     * @return The enum numeric value on the wire for state.
+     */
+    @java.lang.Override public int getStateValue() {
+      return state_;
+    }
+    /**
+     * <pre>
+     * Where the index is in its life (LV1 plan Task 9). Unspecified: ready
+     * (an index defined before Task 9).
+     * </pre>
+     *
+     * <code>.loams.live.v1.IndexState state = 4 [json_name = "state"];</code>
+     * @param value The enum numeric value on the wire for state to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStateValue(int value) {
+      state_ = value;
+      bitField0_ |= 0x00000008;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Where the index is in its life (LV1 plan Task 9). Unspecified: ready
+     * (an index defined before Task 9).
+     * </pre>
+     *
+     * <code>.loams.live.v1.IndexState state = 4 [json_name = "state"];</code>
+     * @return The state.
+     */
+    @java.lang.Override
+    public dev.loams.gen.loams.live.v1.IndexState getState() {
+      dev.loams.gen.loams.live.v1.IndexState result = dev.loams.gen.loams.live.v1.IndexState.forNumber(state_);
+      return result == null ? dev.loams.gen.loams.live.v1.IndexState.UNRECOGNIZED : result;
+    }
+    /**
+     * <pre>
+     * Where the index is in its life (LV1 plan Task 9). Unspecified: ready
+     * (an index defined before Task 9).
+     * </pre>
+     *
+     * <code>.loams.live.v1.IndexState state = 4 [json_name = "state"];</code>
+     * @param value The state to set.
+     * @return This builder for chaining.
+     */
+    public Builder setState(dev.loams.gen.loams.live.v1.IndexState value) {
+      if (value == null) {
+        throw new NullPointerException();
+      }
+      bitField0_ |= 0x00000008;
+      state_ = value.getNumber();
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Where the index is in its life (LV1 plan Task 9). Unspecified: ready
+     * (an index defined before Task 9).
+     * </pre>
+     *
+     * <code>.loams.live.v1.IndexState state = 4 [json_name = "state"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearState() {
+      bitField0_ = (bitField0_ & ~0x00000008);
+      state_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private com.google.protobuf.ByteString deployment_ = com.google.protobuf.ByteString.EMPTY;
+    /**
+     * <pre>
+     * The deployment whose deploy is backfilling it (16 bytes), while
+     * `state` is `INDEX_STATE_BACKFILLING`.
+     * </pre>
+     *
+     * <code>bytes deployment = 5 [json_name = "deployment"];</code>
+     * @return The deployment.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getDeployment() {
+      return deployment_;
+    }
+    /**
+     * <pre>
+     * The deployment whose deploy is backfilling it (16 bytes), while
+     * `state` is `INDEX_STATE_BACKFILLING`.
+     * </pre>
+     *
+     * <code>bytes deployment = 5 [json_name = "deployment"];</code>
+     * @param value The deployment to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDeployment(com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      deployment_ = value;
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The deployment whose deploy is backfilling it (16 bytes), while
+     * `state` is `INDEX_STATE_BACKFILLING`.
+     * </pre>
+     *
+     * <code>bytes deployment = 5 [json_name = "deployment"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDeployment() {
+      bitField0_ = (bitField0_ & ~0x00000010);
+      deployment_ = getDefaultInstance().getDeployment();
       onChanged();
       return this;
     }

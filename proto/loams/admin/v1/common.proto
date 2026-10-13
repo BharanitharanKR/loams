@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+// The shared vocabulary of `loams.admin.v1` (design §44 §5.2, API2 Task 7):
+// who did something (`SubjectRef`), what it was done to (`ResourceRef`), the
+// people of an org (`User`) and the two role ladders. `loams.auth.v1`'s
+// `Session` uses `User` and `OrgRole` from here.
+//
+// This file is the sixth of the package, beside the five the plan names
+// (`org`, `project`, `agent`, `key`, `audit`): every one of those uses
+// `SubjectRef`, and `org.proto`'s `TeamDetail` uses `ProjectRole`, so keeping
+// them in any one service's file would make the files import each other in a
+// cycle (API2 ruling 6/7.3).
+//
+// Rules for the whole package (AP0, design §44 §8):
+//
+// - Every RPC has its own request and response message; a resource comes
+//   back wrapped (`GetOrgResponse.org`), so a field can be added beside it.
+// - Reads are `NO_SIDE_EFFECTS`. Set-state mutations (update, suspend,
+//   resume, grant, remove, revoke) are `IDEMPOTENT`. Create-by-name RPCs
+//   (a project's slug, a team's or agent's name, an invitation's email) are
+//   neither and take no key (API1 ruling 2.4): a retry answers
+//   `already_exists`. `KeyService/CreateKey` is the one create that is not
+//   by name, so it takes `idempotency_key` (field 15).
+// - Lists are AIP-158: `page_size` (0 takes the server's default, at most
+//   1 000) and `page_token` in, `next_page_token` out.
+// - Resource names are message fields (a project's slug, an agent's id),
+//   never URL paths.
+// - Errors carry one `loams.errors.v1.ErrorInfo` with a registered reason
+//   (`docs/api/reasons.md`): `not_found`, `already_exists`,
+//   `invalid_argument`, `permission_denied`, `unauthenticated`, and
+//   `secret_already_issued` for a replayed `CreateKey`.
+// - Times are `google.protobuf.Timestamp`; an unset one is "never" (the
+//   console REST contract's `null`). An empty string is "none" for the
+//   optional strings the REST contract made nullable.
+package loams.admin.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// A person in the org.
+message User {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  // Empty when the person has no avatar.
+  string avatar_url = 4;
+  // Whether the person has a second factor enrolled.
+  bool two_factor = 5;
+  // The OIDC provider id the person signs in with; empty for a password.
+  string sso = 6;
+  google.protobuf.Timestamp created_at = 7;
+  // Unset when the person has never signed in.
+  google.protobuf.Timestamp last_seen_at = 8;
+}
+
+// A role in the org.
+enum OrgRole {
+  ORG_ROLE_UNSPECIFIED = 0;
+  ORG_ROLE_OWNER = 1;
+  ORG_ROLE_ADMIN = 2;
+  ORG_ROLE_MEMBER = 3;
+}
+
+// A role on a project.
+enum ProjectRole {
+  PROJECT_ROLE_UNSPECIFIED = 0;
+  PROJECT_ROLE_ADMIN = 1;
+  PROJECT_ROLE_DEVELOPER = 2;
+  PROJECT_ROLE_VIEWER = 3;
+}
+
+// What kind of principal a `SubjectRef` names.
+enum SubjectKind {
+  SUBJECT_KIND_UNSPECIFIED = 0;
+  SUBJECT_KIND_USER = 1;
+  SUBJECT_KIND_TEAM = 2;
+  SUBJECT_KIND_AGENT = 3;
+  SUBJECT_KIND_SERVICE_ACCOUNT = 4;
+  // The instance itself (a scheduled job, a retention sweep).
+  SUBJECT_KIND_SYSTEM = 5;
+}
+
+// A principal, by kind and id, with its display name.
+//
+// In a request (an agent's owner, a grant's subject) only `kind` and `id` are
+// read; `name` is filled in on the way out.
+message SubjectRef {
+  SubjectKind kind = 1;
+  string id = 2;
+  string name = 3;
+}
+
+// Anything an audit event can be about: a principal, or a resource such as a
+// collection or a key. `kind` is open ("collection", "api_key", "agent"), so
+// a new resource type needs no enum value.
+message ResourceRef {
+  string kind = 1;
+  string id = 2;
+  string name = 3;
+}

@@ -18,7 +18,7 @@ apiVersion: loams.flow/v1
 kind: Connector
 id: clickhouse
 name: ClickHouse
-specVersion: 1.0.0
+specVersion: 1.1.0
 category: warehouse
 priority: P1
 starred: true
@@ -26,9 +26,14 @@ status: preview
 runtime:
   kind: native
   ref: loams_flow::connectors::clickhouse
-  version: "clickhouse 0.15 (source); Iggy clickhouse_sink (sink)"
-  # The sink's runtime is Iggy's `clickhouse_sink` plugin (§33 §8 row 12,
-  # CN1 Task 10); IggyRuntime renders its config from this instance.
+  version: "clickhouse 0.15"
+  # CN2 OR-8: the sink is native (CN2 Task 17); Iggy's `clickhouse_sink`, CN1's sink
+  # runtime (§33 §8 row 12), is its declared fallback (OR-4).
+  fallback:
+    kind: iggy
+    ref: clickhouse               # clickhouse_sink (CN2 R2.3)
+    directions: [sink]
+    replaced_by: CN2 Task 17
 licence:
   component: Apache-2.0
   dependencies:

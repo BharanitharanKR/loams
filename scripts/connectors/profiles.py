@@ -64,11 +64,23 @@ def is_secret_key(key: str) -> bool:
     return k not in NOT_SECRET_KEYS and any(p in k for p in SECRET_KEY_PARTS)
 
 
+SECRET_REF = re.compile(r"^\{auth\.[a-z0-9_]+\}$")
+
+
+def is_secret_ref(value) -> bool:
+    return isinstance(value, str) and SECRET_REF.match(value) is not None
+
+
 def secret_problems(value, at: str = "") -> list[str]:
     problems: list[str] = []
     if isinstance(value, dict):
         for key, child in value.items():
             here = f"{at}.{key}" if at else str(key)
+            # A credential-named key whose value is a secret reference
+            # (`{auth.<field>}`, resolved by the runtime) holds no credential
+            # (CN2 Task 20: PostHog's `api_key` body field).
+            if is_secret_ref(child):
+                continue
             if at != "http.resources" and is_secret_key(str(key)):
                 problems.append(f"{here}: a profile never holds a credential (Review Focus 8)")
                 continue
@@ -108,6 +120,11 @@ def check_profile(path: Path, schema: dict, validator, formats: set[str]) -> tup
     for key in ("apiVersion", "kind", "id", "profile_kind", "module", "system"):
         if key not in doc:
             problems.append(f"{key}: required")
+    system = doc.get("system")
+    if isinstance(system, dict):
+        for key in ("name", "service"):
+            if key not in system:
+                problems.append(f"system.{key}: required (OR-2: the real system the suite runs against)")
     if doc.get("id") != path.stem:
         problems.append(f"id: {doc.get('id')!r} is not the file name ({path.name})")
     kind, module = doc.get("profile_kind"), doc.get("module")

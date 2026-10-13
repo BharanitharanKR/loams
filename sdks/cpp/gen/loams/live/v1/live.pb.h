@@ -30,6 +30,10 @@
 #include "google/protobuf/message_lite.h"
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
+#include "google/protobuf/map.h"  // IWYU pragma: export
+#include "google/protobuf/map_type_handler.h"  // IWYU pragma: export
+#include "google/protobuf/map_entry.h"
+#include "google/protobuf/map_field.h"
 #include "google/protobuf/generated_enum_reflection.h"
 #include "google/protobuf/unknown_field_set.h"
 #include "loams/live/v1/value.pb.h"
@@ -53,22 +57,8 @@ namespace live {
 namespace v1 {
 enum ErrorCode : int;
 extern const uint32_t ErrorCode_internal_data_[];
-class DeployRequest;
-struct DeployRequestGlobalsTypeInternal;
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-extern DeployRequestGlobalsTypeInternal DeployRequest_globals_;
-extern const ::google::protobuf::internal::ClassDataFull DeployRequest_class_data_;
-#else
-extern const DeployRequestGlobalsTypeInternal DeployRequest_globals_;
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-class DeployResponse;
-struct DeployResponseGlobalsTypeInternal;
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-extern DeployResponseGlobalsTypeInternal DeployResponse_globals_;
-extern const ::google::protobuf::internal::ClassDataFull DeployResponse_class_data_;
-#else
-extern const DeployResponseGlobalsTypeInternal DeployResponse_globals_;
-#endif  // PROTOBUF_MESSAGE_GLOBALS
+enum ValidatorPrimitive : int;
+extern const uint32_t ValidatorPrimitive_internal_data_[];
 class IndexSchema;
 struct IndexSchemaGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -213,6 +203,38 @@ extern const ::google::protobuf::internal::ClassDataFull Transition_class_data_;
 #else
 extern const TransitionGlobalsTypeInternal Transition_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class Validator;
+struct ValidatorGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ValidatorGlobalsTypeInternal Validator_globals_;
+extern const ::google::protobuf::internal::ClassDataFull Validator_class_data_;
+#else
+extern const ValidatorGlobalsTypeInternal Validator_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ValidatorObject;
+struct ValidatorObjectGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ValidatorObjectGlobalsTypeInternal ValidatorObject_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ValidatorObject_class_data_;
+#else
+extern const ValidatorObjectGlobalsTypeInternal ValidatorObject_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ValidatorObject_FieldsEntry_DoNotUse;
+struct ValidatorObject_FieldsEntry_DoNotUseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ValidatorObject_FieldsEntry_DoNotUseGlobalsTypeInternal ValidatorObject_FieldsEntry_DoNotUse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ValidatorObject_FieldsEntry_DoNotUse_class_data_;
+#else
+extern const ValidatorObject_FieldsEntry_DoNotUseGlobalsTypeInternal ValidatorObject_FieldsEntry_DoNotUse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ValidatorUnion;
+struct ValidatorUnionGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ValidatorUnionGlobalsTypeInternal ValidatorUnion_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ValidatorUnion_class_data_;
+#else
+extern const ValidatorUnionGlobalsTypeInternal ValidatorUnion_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class WatchRequest;
 struct WatchRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -229,12 +251,61 @@ namespace protobuf {
 template <>
 internal::EnumTraitsT<::loams::live::v1::ErrorCode_internal_data_>
     internal::EnumTraitsImpl::value<::loams::live::v1::ErrorCode>;
+template <>
+internal::EnumTraitsT<::loams::live::v1::ValidatorPrimitive_internal_data_>
+    internal::EnumTraitsImpl::value<::loams::live::v1::ValidatorPrimitive>;
 }  // namespace protobuf
 }  // namespace google
 
 namespace loams {
 namespace live {
 namespace v1 {
+enum ValidatorPrimitive : int {
+  VALIDATOR_PRIMITIVE_UNSPECIFIED = 0,
+  VALIDATOR_PRIMITIVE_NULL = 1,
+  VALIDATOR_PRIMITIVE_INT64 = 2,
+  VALIDATOR_PRIMITIVE_FLOAT64 = 3,
+  VALIDATOR_PRIMITIVE_BOOLEAN = 4,
+  VALIDATOR_PRIMITIVE_STRING = 5,
+  VALIDATOR_PRIMITIVE_BYTES = 6,
+  VALIDATOR_PRIMITIVE_ANY = 7,
+  ValidatorPrimitive_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  ValidatorPrimitive_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t ValidatorPrimitive_internal_data_[];
+inline constexpr ValidatorPrimitive ValidatorPrimitive_MIN =
+    static_cast<ValidatorPrimitive>(0);
+inline constexpr ValidatorPrimitive ValidatorPrimitive_MAX =
+    static_cast<ValidatorPrimitive>(7);
+[[nodiscard]] inline bool ValidatorPrimitive_IsValid(int value) {
+  return 0 <= value && value <= 7;
+}
+inline constexpr int ValidatorPrimitive_ARRAYSIZE = 7 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+ValidatorPrimitive_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(ValidatorPrimitive) {
+  return ValidatorPrimitive_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& ValidatorPrimitive_Name(T value) {
+  static_assert(::std::is_same<T, ValidatorPrimitive>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to ValidatorPrimitive_Name().");
+  return ValidatorPrimitive_Name(static_cast<ValidatorPrimitive>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& ValidatorPrimitive_Name(ValidatorPrimitive value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<ValidatorPrimitive_descriptor, 0, 7>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool ValidatorPrimitive_Parse(
+    ::absl::string_view name, ValidatorPrimitive* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<ValidatorPrimitive>(ValidatorPrimitive_descriptor(), name,
+                                           value);
+}
 enum ErrorCode : int {
   ERROR_CODE_UNSPECIFIED = 0,
   ERROR_CODE_INVALID_ARGUMENT = 1,
@@ -850,7 +921,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LiveError final : public ::google::
   [[nodiscard]] static const LiveError& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<LiveError>(&LiveError_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(LiveError& a, LiveError& b) { a.Swap(&b); }
   inline void Swap(LiveError* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1068,7 +1139,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IndexSchema final : public ::google
   [[nodiscard]] static const IndexSchema& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<IndexSchema>(&IndexSchema_globals_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(IndexSchema& a, IndexSchema& b) { a.Swap(&b); }
   inline void Swap(IndexSchema* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1244,33 +1315,33 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IndexSchema final : public ::google
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeployResponse final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:loams.live.v1.DeployResponse) */ {
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Validator final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:loams.live.v1.Validator) */ {
   using Super_ = ::google::protobuf::Message;
 
  public:
-  inline DeployResponse() : DeployResponse(nullptr) {}
-  ~DeployResponse() PROTOBUF_FINAL;
+  inline Validator() : Validator(nullptr) {}
+  ~Validator() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(DeployResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+  void operator delete(Validator* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(DeployResponse));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(Validator));
   }
 #endif
 
   template <typename = void>
-  explicit constexpr DeployResponse(::google::protobuf::internal::ConstantInitialized,
+  explicit constexpr Validator(::google::protobuf::internal::ConstantInitialized,
                            const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
                                class_data);
 
-  inline DeployResponse(const DeployResponse& from) : DeployResponse(nullptr, from) {}
-  inline DeployResponse(DeployResponse&& from) noexcept : DeployResponse(nullptr, ::std::move(from)) {}
-  inline DeployResponse& operator=(const DeployResponse& from) {
+  inline Validator(const Validator& from) : Validator(nullptr, from) {}
+  inline Validator(Validator&& from) noexcept : Validator(nullptr, ::std::move(from)) {}
+  inline Validator& operator=(const Validator& from) {
     CopyFrom(from);
     return *this;
   }
-  inline DeployResponse& operator=(DeployResponse&& from) noexcept {
+  inline Validator& operator=(Validator&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -1299,12 +1370,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeployResponse final : public ::goo
   [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  [[nodiscard]] static const DeployResponse& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DeployResponse>(&DeployResponse_globals_);
+  [[nodiscard]] static const Validator& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<Validator>(&Validator_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
-  friend void swap(DeployResponse& a, DeployResponse& b) { a.Swap(&b); }
-  inline void Swap(DeployResponse* PROTOBUF_NONNULL other) {
+  enum KindCase {
+    kPrimitive = 1,
+    kArray = 2,
+    kObject = 3,
+    kLiteral = 4,
+    kUnion = 5,
+    kOptional = 6,
+    kId = 7,
+    KIND_NOT_SET = 0,
+  };
+  static constexpr int kIndexInFileMessages = 18;
+  friend void swap(Validator& a, Validator& b) { a.Swap(&b); }
+  inline void Swap(Validator* PROTOBUF_NONNULL other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -1312,7 +1393,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeployResponse final : public ::goo
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(DeployResponse* PROTOBUF_NONNULL other) {
+  void UnsafeArenaSwap(Validator* PROTOBUF_NONNULL other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -1320,14 +1401,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeployResponse final : public ::goo
 
   // implements Message ----------------------------------------------
 
-  [[nodiscard]] DeployResponse* PROTOBUF_NONNULL
+  [[nodiscard]] Validator* PROTOBUF_NONNULL
   New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return Super_::DefaultConstruct<DeployResponse>(arena);
+    return Super_::DefaultConstruct<Validator>(arena);
   }
   using Super_::CopyFrom;
-  void CopyFrom(const DeployResponse& from);
+  void CopyFrom(const Validator& from);
   using Super_::MergeFrom;
-  void MergeFrom(const DeployResponse& from) { DeployResponse::MergeImpl(*this, from); }
+  void MergeFrom(const Validator& from) { Validator::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(::google::protobuf::MessageLite& to_msg,
@@ -1365,15 +1446,15 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeployResponse final : public ::goo
   private:
   void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(DeployResponse* PROTOBUF_NONNULL other);
+  void InternalSwap(Validator* PROTOBUF_NONNULL other);
  private:
-  static ::absl::string_view FullMessageName() { return "loams.live.v1.DeployResponse"; }
+  static ::absl::string_view FullMessageName() { return "loams.live.v1.Validator"; }
 
-  explicit DeployResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  DeployResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const DeployResponse& from);
-  DeployResponse(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, DeployResponse&& from) noexcept
-      : DeployResponse(arena) {
+  explicit Validator(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  Validator(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Validator& from);
+  Validator(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, Validator&& from) noexcept
+      : Validator(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
@@ -1392,29 +1473,369 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeployResponse final : public ::goo
 
   // accessors -------------------------------------------------------
   enum : int {
-    kDeploymentIdFieldNumber = 1,
+    kPrimitiveFieldNumber = 1,
+    kArrayFieldNumber = 2,
+    kObjectFieldNumber = 3,
+    kLiteralFieldNumber = 4,
+    kUnionFieldNumber = 5,
+    kOptionalFieldNumber = 6,
+    kIdFieldNumber = 7,
   };
-  // string deployment_id = 1 [json_name = "deploymentId"];
-  void clear_deployment_id() ;
-  [[nodiscard]] const ::std::string& deployment_id() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_deployment_id(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_deployment_id();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_deployment_id();
-  void set_allocated_deployment_id(::std::string* PROTOBUF_NULLABLE value);
+  // .loams.live.v1.ValidatorPrimitive primitive = 1 [json_name = "primitive"];
+  [[nodiscard]] bool has_primitive() const;
+  void clear_primitive() ;
+  [[nodiscard]] ::loams::live::v1::ValidatorPrimitive primitive() const;
+  void set_primitive(::loams::live::v1::ValidatorPrimitive value);
 
   private:
-  const ::std::string& _internal_deployment_id() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_deployment_id(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_deployment_id();
+  ::loams::live::v1::ValidatorPrimitive _internal_primitive() const;
+  void _internal_set_primitive(::loams::live::v1::ValidatorPrimitive value);
 
   public:
-  // @@protoc_insertion_point(class_scope:loams.live.v1.DeployResponse)
+  // .loams.live.v1.Validator array = 2 [json_name = "array"];
+  [[nodiscard]] bool has_array() const;
+  private:
+  bool _internal_has_array() const;
+
+  public:
+  void clear_array() ;
+  [[nodiscard]] const ::loams::live::v1::Validator& array() const;
+  [[nodiscard]] ::loams::live::v1::Validator* PROTOBUF_NULLABLE release_array();
+  ::loams::live::v1::Validator* PROTOBUF_NONNULL mutable_array();
+  void set_allocated_array(::loams::live::v1::Validator* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_array(::loams::live::v1::Validator* PROTOBUF_NULLABLE value);
+  ::loams::live::v1::Validator* PROTOBUF_NULLABLE unsafe_arena_release_array();
+
+  private:
+  const ::loams::live::v1::Validator& _internal_array() const;
+  ::loams::live::v1::Validator* PROTOBUF_NONNULL _internal_mutable_array();
+
+  public:
+  // .loams.live.v1.ValidatorObject object = 3 [json_name = "object"];
+  [[nodiscard]] bool has_object() const;
+  private:
+  bool _internal_has_object() const;
+
+  public:
+  void clear_object() ;
+  [[nodiscard]] const ::loams::live::v1::ValidatorObject& object() const;
+  [[nodiscard]] ::loams::live::v1::ValidatorObject* PROTOBUF_NULLABLE release_object();
+  ::loams::live::v1::ValidatorObject* PROTOBUF_NONNULL mutable_object();
+  void set_allocated_object(::loams::live::v1::ValidatorObject* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_object(::loams::live::v1::ValidatorObject* PROTOBUF_NULLABLE value);
+  ::loams::live::v1::ValidatorObject* PROTOBUF_NULLABLE unsafe_arena_release_object();
+
+  private:
+  const ::loams::live::v1::ValidatorObject& _internal_object() const;
+  ::loams::live::v1::ValidatorObject* PROTOBUF_NONNULL _internal_mutable_object();
+
+  public:
+  // .loams.live.v1.Value literal = 4 [json_name = "literal"];
+  [[nodiscard]] bool has_literal() const;
+  private:
+  bool _internal_has_literal() const;
+
+  public:
+  void clear_literal() ;
+  [[nodiscard]] const ::loams::live::v1::Value& literal() const;
+  [[nodiscard]] ::loams::live::v1::Value* PROTOBUF_NULLABLE release_literal();
+  ::loams::live::v1::Value* PROTOBUF_NONNULL mutable_literal();
+  void set_allocated_literal(::loams::live::v1::Value* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_literal(::loams::live::v1::Value* PROTOBUF_NULLABLE value);
+  ::loams::live::v1::Value* PROTOBUF_NULLABLE unsafe_arena_release_literal();
+
+  private:
+  const ::loams::live::v1::Value& _internal_literal() const;
+  ::loams::live::v1::Value* PROTOBUF_NONNULL _internal_mutable_literal();
+
+  public:
+  // .loams.live.v1.ValidatorUnion union = 5 [json_name = "union"];
+  [[nodiscard]] bool has_union_() const;
+  private:
+  bool _internal_has_union_() const;
+
+  public:
+  void clear_union_() ;
+  [[nodiscard]] const ::loams::live::v1::ValidatorUnion& union_() const;
+  [[nodiscard]] ::loams::live::v1::ValidatorUnion* PROTOBUF_NULLABLE release_union_();
+  ::loams::live::v1::ValidatorUnion* PROTOBUF_NONNULL mutable_union_();
+  void set_allocated_union_(::loams::live::v1::ValidatorUnion* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_union_(::loams::live::v1::ValidatorUnion* PROTOBUF_NULLABLE value);
+  ::loams::live::v1::ValidatorUnion* PROTOBUF_NULLABLE unsafe_arena_release_union_();
+
+  private:
+  const ::loams::live::v1::ValidatorUnion& _internal_union_() const;
+  ::loams::live::v1::ValidatorUnion* PROTOBUF_NONNULL _internal_mutable_union_();
+
+  public:
+  // .loams.live.v1.Validator optional = 6 [json_name = "optional"];
+  [[nodiscard]] bool has_optional() const;
+  private:
+  bool _internal_has_optional() const;
+
+  public:
+  void clear_optional() ;
+  [[nodiscard]] const ::loams::live::v1::Validator& optional() const;
+  [[nodiscard]] ::loams::live::v1::Validator* PROTOBUF_NULLABLE release_optional();
+  ::loams::live::v1::Validator* PROTOBUF_NONNULL mutable_optional();
+  void set_allocated_optional(::loams::live::v1::Validator* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_optional(::loams::live::v1::Validator* PROTOBUF_NULLABLE value);
+  ::loams::live::v1::Validator* PROTOBUF_NULLABLE unsafe_arena_release_optional();
+
+  private:
+  const ::loams::live::v1::Validator& _internal_optional() const;
+  ::loams::live::v1::Validator* PROTOBUF_NONNULL _internal_mutable_optional();
+
+  public:
+  // string id = 7 [json_name = "id"];
+  [[nodiscard]] bool has_id() const;
+  void clear_id() ;
+  [[nodiscard]] const ::std::string& id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_id();
+  void set_allocated_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_id();
+
+  public:
+  void clear_kind();
+  KindCase kind_case() const;
+  // @@protoc_insertion_point(class_scope:loams.live.v1.Validator)
+ private:
+  class _Internal;
+  void set_has_primitive();
+  void set_has_array();
+  void set_has_object();
+  void set_has_literal();
+  void set_has_union_();
+  void set_has_optional();
+  void set_has_id();
+  [[nodiscard]] inline bool has_kind() const;
+  inline void clear_has_kind();
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 7,
+                          5, 34,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const Validator& from_msg);
+    union KindUnion {
+      constexpr KindUnion() : _constinit_{} {}
+      ::google::protobuf::internal::ConstantInitialized _constinit_;
+      int primitive_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE array_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE object_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE literal_;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE union__;
+      ::google::protobuf::Message* PROTOBUF_NULLABLE optional_;
+      ::google::protobuf::internal::ArenaStringPtr id_;
+    } kind_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t _oneof_case_[1];
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_loams_2flive_2fv1_2flive_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ValidatorObject final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:loams.live.v1.ValidatorObject) */ {
+  using Super_ = ::google::protobuf::Message;
+
+ public:
+  inline ValidatorObject() : ValidatorObject(nullptr) {}
+  ~ValidatorObject() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ValidatorObject* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ValidatorObject));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ValidatorObject(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ValidatorObject(const ValidatorObject& from) : ValidatorObject(nullptr, from) {}
+  inline ValidatorObject(ValidatorObject&& from) noexcept : ValidatorObject(nullptr, ::std::move(from)) {}
+  inline ValidatorObject& operator=(const ValidatorObject& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ValidatorObject& operator=(ValidatorObject&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ValidatorObject& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ValidatorObject>(&ValidatorObject_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 20;
+  friend void swap(ValidatorObject& a, ValidatorObject& b) { a.Swap(&b); }
+  inline void Swap(ValidatorObject* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ValidatorObject* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ValidatorObject* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return Super_::DefaultConstruct<ValidatorObject>(arena);
+  }
+  using Super_::CopyFrom;
+  void CopyFrom(const ValidatorObject& from);
+  using Super_::MergeFrom;
+  void MergeFrom(const ValidatorObject& from) { ValidatorObject::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ValidatorObject* PROTOBUF_NONNULL other);
+ private:
+  static ::absl::string_view FullMessageName() { return "loams.live.v1.ValidatorObject"; }
+
+  explicit ValidatorObject(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ValidatorObject(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ValidatorObject& from);
+  ValidatorObject(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ValidatorObject&& from) noexcept
+      : ValidatorObject(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kFieldsFieldNumber = 1,
+  };
+  // map<string, .loams.live.v1.Validator> fields = 1 [json_name = "fields"];
+  [[nodiscard]] int fields_size() const;
+  private:
+  int _internal_fields_size() const;
+
+  public:
+  void clear_fields() ;
+  [[nodiscard]] const ::google::protobuf::Map<::std::string, ::loams::live::v1::Validator>& fields() const;
+  [[nodiscard]] ::google::protobuf::Map<::std::string, ::loams::live::v1::Validator>* PROTOBUF_NONNULL mutable_fields();
+
+  private:
+  const ::google::protobuf::Map<::std::string, ::loams::live::v1::Validator>& _internal_fields() const;
+  ::google::protobuf::Map<::std::string, ::loams::live::v1::Validator>* PROTOBUF_NONNULL _internal_mutable_fields();
+
+  public:
+  // @@protoc_insertion_point(class_scope:loams.live.v1.ValidatorObject)
  private:
   class _Internal;
   using ParseTableT_ =
       ::google::protobuf::internal::TcParseTable<0, 1,
-                          0, 50,
+                          2, 44,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1439,10 +1860,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeployResponse final : public ::goo
     inline explicit Impl_(
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const DeployResponse& from_msg);
+        const ValidatorObject& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::internal::ArenaStringPtr deployment_id_;
+    ::google::protobuf::internal::MapField<ValidatorObject_FieldsEntry_DoNotUse, ::std::string, ::loams::live::v1::Validator> fields_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1450,198 +1871,40 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeployResponse final : public ::goo
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TableSchema final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:loams.live.v1.TableSchema) */ {
-  using Super_ = ::google::protobuf::Message;
+class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ValidatorObject_FieldsEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::std::string, ::google::protobuf::Message,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_MESSAGE> {
+  using Super_ =
+      ::google::protobuf::internal::MapEntry<::std::string, ::google::protobuf::Message,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_STRING,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_MESSAGE>;
 
  public:
-  inline TableSchema() : TableSchema(nullptr) {}
-  ~TableSchema() PROTOBUF_FINAL;
-
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(TableSchema* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
-    SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(TableSchema));
-  }
-#endif
-
+  ValidatorObject_FieldsEntry_DoNotUse();
   template <typename = void>
-  explicit constexpr TableSchema(::google::protobuf::internal::ConstantInitialized,
+  explicit constexpr ValidatorObject_FieldsEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized,
                            const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
                                class_data);
-
-  inline TableSchema(const TableSchema& from) : TableSchema(nullptr, from) {}
-  inline TableSchema(TableSchema&& from) noexcept : TableSchema(nullptr, ::std::move(from)) {}
-  inline TableSchema& operator=(const TableSchema& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline TableSchema& operator=(TableSchema&& from) noexcept {
-    if (this == &from) return *this;
-    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
+  explicit ValidatorObject_FieldsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_message_globals() {
+    return &ValidatorObject_FieldsEntry_DoNotUse_globals_;
   }
 
-  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
-      ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
-  }
-  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
-  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
-    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
-  }
 
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
-    return GetDescriptor();
-  }
-  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
-  GetDescriptor() {
-    return default_instance().GetMetadata().descriptor;
-  }
-  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
-    return default_instance().GetMetadata().reflection;
-  }
-  [[nodiscard]] static const TableSchema& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TableSchema>(&TableSchema_globals_);
-  }
-  static constexpr int kIndexInFileMessages = 18;
-  friend void swap(TableSchema& a, TableSchema& b) { a.Swap(&b); }
-  inline void Swap(TableSchema* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
-      InternalSwap(other);
-    } else {
-      ::google::protobuf::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(TableSchema* PROTOBUF_NONNULL other) {
-    if (other == this) return;
-    ABSL_DCHECK(GetArena() == other->GetArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  [[nodiscard]] TableSchema* PROTOBUF_NONNULL
-  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return Super_::DefaultConstruct<TableSchema>(arena);
-  }
-  using Super_::CopyFrom;
-  void CopyFrom(const TableSchema& from);
-  using Super_::MergeFrom;
-  void MergeFrom(const TableSchema& from) { TableSchema::MergeImpl(*this, from); }
-
-  private:
-  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
-                        const ::google::protobuf::MessageLite& from_msg);
-
-  public:
-  [[nodiscard]] bool IsInitialized() const {
-    return true;
-  }
-  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
-  #if defined(PROTOBUF_CUSTOM_VTABLE)
-  private:
-  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
-  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
-
-  public:
-  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
-    return _InternalSerialize(*this, target, stream);
-  }
-  #else   // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] ::size_t ByteSizeLong() const final;
-  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
-      ::uint8_t* PROTOBUF_NONNULL target,
-      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
-  #endif  // PROTOBUF_CUSTOM_VTABLE
-  [[nodiscard]] int GetCachedSize() const {
-    return _impl_._cached_size_.Get();
-  }
-
-  private:
-  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static void SharedDtor(MessageLite& self);
-  void InternalSwap(TableSchema* PROTOBUF_NONNULL other);
- private:
-  static ::absl::string_view FullMessageName() { return "loams.live.v1.TableSchema"; }
-
-  explicit TableSchema(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  TableSchema(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TableSchema& from);
-  TableSchema(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TableSchema&& from) noexcept
-      : TableSchema(arena) {
-    *this = ::std::move(from);
-  }
-  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
-  static void* PROTOBUF_NONNULL PlacementNew_(
-      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  static constexpr auto InternalNewImpl_();
-
- public:
   static constexpr auto InternalGenerateClassData_(
-      const MessageLite& prototype,
+      const ::google::protobuf::MessageLite& prototype,
       const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
 
-  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-  enum : int {
-    kIndexesFieldNumber = 2,
-    kNameFieldNumber = 1,
-  };
-  // repeated .loams.live.v1.IndexSchema indexes = 2 [json_name = "indexes"];
-  [[nodiscard]] int indexes_size() const;
-  private:
-  int _internal_indexes_size() const;
-
-  public:
-  void clear_indexes() ;
-  [[nodiscard]] const ::loams::live::v1::IndexSchema& indexes(int index) const;
-  [[nodiscard]] ::loams::live::v1::IndexSchema* PROTOBUF_NONNULL mutable_indexes(int index);
-  ::loams::live::v1::IndexSchema* PROTOBUF_NONNULL add_indexes();
-  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::loams::live::v1::IndexSchema>&
-  indexes() const;
-  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::loams::live::v1::IndexSchema>* PROTOBUF_NONNULL
-  mutable_indexes();
-
-  private:
-  const ::google::protobuf::RepeatedPtrField<::loams::live::v1::IndexSchema>& _internal_indexes() const;
-  ::google::protobuf::RepeatedPtrField<::loams::live::v1::IndexSchema>* PROTOBUF_NONNULL _internal_mutable_indexes();
-
-  public:
-  // string name = 1 [json_name = "name"];
-  void clear_name() ;
-  [[nodiscard]] const ::std::string& name() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_name(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_name();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
-  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_name() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
-
-  public:
-  // @@protoc_insertion_point(class_scope:loams.live.v1.TableSchema)
  private:
-  class _Internal;
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_loams_2flive_2fv1_2flive_2eproto;
+  friend ::google::protobuf::internal::PrivateAccess;
+  friend ValidatorObject_FieldsEntry_DoNotUseGlobalsTypeInternal;
+
   using ParseTableT_ =
       ::google::protobuf::internal::TcParseTable<1, 2,
-                          1, 38,
+                          1, 53,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1650,61 +1913,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TableSchema final : public ::google
   static const ParseTableT_ _table_;
   #endif
 
-  friend class ::google::protobuf::MessageLite;
-  friend class ::google::protobuf::Arena;
-  friend ::google::protobuf::internal::PrivateAccess;
-  template <typename T>
-  friend class ::google::protobuf::Arena::InternalHelper;
-  using InternalArenaConstructable_ = void;
-  using DestructorSkippable_ = void;
-  struct Impl_ {
-    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
-                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-    inline explicit Impl_(
-        ::google::protobuf::internal::InternalVisibility visibility,
-        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const TableSchema& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
-    ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedPtrField< ::loams::live::v1::IndexSchema > indexes_;
-    ::google::protobuf::internal::ArenaStringPtr name_;
-    PROTOBUF_TSAN_DECLARE_MEMBER
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_loams_2flive_2fv1_2flive_2eproto;
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Schema final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:loams.live.v1.Schema) */ {
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ValidatorUnion final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:loams.live.v1.ValidatorUnion) */ {
   using Super_ = ::google::protobuf::Message;
 
  public:
-  inline Schema() : Schema(nullptr) {}
-  ~Schema() PROTOBUF_FINAL;
+  inline ValidatorUnion() : ValidatorUnion(nullptr) {}
+  ~ValidatorUnion() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(Schema* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+  void operator delete(ValidatorUnion* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(Schema));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ValidatorUnion));
   }
 #endif
 
   template <typename = void>
-  explicit constexpr Schema(::google::protobuf::internal::ConstantInitialized,
+  explicit constexpr ValidatorUnion(::google::protobuf::internal::ConstantInitialized,
                            const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
                                class_data);
 
-  inline Schema(const Schema& from) : Schema(nullptr, from) {}
-  inline Schema(Schema&& from) noexcept : Schema(nullptr, ::std::move(from)) {}
-  inline Schema& operator=(const Schema& from) {
+  inline ValidatorUnion(const ValidatorUnion& from) : ValidatorUnion(nullptr, from) {}
+  inline ValidatorUnion(ValidatorUnion&& from) noexcept : ValidatorUnion(nullptr, ::std::move(from)) {}
+  inline ValidatorUnion& operator=(const ValidatorUnion& from) {
     CopyFrom(from);
     return *this;
   }
-  inline Schema& operator=(Schema&& from) noexcept {
+  inline ValidatorUnion& operator=(ValidatorUnion&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -1733,12 +1976,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Schema final : public ::google::pro
   [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  [[nodiscard]] static const Schema& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<Schema>(&Schema_globals_);
+  [[nodiscard]] static const ValidatorUnion& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ValidatorUnion>(&ValidatorUnion_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
-  friend void swap(Schema& a, Schema& b) { a.Swap(&b); }
-  inline void Swap(Schema* PROTOBUF_NONNULL other) {
+  static constexpr int kIndexInFileMessages = 21;
+  friend void swap(ValidatorUnion& a, ValidatorUnion& b) { a.Swap(&b); }
+  inline void Swap(ValidatorUnion* PROTOBUF_NONNULL other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -1746,7 +1989,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Schema final : public ::google::pro
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(Schema* PROTOBUF_NONNULL other) {
+  void UnsafeArenaSwap(ValidatorUnion* PROTOBUF_NONNULL other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -1754,14 +1997,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Schema final : public ::google::pro
 
   // implements Message ----------------------------------------------
 
-  [[nodiscard]] Schema* PROTOBUF_NONNULL
+  [[nodiscard]] ValidatorUnion* PROTOBUF_NONNULL
   New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return Super_::DefaultConstruct<Schema>(arena);
+    return Super_::DefaultConstruct<ValidatorUnion>(arena);
   }
   using Super_::CopyFrom;
-  void CopyFrom(const Schema& from);
+  void CopyFrom(const ValidatorUnion& from);
   using Super_::MergeFrom;
-  void MergeFrom(const Schema& from) { Schema::MergeImpl(*this, from); }
+  void MergeFrom(const ValidatorUnion& from) { ValidatorUnion::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(::google::protobuf::MessageLite& to_msg,
@@ -1799,15 +2042,15 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Schema final : public ::google::pro
   private:
   void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(Schema* PROTOBUF_NONNULL other);
+  void InternalSwap(ValidatorUnion* PROTOBUF_NONNULL other);
  private:
-  static ::absl::string_view FullMessageName() { return "loams.live.v1.Schema"; }
+  static ::absl::string_view FullMessageName() { return "loams.live.v1.ValidatorUnion"; }
 
-  explicit Schema(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  Schema(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Schema& from);
-  Schema(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, Schema&& from) noexcept
-      : Schema(arena) {
+  explicit ValidatorUnion(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ValidatorUnion(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ValidatorUnion& from);
+  ValidatorUnion(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ValidatorUnion&& from) noexcept
+      : ValidatorUnion(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
@@ -1826,29 +2069,29 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Schema final : public ::google::pro
 
   // accessors -------------------------------------------------------
   enum : int {
-    kTablesFieldNumber = 1,
+    kMembersFieldNumber = 1,
   };
-  // repeated .loams.live.v1.TableSchema tables = 1 [json_name = "tables"];
-  [[nodiscard]] int tables_size() const;
+  // repeated .loams.live.v1.Validator members = 1 [json_name = "members"];
+  [[nodiscard]] int members_size() const;
   private:
-  int _internal_tables_size() const;
+  int _internal_members_size() const;
 
   public:
-  void clear_tables() ;
-  [[nodiscard]] const ::loams::live::v1::TableSchema& tables(int index) const;
-  [[nodiscard]] ::loams::live::v1::TableSchema* PROTOBUF_NONNULL mutable_tables(int index);
-  ::loams::live::v1::TableSchema* PROTOBUF_NONNULL add_tables();
-  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::loams::live::v1::TableSchema>&
-  tables() const;
-  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::loams::live::v1::TableSchema>* PROTOBUF_NONNULL
-  mutable_tables();
+  void clear_members() ;
+  [[nodiscard]] const ::loams::live::v1::Validator& members(int index) const;
+  [[nodiscard]] ::loams::live::v1::Validator* PROTOBUF_NONNULL mutable_members(int index);
+  ::loams::live::v1::Validator* PROTOBUF_NONNULL add_members();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::loams::live::v1::Validator>&
+  members() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::loams::live::v1::Validator>* PROTOBUF_NONNULL
+  mutable_members();
 
   private:
-  const ::google::protobuf::RepeatedPtrField<::loams::live::v1::TableSchema>& _internal_tables() const;
-  ::google::protobuf::RepeatedPtrField<::loams::live::v1::TableSchema>* PROTOBUF_NONNULL _internal_mutable_tables();
+  const ::google::protobuf::RepeatedPtrField<::loams::live::v1::Validator>& _internal_members() const;
+  ::google::protobuf::RepeatedPtrField<::loams::live::v1::Validator>* PROTOBUF_NONNULL _internal_mutable_members();
 
   public:
-  // @@protoc_insertion_point(class_scope:loams.live.v1.Schema)
+  // @@protoc_insertion_point(class_scope:loams.live.v1.ValidatorUnion)
  private:
   class _Internal;
   using ParseTableT_ =
@@ -1878,10 +2121,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Schema final : public ::google::pro
     inline explicit Impl_(
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const Schema& from_msg);
+        const ValidatorUnion& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::RepeatedPtrField< ::loams::live::v1::TableSchema > tables_;
+    ::google::protobuf::RepeatedPtrField< ::loams::live::v1::Validator > members_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3593,6 +3836,264 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Transition final : public ::google:
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TableSchema final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:loams.live.v1.TableSchema) */ {
+  using Super_ = ::google::protobuf::Message;
+
+ public:
+  inline TableSchema() : TableSchema(nullptr) {}
+  ~TableSchema() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TableSchema* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TableSchema));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TableSchema(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TableSchema(const TableSchema& from) : TableSchema(nullptr, from) {}
+  inline TableSchema(TableSchema&& from) noexcept : TableSchema(nullptr, ::std::move(from)) {}
+  inline TableSchema& operator=(const TableSchema& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TableSchema& operator=(TableSchema&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TableSchema& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TableSchema>(&TableSchema_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 16;
+  friend void swap(TableSchema& a, TableSchema& b) { a.Swap(&b); }
+  inline void Swap(TableSchema* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TableSchema* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TableSchema* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return Super_::DefaultConstruct<TableSchema>(arena);
+  }
+  using Super_::CopyFrom;
+  void CopyFrom(const TableSchema& from);
+  using Super_::MergeFrom;
+  void MergeFrom(const TableSchema& from) { TableSchema::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TableSchema* PROTOBUF_NONNULL other);
+ private:
+  static ::absl::string_view FullMessageName() { return "loams.live.v1.TableSchema"; }
+
+  explicit TableSchema(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TableSchema(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TableSchema& from);
+  TableSchema(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TableSchema&& from) noexcept
+      : TableSchema(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kIndexesFieldNumber = 2,
+    kNameFieldNumber = 1,
+    kValidatorFieldNumber = 3,
+    kSchemaValidationFieldNumber = 4,
+  };
+  // repeated .loams.live.v1.IndexSchema indexes = 2 [json_name = "indexes"];
+  [[nodiscard]] int indexes_size() const;
+  private:
+  int _internal_indexes_size() const;
+
+  public:
+  void clear_indexes() ;
+  [[nodiscard]] const ::loams::live::v1::IndexSchema& indexes(int index) const;
+  [[nodiscard]] ::loams::live::v1::IndexSchema* PROTOBUF_NONNULL mutable_indexes(int index);
+  ::loams::live::v1::IndexSchema* PROTOBUF_NONNULL add_indexes();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::loams::live::v1::IndexSchema>&
+  indexes() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::loams::live::v1::IndexSchema>* PROTOBUF_NONNULL
+  mutable_indexes();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::loams::live::v1::IndexSchema>& _internal_indexes() const;
+  ::google::protobuf::RepeatedPtrField<::loams::live::v1::IndexSchema>* PROTOBUF_NONNULL _internal_mutable_indexes();
+
+  public:
+  // string name = 1 [json_name = "name"];
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // .loams.live.v1.Validator validator = 3 [json_name = "validator"];
+  [[nodiscard]] bool has_validator() const;
+  void clear_validator() ;
+  [[nodiscard]] const ::loams::live::v1::Validator& validator() const;
+  [[nodiscard]] ::loams::live::v1::Validator* PROTOBUF_NULLABLE release_validator();
+  ::loams::live::v1::Validator* PROTOBUF_NONNULL mutable_validator();
+  void set_allocated_validator(::loams::live::v1::Validator* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_validator(::loams::live::v1::Validator* PROTOBUF_NULLABLE value);
+  ::loams::live::v1::Validator* PROTOBUF_NULLABLE unsafe_arena_release_validator();
+
+  private:
+  const ::loams::live::v1::Validator& _internal_validator() const;
+  ::loams::live::v1::Validator* PROTOBUF_NONNULL _internal_mutable_validator();
+
+  public:
+  // optional bool schema_validation = 4 [json_name = "schemaValidation"];
+  [[nodiscard]] bool has_schema_validation() const;
+  void clear_schema_validation() ;
+  [[nodiscard]] bool schema_validation() const;
+  void set_schema_validation(bool value);
+
+  private:
+  bool _internal_schema_validation() const;
+  void _internal_set_schema_validation(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:loams.live.v1.TableSchema)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          2, 38,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TableSchema& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::loams::live::v1::IndexSchema > indexes_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::loams::live::v1::Validator* PROTOBUF_NULLABLE validator_;
+    bool schema_validation_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_loams_2flive_2fv1_2flive_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QuerySetChange final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:loams.live.v1.QuerySetChange) */ {
   using Super_ = ::google::protobuf::Message;
@@ -4054,33 +4555,33 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QuerySet final : public ::google::p
 };
 // -------------------------------------------------------------------
 
-class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeployRequest final : public ::google::protobuf::Message
-/* @@protoc_insertion_point(class_definition:loams.live.v1.DeployRequest) */ {
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Schema final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:loams.live.v1.Schema) */ {
   using Super_ = ::google::protobuf::Message;
 
  public:
-  inline DeployRequest() : DeployRequest(nullptr) {}
-  ~DeployRequest() PROTOBUF_FINAL;
+  inline Schema() : Schema(nullptr) {}
+  ~Schema() PROTOBUF_FINAL;
 
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-  void operator delete(DeployRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+  void operator delete(Schema* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
     SharedDtor(*msg);
-    ::google::protobuf::internal::SizedDelete(msg, sizeof(DeployRequest));
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(Schema));
   }
 #endif
 
   template <typename = void>
-  explicit constexpr DeployRequest(::google::protobuf::internal::ConstantInitialized,
+  explicit constexpr Schema(::google::protobuf::internal::ConstantInitialized,
                            const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
                                class_data);
 
-  inline DeployRequest(const DeployRequest& from) : DeployRequest(nullptr, from) {}
-  inline DeployRequest(DeployRequest&& from) noexcept : DeployRequest(nullptr, ::std::move(from)) {}
-  inline DeployRequest& operator=(const DeployRequest& from) {
+  inline Schema(const Schema& from) : Schema(nullptr, from) {}
+  inline Schema(Schema&& from) noexcept : Schema(nullptr, ::std::move(from)) {}
+  inline Schema& operator=(const Schema& from) {
     CopyFrom(from);
     return *this;
   }
-  inline DeployRequest& operator=(DeployRequest&& from) noexcept {
+  inline Schema& operator=(Schema&& from) noexcept {
     if (this == &from) return *this;
     if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
       InternalSwap(&from);
@@ -4109,12 +4610,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeployRequest final : public ::goog
   [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
     return default_instance().GetMetadata().reflection;
   }
-  [[nodiscard]] static const DeployRequest& default_instance() {
-    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DeployRequest>(&DeployRequest_globals_);
+  [[nodiscard]] static const Schema& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<Schema>(&Schema_globals_);
   }
   static constexpr int kIndexInFileMessages = 15;
-  friend void swap(DeployRequest& a, DeployRequest& b) { a.Swap(&b); }
-  inline void Swap(DeployRequest* PROTOBUF_NONNULL other) {
+  friend void swap(Schema& a, Schema& b) { a.Swap(&b); }
+  inline void Swap(Schema* PROTOBUF_NONNULL other) {
     if (other == this) return;
     if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
       InternalSwap(other);
@@ -4122,7 +4623,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeployRequest final : public ::goog
       ::google::protobuf::internal::GenericSwap(this, other);
     }
   }
-  void UnsafeArenaSwap(DeployRequest* PROTOBUF_NONNULL other) {
+  void UnsafeArenaSwap(Schema* PROTOBUF_NONNULL other) {
     if (other == this) return;
     ABSL_DCHECK(GetArena() == other->GetArena());
     InternalSwap(other);
@@ -4130,14 +4631,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeployRequest final : public ::goog
 
   // implements Message ----------------------------------------------
 
-  [[nodiscard]] DeployRequest* PROTOBUF_NONNULL
+  [[nodiscard]] Schema* PROTOBUF_NONNULL
   New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
-    return Super_::DefaultConstruct<DeployRequest>(arena);
+    return Super_::DefaultConstruct<Schema>(arena);
   }
   using Super_::CopyFrom;
-  void CopyFrom(const DeployRequest& from);
+  void CopyFrom(const Schema& from);
   using Super_::MergeFrom;
-  void MergeFrom(const DeployRequest& from) { DeployRequest::MergeImpl(*this, from); }
+  void MergeFrom(const Schema& from) { Schema::MergeImpl(*this, from); }
 
   private:
   static void MergeImpl(::google::protobuf::MessageLite& to_msg,
@@ -4175,15 +4676,15 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeployRequest final : public ::goog
   private:
   void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
   static void SharedDtor(MessageLite& self);
-  void InternalSwap(DeployRequest* PROTOBUF_NONNULL other);
+  void InternalSwap(Schema* PROTOBUF_NONNULL other);
  private:
-  static ::absl::string_view FullMessageName() { return "loams.live.v1.DeployRequest"; }
+  static ::absl::string_view FullMessageName() { return "loams.live.v1.Schema"; }
 
-  explicit DeployRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
-  DeployRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const DeployRequest& from);
-  DeployRequest(
-      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, DeployRequest&& from) noexcept
-      : DeployRequest(arena) {
+  explicit Schema(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  Schema(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Schema& from);
+  Schema(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, Schema&& from) noexcept
+      : Schema(arena) {
     *this = ::std::move(from);
   }
   const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
@@ -4202,44 +4703,33 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeployRequest final : public ::goog
 
   // accessors -------------------------------------------------------
   enum : int {
-    kBundleFieldNumber = 1,
-    kSchemaFieldNumber = 2,
+    kTablesFieldNumber = 1,
   };
-  // bytes bundle = 1 [json_name = "bundle"];
-  void clear_bundle() ;
-  [[nodiscard]] const ::std::string& bundle() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_bundle(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_bundle();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_bundle();
-  void set_allocated_bundle(::std::string* PROTOBUF_NULLABLE value);
-
+  // repeated .loams.live.v1.TableSchema tables = 1 [json_name = "tables"];
+  [[nodiscard]] int tables_size() const;
   private:
-  const ::std::string& _internal_bundle() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_bundle(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_bundle();
+  int _internal_tables_size() const;
 
   public:
-  // .loams.live.v1.Schema schema = 2 [json_name = "schema"];
-  [[nodiscard]] bool has_schema() const;
-  void clear_schema() ;
-  [[nodiscard]] const ::loams::live::v1::Schema& schema() const;
-  [[nodiscard]] ::loams::live::v1::Schema* PROTOBUF_NULLABLE release_schema();
-  ::loams::live::v1::Schema* PROTOBUF_NONNULL mutable_schema();
-  void set_allocated_schema(::loams::live::v1::Schema* PROTOBUF_NULLABLE value);
-  void unsafe_arena_set_allocated_schema(::loams::live::v1::Schema* PROTOBUF_NULLABLE value);
-  ::loams::live::v1::Schema* PROTOBUF_NULLABLE unsafe_arena_release_schema();
+  void clear_tables() ;
+  [[nodiscard]] const ::loams::live::v1::TableSchema& tables(int index) const;
+  [[nodiscard]] ::loams::live::v1::TableSchema* PROTOBUF_NONNULL mutable_tables(int index);
+  ::loams::live::v1::TableSchema* PROTOBUF_NONNULL add_tables();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::loams::live::v1::TableSchema>&
+  tables() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::loams::live::v1::TableSchema>* PROTOBUF_NONNULL
+  mutable_tables();
 
   private:
-  const ::loams::live::v1::Schema& _internal_schema() const;
-  ::loams::live::v1::Schema* PROTOBUF_NONNULL _internal_mutable_schema();
+  const ::google::protobuf::RepeatedPtrField<::loams::live::v1::TableSchema>& _internal_tables() const;
+  ::google::protobuf::RepeatedPtrField<::loams::live::v1::TableSchema>* PROTOBUF_NONNULL _internal_mutable_tables();
 
   public:
-  // @@protoc_insertion_point(class_scope:loams.live.v1.DeployRequest)
+  // @@protoc_insertion_point(class_scope:loams.live.v1.Schema)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<0, 1,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -4265,11 +4755,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeployRequest final : public ::goog
     inline explicit Impl_(
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
-        const DeployRequest& from_msg);
+        const Schema& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::google::protobuf::internal::ArenaStringPtr bundle_;
-    ::loams::live::v1::Schema* PROTOBUF_NULLABLE schema_;
+    ::google::protobuf::RepeatedPtrField< ::loams::live::v1::TableSchema > tables_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7308,240 +7797,6 @@ inline void MutateResponse::set_allocated_result(::loams::live::v1::Value* PROTO
 
 // -------------------------------------------------------------------
 
-// DeployRequest
-
-// bytes bundle = 1 [json_name = "bundle"];
-inline void DeployRequest::clear_bundle() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.bundle_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline const ::std::string& DeployRequest::bundle() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:loams.live.v1.DeployRequest.bundle)
-  return _internal_bundle();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void DeployRequest::set_bundle(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  _impl_.bundle_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:loams.live.v1.DeployRequest.bundle)
-}
-inline ::std::string* PROTOBUF_NONNULL DeployRequest::mutable_bundle()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  ::std::string* _s = _internal_mutable_bundle();
-  // @@protoc_insertion_point(field_mutable:loams.live.v1.DeployRequest.bundle)
-  return _s;
-}
-inline const ::std::string& DeployRequest::_internal_bundle() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.bundle_.Get();
-}
-inline void DeployRequest::_internal_set_bundle(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.bundle_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL DeployRequest::_internal_mutable_bundle() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.bundle_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE DeployRequest::release_bundle() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:loams.live.v1.DeployRequest.bundle)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
-    return nullptr;
-  }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  auto* released = _impl_.bundle_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.bundle_.Set("", GetArena());
-  }
-  return released;
-}
-inline void DeployRequest::set_allocated_bundle(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  }
-  _impl_.bundle_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.bundle_.IsDefault()) {
-    _impl_.bundle_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.DeployRequest.bundle)
-}
-
-// .loams.live.v1.Schema schema = 2 [json_name = "schema"];
-inline bool DeployRequest::has_schema() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
-  PROTOBUF_ASSUME(!value || _impl_.schema_ != nullptr);
-  return value;
-}
-inline void DeployRequest::clear_schema() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.schema_ != nullptr) _impl_.schema_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-}
-inline const ::loams::live::v1::Schema& DeployRequest::_internal_schema() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  const ::loams::live::v1::Schema* p = _impl_.schema_;
-  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::loams::live::v1::Schema>(&::loams::live::v1::Schema_globals_);
-}
-inline const ::loams::live::v1::Schema& DeployRequest::schema() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:loams.live.v1.DeployRequest.schema)
-  return _internal_schema();
-}
-inline void DeployRequest::unsafe_arena_set_allocated_schema(
-    ::loams::live::v1::Schema* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (GetArena() == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.schema_);
-  }
-  _impl_.schema_ = reinterpret_cast<::loams::live::v1::Schema*>(value);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.live.v1.DeployRequest.schema)
-}
-inline ::loams::live::v1::Schema* PROTOBUF_NULLABLE DeployRequest::release_schema() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  ::loams::live::v1::Schema* released = _impl_.schema_;
-  _impl_.schema_ = nullptr;
-  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
-    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
-    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    if (GetArena() == nullptr) {
-      delete old;
-    }
-  } else {
-    if (GetArena() != nullptr) {
-      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
-    }
-  }
-  return released;
-}
-inline ::loams::live::v1::Schema* PROTOBUF_NULLABLE DeployRequest::unsafe_arena_release_schema() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:loams.live.v1.DeployRequest.schema)
-
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  ::loams::live::v1::Schema* temp = _impl_.schema_;
-  _impl_.schema_ = nullptr;
-  return temp;
-}
-inline ::loams::live::v1::Schema* PROTOBUF_NONNULL DeployRequest::_internal_mutable_schema() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (_impl_.schema_ == nullptr) {
-    auto* p = Super_::DefaultConstruct<::loams::live::v1::Schema>(GetArena());
-    _impl_.schema_ = reinterpret_cast<::loams::live::v1::Schema*>(p);
-  }
-  return _impl_.schema_;
-}
-inline ::loams::live::v1::Schema* PROTOBUF_NONNULL DeployRequest::mutable_schema()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  ::loams::live::v1::Schema* _msg = _internal_mutable_schema();
-  // @@protoc_insertion_point(field_mutable:loams.live.v1.DeployRequest.schema)
-  return _msg;
-}
-inline void DeployRequest::set_allocated_schema(::loams::live::v1::Schema* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::Arena* message_arena = GetArena();
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (message_arena == nullptr) {
-    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.schema_);
-  }
-
-  if (value != nullptr) {
-    ::google::protobuf::Arena* submessage_arena = value->GetArena();
-    if (message_arena != submessage_arena) {
-      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
-    }
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
-  }
-
-  _impl_.schema_ = reinterpret_cast<::loams::live::v1::Schema*>(value);
-  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.DeployRequest.schema)
-}
-
-// -------------------------------------------------------------------
-
-// DeployResponse
-
-// string deployment_id = 1 [json_name = "deploymentId"];
-inline void DeployResponse::clear_deployment_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.deployment_id_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-}
-inline const ::std::string& DeployResponse::deployment_id() const
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  // @@protoc_insertion_point(field_get:loams.live.v1.DeployResponse.deployment_id)
-  return _internal_deployment_id();
-}
-template <typename Arg_, typename... Args_>
-PROTOBUF_ALWAYS_INLINE void DeployResponse::set_deployment_id(Arg_&& arg, Args_... args) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  _impl_.deployment_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
-  // @@protoc_insertion_point(field_set:loams.live.v1.DeployResponse.deployment_id)
-}
-inline ::std::string* PROTOBUF_NONNULL DeployResponse::mutable_deployment_id()
-    ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  ::std::string* _s = _internal_mutable_deployment_id();
-  // @@protoc_insertion_point(field_mutable:loams.live.v1.DeployResponse.deployment_id)
-  return _s;
-}
-inline const ::std::string& DeployResponse::_internal_deployment_id() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.deployment_id_.Get();
-}
-inline void DeployResponse::_internal_set_deployment_id(const ::std::string& value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.deployment_id_.Set(value, GetArena());
-}
-inline ::std::string* PROTOBUF_NONNULL DeployResponse::_internal_mutable_deployment_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  return _impl_.deployment_id_.Mutable( GetArena());
-}
-inline ::std::string* PROTOBUF_NULLABLE DeployResponse::release_deployment_id() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  // @@protoc_insertion_point(field_release:loams.live.v1.DeployResponse.deployment_id)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
-    return nullptr;
-  }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  auto* released = _impl_.deployment_id_.Release();
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
-    _impl_.deployment_id_.Set("", GetArena());
-  }
-  return released;
-}
-inline void DeployResponse::set_allocated_deployment_id(::std::string* PROTOBUF_NULLABLE value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
-  } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
-  }
-  _impl_.deployment_id_.SetAllocated(value, GetArena());
-  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.deployment_id_.IsDefault()) {
-    _impl_.deployment_id_.Set("", GetArena());
-  }
-  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.DeployResponse.deployment_id)
-}
-
-// -------------------------------------------------------------------
-
 // Schema
 
 // repeated .loams.live.v1.TableSchema tables = 1 [json_name = "tables"];
@@ -7722,6 +7977,132 @@ TableSchema::_internal_mutable_indexes() {
   return &_impl_.indexes_;
 }
 
+// .loams.live.v1.Validator validator = 3 [json_name = "validator"];
+inline bool TableSchema::has_validator() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.validator_ != nullptr);
+  return value;
+}
+inline void TableSchema::clear_validator() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.validator_ != nullptr) _impl_.validator_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::loams::live::v1::Validator& TableSchema::_internal_validator() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::loams::live::v1::Validator* p = _impl_.validator_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::loams::live::v1::Validator>(&::loams::live::v1::Validator_globals_);
+}
+inline const ::loams::live::v1::Validator& TableSchema::validator() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.TableSchema.validator)
+  return _internal_validator();
+}
+inline void TableSchema::unsafe_arena_set_allocated_validator(
+    ::loams::live::v1::Validator* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.validator_);
+  }
+  _impl_.validator_ = reinterpret_cast<::loams::live::v1::Validator*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.live.v1.TableSchema.validator)
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NULLABLE TableSchema::release_validator() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::loams::live::v1::Validator* released = _impl_.validator_;
+  _impl_.validator_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NULLABLE TableSchema::unsafe_arena_release_validator() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.TableSchema.validator)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::loams::live::v1::Validator* temp = _impl_.validator_;
+  _impl_.validator_ = nullptr;
+  return temp;
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NONNULL TableSchema::_internal_mutable_validator() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.validator_ == nullptr) {
+    auto* p = Super_::DefaultConstruct<::loams::live::v1::Validator>(GetArena());
+    _impl_.validator_ = reinterpret_cast<::loams::live::v1::Validator*>(p);
+  }
+  return _impl_.validator_;
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NONNULL TableSchema::mutable_validator()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::loams::live::v1::Validator* _msg = _internal_mutable_validator();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.TableSchema.validator)
+  return _msg;
+}
+inline void TableSchema::set_allocated_validator(::loams::live::v1::Validator* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.validator_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.validator_ = reinterpret_cast<::loams::live::v1::Validator*>(value);
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.TableSchema.validator)
+}
+
+// optional bool schema_validation = 4 [json_name = "schemaValidation"];
+inline bool TableSchema::has_schema_validation() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  return value;
+}
+inline void TableSchema::clear_schema_validation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.schema_validation_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool TableSchema::schema_validation() const {
+  // @@protoc_insertion_point(field_get:loams.live.v1.TableSchema.schema_validation)
+  return _internal_schema_validation();
+}
+inline void TableSchema::set_schema_validation(bool value) {
+  _internal_set_schema_validation(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:loams.live.v1.TableSchema.schema_validation)
+}
+inline bool TableSchema::_internal_schema_validation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.schema_validation_;
+}
+inline void TableSchema::_internal_set_schema_validation(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.schema_validation_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // IndexSchema
@@ -7864,6 +8245,621 @@ IndexSchema::_internal_mutable_fields() {
 
 // -------------------------------------------------------------------
 
+// Validator
+
+// .loams.live.v1.ValidatorPrimitive primitive = 1 [json_name = "primitive"];
+inline bool Validator::has_primitive() const {
+  return kind_case() == kPrimitive;
+}
+inline void Validator::set_has_primitive() {
+  _impl_._oneof_case_[0] = kPrimitive;
+}
+inline void Validator::clear_primitive() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (kind_case() == kPrimitive) {
+    _impl_.kind_.primitive_ = 0;
+    clear_has_kind();
+  }
+}
+inline ::loams::live::v1::ValidatorPrimitive Validator::primitive() const {
+  // @@protoc_insertion_point(field_get:loams.live.v1.Validator.primitive)
+  return _internal_primitive();
+}
+inline void Validator::set_primitive(::loams::live::v1::ValidatorPrimitive value) {
+  if (kind_case() != kPrimitive) {
+    clear_kind();
+    set_has_primitive();
+  }
+  _impl_.kind_.primitive_ = value;
+  // @@protoc_insertion_point(field_set:loams.live.v1.Validator.primitive)
+}
+inline ::loams::live::v1::ValidatorPrimitive Validator::_internal_primitive() const {
+  if (kind_case() == kPrimitive) {
+    return static_cast<::loams::live::v1::ValidatorPrimitive>(_impl_.kind_.primitive_);
+  }
+  return static_cast<::loams::live::v1::ValidatorPrimitive>(0);
+}
+
+// .loams.live.v1.Validator array = 2 [json_name = "array"];
+inline bool Validator::has_array() const {
+  return kind_case() == kArray;
+}
+inline bool Validator::_internal_has_array() const {
+  return kind_case() == kArray;
+}
+inline void Validator::set_has_array() {
+  _impl_._oneof_case_[0] = kArray;
+}
+inline void Validator::clear_array() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (kind_case() == kArray) {
+    if (GetArena() == nullptr) {
+      delete _impl_.kind_.array_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.kind_.array_);
+    }
+    clear_has_kind();
+  }
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NULLABLE Validator::release_array() {
+  // @@protoc_insertion_point(field_release:loams.live.v1.Validator.array)
+  if (kind_case() == kArray) {
+    clear_has_kind();
+    auto* temp = reinterpret_cast<::loams::live::v1::Validator*>(_impl_.kind_.array_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.kind_.array_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::loams::live::v1::Validator& Validator::_internal_array() const {
+  return kind_case() == kArray ? static_cast<const ::loams::live::v1::Validator&>(*reinterpret_cast<::loams::live::v1::Validator*>(_impl_.kind_.array_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::loams::live::v1::Validator>(&::loams::live::v1::Validator_globals_);
+}
+inline const ::loams::live::v1::Validator& Validator::array() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.Validator.array)
+  return _internal_array();
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NULLABLE Validator::unsafe_arena_release_array() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:loams.live.v1.Validator.array)
+  if (kind_case() == kArray) {
+    clear_has_kind();
+    auto* temp = reinterpret_cast<::loams::live::v1::Validator*>(_impl_.kind_.array_);
+    _impl_.kind_.array_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Validator::unsafe_arena_set_allocated_array(
+    ::loams::live::v1::Validator* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_kind();
+  if (value) {
+    set_has_array();
+    _impl_.kind_.array_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.live.v1.Validator.array)
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NONNULL Validator::_internal_mutable_array() {
+  if (kind_case() != kArray) {
+    clear_kind();
+    set_has_array();
+    _impl_.kind_.array_ = reinterpret_cast<::google::protobuf::Message*>(Super_::DefaultConstruct<::loams::live::v1::Validator>(GetArena()));
+  }
+  return reinterpret_cast<::loams::live::v1::Validator*>(_impl_.kind_.array_);
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NONNULL Validator::mutable_array()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::loams::live::v1::Validator* _msg = _internal_mutable_array();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.Validator.array)
+  return _msg;
+}
+
+// .loams.live.v1.ValidatorObject object = 3 [json_name = "object"];
+inline bool Validator::has_object() const {
+  return kind_case() == kObject;
+}
+inline bool Validator::_internal_has_object() const {
+  return kind_case() == kObject;
+}
+inline void Validator::set_has_object() {
+  _impl_._oneof_case_[0] = kObject;
+}
+inline void Validator::clear_object() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (kind_case() == kObject) {
+    if (GetArena() == nullptr) {
+      delete _impl_.kind_.object_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.kind_.object_);
+    }
+    clear_has_kind();
+  }
+}
+inline ::loams::live::v1::ValidatorObject* PROTOBUF_NULLABLE Validator::release_object() {
+  // @@protoc_insertion_point(field_release:loams.live.v1.Validator.object)
+  if (kind_case() == kObject) {
+    clear_has_kind();
+    auto* temp = reinterpret_cast<::loams::live::v1::ValidatorObject*>(_impl_.kind_.object_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.kind_.object_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::loams::live::v1::ValidatorObject& Validator::_internal_object() const {
+  return kind_case() == kObject ? static_cast<const ::loams::live::v1::ValidatorObject&>(*reinterpret_cast<::loams::live::v1::ValidatorObject*>(_impl_.kind_.object_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::loams::live::v1::ValidatorObject>(&::loams::live::v1::ValidatorObject_globals_);
+}
+inline const ::loams::live::v1::ValidatorObject& Validator::object() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.Validator.object)
+  return _internal_object();
+}
+inline ::loams::live::v1::ValidatorObject* PROTOBUF_NULLABLE Validator::unsafe_arena_release_object() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:loams.live.v1.Validator.object)
+  if (kind_case() == kObject) {
+    clear_has_kind();
+    auto* temp = reinterpret_cast<::loams::live::v1::ValidatorObject*>(_impl_.kind_.object_);
+    _impl_.kind_.object_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Validator::unsafe_arena_set_allocated_object(
+    ::loams::live::v1::ValidatorObject* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_kind();
+  if (value) {
+    set_has_object();
+    _impl_.kind_.object_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.live.v1.Validator.object)
+}
+inline ::loams::live::v1::ValidatorObject* PROTOBUF_NONNULL Validator::_internal_mutable_object() {
+  if (kind_case() != kObject) {
+    clear_kind();
+    set_has_object();
+    _impl_.kind_.object_ = reinterpret_cast<::google::protobuf::Message*>(Super_::DefaultConstruct<::loams::live::v1::ValidatorObject>(GetArena()));
+  }
+  return reinterpret_cast<::loams::live::v1::ValidatorObject*>(_impl_.kind_.object_);
+}
+inline ::loams::live::v1::ValidatorObject* PROTOBUF_NONNULL Validator::mutable_object()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::loams::live::v1::ValidatorObject* _msg = _internal_mutable_object();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.Validator.object)
+  return _msg;
+}
+
+// .loams.live.v1.Value literal = 4 [json_name = "literal"];
+inline bool Validator::has_literal() const {
+  return kind_case() == kLiteral;
+}
+inline bool Validator::_internal_has_literal() const {
+  return kind_case() == kLiteral;
+}
+inline void Validator::set_has_literal() {
+  _impl_._oneof_case_[0] = kLiteral;
+}
+inline ::loams::live::v1::Value* PROTOBUF_NULLABLE Validator::release_literal() {
+  // @@protoc_insertion_point(field_release:loams.live.v1.Validator.literal)
+  if (kind_case() == kLiteral) {
+    clear_has_kind();
+    auto* temp = reinterpret_cast<::loams::live::v1::Value*>(_impl_.kind_.literal_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.kind_.literal_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::loams::live::v1::Value& Validator::_internal_literal() const {
+  return kind_case() == kLiteral ? static_cast<const ::loams::live::v1::Value&>(*reinterpret_cast<::loams::live::v1::Value*>(_impl_.kind_.literal_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::loams::live::v1::Value>(&::loams::live::v1::Value_globals_);
+}
+inline const ::loams::live::v1::Value& Validator::literal() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.Validator.literal)
+  return _internal_literal();
+}
+inline ::loams::live::v1::Value* PROTOBUF_NULLABLE Validator::unsafe_arena_release_literal() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:loams.live.v1.Validator.literal)
+  if (kind_case() == kLiteral) {
+    clear_has_kind();
+    auto* temp = reinterpret_cast<::loams::live::v1::Value*>(_impl_.kind_.literal_);
+    _impl_.kind_.literal_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Validator::unsafe_arena_set_allocated_literal(
+    ::loams::live::v1::Value* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_kind();
+  if (value) {
+    set_has_literal();
+    _impl_.kind_.literal_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.live.v1.Validator.literal)
+}
+inline ::loams::live::v1::Value* PROTOBUF_NONNULL Validator::_internal_mutable_literal() {
+  if (kind_case() != kLiteral) {
+    clear_kind();
+    set_has_literal();
+    _impl_.kind_.literal_ = reinterpret_cast<::google::protobuf::Message*>(Super_::DefaultConstruct<::loams::live::v1::Value>(GetArena()));
+  }
+  return reinterpret_cast<::loams::live::v1::Value*>(_impl_.kind_.literal_);
+}
+inline ::loams::live::v1::Value* PROTOBUF_NONNULL Validator::mutable_literal()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::loams::live::v1::Value* _msg = _internal_mutable_literal();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.Validator.literal)
+  return _msg;
+}
+
+// .loams.live.v1.ValidatorUnion union = 5 [json_name = "union"];
+inline bool Validator::has_union_() const {
+  return kind_case() == kUnion;
+}
+inline bool Validator::_internal_has_union_() const {
+  return kind_case() == kUnion;
+}
+inline void Validator::set_has_union_() {
+  _impl_._oneof_case_[0] = kUnion;
+}
+inline void Validator::clear_union_() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (kind_case() == kUnion) {
+    if (GetArena() == nullptr) {
+      delete _impl_.kind_.union__;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.kind_.union__);
+    }
+    clear_has_kind();
+  }
+}
+inline ::loams::live::v1::ValidatorUnion* PROTOBUF_NULLABLE Validator::release_union_() {
+  // @@protoc_insertion_point(field_release:loams.live.v1.Validator.union)
+  if (kind_case() == kUnion) {
+    clear_has_kind();
+    auto* temp = reinterpret_cast<::loams::live::v1::ValidatorUnion*>(_impl_.kind_.union__);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.kind_.union__ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::loams::live::v1::ValidatorUnion& Validator::_internal_union_() const {
+  return kind_case() == kUnion ? static_cast<const ::loams::live::v1::ValidatorUnion&>(*reinterpret_cast<::loams::live::v1::ValidatorUnion*>(_impl_.kind_.union__))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::loams::live::v1::ValidatorUnion>(&::loams::live::v1::ValidatorUnion_globals_);
+}
+inline const ::loams::live::v1::ValidatorUnion& Validator::union_() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.Validator.union)
+  return _internal_union_();
+}
+inline ::loams::live::v1::ValidatorUnion* PROTOBUF_NULLABLE Validator::unsafe_arena_release_union_() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:loams.live.v1.Validator.union)
+  if (kind_case() == kUnion) {
+    clear_has_kind();
+    auto* temp = reinterpret_cast<::loams::live::v1::ValidatorUnion*>(_impl_.kind_.union__);
+    _impl_.kind_.union__ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Validator::unsafe_arena_set_allocated_union_(
+    ::loams::live::v1::ValidatorUnion* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_kind();
+  if (value) {
+    set_has_union_();
+    _impl_.kind_.union__ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.live.v1.Validator.union)
+}
+inline ::loams::live::v1::ValidatorUnion* PROTOBUF_NONNULL Validator::_internal_mutable_union_() {
+  if (kind_case() != kUnion) {
+    clear_kind();
+    set_has_union_();
+    _impl_.kind_.union__ = reinterpret_cast<::google::protobuf::Message*>(Super_::DefaultConstruct<::loams::live::v1::ValidatorUnion>(GetArena()));
+  }
+  return reinterpret_cast<::loams::live::v1::ValidatorUnion*>(_impl_.kind_.union__);
+}
+inline ::loams::live::v1::ValidatorUnion* PROTOBUF_NONNULL Validator::mutable_union_()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::loams::live::v1::ValidatorUnion* _msg = _internal_mutable_union_();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.Validator.union)
+  return _msg;
+}
+
+// .loams.live.v1.Validator optional = 6 [json_name = "optional"];
+inline bool Validator::has_optional() const {
+  return kind_case() == kOptional;
+}
+inline bool Validator::_internal_has_optional() const {
+  return kind_case() == kOptional;
+}
+inline void Validator::set_has_optional() {
+  _impl_._oneof_case_[0] = kOptional;
+}
+inline void Validator::clear_optional() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (kind_case() == kOptional) {
+    if (GetArena() == nullptr) {
+      delete _impl_.kind_.optional_;
+    } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+      ::google::protobuf::internal::MaybePoisonAfterClear(_impl_.kind_.optional_);
+    }
+    clear_has_kind();
+  }
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NULLABLE Validator::release_optional() {
+  // @@protoc_insertion_point(field_release:loams.live.v1.Validator.optional)
+  if (kind_case() == kOptional) {
+    clear_has_kind();
+    auto* temp = reinterpret_cast<::loams::live::v1::Validator*>(_impl_.kind_.optional_);
+    if (GetArena() != nullptr) {
+      temp = ::google::protobuf::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.kind_.optional_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::loams::live::v1::Validator& Validator::_internal_optional() const {
+  return kind_case() == kOptional ? static_cast<const ::loams::live::v1::Validator&>(*reinterpret_cast<::loams::live::v1::Validator*>(_impl_.kind_.optional_))
+                     : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::loams::live::v1::Validator>(&::loams::live::v1::Validator_globals_);
+}
+inline const ::loams::live::v1::Validator& Validator::optional() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.Validator.optional)
+  return _internal_optional();
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NULLABLE Validator::unsafe_arena_release_optional() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:loams.live.v1.Validator.optional)
+  if (kind_case() == kOptional) {
+    clear_has_kind();
+    auto* temp = reinterpret_cast<::loams::live::v1::Validator*>(_impl_.kind_.optional_);
+    _impl_.kind_.optional_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Validator::unsafe_arena_set_allocated_optional(
+    ::loams::live::v1::Validator* PROTOBUF_NULLABLE value) {
+  // We rely on the oneof clear method to free the earlier contents
+  // of this oneof. We can directly use the pointer we're given to
+  // set the new value.
+  clear_kind();
+  if (value) {
+    set_has_optional();
+    _impl_.kind_.optional_ = reinterpret_cast<::google::protobuf::Message*>(value);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.live.v1.Validator.optional)
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NONNULL Validator::_internal_mutable_optional() {
+  if (kind_case() != kOptional) {
+    clear_kind();
+    set_has_optional();
+    _impl_.kind_.optional_ = reinterpret_cast<::google::protobuf::Message*>(Super_::DefaultConstruct<::loams::live::v1::Validator>(GetArena()));
+  }
+  return reinterpret_cast<::loams::live::v1::Validator*>(_impl_.kind_.optional_);
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NONNULL Validator::mutable_optional()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::loams::live::v1::Validator* _msg = _internal_mutable_optional();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.Validator.optional)
+  return _msg;
+}
+
+// string id = 7 [json_name = "id"];
+inline bool Validator::has_id() const {
+  return kind_case() == kId;
+}
+inline void Validator::set_has_id() {
+  _impl_._oneof_case_[0] = kId;
+}
+inline void Validator::clear_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (kind_case() == kId) {
+    _impl_.kind_.id_.Destroy();
+    clear_has_kind();
+  }
+}
+inline const ::std::string& Validator::id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.Validator.id)
+  return _internal_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void Validator::set_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (kind_case() != kId) {
+    clear_kind();
+
+    set_has_id();
+    _impl_.kind_.id_.InitDefault();
+  }
+  _impl_.kind_.id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:loams.live.v1.Validator.id)
+}
+inline ::std::string* PROTOBUF_NONNULL Validator::mutable_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  if (kind_case() != kId) {
+    clear_kind();
+
+    set_has_id();
+    _impl_.kind_.id_.InitDefault();
+  }
+  ::std::string* _s = _internal_mutable_id();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.Validator.id)
+  return _s;
+}
+inline const ::std::string& Validator::_internal_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  if (kind_case() != kId) {
+    return ::google::protobuf::internal::GetEmptyStringAlreadyInited();
+  }
+  return _impl_.kind_.id_.Get();
+}
+inline void Validator::_internal_set_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kind_.id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL Validator::_internal_mutable_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.kind_.id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE Validator::release_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.Validator.id)
+  if (kind_case() != kId) {
+    return nullptr;
+  }
+  clear_has_kind();
+  return _impl_.kind_.id_.Release();
+}
+inline void Validator::set_allocated_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (has_kind()) {
+    clear_kind();
+  }
+  if (value != nullptr) {
+    set_has_id();
+    _impl_.kind_.id_.InitAllocated(value, GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.Validator.id)
+}
+
+inline bool Validator::has_kind() const {
+  return kind_case() != KIND_NOT_SET;
+}
+inline void Validator::clear_has_kind() {
+  _impl_._oneof_case_[0] = KIND_NOT_SET;
+}
+inline Validator::KindCase Validator::kind_case() const {
+  return Validator::KindCase(_impl_._oneof_case_[0]);
+}
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// ValidatorObject
+
+// map<string, .loams.live.v1.Validator> fields = 1 [json_name = "fields"];
+inline int ValidatorObject::_internal_fields_size() const {
+  return _internal_fields().size();
+}
+inline int ValidatorObject::fields_size() const {
+  return _internal_fields_size();
+}
+inline void ValidatorObject::clear_fields() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.fields_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::google::protobuf::Map<::std::string, ::loams::live::v1::Validator>& ValidatorObject::_internal_fields() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.fields_.GetMap();
+}
+inline const ::google::protobuf::Map<::std::string, ::loams::live::v1::Validator>& ValidatorObject::fields() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:loams.live.v1.ValidatorObject.fields)
+  return _internal_fields();
+}
+inline ::google::protobuf::Map<::std::string, ::loams::live::v1::Validator>* PROTOBUF_NONNULL ValidatorObject::_internal_mutable_fields() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.fields_.MutableMap();
+}
+inline ::google::protobuf::Map<::std::string, ::loams::live::v1::Validator>* PROTOBUF_NONNULL ValidatorObject::mutable_fields()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_map:loams.live.v1.ValidatorObject.fields)
+  return _internal_mutable_fields();
+}
+
+// -------------------------------------------------------------------
+
+// ValidatorUnion
+
+// repeated .loams.live.v1.Validator members = 1 [json_name = "members"];
+inline int ValidatorUnion::_internal_members_size() const {
+  return _internal_members().size();
+}
+inline int ValidatorUnion::members_size() const {
+  return _internal_members_size();
+}
+inline void ValidatorUnion::clear_members() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.members_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::loams::live::v1::Validator& ValidatorUnion::members(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.ValidatorUnion.members)
+  return _internal_members().Get(index);
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NONNULL ValidatorUnion::mutable_members(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.ValidatorUnion.members)
+  return _internal_mutable_members()->Mutable(index);
+}
+inline ::loams::live::v1::Validator* PROTOBUF_NONNULL ValidatorUnion::add_members()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::loams::live::v1::Validator* _add =
+      _internal_mutable_members()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:loams.live.v1.ValidatorUnion.members)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::loams::live::v1::Validator>& ValidatorUnion::members() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:loams.live.v1.ValidatorUnion.members)
+  return _internal_members();
+}
+inline ::google::protobuf::RepeatedPtrField<::loams::live::v1::Validator>* PROTOBUF_NONNULL
+ValidatorUnion::mutable_members() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:loams.live.v1.ValidatorUnion.members)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_members();
+}
+inline const ::google::protobuf::RepeatedPtrField<::loams::live::v1::Validator>&
+ValidatorUnion::_internal_members() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.members_;
+}
+inline ::google::protobuf::RepeatedPtrField<::loams::live::v1::Validator>* PROTOBUF_NONNULL
+ValidatorUnion::_internal_mutable_members() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.members_;
+}
+
+// -------------------------------------------------------------------
+
 // LiveError
 
 // .loams.live.v1.ErrorCode code = 1 [json_name = "code"];
@@ -7967,6 +8963,12 @@ inline void LiveError::set_allocated_message(::std::string* PROTOBUF_NULLABLE va
 namespace google {
 namespace protobuf {
 
+template <>
+struct is_proto_enum<::loams::live::v1::ValidatorPrimitive> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::loams::live::v1::ValidatorPrimitive>() {
+  return ::loams::live::v1::ValidatorPrimitive_descriptor();
+}
 template <>
 struct is_proto_enum<::loams::live::v1::ErrorCode> : std::true_type {};
 template <>

@@ -1,0 +1,16 @@
+{
+  "status": {
+    "checkoutId": "checkout-1",
+    "complete": true,
+    "deviceId": "device-1",
+    "files": [
+      {
+        "index": "unchanged",
+        "oldPath": null,
+        "path": "src/main.rs",
+        "worktree": "modified"
+      }
+    ],
+    "revision": "rev-7"
+  }
+}

@@ -26,9 +26,13 @@
 //! The console's `/api/v1/*` REST contract is served on the same listener
 //! ([`console`]), so one process backs the desktop, the phone apps, the
 //! SDKs and the React console: the app protos over Connect, gRPC and
-//! gRPC-Web, the console contract over REST.
+//! gRPC-Web, the console contract over REST. The same contract is also
+//! served over Connect as `loams.auth.v1` and `loams.admin.v1` ([`admin`],
+//! API2 Tasks 6 and 7), from the same resolved seed, so the console can move
+//! off REST one page at a time; API2 Task 11 removes the REST routes.
 
 pub mod acceptance;
+mod admin;
 mod auth;
 mod console;
 mod cors;
@@ -151,17 +155,26 @@ pub async fn serve(config: MockConfig) -> anyhow::Result<MockHandle> {
             config.listen
         );
     }
-    let console = console::Console::load(config.console_signed_in)?;
+    // One resolved seed for both console surfaces, so a REST route and its
+    // RPC answer the same record with the same times.
+    let console_seed = loams_console_mock::load_seed(std::time::SystemTime::now())
+        .context("loading the console seed")?;
+    let console = console::Console::from_seed(&console_seed, config.console_signed_in)?;
+    let console_api = Arc::new(admin::ConsoleApi::new(
+        console_seed,
+        config.console_signed_in,
+        config.heartbeat,
+    )?);
     tracing::info!(
         paths = console.paths(),
         signed_in = config.console_signed_in,
-        "console REST contract mounted"
+        "console REST contract and loams.auth.v1/loams.admin.v1 mounted"
     );
     let listener = tokio::net::TcpListener::bind(config.listen)
         .await
         .with_context(|| format!("binding {}", config.listen))?;
     let addr = listener.local_addr()?;
-    let (protos, store) = router(&config);
+    let (protos, store) = router(&config, &console_api);
     // The OAuth and console routes take precedence; Connect stays the
     // fallback so `/loams.<pkg>.v1.<Service>/<Method>` is still answered.
     // `/api/v1/oauth/token` is the one path both surfaces claim: the console
@@ -196,8 +209,11 @@ pub async fn serve(config: MockConfig) -> anyhow::Result<MockHandle> {
     })
 }
 
-/// The Connect router with every app service registered.
-fn router(config: &MockConfig) -> (Router, Arc<store::Store>) {
+/// The Connect router with every app service and the console API registered.
+fn router(
+    config: &MockConfig,
+    console_api: &Arc<admin::ConsoleApi>,
+) -> (Router, Arc<store::Store>) {
     use proto::loams::approvals::v1::ApprovalServiceExt as _;
     use proto::loams::devices::v1::DeviceServiceExt as _;
     use proto::loams::graph::v1::{GraphAdminServiceExt, GraphServiceExt};
@@ -219,6 +235,7 @@ fn router(config: &MockConfig) -> (Router, Arc<store::Store>) {
     let graph = Arc::new(graph::GraphMock::seeded());
     let router = GraphAdminServiceExt::register(Arc::clone(&graph), router);
     let router = GraphServiceExt::register(graph, router);
+    let router = admin::register(console_api, router);
     (router, store)
 }
 

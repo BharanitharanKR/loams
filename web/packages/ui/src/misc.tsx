@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { Button } from './button';
 import { cx } from './cx';
 
@@ -42,7 +42,7 @@ export function Notice({
     >
       <div>
         <strong>{title}</strong>
-        {children && <p>{children}</p>}
+        {children && <div className="loams-notice-body">{children}</div>}
       </div>
     </div>
   );
@@ -122,62 +122,5 @@ export function Avatar({
     >
       {initials}
     </span>
-  );
-}
-
-/** A modal on the native <dialog>: focus moves in, Escape closes, the page behind is inert. */
-export function Dialog({
-  open,
-  onClose,
-  title,
-  children,
-  footer,
-  dismissible = true,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: ReactNode;
-  children: ReactNode;
-  footer?: ReactNode;
-  /** False keeps Escape and the close button from dismissing it (while work is pending). */
-  dismissible?: boolean;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
-  // The native close event also fires when `open` turns false and the effect
-  // closes the dialog; only a dismissal while `open` is true reports onClose.
-  const openRef = useRef(open);
-  openRef.current = open;
-  useEffect(() => {
-    const d = ref.current;
-    if (!d) return;
-    if (open && !d.open) d.showModal();
-    if (!open && d.open) d.close();
-  }, [open]);
-  return (
-    <dialog
-      ref={ref}
-      className="loams-dialog"
-      onClose={() => openRef.current && onClose()}
-      onCancel={(e) => {
-        if (!dismissible) e.preventDefault();
-      }}
-      aria-labelledby={titleId}
-    >
-      <div className="loams-dialog-head">
-        <h2 id={titleId}>{title}</h2>
-        <Button
-          variant="quiet"
-          size="icon"
-          aria-label="Close"
-          onClick={onClose}
-          disabled={!dismissible}
-        >
-          ×
-        </Button>
-      </div>
-      <div className="loams-dialog-body">{children}</div>
-      {footer && <div className="loams-dialog-foot">{footer}</div>}
-    </dialog>
   );
 }

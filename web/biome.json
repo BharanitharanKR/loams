@@ -8,12 +8,33 @@
       "!**/node_modules",
       "!**/dist",
       "!apps/console/src/api/schema.d.ts",
-      "!packages/proto/src/gen"
+      "!packages/proto/src/gen",
+      "!packages/agentd-client/src/gen",
+      "!packages/agentd-client/src/fixtures.gen.ts",
+      "!packages/agentd-client/test/requests.json"
     ]
   },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
   "linter": { "enabled": true, "rules": { "preset": "recommended" } },
   "javascript": { "formatter": { "quoteStyle": "single" } },
   "css": { "parser": { "cssModules": false, "tailwindDirectives": true } },
-  "assist": { "actions": { "source": { "organizeImports": "on" } } }
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "overrides": [
+    {
+      "includes": ["packages/studio-ui/src/**"],
+      "javascript": { "formatter": { "quoteStyle": "double" } }
+    },
+    {
+      "includes": [
+        "packages/studio-ui/src/lib/observeResize.ts",
+        "packages/studio-ui/src/lib/AnimatedHeight.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": { "noAssignInExpressions": "off" },
+          "correctness": { "useExhaustiveDependencies": "off" }
+        }
+      }
+    }
+  ]
 }

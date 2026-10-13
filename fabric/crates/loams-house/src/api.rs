@@ -55,7 +55,9 @@ use loams_house_proto::loams::house::v1 as pb;
 use loams_house_proto::loams::house::v1::{HouseService, HouseServiceExt};
 use loams_house_proto::loams::operations::v1::Operation;
 
-pub use catalog::{ApiCatalog, FixtureCatalog};
+pub use catalog::{ApiCatalog, FixtureCatalog, LakeCatalog};
+
+use crate::catalog::Lake;
 use frames::Caps;
 use run::{Output, Running, Statement, sorted};
 
@@ -98,17 +100,25 @@ pub struct HouseApi {
     config: HouseConfig,
     pool: WorkerPool,
     catalog: Arc<dyn ApiCatalog>,
+    /// The catalog of lake tables (HS1 Task 10), when the House has one.
+    lake: Option<Arc<Lake>>,
     running: Arc<Running>,
 }
 
 impl HouseApi {
     /// The service over `pool`, with `config`'s users and limits, reading metadata
-    /// from `catalog`.
-    pub fn new(config: HouseConfig, pool: WorkerPool, catalog: Arc<dyn ApiCatalog>) -> Arc<Self> {
+    /// from `catalog`; DDL goes to `lake`, when there is one.
+    pub fn new(
+        config: HouseConfig,
+        pool: WorkerPool,
+        catalog: Arc<dyn ApiCatalog>,
+        lake: Option<Arc<Lake>>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             config,
             pool,
             catalog,
+            lake,
             running: Arc::new(Running::default()),
         })
     }
@@ -457,6 +467,7 @@ impl HouseService for HouseApi {
         let databases = self
             .catalog
             .databases(user.namespace)
+            .await
             .map_err(|err| to_connect(&err))?;
         let (databases, next_page_token) = page(databases, request.page_size, &request.page_token)?;
         Response::ok(pb::ListDatabasesResponse {
@@ -477,6 +488,7 @@ impl HouseService for HouseApi {
         let tables: Vec<pb::Table> = self
             .catalog
             .tables(user.namespace, database_or_default(&request.database))
+            .await
             .map_err(|err| to_connect(&err))?
             .into_iter()
             .filter(|t| filter.is_empty() || t.name.to_lowercase().contains(&filter))
@@ -506,6 +518,7 @@ impl HouseService for HouseApi {
                 database_or_default(&request.database),
                 &request.table,
             )
+            .await
             .map_err(|err| to_connect(&err))?;
         Response::ok(described)
     }

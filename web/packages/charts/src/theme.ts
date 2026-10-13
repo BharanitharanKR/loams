@@ -32,55 +32,8 @@ export interface ChartTheme {
   sequential: readonly [string, string];
 }
 
-/** Categorical order, light surface. */
-export const LIGHT_PALETTE = [
-  '#2a78d6',
-  '#eb6834',
-  '#1baf7a',
-  '#eda100',
-  '#e87ba4',
-  '#008300',
-  '#6250d6',
-  '#e34948',
-] as const;
-
-/** The same hues, stepped for the dark surface. */
-export const DARK_PALETTE = [
-  '#3987e5',
-  '#d95926',
-  '#199e70',
-  '#c98500',
-  '#d55181',
-  '#008300',
-  '#9085e9',
-  '#e66767',
-] as const;
-
-/** Token values from tokens.css, used when the stylesheet is not loaded (tests, early paint). */
-const FALLBACK: Record<ThemeMode, Record<string, string>> = {
-  light: {
-    '--op-bg': '#ffffff',
-    '--op-surface': '#f9f9f7',
-    '--op-raised': '#f0f0ec',
-    '--op-rule': '#deded8',
-    '--op-rule-soft': '#ebebe6',
-    '--op-ink': '#1a1511',
-    '--op-muted': '#5b5044',
-    '--op-faint': '#74695b',
-    '--op-accent': '#8a520a',
-  },
-  dark: {
-    '--op-bg': '#15110d',
-    '--op-surface': '#1c1713',
-    '--op-raised': '#25201a',
-    '--op-rule': '#372e26',
-    '--op-rule-soft': '#28211b',
-    '--op-ink': '#f4f5ee',
-    '--op-muted': '#a69985',
-    '--op-faint': '#938775',
-    '--op-accent': '#e4a24a',
-  },
-};
+/** How many categorical series colours the tokens define (`--op-chart-1` .. `--op-chart-8`). */
+export const PALETTE_SIZE = 8;
 
 const FONT_SANS = 'Archivo, ui-sans-serif, system-ui, sans-serif';
 const FONT_MONO = '"Martian Mono", ui-monospace, monospace';
@@ -90,12 +43,11 @@ export function readChartTheme(root?: HTMLElement): ChartTheme {
   const el = root ?? (typeof document === 'undefined' ? undefined : document.documentElement);
   const mode: ThemeMode = el?.classList.contains('dark') ? 'dark' : 'light';
   const style = el && typeof getComputedStyle === 'function' ? getComputedStyle(el) : undefined;
-  const v = (name: string) => style?.getPropertyValue(name).trim() || FALLBACK[mode][name] || '';
-  const base: readonly string[] = mode === 'dark' ? DARK_PALETTE : LIGHT_PALETTE;
-  const palette = base.map(
-    (hex, i) => style?.getPropertyValue(`--op-chart-${i + 1}`).trim() || hex,
+  const v = (name: string) => style?.getPropertyValue(name).trim() ?? '';
+  const palette = Array.from({ length: PALETTE_SIZE }, (_, i) => v(`--op-chart-${i + 1}`)).filter(
+    Boolean,
   );
-  const first = palette[0] ?? LIGHT_PALETTE[0];
+  const first = palette[0] ?? '';
   const bg = v('--op-bg');
   return {
     mode,
@@ -111,7 +63,7 @@ export function readChartTheme(root?: HTMLElement): ChartTheme {
     fontSans: style?.getPropertyValue('--loams-font-sans').trim() || FONT_SANS,
     fontMono: style?.getPropertyValue('--loams-font-mono').trim() || FONT_MONO,
     palette,
-    sequential: [first.startsWith('#') ? rgba(first, 0.12) : bg, first],
+    sequential: [first ? rgba(first, 0.12) : bg, first],
   };
 }
 

@@ -1,0 +1,130 @@
+{
+  "recorded_from": "Google Workspace",
+  "synthetic": true,
+  "docs": [
+    "https://developers.google.com/workspace/admin/directory/reference/rest/v1/users/list",
+    "https://developers.google.com/identity/protocols/oauth2/web-server#offline"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "users",
+    "config": {
+      "base_url": "{proxy}",
+      "token_url": "{proxy}/token"
+    },
+    "secrets": {
+      "client_id": "synthetic-gw-client",
+      "client_secret": "synthetic-gw-secret",
+      "refresh_token": "synthetic-gw-refresh"
+    },
+    "expect": 3
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/token",
+        "headers": {},
+        "body": {
+          "text": "grant_type=refresh_token&refresh_token=<redacted>&client_id=<redacted>&client_secret=<redacted>&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fadmin.directory.user%20https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fadmin.directory.group.readonly"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "access_token": "<scrubbed>",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "scope": "https://www.googleapis.com/auth/admin.directory.user"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/users?customer=my_customer&maxResults=500",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "kind": "admin#directory#users",
+            "users": [
+              {
+                "kind": "admin#directory#user",
+                "id": "101",
+                "primaryEmail": "ada@example.test",
+                "name": {
+                  "givenName": "Ada",
+                  "familyName": "Test",
+                  "fullName": "Ada Test"
+                },
+                "isAdmin": false,
+                "suspended": false,
+                "orgUnitPath": "/"
+              },
+              {
+                "kind": "admin#directory#user",
+                "id": "102",
+                "primaryEmail": "grace@example.test",
+                "name": {
+                  "givenName": "Grace",
+                  "familyName": "Test",
+                  "fullName": "Grace Test"
+                },
+                "isAdmin": false,
+                "suspended": false,
+                "orgUnitPath": "/"
+              }
+            ],
+            "nextPageToken": "Q0FFU0FnZ0IK"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/users?customer=my_customer&maxResults=500&pageToken=Q0FFU0FnZ0IK",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "kind": "admin#directory#users",
+            "users": [
+              {
+                "kind": "admin#directory#user",
+                "id": "103",
+                "primaryEmail": "katherine@example.test",
+                "name": {
+                  "givenName": "Katherine",
+                  "familyName": "Test",
+                  "fullName": "Katherine Test"
+                },
+                "isAdmin": false,
+                "suspended": false,
+                "orgUnitPath": "/"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

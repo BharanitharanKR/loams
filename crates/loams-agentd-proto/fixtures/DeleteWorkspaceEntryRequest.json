@@ -1,0 +1,9 @@
+{
+  "chatId": "chat-1",
+  "expectedCheckoutId": "checkout-1",
+  "expectedKind": "directory",
+  "expectedSourceRevision": "rev-2",
+  "operationId": "op-2",
+  "path": "target",
+  "recursive": true
+}

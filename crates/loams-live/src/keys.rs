@@ -24,7 +24,8 @@
 //! (empty name → `AppDef`: the journal shard count, Task 10; `"cursor"` →
 //! the app's 32-byte pagination cursor key, LV1 Task 4), `0x06` the
 //! deployment records (name = the deployment's 16-byte id →
-//! `DeploymentRecord`, LV1 Task 6).
+//! `DeploymentRecord`, LV1 Task 6), `0x07` table jobs (name =
+//! table_id:u32 BE ‖ kind:u8 → `TableJobRecord`, LV1 Task 8).
 
 use loams_kv::tuple;
 
@@ -63,6 +64,9 @@ pub const KIND_SCHEMA: u8 = 0x04;
 pub const KIND_APP: u8 = 0x05;
 /// Catalog kind: a deployment record, by id (LV1 Task 6).
 pub const KIND_DEPLOYMENT_RECORD: u8 = 0x06;
+
+/// Catalog kind: a table job, by table and kind (LV1 Task 8).
+pub const KIND_TABLE_JOB: u8 = 0x07;
 
 /// The length of an idempotency record's key hash.
 pub const IDEMPOTENCY_HASH_BYTES: usize = 16;
@@ -165,6 +169,13 @@ impl AppKeys {
     /// Every deployment record, in id order (oldest first).
     pub fn deployments(&self) -> KeyRange {
         prefix_range(self.catalog(KIND_DEPLOYMENT_RECORD, b""))
+    }
+
+    /// The record of table `table`'s job of kind `kind` (LV1 Task 8).
+    pub fn table_job(&self, table: TableId, kind: u8) -> Vec<u8> {
+        let mut name = table.0.to_be_bytes().to_vec();
+        name.push(kind);
+        self.catalog(KIND_TABLE_JOB, &name)
     }
 
     /// The app's settings record (its journal shard count).

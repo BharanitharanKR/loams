@@ -51,7 +51,7 @@ pub mod txn;
 pub use budget::{Budget, BudgetLease, BudgetPool, BudgetStats};
 pub use checkpoint::{Checkpoint, CheckpointStore};
 pub use delivery::{DeadLetter, DeadLetterQueue, Delivery};
-pub use egress::{AllowAll, DenyLocal, EgressCheck, EgressDenied};
+pub use egress::{AllowAll, DenyLocal, EgressCheck, EgressDenied, Resolve, SystemResolver};
 pub use envelope::{CdcOp, CloudEvent, EnvelopeBuilder, EnvelopeError, ids};
 pub use error::{BoxError, CheckpointError, ConnectorError, ErrorClass, FabricError};
 pub use fabric::{FabricAck, FabricReader, FabricWriter};
@@ -62,9 +62,9 @@ pub use pipeline::{
 };
 pub use position::{InstanceKey, Position, SplitId};
 pub use profile::{
-    AsyncJob, AuthScheme, CursorSpec, HttpAuth, HttpMethod, HttpProfile, HttpRateLimit,
-    HttpResource, JobPoll, ListOp, Profile, ProfileKind, RequestSpec, SystemRef, WebhookSpec,
-    WriteOp,
+    AckSpec, AsyncJob, AuthScheme, BodyEncoding, CursorFrom, CursorSpec, HttpAuth, HttpMethod,
+    HttpProfile, HttpRateLimit, HttpResource, JobPoll, ListOp, OffsetSpec, Profile, ProfileKind,
+    RequestSpec, ResponseFormat, SystemRef, WebhookSpec, WriteOp,
 };
 pub use ratelimit::{Rate, RateLimit, RateLimiter};
 pub use retry::{RetryDecision, RetryPolicy};

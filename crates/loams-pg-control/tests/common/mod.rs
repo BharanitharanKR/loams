@@ -539,6 +539,7 @@ where
 }
 
 /// `let h = harness!();`: the harness, or return (skipped).
+#[allow(unused_macros)]
 macro_rules! harness {
     () => {
         match crate::common::harness().await {

@@ -8,9 +8,22 @@ import {
   NamespacePicker as SharedPicker,
   useLoad as useSharedLoad,
 } from '@loams/desktop-ui';
-import { Notice } from '@loams/ui';
+import { isNotServed, Notice } from '@loams/ui';
+import { ApiError } from './client.js';
+
+/**
+ * The message a load carries when the server has no Streams API at all (a server
+ * that is not an engine, such as the desktop's Demo server): the page then says
+ * so calmly instead of showing an error.
+ */
+export const NOT_SERVED = 'This server does not serve streams and links.';
 
 export function errorText(e: unknown): string {
+  if (
+    e instanceof ApiError &&
+    (isNotServed({ code: e.code }) || (e.status === 404 && e.code === 'error'))
+  )
+    return NOT_SERVED;
   return e instanceof Error ? e.message : String(e);
 }
 

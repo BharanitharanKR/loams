@@ -3,8 +3,8 @@
 //! One redb file holds every keyspace of a data directory. Its tables:
 //!
 //! - `versions`: `keyspace_id:u32 BE ‖ esc(root ‖ key) ‖ (u64::MAX −
-//!   commit_ts) BE → [0x00 ‖ value] | [0x01]` (a tombstone; see
-//!   [`mvcc`](self) for `esc`, row T21-1);
+//!   commit_ts) BE → [0x00 ‖ value] | [0x01] | [0x02]` (a tombstone, a
+//!   lock; see [`mvcc`](self) for `esc` and locks, row T21-1);
 //! - `keyspaces`: `name → id`;
 //! - `oracle`: `high_water` (the timestamp oracle's persisted mark) and
 //!   `gc_safe_point`.

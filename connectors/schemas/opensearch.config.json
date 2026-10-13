@@ -1,9 +1,185 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/opensearch.config.json",
-  "title": "OpenSearch instance config (placeholder)",
-  "description": "Placeholder for a OpenSearch instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "OpenSearch connector instance config (loams.flow/v1)",
+  "description": "One OpenSearch connector instance's settings, read by the native search family's Elasticsearch code (`loams_connector_search::elasticsearch`) under the `opensearch` target profile (CN2 Task 15, OR-2): the cluster URL, the index, the `_bulk` sink's batching and the point-in-time source's cursor. The profile's defaults (`api: opensearch`, `source.tiebreaker: _id`) are merged under these keys. `basic.password` and the `aws.*` credentials hold the **names** of secrets in the namespace's store (D189); they are exactly the manifest's `secrets` list. The `key` property is declared because the manifest declares capabilities.sink.upsert: true (CN1 Task 1's semantic rule); it is the document _id the upsert and the delete use, and without it _id is the event's ce_id.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "url",
+    "index"
+  ],
+  "properties": {
+    "url": {
+      "description": "The cluster base URL, http:// or https://, with no credentials in it. A Loams collection's Elasticsearch API is an extra target only (OR-2).",
+      "type": "string",
+      "minLength": 1
+    },
+    "index": {
+      "description": "The index (or alias) read or written.",
+      "type": "string",
+      "minLength": 1
+    },
+    "api": {
+      "description": "The point-in-time API the cluster speaks. The `opensearch` profile sets `opensearch` in its defaults (OpenSearch 2.4+'s PIT API, R15.4).",
+      "enum": [
+        "elasticsearch",
+        "opensearch"
+      ],
+      "default": "elasticsearch"
+    },
+    "basic": {
+      "description": "HTTP basic auth (the manifest's `basic` auth slug).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "username",
+        "password"
+      ],
+      "properties": {
+        "username": {
+          "description": "The basic-auth user.",
+          "type": "string",
+          "minLength": 1
+        },
+        "password": {
+          "description": "The name of the secret holding the basic-auth password, resolved through the secret store (D189).",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "aws": {
+      "description": "AWS SigV4 signing for Amazon OpenSearch Service (the manifest's `iam` auth slug, R15.3). The key fields hold secret **names**, resolved through the secret store (D189).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "region",
+        "access_key_id",
+        "secret_access_key"
+      ],
+      "properties": {
+        "region": {
+          "description": "The AWS region of the domain.",
+          "type": "string",
+          "minLength": 1
+        },
+        "service": {
+          "description": "The SigV4 service name: `es` for OpenSearch Service domains, `aoss` for Serverless.",
+          "enum": [
+            "es",
+            "aoss"
+          ],
+          "default": "es"
+        },
+        "access_key_id": {
+          "description": "The name of the secret holding the AWS access key id.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "secret_access_key": {
+          "description": "The name of the secret holding the AWS secret access key.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "session_token": {
+          "description": "The name of the secret holding an AWS session token, for temporary credentials.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "key": {
+      "description": "The document key: a JSON pointer (or a top-level field name) into an event's data whose value becomes the _id. Without it, _id is the event's ce_id. Either way a replay overwrites rather than duplicates (effectively once).",
+      "type": "string",
+      "minLength": 1
+    },
+    "apply_deletes": {
+      "description": "Apply events carrying loamsop = d as a delete by _id.",
+      "type": "boolean",
+      "default": true
+    },
+    "bulk": {
+      "description": "The `_bulk` sink. A partial failure resends only the failed items; a 429 halves the documents per request.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_docs": {
+          "description": "Documents per `_bulk` request at most.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 1000
+        },
+        "max_bytes": {
+          "description": "Bytes per `_bulk` request at most.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 5242880
+        },
+        "max_item_retries": {
+          "description": "Retries of the failed items of one write before it fails.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 5
+        },
+        "retry_backoff_ms": {
+          "description": "The first backoff between item retries, doubled each time (30 s at most).",
+          "type": "integer",
+          "minimum": 0,
+          "default": 100
+        }
+      }
+    },
+    "source": {
+      "description": "The point-in-time source: `search_after` with a tiebreaker, incremental by a cursor field.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cursor_field": {
+          "description": "A field that only grows (an update time, a sequence): reads are ordered by it and a new pass starts at its last value read. Without it every pass reads the whole index.",
+          "type": "string",
+          "minLength": 1
+        },
+        "tiebreaker": {
+          "description": "The sort tiebreaker inside a point in time. The `opensearch` profile sets `_id`, because OpenSearch documents no `_shard_doc` sort (R15.4).",
+          "type": "string",
+          "minLength": 1
+        },
+        "page_size": {
+          "description": "Hits per page.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 1000
+        },
+        "keep_alive": {
+          "description": "How long a point in time stays open between pages, as a duration string.",
+          "type": "string",
+          "default": "2m"
+        },
+        "poll_interval_ms": {
+          "description": "With it, a pass that reached the end starts again this long after; without it the source reads one pass and ends.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "query": {
+          "description": "A Query DSL query the read is filtered by.",
+          "type": "object"
+        }
+      }
+    },
+    "request_timeout_ms": {
+      "description": "Per-request timeout.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 30000
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }

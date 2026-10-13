@@ -246,6 +246,38 @@ pub trait MetaStore: Send + Sync + fmt::Debug + 'static {
         id: StreamId,
     ) -> MetaResult<Option<StreamState>>;
 
+    /// Creates Loams Graph graph `graph`'s implicit stream,
+    /// [`graph_stream_name`](crate::meta::graph_stream_name) (`_graph.<gr_id>`:
+    /// one partition, class `Standard`, no retention), in `namespace`, and
+    /// returns it (GR1 Task 12). `graph` must be a graph id
+    /// ([`is_graph_id`](crate::meta::is_graph_id)). Idempotent: an existing
+    /// stream is returned, so a retry after a lost acknowledgement answers the
+    /// first attempt's stream. A stream of the name GR1 Task 11 used,
+    /// [`legacy_graph_stream_name`](crate::meta::legacy_graph_stream_name)
+    /// (`graph.<gr_id>`), is renamed in place, keeping its id, partitions and
+    /// records. Rejected with [`ApplyError::NamespaceNotFound`], or
+    /// [`ApplyError::InvalidArgument`] for a graph that is not a graph id.
+    async fn ensure_graph_stream(
+        &self,
+        namespace: NamespaceId,
+        graph: &str,
+    ) -> MetaResult<StreamId>;
+
+    /// Drops graph `graph`'s implicit stream (under its reserved or its
+    /// legacy name) from `namespace`, while the fence, if given, holds: its
+    /// partitions and index entries go, and objects no other entry references
+    /// are retired for garbage collection (GR1 Task 12, a deleted graph's
+    /// purge). Returns the dropped stream, or `None` when there is none, so a
+    /// retry after a lost acknowledgement succeeds with `None`. Rejected with
+    /// [`ApplyError::Fenced`] (nothing changes), or
+    /// [`ApplyError::InvalidArgument`] for a graph that is not a graph id.
+    async fn drop_graph_stream(
+        &self,
+        namespace: NamespaceId,
+        graph: &str,
+        fence: Option<Fence>,
+    ) -> MetaResult<Option<StreamId>>;
+
     /// Declares a link from stream `source` (in `namespace`) into `target`.
     /// Names are unique within the namespace and never start with `_`.
     /// Rejected with [`ApplyError::NamespaceNotFound`],
@@ -302,6 +334,12 @@ pub trait MetaStore: Send + Sync + fmt::Debug + 'static {
     /// failed: its commit record may have been pruned since. A
     /// `created_at_ms` too far ahead of the metastore's own clock is refused
     /// with [`MetaError::ClockSkew`].
+    ///
+    /// Every fence in `commit.fences` is checked atomically with the offset
+    /// assignment (GR1 Task 12, D744): one broken fence rejects the commit with
+    /// [`ApplyError::Fenced`] naming its lease, and nothing changes. A retry of
+    /// an object that was committed returns its offsets even when a fence has
+    /// broken since, because the first attempt was made under it.
     async fn commit_wal(&self, commit: WalCommit) -> Tracked<Vec<u64>>;
 
     /// Replaces a contiguous run of WAL index entries of one partition with one

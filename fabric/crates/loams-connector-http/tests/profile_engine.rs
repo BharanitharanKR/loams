@@ -273,7 +273,7 @@ async fn http_profile_paginates_and_resumes() {
     assert_eq!(got, (1..=6).map(|n| json!(n)).collect::<Vec<_>>());
     let ev = &fabric.events()[0];
     assert_eq!(ev.subject.as_deref(), Some("1"));
-    assert_eq!(ev.ty, "io.loams.dev.flow.fake-crm.record.v1");
+    assert_eq!(ev.ty, "io.loams.dev.flow.fake-crm.item.v1");
     // No position or status names the credential.
     for cp in store.saves() {
         for pos in cp.splits.values() {

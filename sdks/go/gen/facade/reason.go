@@ -53,9 +53,30 @@ const (
 	ReasonQuotaExceeded           Reason = "quota_exceeded"
 	ReasonStorageUnavailable      Reason = "storage_unavailable"
 	ReasonSecretAlreadyIssued     Reason = "secret_already_issued"
+	ReasonRepoNotFound            Reason = "repo_not_found"
+	ReasonRepoAlreadyExists       Reason = "repo_already_exists"
+	ReasonRepoDeleting            Reason = "repo_deleting"
+	ReasonRefStale                Reason = "ref_stale"
+	ReasonRefProtected            Reason = "ref_protected"
+	ReasonOutOfScope              Reason = "out_of_scope"
+	ReasonObjectFormatUnsupported Reason = "object_format_unsupported"
+	ReasonForkTooDeep             Reason = "fork_too_deep"
+	ReasonSequencerUnavailable    Reason = "sequencer_unavailable"
+	ReasonIdempotencyKeyReused    Reason = "idempotency_key_reused"
+	ReasonWorkspaceNotFound       Reason = "workspace_not_found"
+	ReasonWorkspaceFenced         Reason = "workspace_fenced"
+	ReasonWorkspaceReadOnly       Reason = "workspace_read_only"
+	ReasonWorkspaceNameTaken      Reason = "workspace_name_taken"
+	ReasonObjectMissing           Reason = "object_missing"
+	ReasonSecretDetected          Reason = "secret_detected"
+	ReasonEnvUnsealed             Reason = "env_unsealed"
+	ReasonEnvAccessDenied         Reason = "env_access_denied"
+	ReasonEnvForeignReference     Reason = "env_foreign_reference"
 	ReasonLiveBadCursor           Reason = "live_bad_cursor"
 	ReasonLiveWorkerCrashed       Reason = "live_worker_crashed"
 	ReasonLiveDeployConflict      Reason = "live_deploy_conflict"
+	ReasonLiveSchemaViolation     Reason = "live_schema_violation"
+	ReasonLiveIndexNotReady       Reason = "live_index_not_ready"
 	ReasonInvalidArgument         Reason = "invalid_argument"
 	ReasonNotFound                Reason = "not_found"
 	ReasonAlreadyExists           Reason = "already_exists"
@@ -116,9 +137,30 @@ var Reasons = []Reason{
 	ReasonQuotaExceeded,
 	ReasonStorageUnavailable,
 	ReasonSecretAlreadyIssued,
+	ReasonRepoNotFound,
+	ReasonRepoAlreadyExists,
+	ReasonRepoDeleting,
+	ReasonRefStale,
+	ReasonRefProtected,
+	ReasonOutOfScope,
+	ReasonObjectFormatUnsupported,
+	ReasonForkTooDeep,
+	ReasonSequencerUnavailable,
+	ReasonIdempotencyKeyReused,
+	ReasonWorkspaceNotFound,
+	ReasonWorkspaceFenced,
+	ReasonWorkspaceReadOnly,
+	ReasonWorkspaceNameTaken,
+	ReasonObjectMissing,
+	ReasonSecretDetected,
+	ReasonEnvUnsealed,
+	ReasonEnvAccessDenied,
+	ReasonEnvForeignReference,
 	ReasonLiveBadCursor,
 	ReasonLiveWorkerCrashed,
 	ReasonLiveDeployConflict,
+	ReasonLiveSchemaViolation,
+	ReasonLiveIndexNotReady,
 	ReasonInvalidArgument,
 	ReasonNotFound,
 	ReasonAlreadyExists,
@@ -174,9 +216,30 @@ var ReasonCodes = map[Reason]string{
 	ReasonQuotaExceeded:           "resource_exhausted",
 	ReasonStorageUnavailable:      "unavailable",
 	ReasonSecretAlreadyIssued:     "failed_precondition",
+	ReasonRepoNotFound:            "not_found",
+	ReasonRepoAlreadyExists:       "already_exists",
+	ReasonRepoDeleting:            "failed_precondition",
+	ReasonRefStale:                "aborted",
+	ReasonRefProtected:            "failed_precondition",
+	ReasonOutOfScope:              "permission_denied",
+	ReasonObjectFormatUnsupported: "unimplemented",
+	ReasonForkTooDeep:             "failed_precondition",
+	ReasonSequencerUnavailable:    "unavailable",
+	ReasonIdempotencyKeyReused:    "failed_precondition",
+	ReasonWorkspaceNotFound:       "not_found",
+	ReasonWorkspaceFenced:         "aborted",
+	ReasonWorkspaceReadOnly:       "failed_precondition",
+	ReasonWorkspaceNameTaken:      "already_exists",
+	ReasonObjectMissing:           "failed_precondition",
+	ReasonSecretDetected:          "failed_precondition",
+	ReasonEnvUnsealed:             "invalid_argument",
+	ReasonEnvAccessDenied:         "permission_denied",
+	ReasonEnvForeignReference:     "permission_denied",
 	ReasonLiveBadCursor:           "invalid_argument",
 	ReasonLiveWorkerCrashed:       "internal",
 	ReasonLiveDeployConflict:      "failed_precondition",
+	ReasonLiveSchemaViolation:     "invalid_argument",
+	ReasonLiveIndexNotReady:       "failed_precondition",
 	ReasonInvalidArgument:         "invalid_argument",
 	ReasonNotFound:                "not_found",
 	ReasonAlreadyExists:           "already_exists",

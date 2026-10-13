@@ -15,6 +15,13 @@
 //! client's Connect timeout ([`GraphAdmin::for_call`](loams_graph::service::admin::GraphAdmin::for_call),
 //! GR1 Task 6).
 //!
+//! Consistency (GR1 Task 15, §48 §7.2): a `loams-consistency-token` request header is applied to
+//! the request's own `consistency` the way `loams.collection.v1` applies it (it turns `strong`,
+//! `eventual` or none into `at_least`, and merges into an `at_least`), and `Execute` and
+//! `ExecuteBatch` answer their token in the same header as well as in the message.
+//! `ExecuteStream`'s token is in its last chunk only: its headers go out before the statement
+//! has run.
+//!
 //! Not served yet, answered `not_implemented`: `RestoreGraph`, `ExportGraph`, `ImportGraph`
 //! (Task 29).
 
@@ -280,6 +287,30 @@ impl GraphAdminService for Served {
     }
 }
 
+/// Applies the request's `loams-consistency-token` header, if any, to its `consistency` (GR1
+/// Task 15): the rule [`read_consistency`](super::read_consistency) applies to collections.
+#[cfg(feature = "graph")]
+fn apply_token_header(
+    ctx: &RequestContext,
+    consistency: &mut buffa::MessageField<pb::Consistency, buffa::Inline<pb::Consistency>>,
+) -> Result<(), connectrpc::ConnectError> {
+    match ctx.headers().get(&super::CONSISTENCY_TOKEN) {
+        Some(header) => loams_graph::consistency::apply_header(consistency, header.as_bytes()),
+        None => Ok(()),
+    }
+}
+
+/// `response` with its token in the `loams-consistency-token` header too, when it has one.
+#[cfg(feature = "graph")]
+fn with_token<M>(response: M, token: &str) -> Response<M> {
+    let response = Response::new(response);
+    if token.is_empty() {
+        response
+    } else {
+        response.with_header(super::CONSISTENCY_TOKEN.as_str(), token.to_string())
+    }
+}
+
 #[cfg(feature = "graph")]
 impl GraphService for Served {
     async fn execute(
@@ -287,36 +318,35 @@ impl GraphService for Served {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::ExecuteRequest>,
     ) -> ServiceResult<pb::ExecuteResponse> {
-        Response::ok(
-            self.admin
-                .for_call(ctx.deadline())
-                .execute(request.to_owned_message())
-                .await?,
-        )
+        let mut request = request.to_owned_message();
+        apply_token_header(&ctx, &mut request.consistency)?;
+        let answer = self.admin.for_call(ctx.deadline()).execute(request).await?;
+        let token = answer.consistency_token.clone();
+        Ok(with_token(answer, &token))
     }
     async fn execute_batch(
         &self,
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::ExecuteBatchRequest>,
     ) -> ServiceResult<pb::ExecuteBatchResponse> {
-        Response::ok(
-            self.admin
-                .for_call(ctx.deadline())
-                .execute_batch(request.to_owned_message())
-                .await?,
-        )
+        // A batch is the owner's (it has no consistency of its own), so a request header has
+        // nothing to change; the answer's token is in the header too.
+        let answer = self
+            .admin
+            .for_call(ctx.deadline())
+            .execute_batch(request.to_owned_message())
+            .await?;
+        let token = answer.consistency_token.clone();
+        Ok(with_token(answer, &token))
     }
     async fn explain(
         &self,
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::ExplainRequest>,
     ) -> ServiceResult<pb::Plan> {
-        Response::ok(
-            self.admin
-                .for_call(ctx.deadline())
-                .explain(request.to_owned_message())
-                .await?,
-        )
+        let mut request = request.to_owned_message();
+        apply_token_header(&ctx, &mut request.consistency)?;
+        Response::ok(self.admin.for_call(ctx.deadline()).explain(request).await?)
     }
 
     async fn execute_stream(
@@ -324,11 +354,182 @@ impl GraphService for Served {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::ExecuteStreamRequest>,
     ) -> ServiceResult<ServiceStream<pb::ResultChunk>> {
+        let mut request = request.to_owned_message();
+        if let Some(inner) = request.request.as_option_mut() {
+            apply_token_header(&ctx, &mut inner.consistency)?;
+        } else if ctx.headers().contains_key(&super::CONSISTENCY_TOKEN) {
+            let mut inner = pb::ExecuteRequest::default();
+            apply_token_header(&ctx, &mut inner.consistency)?;
+            request.request = inner.into();
+        }
         Response::ok(
             self.admin
                 .for_call(ctx.deadline())
-                .execute_stream(request.to_owned_message())
+                .execute_stream(request)
                 .await?,
         )
     }
+}
+
+/// Graph forwarding between a cluster's graph nodes (GR1 Task 12, `GraphForward`): API1 Task 8
+/// (`loams.internal.v1`) has not landed, so it is an internal REST route beside the hot and read
+/// routes, `POST /internal/v1/graph/<method>` with the request's protobuf bytes, answered with
+/// the response's protobuf bytes (`200`) or the Connect error as JSON (`422`). It moves to
+/// `loams.internal.v1` with API1 Task 8 (R0.16). Unauthenticated, like every internal route
+/// before MT1.
+#[cfg(feature = "graph")]
+pub(crate) const FORWARD_PATH: &str = "/internal/v1/graph/";
+
+/// The node registry as Loams Graph's ownership sees it: the live nodes with the `graph` role.
+#[cfg(feature = "graph")]
+#[derive(Debug)]
+pub(crate) struct RegistryMembership {
+    registry: Arc<loams_hot::NodeRegistry>,
+}
+
+#[cfg(feature = "graph")]
+impl RegistryMembership {
+    pub(crate) fn new(registry: Arc<loams_hot::NodeRegistry>) -> Self {
+        Self { registry }
+    }
+}
+
+#[cfg(feature = "graph")]
+fn graph_node(node: &loams_hot::NodeDescriptor) -> loams_graph::owner::GraphNode {
+    loams_graph::owner::GraphNode {
+        node_id: node.node_id,
+        incarnation: node.incarnation,
+        addr: node.addr.to_string(),
+    }
+}
+
+#[cfg(feature = "graph")]
+impl loams_graph::owner::Membership for RegistryMembership {
+    fn me(&self) -> loams_graph::owner::GraphNode {
+        graph_node(self.registry.me())
+    }
+
+    fn graph_nodes(&self) -> Vec<loams_graph::owner::GraphNode> {
+        self.registry
+            .live()
+            .iter()
+            .filter(|node| node.roles.graph)
+            .map(graph_node)
+            .collect()
+    }
+}
+
+/// Forwards a graph call to its owner over [`FORWARD_PATH`].
+#[cfg(feature = "graph")]
+#[derive(Debug)]
+pub(crate) struct HttpForwarder {
+    client: reqwest::Client,
+}
+
+#[cfg(feature = "graph")]
+impl HttpForwarder {
+    pub(crate) fn new() -> Result<Self, reqwest::Error> {
+        Ok(Self {
+            client: reqwest::Client::builder()
+                .connect_timeout(super::hot::OWNER_CONNECT_TIMEOUT)
+                .build()?,
+        })
+    }
+}
+
+#[cfg(feature = "graph")]
+impl loams_graph::owner::Forwarder for HttpForwarder {
+    fn forward(
+        &self,
+        to: &loams_graph::owner::GraphNode,
+        method: loams_graph::owner::ForwardMethod,
+        request: bytes::Bytes,
+        timeout: std::time::Duration,
+    ) -> loams_graph::owner::ForwardFuture {
+        use connectrpc::{ConnectError, ErrorCode};
+        let url = format!("http://{}{FORWARD_PATH}{}", to.addr, method.as_str());
+        let node = to.node_id;
+        let call = self
+            .client
+            .post(url)
+            .timeout(timeout)
+            .header(reqwest::header::CONTENT_TYPE, "application/proto")
+            .body(request);
+        Box::pin(async move {
+            let unreachable = |err: &dyn std::fmt::Display| {
+                tracing::warn!(node, error = %err, "forwarding a graph call failed");
+                ConnectError::new(
+                    ErrorCode::Unavailable,
+                    format!("the graph's owner (node {node}) did not answer; retry"),
+                )
+            };
+            let response = call.send().await.map_err(|err| unreachable(&err))?;
+            let status = response.status();
+            let body = response.bytes().await.map_err(|err| unreachable(&err))?;
+            match status {
+                reqwest::StatusCode::OK => Ok(body),
+                // The owner's own refusal, as the Connect error it would answer.
+                reqwest::StatusCode::UNPROCESSABLE_ENTITY => {
+                    serde_json::from_slice::<ConnectError>(&body)
+                        .map_err(|err| unreachable(&err))
+                        .and_then(Err)
+                }
+                // A node still starting (or stopping): a retry can reach it.
+                reqwest::StatusCode::SERVICE_UNAVAILABLE => Err(unreachable(&status)),
+                // No such route (a node of another release), a body over its limit: a retry
+                // cannot help (PR #443 review).
+                other => {
+                    tracing::warn!(node, status = %other, "a graph owner answered an unexpected status");
+                    Err(ConnectError::new(
+                        ErrorCode::Internal,
+                        format!("the graph's owner (node {node}) answered {other}"),
+                    ))
+                }
+            }
+        })
+    }
+}
+
+/// `POST /internal/v1/graph/{method}`: serves a call another graph node forwarded here.
+#[cfg(feature = "graph")]
+pub(crate) fn internal_routes() -> axum::Router<AppState> {
+    use axum::extract::{DefaultBodyLimit, Path, State};
+    use axum::http::{StatusCode, header};
+    use axum::response::IntoResponse;
+    async fn serve(
+        State(state): State<AppState>,
+        Path(method): Path<String>,
+        body: bytes::Bytes,
+    ) -> axum::response::Response {
+        let refused = |err: connectrpc::ConnectError| {
+            let json = serde_json::to_vec(&err).unwrap_or_default();
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                [(header::CONTENT_TYPE, "application/json")],
+                json,
+            )
+                .into_response()
+        };
+        let Some(admin) = &state.graph else {
+            return refused(not_in_variant("loams.graph.v1 (forwarded)"));
+        };
+        let Some(method) = loams_graph::owner::ForwardMethod::parse(&method) else {
+            return (StatusCode::NOT_FOUND, "no such graph method").into_response();
+        };
+        match admin.serve_forwarded(method, body).await {
+            Ok(answer) => (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, "application/proto")],
+                answer,
+            )
+                .into_response(),
+            Err(err) => refused(err),
+        }
+    }
+    axum::Router::new()
+        .route(
+            &format!("{FORWARD_PATH}{{method}}"),
+            axum::routing::post(serve),
+        )
+        .layer(DefaultBodyLimit::max(super::MAX_BODY_BYTES))
 }

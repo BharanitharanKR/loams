@@ -46,6 +46,53 @@ class ReasonRequiredException extends LoamsException {}
 class StepUpRequiredException extends LoamsException {}
 class NotImplementedException extends LoamsException {}
 class FeatureNotInVariantException extends LoamsException {}
+class HouseNotConfiguredException extends LoamsException {}
+class HouseSyntaxErrorException extends LoamsException {}
+class HouseUnknownTableException extends LoamsException {}
+class HouseUnknownDatabaseException extends LoamsException {}
+class HouseAccessDeniedException extends LoamsException {}
+class HouseReadOnlyException extends LoamsException {}
+class HouseTimeoutException extends LoamsException {}
+class HouseMemoryLimitException extends LoamsException {}
+class HouseTooManyQueriesException extends LoamsException {}
+class HouseQuotaExceededException extends LoamsException {}
+class HouseDisabledFunctionException extends LoamsException {}
+class HouseCancelledException extends LoamsException {}
+class HouseQueryNotFoundException extends LoamsException {}
+class HouseQueryFailedException extends LoamsException {}
+class ProjectNotFoundException extends LoamsException {}
+class BranchHasChildrenException extends LoamsException {}
+class BranchProtectedException extends LoamsException {}
+class LsnOutOfRetentionException extends LoamsException {}
+class EndpointExistsForBranchException extends LoamsException {}
+class ComputeStartFailedException extends LoamsException {}
+class QuotaExceededException extends LoamsException {}
+class StorageUnavailableException extends LoamsException {}
+class SecretAlreadyIssuedException extends LoamsException {}
+class RepoNotFoundException extends LoamsException {}
+class RepoAlreadyExistsException extends LoamsException {}
+class RepoDeletingException extends LoamsException {}
+class RefStaleException extends LoamsException {}
+class RefProtectedException extends LoamsException {}
+class OutOfScopeException extends LoamsException {}
+class ObjectFormatUnsupportedException extends LoamsException {}
+class ForkTooDeepException extends LoamsException {}
+class SequencerUnavailableException extends LoamsException {}
+class IdempotencyKeyReusedException extends LoamsException {}
+class WorkspaceNotFoundException extends LoamsException {}
+class WorkspaceFencedException extends LoamsException {}
+class WorkspaceReadOnlyException extends LoamsException {}
+class WorkspaceNameTakenException extends LoamsException {}
+class ObjectMissingException extends LoamsException {}
+class SecretDetectedException extends LoamsException {}
+class EnvUnsealedException extends LoamsException {}
+class EnvAccessDeniedException extends LoamsException {}
+class EnvForeignReferenceException extends LoamsException {}
+class LiveBadCursorException extends LoamsException {}
+class LiveWorkerCrashedException extends LoamsException {}
+class LiveDeployConflictException extends LoamsException {}
+class LiveSchemaViolationException extends LoamsException {}
+class LiveIndexNotReadyException extends LoamsException {}
 class TokenExpiredException extends LoamsException {}
 class UnauthenticatedException extends LoamsException {}
 class DecisionProofInvalidException extends LoamsException {}
@@ -82,6 +129,53 @@ class ErrorParser
         'push_target_unknown' => PushTargetUnknownException::class,
         'not_implemented' => NotImplementedException::class,
         'feature_not_in_variant' => FeatureNotInVariantException::class,
+        'house_not_configured' => HouseNotConfiguredException::class,
+        'house_syntax_error' => HouseSyntaxErrorException::class,
+        'house_unknown_table' => HouseUnknownTableException::class,
+        'house_unknown_database' => HouseUnknownDatabaseException::class,
+        'house_access_denied' => HouseAccessDeniedException::class,
+        'house_read_only' => HouseReadOnlyException::class,
+        'house_timeout' => HouseTimeoutException::class,
+        'house_memory_limit' => HouseMemoryLimitException::class,
+        'house_too_many_queries' => HouseTooManyQueriesException::class,
+        'house_quota_exceeded' => HouseQuotaExceededException::class,
+        'house_disabled_function' => HouseDisabledFunctionException::class,
+        'house_cancelled' => HouseCancelledException::class,
+        'house_query_not_found' => HouseQueryNotFoundException::class,
+        'house_query_failed' => HouseQueryFailedException::class,
+        'project_not_found' => ProjectNotFoundException::class,
+        'branch_has_children' => BranchHasChildrenException::class,
+        'branch_protected' => BranchProtectedException::class,
+        'lsn_out_of_retention' => LsnOutOfRetentionException::class,
+        'endpoint_exists_for_branch' => EndpointExistsForBranchException::class,
+        'compute_start_failed' => ComputeStartFailedException::class,
+        'quota_exceeded' => QuotaExceededException::class,
+        'storage_unavailable' => StorageUnavailableException::class,
+        'secret_already_issued' => SecretAlreadyIssuedException::class,
+        'repo_not_found' => RepoNotFoundException::class,
+        'repo_already_exists' => RepoAlreadyExistsException::class,
+        'repo_deleting' => RepoDeletingException::class,
+        'ref_stale' => RefStaleException::class,
+        'ref_protected' => RefProtectedException::class,
+        'out_of_scope' => OutOfScopeException::class,
+        'object_format_unsupported' => ObjectFormatUnsupportedException::class,
+        'fork_too_deep' => ForkTooDeepException::class,
+        'sequencer_unavailable' => SequencerUnavailableException::class,
+        'idempotency_key_reused' => IdempotencyKeyReusedException::class,
+        'workspace_not_found' => WorkspaceNotFoundException::class,
+        'workspace_fenced' => WorkspaceFencedException::class,
+        'workspace_read_only' => WorkspaceReadOnlyException::class,
+        'workspace_name_taken' => WorkspaceNameTakenException::class,
+        'object_missing' => ObjectMissingException::class,
+        'secret_detected' => SecretDetectedException::class,
+        'env_unsealed' => EnvUnsealedException::class,
+        'env_access_denied' => EnvAccessDeniedException::class,
+        'env_foreign_reference' => EnvForeignReferenceException::class,
+        'live_bad_cursor' => LiveBadCursorException::class,
+        'live_worker_crashed' => LiveWorkerCrashedException::class,
+        'live_deploy_conflict' => LiveDeployConflictException::class,
+        'live_schema_violation' => LiveSchemaViolationException::class,
+        'live_index_not_ready' => LiveIndexNotReadyException::class,
         'invalid_argument' => InvalidArgumentException::class,
         'not_found' => NotFoundException::class,
         'already_exists' => AlreadyExistsException::class,

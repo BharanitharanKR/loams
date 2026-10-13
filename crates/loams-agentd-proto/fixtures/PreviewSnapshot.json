@@ -1,0 +1,23 @@
+{
+  "error": null,
+  "projectName": "project",
+  "proxyPort": 7331,
+  "remote": false,
+  "services": [
+    {
+      "cwd": "/home/dev/project/web",
+      "deviceId": "device-1",
+      "deviceName": "workstation",
+      "hostname": "web.project.localhost",
+      "id": "preview-1",
+      "loamsDesktopOwned": false,
+      "name": "web",
+      "pid": 4242,
+      "port": 5173,
+      "projectCwd": "/home/dev/project",
+      "projectId": "space-1",
+      "projectName": "project",
+      "startedAt": 1791797400000
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+# SendGrid — an HTTP-API profile (CN2 OR-11, Task 20). Written from Twilio
+# SendGrid's public v3 API reference:
+#   Mail Send: https://www.twilio.com/docs/sendgrid/api-reference/mail-send/mail-send
+#   Bounces (offset/limit): https://www.twilio.com/docs/sendgrid/api-reference/bounces-api/retrieve-all-bounces
+#   Rate-limit headers: https://www.twilio.com/docs/sendgrid/api-reference/how-to-use-the-sendgrid-v3-api/rate-limits
+#   Signed Event Webhook (ECDSA P-256):
+#     https://www.twilio.com/docs/sendgrid/for-developers/tracking-events/getting-started-event-webhook-security-features
+# The webhook "secret" an instance names is the verification public key
+# (base64 DER) SendGrid shows for the signed Event Webhook.
+apiVersion: loams.flow/v1
+kind: Profile
+id: sendgrid
+profile_kind: http-api
+module: http
+system:
+  name: SendGrid
+  service: { fixture: conformance/connectors/fixtures/sendgrid }
+defaults: {}
+narrows: []
+http:
+  base_url: "https://api.sendgrid.com/v3"
+  auth: { scheme: bearer }
+  resources:
+    mail:
+      create:
+        method: POST
+        path: "/mail/send"
+    bounces:
+      list:
+        method: GET
+        path: "/suppression/bounces"
+        offset: { param: offset, limit_param: limit, limit: 500 }
+        key: "/email"
+  rate_limit:
+    requests: 600
+    per_seconds: 60
+    honour_headers: ["Retry-After", "X-RateLimit-Remaining", "X-RateLimit-Reset"]
+  webhook: { scheme: sendgrid, header: X-Twilio-Email-Event-Webhook-Signature }

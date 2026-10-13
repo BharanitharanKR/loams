@@ -4,7 +4,9 @@ use std::collections::BTreeSet;
 use std::time::SystemTime;
 
 use httpmock::MockServer;
-use loams_console_mock::{CONTRACT, ENGINE_TEMPLATES, Route, load_seed, register, routes};
+use loams_console_mock::{
+    CONNECT_ONLY_RPCS, CONNECT_RPCS, CONTRACT, ENGINE_TEMPLATES, Route, load_seed, register, routes,
+};
 use serde_json::Value;
 
 fn contract() -> Value {
@@ -47,6 +49,131 @@ fn every_operation_has_a_mock_and_every_mock_an_operation() {
         extra.is_empty(),
         "mocks for paths the contract lacks: {extra:?}"
     );
+}
+
+/// API2 Tasks 6 and 7: every operation of the contract has its Connect RPC
+/// (or stays HTTP, D602) in `CONNECT_RPCS`, the table names RPCs that exist in
+/// `proto/loams/{auth,admin}/v1` (or `loams.instance.v1`), and it says what
+/// `docs/api/route-map.md`'s console table says.
+#[test]
+fn connect_rpcs_cover_the_contract_and_agree_with_the_route_map() {
+    let ops = operations(&contract());
+    let mapped: BTreeSet<(String, String)> = CONNECT_RPCS
+        .iter()
+        .map(|(m, t, _)| ((*m).to_owned(), (*t).to_owned()))
+        .collect();
+    assert_eq!(
+        mapped.len(),
+        CONNECT_RPCS.len(),
+        "an operation is mapped twice"
+    );
+    assert_eq!(
+        ops, mapped,
+        "CONNECT_RPCS and the contract's operations differ"
+    );
+
+    // Every RPC named is declared in the protos.
+    let declared = declared_rpcs();
+    assert!(declared.len() > 40, "only {} RPCs parsed", declared.len());
+    for rpc in CONNECT_RPCS.iter().filter_map(|(_, _, rpc)| *rpc) {
+        if rpc.starts_with("loams.instance.v1.") {
+            continue;
+        }
+        assert!(declared.contains(rpc), "{rpc} is not declared in proto/");
+    }
+    // And every declared console RPC answers a route, or is one of the two
+    // that never had one.
+    let answering: BTreeSet<&str> = CONNECT_RPCS.iter().filter_map(|(_, _, rpc)| *rpc).collect();
+    for rpc in &declared {
+        assert!(
+            answering.contains(rpc.as_str()) || CONNECT_ONLY_RPCS.contains(&rpc.as_str()),
+            "{rpc} answers no contract operation and is not in CONNECT_ONLY_RPCS"
+        );
+    }
+
+    // docs/api/route-map.md's console section names the same RPC per route.
+    let doc = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../docs/api/route-map.md"
+    ))
+    .expect("read docs/api/route-map.md");
+    let section = doc
+        .split("## Console contract")
+        .nth(1)
+        .expect("route-map.md has a console contract section");
+    let mut documented = 0;
+    for line in section.lines() {
+        let cells: Vec<&str> = line.split('|').map(str::trim).collect();
+        if cells.len() < 5 || !["GET", "POST", "PATCH", "DELETE"].contains(&cells[1]) {
+            continue;
+        }
+        let template = cells[2].trim_matches('`');
+        let target = cells[4];
+        let expected = if target.starts_with("kept") {
+            None
+        } else {
+            let first = target.split('`').nth(1).expect("a backticked RPC");
+            Some(if first.starts_with("loams.") {
+                first.to_owned()
+            } else {
+                format!("loams.admin.v1.{first}")
+            })
+        };
+        let ours = CONNECT_RPCS
+            .iter()
+            .find(|(m, t, _)| *m == cells[1] && *t == template)
+            .unwrap_or_else(|| {
+                panic!(
+                    "route-map row {} {template} is not in CONNECT_RPCS",
+                    cells[1]
+                )
+            })
+            .2;
+        assert_eq!(
+            ours.map(str::to_owned),
+            expected,
+            "{} {template}: CONNECT_RPCS and route-map.md disagree",
+            cells[1]
+        );
+        documented += 1;
+    }
+    // The `.well-known` rows are in the map's protocol table, not this one.
+    assert!(
+        documented >= 44,
+        "only {documented} console rows parsed out of route-map.md"
+    );
+}
+
+/// `<package>.<Service>/<Method>` for every `rpc` in `proto/loams/auth/v1`
+/// and `proto/loams/admin/v1`, read from the files rather than from generated
+/// code, so the check is about what the contract says.
+fn declared_rpcs() -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for dir in ["auth", "admin"] {
+        let path = format!("{}/../../proto/loams/{dir}/v1", env!("CARGO_MANIFEST_DIR"));
+        for entry in std::fs::read_dir(&path).expect("read a proto dir") {
+            let text =
+                std::fs::read_to_string(entry.expect("a dir entry").path()).expect("read a .proto");
+            let package = text
+                .lines()
+                .find_map(|l| l.strip_prefix("package "))
+                .map(|p| p.trim_end_matches(';').to_owned());
+            let mut service = None;
+            for line in text.lines().map(str::trim) {
+                if let Some(rest) = line.strip_prefix("service ") {
+                    service = rest.split_whitespace().next().map(str::to_owned);
+                } else if let Some(rest) = line.strip_prefix("rpc ") {
+                    let method = rest.split('(').next().expect("an rpc name").trim();
+                    out.insert(format!(
+                        "{}.{}/{method}",
+                        package.as_deref().expect("a package"),
+                        service.as_deref().expect("an rpc inside a service"),
+                    ));
+                }
+            }
+        }
+    }
+    out
 }
 
 #[test]

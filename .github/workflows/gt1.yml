@@ -1,0 +1,72 @@
+# GT1: Loams Git (docs/plans/2026-10-10-gt1-loams-git.md, Task 11).
+#
+# loams-git: the WAL core's suites (formats, blob store, WAL, state machine,
+# object database, ref log, checkpoints, forks, segment GC, and the
+# linearizability histories on 32 seeds) and git-remote-loams driven by the
+# real git (Task 51, with its fault hook), with RustFS as the store for the
+# store-backed suite (tests/s3.rs) and the Q385 multipart probe. The first
+# step prints the runner's git, kernel and /dev/fuse (plan T0-23). The
+# nightly run (gt1-nightly.yml) takes 1024 seeds and the bench.
+name: Git
+
+on:
+  workflow_dispatch:
+  # Full tier: pull requests into main (the release gate); the nightly dispatches it on dev.
+  pull_request:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "deny.toml"
+      - "crates/loams-git*/**"
+      - "crates/loams-fs/**"
+      - "crates/loams-store/**"
+      - "crates/loams-cloudevents/**"
+      - "bench/git-wal/**"
+      - "scripts/git/**"
+      - ".github/workflows/gt1.yml"
+      - ".github/workflows/gt1-nightly.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gt1-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  loams-git:
+    name: Suites
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: environment (git, kernel, /dev/fuse)
+        run: |
+          git --version
+          uname -r
+          ls -l /dev/fuse || echo "no /dev/fuse"
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: gt1-loams-git
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
+      - name: RustFS
+        run: scripts/git/rustfs.sh start | sed -n 's/^export //p' >> "$GITHUB_ENV"
+      - name: fmt
+        run: cargo fmt --all -- --check
+      - name: clippy
+        run: cargo clippy -p loams-git -p loams-git-remote -p loams-fs -p git-wal-bench --all-targets --features loams-git-remote/faults --locked -- -D warnings
+      - name: test (32 linearizability seeds)
+        env:
+          LOAMS_GIT_LIN_SEEDS: "32"
+        run: cargo test -p loams-git -p loams-git-remote -p loams-fs --features loams-git-remote/faults --locked
+      - name: Q385 (RustFS multipart atomicity)
+        run: cargo test -p loams-git --locked --test blob -- --ignored q385 --nocapture
+      - name: stop RustFS
+        if: always()
+        run: scripts/git/rustfs.sh stop || true

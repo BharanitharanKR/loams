@@ -4,6 +4,9 @@
 # `editions: ['desktop']` and `inject: ['desktop']`, so a browser build never
 # loads them.
 #
+# Studio on the desktop reaches loams-agentd through the desktop bridge.
+- id: studio
+  inject: [router, slots, mode, platform, flags, desktop]
 - insert:
     - id: desktop-servers
       name: '@loams/plugin-desktop-servers'

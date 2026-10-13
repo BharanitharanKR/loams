@@ -315,6 +315,55 @@ class ConformanceTest extends TestCase
     }
 
     #[Test]
+    public function php_error_reason_registry_matches_reasons_md(): void
+    {
+        $this->test_php_error_reason_registry_matches_reasons_md();
+    }
+
+    /**
+     * ErrorParser::REASONS is a transcription of docs/api/reasons.md's registry:
+     * the same reasons in the same order, so a reason added to or dropped from
+     * the page fails here rather than drifting silently. Each reason must also
+     * map to a typed exception of its own.
+     */
+    public function test_php_error_reason_registry_matches_reasons_md(): void
+    {
+        $page = __DIR__ . '/../../../docs/api/reasons.md';
+        $lines = file($page, FILE_IGNORE_NEW_LINES);
+        $this->assertNotFalse($lines, "reading {$page}");
+
+        // The registry's rows are `| `reason` | ...`: the first column's backticked token.
+        $documented = [];
+        foreach ($lines as $line) {
+            if (preg_match('/^\|\s*`([a-z][a-z0-9_]*)`\s*\|/', trim($line), $m)) {
+                $documented[] = $m[1];
+            }
+        }
+        $this->assertNotEmpty($documented, "docs/api/reasons.md yielded no reasons; its table's shape changed");
+
+        $this->assertSame(
+            $documented,
+            array_keys(ErrorParser::REASONS),
+            'docs/api/reasons.md and ErrorParser::REASONS have drifted apart'
+        );
+
+        foreach (ErrorParser::REASONS as $reason => $class) {
+            $exc = ErrorParser::parse(400, [
+                'code' => 'unknown',
+                'details' => [['@type' => 'type.googleapis.com/loams.errors.v1.ErrorInfo', 'reason' => $reason]],
+            ]);
+            $this->assertInstanceOf($class, $exc, "reason {$reason} did not map to {$class}");
+            $this->assertSame($reason, $exc->reason);
+            $this->assertNull($exc->unknownReason, "reason {$reason} was reported as unknown");
+        }
+        $this->assertCount(
+            count(array_unique(ErrorParser::REASONS)),
+            ErrorParser::REASONS,
+            'two reasons share one exception class'
+        );
+    }
+
+    #[Test]
     public function php_stream_resume_with_cursor(): void
     {
         $this->test_php_stream_resume_with_cursor();

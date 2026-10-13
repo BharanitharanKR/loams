@@ -1,4 +1,13 @@
-import { app, clipboard, ipcMain, Notification, shell } from "electron";
+import {
+	app,
+	BrowserWindow,
+	clipboard,
+	dialog,
+	ipcMain,
+	Notification,
+	type OpenDialogOptions,
+	shell,
+} from "electron";
 import { CH, type IpcResult } from "../../shared/contracts";
 import { isSafeRoute } from "../../shared/deeplink";
 import { assertTrustedSender, navigationDecision } from "../security/policy";
@@ -41,6 +50,16 @@ export function registerShellIpc(deps: ShellIpcDeps): void {
 	ipcMain.handle(CH.shellClipboard, (e, text: unknown) => {
 		assertTrustedSender(e);
 		if (typeof text === "string") clipboard.writeText(text.slice(0, 1_000_000));
+	});
+	ipcMain.handle(CH.shellPickFolder, async (e, title: unknown): Promise<string | null> => {
+		assertTrustedSender(e);
+		const opts: OpenDialogOptions = {
+			title: typeof title === "string" ? title.slice(0, 120) : "Choose a folder",
+			properties: ["openDirectory", "createDirectory"],
+		};
+		const w = BrowserWindow.fromWebContents(e.sender);
+		const r = w ? await dialog.showOpenDialog(w, opts) : await dialog.showOpenDialog(opts);
+		return r.canceled ? null : (r.filePaths[0] ?? null);
 	});
 	ipcMain.handle(CH.shellBadge, (e, count: unknown) => {
 		assertTrustedSender(e);

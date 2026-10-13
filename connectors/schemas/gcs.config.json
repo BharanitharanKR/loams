@@ -1,9 +1,172 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/gcs.config.json",
-  "title": "GCS instance config (placeholder)",
-  "description": "Placeholder for a GCS instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "GCS connector instance config (loams.flow/v1)",
+  "description": "One Google Cloud Storage instance's settings, read by the native objects family (`loams_connector_objects::gcs`, CN2 Task 13) over the GCS JSON API. `auth.service_account_key` holds a secret **name** (D189), exactly the manifest's `secrets`; without it the pod's metadata server supplies credentials.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "bucket"
+  ],
+  "properties": {
+    "bucket": {
+      "description": "The bucket.",
+      "type": "string",
+      "minLength": 1
+    },
+    "prefix": {
+      "description": "The key prefix the source lists under and the sink writes under. Give each sink instance its own.",
+      "type": "string",
+      "default": ""
+    },
+    "prefixes": {
+      "description": "Several prefixes to list, one source split each; `prefix` when empty.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "endpoint": {
+      "description": "An emulator's endpoint (fake-gcs-server); with no key the client then sends no OAuth token.",
+      "type": "string",
+      "minLength": 1
+    },
+    "allow_http": {
+      "description": "Allow plain HTTP to `endpoint`: development and CI stores only.",
+      "type": "boolean",
+      "default": false
+    },
+    "auth": {
+      "description": "GCS credentials, as a secret name.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "service_account_key": {
+          "description": "The service account key (JSON). The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "source": {
+      "description": "The listing source: one split per prefix, read in lexicographic key order after a high-water key.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decode": {
+          "description": "What each listed object becomes: one `object` event with its metadata (`metadata`) or its bytes (`bytes`), or Arrow batches decoded from CSV, NDJSON or Parquet.",
+          "enum": [
+            "metadata",
+            "bytes",
+            "csv",
+            "ndjson",
+            "parquet"
+          ],
+          "default": "metadata"
+        },
+        "columns": {
+          "description": "The columns of CSV and NDJSON objects, typed with the SDK's SQL type names (required for `csv` and `ndjson`; Parquet carries its own schema).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "type"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "description": "A SQL type name (docs/guides/connectors/schema-mapping.md).",
+                "type": "string",
+                "minLength": 1
+              },
+              "nullable": {
+                "type": "boolean",
+                "default": true
+              }
+            }
+          }
+        },
+        "csv_header": {
+          "description": "CSV objects start with a header line.",
+          "type": "boolean",
+          "default": true
+        },
+        "poll_interval_ms": {
+          "description": "List again this long after a listing ends. Without it the source lists once and ends (a bounded read).",
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_object_bytes": {
+          "description": "Objects larger than this are not decoded or carried; they go to the DLQ as poison and the listing moves past them.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 67108864
+        },
+        "decode_batch_rows": {
+          "description": "Rows per decoded batch before the batch budget cuts it.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 8192
+        }
+      }
+    },
+    "sink": {
+      "description": "The rolling sink: files rolled by size or time, named `<prefix>/<instance>/fabric/<first>-<last>.<ext>` after the sink's own row numbers, each Fabric batch staged with its checkpoint first (R13.2).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "description": "The file format: Parquet rows of the CloudEvents envelope, structured-mode CloudEvents as NDJSON, or the events' data (`raw`). Arrow batches keep their own schema.",
+          "enum": [
+            "parquet",
+            "ndjson",
+            "raw"
+          ],
+          "default": "parquet"
+        },
+        "roll_bytes": {
+          "description": "Roll a file once this many staged bytes are waiting.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 134217728
+        },
+        "roll_interval_secs": {
+          "description": "Roll a file once its first row has waited this long, checked as batches arrive.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 300
+        },
+        "conditional_put": {
+          "description": "Publish with `x-goog-if-generation-match: 0`, so a file already at a sink name is never overwritten. Off makes the sink at least once.",
+          "type": "boolean",
+          "default": true
+        },
+        "compression": {
+          "description": "Parquet compression.",
+          "enum": [
+            "zstd",
+            "snappy",
+            "gzip",
+            "none"
+          ],
+          "default": "zstd"
+        },
+        "raw_separator": {
+          "description": "Raw format: written after each event's data.",
+          "type": "string",
+          "default": "\n"
+        }
+      }
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }

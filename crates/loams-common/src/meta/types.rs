@@ -369,6 +369,34 @@ pub fn implicit_name(collection: &str, id: CollectionId) -> String {
     format!("_collection.{collection}.{id}")
 }
 
+/// The prefix of a Loams Graph graph's implicit stream (GR1 Task 12).
+pub const GRAPH_STREAM_PREFIX: &str = "_graph.";
+
+/// The name of Loams Graph graph `graph`'s implicit stream: `_graph.<gr_id>`
+/// (GR1 Task 12). Reserved: only
+/// [`ensure_graph_stream`](super::MetaStore::ensure_graph_stream) creates it.
+pub fn graph_stream_name(graph: &str) -> String {
+    format!("{GRAPH_STREAM_PREFIX}{graph}")
+}
+
+/// The name GR1 Task 11 gave a graph's stream before the reserved name
+/// existed: `graph.<gr_id>`, an ordinary stream name.
+/// [`ensure_graph_stream`](super::MetaStore::ensure_graph_stream) renames such
+/// a stream to [`graph_stream_name`].
+pub fn legacy_graph_stream_name(graph: &str) -> String {
+    format!("graph.{graph}")
+}
+
+/// Whether `graph` is a Loams Graph id: `gr_` and a ULID in Crockford
+/// base32, upper case (`gr_01J…`, 29 bytes).
+pub fn is_graph_id(graph: &str) -> bool {
+    const CROCKFORD: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+    let Some(ulid) = graph.strip_prefix("gr_") else {
+        return false;
+    };
+    ulid.len() == 26 && ulid.as_bytes()[0] <= b'7' && ulid.bytes().all(|b| CROCKFORD.contains(&b))
+}
+
 /// Pointer keys under this prefix belong to collections.
 pub const COLLECTION_POINTER_PREFIX: &str = "collection/";
 

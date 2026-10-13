@@ -1,0 +1,105 @@
+{
+  "recorded_from": "Twilio",
+  "synthetic": true,
+  "docs": [
+    "https://www.twilio.com/docs/messaging/api/message-resource"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "messages",
+    "config": {
+      "account_sid": "AC00000000000000000000000000000000",
+      "base_url": "{proxy}/2010-04-01/Accounts/AC00000000000000000000000000000000"
+    },
+    "secrets": {
+      "username": "synthetic-twilio-sid",
+      "password": "synthetic-twilio-token"
+    },
+    "expect": 3
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/2010-04-01/Accounts/AC00000000000000000000000000000000/Messages.json?PageSize=100",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "messages": [
+              {
+                "sid": "SM00000000000000000000000000000001",
+                "account_sid": "AC00000000000000000000000000000000",
+                "from": "+15005550006",
+                "to": "+15005550009",
+                "body": "Your code is 1234",
+                "status": "delivered",
+                "direction": "outbound-api",
+                "date_created": "Wed, 01 Oct 2026 10:00:00 +0000",
+                "uri": "/2010-04-01/Accounts/AC00000000000000000000000000000000/Messages/SM00000000000000000000000000000001.json"
+              },
+              {
+                "sid": "SM00000000000000000000000000000002",
+                "account_sid": "AC00000000000000000000000000000000",
+                "from": "+15005550006",
+                "to": "+15005550009",
+                "body": "See you at 10",
+                "status": "delivered",
+                "direction": "outbound-api",
+                "date_created": "Wed, 01 Oct 2026 10:00:00 +0000",
+                "uri": "/2010-04-01/Accounts/AC00000000000000000000000000000000/Messages/SM00000000000000000000000000000002.json"
+              }
+            ],
+            "page": 0,
+            "page_size": 100,
+            "first_page_uri": "/2010-04-01/Accounts/AC00000000000000000000000000000000/Messages.json?PageSize=100&Page=0",
+            "next_page_uri": "/2010-04-01/Accounts/AC00000000000000000000000000000000/Messages.json?PageSize=100&Page=1&PageToken=PASM00000000000000000000000000000002",
+            "previous_page_uri": null,
+            "uri": "/2010-04-01/Accounts/AC00000000000000000000000000000000/Messages.json?PageSize=100&Page=0"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/2010-04-01/Accounts/AC00000000000000000000000000000000/Messages.json?PageSize=100&Page=1&PageToken=PASM00000000000000000000000000000002",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "messages": [
+              {
+                "sid": "SM00000000000000000000000000000003",
+                "account_sid": "AC00000000000000000000000000000000",
+                "from": "+15005550006",
+                "to": "+15005550009",
+                "body": "Order shipped",
+                "status": "delivered",
+                "direction": "outbound-api",
+                "date_created": "Wed, 01 Oct 2026 10:00:00 +0000",
+                "uri": "/2010-04-01/Accounts/AC00000000000000000000000000000000/Messages/SM00000000000000000000000000000003.json"
+              }
+            ],
+            "page": 1,
+            "page_size": 100,
+            "next_page_uri": null,
+            "uri": "/2010-04-01/Accounts/AC00000000000000000000000000000000/Messages.json?PageSize=100&Page=1&PageToken=PASM00000000000000000000000000000002"
+          }
+        }
+      }
+    }
+  ]
+}

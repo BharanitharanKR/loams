@@ -60,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
         "  app protos: Connect, gRPC and gRPC-Web (loams.{{instance,devices,approvals,operations,notifications}}.v1)"
     );
     println!(
-        "  console:    /api/v1/* (signed {})",
+        "  console:    /api/v1/* and Connect loams.{{auth,admin}}.v1 (signed {})",
         if args.signed_out { "out" } else { "in" }
     );
     println!(

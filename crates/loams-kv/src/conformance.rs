@@ -13,7 +13,7 @@
 //! then returns, after the factory's `skipped:` line) when the backend is
 //! not available. The cases cover snapshot isolation (later commits are
 //! invisible, first committer wins, a locked read conflicts with a later
-//! write, inserts of present keys fail), scans, root isolation, and the
+//! write, a committed lock makes later committers of the key conflict, inserts of present keys fail), scans, root isolation, and the
 //! runner: its retries, attempt budget, deadline, fault points and commit
 //! tokens, and GC barriers.
 
@@ -39,6 +39,7 @@ macro_rules! kv_conformance {
                 snapshot_ignores_later_commits,
                 first_committer_wins,
                 locked_read_conflicts_with_write,
+                locked_key_conflicts_with_later_writers,
                 scan_bounds_and_order,
                 insert_existing_key_fails,
                 roots_are_isolated,
@@ -200,6 +201,178 @@ pub async fn locked_read_conflicts_with_write(factory: Factory) {
         .await
         .expect("a snapshot");
     assert_eq!(snap.get(b"other").await.expect("get"), None);
+}
+
+/// What the second transaction of [`lock_holder_then`] does to the key.
+#[derive(Debug, Clone, Copy)]
+enum Second {
+    Put,
+    Lock,
+}
+
+/// T1 locks `key` (and writes `key/x`, so it is not read-only); T2 starts
+/// before T1 commits and then puts or locks `key` (and writes `key/y`);
+/// T1 commits first, and T2's single attempt after it. Returns T2's
+/// outcome. Each round uses keys of its own: on TiKV a conflicting T2 may
+/// leave a lock on its other key that a later round would wait out.
+async fn lock_holder_then(store: &Store, key: &[u8], second: Second) -> Result<(), TxnError> {
+    let key: Arc<[u8]> = key.into();
+    let started = Arc::new(tokio::sync::Barrier::new(2));
+    let ended = Arc::new(tokio::sync::Barrier::new(2));
+    let t2 = {
+        let store = store.clone();
+        let (started, ended, key) = (started.clone(), ended.clone(), key.clone());
+        tokio::spawn(async move {
+            let mut opts = TxnOptions::new("kv.conformance.lock_second");
+            opts.max_attempts = 1;
+            store
+                .run(opts, move |txn| {
+                    let (started, ended, key) = (started.clone(), ended.clone(), key.clone());
+                    Box::pin(async move {
+                        started.wait().await;
+                        ended.wait().await;
+                        second.apply(txn, &key).await
+                    })
+                })
+                .await
+                .map(|_| ())
+        })
+    };
+    started.wait().await;
+    lock_once(store, &key, false)
+        .await
+        .expect("the locker commits");
+    ended.wait().await;
+    t2.await.expect("joined")
+}
+
+impl Second {
+    /// Puts or locks `key`, and writes `key/y`.
+    async fn apply(self, txn: &mut crate::Txn, key: &[u8]) -> Result<(), TxnError> {
+        match self {
+            Second::Put => txn.put(key, b"t2".to_vec()).await?,
+            Second::Lock => txn.lock_keys([key]).await?,
+        }
+        txn.put(&[key, b"/y"].concat(), b"t2".to_vec()).await
+    }
+}
+
+/// One transaction that locks `key` and writes `key/x`; with `rollback`,
+/// its body then fails, so it rolls back.
+async fn lock_once(store: &Store, key: &[u8], rollback: bool) -> Result<(), TxnError> {
+    let key: Arc<[u8]> = key.into();
+    let mut opts = TxnOptions::new("kv.conformance.lock_first");
+    opts.max_attempts = 1;
+    store
+        .run(opts, |txn| {
+            let key = key.clone();
+            Box::pin(async move {
+                txn.lock_keys([&*key]).await?;
+                txn.put(&[&*key, b"/x"].concat(), b"t1".to_vec()).await?;
+                if rollback {
+                    return Err(TxnError::Fatal("roll back".into()));
+                }
+                Ok(())
+            })
+        })
+        .await
+        .map(|_| ())
+}
+
+/// A key T1 locked (`lock_keys`, without writing it) makes a concurrent T2
+/// that writes or locks it and commits after T1 conflict, whether the key
+/// is present or absent (TiKV's committed `Lock` record). A rolled-back
+/// lock is no lock: a transaction after it writes the key. (One concurrent
+/// with the rolled-back locker may conflict on TiKV, whose rollback leaves
+/// a record, and commits on the embedded store; neither is asserted.) A
+/// transaction that starts after the locker committed does not conflict.
+/// A lock is no value: reads skip it, and an insert of an absent key that
+/// was only locked succeeds.
+pub async fn locked_key_conflicts_with_later_writers(factory: Factory) {
+    let Some(store) = factory.store(Spec::fresh()).await else {
+        return;
+    };
+    for (i, second) in [Second::Put, Second::Lock].into_iter().enumerate() {
+        for present in [true, false] {
+            let key = format!("k{i}{}", if present { "p" } else { "a" }).into_bytes();
+            let fresh = |round: &str| [key.as_slice(), round.as_bytes()].concat();
+            let (committed, rolled_back) = (fresh("c"), fresh("r"));
+            if present {
+                for k in [&committed, &rolled_back] {
+                    let k = k.clone();
+                    store
+                        .run(TxnOptions::new("kv.conformance.put"), move |txn| {
+                            let k = k.clone();
+                            Box::pin(async move { txn.put(&k, b"0".to_vec()).await })
+                        })
+                        .await
+                        .expect("a put commits");
+                }
+            }
+            let after_commit = lock_holder_then(&store, &committed, second).await;
+            assert!(
+                matches!(after_commit, Err(TxnError::Conflict)),
+                "{second:?} after a committed lock (present: {present}): {after_commit:?}"
+            );
+            let refused = lock_once(&store, &rolled_back, true).await;
+            assert!(matches!(refused, Err(TxnError::Fatal(_))), "{refused:?}");
+            let mut opts = TxnOptions::new("kv.conformance.after_rollback");
+            opts.max_attempts = 1;
+            store
+                .run(opts, |txn| {
+                    let k = rolled_back.clone();
+                    Box::pin(async move { second.apply(txn, &k).await })
+                })
+                .await
+                .unwrap_or_else(|e| {
+                    panic!("{second:?} after a rolled-back lock (present: {present}): {e:?}")
+                });
+        }
+    }
+    put(&store, b"present", b"t2").await;
+    let mut opts = TxnOptions::new("kv.conformance.lock_only");
+    opts.max_attempts = 1;
+    store
+        .run(opts, |txn| {
+            Box::pin(async move {
+                txn.lock_keys([b"fresh".as_slice(), b"present"]).await?;
+                txn.put(b"locker", b"locked".to_vec()).await
+            })
+        })
+        .await
+        .expect("the locker commits");
+    let mut snap = store
+        .snapshot(store.now().await.expect("now"))
+        .await
+        .expect("a snapshot");
+    assert_eq!(
+        snap.get(b"fresh").await.expect("get"),
+        None,
+        "a lock is no value"
+    );
+    assert_eq!(
+        snap.get(b"present").await.expect("get"),
+        Some(b"t2".to_vec()),
+        "a lock hides no value"
+    );
+    assert_eq!(
+        snap.scan(b"f", Some(b"g"), 10).await.expect("scan"),
+        vec![],
+        "scans skip locks"
+    );
+    // Started after the lock committed: no conflict.
+    let mut opts = TxnOptions::new("kv.conformance.lock_after");
+    opts.max_attempts = 1;
+    store
+        .run(opts, |txn| {
+            Box::pin(async move {
+                assert_eq!(txn.get(b"fresh").await?, None);
+                txn.insert(b"fresh", b"new".to_vec()).await?;
+                txn.put(b"present", b"later".to_vec()).await
+            })
+        })
+        .await
+        .expect("a later transaction writes locked keys");
 }
 
 /// Forward and reverse scans over `[lo, hi)` return keys in order, respect

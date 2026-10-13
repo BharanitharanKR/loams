@@ -44,9 +44,15 @@ npm @bufbuild/protobuf 2.16.0 sha512-FWa0sPlqYGJgpTs6OxBRcL/AW4JT0OIO+W1ajerluoT
 npm @connectrpc/connect 2.2.0 sha512-M63OQ1ZFcPUm85CuewJ9G9CMV8LjzGR9935xOnXNQGSazAbwMb3x2W7vXBYM1zqrP7XFD8uxp/dUAhirclgwnQ== the Connect runtime for TypeScript
 
 # --- Python (design §44 §9 row 2; SDK2 Task 1) ---
-# The runtime distribution is `connectrpc`, from connectrpc/connect-py. It is NOT
-# `connect-python`: that name on PyPI is a different, third-party project whose
-# last release predates this SDK. Both are Apache-2.0; only one is Connect's.
+# The runtime distribution is `connectrpc`, from connectrpc/connect-py. Its
+# earlier name on PyPI was `connect-python` (connectrpc/connect-python), whose
+# last release is 0.9.0 (2026-03-19); from 0.9.0 on the project publishes as
+# `connectrpc`, and the generator as `protoc-gen-connectrpc`.
+#
+# 0.10 to 0.12 changed the runtime API the SDK uses: the client takes `codec=`
+# rather than `proto_json=` and defaults to protobuf-py, and error details are
+# protobuf-py `ErrorDetail`s. `sdks/python/src/loams/runtime/transports.py` and
+# `errors.py` carry the port.
 pypi connectrpc 0.12.1 da7ca41c6cd8d9ce640ad86ae325a71cd83dfdd1e43748976315cb4b0546fb69 the Connect runtime (sdist)
 pypi protoc-gen-connectrpc 0.12.1 dde1652e291be825c4e84e71d9398c6ddd3c5c50995f3872a78ea9e4e21464dc the code generator (sdist)
 # The maintained protobuf runtime, and the reason `sdks/python/buf.gen.proto.yaml`
@@ -55,7 +61,11 @@ pypi protoc-gen-connectrpc 0.12.1 dde1652e291be825c4e84e71d9398c6ddd3c5c50995f38
 # protoc-gen-python writes `*_pb2.py`.
 pypi protobuf 7.36.2 497d0463ff3316681da6c0b9e8d06cb465d61abce00b613ab42226175644d1bb the protobuf runtime (sdist)
 bsr buf.build/protocolbuffers/python v35.0 protoc-35.0 the messages
-bsr buf.build/connectrpc/python v0.12.1 connect-py-0.12.1 the Connect clients
+# The BSR plugin was renamed with the project: `buf.build/connectrpc/python`
+# stops at v0.10.1 (deprecated, "use connectrpc/py instead"), and v0.11.0 onward
+# is published as `buf.build/connectrpc/py`. v0.12.1 was added to bufbuild/plugins
+# on 2026-09-08 and the BSR serves it (checked with `buf generate` 2026-10-13).
+bsr buf.build/connectrpc/py v0.12.1 connect-py-0.12.1 the Connect clients
 
 # --- Go (design §44 §9 row 3; SDK2 Task 2) ---
 # connect-go v1 is the stable line. v2 is at v2.0.0-rc.1 (2026-09-30) and is not
@@ -71,3 +81,11 @@ bsr buf.build/connectrpc/go v1.21.0 connect-go-1.21.0 the Connect clients
 crate connectrpc 0.9.1 457cfa540c62e1b0b05db676cc9a9129162ad94d3a3eec6f2d19706c53acae7d the Connect runtime
 crate connectrpc-build 0.9.0 603619f92fc55725d971ed9292855cd75f7a2c52ed66c181e0ec531dd7f8dd9b the code generator, run from build.rs
 crate buffa 0.9.2 a92f2f5df67a9d5ccfc65237bfc954c56328aee40a04a9b92381ecba370be246 the code generator's schema layer
+
+# --- The stub-only languages (SDK2 Tasks 6, 7, 11) ---
+# One protoc plugin each, generating messages only; the call path is hand-written.
+# The versions are the ones the committed output was generated with, so recording
+# them moves nothing. C++ must equal the libprotobuf the sdk-cpp job builds (36.1).
+bsr buf.build/protocolbuffers/cpp v36.1 protoc-36.1 the C++ messages
+bsr buf.build/protocolbuffers/csharp v35.0 protoc-35.0 the C# messages
+bsr buf.build/protocolbuffers/java v29.3 protoc-29.3 the Java messages

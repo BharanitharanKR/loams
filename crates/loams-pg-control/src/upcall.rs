@@ -38,7 +38,7 @@
 
 mod keys;
 mod limit;
-mod spec;
+pub(crate) mod spec;
 mod tenants;
 
 use std::collections::BTreeMap;
@@ -74,6 +74,7 @@ pub use keys::{
     TokenError, UPCALL_AUDIENCE, UpcallClaims, load_or_create_signing_key,
 };
 pub use limit::Rate;
+pub use spec::Sources as SpecSources;
 
 use crate::ids::ComputeId;
 use crate::model::{

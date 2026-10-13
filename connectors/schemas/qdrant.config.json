@@ -1,9 +1,94 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/qdrant.config.json",
-  "title": "Qdrant instance config (placeholder)",
-  "description": "Placeholder for a Qdrant instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "Qdrant connector instance config (loams.flow/v1)",
+  "description": "One Qdrant connector instance's settings, read by the native search family's REST client (`loams_connector_search::qdrant`, CN2 Task 15, R15.2): the endpoint, the collection, where the key, vector and payload are in an event, the sink's batching and the scroll source. `api_key` holds the **name** of a secret in the namespace's store (D189) and is exactly the manifest's `secrets` list. The `key` property is declared because the manifest declares capabilities.sink.upsert: true (CN1 Task 1's semantic rule): the point id is UUID v5 of the key's value, or of the event's ce_id without it.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "url",
+    "collection"
+  ],
+  "properties": {
+    "url": {
+      "description": "The REST endpoint, http:// or https:// (port 6333 by default), with no credentials in it. Loams collections' Qdrant API is an extra target only (OR-2).",
+      "type": "string",
+      "minLength": 1
+    },
+    "collection": {
+      "description": "The collection read or written.",
+      "type": "string",
+      "minLength": 1
+    },
+    "api_key": {
+      "description": "The name of the secret holding the API key, sent as the `api-key` header, resolved through the secret store (D189).",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "key": {
+      "description": "A JSON pointer (or a top-level field name) to the document key in an event's data; the point id is UUID v5 of its value. Without it, the key is the event's ce_id. Either way a replay overwrites the same point.",
+      "type": "string",
+      "minLength": 1
+    },
+    "vector": {
+      "description": "A JSON pointer to the vector: an array of numbers, or an object of named vectors.",
+      "type": "string",
+      "minLength": 1,
+      "default": "/vector"
+    },
+    "payload": {
+      "description": "A JSON pointer to the payload object. Without it, the payload is the whole data object minus a top-level vector.",
+      "type": "string",
+      "minLength": 1
+    },
+    "apply_deletes": {
+      "description": "Apply events carrying loamsop = d as a delete of the point.",
+      "type": "boolean",
+      "default": true
+    },
+    "batch": {
+      "description": "Points per upsert request at most.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 256
+    },
+    "source": {
+      "description": "The scroll source: one split per collection, in point-id order.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "page_size": {
+          "description": "Points per scroll page.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 256
+        },
+        "with_vector": {
+          "description": "Read the vectors with the payload.",
+          "type": "boolean",
+          "default": true
+        },
+        "filter": {
+          "description": "A Qdrant filter the scroll is restricted to.",
+          "type": "object"
+        },
+        "poll_interval_ms": {
+          "description": "With it, a scroll that reached the end starts again from the first point this long after (unchanged points keep their event ids); without it the source reads one pass and ends.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "request_timeout_ms": {
+      "description": "Per-request timeout.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 30000
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }

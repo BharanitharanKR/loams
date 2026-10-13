@@ -1,0 +1,41 @@
+# Amazon SES — an HTTP-API profile (CN2 OR-11, Task 20) over the SES API v2,
+# signed with SigV4 (service `ses`). Written from AWS's public API reference:
+#   SendEmail: https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_SendEmail.html
+#   ListSuppressedDestinations:
+#     https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_ListSuppressedDestinations.html
+#   Endpoints (email.<region>.amazonaws.com): https://docs.aws.amazon.com/general/latest/gr/ses.html
+#   Signature Version 4: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html
+# `region` sets the endpoint and the signing region together. SES delivers its
+# own events through SNS or EventBridge rather than a signed webhook, so the
+# source is the suppression list.
+apiVersion: loams.flow/v1
+kind: Profile
+id: amazon-ses
+profile_kind: http-api
+module: http
+system:
+  name: Amazon SES
+  service: { fixture: conformance/connectors/fixtures/amazon-ses }
+defaults:
+  region: us-east-1
+narrows: []
+http:
+  base_url: "https://email.{config.region}.amazonaws.com"
+  auth: { scheme: aws-sigv4, service: ses, region: "{config.region}" }
+  resources:
+    emails:
+      create:
+        method: POST
+        path: "/v2/email/outbound-emails"
+    suppressed:
+      list:
+        method: GET
+        path: "/v2/email/suppression/addresses"
+        items: "/SuppressedDestinationSummaries"
+        cursor: { next: "/NextToken", param: NextToken }
+        key: "/EmailAddress"
+        query: { PageSize: "100" }
+  rate_limit:
+    requests: 1
+    per_seconds: 1
+    honour_headers: ["Retry-After"]

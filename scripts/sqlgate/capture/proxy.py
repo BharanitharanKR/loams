@@ -68,6 +68,7 @@ def main():
     if "--tls-sha2" in sys.argv:
         i = sys.argv.index("--tls-sha2")
         tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        tls.minimum_version = ssl.TLSVersion.TLSv1_2
         tls.load_cert_chain(sys.argv[i + 1], sys.argv[i + 2])
     srv = socket.socket()
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

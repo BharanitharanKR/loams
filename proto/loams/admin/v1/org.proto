@@ -1,0 +1,232 @@
+syntax = "proto3";
+
+// The org, its members, invitations and teams (design §44 §5.2, §19 P9;
+// API2 Task 7). Replaces the console's `/api/v1/org`, `/org/members`,
+// `/org/invitations` and `/teams` REST routes, one RPC per route. The package
+// rules are in `common.proto`.
+package loams.admin.v1;
+
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+import "loams/admin/v1/common.proto";
+import "loams/options/v1/options.proto";
+
+// The caller's org: its settings, people and teams.
+service OrgService {
+  option (loams.options.v1.module) = {
+    name: "admin.org"
+    summary: "The org: settings, members, invitations and teams."
+  };
+
+  // The caller's org. (replaces `GET /api/v1/org`)
+  rpc GetOrg(GetOrgRequest) returns (GetOrgResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {name: "get"};
+  }
+  // Changes the fields named in `update_mask`. (replaces `PATCH /api/v1/org`)
+  rpc UpdateOrg(UpdateOrgRequest) returns (UpdateOrgResponse) {
+    option idempotency_level = IDEMPOTENT;
+    option (loams.options.v1.facade) = {name: "update"};
+  }
+  // The org's members. (replaces `GET /api/v1/org/members`)
+  rpc ListMembers(ListMembersRequest) returns (ListMembersResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {
+      name: "listMembers"
+      pagination: "members:next_page_token"
+    };
+  }
+  // Removes a member from the org; removing one who is not a member is not
+  // an error. (replaces `DELETE /api/v1/org/members/{user}`)
+  rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse) {
+    option idempotency_level = IDEMPOTENT;
+    option (loams.options.v1.facade) = {name: "removeMember"};
+  }
+  // Open invitations. (replaces `GET /api/v1/org/invitations`)
+  rpc ListInvitations(ListInvitationsRequest) returns (ListInvitationsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {
+      name: "listInvitations"
+      pagination: "invitations:next_page_token"
+    };
+  }
+  // Invites an email address; a second open invitation for the same address
+  // is `already_exists`. (replaces `POST /api/v1/org/invitations`)
+  rpc CreateInvitation(CreateInvitationRequest) returns (CreateInvitationResponse) {
+    option (loams.options.v1.facade) = {name: "createInvitation"};
+  }
+  // The org's teams. (replaces `GET /api/v1/teams`)
+  rpc ListTeams(ListTeamsRequest) returns (ListTeamsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {
+      name: "listTeams"
+      pagination: "teams:next_page_token"
+    };
+  }
+  // Creates a team by name. (replaces `POST /api/v1/teams`)
+  rpc CreateTeam(CreateTeamRequest) returns (CreateTeamResponse) {
+    option (loams.options.v1.facade) = {name: "createTeam"};
+  }
+  // A team with its members and project grants. (replaces `GET /api/v1/teams/{team}`)
+  rpc GetTeam(GetTeamRequest) returns (GetTeamResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {name: "getTeam"};
+  }
+  // Adds a person to a team; adding a member again is not an error.
+  // (replaces `POST /api/v1/teams/{team}/members`)
+  rpc AddTeamMember(AddTeamMemberRequest) returns (AddTeamMemberResponse) {
+    option idempotency_level = IDEMPOTENT;
+    option (loams.options.v1.facade) = {name: "addTeamMember"};
+  }
+}
+
+// An org: the tenant every project, person and agent belongs to.
+message Org {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  google.protobuf.Timestamp created_at = 4;
+  // Members without a second factor cannot sign in.
+  bool require_two_factor = 5;
+  // The email domains an invitation may be sent to; empty allows any.
+  repeated string allowed_domains = 6;
+}
+
+// A person's membership of the org.
+message Member {
+  User user = 1;
+  OrgRole role = 2;
+  // The ids of the teams the person is on.
+  repeated string teams = 3;
+  google.protobuf.Timestamp joined_at = 4;
+}
+
+// An open invitation to join the org.
+message Invitation {
+  string id = 1;
+  string email = 2;
+  OrgRole role = 3;
+  // The ids of the teams the person joins on accepting.
+  repeated string teams = 4;
+  SubjectRef invited_by = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp expires_at = 7;
+}
+
+// A team: a group of people that is granted project roles together.
+message Team {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  string description = 4;
+  int32 member_count = 5;
+  // The identity provider group the team is synced from; empty when it is
+  // managed in Loams.
+  string idp_group = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+// One project role held by a team.
+message ProjectGrantRef {
+  // The project's slug.
+  string project = 1;
+  ProjectRole role = 2;
+}
+
+message GetOrgRequest {}
+
+message GetOrgResponse {
+  Org org = 1;
+}
+
+message UpdateOrgRequest {
+  // The new values; only the fields named in `update_mask` are read. `id`,
+  // `slug` and `created_at` cannot be changed.
+  Org org = 1;
+  // `name`, `require_two_factor` and `allowed_domains`. An empty mask
+  // changes nothing and answers the org as it is.
+  google.protobuf.FieldMask update_mask = 2;
+}
+
+message UpdateOrgResponse {
+  Org org = 1;
+}
+
+message ListMembersRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListMembersResponse {
+  repeated Member members = 1;
+  string next_page_token = 2;
+}
+
+message RemoveMemberRequest {
+  // The user's id.
+  string user = 1;
+}
+
+message RemoveMemberResponse {}
+
+message ListInvitationsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListInvitationsResponse {
+  repeated Invitation invitations = 1;
+  string next_page_token = 2;
+}
+
+message CreateInvitationRequest {
+  string email = 1;
+  OrgRole role = 2;
+  // Team ids to join on accepting.
+  repeated string teams = 3;
+}
+
+message CreateInvitationResponse {
+  Invitation invitation = 1;
+}
+
+message ListTeamsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListTeamsResponse {
+  repeated Team teams = 1;
+  string next_page_token = 2;
+}
+
+message CreateTeamRequest {
+  string name = 1;
+  string description = 2;
+  // Empty for a team managed in Loams.
+  string idp_group = 3;
+}
+
+message CreateTeamResponse {
+  Team team = 1;
+}
+
+message GetTeamRequest {
+  // The team's id.
+  string team = 1;
+}
+
+message GetTeamResponse {
+  Team team = 1;
+  repeated User members = 2;
+  repeated ProjectGrantRef projects = 3;
+}
+
+message AddTeamMemberRequest {
+  // The team's id.
+  string team = 1;
+  // The user's id.
+  string user = 2;
+}
+
+message AddTeamMemberResponse {}

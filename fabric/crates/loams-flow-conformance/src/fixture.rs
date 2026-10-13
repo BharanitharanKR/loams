@@ -95,6 +95,15 @@ pub struct Fixture {
     /// The real system the exchanges came from (OR-2). Never a mock and
     /// never a Loams module.
     pub recorded_from: String,
+    /// Built by hand from the vendor's published request and response
+    /// shapes (`docs`), not recorded (CN2 Task 20, R20.1). A synthetic
+    /// fixture replays like a recording but never counts toward `preview`
+    /// (OR-23): the `connectors-nightly` job replaces it with a recording.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub synthetic: bool,
+    /// The vendor documentation a synthetic fixture was built from.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub docs: Vec<String>,
     #[serde(default)]
     pub exchanges: Vec<Exchange>,
 }
@@ -119,7 +128,19 @@ impl Fixture {
         if f.recorded_from.trim().is_empty() {
             return Err(FixtureError::NoSystem);
         }
+        if f.synthetic && f.docs.is_empty() {
+            return Err(FixtureError::Io(format!(
+                "{}: a synthetic fixture names the vendor documentation it was built from",
+                path.display()
+            )));
+        }
         Ok(f)
+    }
+
+    /// Whether replaying this fixture can count toward `preview` (OR-23):
+    /// only a recording of the real system can.
+    pub fn counts_toward_preview(&self) -> bool {
+        !self.synthetic
     }
 
     pub fn to_json(&self) -> String {
@@ -370,6 +391,9 @@ struct ProxyState {
     used: Vec<bool>,
     unmatched: Vec<String>,
     recorded: Vec<Exchange>,
+    /// Every request a replay received, as received (in memory only, for a
+    /// test's assertions on headers the matcher ignores; never saved).
+    received: Vec<RecordedRequest>,
 }
 
 enum Mode {
@@ -432,6 +456,13 @@ impl ProxyHandle {
         format!("http://{}", self.addr)
     }
 
+    /// The requests a replay received, unscrubbed and in order. They stay
+    /// in memory for the test's assertions (a signature, a content type);
+    /// nothing writes them out.
+    pub fn received(&self) -> Vec<RecordedRequest> {
+        lock(&self.state).received.clone()
+    }
+
     pub fn unmatched(&self) -> Vec<String> {
         lock(&self.state).unmatched.clone()
     }
@@ -453,6 +484,8 @@ impl ProxyHandle {
         let exchanges = std::mem::take(&mut lock(&self.state).recorded);
         Fixture {
             recorded_from: self.recorded_from,
+            synthetic: false,
+            docs: Vec::new(),
             exchanges,
         }
     }
@@ -549,6 +582,12 @@ async fn handle(
         Mode::Replay(fixture) => {
             let key = rules.key(&method, &path, &req_body);
             let mut s = lock(st);
+            s.received.push(RecordedRequest {
+                method: method.clone(),
+                path: path.clone(),
+                headers: headers.clone(),
+                body: req_body.clone(),
+            });
             let candidates: Vec<usize> = fixture
                 .exchanges
                 .iter()

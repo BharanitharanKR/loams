@@ -40,12 +40,15 @@ one port an instance serves.
 ## Install
 
 ```swift
-.package(url: "https://github.com/ostrium-labs/loams-swift.git", from: "0.1.0")
+.package(url: "https://github.com/ostrium-labs/loams.git", exact: "0.1.0-preview.2")
 ```
 
-**Nothing is published.** There is no tag, no SwiftPM registry entry, and no
-release job. The version stays unpublished until the owner confirms the registry
-account (design §44 §13).
+and `.product(name: "Loams", package: "loams")` in the target's dependencies.
+
+The package is the main repository: its root `Package.swift` exposes this
+directory's `Sources/Loams`, and the Loams release tag (`v0.1.0-preview.2`) is
+the package version, so there is no mirror and no second tag. **Preview:**
+SwiftPM picks a prerelease only when the requirement names one, as above.
 
 ## Quickstart
 

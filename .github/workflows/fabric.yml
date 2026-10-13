@@ -1,4 +1,4 @@
-name: Fabric
+name: Connectors
 
 # This workflow file is shared with FL1 (issue #209), which introduces the
 # `fabric/` workspace; CN1 (issue #211, plan 2026-10-01-cn1-starred-connectors)
@@ -20,6 +20,9 @@ name: Fabric
 #                        accounts, with repository secrets (OR-3, OR-23)
 #   connectors-alerts  — promtool rule tests of the connector alerts and the
 #                        metrics/activity tests that run them (Task 24)
+#   connectors-kind    — the loams-connectors chart (helm lint, golden render),
+#                        the fleet's golden and lease tests, and the kind
+#                        mixed-fleet test once its images exist (Task 26)
 # Jobs FL1 owns and adds here separately: connectors-it (the ★ contract suites
 # against the `connectors` compose profile, from CN1 Tasks 3–13), and the
 # `fabric` workspace's own build/publish steps. Keep this file minimal and
@@ -28,40 +31,38 @@ on:
   push:
     branches: [main, dev]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
-  schedule:
-    # Weekly: the two catalog drift scripts need the network (CN1 plan Task 2:
-    # "both run weekly and on demand, not on every PR"), so they cannot be a
-    # pull-request gate. Off the hour ci.yml's nightly runs on (17 2 * * *).
-    - cron: "41 3 * * 1"
-    # Daily: connectors-nightly against real accounts (CN2 Task 6). A
-    # different cron string, so each scheduled job can tell its run apart
-    # (`github.event.schedule`).
-    - cron: "23 4 * * *"
 
 permissions:
   contents: read
 
 concurrency:
   group: fabric-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
+  # A newer dev head supersedes an older one; main runs to completion.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Which parts of the tree a pull request touches; the jobs below run on a pull
-  # request only when their filter matches, and on a push to main they all run
-  # (this job is skipped there). dorny/paths-filter is MIT-licensed; pinned to
+  # Which parts of the tree a pull request, or a push to dev (against the
+  # previous dev head), touches; the jobs below run there only when their filter
+  # matches, and on a push to main or a dispatch (the nightly) they all run
+  # (this job is skipped there). A draft pull request skips the connector
+  # stacks until it is ready for review (or carries the `ci:full` label). dorny/paths-filter is MIT-licensed; pinned to
   # v4.0.3, as in ci.yml.
   changes:
-    name: changed paths
-    if: github.event_name == 'pull_request'
+    name: Changed paths
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/dev')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       pull-requests: read
     outputs:
+      heavy: ${{ github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+      # 'true' on a pull request into main: the full tier.
+      full: ${{ github.base_ref == 'main' }}
       fabric: ${{ steps.filter.outputs.fabric }}
       drift: ${{ steps.filter.outputs.drift }}
       connect-routes: ${{ steps.filter.outputs.connect-routes }}
@@ -70,10 +71,16 @@ jobs:
       # A JSON list of the families whose suites a pull request must run.
       families: ${{ steps.families.outputs.list }}
       alerts: ${{ steps.filter.outputs.alerts }}
+      kube: ${{ steps.filter.outputs.kube }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'push'
+        with:
+          persist-credentials: false
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
+          base: ${{ github.event_name == 'push' && github.event.before || '' }}
           filters: |
             # Every Rust filter includes these.
             toolchain: &toolchain
@@ -81,7 +88,7 @@ jobs:
               - "Cargo.lock"
               - "rust-toolchain*"
               - ".cargo/**"
-              - ".github/workflows/**"
+              - ".github/workflows/fabric.yml"
             # The fabric/ workspace, the registry data and its drift scripts.
             # A new crate under fabric/crates/** is covered by fabric/**.
             fabric: &fabric
@@ -104,7 +111,7 @@ jobs:
             # `connect/` holds the generated Camel YAML routes for
             # `loams-connect` (design §33 §10, Q353). Declared for CN1 Task 12.
             connect-routes:
-              - ".github/workflows/**"
+              - ".github/workflows/fabric.yml"
               - "connect/**"
               - "fabric/crates/loams-flow/**"
               - "fabric/crates/loams-fabric/**"
@@ -116,6 +123,14 @@ jobs:
               - "fabric/Cargo.lock"
               - "fabric/crates/loams-connector-sdk/**"
               - "fabric/crates/loams-connector-http/**"
+              # Task 20: the SaaS suites read the profiles, their fixtures and
+              # the import routes, through `loams-flow` and the kit.
+              - "fabric/crates/loams-flow/**"
+              - "fabric/crates/loams-flow-conformance/**"
+              - "connectors/profiles/**"
+              - "connectors/schema/profile.schema.json"
+              - "connectors/routes/**"
+              - "conformance/connectors/fixtures/**"
             # The conformance kit and the real-system estate (CN2 Task 6).
             # Every family's suites depend on all of it.
             conformance: &conformance
@@ -154,7 +169,15 @@ jobs:
               - "fabric/crates/loams-connector-sdk/**"
               - "fabric/crates/loams-flow/**"
               - "deploy/observability/connectors/**"
-              - "scripts/ci/no-metering.*"
+            # The connector fleet on Kubernetes (CN2 Task 26): the chart and
+            # the code that renders the fallback pods and holds the leases.
+            kube:
+              - *toolchain
+              - "fabric/Cargo.toml"
+              - "fabric/Cargo.lock"
+              - "fabric/crates/loams-connector-sdk/**"
+              - "fabric/crates/loams-flow/**"
+              - "deploy/helm/loams-connectors/**"
       # The changed families, as a JSON list for the shards' matrices. A
       # shard whose family has no service in its stack, or no crate yet,
       # finishes at once (scripts/connectors/compose_services.py).
@@ -168,9 +191,9 @@ jobs:
   # fabric workspace's lint table equals the root workspace's; it runs in FL1's
   # own job and is not repeated here.
   connectors-unit:
-    name: fabric workspace (fmt, clippy, tests, deny)
+    name: "Fabric: fmt, clippy, tests and deny"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.fabric == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.fabric == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -180,6 +203,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           workspaces: fabric -> target
       - name: rustfmt
         working-directory: fabric
@@ -198,6 +222,21 @@ jobs:
       - name: licenses, advisories, sources
         working-directory: fabric
         run: cargo deny check
+      # CN2 Task 3's licence gate (design §33 D359; OR-3): no ci-service or
+      # user-supplied component in an image Loams builds or the default compose
+      # profile, and no denied or missing licence among the crates compiled into a
+      # loams-connector-* family crate. Each runs its shared-fixture self-test first.
+      # PyYAML reads the compose files (MIT; pinned here, unpinned in ci.yml).
+      - name: PyYAML
+        run: python3 -m pip install --quiet --disable-pip-version-check PyYAML==6.0.2
+      - name: image licences (ci-service, user-supplied)
+        run: |
+          python3 scripts/connectors/image_licences.py --self-test
+          python3 scripts/connectors/image_licences.py
+      - name: family crate licences
+        run: |
+          python3 scripts/connectors/crate_licences.py --self-test
+          python3 scripts/connectors/crate_licences.py
       # CN2 Task 7: every profile under connectors/profiles/ and every manifest's
       # runtime.profile (the same rules as loams-flow's `profile` module).
       - name: connector profiles
@@ -209,14 +248,20 @@ jobs:
   # serve its tests), so it stays fast; `connectors-unit` covers the crate
   # again inside the whole workspace, with cargo-deny.
   sdk-unit:
-    name: connector SDK (fmt, clippy, tests)
+    name: "Connector SDK: tests"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      # `loams-connector-http`'s SaaS suites (CN2 Task 20) load the real
+      # profiles through `loams-flow` and replay fixtures through the
+      # conformance kit, both of which link `loams-flow-proto`.
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           workspaces: fabric -> target
           key: sdk-unit
       - name: rustfmt
@@ -234,9 +279,9 @@ jobs:
   # conformance/connectors/systems.toml, deploy/fabric/compose.yaml and this
   # file. No services. It links `loams-flow`, hence protoc.
   conformance-kit:
-    name: conformance kit (fmt, clippy, tests)
+    name: "Conformance kit: tests"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.conformance == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.conformance == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -244,6 +289,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           workspaces: fabric -> target
           key: conformance-kit
       - name: rustfmt
@@ -264,14 +310,14 @@ jobs:
   # A shard whose crate does not exist yet, or whose family has no service in
   # this stack, ends after checkout.
   connectors-p2:
-    name: connectors-p2 (${{ matrix.family }})
+    name: "Connectors: ${{ matrix.family }}"
     needs: changes
-    if: ${{ !cancelled() && github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.families != '[]') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.families != '[]'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        family: ${{ fromJSON(github.event_name == 'pull_request' && needs.changes.outputs.families || '["http","kafka","postgres","mysql","sqlserver","objects","kv","search","mongodb","analytics","lakehouse","brokers","cloud","protocols"]') }}
+        family: ${{ fromJSON(needs.changes.result == 'success' && needs.changes.outputs.families || '["http","kafka","postgres","mysql","sqlserver","objects","kv","search","mongodb","analytics","lakehouse","brokers","cloud","protocols"]') }}
     env:
       FAMILY: ${{ matrix.family }}
       PROFILE: connectors-p2
@@ -284,6 +330,9 @@ jobs:
             config --format json > "$RUNNER_TEMP/compose.json"
           services=$(python3 scripts/connectors/compose_services.py \
             --profile "$PROFILE" --family "$FAMILY" --compose-json "$RUNNER_TEMP/compose.json")
+          # The ★ Apache Kafka suite (CN2 Task 9; CN1's manifest has no
+          # systems.toml entry until Task 8 ports it onto the SDK).
+          if [ "$FAMILY" = kafka ]; then services="${services:+$services }kafka"; fi
           echo "services=$services" >> "$GITHUB_OUTPUT"
           if [ -d "fabric/crates/loams-connector-$FAMILY" ] && [ -n "$services" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
@@ -297,6 +346,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.plan.outputs.run == 'true'
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           workspaces: fabric -> target
           key: connectors-${{ matrix.family }}
       - name: build the family crate's tests
@@ -308,11 +358,31 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # the service list is space-separated on purpose
           docker compose -f deploy/fabric/compose.yaml --profile "$PROFILE" up -d --wait --wait-timeout 600 ${{ steps.plan.outputs.services }}
+      # CN2 Task 13: buckets, the Azurite container and the SFTP host key.
+      - name: objects endpoints and buckets
+        if: steps.plan.outputs.run == 'true' && matrix.family == 'objects'
+        run: scripts/connectors/objects_stack.sh
+      # CN2 Task 17 (R17.7): the DuckDB target loads DuckDB's own shared
+      # library by path from an allowlist with a SHA-256 check; Loams compiles
+      # no DuckDB code. The analytics shard fetches the pinned release asset
+      # (v1.5.6, 2026-09-28, MIT), checked against GitHub's recorded digest.
+      - name: libduckdb (analytics)
+        if: steps.plan.outputs.run == 'true' && matrix.family == 'analytics'
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/libduckdb.zip" \
+            https://github.com/duckdb/duckdb/releases/download/v1.5.6/libduckdb-linux-amd64.zip
+          echo "b845005f5132a7d8180057c35e14a7626632258782f871a90861b19c1c03841b  $RUNNER_TEMP/libduckdb.zip" | sha256sum -c -
+          unzip -q -o "$RUNNER_TEMP/libduckdb.zip" libduckdb.so -d "$RUNNER_TEMP/duckdb"
+          echo "3f4962cdd266eab2b479a5b5a4a6d063d279b2954ae814ed00385d553b747633  $RUNNER_TEMP/duckdb/libduckdb.so" | sha256sum -c -
+          echo "LOAMS_DUCKDB_DRIVER=$RUNNER_TEMP/duckdb/libduckdb.so" >> "$GITHUB_ENV"
+          echo "LOAMS_DUCKDB_DRIVER_SHA256=3f4962cdd266eab2b479a5b5a4a6d063d279b2954ae814ed00385d553b747633" >> "$GITHUB_ENV"
       - name: suites
         if: steps.plan.outputs.run == 'true'
         working-directory: fabric
         env:
           LOAMS_CONNECTORS_P2_STACK: "1"
+          # The Kafka family's ★ Apache Kafka suite (CN2 Task 9).
+          LOAMS_CONNECTORS_STACK: ${{ matrix.family == 'kafka' && '1' || '' }}
         run: cargo test -p "loams-connector-$FAMILY" --locked
       - name: service logs
         if: failure() && steps.plan.outputs.run == 'true'
@@ -327,14 +397,14 @@ jobs:
   # emulator). They run here only: never in an image Loams builds, never in
   # the default compose profile.
   connectors-ci-only:
-    name: connectors-ci-only (${{ matrix.family }})
+    name: "Connectors: ${{ matrix.family }} (CI-only images)"
     needs: changes
-    if: ${{ !cancelled() && github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.families != '[]') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.families != '[]'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        family: ${{ fromJSON(github.event_name == 'pull_request' && needs.changes.outputs.families || '["http","kafka","postgres","mysql","sqlserver","objects","kv","search","mongodb","analytics","lakehouse","brokers","cloud","protocols"]') }}
+        family: ${{ fromJSON(needs.changes.result == 'success' && needs.changes.outputs.families || '["http","kafka","postgres","mysql","sqlserver","objects","kv","search","mongodb","analytics","lakehouse","brokers","cloud","protocols"]') }}
     env:
       FAMILY: ${{ matrix.family }}
       PROFILE: connectors-ci-only
@@ -360,6 +430,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.plan.outputs.run == 'true'
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           workspaces: fabric -> target
           key: connectors-${{ matrix.family }}
       - name: build the family crate's tests
@@ -371,6 +442,15 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # the service list is space-separated on purpose
           docker compose -f deploy/fabric/compose.yaml --profile "$PROFILE" up -d --wait --wait-timeout 900 ${{ steps.plan.outputs.services }}
+      # The Event Hubs emulator has no health check (CN2 Task 9).
+      - name: wait for the Event Hubs emulator
+        if: steps.plan.outputs.run == 'true' && contains(steps.plan.outputs.services, 'eventhubs')
+        run: |
+          for _ in $(seq 1 90); do
+            if docker compose -f deploy/fabric/compose.yaml --profile "$PROFILE" logs eventhubs 2>&1 | grep -q "Emulator Service is Successfully Up"; then exit 0; fi
+            sleep 2
+          done
+          echo "the Event Hubs emulator did not come up"; exit 1
       - name: suites
         if: steps.plan.outputs.run == 'true'
         working-directory: fabric
@@ -392,8 +472,8 @@ jobs:
   # nightlies). `nightly_secrets_are_wired_into_the_nightly_job` keeps the env
   # block below in step with systems.toml.
   connectors-nightly:
-    name: connectors-nightly (${{ matrix.family }})
-    if: ${{ !cancelled() && ((github.event_name == 'schedule' && github.event.schedule == '23 4 * * *') || github.event_name == 'workflow_dispatch') }}
+    name: "Connectors: ${{ matrix.family }} (nightly)"
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -403,6 +483,7 @@ jobs:
       FAMILY: ${{ matrix.family }}
       LOAMS_ADLS_ACCOUNT: ${{ secrets.LOAMS_ADLS_ACCOUNT }}
       LOAMS_ADLS_KEY: ${{ secrets.LOAMS_ADLS_KEY }}
+      LOAMS_AMAZON_OPENSEARCH_URL: ${{ secrets.LOAMS_AMAZON_OPENSEARCH_URL }}
       LOAMS_ANTHROPIC_API_KEY: ${{ secrets.LOAMS_ANTHROPIC_API_KEY }}
       LOAMS_AURORA_MYSQL_URL: ${{ secrets.LOAMS_AURORA_MYSQL_URL }}
       LOAMS_AURORA_POSTGRES_URL: ${{ secrets.LOAMS_AURORA_POSTGRES_URL }}
@@ -422,6 +503,7 @@ jobs:
       LOAMS_EVENTGRID_ENDPOINT: ${{ secrets.LOAMS_EVENTGRID_ENDPOINT }}
       LOAMS_EVENTGRID_KEY: ${{ secrets.LOAMS_EVENTGRID_KEY }}
       LOAMS_EVENTHUBS_CONNECTION_STRING: ${{ secrets.LOAMS_EVENTHUBS_CONNECTION_STRING }}
+      LOAMS_EVENTHUBS_NAMESPACE: ${{ secrets.LOAMS_EVENTHUBS_NAMESPACE }}
       LOAMS_GCP_CREDENTIALS_JSON: ${{ secrets.LOAMS_GCP_CREDENTIALS_JSON }}
       LOAMS_GCP_PROJECT: ${{ secrets.LOAMS_GCP_PROJECT }}
       LOAMS_GCS_BUCKET: ${{ secrets.LOAMS_GCS_BUCKET }}
@@ -443,6 +525,9 @@ jobs:
       LOAMS_REDPANDA_SASL_PASSWORD: ${{ secrets.LOAMS_REDPANDA_SASL_PASSWORD }}
       LOAMS_REDPANDA_SASL_USERNAME: ${{ secrets.LOAMS_REDPANDA_SASL_USERNAME }}
       LOAMS_REDSHIFT_DATABASE: ${{ secrets.LOAMS_REDSHIFT_DATABASE }}
+      LOAMS_REDSHIFT_IAM_ROLE: ${{ secrets.LOAMS_REDSHIFT_IAM_ROLE }}
+      LOAMS_REDSHIFT_SINK_TABLE: ${{ secrets.LOAMS_REDSHIFT_SINK_TABLE }}
+      LOAMS_REDSHIFT_UNLOAD_URI: ${{ secrets.LOAMS_REDSHIFT_UNLOAD_URI }}
       LOAMS_REDSHIFT_WORKGROUP: ${{ secrets.LOAMS_REDSHIFT_WORKGROUP }}
       LOAMS_SALESFORCE_CLIENT_ID: ${{ secrets.LOAMS_SALESFORCE_CLIENT_ID }}
       LOAMS_SALESFORCE_CLIENT_SECRET: ${{ secrets.LOAMS_SALESFORCE_CLIENT_SECRET }}
@@ -463,6 +548,16 @@ jobs:
       LOAMS_ZENDESK_SUBDOMAIN: ${{ secrets.LOAMS_ZENDESK_SUBDOMAIN }}
       LOAMS_ZENDESK_TOKEN: ${{ secrets.LOAMS_ZENDESK_TOKEN }}
       LOAMS_ZENDESK_USER: ${{ secrets.LOAMS_ZENDESK_USER }}
+      # CN2 Task 13: the objects family's nightly suites read these names, and
+      # run only when LOAMS_CONNECTORS_NIGHTLY is set.
+      LOAMS_ADLS_ACCESS_KEY: ${{ secrets.LOAMS_ADLS_ACCESS_KEY }}
+      LOAMS_ADLS_FILESYSTEM: ${{ secrets.LOAMS_ADLS_FILESYSTEM }}
+      LOAMS_AZURE_ACCESS_KEY: ${{ secrets.LOAMS_AZURE_ACCESS_KEY }}
+      LOAMS_AZURE_ACCOUNT: ${{ secrets.LOAMS_AZURE_ACCOUNT }}
+      LOAMS_AZURE_CONTAINER: ${{ secrets.LOAMS_AZURE_CONTAINER }}
+      LOAMS_GCS_SERVICE_ACCOUNT_KEY: ${{ secrets.LOAMS_GCS_SERVICE_ACCOUNT_KEY }}
+      LOAMS_R2_ENDPOINT: ${{ secrets.LOAMS_R2_ENDPOINT }}
+      LOAMS_CONNECTORS_NIGHTLY: "1"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -488,6 +583,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.plan.outputs.run == 'true'
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           workspaces: fabric -> target
           key: connectors-${{ matrix.family }}
       - name: up
@@ -499,6 +595,9 @@ jobs:
             docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only \
               up -d --wait --wait-timeout 900 $services
           fi
+      - name: objects endpoints and buckets
+        if: steps.plan.outputs.run == 'true' && matrix.family == 'objects'
+        run: scripts/connectors/objects_stack.sh
       - name: suites
         if: steps.plan.outputs.run == 'true'
         working-directory: fabric
@@ -515,11 +614,11 @@ jobs:
   # test. promtool comes from the Prometheus 3.5.0 release (Apache-2.0, LTS,
   # 2025-07-14), checked against its published SHA-256. The Rust test
   # `each_alert_fires_in_a_test` runs the same rule tests through
-  # LOAMS_PROMTOOL, beside the label, activity-observer and no-metering tests.
+  # LOAMS_PROMTOOL, beside the label and activity-observer tests.
   connectors-alerts:
-    name: connector alerts (promtool) and activity observer
+    name: "Connectors: alerts and activity"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.alerts == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.alerts == 'true'))) }}
     runs-on: ubuntu-24.04
     env:
       PROMETHEUS_VERSION: "3.5.0"
@@ -541,18 +640,77 @@ jobs:
         run: |
           "$LOAMS_PROMTOOL" check rules deploy/observability/connectors/alerts.yaml
           "$LOAMS_PROMTOOL" test rules deploy/observability/connectors/alerts.test.yaml
-      - name: no-metering guard
-        run: scripts/ci/no-metering.sh
+      # loams-flow builds loams-flow-proto, which needs protoc.
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
+          workspaces: fabric -> target
+          key: connectors-alerts
+      - name: metrics and activity tests
+        working-directory: fabric
+        run: cargo test -p loams-flow --test activity --locked
+
+  # CN2 owns this job (plan 2026-10-10-cn2-connectors, Task 26). helm comes
+  # from the v3.22.0 release (Apache-2.0, 2026-09-10) and kind from v0.33.0
+  # (Apache-2.0, 2026-08-26), each checked against its published SHA-256.
+  # `helm_lint_and_template_golden` lints the chart and compares its render
+  # with the golden file; the rest of tests/kube.rs covers KubeRuntime's
+  # golden objects and the fenced leases. The kind test (`it_kind_mixed_fleet`)
+  # needs the loams-fabric, loams-connect and Iggy connectors images, which
+  # FL1, CN1 Task 12 and Task 22 publish; it runs once the repository variable
+  # LOAMS_KIND_FLEET_VALUES names a values file with their digests (R26.10).
+  connectors-kind:
+    name: "Connectors: Kubernetes fleet (helm chart, kube golden, kind)"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.kube == 'true'))) }}
+    runs-on: ubuntu-24.04
+    env:
+      HELM_VERSION: "3.22.0"
+      HELM_SHA256: 1e4ab49e429626cf6c6958d914248b78c9730803c2751b87627e171dc800e7bb
+      KIND_VERSION: "0.33.0"
+      KIND_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: helm
+        run: |
+          dir="$RUNNER_TEMP/helm"
+          mkdir -p "$dir"
+          curl -sSfL --retry 3 -o "$dir/helm.tgz" "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz"
+          echo "${HELM_SHA256}  $dir/helm.tgz" | sha256sum -c -
+          tar -xzf "$dir/helm.tgz" -C "$dir" --strip-components=1 linux-amd64/helm
+          echo "LOAMS_HELM=$dir/helm" >> "$GITHUB_ENV"
+          echo "$dir" >> "$GITHUB_PATH"
+      - name: helm lint
+        run: helm lint --strict deploy/helm/loams-connectors -f deploy/helm/loams-connectors/ci/golden-values.yaml
       # loams-flow builds loams-flow-proto, which needs protoc.
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: fabric -> target
-          key: connectors-alerts
-      - name: metrics and activity tests
+          key: connectors-kind
+      - name: chart golden, KubeRuntime golden and lease tests
         working-directory: fabric
-        run: cargo test -p loams-flow --test activity --locked
+        run: cargo test -p loams-flow --test kube --locked
+      - name: kind
+        if: ${{ vars.LOAMS_KIND_FLEET_VALUES != '' }}
+        run: |
+          dir="$RUNNER_TEMP/kind"
+          mkdir -p "$dir"
+          curl -sSfL --retry 3 -o "$dir/kind" "https://github.com/kubernetes-sigs/kind/releases/download/v${KIND_VERSION}/kind-linux-amd64"
+          echo "${KIND_SHA256}  $dir/kind" | sha256sum -c -
+          chmod +x "$dir/kind"
+          "$dir/kind" create cluster --name loams-connectors --wait 120s
+      - name: mixed fleet on kind
+        if: ${{ vars.LOAMS_KIND_FLEET_VALUES != '' }}
+        working-directory: fabric
+        env:
+          LOAMS_KIND_FLEET_VALUES: ${{ github.workspace }}/${{ vars.LOAMS_KIND_FLEET_VALUES }}
+        run: cargo test -p loams-flow --test it_kind --locked -- --ignored
 
   # CN1 Task 2's drift checks (design §33 CN-R1): the appendix is regenerated
   # from connectors/registry/catalog.csv and diffed against the design doc, and
@@ -561,9 +719,8 @@ jobs:
   # schedule and on demand only, and each script skips cleanly when its catalog
   # is not there.
   connectors-drift:
-    name: connector catalog drift (Camel, Kestra, appendix)
-    # The weekly cron only; the daily one is connectors-nightly's.
-    if: ${{ !cancelled() && ((github.event_name == 'schedule' && github.event.schedule == '41 3 * * 1') || github.event_name == 'workflow_dispatch') }}
+    name: "Connectors: catalog drift"
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     env:
       # A literal path under the runner's temp directory, not `runner.temp` and
@@ -634,7 +791,7 @@ jobs:
   # declared and switched off rather than written as an empty shell: Loams
   # writes no Java (owner, 2026-10-01), so there is nothing to build here yet.
   connect-routes:
-    name: loams-connect routes (connect/**)
+    name: "Connect: routes"
     needs: changes
     if: false
     runs-on: ubuntu-24.04
@@ -643,3 +800,31 @@ jobs:
       # connect/routes/**/*.yaml, and `rendered_routes_are_valid_yaml_dsl`.
       - name: not implemented yet (CN1 Task 12)
         run: echo "connect-routes is declared for CN1 Task 12 and is switched off"
+
+  # One check for branch protection: it passes when every job this event
+  # selected passed and the rest were skipped (as ci.yml's `CI required`).
+  # The nightly suites against real accounts and the weekly drift scripts are
+  # not in it: they run on the schedule, not on a pull request.
+  required:
+    name: Connectors required
+    if: always()
+    needs:
+      - changes
+      - connectors-unit
+      - sdk-unit
+      - conformance-kit
+      - connectors-p2
+      - connectors-ci-only
+      - connectors-alerts
+      - connectors-kind
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all selected fabric jobs to pass
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          if jq -e '[.[] | .result] | any(. == "failure" or . == "cancelled")' <<< "$NEEDS_JSON"; then
+            echo "A fabric job failed or was cancelled" >&2
+            exit 1
+          fi

@@ -1,0 +1,416 @@
+syntax = "proto3";
+
+// Files (design §53 §5.2, §6.4; plan SD1 Task 4): the folder picker, the
+// file tree, reads and hash-guarded writes, moves and deletes, search, and a
+// checkout's change stream. Every call names its checkout through a
+// `WorkspaceTarget`, which the daemon resolves and jails. The gap G23
+// (content search) is declared here and answers `unimplemented` until SD1
+// Task 11. File content is data: a client renders it as text (§53 D919). See
+// studio.proto for the package's rules.
+package loams.agentd.v1;
+
+import "loams/agentd/v1/studio.proto";
+import "loams/options/v1/options.proto";
+
+service FileService {
+  option (loams.options.v1.module) = {
+    name: "agentd.files"
+    summary: "Loams Studio's files: folders, the tree, reads, writes, moves, deletes and search."
+    unstable: true
+  };
+
+  // The folder picker (ndjson: `ListFolders`).
+  rpc ListFolders(ListFoldersRequest) returns (ListFoldersResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Home and mounted drives (ndjson: `ListDrives`).
+  rpc ListDrives(ListDrivesRequest) returns (ListDrivesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Fuzzy path search for @-mentions (ndjson: `SearchFiles`).
+  rpc SearchMentions(SearchMentionsRequest) returns (SearchMentionsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Fuzzy path search in a checkout (ndjson: `SearchWorkspaceFiles`).
+  rpc Search(SearchRequest) returns (SearchResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // One page of a directory (ndjson: `ListWorkspaceDirectory`).
+  rpc ListDirectory(ListDirectoryRequest) returns (ListDirectoryResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // A bounded text read (ndjson: `ReadWorkspaceFile`).
+  rpc ReadFile(ReadFileRequest) returns (ReadFileResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // One chunk of an image (ndjson: `ReadWorkspaceImage`).
+  rpc ReadImage(ReadImageRequest) returns (ReadImageResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // A write guarded by the content hash it replaces (ndjson:
+  // `WriteWorkspaceFile`).
+  rpc WriteFile(WriteFileRequest) returns (WriteFileResponse);
+  // ndjson: `MoveWorkspaceEntry`.
+  rpc MoveEntry(MoveEntryRequest) returns (MoveEntryResponse);
+  // ndjson: `DeleteWorkspaceEntry`.
+  rpc DeleteEntry(DeleteEntryRequest) returns (DeleteEntryResponse);
+  // The checkout's filesystem changes (ndjson: `WatchWorkspaceFiles`).
+  rpc WatchFiles(WatchFilesRequest) returns (stream WatchFilesResponse);
+
+  // G23: content search, one match per message (SD1 Task 11).
+  rpc SearchContent(SearchContentRequest) returns (stream SearchContentResponse);
+}
+
+message FolderEntry {
+  string name = 1;
+  bool is_dir = 2;
+  bool is_repo = 3;
+}
+
+message FolderListing {
+  string path = 1;
+  repeated FolderEntry entries = 2;
+  bool truncated = 3;
+}
+
+message DriveEntry {
+  string name = 1;
+  string path = 2;
+}
+
+message FileSearchMatch {
+  string path = 1;
+  bool is_dir = 2;
+}
+
+enum WorkspaceEntryKind {
+  WORKSPACE_ENTRY_KIND_UNSPECIFIED = 0;
+  WORKSPACE_ENTRY_KIND_FILE = 1;
+  WORKSPACE_ENTRY_KIND_DIRECTORY = 2;
+  WORKSPACE_ENTRY_KIND_SYMLINK = 3;
+}
+
+message WorkspaceEntry {
+  // The revision a move or delete must name.
+  optional string mutation_revision = 1;
+  string path = 2;
+  string name = 3;
+  WorkspaceEntryKind kind = 4;
+  optional uint64 size = 5;
+  optional int64 modified_at_ms = 6;
+  bool ignored = 7;
+  bool read_only = 8;
+}
+
+message WorkspaceMutationCapabilities {
+  bool move_entry = 1;
+  bool delete_entry = 2;
+}
+
+message WorkspaceDirectoryPage {
+  optional string checkout_id = 1;
+  WorkspaceMutationCapabilities mutation_capabilities = 2;
+  string directory = 3;
+  repeated WorkspaceEntry entries = 4;
+  optional string next_cursor = 5;
+  bool truncated = 6;
+}
+
+message WorkspaceFileSearchMatch {
+  string path = 1;
+  string name = 2;
+  WorkspaceEntryKind kind = 3;
+  int64 score = 4;
+}
+
+enum WorkspaceTextEncoding {
+  WORKSPACE_TEXT_ENCODING_UNSPECIFIED = 0;
+  WORKSPACE_TEXT_ENCODING_UTF8 = 1;
+  WORKSPACE_TEXT_ENCODING_UTF8_BOM = 2;
+  WORKSPACE_TEXT_ENCODING_BINARY = 3;
+  WORKSPACE_TEXT_ENCODING_UNSUPPORTED = 4;
+}
+
+enum WorkspaceLineEnding {
+  WORKSPACE_LINE_ENDING_UNSPECIFIED = 0;
+  WORKSPACE_LINE_ENDING_LF = 1;
+  WORKSPACE_LINE_ENDING_CRLF = 2;
+  WORKSPACE_LINE_ENDING_MIXED = 3;
+  WORKSPACE_LINE_ENDING_NONE = 4;
+}
+
+enum WorkspaceReadOnlyReason {
+  WORKSPACE_READ_ONLY_REASON_UNSPECIFIED = 0;
+  WORKSPACE_READ_ONLY_REASON_BINARY = 1;
+  WORKSPACE_READ_ONLY_REASON_UNSUPPORTED_ENCODING = 2;
+  WORKSPACE_READ_ONLY_REASON_MIXED_LINE_ENDINGS = 3;
+  WORKSPACE_READ_ONLY_REASON_SYMLINK = 4;
+  WORKSPACE_READ_ONLY_REASON_TOO_LARGE = 5;
+  WORKSPACE_READ_ONLY_REASON_PERMISSION_DENIED = 6;
+  WORKSPACE_READ_ONLY_REASON_NOT_REGULAR_FILE = 7;
+  WORKSPACE_READ_ONLY_REASON_OUTSIDE_WORKSPACE = 8;
+}
+
+message WorkspaceFileText {
+  string checkout_id = 1;
+  string path = 2;
+  optional string text = 3;
+  optional string content_hash = 4;
+  uint64 size = 5;
+  optional int64 modified_at_ms = 6;
+  WorkspaceTextEncoding encoding = 7;
+  optional WorkspaceLineEnding line_ending = 8;
+  optional WorkspaceReadOnlyReason read_only_reason = 9;
+  bool truncated = 10;
+}
+
+message WorkspaceImageChunk {
+  string checkout_id = 1;
+  string content_hash = 2;
+  string mime_type = 3;
+  // Base64, as on the ndjson wire.
+  string data = 4;
+  uint64 next_offset = 5;
+  uint64 size = 6;
+  bool done = 7;
+}
+
+enum WorkspaceWritableEncoding {
+  WORKSPACE_WRITABLE_ENCODING_UNSPECIFIED = 0;
+  WORKSPACE_WRITABLE_ENCODING_UTF8 = 1;
+  WORKSPACE_WRITABLE_ENCODING_UTF8_BOM = 2;
+}
+
+enum WorkspaceWritableLineEnding {
+  WORKSPACE_WRITABLE_LINE_ENDING_UNSPECIFIED = 0;
+  WORKSPACE_WRITABLE_LINE_ENDING_LF = 1;
+  WORKSPACE_WRITABLE_LINE_ENDING_CRLF = 2;
+}
+
+enum WorkspaceFileConflictReason {
+  WORKSPACE_FILE_CONFLICT_REASON_UNSPECIFIED = 0;
+  WORKSPACE_FILE_CONFLICT_REASON_CHANGED = 1;
+  WORKSPACE_FILE_CONFLICT_REASON_DELETED = 2;
+  WORKSPACE_FILE_CONFLICT_REASON_REPLACED = 3;
+  WORKSPACE_FILE_CONFLICT_REASON_NOT_REGULAR_FILE = 4;
+}
+
+message WorkspaceFileWriteResult {
+  string path = 1;
+  string content_hash = 2;
+  uint64 size = 3;
+  optional int64 modified_at_ms = 4;
+}
+
+// ndjson `WriteWorkspaceFileOutcome`, tagged by `status`.
+message WriteWorkspaceFileOutcome {
+  oneof outcome {
+    WorkspaceFileWritten written = 1;
+    WorkspaceFileConflict conflict = 2;
+  }
+}
+
+message WorkspaceFileWritten {
+  WorkspaceFileWriteResult file = 1;
+}
+
+message WorkspaceFileConflict {
+  WorkspaceFileConflictReason reason = 1;
+  optional string current_content_hash = 2;
+  optional int64 current_modified_at_ms = 3;
+}
+
+enum WorkspaceFileChangeKind {
+  WORKSPACE_FILE_CHANGE_KIND_UNSPECIFIED = 0;
+  WORKSPACE_FILE_CHANGE_KIND_CREATED = 1;
+  WORKSPACE_FILE_CHANGE_KIND_MODIFIED = 2;
+  WORKSPACE_FILE_CHANGE_KIND_REMOVED = 3;
+  WORKSPACE_FILE_CHANGE_KIND_RENAMED = 4;
+}
+
+message WorkspaceFileChange {
+  optional string operation_id = 1;
+  WorkspaceFileChangeKind kind = 2;
+  string path = 3;
+  optional string old_path = 4;
+}
+
+message WorkspaceFileChanges {
+  uint64 sequence = 1;
+  // The client missed changes and must list again.
+  bool resync_required = 2;
+  repeated WorkspaceFileChange changes = 3;
+}
+
+enum WorkspaceMutationRejection {
+  WORKSPACE_MUTATION_REJECTION_UNSPECIFIED = 0;
+  WORKSPACE_MUTATION_REJECTION_INVALID_PATH = 1;
+  WORKSPACE_MUTATION_REJECTION_WORKSPACE_CHANGED = 2;
+  WORKSPACE_MUTATION_REJECTION_SOURCE_MISSING = 3;
+  WORKSPACE_MUTATION_REJECTION_SOURCE_CHANGED = 4;
+  WORKSPACE_MUTATION_REJECTION_DESTINATION_EXISTS = 5;
+  WORKSPACE_MUTATION_REJECTION_INVALID_DESTINATION = 6;
+  WORKSPACE_MUTATION_REJECTION_PERMISSION_DENIED = 7;
+  WORKSPACE_MUTATION_REJECTION_UNSUPPORTED = 8;
+  WORKSPACE_MUTATION_REJECTION_BUSY = 9;
+  WORKSPACE_MUTATION_REJECTION_PARTIAL_FAILURE = 10;
+}
+
+// ndjson `WorkspaceMutationOutcome`, tagged by `status`.
+message WorkspaceMutationOutcome {
+  oneof outcome {
+    WorkspaceMutationApplied applied = 1;
+    WorkspaceMutationRejected rejected = 2;
+  }
+}
+
+message WorkspaceMutationApplied {
+  string operation_id = 1;
+  string checkout_id = 2;
+  WorkspaceFileChange change = 3;
+  WorkspaceEntry entry = 4;
+}
+
+message WorkspaceMutationRejected {
+  string operation_id = 1;
+  WorkspaceMutationRejection reason = 2;
+  string message = 3;
+}
+
+message ListFoldersRequest {
+  // Unset means home.
+  optional string path = 1;
+}
+
+message ListFoldersResponse {
+  FolderListing listing = 1;
+}
+
+message ListDrivesRequest {}
+
+message ListDrivesResponse {
+  repeated DriveEntry drives = 1;
+}
+
+message SearchMentionsRequest {
+  string query = 1;
+  optional string chat_id = 2;
+  optional string space_id = 3;
+  optional string path = 4;
+}
+
+message SearchMentionsResponse {
+  repeated FileSearchMatch matches = 1;
+}
+
+message SearchRequest {
+  WorkspaceTarget target = 1;
+  string query = 2;
+  bool include_ignored = 3;
+  optional uint32 limit = 4;
+}
+
+message SearchResponse {
+  repeated WorkspaceFileSearchMatch matches = 1;
+}
+
+message ListDirectoryRequest {
+  WorkspaceTarget target = 1;
+  // Relative to the checkout; empty is its root.
+  string directory = 2;
+  bool include_ignored = 3;
+  optional string cursor = 4;
+}
+
+message ListDirectoryResponse {
+  WorkspaceDirectoryPage page = 1;
+}
+
+message ReadFileRequest {
+  WorkspaceTarget target = 1;
+  string path = 2;
+}
+
+message ReadFileResponse {
+  WorkspaceFileText file = 1;
+}
+
+message ReadImageRequest {
+  WorkspaceTarget target = 1;
+  string path = 2;
+  string expected_checkout_id = 3;
+  uint64 offset = 4;
+  optional string expected_content_hash = 5;
+}
+
+message ReadImageResponse {
+  WorkspaceImageChunk chunk = 1;
+}
+
+message WriteFileRequest {
+  WorkspaceTarget target = 1;
+  string expected_checkout_id = 2;
+  string path = 3;
+  string text = 4;
+  string expected_content_hash = 5;
+  WorkspaceWritableEncoding encoding = 6;
+  WorkspaceWritableLineEnding line_ending = 7;
+}
+
+message WriteFileResponse {
+  WriteWorkspaceFileOutcome outcome = 1;
+}
+
+message MoveEntryRequest {
+  WorkspaceTarget target = 1;
+  string operation_id = 2;
+  string expected_checkout_id = 3;
+  string source_path = 4;
+  string destination_path = 5;
+  string expected_source_revision = 6;
+  WorkspaceEntryKind expected_kind = 7;
+}
+
+message MoveEntryResponse {
+  WorkspaceMutationOutcome outcome = 1;
+}
+
+message DeleteEntryRequest {
+  WorkspaceTarget target = 1;
+  string operation_id = 2;
+  string expected_checkout_id = 3;
+  string path = 4;
+  string expected_source_revision = 5;
+  WorkspaceEntryKind expected_kind = 6;
+  bool recursive = 7;
+}
+
+message DeleteEntryResponse {
+  WorkspaceMutationOutcome outcome = 1;
+}
+
+message WatchFilesRequest {
+  WorkspaceTarget target = 1;
+}
+
+message WatchFilesResponse {
+  WorkspaceFileChanges changes = 1;
+}
+
+message SearchContentRequest {
+  optional string space_id = 1;
+  optional string chat_id = 2;
+  string query = 3;
+  bool regex = 4;
+  bool case_sensitive = 5;
+  repeated string globs = 6;
+  uint32 max_results = 7;
+}
+
+// G23: one match.
+message SearchContentResponse {
+  string path = 1;
+  uint32 line = 2;
+  uint32 column = 3;
+  string preview = 4;
+}

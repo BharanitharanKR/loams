@@ -1,9 +1,226 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/sftp.config.json",
-  "title": "SFTP instance config (placeholder)",
-  "description": "Placeholder for a SFTP instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "SFTP connector instance config (loams.flow/v1)",
+  "description": "One SFTP instance's settings, read by the native objects family (`loams_connector_objects::sftp`, CN2 Task 13) over SSH 2 and SFTP v3. `auth.*` holds secret **names** (D189), exactly the manifest's `secrets`: a password, or an Ed25519 or ECDSA private key (R13.6). `host_key` is required and any other server key is refused.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "host",
+    "username",
+    "host_key"
+  ],
+  "properties": {
+    "host": {
+      "description": "The SFTP server.",
+      "type": "string",
+      "minLength": 1
+    },
+    "port": {
+      "description": "The SSH port.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "default": 22
+    },
+    "username": {
+      "description": "The SSH user.",
+      "type": "string",
+      "minLength": 1
+    },
+    "root": {
+      "description": "The directory the source reads and the sink writes under.",
+      "type": "string",
+      "default": ""
+    },
+    "recursive": {
+      "description": "The source descends into subdirectories.",
+      "type": "boolean",
+      "default": false
+    },
+    "host_key": {
+      "description": "The server's public key as in `known_hosts` or `ssh-keyscan` output (`ssh-ed25519 AAAA…`); a host name before it is ignored. Not a secret.",
+      "type": "string",
+      "minLength": 1
+    },
+    "auth": {
+      "description": "SSH credentials, as secret names: `password` or `private_key` is required.",
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "password"
+          ]
+        },
+        {
+          "required": [
+            "private_key"
+          ]
+        }
+      ],
+      "properties": {
+        "password": {
+          "description": "The user's password. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "private_key": {
+          "description": "An OpenSSH private key (Ed25519 or ECDSA). The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "private_key_passphrase": {
+          "description": "The private key's passphrase. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "prefix": {
+      "description": "The sink's directory under `root`.",
+      "type": "string",
+      "default": ""
+    },
+    "prefixes": {
+      "description": "Several directories under `root` to read, one source split each; `prefix` when empty.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source": {
+      "description": "The listing source: one split per prefix, read in lexicographic key order after a high-water key.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decode": {
+          "description": "What each listed object becomes: one `object` event with its metadata (`metadata`) or its bytes (`bytes`), or Arrow batches decoded from CSV, NDJSON or Parquet.",
+          "enum": [
+            "metadata",
+            "bytes",
+            "csv",
+            "ndjson",
+            "parquet"
+          ],
+          "default": "metadata"
+        },
+        "columns": {
+          "description": "The columns of CSV and NDJSON objects, typed with the SDK's SQL type names (required for `csv` and `ndjson`; Parquet carries its own schema).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "type"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "description": "A SQL type name (docs/guides/connectors/schema-mapping.md).",
+                "type": "string",
+                "minLength": 1
+              },
+              "nullable": {
+                "type": "boolean",
+                "default": true
+              }
+            }
+          }
+        },
+        "csv_header": {
+          "description": "CSV objects start with a header line.",
+          "type": "boolean",
+          "default": true
+        },
+        "poll_interval_ms": {
+          "description": "List again this long after a listing ends. Without it the source lists once and ends (a bounded read).",
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_object_bytes": {
+          "description": "Objects larger than this are not decoded or carried; they go to the DLQ as poison and the listing moves past them.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 67108864
+        },
+        "decode_batch_rows": {
+          "description": "Rows per decoded batch before the batch budget cuts it.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 8192
+        }
+      }
+    },
+    "sink": {
+      "description": "The SFTP sink: one file per Fabric batch, written as `.<name>.tmp` and published with SFTP v3 `RENAME`, which refuses an existing destination (R13.6).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "description": "The file format.",
+          "enum": [
+            "parquet",
+            "ndjson",
+            "raw"
+          ],
+          "default": "parquet"
+        },
+        "roll_bytes": {
+          "description": "Accepted for the family's shared shape; the SFTP sink writes one file per batch.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 134217728
+        },
+        "roll_interval_secs": {
+          "description": "Accepted for the family's shared shape; the SFTP sink writes one file per batch.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 300
+        },
+        "conditional_put": {
+          "description": "Accepted for the family's shared shape; the rename already refuses an existing file.",
+          "type": "boolean",
+          "default": true
+        },
+        "compression": {
+          "description": "Parquet compression.",
+          "enum": [
+            "zstd",
+            "snappy",
+            "gzip",
+            "none"
+          ],
+          "default": "zstd"
+        },
+        "raw_separator": {
+          "description": "Raw format: written after each event's data.",
+          "type": "string",
+          "default": "\n"
+        }
+      }
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    },
+    "evolution": {
+      "description": "Accepted for the SDK's shared keys; unused by SFTP.",
+      "type": "string"
+    },
+    "lossy": {
+      "description": "Accepted for the SDK's shared keys; unused by SFTP.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
 }

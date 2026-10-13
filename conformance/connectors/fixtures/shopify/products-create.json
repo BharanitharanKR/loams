@@ -1,0 +1,65 @@
+{
+  "recorded_from": "Shopify",
+  "synthetic": true,
+  "docs": [
+    "https://shopify.dev/docs/api/admin-rest/2025-07/resources/product",
+    "https://shopify.dev/docs/api/admin-rest/usage/pagination"
+  ],
+  "scenario": {
+    "direction": "sink",
+    "resource": "products",
+    "config": {
+      "shop": "loams-test",
+      "base_url": "{proxy}/admin/api/2025-07"
+    },
+    "secrets": {
+      "api_key": "synthetic-shopify-token"
+    },
+    "input": [
+      {
+        "title": "Green Widget",
+        "vendor": "Loams Test",
+        "product_type": "Widget",
+        "status": "draft"
+      }
+    ],
+    "expect": 1
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/admin/api/2025-07/products.json",
+        "headers": {},
+        "body": {
+          "json": {
+            "product": {
+              "title": "Green Widget",
+              "vendor": "Loams Test",
+              "product_type": "Widget",
+              "status": "draft"
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "product": {
+              "title": "Green Widget",
+              "vendor": "Loams Test",
+              "product_type": "Widget",
+              "status": "draft",
+              "id": 632910394,
+              "handle": "green-widget"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

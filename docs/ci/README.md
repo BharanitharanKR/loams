@@ -1,0 +1,38 @@
+# CI
+
+GitHub Actions on this repository. The repository is public, so GitHub-hosted runners (Linux,
+Windows, macOS) cost nothing; what is scarce is the organisation's concurrent-job limit (about 20
+jobs, about 5 of them macOS). Blacksmith runners (free tier, minutes counted per vCPU) are used
+only for the heavy Rust builds, through the `RUNNER_HEAVY` repository variable.
+
+## Tiers
+
+| Event | What runs |
+|---|---|
+| Pull request into `dev`, push to `dev` | **Fast tier**, by changed path: DCO, repository checks, Rust fmt/clippy and tests, cargo-deny, console, protos, the seven supported SDKs, unit jobs |
+| Pull request into `main` (the release gate) | **Full tier**, by changed path: the fast tier plus the engine, TiKV, Live, durable, Graph, fuzzing, specs, Windows check, connector stacks, mobile, Postgres e2e, Git, desktop on all five platforms |
+| Push to `main`, manual dispatch, nightly | Everything, regardless of paths |
+
+`nightly.yml` dispatches the full suites on `dev` every night (a `schedule:` only runs on the
+default branch, `main`). A red nightly means: fix `dev` before the next `dev` → `main` pull request.
+
+A draft pull request skips the heavy jobs until it is marked ready; the `ci:full` label (then a
+push) runs them anyway. CodeRabbit does not review drafts.
+
+## Required checks
+
+`CI required`, `Connectors required`, `Web and mobile required` (each passes when every job its
+event selected passed and the rest were skipped) and, on `dev`, `DCO sign-off`.
+
+## Names
+
+Workflows are named for their product area (`CI`, `Connectors`, `Web and mobile`, `Postgres`,
+`Git`, `Desktop`, `Release …`). Jobs are sentence case; in a workflow that covers several areas
+they carry an `Area: what` prefix (`Rust: tests (1/2)`, `SDK: Swift`, `Mobile: iOS`). A gate is
+`<Workflow> required`.
+
+## Adding a job
+
+Give it a path filter in its workflow's `changes` job, decide its tier (fast only if it is quick
+and catches what a pull request into `dev` must not break), add it to the workflow's `required`
+gate, and give the workflow a `concurrency` group that cancels superseded runs.

@@ -637,25 +637,78 @@ async fn no_graph_answers_graph_absent() {
     running.server.shutdown().await.expect("shutdown");
 }
 
-/// In a `graph` build, a cluster node does not serve Loams Graph before it has the `graph` role
-/// (R5.2, Task 12), so it answers `GraphAbsent` (the node's start path takes `serves_graph`; a
-/// cluster node cannot start in process here).
+/// A cluster node serves Loams Graph only with the `graph` role, which `Roles::all` leaves out
+/// (GR1 Task 12, R5.2, R12.5).
 #[cfg(feature = "graph")]
 #[test]
-fn a_cluster_node_does_not_serve_graph() {
+fn a_cluster_node_serves_graph_only_with_the_graph_role() {
     let dir = TempDir::new().expect("temp dir");
     let mut config = ServerConfig::new(dir.path());
     assert!(config.serves_graph());
-    config.cluster = Some(loams::ClusterConfig::new(
-        1,
-        loams_hot::Roles::all(),
-        "127.0.0.1:1",
-        std::collections::BTreeMap::from([(1, "127.0.0.1:1".to_string())]),
-    ));
+    let cluster = |roles| {
+        Some(loams::ClusterConfig::new(
+            1,
+            roles,
+            "127.0.0.1:1",
+            std::collections::BTreeMap::from([(1, "127.0.0.1:1".to_string())]),
+        ))
+    };
+    config.cluster = cluster(loams_hot::Roles::all());
     assert!(!config.serves_graph());
-    config.cluster = None;
+    config.cluster = cluster(loams_hot::Roles {
+        graph: true,
+        ..loams_hot::Roles::all()
+    });
+    assert!(config.serves_graph());
     config.graph.enabled = false;
     assert!(!config.serves_graph());
+}
+
+/// `GraphForward` (GR1 Task 12, R12.4): another graph node's call arrives on
+/// `/internal/v1/graph/<method>` as protobuf bytes and is answered as protobuf bytes, or as the
+/// Connect error in JSON.
+#[cfg(feature = "graph")]
+#[tokio::test]
+async fn forwarded_graph_calls_are_served_on_the_internal_route() {
+    use loams_proto::loams::graph::v1 as pb;
+    let running = Running::start().await;
+    let (status, graph) = running
+        .connect(
+            "/loams.graph.v1.GraphAdminService/CreateGraph",
+            &json!({"namespace": "acme", "name": "kg"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{graph}");
+    let forward = async |method: &str, body: Vec<u8>| {
+        let response = reqwest::Client::new()
+            .post(format!("{}/internal/v1/graph/{method}", running.base))
+            .header("content-type", "application/proto")
+            .body(body)
+            .send()
+            .await
+            .expect("forwarded call");
+        (response.status(), response.bytes().await.expect("a body"))
+    };
+    let request = pb::ExecuteRequest {
+        namespace: "acme".to_string(),
+        graph: "kg".to_string(),
+        statement: "INSERT (:N {k: 1}) RETURN 1".to_string(),
+        ..Default::default()
+    };
+    let (status, body) = forward("execute", request.encode_to_vec()).await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let answer = pb::ExecuteResponse::decode_from_slice(&body).expect("an ExecuteResponse");
+    assert!(answer.consistency_token.ends_with("@1"), "{answer:?}");
+    let missing = pb::ExecuteRequest {
+        graph: "nope".to_string(),
+        ..request
+    };
+    let (status, body) = forward("execute", missing.encode_to_vec()).await;
+    assert_eq!(status, reqwest::StatusCode::UNPROCESSABLE_ENTITY);
+    let error: Value = serde_json::from_slice(&body).expect("a Connect error");
+    assert_eq!(error["code"], "not_found", "{error}");
+    let (status, _) = forward("drop-everything", Vec::new()).await;
+    assert_eq!(status, reqwest::StatusCode::NOT_FOUND);
 }
 
 /// The scheduled catalog sweep (R4.9) runs on its interval, without anyone calling
@@ -689,6 +742,119 @@ async fn zero_maintenance_interval_refused() {
     config.graph.maintenance_every = Duration::ZERO;
     let err = Server::start(config).await.expect_err("refused");
     assert!(err.to_string().contains("maintenance_every"), "{err}");
+}
+
+/// `checkpoint_every` must be greater than zero too (GR1 Task 13).
+#[cfg(feature = "graph")]
+#[tokio::test]
+async fn zero_checkpoint_interval_refused() {
+    let dir = TempDir::new().expect("temp dir");
+    let mut config = ServerConfig::new(dir.path());
+    config.listen = SocketAddr::from(([127, 0, 0, 1], 0));
+    config.graph.checkpoint_every = Duration::ZERO;
+    let err = Server::start(config).await.expect_err("refused");
+    assert!(err.to_string().contains("checkpoint_every"), "{err}");
+}
+
+/// The scheduled checkpoint (GR1 Task 13): a graph that changed and has no portable snapshot is
+/// snapshotted on the next tick, without anyone calling `checkpoint`.
+#[cfg(feature = "graph")]
+#[tokio::test]
+async fn graphs_are_checkpointed_on_schedule() {
+    let running = Running::start_with(|config| {
+        config.graph.checkpoint_every = Duration::from_millis(50);
+    })
+    .await;
+    let (status, _) = running
+        .connect(
+            "/loams.graph.v1.GraphAdminService/CreateGraph",
+            &json!({"namespace": "acme", "name": "kg"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let (status, _) = running
+        .connect(
+            "/loams.graph.v1.GraphService/Execute",
+            &json!({"namespace": "acme", "graph": "kg", "statement": "INSERT (:X)"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while running.server.graph_checkpoints().expect("graph is served") < 1 {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the graph was never checkpointed"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    running.server.shutdown().await.expect("shutdown");
+}
+
+/// A zero idle-eviction time would evict every graph between statements (GR1 Task 14).
+#[cfg(feature = "graph")]
+#[tokio::test]
+async fn zero_idle_eviction_refused() {
+    let dir = TempDir::new().expect("temp dir");
+    let mut config = ServerConfig::new(dir.path());
+    config.listen = SocketAddr::from(([127, 0, 0, 1], 0));
+    config.graph.evict.idle_after = Duration::ZERO;
+    let err = Server::start(config).await.expect_err("refused");
+    assert!(err.to_string().contains("idle_after"), "{err}");
+}
+
+/// The scheduled eviction (GR1 Task 14): an idle graph is evicted on a tick, without anyone
+/// calling `evict`, reported `EVICTED`, and its next statement opens it again with what it held.
+#[cfg(feature = "graph")]
+#[tokio::test]
+async fn idle_graphs_are_evicted_on_schedule() {
+    let running = Running::start_with(|config| {
+        config.graph.checkpoint_every = Duration::from_millis(50);
+        config.graph.evict.idle_after = Duration::from_millis(100);
+    })
+    .await;
+    let (status, _) = running
+        .connect(
+            "/loams.graph.v1.GraphAdminService/CreateGraph",
+            &json!({"namespace": "acme", "name": "kg"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let (status, _) = running
+        .connect(
+            "/loams.graph.v1.GraphService/Execute",
+            &json!({"namespace": "acme", "graph": "kg", "statement": "INSERT (:X {k: 1})"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while running.server.graph_evictions().expect("graph is served") < 1 {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the graph was never evicted"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let (status, graph) = running
+        .connect(
+            "/loams.graph.v1.GraphAdminService/GetGraph",
+            &json!({"namespace": "acme", "name": "kg"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    assert_eq!(graph["state"], "GRAPH_STATE_EVICTED", "{graph}");
+    let (status, answer) = running
+        .connect(
+            "/loams.graph.v1.GraphService/Execute",
+            &json!({"namespace": "acme", "graph": "kg", "statement": "MATCH (n:X) RETURN n.k"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{answer}");
+    assert_eq!(
+        answer["rows"]["rows"].as_array().map(Vec::len),
+        Some(1),
+        "{answer}"
+    );
+    running.server.shutdown().await.expect("shutdown");
 }
 
 /// The scheduled purge (Task 4 R4.9): a deleted graph's storage goes once the retention hold has
@@ -738,5 +904,78 @@ async fn deleted_graphs_are_purged_on_schedule() {
         );
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
+    running.server.shutdown().await.expect("shutdown");
+}
+
+/// GR1 Task 15 (§48 §7.2): a statement's token rides in the `loams-consistency-token` response
+/// header as well as in its message, and a request may send one in that header: a read waits
+/// for it (`consistency_wait`) and is `UNAVAILABLE`/`consistency_wait_timeout` past it, and a
+/// header that is not a token is `INVALID_ARGUMENT`.
+#[cfg(feature = "graph")]
+#[tokio::test]
+async fn consistency_tokens_ride_in_the_header() {
+    let running = Running::start_with(|config| {
+        config.graph.consistency_wait = Duration::from_millis(200);
+    })
+    .await;
+    let (status, _) = running
+        .connect(
+            "/loams.graph.v1.GraphAdminService/CreateGraph",
+            &json!({"namespace": "acme", "name": "kg"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let call = |statement: &str, header: Option<&str>| {
+        let mut request = reqwest::Client::new()
+            .post(format!(
+                "{}/loams.graph.v1.GraphService/Execute",
+                running.base
+            ))
+            .header("content-type", "application/json")
+            .body(json!({"namespace": "acme", "graph": "kg", "statement": statement}).to_string());
+        if let Some(header) = header {
+            request = request.header("loams-consistency-token", header);
+        }
+        async move {
+            let response = request.send().await.expect("execute");
+            let status = response.status();
+            let header = response
+                .headers()
+                .get("loams-consistency-token")
+                .map(|v| v.to_str().expect("ascii").to_string());
+            let body: Value = response.json().await.expect("a JSON body");
+            (status, header, body)
+        }
+    };
+
+    let (status, header, body) = call("INSERT (:N {k: 1})", None).await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{body}");
+    let written = header.expect("the write's token in the header");
+    assert_eq!(body["consistencyToken"], written.as_str(), "{body}");
+
+    // The token read sees the write, and answers the state it read.
+    let (status, header, body) = call("MATCH (n:N) RETURN n.k", Some(&written)).await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{body}");
+    assert_eq!(body["rows"]["rows"][0]["values"][0]["int64"], "1", "{body}");
+    assert_eq!(header.as_deref(), Some(written.as_str()));
+
+    // A token the graph never reaches: the read waits, then is refused.
+    let (stream, offset) = written
+        .strip_prefix("v1:s")
+        .and_then(|rest| rest.split_once("/p0@"))
+        .expect("a graph token");
+    let ahead = format!(
+        "v1:s{stream}/p0@{}",
+        offset.parse::<u64>().expect("an offset") + 50
+    );
+    let started = std::time::Instant::now();
+    let (status, _, body) = call("MATCH (n:N) RETURN n.k", Some(&ahead)).await;
+    assert_eq!(status, reqwest::StatusCode::SERVICE_UNAVAILABLE, "{body}");
+    assert_eq!(reason(&body), "consistency_wait_timeout");
+    assert!(started.elapsed() >= Duration::from_millis(200));
+
+    let (status, _, body) = call("MATCH (n:N) RETURN n.k", Some("not-a-token")).await;
+    assert_eq!(status, reqwest::StatusCode::BAD_REQUEST, "{body}");
+    assert_eq!(reason(&body), "invalid_argument");
     running.server.shutdown().await.expect("shutdown");
 }

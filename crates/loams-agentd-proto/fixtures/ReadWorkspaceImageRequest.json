@@ -1,0 +1,7 @@
+{
+  "chatId": "chat-1",
+  "expectedCheckoutId": "checkout-1",
+  "expectedContentHash": null,
+  "offset": 0,
+  "path": "docs/shot.png"
+}

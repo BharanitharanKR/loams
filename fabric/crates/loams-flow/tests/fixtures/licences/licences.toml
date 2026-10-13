@@ -1,0 +1,57 @@
+# A gate input with one stanza of each CN2 Task 3 kind, for the licence-gate tests
+# (tests/licence_gate.rs) and for the `--self-test` modes of
+# scripts/connectors/image_licences.py and crate_licences.py. The digests are
+# placeholders: this file is a fixture, not the pinned estate (CN2 Task 0 pins that in
+# connectors/licences.toml).
+
+[deny]
+ids = [
+  "AGPL-3.0-only",
+  "AGPL-3.0-or-later",
+  "BUSL-1.1",
+  "SSPL-1.0",
+  "Elastic-2.0",
+  "NOASSERTION",
+  "unknown",
+]
+
+[components.kafka]
+name = "Apache Kafka"
+spdx = "Apache-2.0"
+kind = "runtime"
+used_by = ["kafka"]
+source = "https://github.com/apache/kafka"
+
+# A ci-service carrying a refused id: allowed, because it runs only in CI (OR-3, D60).
+[components.redpanda]
+name = "Redpanda"
+spdx = "BUSL-1.1"
+kind = "ci-service"
+image = "docker.redpanda.com/redpandadata/redpanda"
+digest = "sha256:0000000000000000000000000000000000000000000000000000000000000001"
+reason = "Kafka-protocol conformance for the redpanda manifest; BSL, so never shipped (OR-3)"
+profiles = ["connectors-ci-only"]
+used_by = ["redpanda"]
+source = "https://github.com/redpanda-data/redpanda"
+
+# A ci-service under a vendor EULA rather than an SPDX id.
+[components.oracle-database-free]
+name = "Oracle Database Free"
+spdx = "LicenseRef-Oracle-EULA"
+kind = "ci-service"
+image = "container-registry.oracle.com/database/free"
+digest = "sha256:0000000000000000000000000000000000000000000000000000000000000002"
+reason = "The Oracle fallback's suite (OR-3, OR-4)"
+profiles = ["connectors-ci-only"]
+used_by = ["oracle"]
+source = "https://container-registry.oracle.com"
+
+# A user-supplied driver: the operator mounts it; Loams never ships it (CN1 Ruling 8).
+[components.ojdbc]
+name = "Oracle JDBC driver"
+spdx = "LicenseRef-Oracle-FUTC"
+kind = "user-supplied"
+driver = "ojdbc*.jar"
+mount = "/opt/loams-connect/drivers/oracle"
+used_by = ["oracle"]
+source = "https://www.oracle.com/database/technologies/appdev/jdbc-downloads.html"

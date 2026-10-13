@@ -8,7 +8,7 @@ header `loams-consistency-token`. On this SDK neither path delivers:
 
 * no generated message has a `consistency_token` field, so `record_consistency`
   finds nothing to read; and
-* `connect-python==0.9.0` exposes only `execute_unary` / `execute_server_stream`,
+* `connectrpc==0.12.1` exposes only `execute_unary` / `execute_server_stream`,
   which hand back the message and drop the response headers, so the header
   cannot be read either -- there is no `call_unary` to ask.
 
@@ -19,7 +19,7 @@ read-your-writes nor an error. The Rust SDK reads the header
 rather than a missing feature.
 
 `test_a_connectrpc_upgrade_that_exposes_headers_should_prompt_the_fix` fails the
-moment connect-python grows a call that returns response headers, which is the
+moment connectrpc grows a call that returns response headers, which is the
 signal to read the token and make the flag do what it says.
 """
 
@@ -166,15 +166,15 @@ def test_no_generated_message_carries_a_consistency_token() -> None:
 def test_a_connectrpc_upgrade_that_exposes_headers_should_prompt_the_fix() -> None:
     """The dependency limit, asserted so it cannot stop being true quietly.
 
-    connect-python 0.9.0 gives no way to read response headers, which is why the
+    connectrpc 0.12.1 gives no way to read response headers, which is why the
     store can never fill: the header is the only place a token actually arrives.
-    If this ever fails, connect-python can hand back headers, and the fix is to
+    If this ever fails, connectrpc can hand back headers, and the fix is to
     read `loams-consistency-token` off them in `record_consistency` rather than
     to keep documenting the gap.
     """
     header_capable = [name for name in dir(ConnectClient) if name in ("call_unary", "call_server_stream")]
     assert header_capable == [], (
-        f"connect-python now exposes {header_capable}, which return response "
+        f"connectrpc now exposes {header_capable}, which return response "
         "headers. `record_consistency` should read `loams-consistency-token` from "
         "them so `session_consistency=True` stops being inert -- see the note on "
         "`Loams(session_consistency=...)`."

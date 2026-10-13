@@ -1,0 +1,10 @@
+{
+  "buildSha": "abc123",
+  "features": [],
+  "mode": "service",
+  "pid": 41234,
+  "protocol": 1,
+  "role": "owner",
+  "startedAtMs": 1791797400000,
+  "version": "0.2.1"
+}

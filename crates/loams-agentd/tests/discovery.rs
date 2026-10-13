@@ -196,6 +196,7 @@ fn stale_discovery_is_ignored() {
         port: dead_port,
         started_at_ms: 1,
         mode: DaemonMode::Service,
+        connect_port: None,
     };
     std::fs::write(
         home.file("agentd.json"),
@@ -212,4 +213,93 @@ fn stale_discovery_is_ignored() {
     assert_eq!(daemon.discovery.mode, DaemonMode::Child);
     assert_eq!(daemon.hello(AGENTD_PROTOCOL).unwrap().pid, daemon.pid);
     assert_eq!(daemon.stop().code(), Some(0));
+}
+
+/// One HTTP/1.1 Connect unary call (JSON) to `127.0.0.1:port`, as raw bytes
+/// so every header is under the test's control. Answers the status and body.
+fn connect_post(port: u16, path: &str, headers: &[(&str, &str)]) -> (u16, serde_json::Value) {
+    use std::io::{Read, Write};
+    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    stream
+        .set_read_timeout(Some(std::time::Duration::from_secs(30)))
+        .unwrap();
+    let mut request = format!(
+        "POST {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\n\
+         Content-Length: 2\r\nConnection: close\r\n"
+    );
+    for (name, value) in headers {
+        request.push_str(&format!("{name}: {value}\r\n"));
+    }
+    request.push_str("\r\n{}");
+    stream.write_all(request.as_bytes()).unwrap();
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response).unwrap();
+    let response = String::from_utf8_lossy(&response).into_owned();
+    let status = response
+        .split_whitespace()
+        .nth(1)
+        .and_then(|code| code.parse().ok())
+        .unwrap();
+    let body = response.split("\r\n\r\n").nth(1).unwrap_or_default();
+    // A chunked body: keep the JSON object between the chunk sizes.
+    let json = body
+        .find('{')
+        .and_then(|start| body.rfind('}').map(|end| &body[start..=end]))
+        .unwrap_or("null");
+    (
+        status,
+        serde_json::from_str(json).unwrap_or(serde_json::Value::Null),
+    )
+}
+
+/// SD1 Task 5: `agentd.json` names the `loams.agentd.v1` listener, which
+/// serves the owner token only, refuses an `Origin`, and reports the
+/// `studio.v1` feature, as `Hello` does.
+#[test]
+fn discovery_has_connect_port() {
+    let home = Home::new(CHILD);
+    let daemon = Daemon::start(&home, &["--child"]);
+    let connect_port = daemon
+        .discovery
+        .connect_port
+        .expect("agentd.json names the Connect port");
+    assert_ne!(connect_port, daemon.discovery.port);
+
+    const GET_HOST: &str = "/loams.agentd.v1.StudioService/GetHost";
+    let bearer = format!("Bearer {}", daemon.token);
+    let (status, body) = connect_post(connect_port, GET_HOST, &[("Authorization", &bearer)]);
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["host"]["pid"], daemon.pid);
+    assert!(
+        body["host"]["features"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|feature| feature == "studio.v1"),
+        "{body}"
+    );
+    let (status, _) = connect_post(connect_port, GET_HOST, &[]);
+    assert_eq!(status, 401);
+    let (status, _) = connect_post(
+        connect_port,
+        GET_HOST,
+        &[
+            ("Authorization", &bearer),
+            ("Origin", "https://evil.example"),
+        ],
+    );
+    assert_eq!(status, 403);
+    assert!(
+        daemon
+            .hello(AGENTD_PROTOCOL)
+            .unwrap()
+            .features
+            .contains(&"studio.v1".to_owned())
+    );
+
+    assert_eq!(daemon.stop().code(), Some(0));
+    assert!(
+        std::net::TcpStream::connect(("127.0.0.1", connect_port)).is_err(),
+        "the Connect listener closes with the daemon"
+    );
 }

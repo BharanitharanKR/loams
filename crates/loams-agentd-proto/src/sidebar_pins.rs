@@ -1,5 +1,6 @@
 //! Per-pin intents and dense, collision-free hexadecimal ordering keys.
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 pub const MAX_PIN_ORDER_KEY_BYTES: usize = 8192;
 const NONCE_BYTES: usize = 149; // Maximum wire HLC: 13 + 1 + 6 + 1 + 128.
@@ -65,7 +66,7 @@ pub fn pin_order_key_between(
     Err("Pin ordering key is too long")
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "action", rename_all = "camelCase")]
 pub enum SidebarPinChange {
     #[serde(rename_all = "camelCase")]
@@ -131,7 +132,7 @@ impl SidebarPinChange {
 }
 
 /// Section intents share the pin queue so moves cannot overtake one another.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "action", rename_all = "camelCase")]
 pub enum SidebarSectionChange {
     Create {

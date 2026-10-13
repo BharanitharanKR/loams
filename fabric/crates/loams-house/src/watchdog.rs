@@ -50,7 +50,9 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
 use crate::errors::{ChError, HouseError};
-use crate::sandbox::{self, FORWARDER_PORT, FORWARDER_SOCKET_FD, SandboxMode, WorkerCgroups};
+use crate::sandbox::{
+    self, FORWARDER_PORT, FORWARDER_SOCKET_FD, Forward, ForwardTarget, SandboxMode, WorkerCgroups,
+};
 
 /// Why a worker stopped: the `reason` label of
 /// `loams_house_worker_kills_total{reason}` (HS1 Shared contracts).
@@ -157,6 +159,11 @@ pub trait Launcher: Send + Sync + fmt::Debug {
     /// Starts worker `id` and returns the front's end of its socket. The worker is
     /// not ready until it sends `Ready`; the pool waits for that.
     fn launch(&self, id: &str) -> Result<Launched, HouseError>;
+
+    /// Worker `id` was bound to `namespace`. A launcher whose workers read the
+    /// bucket through `house-cache` passes it on, so the worker's reads are
+    /// scoped to that namespace (HS1 Task 9).
+    fn bound(&self, _id: &str, _namespace: &str) {}
 }
 
 /// A started worker.
@@ -356,8 +363,9 @@ pub struct ProcessLauncher {
     memory_limit: Option<u64>,
     s3_endpoint: Option<String>,
     sandbox: SandboxMode,
-    forwarder: Option<std::net::SocketAddr>,
+    forwarder: Option<Forward>,
     cgroups: Option<WorkerCgroups>,
+    open_acl: bool,
 }
 
 impl ProcessLauncher {
@@ -377,6 +385,7 @@ impl ProcessLauncher {
             sandbox,
             forwarder: None,
             cgroups: None,
+            open_acl: false,
         }
     }
 
@@ -414,7 +423,18 @@ impl ProcessLauncher {
     /// (`http://127.0.0.1:FORWARDER_PORT/`); in `pods` and `none`, to `upstream`
     /// directly. Replaces any [`ProcessLauncher::with_s3_endpoint`].
     pub fn with_forwarder(mut self, upstream: std::net::SocketAddr) -> Self {
-        self.forwarder = Some(upstream);
+        self.forwarder = Some(Forward::Relay(upstream));
+        self
+    }
+
+    /// Where a worker's bucket reads go: `target`, a server in the front's own
+    /// process (`house-cache`, HS1 Task 9) that knows each connection's worker.
+    /// In `netns`, through the worker's forwarder channel; otherwise through a
+    /// loopback endpoint `target` opens for that worker. The pool tells it which
+    /// namespace each worker is bound to ([`Launcher::bound`]). Replaces any
+    /// [`ProcessLauncher::with_s3_endpoint`].
+    pub fn with_forward_target(mut self, target: Arc<dyn ForwardTarget>) -> Self {
+        self.forwarder = Some(Forward::Target(target));
         self
     }
 
@@ -431,15 +451,53 @@ impl ProcessLauncher {
         self
     }
 
-    /// The loopback endpoint each worker's `READ ON S3` grant names.
+    /// The loopback endpoint each worker's read views name (no grant names it:
+    /// HS1 R-ACL.1).
     pub fn with_s3_endpoint(mut self, endpoint: impl Into<String>) -> Self {
         self.s3_endpoint = Some(endpoint.into());
         self
     }
 
+    /// Test builds only: workers start with chDB's own all-powerful `default`
+    /// and no settings profile (`--test-open-acl`, HS1 R-ACL.1), so a test can
+    /// show that the engine's access control is what refuses a statement, or test
+    /// the layers behind it (`house-cache`, the sandbox) on their own.
+    #[cfg(feature = "test-hooks")]
+    pub fn with_open_acl(mut self) -> Self {
+        self.open_acl = true;
+        self
+    }
+
     /// The command line of worker `id`, without the program name. Never a
     /// credential: the grammar is `loams_house_worker::WorkerArgs`.
+    ///
+    /// It has no side effect: an unsealed worker whose reads go to a
+    /// [`ForwardTarget`] gets its endpoint only when [`Launcher::launch`] opens
+    /// it, so `--s3-endpoint` is absent here.
     pub fn args(&self, id: &str) -> Vec<String> {
+        self.args_with(id, self.fixed_endpoint())
+    }
+
+    /// The bucket endpoint every worker is given, when it does not depend on
+    /// the worker (`--s3-endpoint`).
+    fn fixed_endpoint(&self) -> Option<String> {
+        match (&self.forwarder, self.sandbox) {
+            (Some(_), SandboxMode::Netns) => Some(format!("http://127.0.0.1:{FORWARDER_PORT}/")),
+            (Some(Forward::Relay(upstream)), _) => Some(format!("http://{upstream}/")),
+            (Some(Forward::Target(_)), _) => None,
+            (None, _) => self.s3_endpoint.clone(),
+        }
+    }
+
+    /// The target an unsealed worker's private endpoint is opened on, if any.
+    fn endpoint_target(&self) -> Option<&Arc<dyn ForwardTarget>> {
+        match (&self.forwarder, self.sandbox) {
+            (Some(Forward::Target(target)), mode) if mode != SandboxMode::Netns => Some(target),
+            _ => None,
+        }
+    }
+
+    fn args_with(&self, id: &str, endpoint: Option<String>) -> Vec<String> {
         let mut args = vec![
             "--tmp-dir".to_string(),
             self.tmp_root.join(id).display().to_string(),
@@ -450,11 +508,6 @@ impl ProcessLauncher {
             args.push("--memory-limit".to_string());
             args.push(bytes.to_string());
         }
-        let endpoint = match (self.forwarder, self.sandbox) {
-            (Some(_), SandboxMode::Netns) => Some(format!("http://127.0.0.1:{FORWARDER_PORT}/")),
-            (Some(upstream), _) => Some(format!("http://{upstream}/")),
-            (None, _) => self.s3_endpoint.clone(),
-        };
         if let Some(endpoint) = endpoint {
             args.push("--s3-endpoint".to_string());
             args.push(endpoint);
@@ -468,6 +521,9 @@ impl ProcessLauncher {
         if let Some(cgroups) = &self.cgroups {
             args.push("--cgroup".to_string());
             args.push(cgroups.dir(id).display().to_string());
+        }
+        if self.open_acl {
+            args.push("--test-open-acl".to_string());
         }
         args
     }
@@ -501,6 +557,12 @@ fn spawn_error(what: &str, err: impl fmt::Display) -> HouseError {
 }
 
 impl Launcher for ProcessLauncher {
+    fn bound(&self, id: &str, namespace: &str) {
+        if let Some(Forward::Target(target)) = &self.forwarder {
+            target.bound(id, namespace);
+        }
+    }
+
     fn launch(&self, id: &str) -> Result<Launched, HouseError> {
         let dir = self.tmp_root.join(id);
         std::fs::create_dir_all(&dir).map_err(|err| spawn_error("its directory", err))?;
@@ -548,7 +610,24 @@ impl Launcher for ProcessLauncher {
 
         let program = cstring(&self.binary.display().to_string())?;
         let mut argv = vec![program];
-        for arg in self.args(id) {
+        // An unsealed worker's private endpoint: released on every path out of
+        // here until its exit is watched.
+        let mut opened = None;
+        let endpoint = match self.endpoint_target() {
+            Some(target) => {
+                let addr = target
+                    .endpoint(id)
+                    .map_err(|err| spawn_error("its bucket endpoint", err))?;
+                opened = Some(EndpointGuard {
+                    target: Arc::clone(target),
+                    id: id.to_string(),
+                    armed: true,
+                });
+                Some(format!("http://{addr}/"))
+            }
+            None => self.fixed_endpoint(),
+        };
+        for arg in self.args_with(id, endpoint) {
             argv.push(cstring(&arg)?);
         }
         // §49 §13.1: workers hold no credentials. Nothing from the front's
@@ -569,12 +648,19 @@ impl Launcher for ProcessLauncher {
         let control = ProcessControl::start(pid, dir, cgroup);
         if let Some((front_end, worker_end)) = forwarder {
             drop(worker_end);
-            let upstream = self
+            let forward = self
                 .forwarder
+                .clone()
                 .ok_or_else(|| spawn_error("the forwarder", "no upstream"))?;
-            if let Err(err) = sandbox::serve_forwarder(front_end, upstream, id) {
+            if let Err(err) = sandbox::serve_forwarder(front_end, forward, id) {
                 control.terminate();
                 return Err(spawn_error("the forwarder thread", err));
+            }
+        } else if let Some(Forward::Target(target)) = &self.forwarder {
+            // No forwarder channel whose end says the worker is gone: its exit does.
+            forget_on_exit(Arc::clone(target), id, control.exit());
+            if let Some(guard) = opened.take() {
+                guard.disarm();
             }
         }
 
@@ -582,6 +668,58 @@ impl Launcher for ProcessLauncher {
             socket: front,
             control,
         })
+    }
+}
+
+/// Releases a worker's private endpoint unless disarmed: a launch that fails
+/// after opening it must not leave its listener behind.
+struct EndpointGuard {
+    target: Arc<dyn ForwardTarget>,
+    id: String,
+    armed: bool,
+}
+
+impl EndpointGuard {
+    fn disarm(mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for EndpointGuard {
+    fn drop(&mut self) {
+        if self.armed {
+            self.target.gone(&self.id);
+        }
+    }
+}
+
+/// Tells `target` that worker `id` is gone once its exit is seen.
+fn forget_on_exit(
+    target: Arc<dyn ForwardTarget>,
+    id: &str,
+    mut exit: watch::Receiver<Option<String>>,
+) {
+    let id = id.to_string();
+    let wait = async move {
+        let _ = exit.wait_for(Option::is_some).await;
+        target.gone(&id);
+    };
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => {
+            handle.spawn(wait);
+        }
+        Err(_) => {
+            let _ = std::thread::Builder::new()
+                .name("house-forget".to_string())
+                .spawn(move || {
+                    if let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                        .enable_time()
+                        .build()
+                    {
+                        runtime.block_on(wait);
+                    }
+                });
+        }
     }
 }
 
@@ -705,6 +843,7 @@ impl InprocWorker {
                 sandbox: SandboxMode::None,
                 forwarder_port: None,
                 cgroup: None,
+                open_acl: false,
             },
         }
     }

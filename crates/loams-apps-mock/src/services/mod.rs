@@ -7,7 +7,7 @@
 
 mod approvals;
 mod devices;
-mod watch;
+pub(crate) mod watch;
 
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};

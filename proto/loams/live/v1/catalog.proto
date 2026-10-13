@@ -5,6 +5,9 @@ syntax = "proto3";
 
 package loams.live.v1;
 
+// `DeploymentState`, `IndexState` and `FunctionInfo` are the admin API's
+// (LV1 plan Task 10): the records store what the API shows.
+import "loams/live/v1/admin.proto";
 import "loams/live/v1/live.proto";
 
 // A table: the value of its catalog record `0x01 ‖ 0x02 ‖ id:u32 BE`. The
@@ -21,6 +24,63 @@ message TableDef {
   // The id the next user index gets; ids are never reused, so the entries
   // of a removed index can never be read as another index's.
   uint32 next_index_id = 5;
+  // The validator every write to the table must match (design §45 §4.1;
+  // LV1 plan Task 8), as the active deployment's schema declares it.
+  // Absent: none.
+  Validator validator = 6;
+  // A stricter validator a deploy is checking the table's documents
+  // against: until that deploy activates or fails, every write must match
+  // it as well as `validator`. Absent: none.
+  EnforcingValidator enforcing = 7;
+}
+
+// A validator being enforced ahead of its deploy (LV1 plan Task 8).
+message EnforcingValidator {
+  Validator validator = 1;
+  // The deployment whose deploy is checking it (16 bytes).
+  bytes deployment = 2;
+}
+
+// A leased, checkpointed scan of one table's documents (LV1 plan Task 8):
+// the value of catalog record `0x01 ‖ 0x07 ‖ table_id:u32 BE ‖ kind:u8`.
+// Every batch is one transaction that reads this record, checks the lease,
+// visits the documents after `checkpoint` and writes the record back.
+message TableJobRecord {
+  // The encoding version; 1 in LV1.
+  uint32 format = 1;
+  TableJobKind kind = 2;
+  uint32 table_id = 3;
+  // The deployment the job works for (16 bytes).
+  bytes deployment = 4;
+  // Who holds the lease, and until when (TSO physical time, ms). Another
+  // owner may take the job over once the lease has expired.
+  string owner = 5;
+  uint64 lease_expires_ms = 6;
+  // The last document key done; empty before the first batch.
+  bytes checkpoint = 7;
+  // Documents visited so far.
+  uint64 scanned = 8;
+  // The scan reached the end of the table.
+  bool done = 9;
+  // What the job found (a validation: the offending documents), at most
+  // 100.
+  repeated JobFinding findings = 10;
+}
+
+enum TableJobKind {
+  TABLE_JOB_KIND_UNSPECIFIED = 0;
+  // A validation scan of a stricter validator (LV1 plan Task 8).
+  TABLE_JOB_KIND_VALIDATE = 1;
+  // The backfill of the table's new indexes (LV1 plan Task 9).
+  TABLE_JOB_KIND_BACKFILL = 2;
+}
+
+// One document a table job found.
+message JobFinding {
+  // The document id, 16 bytes.
+  bytes doc_id = 1;
+  // What is wrong, without values (field paths and types).
+  string detail = 2;
 }
 
 // A user index of a table. `_creationTime` and then `_id` are appended to
@@ -31,6 +91,12 @@ message IndexDef {
   string name = 2;
   // The indexed top-level fields, at most 16.
   repeated string fields = 3;
+  // Where the index is in its life (LV1 plan Task 9). Unspecified: ready
+  // (an index defined before Task 9).
+  IndexState state = 4;
+  // The deployment whose deploy is backfilling it (16 bytes), while
+  // `state` is `INDEX_STATE_BACKFILLING`.
+  bytes deployment = 5;
 }
 
 // The app's own settings: the value of its catalog record `0x01 ‖ 0x05`
@@ -58,8 +124,8 @@ message DeploymentRecord {
   bytes id = 2;
   // SHA-256 of the bundle, 32 bytes.
   bytes bundle_sha256 = 3;
-  // The schema the deployment declares (only additive table creation in
-  // Task 6; validators and index changes in Tasks 8 and 9).
+  // The schema the deployment declares (additive table creation in Task 6,
+  // validators in Task 8, index changes in Task 9).
   Schema schema = 4;
   // The TSO physical time of the deploy's first transaction, in ms.
   uint64 created_at_ms = 5;
@@ -72,24 +138,7 @@ message DeploymentRecord {
   DeploymentState state = 9;
   // Why the deployment failed, when `state` is `DEPLOYMENT_STATE_FAILED`.
   string failure_reason = 10;
-}
-
-// Where a deployment is in its life (design §45 §3.3).
-enum DeploymentState {
-  DEPLOYMENT_STATE_UNSPECIFIED = 0;
-  // Its record is written; its schema is not applied yet.
-  DEPLOYMENT_STATE_PENDING = 1;
-  // A stricter validator scans existing data (LV1 plan Task 8).
-  DEPLOYMENT_STATE_VALIDATING = 2;
-  // A new index is backfilled (LV1 plan Task 9).
-  DEPLOYMENT_STATE_BACKFILLING = 3;
-  // The pointer names it: new calls run its functions.
-  DEPLOYMENT_STATE_ACTIVE = 4;
-  // A later deployment replaced it.
-  DEPLOYMENT_STATE_SUPERSEDED = 5;
-  // It never became active; `failure_reason` says why.
-  DEPLOYMENT_STATE_FAILED = 6;
-  // It is active, but its isolated workers crashed five times within a
-  // minute (design §45 §3.1). Calls are still served.
-  DEPLOYMENT_STATE_DEGRADED = 7;
+  // The functions its bundle exports (LV1 plan Task 10), by path; empty in
+  // a record written before Task 10.
+  repeated FunctionInfo functions = 11;
 }

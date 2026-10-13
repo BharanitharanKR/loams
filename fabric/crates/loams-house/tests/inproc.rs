@@ -22,6 +22,7 @@ fn statement(sql: &str) -> Execute {
         limits: Limits::default(),
         input: None,
         output: Output::Blocks,
+        database: None,
     }
 }
 

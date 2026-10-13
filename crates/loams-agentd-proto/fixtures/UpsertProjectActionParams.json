@@ -1,0 +1,9 @@
+{
+  "action": {
+    "command": "cargo test",
+    "icon": "test",
+    "name": "Test",
+    "runOnWorktreeCreate": false
+  },
+  "spaceId": "space-1"
+}

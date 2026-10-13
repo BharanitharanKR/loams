@@ -3,6 +3,7 @@
 // Nothing here returns or logs the token: the client holds it.
 import type {
 	AgentdBackground,
+	AgentdRepo,
 	AgentdSession,
 	AgentdStatus,
 	IpcResult,
@@ -17,6 +18,35 @@ import {
 import { AgentdError, type DaemonStatus, type HelloReply } from "./types";
 
 const SESSION_ID = /^[A-Za-z0-9._-]{1,128}$/;
+const MAX_PATH = 4096;
+const MAX_URL = 2048;
+
+/** An absolute local path (POSIX or Windows), with no NUL and no control characters. */
+function isRepoPath(p: unknown): p is string {
+	return (
+		typeof p === "string" &&
+		p.length > 0 &&
+		p.length <= MAX_PATH &&
+		!/[\u0000-\u001f]/.test(p) &&
+		(p.startsWith("/") || /^[A-Za-z]:[\\/]/.test(p))
+	);
+}
+
+/**
+ * A remote git URL `CloneRepo` may take: https, ssh, or scp-like `user@host:path`.
+ * Never `file:`, `ext::` (git's command transport) or anything starting with `-`.
+ */
+export function isCloneUrl(u: unknown): u is string {
+	if (typeof u !== "string" || u.length > MAX_URL || /\s/.test(u) || u.startsWith("-"))
+		return false;
+	if (/^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[A-Za-z0-9._~/-]+$/.test(u)) return true;
+	try {
+		const url = new URL(u);
+		return (url.protocol === "https:" || url.protocol === "ssh:") && url.hostname !== "";
+	} catch {
+		return false;
+	}
+}
 const DRAIN_TIMEOUT_MS = 20_000;
 
 export interface AgentdServiceDeps {
@@ -138,6 +168,42 @@ export class AgentdService {
 		try {
 			const r = await c.call("AttachSession", { sessionId });
 			return { ok: true, value: { route: `/agent/${encodeURIComponent(r.sessionId)}` } };
+		} catch (e) {
+			return errorResult(e);
+		}
+	}
+
+	/** Studio's projects (§53 §5.2): the repositories the daemon knows (`ListRepos`). */
+	async repos(): Promise<IpcResult<AgentdRepo[]>> {
+		const c = this.#client;
+		if (!c) return fail("not_running", "Background agents are not running");
+		try {
+			return { ok: true, value: (await c.call("ListRepos", {})).map((r) => ({ ...r })) };
+		} catch (e) {
+			return errorResult(e);
+		}
+	}
+
+	/** Add a local folder the person picked (`AddRepo`). */
+	async addRepo(path: unknown): Promise<IpcResult<AgentdRepo>> {
+		if (!isRepoPath(path)) return fail("bad_params", "Expected an absolute folder path");
+		const c = this.#client;
+		if (!c) return fail("not_running", "Background agents are not running");
+		try {
+			return { ok: true, value: { ...(await c.call("AddRepo", { path })) } };
+		} catch (e) {
+			return errorResult(e);
+		}
+	}
+
+	/** Clone a remote repository on this machine (`CloneRepo`). */
+	async cloneRepo(url: unknown): Promise<IpcResult<AgentdRepo>> {
+		if (!isCloneUrl(url))
+			return fail("invalid_url", "Expected an https, ssh or user@host:path git URL");
+		const c = this.#client;
+		if (!c) return fail("not_running", "Background agents are not running");
+		try {
+			return { ok: true, value: { ...(await c.call("CloneRepo", { url })) } };
 		} catch (e) {
 			return errorResult(e);
 		}
