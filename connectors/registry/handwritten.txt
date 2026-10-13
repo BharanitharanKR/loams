@@ -19,9 +19,11 @@ jdbc
 kafka
 kinesis
 mysql
+opensearch
 opentelemetry
 parquet
 postgresql
+qdrant
 redis
 redis-streams
 redpanda
