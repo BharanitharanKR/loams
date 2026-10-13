@@ -92,6 +92,8 @@ export async function startDesktop(
     patches: [parsePatch(desktopYml)],
     extraModules: desktopModules,
     extraManifests: desktopManifests,
+    // Studio is the desktop's default mode and needs no instance flag (D902, Q801).
+    modeFlags: {},
   });
   await wireDeepLinks(api);
   return handle;

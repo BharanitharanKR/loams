@@ -55,6 +55,11 @@ export interface SlotMeta {
   id?: string;
   /** An icon name the shell knows ("postgres", "live"); unknown names get a plain dot. */
   icon?: string;
+  /**
+   * The console mode a nav entry shows in (§53 §4.1, D901), for a plugin in both
+   * modes. Without it the entry shows in each of its plugin's modes.
+   */
+  mode?: 'console' | 'studio';
 }
 
 export interface SlotSpec<N extends SlotName> {

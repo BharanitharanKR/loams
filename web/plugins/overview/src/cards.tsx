@@ -83,6 +83,12 @@ function Gate<T>({
   if (!where.known || load.state === 'loading') {
     return { tag: { tone: 'progress', label: 'Loading' }, body: <Muted>Reading {what}…</Muted> };
   }
+  if (load.state === 'error' && load.notServed) {
+    return {
+      tag: { tone: 'planned', label: 'Not on this server' },
+      body: <Muted>This server does not serve {what}.</Muted>,
+    };
+  }
   if (load.state === 'error') {
     return {
       tag: { tone: 'failed', label: 'Not reachable' },
@@ -181,7 +187,23 @@ export function DataCard({ where, load }: { where: Where; load: Load<DataSummary
   );
 }
 
-export function DurableCard({ where, load }: { where: Where; load: Load<DurableSummary> }) {
+export function DurableCard({
+  where,
+  load,
+  local = true,
+}: {
+  where: Where;
+  load: Load<DurableSummary>;
+  /** False when the active server is not this computer: durable runs on the local engine only. */
+  local?: boolean;
+}) {
+  if (!local) {
+    return (
+      <OverviewCard id="durable" title="Durable" href="/durable" tag={LOCAL_ONLY}>
+        <LocalOnly />
+      </OverviewCard>
+    );
+  }
   const g = Gate({
     where,
     load,

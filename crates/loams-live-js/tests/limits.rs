@@ -129,9 +129,22 @@ async fn busy_loop_times_out(store: TestStore) {
 }
 live_test!(busy_loop_times_out);
 
+/// The CPU limit of the allocation bombs: far above what reaching the
+/// memory limit takes, so a call that finishes under it stopped at the memory
+/// limit and not at the CPU one, even on a loaded runner with an isolated
+/// worker (`CPU` itself left too little margin there).
+const BOMB_CPU: Duration = Duration::from_secs(3);
+
 async fn allocation_bomb_hits_memory_limit(store: TestStore) {
     let r = runner(&store).await;
-    let bundle = load_with(HOGS, config()).await;
+    let bundle = load_with(
+        HOGS,
+        JsConfig {
+            cpu_limit: BOMB_CPU,
+            ..config()
+        },
+    )
+    .await;
     match query(&r, &function(&bundle, "hogs:bomb"), unit()).await {
         Err(e @ LiveError::FunctionOutOfMemory { .. }) => {
             assert_eq!(e.code(), pb::ErrorCode::ERROR_CODE_FUNCTION_OUT_OF_MEMORY);
@@ -148,7 +161,7 @@ async fn allocation_bomb_hits_memory_limit(store: TestStore) {
             Err(LiveError::FunctionOutOfMemory { function, .. }) => assert_eq!(function, path),
             other => panic!("{path}: out of memory, not {other:?}"),
         }
-        assert!(started.elapsed() < CPU, "{path}: stopped at the limit");
+        assert!(started.elapsed() < BOMB_CPU, "{path}: stopped at the limit");
     }
     match mutate(&r, &function(&bundle, "hogs:bombThenWrite"), unit()).await {
         Err(LiveError::FunctionOutOfMemory { .. }) => {}

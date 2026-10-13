@@ -236,9 +236,17 @@ mod tests {
         let keyed: Vec<&str> = every_binding()
             .into_iter()
             .filter(|binding| binding.keyed)
-            .map(|binding| binding.name)
+            .map(|binding| binding.rpc)
             .collect();
-        assert_eq!(keyed, vec!["mutate"]);
+        // `KeyService/CreateKey` (API2 Task 7) is the one admin create that is
+        // not by name, so it is the one that takes a key.
+        assert_eq!(
+            keyed,
+            vec![
+                "loams.admin.v1.KeyService/CreateKey",
+                "loams.live.v1.LiveService/Mutate",
+            ]
+        );
     }
 
     /// Every binding's `rpc` is the path curl and grpcurl use, and it is what
@@ -255,24 +263,44 @@ mod tests {
         }
     }
 
-    /// Only `LiveAdminService.ListDeployments` (LV1 Task 10) declares paging,
-    /// and the table says so: a row that claimed pagination for an RPC that
-    /// does not read a page token would send one anyway.
+    /// Only `LiveAdminService.ListDeployments` (LV1 Task 10) and the lists of
+    /// `loams.admin.v1` (API2 Task 7) declare paging, and the table says so: a
+    /// row that claimed pagination for an RPC that does not read a page token
+    /// would send one anyway. (The name predates the admin lists.)
     #[test]
     fn only_list_deployments_is_paged_and_that_is_visible() {
-        let paged: Vec<&str> = every_binding()
+        let mut paged: Vec<&str> = every_binding()
             .into_iter()
             .filter(|binding| binding.pagination.is_some())
             .map(|binding| binding.rpc)
             .collect();
-        assert_eq!(paged, ["loams.live.v1.LiveAdminService/ListDeployments"]);
+        paged.sort_unstable();
+        assert_eq!(
+            paged,
+            [
+                "loams.admin.v1.AgentService/ListAgentTokens",
+                "loams.admin.v1.AgentService/ListAgents",
+                "loams.admin.v1.AgentService/ListServiceAccounts",
+                "loams.admin.v1.AgentService/ListTrustPolicies",
+                "loams.admin.v1.AuditService/ListAuditEvents",
+                "loams.admin.v1.KeyService/ListKeys",
+                "loams.admin.v1.OrgService/ListInvitations",
+                "loams.admin.v1.OrgService/ListMembers",
+                "loams.admin.v1.OrgService/ListTeams",
+                "loams.admin.v1.ProjectService/ListAccess",
+                "loams.admin.v1.ProjectService/ListEnvironments",
+                "loams.admin.v1.ProjectService/ListProjects",
+                "loams.live.v1.LiveAdminService/ListDeployments",
+            ]
+        );
     }
 
-    /// Only `Watch` and `TailLogs` stream server messages.
+    /// Only the watches (`Watch`, `WatchAuditEvents`) and `TailLogs` stream
+    /// server messages.
     #[test]
     fn only_watch_and_tail_logs_are_server_streams() {
         for binding in every_binding() {
-            let expected = if binding.method == "Watch" || binding.method == "TailLogs" {
+            let expected = if ["Watch", "WatchAuditEvents", "TailLogs"].contains(&binding.method) {
                 facade::Streaming::Server
             } else {
                 facade::Streaming::Unary
@@ -307,11 +335,78 @@ mod tests {
             LIVE_SERVICE_MODIFY_QUERY_SET_SPEC, LIVE_SERVICE_MUTATE_SPEC, LIVE_SERVICE_QUERY_SPEC,
             LIVE_SERVICE_WATCH_SPEC,
         };
+        use loams_proto::loams::admin::v1::{
+            AGENT_SERVICE_CREATE_AGENT_SPEC, AGENT_SERVICE_CREATE_SERVICE_ACCOUNT_SPEC,
+            AGENT_SERVICE_CREATE_TRUST_POLICY_SPEC, AGENT_SERVICE_GET_AGENT_SPEC,
+            AGENT_SERVICE_LIST_AGENT_TOKENS_SPEC, AGENT_SERVICE_LIST_AGENTS_SPEC,
+            AGENT_SERVICE_LIST_SERVICE_ACCOUNTS_SPEC, AGENT_SERVICE_LIST_TRUST_POLICIES_SPEC,
+            AGENT_SERVICE_RESUME_AGENT_SPEC, AGENT_SERVICE_SUSPEND_AGENT_SPEC,
+            AGENT_SERVICE_UPDATE_AGENT_SPEC, AUDIT_SERVICE_LIST_AUDIT_EVENTS_SPEC,
+            AUDIT_SERVICE_WATCH_AUDIT_EVENTS_SPEC, KEY_SERVICE_CREATE_KEY_SPEC,
+            KEY_SERVICE_LIST_KEYS_SPEC, KEY_SERVICE_REVOKE_KEY_SPEC, KEY_SERVICE_REVOKE_TOKEN_SPEC,
+            ORG_SERVICE_ADD_TEAM_MEMBER_SPEC, ORG_SERVICE_CREATE_INVITATION_SPEC,
+            ORG_SERVICE_CREATE_TEAM_SPEC, ORG_SERVICE_GET_ORG_SPEC, ORG_SERVICE_GET_TEAM_SPEC,
+            ORG_SERVICE_LIST_INVITATIONS_SPEC, ORG_SERVICE_LIST_MEMBERS_SPEC,
+            ORG_SERVICE_LIST_TEAMS_SPEC, ORG_SERVICE_REMOVE_MEMBER_SPEC,
+            ORG_SERVICE_UPDATE_ORG_SPEC, PROJECT_SERVICE_CREATE_ENVIRONMENT_SPEC,
+            PROJECT_SERVICE_CREATE_PROJECT_SPEC, PROJECT_SERVICE_GET_ENVIRONMENT_ACTIVITY_SPEC,
+            PROJECT_SERVICE_GET_ENVIRONMENT_SPEC, PROJECT_SERVICE_GET_PROJECT_SPEC,
+            PROJECT_SERVICE_GRANT_ACCESS_SPEC, PROJECT_SERVICE_LIST_ACCESS_SPEC,
+            PROJECT_SERVICE_LIST_ENVIRONMENTS_SPEC, PROJECT_SERVICE_LIST_PROJECTS_SPEC,
+        };
+        use loams_proto::loams::auth::v1::{
+            AUTH_SERVICE_COMPLETE_SETUP_SPEC, AUTH_SERVICE_CREATE_SESSION_SPEC,
+            AUTH_SERVICE_DECIDE_CONSENT_SPEC, AUTH_SERVICE_DELETE_SESSION_SPEC,
+            AUTH_SERVICE_GET_SESSION_SPEC, AUTH_SERVICE_LIST_PROVIDERS_SPEC,
+        };
         use loams_proto::loams::instance::v1::{
             INSTANCE_SERVICE_GET_INSTANCE_SPEC, INSTANCE_SERVICE_WHO_AM_I_SPEC,
         };
 
         let generated = [
+            // The console API (API2 Tasks 6 and 7).
+            AUTH_SERVICE_LIST_PROVIDERS_SPEC,
+            AUTH_SERVICE_COMPLETE_SETUP_SPEC,
+            AUTH_SERVICE_GET_SESSION_SPEC,
+            AUTH_SERVICE_CREATE_SESSION_SPEC,
+            AUTH_SERVICE_DELETE_SESSION_SPEC,
+            AUTH_SERVICE_DECIDE_CONSENT_SPEC,
+            ORG_SERVICE_GET_ORG_SPEC,
+            ORG_SERVICE_UPDATE_ORG_SPEC,
+            ORG_SERVICE_LIST_MEMBERS_SPEC,
+            ORG_SERVICE_REMOVE_MEMBER_SPEC,
+            ORG_SERVICE_LIST_INVITATIONS_SPEC,
+            ORG_SERVICE_CREATE_INVITATION_SPEC,
+            ORG_SERVICE_LIST_TEAMS_SPEC,
+            ORG_SERVICE_CREATE_TEAM_SPEC,
+            ORG_SERVICE_GET_TEAM_SPEC,
+            ORG_SERVICE_ADD_TEAM_MEMBER_SPEC,
+            PROJECT_SERVICE_LIST_PROJECTS_SPEC,
+            PROJECT_SERVICE_CREATE_PROJECT_SPEC,
+            PROJECT_SERVICE_GET_PROJECT_SPEC,
+            PROJECT_SERVICE_LIST_ACCESS_SPEC,
+            PROJECT_SERVICE_GRANT_ACCESS_SPEC,
+            PROJECT_SERVICE_LIST_ENVIRONMENTS_SPEC,
+            PROJECT_SERVICE_CREATE_ENVIRONMENT_SPEC,
+            PROJECT_SERVICE_GET_ENVIRONMENT_SPEC,
+            PROJECT_SERVICE_GET_ENVIRONMENT_ACTIVITY_SPEC,
+            AGENT_SERVICE_LIST_AGENTS_SPEC,
+            AGENT_SERVICE_CREATE_AGENT_SPEC,
+            AGENT_SERVICE_GET_AGENT_SPEC,
+            AGENT_SERVICE_UPDATE_AGENT_SPEC,
+            AGENT_SERVICE_SUSPEND_AGENT_SPEC,
+            AGENT_SERVICE_RESUME_AGENT_SPEC,
+            AGENT_SERVICE_LIST_AGENT_TOKENS_SPEC,
+            AGENT_SERVICE_LIST_TRUST_POLICIES_SPEC,
+            AGENT_SERVICE_CREATE_TRUST_POLICY_SPEC,
+            AGENT_SERVICE_LIST_SERVICE_ACCOUNTS_SPEC,
+            AGENT_SERVICE_CREATE_SERVICE_ACCOUNT_SPEC,
+            KEY_SERVICE_LIST_KEYS_SPEC,
+            KEY_SERVICE_CREATE_KEY_SPEC,
+            KEY_SERVICE_REVOKE_KEY_SPEC,
+            KEY_SERVICE_REVOKE_TOKEN_SPEC,
+            AUDIT_SERVICE_LIST_AUDIT_EVENTS_SPEC,
+            AUDIT_SERVICE_WATCH_AUDIT_EVENTS_SPEC,
             INSTANCE_SERVICE_GET_INSTANCE_SPEC,
             INSTANCE_SERVICE_WHO_AM_I_SPEC,
             LIVE_SERVICE_WATCH_SPEC,

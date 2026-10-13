@@ -1,7 +1,8 @@
 //! Generates the app protos' messages, service traits and clients from
 //! `proto/loams/{instance,devices,approvals,operations,notifications,errors}/v1`
-//! and `loams.graph.v1` (with the `loams.options.v1` it imports; GR1 Task 7)
-//! at the workspace root (design §37 §8.2), with connect-rust's code
+//! and `loams.graph.v1` (with the `loams.options.v1` it imports; GR1 Task 7),
+//! plus the console API, `loams.auth.v1` and `loams.admin.v1` (API2 Tasks 6
+//! and 7), at the workspace root (design §37 §8.2), with connect-rust's code
 //! generator and the system `protoc`.
 
 fn main() {
@@ -20,6 +21,13 @@ fn main() {
         "notifications/v1/notifications",
         "options/v1/options",
         "graph/v1/graph",
+        "admin/v1/common",
+        "admin/v1/org",
+        "admin/v1/project",
+        "admin/v1/agent",
+        "admin/v1/key",
+        "admin/v1/audit",
+        "auth/v1/auth",
     ]
     .iter()
     .map(|name| format!("{root}/loams/{name}.proto"))

@@ -51,4 +51,8 @@ plugins:
       - package=loams.operations.v1=loams.operations.v1.operations_pb2
       - package=loams.notifications.v1=loams.notifications.v1.notifications_pb2
       - package=loams.live.v1=loams.live.v1.live_pb2
+      - package=loams.auth.v1=loams.auth.v1.auth_pb2
+      # Six files: the facade imports each message from its own file's
+      # module, next to this one.
+      - package=loams.admin.v1=loams.admin.v1.org_pb2
 clean: true

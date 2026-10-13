@@ -51,6 +51,16 @@ const FILES: &[&str] = &[
     "loams/repos/v1/workspaces.proto",
     "loams/repos/v1/objects.proto",
     "loams/repos/v1/env.proto",
+    // The console API (API2 Tasks 6 and 7): the types and clients the Rust
+    // SDK's facade binds. The server registers neither package yet; its
+    // `connect_admin.rs` and `connect_auth.rs` are the tasks' server half.
+    "loams/admin/v1/common.proto",
+    "loams/admin/v1/org.proto",
+    "loams/admin/v1/project.proto",
+    "loams/admin/v1/agent.proto",
+    "loams/admin/v1/key.proto",
+    "loams/admin/v1/audit.proto",
+    "loams/auth/v1/auth.proto",
 ];
 
 fn main() {
@@ -59,7 +69,15 @@ fn main() {
     // compile time would point into whichever worktree compiled it first.
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .expect("cargo sets CARGO_MANIFEST_DIR for build scripts");
-    let root = format!("{manifest_dir}/../../proto");
+    // `proto/` inside the crate: a symlink to the workspace's `proto/` in this
+    // repository, real files in the published crate. A checkout without symlink
+    // support (Windows with `core.symlinks=false`) falls back to the workspace.
+    let packaged = format!("{manifest_dir}/proto");
+    let root = if std::path::Path::new(&packaged).join("loams").is_dir() {
+        packaged
+    } else {
+        format!("{manifest_dir}/../../proto")
+    };
     let files: Vec<String> = FILES.iter().map(|f| format!("{root}/{f}")).collect();
     for file in &files {
         println!("cargo:rerun-if-changed={file}");

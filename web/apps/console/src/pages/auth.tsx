@@ -161,7 +161,7 @@ export function SetupPage() {
     setError(undefined);
     try {
       const r = await api.POST('/api/v1/setup', { body: form });
-      if (r.data) window.location.assign('/ui/');
+      if (r.data) window.location.assign(import.meta.env.BASE_URL);
       else setError(message(r.error));
     } catch (e) {
       setError(message(e));

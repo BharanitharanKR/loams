@@ -17,10 +17,392 @@ export const PROTO_REV = 'v1';
 import type { MessageInitShape } from '@bufbuild/protobuf';
 import type { DescService } from '@bufbuild/protobuf';
 import type { CallOptions } from '../runtime/call.js';
+import { AgentService, AuditService, KeyService, OrgService, ProjectService } from '@loams/proto/admin';
+import type { AddTeamMemberRequestSchema, AddTeamMemberResponse, CreateAgentRequestSchema, CreateAgentResponse, CreateEnvironmentRequestSchema, CreateEnvironmentResponse, CreateInvitationRequestSchema, CreateInvitationResponse, CreateKeyRequestSchema, CreateKeyResponse, CreateProjectRequestSchema, CreateProjectResponse, CreateServiceAccountRequestSchema, CreateServiceAccountResponse, CreateTeamRequestSchema, CreateTeamResponse, CreateTrustPolicyRequestSchema, CreateTrustPolicyResponse, GetAgentRequestSchema, GetAgentResponse, GetEnvironmentActivityRequestSchema, GetEnvironmentActivityResponse, GetEnvironmentRequestSchema, GetEnvironmentResponse, GetOrgRequestSchema, GetOrgResponse, GetProjectRequestSchema, GetProjectResponse, GetTeamRequestSchema, GetTeamResponse, GrantAccessRequestSchema, GrantAccessResponse, ListAccessRequestSchema, ListAccessResponse, ListAgentTokensRequestSchema, ListAgentTokensResponse, ListAgentsRequestSchema, ListAgentsResponse, ListAuditEventsRequestSchema, ListAuditEventsResponse, ListEnvironmentsRequestSchema, ListEnvironmentsResponse, ListInvitationsRequestSchema, ListInvitationsResponse, ListKeysRequestSchema, ListKeysResponse, ListMembersRequestSchema, ListMembersResponse, ListProjectsRequestSchema, ListProjectsResponse, ListServiceAccountsRequestSchema, ListServiceAccountsResponse, ListTeamsRequestSchema, ListTeamsResponse, ListTrustPoliciesRequestSchema, ListTrustPoliciesResponse, RemoveMemberRequestSchema, RemoveMemberResponse, ResumeAgentRequestSchema, ResumeAgentResponse, RevokeKeyRequestSchema, RevokeKeyResponse, RevokeTokenRequestSchema, RevokeTokenResponse, SuspendAgentRequestSchema, SuspendAgentResponse, UpdateAgentRequestSchema, UpdateAgentResponse, UpdateOrgRequestSchema, UpdateOrgResponse, WatchAuditEventsRequestSchema, WatchAuditEventsResponse } from '@loams/proto/admin';
+import { AuthService } from '@loams/proto/auth';
+import type { CompleteSetupRequestSchema, CompleteSetupResponse, CreateSessionRequestSchema, CreateSessionResponse, DecideConsentRequestSchema, DecideConsentResponse, DeleteSessionRequestSchema, DeleteSessionResponse, GetSessionRequestSchema, GetSessionResponse, ListProvidersRequestSchema, ListProvidersResponse } from '@loams/proto/auth';
 import { InstanceService } from '@loams/proto/instance';
 import type { GetInstanceRequestSchema, GetInstanceResponse, WhoAmIRequestSchema, WhoAmIResponse } from '@loams/proto/instance';
 import { LiveAdminService, LiveService } from '@loams/live/live';
 import type { ActivateDeploymentRequestSchema, ActivateDeploymentResponse, DeployRequestSchema, DeployResponse, GetDeploymentRequestSchema, GetDeploymentResponse, GetIndexStatusRequestSchema, GetIndexStatusResponse, ListDeploymentsRequestSchema, ListDeploymentsResponse, ModifyQuerySetRequestSchema, ModifyQuerySetResponse, MutateRequestSchema, MutateResponse, QueryRequestSchema, QueryResponse, TailLogsRequestSchema, TailLogsResponse, Transition, WatchRequestSchema } from '@loams/live/live';
+/**
+ *  `loams.admin.agents` — Agents, their tokens and trust policies, and service accounts.
+ *
+ *  Wraps `loams.admin.v1.AgentService`.
+ */
+export interface AdminAgentsModule {
+  /** The SDK module, as it appears on `loams.admin.agents`. */
+  readonly module: 'admin.agents';
+  /** The service behind the module. */
+  readonly service: 'loams.admin.v1.AgentService';
+  /** Whether the package's wire contract may still change. */
+  readonly unstable: false;
+  /**
+   *  `loams.admin.v1.AgentService/CreateAgent`, retried: manual.
+   */
+  create(
+    request: MessageInitShape<typeof CreateAgentRequestSchema>,
+    options?: CallOptions,
+  ): Promise<CreateAgentResponse>;
+  /**
+   *  `loams.admin.v1.AgentService/CreateServiceAccount`, retried: manual.
+   */
+  createServiceAccount(
+    request: MessageInitShape<typeof CreateServiceAccountRequestSchema>,
+    options?: CallOptions,
+  ): Promise<CreateServiceAccountResponse>;
+  /**
+   *  `loams.admin.v1.AgentService/CreateTrustPolicy`, retried: manual.
+   */
+  createTrustPolicy(
+    request: MessageInitShape<typeof CreateTrustPolicyRequestSchema>,
+    options?: CallOptions,
+  ): Promise<CreateTrustPolicyResponse>;
+  /**
+   *  `loams.admin.v1.AgentService/GetAgent`, retried: safe.
+   */
+  get(
+    request: MessageInitShape<typeof GetAgentRequestSchema>,
+    options?: CallOptions,
+  ): Promise<GetAgentResponse>;
+  /**
+   *  `loams.admin.v1.AgentService/ListAgents`, retried: safe. AIP-158: page with `agents` and follow `next_page_token` through `loams.paginate`.
+   */
+  list(
+    request: MessageInitShape<typeof ListAgentsRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListAgentsResponse>;
+  /**
+   *  `loams.admin.v1.AgentService/ListServiceAccounts`, retried: safe. AIP-158: page with `service_accounts` and follow `next_page_token` through `loams.paginate`.
+   */
+  listServiceAccounts(
+    request: MessageInitShape<typeof ListServiceAccountsRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListServiceAccountsResponse>;
+  /**
+   *  `loams.admin.v1.AgentService/ListAgentTokens`, retried: safe. AIP-158: page with `tokens` and follow `next_page_token` through `loams.paginate`.
+   */
+  listTokens(
+    request: MessageInitShape<typeof ListAgentTokensRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListAgentTokensResponse>;
+  /**
+   *  `loams.admin.v1.AgentService/ListTrustPolicies`, retried: safe. AIP-158: page with `trust_policies` and follow `next_page_token` through `loams.paginate`.
+   */
+  listTrustPolicies(
+    request: MessageInitShape<typeof ListTrustPoliciesRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListTrustPoliciesResponse>;
+  /**
+   *  `loams.admin.v1.AgentService/ResumeAgent`, retried: safe.
+   */
+  resume(
+    request: MessageInitShape<typeof ResumeAgentRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ResumeAgentResponse>;
+  /**
+   *  `loams.admin.v1.AgentService/SuspendAgent`, retried: safe.
+   */
+  suspend(
+    request: MessageInitShape<typeof SuspendAgentRequestSchema>,
+    options?: CallOptions,
+  ): Promise<SuspendAgentResponse>;
+  /**
+   *  `loams.admin.v1.AgentService/UpdateAgent`, retried: safe.
+   */
+  update(
+    request: MessageInitShape<typeof UpdateAgentRequestSchema>,
+    options?: CallOptions,
+  ): Promise<UpdateAgentResponse>;
+}
+
+/**
+ *  `loams.admin.audit` — The audit log: who did what, to what, and whether it was allowed.
+ *
+ *  Wraps `loams.admin.v1.AuditService`.
+ */
+export interface AdminAuditModule {
+  /** The SDK module, as it appears on `loams.admin.audit`. */
+  readonly module: 'admin.audit';
+  /** The service behind the module. */
+  readonly service: 'loams.admin.v1.AuditService';
+  /** Whether the package's wire contract may still change. */
+  readonly unstable: false;
+  /**
+   *  `loams.admin.v1.AuditService/ListAuditEvents`, retried: safe. AIP-158: page with `events` and follow `next_page_token` through `loams.paginate`.
+   */
+  list(
+    request: MessageInitShape<typeof ListAuditEventsRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListAuditEventsResponse>;
+  /**
+   *  `loams.admin.v1.AuditService/WatchAuditEvents`, retried: safe.
+   */
+  watch(
+    request: MessageInitShape<typeof WatchAuditEventsRequestSchema>,
+    options?: CallOptions,
+  ): AsyncIterable<WatchAuditEventsResponse>;
+}
+
+/**
+ *  `loams.admin.keys` — API keys, and revoking agent tokens.
+ *
+ *  Wraps `loams.admin.v1.KeyService`.
+ */
+export interface AdminKeysModule {
+  /** The SDK module, as it appears on `loams.admin.keys`. */
+  readonly module: 'admin.keys';
+  /** The service behind the module. */
+  readonly service: 'loams.admin.v1.KeyService';
+  /** Whether the package's wire contract may still change. */
+  readonly unstable: false;
+  /**
+   *  `loams.admin.v1.KeyService/CreateKey`, retried: manual.
+   */
+  create(
+    request: MessageInitShape<typeof CreateKeyRequestSchema>,
+    options?: CallOptions,
+  ): Promise<CreateKeyResponse>;
+  /**
+   *  `loams.admin.v1.KeyService/ListKeys`, retried: safe. AIP-158: page with `keys` and follow `next_page_token` through `loams.paginate`.
+   */
+  list(
+    request: MessageInitShape<typeof ListKeysRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListKeysResponse>;
+  /**
+   *  `loams.admin.v1.KeyService/RevokeKey`, retried: safe.
+   */
+  revoke(
+    request: MessageInitShape<typeof RevokeKeyRequestSchema>,
+    options?: CallOptions,
+  ): Promise<RevokeKeyResponse>;
+  /**
+   *  `loams.admin.v1.KeyService/RevokeToken`, retried: safe.
+   */
+  revokeToken(
+    request: MessageInitShape<typeof RevokeTokenRequestSchema>,
+    options?: CallOptions,
+  ): Promise<RevokeTokenResponse>;
+}
+
+/**
+ *  `loams.admin.org` — The org: settings, members, invitations and teams.
+ *
+ *  Wraps `loams.admin.v1.OrgService`.
+ */
+export interface AdminOrgModule {
+  /** The SDK module, as it appears on `loams.admin.org`. */
+  readonly module: 'admin.org';
+  /** The service behind the module. */
+  readonly service: 'loams.admin.v1.OrgService';
+  /** Whether the package's wire contract may still change. */
+  readonly unstable: false;
+  /**
+   *  `loams.admin.v1.OrgService/AddTeamMember`, retried: safe.
+   */
+  addTeamMember(
+    request: MessageInitShape<typeof AddTeamMemberRequestSchema>,
+    options?: CallOptions,
+  ): Promise<AddTeamMemberResponse>;
+  /**
+   *  `loams.admin.v1.OrgService/CreateInvitation`, retried: manual.
+   */
+  createInvitation(
+    request: MessageInitShape<typeof CreateInvitationRequestSchema>,
+    options?: CallOptions,
+  ): Promise<CreateInvitationResponse>;
+  /**
+   *  `loams.admin.v1.OrgService/CreateTeam`, retried: manual.
+   */
+  createTeam(
+    request: MessageInitShape<typeof CreateTeamRequestSchema>,
+    options?: CallOptions,
+  ): Promise<CreateTeamResponse>;
+  /**
+   *  `loams.admin.v1.OrgService/GetOrg`, retried: safe.
+   */
+  get(
+    request: MessageInitShape<typeof GetOrgRequestSchema>,
+    options?: CallOptions,
+  ): Promise<GetOrgResponse>;
+  /**
+   *  `loams.admin.v1.OrgService/GetTeam`, retried: safe.
+   */
+  getTeam(
+    request: MessageInitShape<typeof GetTeamRequestSchema>,
+    options?: CallOptions,
+  ): Promise<GetTeamResponse>;
+  /**
+   *  `loams.admin.v1.OrgService/ListInvitations`, retried: safe. AIP-158: page with `invitations` and follow `next_page_token` through `loams.paginate`.
+   */
+  listInvitations(
+    request: MessageInitShape<typeof ListInvitationsRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListInvitationsResponse>;
+  /**
+   *  `loams.admin.v1.OrgService/ListMembers`, retried: safe. AIP-158: page with `members` and follow `next_page_token` through `loams.paginate`.
+   */
+  listMembers(
+    request: MessageInitShape<typeof ListMembersRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListMembersResponse>;
+  /**
+   *  `loams.admin.v1.OrgService/ListTeams`, retried: safe. AIP-158: page with `teams` and follow `next_page_token` through `loams.paginate`.
+   */
+  listTeams(
+    request: MessageInitShape<typeof ListTeamsRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListTeamsResponse>;
+  /**
+   *  `loams.admin.v1.OrgService/RemoveMember`, retried: safe.
+   */
+  removeMember(
+    request: MessageInitShape<typeof RemoveMemberRequestSchema>,
+    options?: CallOptions,
+  ): Promise<RemoveMemberResponse>;
+  /**
+   *  `loams.admin.v1.OrgService/UpdateOrg`, retried: safe.
+   */
+  update(
+    request: MessageInitShape<typeof UpdateOrgRequestSchema>,
+    options?: CallOptions,
+  ): Promise<UpdateOrgResponse>;
+}
+
+/**
+ *  `loams.admin.projects` — Projects, project access and environments.
+ *
+ *  Wraps `loams.admin.v1.ProjectService`.
+ */
+export interface AdminProjectsModule {
+  /** The SDK module, as it appears on `loams.admin.projects`. */
+  readonly module: 'admin.projects';
+  /** The service behind the module. */
+  readonly service: 'loams.admin.v1.ProjectService';
+  /** Whether the package's wire contract may still change. */
+  readonly unstable: false;
+  /**
+   *  `loams.admin.v1.ProjectService/CreateProject`, retried: manual.
+   */
+  create(
+    request: MessageInitShape<typeof CreateProjectRequestSchema>,
+    options?: CallOptions,
+  ): Promise<CreateProjectResponse>;
+  /**
+   *  `loams.admin.v1.ProjectService/CreateEnvironment`, retried: manual.
+   */
+  createEnvironment(
+    request: MessageInitShape<typeof CreateEnvironmentRequestSchema>,
+    options?: CallOptions,
+  ): Promise<CreateEnvironmentResponse>;
+  /**
+   *  `loams.admin.v1.ProjectService/GetProject`, retried: safe.
+   */
+  get(
+    request: MessageInitShape<typeof GetProjectRequestSchema>,
+    options?: CallOptions,
+  ): Promise<GetProjectResponse>;
+  /**
+   *  `loams.admin.v1.ProjectService/GetEnvironment`, retried: safe.
+   */
+  getEnvironment(
+    request: MessageInitShape<typeof GetEnvironmentRequestSchema>,
+    options?: CallOptions,
+  ): Promise<GetEnvironmentResponse>;
+  /**
+   *  `loams.admin.v1.ProjectService/GetEnvironmentActivity`, retried: safe.
+   */
+  getEnvironmentActivity(
+    request: MessageInitShape<typeof GetEnvironmentActivityRequestSchema>,
+    options?: CallOptions,
+  ): Promise<GetEnvironmentActivityResponse>;
+  /**
+   *  `loams.admin.v1.ProjectService/GrantAccess`, retried: safe.
+   */
+  grantAccess(
+    request: MessageInitShape<typeof GrantAccessRequestSchema>,
+    options?: CallOptions,
+  ): Promise<GrantAccessResponse>;
+  /**
+   *  `loams.admin.v1.ProjectService/ListProjects`, retried: safe. AIP-158: page with `projects` and follow `next_page_token` through `loams.paginate`.
+   */
+  list(
+    request: MessageInitShape<typeof ListProjectsRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListProjectsResponse>;
+  /**
+   *  `loams.admin.v1.ProjectService/ListAccess`, retried: safe. AIP-158: page with `grants` and follow `next_page_token` through `loams.paginate`.
+   */
+  listAccess(
+    request: MessageInitShape<typeof ListAccessRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListAccessResponse>;
+  /**
+   *  `loams.admin.v1.ProjectService/ListEnvironments`, retried: safe. AIP-158: page with `environments` and follow `next_page_token` through `loams.paginate`.
+   */
+  listEnvironments(
+    request: MessageInitShape<typeof ListEnvironmentsRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListEnvironmentsResponse>;
+}
+
+/**
+ *  `loams.auth` — Sign-in providers, first-run setup, sessions and OAuth consent.
+ *
+ *  Wraps `loams.auth.v1.AuthService`.
+ */
+export interface AuthModule {
+  /** The SDK module, as it appears on `loams.auth`. */
+  readonly module: 'auth';
+  /** The service behind the module. */
+  readonly service: 'loams.auth.v1.AuthService';
+  /** Whether the package's wire contract may still change. */
+  readonly unstable: false;
+  /**
+   *  `loams.auth.v1.AuthService/CompleteSetup`, retried: manual.
+   */
+  completeSetup(
+    request: MessageInitShape<typeof CompleteSetupRequestSchema>,
+    options?: CallOptions,
+  ): Promise<CompleteSetupResponse>;
+  /**
+   *  `loams.auth.v1.AuthService/CreateSession`, retried: manual.
+   */
+  createSession(
+    request: MessageInitShape<typeof CreateSessionRequestSchema>,
+    options?: CallOptions,
+  ): Promise<CreateSessionResponse>;
+  /**
+   *  `loams.auth.v1.AuthService/DecideConsent`, retried: manual.
+   */
+  decideConsent(
+    request: MessageInitShape<typeof DecideConsentRequestSchema>,
+    options?: CallOptions,
+  ): Promise<DecideConsentResponse>;
+  /**
+   *  `loams.auth.v1.AuthService/DeleteSession`, retried: safe.
+   */
+  deleteSession(
+    request: MessageInitShape<typeof DeleteSessionRequestSchema>,
+    options?: CallOptions,
+  ): Promise<DeleteSessionResponse>;
+  /**
+   *  `loams.auth.v1.AuthService/GetSession`, retried: safe.
+   */
+  getSession(
+    request: MessageInitShape<typeof GetSessionRequestSchema>,
+    options?: CallOptions,
+  ): Promise<GetSessionResponse>;
+  /**
+   *  `loams.auth.v1.AuthService/ListProviders`, retried: safe.
+   */
+  listProviders(
+    request: MessageInitShape<typeof ListProvidersRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListProvidersResponse>;
+}
+
 /**
  *  `loams.instance` — What this instance is, and who the caller is on it.
  *
@@ -196,6 +578,108 @@ export interface ModuleBinding {
 /** Every annotated service, as the module catalogue. Order is by module name. */
 export const MODULES: readonly ModuleBinding[] = [
   {
+    name: 'admin.agents',
+    summary: 'Agents, their tokens and trust policies, and service accounts.',
+    service: 'loams.admin.v1.AgentService',
+    package: 'loams.admin.v1',
+    unstable: false,
+    derived: false,
+    calls: [
+      { module: 'admin.agents', name: 'create', protoName: 'create', method: 'CreateAgent', rpc: 'loams.admin.v1.AgentService/CreateAgent', service: 'loams.admin.v1.AgentService', package: 'loams.admin.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'admin.agents', name: 'createServiceAccount', protoName: 'createServiceAccount', method: 'CreateServiceAccount', rpc: 'loams.admin.v1.AgentService/CreateServiceAccount', service: 'loams.admin.v1.AgentService', package: 'loams.admin.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'admin.agents', name: 'createTrustPolicy', protoName: 'createTrustPolicy', method: 'CreateTrustPolicy', rpc: 'loams.admin.v1.AgentService/CreateTrustPolicy', service: 'loams.admin.v1.AgentService', package: 'loams.admin.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'admin.agents', name: 'get', protoName: 'get', method: 'GetAgent', rpc: 'loams.admin.v1.AgentService/GetAgent', service: 'loams.admin.v1.AgentService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'admin.agents', name: 'list', protoName: 'list', method: 'ListAgents', rpc: 'loams.admin.v1.AgentService/ListAgents', service: 'loams.admin.v1.AgentService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: { items: 'agents', nextPageToken: 'nextPageToken' } },
+      { module: 'admin.agents', name: 'listServiceAccounts', protoName: 'listServiceAccounts', method: 'ListServiceAccounts', rpc: 'loams.admin.v1.AgentService/ListServiceAccounts', service: 'loams.admin.v1.AgentService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: { items: 'service_accounts', nextPageToken: 'nextPageToken' } },
+      { module: 'admin.agents', name: 'listTokens', protoName: 'listTokens', method: 'ListAgentTokens', rpc: 'loams.admin.v1.AgentService/ListAgentTokens', service: 'loams.admin.v1.AgentService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: { items: 'tokens', nextPageToken: 'nextPageToken' } },
+      { module: 'admin.agents', name: 'listTrustPolicies', protoName: 'listTrustPolicies', method: 'ListTrustPolicies', rpc: 'loams.admin.v1.AgentService/ListTrustPolicies', service: 'loams.admin.v1.AgentService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: { items: 'trust_policies', nextPageToken: 'nextPageToken' } },
+      { module: 'admin.agents', name: 'resume', protoName: 'resume', method: 'ResumeAgent', rpc: 'loams.admin.v1.AgentService/ResumeAgent', service: 'loams.admin.v1.AgentService', package: 'loams.admin.v1', idempotency: 'idempotent', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'admin.agents', name: 'suspend', protoName: 'suspend', method: 'SuspendAgent', rpc: 'loams.admin.v1.AgentService/SuspendAgent', service: 'loams.admin.v1.AgentService', package: 'loams.admin.v1', idempotency: 'idempotent', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'admin.agents', name: 'update', protoName: 'update', method: 'UpdateAgent', rpc: 'loams.admin.v1.AgentService/UpdateAgent', service: 'loams.admin.v1.AgentService', package: 'loams.admin.v1', idempotency: 'idempotent', retry: 'safe', streaming: 'unary', pagination: null },
+    ],
+  },
+  {
+    name: 'admin.audit',
+    summary: 'The audit log: who did what, to what, and whether it was allowed.',
+    service: 'loams.admin.v1.AuditService',
+    package: 'loams.admin.v1',
+    unstable: false,
+    derived: false,
+    calls: [
+      { module: 'admin.audit', name: 'list', protoName: 'list', method: 'ListAuditEvents', rpc: 'loams.admin.v1.AuditService/ListAuditEvents', service: 'loams.admin.v1.AuditService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: { items: 'events', nextPageToken: 'nextPageToken' } },
+      { module: 'admin.audit', name: 'watch', protoName: 'watch', method: 'WatchAuditEvents', rpc: 'loams.admin.v1.AuditService/WatchAuditEvents', service: 'loams.admin.v1.AuditService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'server', pagination: null },
+    ],
+  },
+  {
+    name: 'admin.keys',
+    summary: 'API keys, and revoking agent tokens.',
+    service: 'loams.admin.v1.KeyService',
+    package: 'loams.admin.v1',
+    unstable: false,
+    derived: false,
+    calls: [
+      { module: 'admin.keys', name: 'create', protoName: 'create', method: 'CreateKey', rpc: 'loams.admin.v1.KeyService/CreateKey', service: 'loams.admin.v1.KeyService', package: 'loams.admin.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'admin.keys', name: 'list', protoName: 'list', method: 'ListKeys', rpc: 'loams.admin.v1.KeyService/ListKeys', service: 'loams.admin.v1.KeyService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: { items: 'keys', nextPageToken: 'nextPageToken' } },
+      { module: 'admin.keys', name: 'revoke', protoName: 'revoke', method: 'RevokeKey', rpc: 'loams.admin.v1.KeyService/RevokeKey', service: 'loams.admin.v1.KeyService', package: 'loams.admin.v1', idempotency: 'idempotent', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'admin.keys', name: 'revokeToken', protoName: 'revokeToken', method: 'RevokeToken', rpc: 'loams.admin.v1.KeyService/RevokeToken', service: 'loams.admin.v1.KeyService', package: 'loams.admin.v1', idempotency: 'idempotent', retry: 'safe', streaming: 'unary', pagination: null },
+    ],
+  },
+  {
+    name: 'admin.org',
+    summary: 'The org: settings, members, invitations and teams.',
+    service: 'loams.admin.v1.OrgService',
+    package: 'loams.admin.v1',
+    unstable: false,
+    derived: false,
+    calls: [
+      { module: 'admin.org', name: 'addTeamMember', protoName: 'addTeamMember', method: 'AddTeamMember', rpc: 'loams.admin.v1.OrgService/AddTeamMember', service: 'loams.admin.v1.OrgService', package: 'loams.admin.v1', idempotency: 'idempotent', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'admin.org', name: 'createInvitation', protoName: 'createInvitation', method: 'CreateInvitation', rpc: 'loams.admin.v1.OrgService/CreateInvitation', service: 'loams.admin.v1.OrgService', package: 'loams.admin.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'admin.org', name: 'createTeam', protoName: 'createTeam', method: 'CreateTeam', rpc: 'loams.admin.v1.OrgService/CreateTeam', service: 'loams.admin.v1.OrgService', package: 'loams.admin.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'admin.org', name: 'get', protoName: 'get', method: 'GetOrg', rpc: 'loams.admin.v1.OrgService/GetOrg', service: 'loams.admin.v1.OrgService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'admin.org', name: 'getTeam', protoName: 'getTeam', method: 'GetTeam', rpc: 'loams.admin.v1.OrgService/GetTeam', service: 'loams.admin.v1.OrgService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'admin.org', name: 'listInvitations', protoName: 'listInvitations', method: 'ListInvitations', rpc: 'loams.admin.v1.OrgService/ListInvitations', service: 'loams.admin.v1.OrgService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: { items: 'invitations', nextPageToken: 'nextPageToken' } },
+      { module: 'admin.org', name: 'listMembers', protoName: 'listMembers', method: 'ListMembers', rpc: 'loams.admin.v1.OrgService/ListMembers', service: 'loams.admin.v1.OrgService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: { items: 'members', nextPageToken: 'nextPageToken' } },
+      { module: 'admin.org', name: 'listTeams', protoName: 'listTeams', method: 'ListTeams', rpc: 'loams.admin.v1.OrgService/ListTeams', service: 'loams.admin.v1.OrgService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: { items: 'teams', nextPageToken: 'nextPageToken' } },
+      { module: 'admin.org', name: 'removeMember', protoName: 'removeMember', method: 'RemoveMember', rpc: 'loams.admin.v1.OrgService/RemoveMember', service: 'loams.admin.v1.OrgService', package: 'loams.admin.v1', idempotency: 'idempotent', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'admin.org', name: 'update', protoName: 'update', method: 'UpdateOrg', rpc: 'loams.admin.v1.OrgService/UpdateOrg', service: 'loams.admin.v1.OrgService', package: 'loams.admin.v1', idempotency: 'idempotent', retry: 'safe', streaming: 'unary', pagination: null },
+    ],
+  },
+  {
+    name: 'admin.projects',
+    summary: 'Projects, project access and environments.',
+    service: 'loams.admin.v1.ProjectService',
+    package: 'loams.admin.v1',
+    unstable: false,
+    derived: false,
+    calls: [
+      { module: 'admin.projects', name: 'create', protoName: 'create', method: 'CreateProject', rpc: 'loams.admin.v1.ProjectService/CreateProject', service: 'loams.admin.v1.ProjectService', package: 'loams.admin.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'admin.projects', name: 'createEnvironment', protoName: 'createEnvironment', method: 'CreateEnvironment', rpc: 'loams.admin.v1.ProjectService/CreateEnvironment', service: 'loams.admin.v1.ProjectService', package: 'loams.admin.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'admin.projects', name: 'get', protoName: 'get', method: 'GetProject', rpc: 'loams.admin.v1.ProjectService/GetProject', service: 'loams.admin.v1.ProjectService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'admin.projects', name: 'getEnvironment', protoName: 'getEnvironment', method: 'GetEnvironment', rpc: 'loams.admin.v1.ProjectService/GetEnvironment', service: 'loams.admin.v1.ProjectService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'admin.projects', name: 'getEnvironmentActivity', protoName: 'getEnvironmentActivity', method: 'GetEnvironmentActivity', rpc: 'loams.admin.v1.ProjectService/GetEnvironmentActivity', service: 'loams.admin.v1.ProjectService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'admin.projects', name: 'grantAccess', protoName: 'grantAccess', method: 'GrantAccess', rpc: 'loams.admin.v1.ProjectService/GrantAccess', service: 'loams.admin.v1.ProjectService', package: 'loams.admin.v1', idempotency: 'idempotent', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'admin.projects', name: 'list', protoName: 'list', method: 'ListProjects', rpc: 'loams.admin.v1.ProjectService/ListProjects', service: 'loams.admin.v1.ProjectService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: { items: 'projects', nextPageToken: 'nextPageToken' } },
+      { module: 'admin.projects', name: 'listAccess', protoName: 'listAccess', method: 'ListAccess', rpc: 'loams.admin.v1.ProjectService/ListAccess', service: 'loams.admin.v1.ProjectService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: { items: 'grants', nextPageToken: 'nextPageToken' } },
+      { module: 'admin.projects', name: 'listEnvironments', protoName: 'listEnvironments', method: 'ListEnvironments', rpc: 'loams.admin.v1.ProjectService/ListEnvironments', service: 'loams.admin.v1.ProjectService', package: 'loams.admin.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: { items: 'environments', nextPageToken: 'nextPageToken' } },
+    ],
+  },
+  {
+    name: 'auth',
+    summary: 'Sign-in providers, first-run setup, sessions and OAuth consent.',
+    service: 'loams.auth.v1.AuthService',
+    package: 'loams.auth.v1',
+    unstable: false,
+    derived: false,
+    calls: [
+      { module: 'auth', name: 'completeSetup', protoName: 'completeSetup', method: 'CompleteSetup', rpc: 'loams.auth.v1.AuthService/CompleteSetup', service: 'loams.auth.v1.AuthService', package: 'loams.auth.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'auth', name: 'createSession', protoName: 'createSession', method: 'CreateSession', rpc: 'loams.auth.v1.AuthService/CreateSession', service: 'loams.auth.v1.AuthService', package: 'loams.auth.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'auth', name: 'decideConsent', protoName: 'decideConsent', method: 'DecideConsent', rpc: 'loams.auth.v1.AuthService/DecideConsent', service: 'loams.auth.v1.AuthService', package: 'loams.auth.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'auth', name: 'deleteSession', protoName: 'deleteSession', method: 'DeleteSession', rpc: 'loams.auth.v1.AuthService/DeleteSession', service: 'loams.auth.v1.AuthService', package: 'loams.auth.v1', idempotency: 'idempotent', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'auth', name: 'getSession', protoName: 'getSession', method: 'GetSession', rpc: 'loams.auth.v1.AuthService/GetSession', service: 'loams.auth.v1.AuthService', package: 'loams.auth.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'auth', name: 'listProviders', protoName: 'listProviders', method: 'ListProviders', rpc: 'loams.auth.v1.AuthService/ListProviders', service: 'loams.auth.v1.AuthService', package: 'loams.auth.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: null },
+    ],
+  },
+  {
     name: 'instance',
     summary: 'What this instance is, and who the caller is on it.',
     service: 'loams.instance.v1.InstanceService',
@@ -256,6 +740,12 @@ export const MODULES: readonly ModuleBinding[] = [
 *  than by a hand-written client.
 */
 export const SERVICE_DESCRIPTORS: Readonly<Record<string, DescService>> = {
+  'loams.admin.v1.AgentService': AgentService,
+  'loams.admin.v1.AuditService': AuditService,
+  'loams.admin.v1.KeyService': KeyService,
+  'loams.admin.v1.OrgService': OrgService,
+  'loams.admin.v1.ProjectService': ProjectService,
+  'loams.auth.v1.AuthService': AuthService,
   'loams.instance.v1.InstanceService': InstanceService,
   'loams.live.v1.LiveAdminService': LiveAdminService,
   'loams.live.v1.LiveService': LiveService,
@@ -264,7 +754,9 @@ export const SERVICE_DESCRIPTORS: Readonly<Record<string, DescService>> = {
 /** The proto packages this SDK speaks, as `GetInstance.api_versions` names them. */
 export const PROTO_PACKAGES = [
   'google.protobuf',
+  'loams.admin.v1',
   'loams.approvals.v1',
+  'loams.auth.v1',
   'loams.collection.v1',
   'loams.devices.v1',
   'loams.errors.v1',

@@ -101,7 +101,8 @@ export function OverviewPage({
   const key = `${engine?.phase}:${active?.id}:${tick}`;
   const live = where.known && !where.down;
   const data = useLoad(() => loadData(transport), key, live, active?.id);
-  const durable = useLoad(() => loadDurable(net), key, live, active?.id);
+  // Durable execution is served by the local engine only (the desktop proxy answers 404 elsewhere).
+  const durable = useLoad(() => loadDurable(net), key, live && isLocal, active?.id);
   const streams = useLoad(() => loadStreams(net), key, live, active?.id);
   const connectors = useLoad(() => loadConnectors(desktop), tick);
   const factory = useLoad(() => desktop.factory.list(), tick);
@@ -133,7 +134,7 @@ export function OverviewPage({
         />
         <StackCard id="wesql" title="WeSQL" href="/wesql" state={wesql} local={isLocal} />
         <LiveCard engine={engine} local={isLocal} />
-        <DurableCard where={where} load={durable} />
+        <DurableCard where={where} load={durable} local={isLocal} />
         <StreamsCard where={where} load={streams} />
         <ConnectorsCard load={connectors} />
         <FactoryCard load={factory} />

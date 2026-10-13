@@ -55,4 +55,4 @@ Requests are signed with SigV4 and sent through the SDK's egress-checked HTTP cl
 
 ## Registry status
 
-`connectors/registry/dynamodb-streams.yaml` is still the generated `planned` stub on Camel. The manifest this connector ships is `fabric/crates/loams-connector-kv/manifests/dynamodb-streams.yaml`. CN2 Task 2 installs it (ruling R14.1).
+`connectors/registry/dynamodb-streams.yaml` is the hand-written manifest this connector ships, with its config schema `connectors/schemas/dynamodb-streams.config.json` (ruling R14.1). It stays `planned` until the family's suites are green in CI (OR-23).

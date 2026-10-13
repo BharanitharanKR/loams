@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+// The org's audit log (design §44 §5.2, §19 §7; API2 Task 7). Replaces the
+// console's `GET /api/v1/audit`, and adds the watch §44 §5.2 names. The
+// package rules are in `common.proto`.
+//
+// The REST route paged with `before` (an event id) and `limit`; here it is
+// AIP-158's `page_token` and `page_size`, newest first either way.
+//
+// `WatchAuditEvents` follows the watch shape of AP0 Ruling 3 (and
+// `loams.approvals.v1`'s `WatchApprovals`): a `snapshot` first, then each new
+// event as it is recorded, and a `heartbeat` every 15 s. Every response
+// carries a `cursor`; a client that reconnects with it as `resume_cursor`
+// gets the events it missed and no snapshot. A cursor the server no longer
+// holds gets a fresh snapshot with `snapshot_reset`.
+package loams.admin.v1;
+
+import "google/protobuf/timestamp.proto";
+import "loams/admin/v1/common.proto";
+import "loams/options/v1/options.proto";
+
+// The audit log: who did what, to what, and whether it was allowed.
+service AuditService {
+  option (loams.options.v1.module) = {
+    name: "admin.audit"
+    summary: "The audit log: who did what, to what, and whether it was allowed."
+  };
+
+  // Audit events, newest first. (replaces `GET /api/v1/audit`)
+  rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {
+      name: "list"
+      pagination: "events:next_page_token"
+    };
+  }
+  // A snapshot of the newest events, then each new one as it is recorded.
+  rpc WatchAuditEvents(WatchAuditEventsRequest) returns (stream WatchAuditEventsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {name: "watch"};
+  }
+}
+
+// Whether the audited action was allowed.
+enum AuditOutcome {
+  AUDIT_OUTCOME_UNSPECIFIED = 0;
+  AUDIT_OUTCOME_SUCCESS = 1;
+  AUDIT_OUTCOME_DENIED = 2;
+}
+
+// One audited action.
+message AuditEvent {
+  string id = 1;
+  google.protobuf.Timestamp at = 2;
+  // Who did it.
+  SubjectRef actor = 3;
+  // The person an agent acted for; unset otherwise.
+  SubjectRef acting_for = 4;
+  // What was done, for example "query.search" or "api_key.create".
+  string action = 5;
+  // What it was done to.
+  ResourceRef target = 6;
+  // The project's slug; empty for an org-wide action.
+  string project = 7;
+  // The environment's slug; empty when the action had none.
+  string environment = 8;
+  // The caller's address; empty when it is not known.
+  string ip = 9;
+  AuditOutcome outcome = 10;
+}
+
+message ListAuditEventsRequest {
+  // A project's slug; empty for every project.
+  string project = 1;
+  // A principal's id; empty for every actor.
+  string actor = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message ListAuditEventsResponse {
+  repeated AuditEvent events = 1;
+  string next_page_token = 2;
+}
+
+message WatchAuditEventsRequest {
+  // A project's slug; empty for every project.
+  string project = 1;
+  // A principal's id; empty for every actor.
+  string actor = 2;
+  // How many of the newest events the snapshot holds: 0 takes the server's
+  // default (50), at most 1 000.
+  int32 snapshot_size = 3;
+  // The `cursor` of the last response received. A valid cursor skips the
+  // snapshot; one the server no longer holds gets a fresh snapshot with
+  // `snapshot_reset`.
+  string resume_cursor = 4;
+}
+
+message WatchAuditEventsResponse {
+  oneof event {
+    // The first response: the newest matching events, newest first.
+    AuditSnapshot snapshot = 1;
+    // A new event was recorded.
+    AuditEvent append = 2;
+    // Nothing happened for 15 s.
+    Heartbeat heartbeat = 3;
+  }
+  // Pass back as `resume_cursor` to resume after a drop.
+  string cursor = 4;
+  // True when `resume_cursor` was too old and this is a fresh snapshot.
+  bool snapshot_reset = 5;
+}
+
+// The newest matching events when a watch starts.
+message AuditSnapshot {
+  repeated AuditEvent events = 1;
+}
+
+// A keep-alive on a watch stream.
+message Heartbeat {}

@@ -1,7 +1,7 @@
 # The P4b merge gate for the Loams WAL (docs/design/28-loams-postgres.md §7):
 # pgbench against stock safekeepers vs the Loams WAL service on TiKV, on a
 # dedicated runner. Manual only: shared runners are too noisy for p99s.
-name: Loams WAL benchmark (P4b)
+name: Postgres benchmark
 
 on:
   workflow_dispatch:
@@ -26,6 +26,7 @@ permissions:
 
 jobs:
   gate:
+    name: WAL benchmark
     runs-on: [self-hosted, loam-bench]
     timeout-minutes: 720
     steps:

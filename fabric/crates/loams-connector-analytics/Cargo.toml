@@ -1,0 +1,60 @@
+[package]
+name = "loams-connector-analytics"
+description = "The Loams analytics connector family (CN2 Task 17, OR-6): the native ClickHouse sink (OR-8), Redshift over its Data API, Databricks over the SQL Statement Execution API, Trino over its client protocol, and ADBC targets such as DuckDB, on the connector SDK."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+# Every family crate depends on the SDK and its protocol crates only (OR-6).
+loams-connector-sdk = { path = "../loams-connector-sdk" }
+# ADBC (the DuckDB target and any allowlisted driver, CN1 Ruling 9): the
+# driver manager loads a driver's shared library by path; no driver is
+# compiled into Loams. 0.24.0 (2026-07-28), Apache-2.0; arrow `>=58, <60`, so
+# the workspace's 59.
+adbc_core = "=0.24.0"
+adbc_driver_manager = "=0.24.0"
+# The workspace's arrow 59 line (CN1 Ruling 4). Apache-2.0.
+arrow-array.workspace = true
+arrow-ipc.workspace = true
+arrow-json.workspace = true
+arrow-schema.workspace = true
+arrow-select = "59"
+# The SDK's own async-trait pin (0.1.92 in fabric/Cargo.lock).
+async-trait = "0.1.89"
+base64.workspace = true
+bytes.workspace = true
+futures.workspace = true
+http.workspace = true
+# Redshift's staging and UNLOAD bucket: S3 through object_store, built with
+# the egress-checked HTTP client (R13.3's pattern). Pinned to 0.13.2 (CN2
+# R0.13). MIT OR Apache-2.0.
+object_store = { version = "=0.13.2", default-features = false, features = ["aws"] }
+# Parquet for the Databricks volume files, Redshift's staged COPY files and
+# its UNLOAD output. The workspace's 59 line. Apache-2.0.
+parquet.workspace = true
+# object_store's own HTTP client (see object_store above). The same 0.12 line
+# and features object_store asks for. MIT OR Apache-2.0.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "http2"] }
+serde.workspace = true
+serde_json.workspace = true
+# SigV4 for the Redshift Data API, and batch digests (dedup tokens, file
+# names). HMAC-SHA256 is written over sha2, as `loams-connector-http` does.
+sha2.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tracing.workspace = true
+
+[dev-dependencies]
+http-body-util.workspace = true
+# The fake HTTP endpoints of the request-shape tests, as the SDK's and the
+# HTTP family's tests use hyper's server.
+hyper = { workspace = true, features = ["server", "http1"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "test-util"] }
+
+[lints]
+workspace = true

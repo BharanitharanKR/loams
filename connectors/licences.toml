@@ -197,6 +197,7 @@ used_by = [
   "s3",
   "delta-lake",
   "redshift",
+  "databricks",
 ]
 source = "https://crates.io/crates/parquet"
 
@@ -855,6 +856,28 @@ version = "1.1.0"
 # the datafusion feature, kept behind a family-crate feature (R0.14).
 used_by = ["delta-lake"]
 source = "https://crates.io/crates/deltalake"
+
+[components.buoyant_kernel]
+name = "buoyant_kernel (delta_kernel)"
+spdx = "Apache-2.0"
+kind = "library"
+version = "0.28.1"
+# deltalake 1.1.0 depends on the Delta kernel under this package name (`package =
+# "buoyant_kernel"`, published by a delta-rs maintainer), with its default engine
+# `buoyant_kernel_engine` 0.28.0 (CN2 R0.14 asks for this stanza when Task 17 links it).
+used_by = ["delta-lake"]
+source = "https://crates.io/crates/buoyant_kernel"
+
+[components.libduckdb]
+name = "DuckDB (libduckdb)"
+spdx = "MIT"
+kind = "driver"
+version = "1.5.6"
+# DuckDB's ADBC driver is DuckDB's own shared library (entry point `duckdb_adbc_init`), the
+# `libduckdb` release asset. The `duckdb` target loads it by path from the runtime's allowlist
+# with a SHA-256 check (CN1 Ruling 9; CN2 R17.7); Loams compiles no DuckDB code.
+used_by = ["duckdb"]
+source = "https://github.com/duckdb/duckdb"
 
 [components.arrow-csv]
 name = "arrow-csv"

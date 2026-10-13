@@ -1,0 +1,178 @@
+syntax = "proto3";
+
+// Sign-in, first-run setup, console sessions and OAuth consent (design §44
+// §5.2, §19 §3 and §5; API2 Task 6). Replaces the console's
+// `/api/v1/setup`, `/api/v1/session` and `/api/v1/oauth/consent` REST routes,
+// and lists the sign-in providers the console used to read from
+// `GET /api/v1/instance`'s `sign_in`.
+//
+// **What stays HTTP** (D602, Q602): `/auth/oidc/{provider}/start` and its
+// callback (browser redirects), `/oauth/token`, `/oauth/authorize`,
+// `/.well-known/oauth-protected-resource`,
+// `/.well-known/oauth-authorization-server` and `/.well-known/jwks.json`.
+// Standard clients expect them at fixed HTTP paths, so they are protocol
+// endpoints, not RPCs. `ListProviders` names each OIDC provider's `id`, which
+// is the `{provider}` of its start path.
+//
+// **Sessions** are a cookie or a bearer token. `CreateSession` and
+// `CompleteSetup` set an `HttpOnly; Secure; SameSite=Lax` session cookie on
+// the Connect response for a browser; other callers send
+// `Authorization: Bearer`. A credential never travels in a URL.
+//
+// **Unauthenticated RPCs** are `ListProviders` and `CompleteSetup` (the
+// plan's `PUBLIC_RPCS`), plus `CreateSession`, which is how a person without a
+// session gets one. `CompleteSetup` is answered only before setup has run, and
+// only from loopback or with the setup token.
+//
+// Errors carry one `loams.errors.v1.ErrorInfo`: `unauthenticated` (no or an
+// unusable session), `token_expired`, `invalid_argument`, and
+// `failed_precondition` for a `CompleteSetup` after setup.
+package loams.auth.v1;
+
+import "google/protobuf/timestamp.proto";
+import "loams/admin/v1/common.proto";
+import "loams/admin/v1/org.proto";
+import "loams/options/v1/options.proto";
+
+// Sign-in providers, first-run setup, sessions and OAuth consent.
+service AuthService {
+  option (loams.options.v1.module) = {
+    name: "auth"
+    summary: "Sign-in providers, first-run setup, sessions and OAuth consent."
+  };
+
+  // How people sign in to this instance. No auth.
+  rpc ListProviders(ListProvidersRequest) returns (ListProvidersResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {name: "listProviders"};
+  }
+  // First-run setup: creates the org and its owner, and signs the owner in.
+  // (replaces `POST /api/v1/setup`)
+  rpc CompleteSetup(CompleteSetupRequest) returns (CompleteSetupResponse) {
+    option (loams.options.v1.facade) = {name: "completeSetup"};
+  }
+  // The caller's session. (replaces `GET /api/v1/session`)
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {name: "getSession"};
+  }
+  // Signs in with a password (and a TOTP code when the person has one).
+  // (replaces `POST /api/v1/session`)
+  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse) {
+    option (loams.options.v1.facade) = {name: "createSession"};
+  }
+  // Signs out; signing out without a session is not an error.
+  // (replaces `DELETE /api/v1/session`)
+  rpc DeleteSession(DeleteSessionRequest) returns (DeleteSessionResponse) {
+    option idempotency_level = IDEMPOTENT;
+    option (loams.options.v1.facade) = {name: "deleteSession"};
+  }
+  // The signed-in person's answer on the OAuth consent screen; answers where
+  // to send the browser next. Console-internal. (replaces `POST /api/v1/oauth/consent`)
+  rpc DecideConsent(DecideConsentRequest) returns (DecideConsentResponse) {
+    option (loams.options.v1.facade) = {name: "decideConsent"};
+  }
+}
+
+// The kind of an OIDC provider, which picks its button and its quirks.
+enum OidcProviderKind {
+  OIDC_PROVIDER_KIND_UNSPECIFIED = 0;
+  OIDC_PROVIDER_KIND_KEYCLOAK = 1;
+  OIDC_PROVIDER_KIND_OKTA = 2;
+  OIDC_PROVIDER_KIND_ENTRA = 3;
+  OIDC_PROVIDER_KIND_GOOGLE = 4;
+  OIDC_PROVIDER_KIND_AUTHENTIK = 5;
+  OIDC_PROVIDER_KIND_DEX = 6;
+  OIDC_PROVIDER_KIND_GENERIC = 7;
+}
+
+// An OIDC provider people can sign in with.
+message OidcProvider {
+  // The `{provider}` of `/auth/oidc/{provider}/start`.
+  string id = 1;
+  // The button's label.
+  string name = 2;
+  OidcProviderKind kind = 3;
+}
+
+// A signed-in person's session.
+message Session {
+  loams.admin.v1.User user = 1;
+  loams.admin.v1.Org org = 2;
+  loams.admin.v1.OrgRole role = 3;
+  // Sent back in the `X-CSRF-Token` header on every cookie-authenticated
+  // call that is not a GET, as the REST console did.
+  string csrf_token = 4;
+  google.protobuf.Timestamp expires_at = 5;
+}
+
+message ListProvidersRequest {}
+
+message ListProvidersResponse {
+  bool password = 1;
+  bool totp = 2;
+  bool passkeys = 3;
+  repeated OidcProvider oidc = 4;
+}
+
+message CompleteSetupRequest {
+  // The token `loams` printed at first start; not needed from loopback.
+  string setup_token = 1;
+  string org_name = 2;
+  // The owner's name.
+  string name = 3;
+  string email = 4;
+  string password = 5;
+}
+
+message CompleteSetupResponse {
+  Session session = 1;
+}
+
+message GetSessionRequest {}
+
+message GetSessionResponse {
+  Session session = 1;
+}
+
+message CreateSessionRequest {
+  string email = 1;
+  string password = 2;
+  // Required when the person has a second factor enrolled.
+  string totp_code = 3;
+}
+
+message CreateSessionResponse {
+  Session session = 1;
+}
+
+message DeleteSessionRequest {}
+
+message DeleteSessionResponse {}
+
+// The person's answer on the consent screen.
+enum ConsentDecision {
+  CONSENT_DECISION_UNSPECIFIED = 0;
+  CONSENT_DECISION_ALLOW = 1;
+  CONSENT_DECISION_DENY = 2;
+}
+
+message DecideConsentRequest {
+  ConsentDecision decision = 1;
+  // The rest is the authorization request the consent screen was opened
+  // with, passed through unchanged.
+  string client_id = 2;
+  string redirect_uri = 3;
+  string scope = 4;
+  string audience = 5;
+  string state = 6;
+  string code_challenge = 7;
+  // "S256", the only method accepted.
+  string code_challenge_method = 8;
+}
+
+message DecideConsentResponse {
+  // Where to send the browser: the client's `redirect_uri` with a `code` (or
+  // an `error` when the person denied).
+  string redirect_to = 1;
+}

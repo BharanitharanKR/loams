@@ -45,38 +45,42 @@ export function DataTable({
   for (const row of shown)
     for (const key of Object.keys(row)) if (!columns.includes(key)) columns.push(key);
   const note = rows.length > shown.length ? ` (latest ${shown.length} of ${rows.length} rows)` : '';
+  // The hiding sits on a wrapper: a table keeps its min-content width whatever its
+  // `width`, which would widen the page on a phone.
   return (
-    <table style={srOnly}>
-      <caption>
-        {caption}
-        {note}
-      </caption>
-      <thead>
-        <tr>
-          {columns.map((c) => (
-            <th key={c} scope="col">
-              {c}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {shown.length === 0 ? (
+    <div style={srOnly}>
+      <table>
+        <caption>
+          {caption}
+          {note}
+        </caption>
+        <thead>
           <tr>
-            <td colSpan={Math.max(1, columns.length)}>No data yet</td>
+            {columns.map((c) => (
+              <th key={c} scope="col">
+                {c}
+              </th>
+            ))}
           </tr>
-        ) : (
-          shown.map((row, i) => (
-            // Rows have no identity of their own; position in the window is the key.
-            // biome-ignore lint/suspicious/noArrayIndexKey: see above
-            <tr key={i}>
-              {columns.map((c) => (
-                <td key={c}>{cell(row[c], c === timeField)}</td>
-              ))}
+        </thead>
+        <tbody>
+          {shown.length === 0 ? (
+            <tr>
+              <td colSpan={Math.max(1, columns.length)}>No data yet</td>
             </tr>
-          ))
-        )}
-      </tbody>
-    </table>
+          ) : (
+            shown.map((row, i) => (
+              // Rows have no identity of their own; position in the window is the key.
+              // biome-ignore lint/suspicious/noArrayIndexKey: see above
+              <tr key={i}>
+                {columns.map((c) => (
+                  <td key={c}>{cell(row[c], c === timeField)}</td>
+                ))}
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 }

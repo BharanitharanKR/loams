@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+// API keys and token revocation (design §44 §5.2, §19 §5; API2 Task 7).
+// Replaces the console's `/api/v1/projects/{project}/environments/
+// {environment}/keys`, `/api/v1/keys/{key}` and `/api/v1/tokens/{jti}` REST
+// routes, one RPC per route. The package rules are in `common.proto`.
+//
+// **A secret is answered once.** `CreateKey` returns the key's secret in its
+// response and nowhere else: no list, get or log carries it. A replay of the
+// same `idempotency_key` does not answer the secret again; it fails with
+// `failed_precondition`, reason `secret_already_issued` (the reason PG2
+// registered for the same rule), and the caller creates a new key with a new
+// idempotency key.
+package loams.admin.v1;
+
+import "google/protobuf/timestamp.proto";
+import "loams/admin/v1/common.proto";
+import "loams/options/v1/options.proto";
+
+// API keys of an environment, and revoking agent tokens.
+service KeyService {
+  option (loams.options.v1.module) = {
+    name: "admin.keys"
+    summary: "API keys, and revoking agent tokens."
+  };
+
+  // An environment's API keys, without their secrets.
+  // (replaces `GET /api/v1/projects/{project}/environments/{environment}/keys`)
+  rpc ListKeys(ListKeysRequest) returns (ListKeysResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {
+      name: "list"
+      pagination: "keys:next_page_token"
+    };
+  }
+  // Creates an API key and answers its secret, once.
+  // (replaces `POST /api/v1/projects/{project}/environments/{environment}/keys`)
+  rpc CreateKey(CreateKeyRequest) returns (CreateKeyResponse) {
+    option (loams.options.v1.facade) = {name: "create"};
+  }
+  // Revokes an API key; revoking it again is not an error.
+  // (replaces `DELETE /api/v1/keys/{key}`)
+  rpc RevokeKey(RevokeKeyRequest) returns (RevokeKeyResponse) {
+    option idempotency_level = IDEMPOTENT;
+    option (loams.options.v1.facade) = {name: "revoke"};
+  }
+  // Revokes an agent token by its `jti`; revoking it again is not an error.
+  // (replaces `DELETE /api/v1/tokens/{jti}`)
+  rpc RevokeToken(RevokeTokenRequest) returns (RevokeTokenResponse) {
+    option idempotency_level = IDEMPOTENT;
+    option (loams.options.v1.facade) = {name: "revokeToken"};
+  }
+}
+
+// An API key, without its secret.
+message ApiKey {
+  string id = 1;
+  string name = 2;
+  // The secret's first characters, to tell keys apart.
+  string prefix = 3;
+  // The environment's slug.
+  string environment = 4;
+  // The user or service account the key acts as.
+  SubjectRef principal = 5;
+  repeated string scopes = 6;
+  google.protobuf.Timestamp created_at = 7;
+  // Unset for a key that does not expire.
+  google.protobuf.Timestamp expires_at = 8;
+  // Unset when the key has never been used.
+  google.protobuf.Timestamp last_used_at = 9;
+}
+
+message ListKeysRequest {
+  // The project's slug.
+  string project = 1;
+  // The environment's slug.
+  string environment = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message ListKeysResponse {
+  repeated ApiKey keys = 1;
+  string next_page_token = 2;
+}
+
+message CreateKeyRequest {
+  // The project's slug.
+  string project = 1;
+  // The environment's slug.
+  string environment = 2;
+  string name = 3;
+  // The service account's id the key acts as; empty for the caller.
+  string service_account = 4;
+  repeated string scopes = 5;
+  // 0 for a key that does not expire.
+  int32 expires_in_days = 6;
+  // Required. A retry with the same key does not answer the secret again:
+  // it fails with `secret_already_issued`.
+  string idempotency_key = 15;
+}
+
+message CreateKeyResponse {
+  ApiKey key = 1;
+  // The key itself. Shown once: store it now.
+  string secret = 2;
+}
+
+message RevokeKeyRequest {
+  // The key's id.
+  string key = 1;
+}
+
+message RevokeKeyResponse {}
+
+message RevokeTokenRequest {
+  // The token's `jti`.
+  string jti = 1;
+}
+
+message RevokeTokenResponse {}

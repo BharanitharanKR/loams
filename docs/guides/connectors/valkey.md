@@ -55,4 +55,4 @@ Every connection is opened by `sdk::net`, which egress-checks the address after 
 
 ## Registry status
 
-`connectors/registry/valkey.yaml` is still the generated `planned` stub. The manifest this connector ships is `fabric/crates/loams-connector-kv/manifests/valkey.yaml`. CN2 Task 2 installs it (ruling R14.1), and its status moves to `preview` once the `connectors-p2` suites are green.
+`connectors/registry/valkey.yaml` is the hand-written manifest this connector ships, with its config schema `connectors/schemas/valkey.config.json` (ruling R14.1). It stays `planned` until the family's suites are green in CI (OR-23).

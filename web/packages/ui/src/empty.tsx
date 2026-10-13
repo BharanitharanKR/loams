@@ -19,7 +19,7 @@ export function Empty({
     <div className="loams-empty">
       <Grain kind={grain} seed={seed} />
       <strong>{title}</strong>
-      {children && <p>{children}</p>}
+      {children && <div className="loams-empty-body">{children}</div>}
       {actions && <div className="loams-empty-actions">{actions}</div>}
     </div>
   );

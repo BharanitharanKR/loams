@@ -1,11 +1,12 @@
 // The cordis console end to end in jsdom: the real catalog (base.yml), the
 // real plugins, the browser platform over the in-memory mock.
 
-import { THIRD_PARTY_FLAG } from '@loams/console-host';
+import { parsePatch, THIRD_PARTY_FLAG } from '@loams/console-host';
 import { createMockTransport } from '@loams/console-host/testing';
 import { createWebPlatform } from '@loams/platform-web';
 import { waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
+import samplesYml from '../catalog/samples.yml?raw';
 import { startConsole } from '../src/cordis/start.js';
 
 let dispose: (() => Promise<void>) | undefined;
@@ -16,13 +17,18 @@ afterEach(async () => {
   window.location.hash = '';
 });
 
-async function start(features: Record<string, boolean> = {}, grantDeclared = false) {
+async function start(
+  features: Record<string, boolean> = {},
+  grantDeclared = false,
+  samples = false,
+) {
   const root = document.createElement('div');
   document.body.append(root);
   const handle = await startConsole({
     platform: createWebPlatform({ transport: createMockTransport({ features }) }),
     root,
     base: '/ui/',
+    patches: samples ? [parsePatch(samplesYml)] : undefined,
     grant: grantDeclared ? (manifest) => manifest.permissions : undefined,
   });
   dispose = handle.dispose;
@@ -47,10 +53,10 @@ describe('the cordis console', () => {
       namespaces: 'active',
       approvals: 'active',
       deployments: 'active',
-      hello: 'skipped',
     });
-    expect(handle.plugins().find((p) => p.id === 'hello')?.tier).toBe('third-party');
-    await waitFor(() => expect(root.textContent).toContain('Loams (in-browser mock)'));
+    // The sample third-party plugin is demo-only (catalog/samples.yml).
+    expect(handle.plugins().find((p) => p.id === 'hello')).toBeUndefined();
+    await waitFor(() => expect(root.textContent).toContain('Demo instance'));
 
     window.location.hash = '#/approvals';
     window.dispatchEvent(new HashChangeEvent('hashchange'));
@@ -73,7 +79,8 @@ describe('the cordis console', () => {
   });
 
   it('runs the third-party sample in a sandboxed frame when the instance allows it', async () => {
-    const { root, handle } = await start({ [THIRD_PARTY_FLAG]: true }, true);
+    const { root, handle } = await start({ [THIRD_PARTY_FLAG]: true }, true, true);
+    expect(handle.plugins().find((p) => p.id === 'hello')?.tier).toBe('third-party');
     await waitFor(() => expect(navLabels(root)).toContain('hello'));
     window.location.hash = '#/plugins/hello';
     window.dispatchEvent(new HashChangeEvent('hashchange'));
