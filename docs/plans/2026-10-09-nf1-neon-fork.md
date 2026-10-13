@@ -1517,3 +1517,36 @@ Fork PR ostrium-labs/loams-postgres#8 (branch `loams/nf1-storage`, `468ad273`, L
 7. **Labels:** `org.opencontainers.image.{title,description,source,revision,version,vendor,licenses}`. **Files:** `/usr/share/doc/loams-postgres/{LICENSE,NOTICE,LOAMS_PATCHES.md,THIRD_PARTY_LICENSES.html}`.
 8. **Not measured:** the build times for §51 §5.2 (Q721) need Actions. The workflow writes each architecture's job time to the run summary.
 9. **Pre-existing, not changed:** the final stage downloads the AWS CLI from `awscli.amazonaws.com` without a checksum. That breaks "every downloaded source by sha256". Left for Task 20 or a follow-up.
+
+### Task 11 rulings (2026-10-13, at `dev` `f8fc9f1b`)
+
+Fork PR ostrium-labs/loams-postgres#9 (branch `loams/nf1-compute`, LP-0011) merged into `main` as `3178b3b4`; CodeRabbit: 1 comment (the smoke's checks printed false instead of failing), fixed in b827700d.
+
+1. **The matrix comes from Loams' pin file.** `scripts/loams/compute-matrix.py` reads `supported ∪ maintenance ∪ beta` (today 16 and 17) and takes each major's minor from `vendor/revisions.json`.
+   - Debian follows Neon: bullseye for 14–16, bookworm for 17 and newer, until Q727 (Task 28).
+   - Tags follow the shared contract: `<pgminor>-<sha12>` and `edge`. A beta major gets `<pgminor>-beta-<sha12>` and `beta`.
+   - Both amd64 and arm64 (Q729's default).
+   - Tests: `test_compute_matrix.py` (7, in `loams-hygiene.yml`).
+2. **Heavy stages** (`scripts/loams/compute-heavy-stages.txt`):
+   - The list is `plv8-build`, `rdkit-build`, `postgis-build`, `pgrouting-build`, plus `pg_mooncake-build` beside `pg_duckdb-build`. pg_mooncake also vendors DuckDB; both leave the list when Task 21 drops them (Q719).
+   - On `main` each heavy stage builds in its own job (`--target`, `outputs: type=cacheonly`).
+   - Each writes its **own** cache ref, `compute-v<N>-<arch>-<stage>`. One shared ref would be overwritten by every job.
+   - The image build reads all of them plus its own `compute-v<N>-<arch>`.
+   - BuildKit runs one stage at a time (`max-parallelism = 1`, as Neon's CI did), because each stage runs `make -j$(nproc)`.
+   - A pull request skips the heavy jobs and builds from `main`'s caches.
+3. **`cargo auditable` in the compute image** (Task 1 ruling 3). `compute_ctl`, `fast_import` and `local_proxy` are built with `cargo auditable build` (cargo-auditable 0.7.0, as build-tools), so the audit reads their `.dep-v0` instead of the strings fallback.
+   - `GIT_VERSION` reaches that stage.
+   - The Rust crates' `THIRD_PARTY_LICENSES.html` is generated in the same step, because the crate sources live only in its cache mounts.
+   - The image has OCI labels and `/usr/share/doc/loams-postgres-compute/{LICENSE,NOTICE,LOAMS_PATCHES.md,THIRD_PARTY_LICENSES.html}`.
+4. **`core_extensions_create`.** `compute/tests/loams-smoke/core-extensions.sql` uses §51 §7.1's `core` tier until Task 20's manifest exists:
+   - contrib;
+   - `neon` and `neon_utils`;
+   - `vector`, `postgis`, `pg_cron`, `pg_partman` (in schema `partman`), `pgaudit`, `pg_hint_plan`, `hypopg`, `pg_repack`, `pg_ivm` and `pg_session_jwt`;
+   - `wal2json`, which is an output plugin, decoding one change through a logical slot.
+
+   Every `CREATE EXTENSION` is `IF NOT EXISTS`, because `compute_ctl` creates `pg_stat_statements` and `neon` itself. A `DO` block then fails on any missing extension. The `pg_stat_statements`, pgvector and PostGIS queries follow.
+   **Run locally** through `scripts/loams/smoke/run.sh` on Neon's 77e22e4b `compute-node-v17` and `-v16`: ok on 170005 and 160009. `pgaudit` needs `shared_preload_libraries`, so the smoke spec preloads it.
+5. **`compute_image_audit_clean`:** `audit-image.sh` exits 0 on the index, and the job checks that `compute_ctl`, `local_proxy` and `fast_import` are among the audited binaries.
+6. **Timings (`heavy_stage_jobs_under_limit`)** go to each job's summary. The cold and warm durations per major and architecture, and the Q721 budget check, need the first runs (Actions: owner).
+7. **The smoke's storage image** is `vars.SMOKE_STORAGE_IMAGE`, defaulting to `loams-postgres-storage:edge` from Task 10.
+8. **LP-0032 takes effect with these images.** Our `compute_ctl` creates spec roles with least privilege (Task 4 ruling 4). Loams switches to them in Task 14.
