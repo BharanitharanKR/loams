@@ -46,7 +46,8 @@ public interface JournalEntryOrBuilder extends
 
   /**
    * <pre>
-   * The mutation's function path ("module:export" or "_system:insert").
+   * The mutation's function path ("module:export" or "_system:insert"), or
+   * the catalog operation for an entry with no writes ("live.deploy", ...).
    * </pre>
    *
    * <code>string function = 3 [json_name = "function"];</code>
@@ -55,7 +56,8 @@ public interface JournalEntryOrBuilder extends
   java.lang.String getFunction();
   /**
    * <pre>
-   * The mutation's function path ("module:export" or "_system:insert").
+   * The mutation's function path ("module:export" or "_system:insert"), or
+   * the catalog operation for an entry with no writes ("live.deploy", ...).
    * </pre>
    *
    * <code>string function = 3 [json_name = "function"];</code>
@@ -83,4 +85,58 @@ public interface JournalEntryOrBuilder extends
    */
   com.google.protobuf.ByteString
       getRequestIdBytes();
+
+  /**
+   * <pre>
+   * The catalog changes the transaction committed (LV1 plan Task 11). Every
+   * node's tailer sees them at the tick that contains them and reloads what
+   * they change before it matches that tick's writes.
+   * </pre>
+   *
+   * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+   */
+  java.util.List<dev.loams.gen.loams.live.v1.CatalogChange> 
+      getCatalogList();
+  /**
+   * <pre>
+   * The catalog changes the transaction committed (LV1 plan Task 11). Every
+   * node's tailer sees them at the tick that contains them and reloads what
+   * they change before it matches that tick's writes.
+   * </pre>
+   *
+   * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+   */
+  dev.loams.gen.loams.live.v1.CatalogChange getCatalog(int index);
+  /**
+   * <pre>
+   * The catalog changes the transaction committed (LV1 plan Task 11). Every
+   * node's tailer sees them at the tick that contains them and reloads what
+   * they change before it matches that tick's writes.
+   * </pre>
+   *
+   * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+   */
+  int getCatalogCount();
+  /**
+   * <pre>
+   * The catalog changes the transaction committed (LV1 plan Task 11). Every
+   * node's tailer sees them at the tick that contains them and reloads what
+   * they change before it matches that tick's writes.
+   * </pre>
+   *
+   * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+   */
+  java.util.List<? extends dev.loams.gen.loams.live.v1.CatalogChangeOrBuilder> 
+      getCatalogOrBuilderList();
+  /**
+   * <pre>
+   * The catalog changes the transaction committed (LV1 plan Task 11). Every
+   * node's tailer sees them at the tick that contains them and reloads what
+   * they change before it matches that tick's writes.
+   * </pre>
+   *
+   * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+   */
+  dev.loams.gen.loams.live.v1.CatalogChangeOrBuilder getCatalogOrBuilder(
+      int index);
 }
