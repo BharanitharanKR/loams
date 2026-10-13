@@ -1467,7 +1467,7 @@ Fork PR ostrium-labs/loams-postgres#7 (branch `loams/nf1-build-tools`, `bd5dcda5
    - `scripts/loams/pin-build-tools.sh` rewrites `ARG BUILD_TOOLS=` and nothing else. It refuses a tag, another registry or a short digest.
    - The job `pin` commits as `github-actions[bot]`, with a matching `Signed-off-by` and `Loams-Patch: LP-0009`, so the DCO and patch checks pass. It pushes to `bot/build-tools-<digest12>`, outside the `loams/*` no-deletion ruleset, so the branch can be deleted after merging.
    - The PR is opened with `LOAMS_BOT_TOKEN` (the App, Q733) when that secret exists, and with `GITHUB_TOKEN` otherwise.
-   - The `GITHUB_TOKEN` path needs the owner's "Allow GitHub Actions to create and approve pull requests", and its PRs start no checks.
+   - The `GITHUB_TOKEN` path needs the owner's "Allow GitHub Actions to create and approve pull requests". The checks of a PR opened with `GITHUB_TOKEN` wait for a maintainer to approve them; the App token runs them at once.
 3. **`Dockerfile`: `FROM $BUILD_TOOLS`** in the three build stages, replacing `$REPOSITORY/$IMAGE:$TAG` (`pinned`).
    - **Bootstrap:** until our first build, the default is the neon-archive mirror of Neon's last public build-tools (`ghcr.io/ostrium-labs/neon-archive/build-tools@sha256:bd1fe230…`). That image is byte-identical to Neon's `d4a4001a…-bookworm` and its audit is clean (Task 1).
    - It is a builder stage only: nothing from it ships in an image, so the "never deployed" ruling on the neon-archive packages (Task 2 ruling 2) is kept. The first run's pin PR replaces it.
