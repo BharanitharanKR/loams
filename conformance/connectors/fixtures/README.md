@@ -11,8 +11,25 @@ manifest's `fixture` service.
 - **Recorded only from the real system.** A fixture is written by
   `FixtureProxy::record` while a connector talks to the real system (a
   nightly account, or a developer's own account), and its `recorded_from`
-  names that system. Never hand-written, never recorded from a mock, an
-  emulator or a Loams module. A fixture without `recorded_from` is refused.
+  names that system. Never recorded from a mock, an emulator or a Loams
+  module, and never hand-written unless marked synthetic (below). A fixture
+  without `recorded_from` is refused.
+- **Synthetic fixtures are marked, and never count** (CN2 Task 20, R20.1).
+  Where no account could be recorded from yet, a family task may build a
+  fixture by hand from the vendor's *published* request and response shapes.
+  It says so with `"synthetic": true` and lists the documentation it follows
+  in `"docs"` (`Fixture::load` refuses a synthetic fixture without them). It
+  replays exactly like a recording, so the family's own tests run in PR CI,
+  but `Fixture::counts_toward_preview` is false and the kit never treats a
+  directory of synthetic fixtures as an available service: the manifest stays
+  `planned` until the `connectors-nightly` job records the real exchanges and
+  replaces it. Values in a synthetic fixture are invented (`example.test`
+  addresses, `synthetic-…` credentials, documentation IP ranges).
+- **Scenarios.** A fixture may carry a `"scenario"` object (ignored by the
+  kit) that the family's tests read: the resource, the instance config
+  (`{proxy}` is the replay's URL), the secrets by field, and the items written
+  or expected. A webhook fixture holds the delivery as its request, with the
+  body as `{ "text": … }` so the signed bytes are exact.
 - **No secrets.** Recording scrubs header values (`Authorization`, cookies,
   API-key headers, …), query parameters (`access_token`, `client_secret`,
   signatures, …) and JSON body fields by pointer (`/access_token`,

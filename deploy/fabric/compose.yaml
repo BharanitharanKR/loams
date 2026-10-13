@@ -212,6 +212,11 @@ services:
     profiles: [connectors-p2]
     labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--web.enable-remote-write-receiver"]
+    # CN2 Task 21 (R21.7): scrape itself and remote-write to the receiver the
+    # connector's test serves on the runner.
+    volumes:
+      - ./emulators/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts: ["host.docker.internal:host-gateway"]
     ports: ["9090:9090"]
 
   # Vault's API, open licence (the `vault` manifest's system).

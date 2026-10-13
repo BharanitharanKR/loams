@@ -1602,6 +1602,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "loams-connector-protocols"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "buffa",
+ "bytes",
+ "http",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "loams-connector-http",
+ "loams-connector-sdk",
+ "loams-flow-conformance",
+ "loams-flow-proto",
+ "prost",
+ "prost-reflect",
+ "prost-types",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2",
+ "snap",
+ "tokio",
+ "webpki-roots",
+]
+
+[[package]]
 name = "loams-connector-sdk"
 version = "0.0.1"
 dependencies = [
@@ -1685,6 +1714,7 @@ version = "0.0.1"
 dependencies = [
  "buffa",
  "buffa-types",
+ "connectrpc",
  "connectrpc-build",
  "serde",
  "serde_json",

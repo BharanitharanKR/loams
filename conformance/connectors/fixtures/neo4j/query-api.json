@@ -1,0 +1,130 @@
+{
+  "recorded_from": "Neo4j",
+  "synthetic": true,
+  "docs": [
+    "https://neo4j.com/docs/query-api/current/query/",
+    "https://neo4j.com/docs/query-api/current/typed-json/",
+    "https://neo4j.com/docs/http-api/current/endpoints/"
+  ],
+  "scenario": {
+    "config": {
+      "url": "{proxy}",
+      "database": "neo4j",
+      "auth": { "basic": { "username": "neo4j", "password": "neo4j-password" } },
+      "sink": { "statement": "UNWIND $rows AS row MERGE (p:Person {id: row.id}) SET p.name = row.name", "batch": 100 },
+      "source": { "label": "Person", "cursor": "updatedAt", "page_size": 2 }
+    },
+    "secrets": { "neo4j-password": "synthetic-neo4j-password" },
+    "rows": [ { "id": "p1", "name": "Ada" }, { "id": "p2", "name": "Grace" } ]
+  },
+  "exchanges": [
+    {
+      "request": { "method": "GET", "path": "/", "body": "empty" },
+      "response": {
+        "status": 200,
+        "headers": { "content-type": "application/json" },
+        "body": {
+          "json": {
+            "bolt_routing": "neo4j://neo4j.example.test:7687",
+            "transaction": "http://neo4j.example.test:7474/db/{databaseName}/tx",
+            "bolt_direct": "bolt://neo4j.example.test:7687",
+            "neo4j_version": "5.26.0",
+            "neo4j_edition": "community"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/db/neo4j/query/v2",
+        "body": {
+          "json": {
+            "statement": "UNWIND $rows AS row MERGE (p:Person {id: row.id}) SET p.name = row.name",
+            "parameters": { "rows": [ { "id": "p1", "name": "Ada" }, { "id": "p2", "name": "Grace" } ] }
+          }
+        }
+      },
+      "response": {
+        "status": 202,
+        "headers": { "content-type": "application/json" },
+        "body": { "json": { "data": { "fields": [], "values": [] }, "bookmarks": [ "FB:synthetic-bookmark-1" ] } }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/db/neo4j/query/v2",
+        "body": {
+          "json": {
+            "statement": "MATCH (n:`Person`) WHERE n.`updatedAt` IS NOT NULL AND ($cursor IS NULL OR n.`updatedAt` > $cursor OR (n.`updatedAt` = $cursor AND elementId(n) > $after)) RETURN n, n.`updatedAt` AS cursor, elementId(n) AS eid ORDER BY cursor, eid LIMIT $limit",
+            "parameters": {
+              "cursor": { "$type": "Null", "_value": null },
+              "after": { "$type": "String", "_value": "" },
+              "limit": { "$type": "Integer", "_value": "2" }
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 202,
+        "headers": { "content-type": "application/vnd.neo4j.query" },
+        "body": {
+          "json": {
+            "data": {
+              "fields": [ "n", "cursor", "eid" ],
+              "values": [
+                [
+                  { "$type": "Node", "_value": { "_element_id": "4:synthetic:1", "_labels": [ "Person" ], "_properties": { "id": { "$type": "String", "_value": "p1" }, "name": { "$type": "String", "_value": "Ada" }, "updatedAt": { "$type": "Integer", "_value": "100" } } } },
+                  { "$type": "Integer", "_value": "100" },
+                  { "$type": "String", "_value": "4:synthetic:1" }
+                ],
+                [
+                  { "$type": "Node", "_value": { "_element_id": "4:synthetic:2", "_labels": [ "Person" ], "_properties": { "id": { "$type": "String", "_value": "p2" }, "name": { "$type": "String", "_value": "Grace" }, "updatedAt": { "$type": "Integer", "_value": "200" } } } },
+                  { "$type": "Integer", "_value": "200" },
+                  { "$type": "String", "_value": "4:synthetic:2" }
+                ]
+              ]
+            },
+            "bookmarks": [ "FB:synthetic-bookmark-1" ]
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/db/neo4j/query/v2",
+        "body": {
+          "json": {
+            "statement": "MATCH (n:`Person`) WHERE n.`updatedAt` IS NOT NULL AND ($cursor IS NULL OR n.`updatedAt` > $cursor OR (n.`updatedAt` = $cursor AND elementId(n) > $after)) RETURN n, n.`updatedAt` AS cursor, elementId(n) AS eid ORDER BY cursor, eid LIMIT $limit",
+            "parameters": {
+              "cursor": { "$type": "Integer", "_value": "200" },
+              "after": { "$type": "String", "_value": "4:synthetic:2" },
+              "limit": { "$type": "Integer", "_value": "2" }
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 202,
+        "headers": { "content-type": "application/vnd.neo4j.query" },
+        "body": {
+          "json": {
+            "data": {
+              "fields": [ "n", "cursor", "eid" ],
+              "values": [
+                [
+                  { "$type": "Node", "_value": { "_element_id": "4:synthetic:3", "_labels": [ "Person" ], "_properties": { "id": { "$type": "String", "_value": "p3" }, "name": { "$type": "String", "_value": "Edsger" }, "updatedAt": { "$type": "Integer", "_value": "300" } } } },
+                  { "$type": "Integer", "_value": "300" },
+                  { "$type": "String", "_value": "4:synthetic:3" }
+                ]
+              ]
+            },
+            "bookmarks": [ "FB:synthetic-bookmark-1" ]
+          }
+        }
+      }
+    }
+  ]
+}

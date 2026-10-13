@@ -67,6 +67,8 @@ async fn send(
 async fn fixture_replay_rejects_unrecorded_request() {
     let fixture = Fixture {
         recorded_from: "HubSpot".to_owned(),
+        synthetic: false,
+        docs: vec![],
         exchanges: vec![
             exchange(
                 "POST",
@@ -128,12 +130,42 @@ async fn fixture_replay_rejects_unrecorded_request() {
     // A fixture that does not name the real system it came from is refused.
     let anonymous = Fixture {
         recorded_from: String::new(),
+        synthetic: false,
+        docs: vec![],
         exchanges: vec![],
     };
     assert!(matches!(
         FixtureProxy::replay(anonymous, ScrubRules::default()).await,
         Err(FixtureError::NoSystem)
     ));
+}
+
+/// CN2 Task 20 (R20.1): a synthetic fixture replays like a recording, must
+/// name the documentation it was built from, and never counts toward
+/// `preview`.
+#[test]
+fn synthetic_fixture_is_marked_and_documented() {
+    let dir = std::env::temp_dir().join(format!("loams-synthetic-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("list.json");
+    let doc = |docs: &str| {
+        format!(
+            r#"{{"recorded_from": "Stripe", "synthetic": true, "docs": [{docs}], "exchanges": []}}"#
+        )
+    };
+    std::fs::write(
+        &path,
+        doc(r#""https://docs.stripe.com/api/customers/list""#),
+    )
+    .unwrap();
+    let f = Fixture::load(&path).unwrap();
+    assert!(f.synthetic && !f.counts_toward_preview());
+    std::fs::write(&path, doc("")).unwrap();
+    assert!(
+        Fixture::load(&path).is_err(),
+        "a synthetic fixture cites its docs"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 /// A stand-in upstream for the recording test only: it plays the role of the
