@@ -1,0 +1,12 @@
+{
+  "all": false,
+  "amend": false,
+  "checkoutId": "checkout-1",
+  "cwd": "/home/dev/project",
+  "expectedChecksum": "sum-1",
+  "message": "Fix the linker",
+  "paths": [
+    "src/main.rs"
+  ],
+  "signoff": true
+}

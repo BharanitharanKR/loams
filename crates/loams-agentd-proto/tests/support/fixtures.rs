@@ -1475,6 +1475,109 @@ pub fn all() -> Vec<Fixture> {
             checksum: s("sum-2"),
         },
     ));
+
+    // Worktrees and git writes (SD1 Task 9, §53 §6.5 G1–G5, G21).
+    add(Fixture::new(
+        "WorktreeList",
+        WorktreeList(vec![WorktreeInfo {
+            path: s("/home/dev/.loams-desktop/worktrees/project/fix-linker"),
+            branch: s("loams-desktop/fix-linker"),
+            head: s("4b825dc642cb6eb9a060e54bf8d69288fbee4904"),
+            checkout_id: some("checkout-2"),
+            chat_ids: vec![s("chat-1")],
+            dirty: true,
+            ahead: 2,
+            behind: 1,
+            last_activity_ms: MS,
+        }]),
+    ));
+    add(Fixture::new(
+        "CommitWorktreeParams",
+        CommitWorktreeParams {
+            checkout_id: s("checkout-1"),
+            cwd: s("/home/dev/project"),
+            message: s("Fix the linker"),
+            paths: vec![s("src/main.rs")],
+            all: false,
+            amend: false,
+            signoff: true,
+            expected_checksum: s("sum-1"),
+        },
+    ));
+    add(Fixture::new(
+        "CommitWorktreeReply",
+        CommitWorktreeReply {
+            sha: s("4b825dc642cb6eb9a060e54bf8d69288fbee4904"),
+            summary: s("Fix the linker"),
+        },
+    ));
+    add(Fixture::new(
+        "PushBranchParams",
+        PushBranchParams {
+            cwd: s("/home/dev/project"),
+            remote: some("origin"),
+            branch: s("fix-linker"),
+            set_upstream: true,
+            force_with_lease: false,
+        },
+    ));
+    add(Fixture::new(
+        "PushBranchReply",
+        PushBranchReply {
+            remote: s("origin"),
+            ref_name: s("refs/heads/fix-linker"),
+            url: some("https://forgejo.example.com/dev/project.git"),
+        },
+    ));
+    add(Fixture::new(
+        "CreateChangeRequestParams",
+        CreateChangeRequestParams {
+            cwd: s("/home/dev/project"),
+            provider: ChangeRequestProvider::Forgejo,
+            base: s("main"),
+            head: s("fix-linker"),
+            title: s("Fix the linker"),
+            body: s("Links again."),
+            draft: false,
+            link_issue: some("42"),
+        },
+    ));
+    add(Fixture::new(
+        "CreateChangeRequestReply",
+        CreateChangeRequestReply {
+            provider: ChangeRequestProvider::Forgejo,
+            number: 7,
+            url: s("https://forgejo.example.com/dev/project/pulls/7"),
+            state: ChangeRequestState::Open,
+        },
+    ));
+    add(Fixture::new(
+        "MergeBranchParams",
+        MergeBranchParams {
+            repo_path: s("/home/dev/project"),
+            source: s("loams-desktop/fix-linker"),
+            target: s("main"),
+            strategy: MergeStrategy::Squash,
+            message: some("Fix the linker"),
+            delete_source: true,
+            remove_worktree: true,
+            expected_source_head: s("4b825dc642cb6eb9a060e54bf8d69288fbee4904"),
+        },
+    ));
+    add(Fixture::new(
+        "MergeBranchReply",
+        MergeBranchReply {
+            sha: s("4b825dc642cb6eb9a060e54bf8d69288fbee4904"),
+        },
+    ));
+    add(Fixture::new(
+        "DiscardPathsParams",
+        DiscardPathsParams {
+            checkout_id: s("checkout-1"),
+            paths: vec![s("src/main.rs")],
+            expected_checksum: s("sum-1"),
+        },
+    ));
     add(Fixture::new(
         "GetCheckoutFileDiffTextRequest",
         GetCheckoutFileDiffTextRequest {

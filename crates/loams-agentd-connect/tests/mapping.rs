@@ -67,11 +67,16 @@ table! {
     "CheckoutDiff" => message::<rs::CheckoutDiff>,
     "CheckoutDiffList" => list::<rs::CheckoutDiff>,
     "CheckoutFileDiffText" => message::<rs::CheckoutFileDiffText>,
+    "CommitWorktreeParams" => message::<rs::CommitWorktreeParams>,
+    "CommitWorktreeReply" => message::<rs::CommitWorktreeReply>,
     "CompleteAgentLoginParams" => message::<rs::CompleteAgentLoginParams>,
+    "CreateChangeRequestParams" => message::<rs::CreateChangeRequestParams>,
+    "CreateChangeRequestReply" => message::<rs::CreateChangeRequestReply>,
     "CreateWorktreeOutcome" => message::<rs::CreateWorktreeOutcome>,
     "CreateWorktreeParams" => message::<rs::CreateWorktreeParams>,
     "DeleteWorkspaceEntryRequest" => message::<rs::DeleteWorkspaceEntryRequest>,
     "DeleteWorktreeParams" => message::<rs::DeleteWorktreeParams>,
+    "DiscardPathsParams" => message::<rs::DiscardPathsParams>,
     "DismissHarnessUpdateParams" => message::<rs::DismissHarnessUpdateParams>,
     "DriveListing" => |v| {
         let listing: rs::DriveListing = serde_json::from_value(v.clone()).unwrap();
@@ -91,6 +96,8 @@ table! {
     "ListFoldersParams" => message::<rs::ListFoldersParams>,
     "ListModelsParams" => message::<rs::ListModelsParams>,
     "ListWorkspaceDirectoryRequest" => message::<rs::ListWorkspaceDirectoryRequest>,
+    "MergeBranchParams" => message::<rs::MergeBranchParams>,
+    "MergeBranchReply" => message::<rs::MergeBranchReply>,
     "MessagePart" => message::<rs::MessagePart>,
     "ModelList" => list::<rs::Model>,
     "MoveQueuedMessageParams" => message::<rs::MoveQueuedMessageParams>,
@@ -99,6 +106,8 @@ table! {
     "ProjectActionRun" => message::<rs::ProjectActionRun>,
     "ProjectActionSetup" => message::<rs::ProjectActionSetup>,
     "ProjectActionsSnapshot" => message::<rs::ProjectActionsSnapshot>,
+    "PushBranchParams" => message::<rs::PushBranchParams>,
+    "PushBranchReply" => message::<rs::PushBranchReply>,
     "QueueMessageParams" => message::<rs::QueueMessageParams>,
     "QueueSnapshot" => |v| {
         let snapshot: rs::QueueSnapshot = serde_json::from_value(v.clone()).unwrap();
@@ -145,6 +154,7 @@ table! {
     },
     "WorkspaceImageChunk" => message::<rs::WorkspaceImageChunk>,
     "WorkspaceMutationOutcome" => message::<rs::WorkspaceMutationOutcome>,
+    "WorktreeList" => list::<rs::WorktreeInfo>,
     "WriteWorkspaceFileOutcome" => message::<rs::WriteWorkspaceFileOutcome>,
     "WriteWorkspaceFileRequest" => message::<rs::WriteWorkspaceFileRequest>,
 }

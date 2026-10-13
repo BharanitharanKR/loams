@@ -4,7 +4,6 @@ use connectrpc::{RequestContext, ServiceRequest, ServiceResult, ServiceStream};
 use loams_agentd_proto as rs;
 
 use super::{Agentd, stream, unary};
-use crate::error;
 use crate::map::{Wire, msg};
 use crate::proto::loams::agentd::v1 as pb;
 
@@ -102,8 +101,14 @@ impl pb::DiffService for Agentd {
     async fn discard_paths(
         &self,
         _ctx: RequestContext,
-        _request: ServiceRequest<'_, pb::DiscardPathsRequest>,
+        request: ServiceRequest<'_, pb::DiscardPathsRequest>,
     ) -> ServiceResult<pb::DiscardPathsResponse> {
-        Err(error::not_implemented("DiscardPaths", "G21, SD1 Task 9"))
+        unary!(
+            self,
+            request,
+            DiscardPaths,
+            |req| Wire::from_pb(req)?,
+            |_empty| pb::DiscardPathsResponse::default()
+        )
     }
 }

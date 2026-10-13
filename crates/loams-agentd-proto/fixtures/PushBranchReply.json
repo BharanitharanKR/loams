@@ -1,0 +1,5 @@
+{
+  "ref": "refs/heads/fix-linker",
+  "remote": "origin",
+  "url": "https://forgejo.example.com/dev/project.git"
+}

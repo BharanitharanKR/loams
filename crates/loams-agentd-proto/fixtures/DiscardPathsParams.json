@@ -1,0 +1,7 @@
+{
+  "checkoutId": "checkout-1",
+  "expectedChecksum": "sum-1",
+  "paths": [
+    "src/main.rs"
+  ]
+}

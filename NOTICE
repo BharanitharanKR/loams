@@ -156,8 +156,7 @@ Electron shell (build configuration and main-process patterns); each adapted
 file carries an attribution header. See apps/desktop-electron/NOTICE.
 
 T3 Code (https://github.com/pingdotgg/t3code), MIT License, Copyright (c)
-2026 T3 Tools Inc. Files under web/packages/studio-ui/ marked in their
-headers are derived from T3 Code at the commit recorded in
-web/packages/studio-ui/provenance.json; the MIT licence text is in
-web/packages/studio-ui/LICENSE.t3code and must accompany distributions of
-those files.
+2026 T3 Tools Inc. Files under web/packages/studio-ui/ and web/packages/ui/
+marked in their headers are derived from T3 Code at the commit recorded in
+each package's provenance.json; the MIT licence text is in each package's
+LICENSE.t3code and must accompany distributions of those files.

@@ -75,7 +75,7 @@ describe("routeAgentd", () => {
 		const fetchImpl = vi.fn(async () => new Response("{}"));
 		for (const path of [
 			// A §53 §6.5 gap, not served yet.
-			"/loams.agentd.v1.GitService/ListWorktrees",
+			"/loams.agentd.v1.ThreadService/ListCheckpoints",
 			// No such method.
 			"/loams.agentd.v1.ThreadService/Shutdown",
 			// A path, not an exact method.
