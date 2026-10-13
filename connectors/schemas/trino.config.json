@@ -1,9 +1,79 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/trino.config.json",
-  "title": "Trino instance config (placeholder)",
-  "description": "Placeholder for a Trino instance's settings. It is filled in when this connector is built: CN2 for the P2 rows, as first-party native connectors with declared fallbacks (CN2 OR-1, OR-4), and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "Trino connector instance config (loams.flow/v1)",
+  "description": "One Trino source's settings, read by the native analytics family (`loams_connector_analytics::trino`, CN2 Task 17) over Trino's client REST protocol. A source only. `password` and `token` hold secret **names** (D189), exactly the manifest's `secrets`, and are exclusive.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "url",
+    "user",
+    "query"
+  ],
+  "properties": {
+    "url": {
+      "description": "The coordinator, `https://trino.example.com:8443`. Every `nextUri` must stay on it.",
+      "type": "string",
+      "minLength": 1
+    },
+    "user": {
+      "description": "The Trino user (`X-Trino-User`).",
+      "type": "string",
+      "minLength": 1
+    },
+    "catalog": {
+      "description": "The session catalog.",
+      "type": "string",
+      "minLength": 1
+    },
+    "schema": {
+      "description": "The session schema.",
+      "type": "string",
+      "minLength": 1
+    },
+    "query": {
+      "description": "The query. Give it an `ORDER BY` so a resume after Trino has forgotten the page is exact (R17.9).",
+      "type": "string",
+      "minLength": 1
+    },
+    "password": {
+      "description": "HTTP Basic's password; needs an `https://` url. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "token": {
+      "description": "A JWT or OAuth 2 access token, sent as `Authorization: Bearer`. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "timeout_secs": {
+      "description": "Per-request timeout, in seconds.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 60
+    },
+    "lossy": {
+      "description": "Columns whose mapping loses information and is accepted (R5.1), for example a `timestamp` without a zone read as UTC.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "evolution": {
+      "description": "The schema evolution policy (see the schema-mapping guide).",
+      "enum": [
+        "additive",
+        "widen",
+        "pause"
+      ],
+      "default": "additive"
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }

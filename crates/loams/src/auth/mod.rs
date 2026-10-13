@@ -28,11 +28,21 @@
 //! - `off` (the default): no authentication, and the server refuses to start
 //!   unless every listener is on loopback.
 //!
+//! Whatever the mode, the engine also takes the credentials of its own
+//! principal store ([`directory`], API2 Tasks 6 and 7): the console's
+//! session (the `loams_session` cookie or an `ls_…` bearer, from
+//! `AuthService/CreateSession`) and the API keys `KeyService/CreateKey`
+//! keeps in the metastore. With `off`, a valid session still names its
+//! person, and anything else is the developer on loopback.
+//!
 //! [`Authenticator`] is the hook MT1 extends (API2 Task 6): the layer
 //! ([`layer`]) turns a request's credential into a [`Principal`] in the
-//! request extensions, and no handler parses a header.
+//! request extensions, and no handler parses a header. [`authorizer`] is the
+//! second hook: what an admitted principal may do in the org.
 
 pub mod api_key;
+pub mod authorizer;
+pub mod directory;
 pub mod layer;
 pub mod oidc;
 pub mod tailscale;
@@ -41,7 +51,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use async_trait::async_trait;
 use http::StatusCode;
@@ -50,6 +60,23 @@ pub use layer::{AuthLayerState, Cors};
 
 /// The environment variable that picks the mode.
 pub const MODE_ENV: &str = "LOAMS_AUTH_MODE";
+
+/// The environment variable holding the first-run setup token
+/// (`AuthService/CompleteSetup` on an engine with authentication on).
+pub const SETUP_TOKEN_ENV: &str = "LOAMS_SETUP_TOKEN";
+
+/// The RPCs answered without a credential (the API2 shared contract's
+/// `PUBLIC_RPCS`, with ruling 6/7.9's `CreateSession` and the server half's
+/// `DeleteSession`). [`layer::MAIN_PUBLIC_PATHS`] is these plus the probes.
+pub const PUBLIC_RPCS: &[&str] = &[
+    "/loams.instance.v1.InstanceService/GetInstance",
+    "/loams.auth.v1.AuthService/ListProviders",
+    "/loams.auth.v1.AuthService/CompleteSetup",
+    "/loams.auth.v1.AuthService/CreateSession",
+    "/loams.auth.v1.AuthService/DeleteSession",
+    "/grpc.health.v1.Health/Check",
+    "/grpc.health.v1.Health/Watch",
+];
 
 /// Who made a request (API2 shared contract).
 #[derive(Clone, PartialEq, Eq)]
@@ -78,7 +105,12 @@ impl fmt::Debug for Principal {
 pub enum PrincipalKind {
     /// An OIDC user (a JWT from the issuer).
     User,
-    /// An API key from `LOAMS_API_KEYS_FILE`.
+    /// A person signed in to the console (`AuthService/CreateSession`);
+    /// `subject` is their user id in the org.
+    Session,
+    /// An API key: from `LOAMS_API_KEYS_FILE` (`subject` `apikey:<id>`), or
+    /// one `KeyService/CreateKey` made (the same `subject` shape; the
+    /// metastore has its record).
     ApiKey,
     /// A tailnet user, as `tailscale serve` named them.
     Tailscale,
@@ -148,6 +180,12 @@ pub mod reason {
     pub const TOKEN_MISSING: &str = "token_missing";
     pub const TOKEN_MALFORMED: &str = "token_malformed";
     pub const TOKEN_EXPIRED: &str = "token_expired";
+    /// A revoked API key, or a session that was signed out or whose person
+    /// left the org.
+    pub const TOKEN_REVOKED: &str = "token_revoked";
+    /// A cookie-authenticated call that is not a `GET` without the
+    /// session's `X-CSRF-Token`.
+    pub const CSRF_TOKEN_INVALID: &str = "csrf_token_invalid";
     pub const TOKEN_NOT_YET_VALID: &str = "token_not_yet_valid";
     pub const TOKEN_BAD_SIGNATURE: &str = "token_bad_signature";
     pub const TOKEN_WRONG_AUDIENCE: &str = "token_wrong_audience";
@@ -170,6 +208,25 @@ pub enum Credential {
     ApiKey(String),
     /// A bearer that is not an API key: a JWT.
     Jwt(String),
+    /// A console session: an `ls_…` bearer, or the `loams_session` cookie.
+    Session(SessionCredential),
+}
+
+/// A console session token as the request carried it.
+#[derive(Clone, PartialEq, Eq)]
+pub struct SessionCredential {
+    pub token: String,
+    /// `Some` when the token came in the cookie on a call that must prove it
+    /// is the console's own (anything but a `GET` and `GetSession`): the
+    /// `X-CSRF-Token` header's value, empty when it was absent. The session
+    /// is admitted only if it matches.
+    pub csrf: Option<String>,
+}
+
+impl fmt::Debug for SessionCredential {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("SessionCredential([redacted])")
+    }
 }
 
 impl fmt::Debug for Credential {
@@ -177,6 +234,7 @@ impl fmt::Debug for Credential {
         match self {
             Self::ApiKey(_) => f.write_str("ApiKey([redacted])"),
             Self::Jwt(_) => f.write_str("Jwt([redacted])"),
+            Self::Session(_) => f.write_str("Session([redacted])"),
         }
     }
 }
@@ -253,7 +311,36 @@ pub struct AuthConfig {
     /// so it takes only these origins (empty: the hosted console's) and
     /// refuses a request from any other.
     pub cors_origins: Vec<String>,
+    /// `LOAMS_SETUP_TOKEN`: what `AuthService/CompleteSetup` must carry on
+    /// an engine with authentication on. With authentication off (loopback
+    /// only) setup needs no token; with it on and no token set, setup is
+    /// refused until the operator sets one.
+    pub setup_token: Option<String>,
+    /// Authenticators to consult after the mode's own (MT1's, or a test's):
+    /// the hook that proves a new credential kind needs no handler change
+    /// (API2 Task 6, `authenticator_is_swappable`). Any of them turns
+    /// authentication on.
+    pub extra_authenticators: Authenticators,
 }
+
+/// A list of [`Authenticator`]s that a config can carry (cloned by
+/// reference, equal when they are the same objects).
+#[derive(Clone, Default)]
+pub struct Authenticators(pub Vec<Arc<dyn Authenticator>>);
+
+impl fmt::Debug for Authenticators {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Authenticators({})", self.0.len())
+    }
+}
+
+impl PartialEq for Authenticators {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.len() == other.0.len() && self.0.iter().zip(&other.0).all(|(a, b)| Arc::ptr_eq(a, b))
+    }
+}
+
+impl Eq for Authenticators {}
 
 impl Default for AuthConfig {
     fn default() -> Self {
@@ -271,6 +358,8 @@ impl AuthConfig {
             oidc: None,
             tailscale: None,
             cors_origins: Vec::new(),
+            setup_token: None,
+            extra_authenticators: Authenticators::default(),
         }
     }
 
@@ -289,7 +378,7 @@ impl AuthConfig {
 
     /// Whether requests are authenticated at all.
     pub fn enforced(&self) -> bool {
-        self.mode != AuthMode::Off
+        self.mode != AuthMode::Off || !self.extra_authenticators.0.is_empty()
     }
 
     /// Reads `LOAMS_AUTH_MODE`, `LOAMS_API_KEYS_FILE`, `LOAMS_OIDC_*`,
@@ -317,6 +406,10 @@ impl AuthConfig {
                 .into_iter()
                 .map(|o| o.trim_end_matches('/').to_owned())
                 .collect(),
+            setup_token: var(SETUP_TOKEN_ENV)
+                .map(|v| v.trim().to_owned())
+                .filter(|v| !v.is_empty()),
+            extra_authenticators: Authenticators::default(),
         };
         if let AuthMode::On {
             api_keys,
@@ -440,6 +533,72 @@ impl AuthConfig {
     }
 }
 
+/// Who may run first-run setup (`AuthService/CompleteSetup`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SetupGate {
+    /// Anyone who reaches the engine: authentication is off, so every
+    /// listener is loopback.
+    Open,
+    /// Whoever carries `LOAMS_SETUP_TOKEN`.
+    Token(String),
+    /// Nobody: authentication is on and no setup token is set.
+    Closed,
+}
+
+/// What the main port's `loams.auth.v1` and `loams.admin.v1` stand on: the
+/// principal store, the authorizer that reads roles from it, and the setup
+/// gate.
+#[derive(Clone)]
+pub struct Principals {
+    pub directory: Arc<directory::Directory>,
+    pub authorizer: Arc<dyn authorizer::Authorizer>,
+    pub setup: SetupGate,
+}
+
+impl fmt::Debug for Principals {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Principals")
+            .field("directory", &self.directory)
+            .field("setup", &matches!(self.setup, SetupGate::Open))
+            .finish_non_exhaustive()
+    }
+}
+
+impl Principals {
+    /// `directory` with [`authorizer::OrgRoleAuthorizer`] over it.
+    pub fn new(directory: Arc<directory::Directory>, setup: SetupGate) -> Self {
+        Self {
+            authorizer: Arc::new(authorizer::OrgRoleAuthorizer::new(directory.clone())),
+            directory,
+            setup,
+        }
+    }
+
+    /// The principal store over `meta` and `store`, attached to `auth` so
+    /// its sessions and keys authenticate, with the setup gate `auth`'s
+    /// mode implies.
+    pub fn attach(
+        auth: &Auth,
+        meta: Arc<dyn loams_common::meta::MetaStore>,
+        store: loams_store::Store,
+    ) -> Self {
+        let directory = match auth.directory() {
+            Some(existing) => existing.clone(),
+            None => {
+                let directory = directory::Directory::new(meta, store);
+                auth.attach_directory(directory.clone());
+                directory
+            }
+        };
+        let setup = match (auth.enforced(), auth.setup_token()) {
+            (false, _) => SetupGate::Open,
+            (true, Some(token)) => SetupGate::Token(token.to_owned()),
+            (true, None) => SetupGate::Closed,
+        };
+        Self::new(directory, setup)
+    }
+}
+
 /// The engine's authenticators, built from an [`AuthConfig`].
 pub struct Auth {
     authenticators: Vec<Arc<dyn Authenticator>>,
@@ -449,6 +608,11 @@ pub struct Auth {
     /// CORS on the `tailscale serve` target: never any origin, since the
     /// tailnet identity there is ambient, like a cookie.
     tailscale_cors: Cors,
+    /// The engine's own principal store (sessions and metastore API keys),
+    /// attached once the metastore is up ([`Auth::attach_directory`]).
+    directory: OnceLock<Arc<directory::Directory>>,
+    /// `LOAMS_SETUP_TOKEN`.
+    setup_token: Option<String>,
 }
 
 impl fmt::Debug for Auth {
@@ -502,6 +666,7 @@ impl Auth {
                 authenticators.push(Arc::new(oidc::OidcAuthenticator::new(oidc.clone())?));
             }
         }
+        authenticators.extend(config.extra_authenticators.0.iter().cloned());
         let origins = config.cors_origins.iter().cloned().collect::<BTreeSet<_>>();
         let cors = match (config.enforced(), origins.is_empty()) {
             (true, true) => Cors::any(),
@@ -517,6 +682,8 @@ impl Auth {
             enforced: config.enforced(),
             cors,
             tailscale_cors,
+            directory: OnceLock::new(),
+            setup_token: config.setup_token.clone(),
         }))
     }
 
@@ -531,10 +698,13 @@ impl Auth {
             enforced: true,
             cors: Cors::new(cors_origins),
             tailscale_cors: Cors::default(),
+            directory: OnceLock::new(),
+            setup_token: None,
         })
     }
 
-    /// No authentication: every request is [`PrincipalKind::DevLoopback`].
+    /// No authentication: every request is [`PrincipalKind::DevLoopback`]
+    /// (or the person whose console session it carries).
     pub fn off() -> Arc<Self> {
         Arc::new(Self {
             authenticators: Vec::new(),
@@ -542,11 +712,30 @@ impl Auth {
             enforced: false,
             cors: Cors::new(BTreeSet::new()),
             tailscale_cors: Cors::default(),
+            directory: OnceLock::new(),
+            setup_token: None,
         })
     }
 
     pub fn enforced(&self) -> bool {
         self.enforced
+    }
+
+    /// Takes the principal store's credentials (console sessions and the
+    /// metastore's API keys) from now on. The first directory attached
+    /// stays; a second call is ignored.
+    pub fn attach_directory(&self, directory: Arc<directory::Directory>) {
+        let _ = self.directory.set(directory);
+    }
+
+    /// The attached principal store.
+    pub fn directory(&self) -> Option<&Arc<directory::Directory>> {
+        self.directory.get()
+    }
+
+    /// `LOAMS_SETUP_TOKEN`.
+    pub(crate) fn setup_token(&self) -> Option<&str> {
+        self.setup_token.as_deref()
     }
 
     pub(crate) fn tailscale(&self) -> Option<&tailscale::TailscaleAuth> {
@@ -564,14 +753,29 @@ impl Auth {
     /// The principal for `credential`: the first authenticator that takes
     /// it decides.
     pub async fn authenticate(&self, credential: &Credential) -> Result<Principal, AuthError> {
+        // The principal store first: it decides its own sessions, and the
+        // API keys it holds (a key it does not hold falls through to the
+        // key file).
+        if let Some(directory) = self.directory.get()
+            && let Some(result) = directory.authenticate(credential).await
+        {
+            return result;
+        }
         for authenticator in &self.authenticators {
             if let Some(result) = authenticator.authenticate(credential).await {
                 return result;
             }
         }
         let what = match credential {
+            Credential::ApiKey(_) if self.directory.get().is_some() => {
+                return Err(AuthError::unauthenticated(
+                    reason::API_KEY_INVALID,
+                    "the API key is not valid",
+                ));
+            }
             Credential::ApiKey(_) => "API keys are not enabled on this engine (LOAMS_AUTH_MODE)",
             Credential::Jwt(_) => "OIDC tokens are not enabled on this engine (LOAMS_AUTH_MODE)",
+            Credential::Session(_) => "console sessions are not served by this listener",
         };
         Err(AuthError::unauthenticated(
             reason::CREDENTIAL_NOT_ACCEPTED,

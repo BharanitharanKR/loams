@@ -11,7 +11,10 @@
 
 mod collections;
 pub mod connect;
+mod connect_admin;
+mod connect_auth;
 mod connect_collections;
+mod connect_console;
 mod connect_documents;
 mod connect_errors;
 mod connect_hot;
@@ -145,6 +148,9 @@ pub struct AppState {
     /// node's repository sequencers; `None` when this node does not serve it.
     #[cfg(feature = "git")]
     pub git: Option<Arc<repos::GitRuntime>>,
+    /// The principal store, its authorizer and the setup gate, behind
+    /// `loams.auth.v1` and `loams.admin.v1` (API2 Tasks 6 and 7).
+    pub principals: crate::auth::Principals,
     /// Loams Live's two services (LV1 plan Task 12, feature `live`), registered on this router;
     /// `None` when Live is off or this router may not serve it (a non-loopback main port before
     /// LV1 Task 18), and then the package answers `feature_not_in_variant`.

@@ -11,7 +11,12 @@ import { OpenPanelPanel } from './panels/openpanel.js';
 import { PlanePanel } from './panels/plane.js';
 import { ZulipPanel } from './panels/zulip.js';
 
-const PANELS: Partial<Record<FactoryAppId, (p: { desktop: LoamsDesktopApi }) => ReactNode>> = {
+const PANELS: Partial<
+  Record<
+    FactoryAppId,
+    (p: { desktop: LoamsDesktopApi; navigate: (to: string) => void }) => ReactNode
+  >
+> = {
   forgejo: ForgejoPanel,
   zulip: ZulipPanel,
   plane: PlanePanel,
@@ -21,7 +26,7 @@ const PANELS: Partial<Record<FactoryAppId, (p: { desktop: LoamsDesktopApi }) => 
   langfuse: LangfusePanel,
 };
 
-/** `/factory/:app`: the app's native panels, or "Full UI only". */
+/** `/studio/factory/:app`: the app's native panels, or "Full UI only". */
 export function PanelsPage({
   desktop,
   app,
@@ -46,7 +51,7 @@ export function PanelsPage({
       <div className="lc-page">
         <Empty
           title="Unknown app"
-          actions={<Button onClick={() => navigate('/factory')}>Back</Button>}
+          actions={<Button onClick={() => navigate('/studio/factory')}>Back</Button>}
         />
       </div>
     );
@@ -73,17 +78,17 @@ export function PanelsPage({
         subtitle={`${ROLES[app]}${info.url ? ` · ${info.url}` : ''}`}
         actions={
           <>
-            <Button size="sm" variant="quiet" onClick={() => navigate('/factory')}>
+            <Button size="sm" variant="quiet" onClick={() => navigate('/studio/factory')}>
               All apps
             </Button>
-            <Button size="sm" onClick={() => navigate(`/factory/${app}/configure`)}>
+            <Button size="sm" onClick={() => navigate(`/studio/factory/${app}/configure`)}>
               Configure
             </Button>
             <Button
               size="sm"
               variant="primary"
               disabled={!configured}
-              onClick={() => navigate(`/factory/${app}/app`)}
+              onClick={() => navigate(`/studio/factory/${app}/app`)}
             >
               Open app
             </Button>
@@ -110,7 +115,7 @@ export function PanelsPage({
           {info.label} has no native panels. Use Open app to work in its own interface.
         </Empty>
       ) : (
-        <Panel desktop={desktop} />
+        <Panel desktop={desktop} navigate={navigate} />
       )}
     </div>
   );

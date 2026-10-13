@@ -88,6 +88,24 @@ The rules, in the order they bite:
 | `live_deploy_conflict` | failed_precondition | `loams.live.v1` Deploy (LiveAdminService's Deploy and ActivateDeployment from LV1 Task 10): the deploy's `expected_active` is not the app's active deployment, because another deploy activated in between; the message names both. The deployment's record is `failed` (LV1 Task 6, design §45 §3.3) | |
 | `live_schema_violation` | invalid_argument | `loams.live.v1` Mutate (and every write a function makes, `_system:*` included): the document does not match its table's validator, or a stricter validator a deploy is checking; the message names the table and the field paths, never the values (LV1 Task 8, design §45 §4.1) | `field_violations` (path, description) |
 | `live_index_not_ready` | failed_precondition | `loams.live.v1` Query, Mutate and the session's queries: the function read an index a deploy is still backfilling; it becomes readable when that deploy activates (LV1 Task 9, design §45 §4.2). The message names the index and the table | |
+| `role_required` | permission_denied | every `loams.admin.v1` RPC whose caller's org role is below the one it needs (reads `member`, mutations `admin`, inviting or removing an owner `owner`), or who is not in the org (API2 Task 7, `member_cannot_create_key`) | `role` (the role needed) |
+| `setup_required` | failed_precondition | every `loams.admin.v1` RPC before first-run setup (`AuthService/CompleteSetup`) has created the org | |
+| `token_missing` | unauthenticated | any main-port RPC outside `PUBLIC_RPCS` called without a credential (the auth layer, API2 Task 6) | |
+| `token_malformed` | unauthenticated | a credential that is neither an API key, a session token nor a JWT, or more than one `Authorization` header | |
+| `token_revoked` | unauthenticated | a revoked API key (`KeyService/RevokeKey`), or a console session that was signed out or whose person left the org | |
+| `token_not_yet_valid` | unauthenticated | an OIDC token whose `nbf` is in the future | |
+| `token_bad_signature` | unauthenticated | an OIDC token whose signature does not verify | |
+| `token_wrong_audience` | unauthenticated | an OIDC token for another audience | |
+| `token_wrong_issuer` | unauthenticated | an OIDC token from an issuer this engine does not trust | |
+| `token_unknown_key` | unauthenticated | an OIDC token signed with a key its issuer's JWKS does not have | |
+| `token_algorithm_not_allowed` | unauthenticated | an OIDC token signed with an algorithm other than RS256 or EdDSA | |
+| `api_key_invalid` | unauthenticated | an API key no key file or metastore record admits | |
+| `credential_not_accepted` | unauthenticated | a credential kind this engine's `LOAMS_AUTH_MODE` does not take | |
+| `credential_in_query_string` | unauthenticated | any request with `access_token`, `token`, `api_key`, `apikey` or `api-key` in its query string (D608) | |
+| `csrf_token_invalid` | permission_denied | a call authenticated by the `loams_session` cookie that is not a `GET` (nor `GetSession`) without the session's `X-CSRF-Token` | |
+| `principal_not_allowed` | permission_denied | a valid OIDC or tailnet identity that is not on the engine's allowlist | |
+| `cors_origin_not_allowed` | permission_denied | a browser call from an origin outside `LOAMS_CORS_ORIGINS` | |
+| `auth_unavailable` | unavailable | a credential that cannot be checked now (the issuer's JWKS or the principal store is unreachable) | |
 | `invalid_argument` | invalid_argument | any RPC: a malformed field, an unparseable value | `field` |
 | `not_found` | not_found | any RPC: the named resource does not exist | `kind`, `name` |
 | `already_exists` | already_exists | any RPC that creates a named resource | |

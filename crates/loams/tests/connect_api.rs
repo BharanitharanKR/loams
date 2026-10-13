@@ -376,6 +376,11 @@ fn reasons_are_snake_case_and_unique() {
         "feature_not_in_variant",
         // HS1 Task 7's: `loams.house.v1` with no House front configured.
         "house_not_configured",
+        // API2 Tasks 6 and 7: the auth layer's and the admin API's.
+        "token_missing",
+        "token_revoked",
+        "role_required",
+        "setup_required",
         // The code-to-class mapping every RPC error goes through (D611).
         "invalid_argument",
         "not_found",

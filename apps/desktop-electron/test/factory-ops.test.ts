@@ -33,6 +33,8 @@ describe("ops", () => {
 			"topPages",
 			"live",
 			"metricsDaily",
+			// GlitchTip's latest event of an issue (SD1 Task 27): a read.
+			"latestIssueEvent",
 		]);
 		for (const m of called)
 			expect(OP_NAME_ALLOWLIST.test(m) || allowedExtra.has(m), m).toBe(true);
@@ -81,5 +83,113 @@ describe("ops", () => {
 				label: "SSO origin (optional)",
 				secret: false,
 			});
+	});
+});
+
+// SD1 Task 27: the reads behind Studio's in-context links (§53 §5.9).
+describe("ops for Studio", () => {
+	const adapter = (methods: Record<string, (...a: unknown[]) => unknown>) =>
+		Object.fromEntries(
+			Object.entries(methods).map(([k, f]) => [
+				k,
+				async (...a: unknown[]) => f(...a),
+			]),
+		) as never;
+	const ctx = { fields: {} };
+
+	it("forgejo_pulls_carry_the_head_branch", async () => {
+		const op = OPS.forgejo.issues;
+		if (!op) throw new Error("no issues op");
+		const params = op.params.parse({
+			type: "pulls",
+			owner: "acme",
+			repo: "site",
+		});
+		const rows = (await op.run(
+			adapter({
+				listPullRequests: () => ({
+					items: [
+						{
+							number: 12,
+							title: "Fix login",
+							state: "open",
+							html_url: "https://git.example.test/acme/site/pulls/12",
+							head: { ref: "mkt-42-fix", sha: "abc" },
+						},
+					],
+				}),
+			}),
+			params as never,
+			ctx,
+		)) as { id: string; head?: string }[];
+		expect(rows).toEqual([
+			expect.objectContaining({ id: "12", head: "mkt-42-fix" }),
+		]);
+	});
+
+	it("glitchtip_latest_event_projects_stack_and_release", async () => {
+		const op = OPS.glitchtip.latestEvent;
+		if (!op) throw new Error("no latestEvent op");
+		expect(() => op.params.parse({ issueId: "../x" })).toThrow();
+		expect(() => op.params.parse({ issueId: "1", extra: 1 })).toThrow();
+		const seen: unknown[] = [];
+		const frames = Array.from({ length: 80 }, (_, i) => ({
+			filename: `src/f${i}.ts`,
+			function: `fn${i}`,
+			lineNo: i + 1,
+		}));
+		const out = (await op.run(
+			adapter({
+				latestIssueEvent: (id) => {
+					seen.push(id);
+					return {
+						culprit: "checkout/cart.ts in total",
+						release: { version: "web@1.4.2" },
+						entries: [
+							{ type: "breadcrumbs", data: {} },
+							{
+								type: "exception",
+								data: {
+									values: [
+										{
+											type: "TypeError",
+											value: "Cannot read properties of undefined",
+											stacktrace: { frames },
+										},
+									],
+								},
+							},
+						],
+					};
+				},
+			}),
+			op.params.parse({ issueId: "311" }) as never,
+			ctx,
+		)) as { release?: string; culprit?: string; stack?: string };
+		expect(seen).toEqual(["311"]);
+		expect(out.release).toBe("web@1.4.2");
+		expect(out.culprit).toBe("checkout/cart.ts in total");
+		expect(out.stack).toMatch(
+			/^TypeError: Cannot read properties of undefined\n/,
+		);
+		// The innermost frame (last in Sentry's order) comes first; the trace is capped.
+		expect(out.stack).toContain("  at fn79 (src/f79.ts:80)");
+		expect(out.stack?.length).toBeLessThanOrEqual(4000);
+	});
+
+	it("glitchtip_release_from_tags", async () => {
+		const op = OPS.glitchtip.latestEvent;
+		if (!op) throw new Error("no latestEvent op");
+		const out = (await op.run(
+			adapter({
+				latestIssueEvent: () => ({
+					tags: [{ key: "release", value: "api@2" }],
+				}),
+			}),
+			op.params.parse({ issueId: "1" }) as never,
+			ctx,
+		)) as { release?: string; stack?: string };
+		expect(out.release).toBe("api@2");
+		expect(out.stack).toBeUndefined();
 	});
 });

@@ -60,7 +60,7 @@ snowflake,Snowflake,warehouse,P1,true,preview,native,loams_flow::connectors::adb
 bigquery,BigQuery,warehouse,P1,true,preview,native,loams_flow::connectors::adbc,Y,Y,Y,Y,,,sa,google-bigquery,plugin-gcp (bigquery),native:loams_flow::connectors::adbc,native:loams_flow::connectors::adbc,,
 redshift,Redshift,warehouse,P2,false,planned,native,loams_connector_analytics::redshift,Y,Y,,Y,,,basic|iam,aws2-redshift-data|sql,plugin-jdbc (redshift),native:loams_connector_analytics::redshift,native:loams_connector_analytics::redshift,,
 databricks,Databricks,warehouse,P2,false,planned,native,loams_connector_analytics::databricks,Y,Y,,Y,,,oauth2|key,sql|jdbc,plugin-databricks,native:loams_connector_analytics::databricks,native:loams_connector_analytics::databricks,,
-clickhouse,ClickHouse,warehouse,P1,true,preview,native,loams_flow::connectors::clickhouse,Y,Y,Y,Y,,,basic,clickhouse|sql,plugin-jdbc (clickhouse),native:loams_flow::connectors::clickhouse,native:loams_flow::connectors::clickhouse,,iggy:clickhouse:sink:CN2 Task 17
+clickhouse,ClickHouse,warehouse,P1,true,preview,native,loams_flow::connectors::clickhouse,Y,Y,Y,Y,,,basic,clickhouse|sql,plugin-jdbc (clickhouse),native:loams_flow::connectors::clickhouse,native:loams_connector_analytics::clickhouse_sink,,iggy:clickhouse:sink:CN2 Task 17
 duckdb,DuckDB,warehouse,P2,false,planned,native,loams_connector_analytics::adbc,Y,Y,,Y,,,none,duckdb,plugin-jdbc (duckdb),native:loams_connector_analytics::adbc,native:loams_connector_analytics::adbc,duckdb,
 druid,Druid,warehouse,P3,false,planned,openapi,openapi:druid,Y,Y,Y,Y,,,basic,,plugin-jdbc (druid),,,,
 pinot,Pinot,warehouse,P3,false,planned,openapi,openapi:pinot,Y,Y,Y,Y,,,basic,,plugin-jdbc (pinot),,,,

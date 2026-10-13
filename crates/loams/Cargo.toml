@@ -40,7 +40,8 @@ connectrpc-health.workspace = true
 connectrpc-reflection.workspace = true
 datafusion = { workspace = true, optional = true }
 datafusion-postgres = { workspace = true, optional = true }
-futures = { workspace = true, optional = true }
+# `WatchAuditEvents` streams (API2 Task 7), and the optional engines below.
+futures.workspace = true
 getrandom = "0.3"
 fail = { workspace = true, optional = true }
 http.workspace = true
@@ -131,7 +132,7 @@ live-tikv = ["live", "tikv", "loams-live/tikv"]
 # `loams pg-control` role, serving `loams.postgres.v1` and the upcalls Neon's
 # components call. Off by default: the default build links none of it. With
 # `tikv` too, `--store tikv` keeps its records on TiKV.
-postgres = ["dep:loams-pg-control", "dep:loams-postgres", "dep:futures"]
+postgres = ["dep:loams-pg-control", "dep:loams-postgres"]
 # `--runtime kubernetes`: role secrets and the signing key as Kubernetes
 # Secrets (the kube client).
 postgres-kubernetes = ["postgres", "loams-pg-control/kubernetes"]
@@ -154,7 +155,7 @@ durable-tikv = ["durable", "loams-durable/tikv"]
 # The MySQL wire listener over collections (`--mysql-listen`).
 mysql-wire = ["dep:opensrv-mysql", "dep:datafusion"]
 # The PostgreSQL wire listener over collections (`--pg-listen`).
-pgwire = ["dep:datafusion-postgres", "dep:datafusion", "dep:futures"]
+pgwire = ["dep:datafusion-postgres", "dep:datafusion"]
 # The native stream gRPC endpoint used by Dapr protocol adapters.
 stream-grpc = ["dep:loams-stream-grpc"]
 # Loams Graph (GR1 Task 5, design §48, D741): `loams.graph.v1` on the main port, Grafeo
@@ -168,7 +169,7 @@ graph = ["dep:loams-graph"]
 # `loams` links no `loams-git` or gitoxide crate (`tests/git/main.rs`'s
 # `default_features_exclude_git`) and every `loams.repos.v1` RPC answers
 # `feature_not_in_variant`.
-git = ["dep:loams-git", "dep:futures"]
+git = ["dep:loams-git"]
 # The sccache build cache (GT1 Tasks 68–71, design §36 §8). Reserved by GT1
 # Task 12: its crate, `loams-buildcache`, does not exist yet.
 buildcache = []
@@ -198,6 +199,9 @@ arrow-array.workspace = true
 arrow-flight.workspace = true
 arrow-schema.workspace = true
 futures.workspace = true
+# `connect_admin.rs`'s `mock_and_server_answer_alike` runs the console mock
+# beside the server (API2 Task 7).
+loams-apps-mock = { path = "../loams-apps-mock" }
 object_store.workspace = true
 # The reference evaluator of the ES DSL tests (plan M1.5 Task 7).
 loams-es = { workspace = true, features = ["test-util"] }

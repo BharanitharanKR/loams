@@ -1,0 +1,15 @@
+@loams/ui (Loams design system)
+Copyright 2026 The Loams Authors
+
+This package is licensed under the Apache License 2.0, except for the
+portions derived from T3 Code, which remain under the MIT License.
+
+T3 Code (https://github.com/pingdotgg/t3code), MIT License, Copyright (c)
+2026 T3 Tools Inc. Files under src/ whose header starts with "Portions of
+this file are from T3 Code" are adapted from T3 Code's components/ui. Each
+header names the upstream path and commit; provenance.json records the
+commit, the source archive's SHA-256, and the upstream SHA-256 of every such
+file. They were taken from commit 6524a8d43795dc543f7cfb572388cdea3662ad48
+unless provenance.json records another commit for a file. The MIT licence
+text is in LICENSE.t3code and must accompany distributions of those files.
+Loams' changes to them are Apache-2.0.

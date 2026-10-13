@@ -49,6 +49,8 @@ export function parseQuery(search: string): Record<string, string> {
 export interface HashSource {
   get(): string;
   set(path: string): void;
+  /** Swaps the current history entry (a redirect); without it, `set` is used. */
+  replace?(path: string): void;
   listen(listener: () => void): () => void;
 }
 
@@ -58,6 +60,9 @@ export const windowHash: HashSource = {
   get: () => globalThis.location?.hash.replace(/^#/, '') || '/',
   set: (path) => {
     globalThis.location.hash = path;
+  },
+  replace: (path) => {
+    globalThis.location.replace(`#${path}`);
   },
   listen: (listener) => {
     globalThis.addEventListener?.('hashchange', listener);
@@ -119,8 +124,9 @@ export class HashRouter implements RouterService {
     };
   }
 
-  navigate(to: string): void {
-    this.source.set(to);
+  navigate(to: string, opts: { replace?: boolean } = {}): void {
+    if (opts.replace && this.source.replace) this.source.replace(to);
+    else this.source.set(to);
     this.#update();
   }
 

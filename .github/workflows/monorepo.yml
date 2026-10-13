@@ -165,6 +165,7 @@ jobs:
         run: |
           node --test scripts/studio/vendor.test.mjs
           node scripts/studio/vendor.mjs check
+          node scripts/studio/vendor.mjs check --package web/packages/ui
 
   npm-licences:
     name: monorepo npm licence gate

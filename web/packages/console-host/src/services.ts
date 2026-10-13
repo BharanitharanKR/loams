@@ -96,7 +96,11 @@ export interface Location {
 export interface RouterService {
   /** Registers a page; returns its disposer (call inside `ctx.effect`). */
   page(spec: PageSpec, component: ComponentType<PageProps>): () => void;
-  navigate(to: string): void;
+  /**
+   * Goes to a route. `replace` swaps the current history entry instead of adding one,
+   * for a redirect, so Back does not land on the redirecting route again.
+   */
+  navigate(to: string, opts?: { replace?: boolean }): void;
   current(): Location;
   subscribe(listener: () => void): () => void;
   /**

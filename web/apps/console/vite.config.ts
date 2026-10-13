@@ -33,7 +33,8 @@ const SANDBOX_FILES: Record<string, string> = {
 
 /**
  * Attribution shipped beside the bundle (SD1 T1-7): the root NOTICE and T3 Code's
- * MIT licence, since the console bundles code vendored into @loams/studio-ui.
+ * MIT licence, since the console bundles code vendored into @loams/studio-ui and
+ * @loams/ui (both packages carry the same LICENSE.t3code; the ui test checks they match).
  */
 const ATTRIBUTION_FILES: Record<string, string> = {
   NOTICE: fileURLToPath(new URL('../../../NOTICE', import.meta.url)),

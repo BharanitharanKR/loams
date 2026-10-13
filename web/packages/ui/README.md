@@ -76,8 +76,32 @@ see [docs/design/console-ui-stack.md](../../../docs/design/console-ui-stack.md))
 - `Tabs`, `Tab` — tabs with arrow-key movement, with or without panels.
 - `Tooltip`, `TooltipProvider` — a short hover or focus label.
 - `ToastProvider`, `Toaster`, `useToast` — transient messages.
+- `AlertDialog` — a confirmation (role `alertdialog`) with a confirm and a
+  cancel button; `Sheet` — a modal panel from the left, right or bottom edge.
 
 Plugins import these from `@loams/ui`, never from `@base-ui/react` directly.
+
+Studio's primitives, adapted from T3 Code's `components/ui` (MIT; see
+`NOTICE`, `LICENSE.t3code` and `provenance.json`)
+
+- `CommandPalette`, `CommandItem`, `matchCommand`, `Shortcut` — the palette:
+  a dialog around an always-open autocomplete; arrows move, Enter runs, long
+  lists are virtualised.
+- `Sidebar` and `SidebarHeader`, `SidebarContent`, `SidebarFooter`,
+  `SidebarGroup`, `SidebarMenu`, `SidebarMenuItem`, `SidebarMenuButton`,
+  `SidebarMenuSub` — a resizable sidebar and its rows; `ResizeHandle` — the
+  keyboard-operable splitter it uses, for panels and drawers too.
+- `Kbd`, `KbdGroup` — keys and chords.
+- `Toggle`, `ToggleGroup` — toggle buttons, one or several pressed
+  (`Segmented` stays the exactly-one pill row).
+- `InputGroup`, `InputGroupAddon`, `InputGroupInput` — an input with a glyph,
+  a hint or a button attached.
+- `MiddleTruncate`, `splitForMiddleTruncate` — an ellipsis in the middle, for
+  branches and paths.
+- `ScrollArea` — thin overlay scrollbars and edge fades.
+- `Switch` — an on/off setting that applies at once.
+- `Collapsible`, `CollapsibleTrigger`, `CollapsiblePanel` — a disclosure.
+- `Spinner`, `Skeleton` — loading states.
 
 Formatters
 

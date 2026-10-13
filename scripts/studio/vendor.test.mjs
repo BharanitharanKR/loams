@@ -300,6 +300,24 @@ test('vendor_check_fails_on_drift_and_missing_rows', () => {
   assert.match(res.stderr, /no provenance row/);
 });
 
+test('vendor_header_names_the_package_licence', async () => {
+  const { headerFor, licencePathFor, REPO_ROOT } = await import('./vendor.mjs');
+  assert.equal(licencePathFor(), 'web/packages/studio-ui/LICENSE.t3code');
+  assert.equal(
+    licencePathFor(join(REPO_ROOT, 'web/packages/ui')),
+    'web/packages/ui/LICENSE.t3code',
+  );
+  // A package outside the repository (these tests' fixtures) falls back to Studio's copy.
+  assert.equal(licencePathFor(makePackage()), 'web/packages/studio-ui/LICENSE.t3code');
+  const header = headerFor({
+    upstreamPath: 'apps/web/src/components/ui/kbd.tsx',
+    commit: COMMIT,
+    change: 'ported to tokens',
+    licence: licencePathFor(join(REPO_ROOT, 'web/packages/ui')),
+  });
+  assert.match(header.split('\n')[2], /^\/\/ \(see web\/packages\/ui\/LICENSE\.t3code\)\. /);
+});
+
 test('upstream_report_classifies', () => {
   const work = scratch('report');
   const oldTree = join(work, 'old');
