@@ -1,4 +1,4 @@
-name: Release signing (SignPath, Linux)
+name: Release sign
 
 # Linux release signing for issues #253 and #264, as the owner ruled on
 # 2026-10-03:
@@ -83,7 +83,7 @@ jobs:
   # that runs is the branch's, and the source under review includes the build
   # scripts, which is exactly what SignPath's origin verification attests to.
   guard:
-    name: release tag guard
+    name: Tag guard
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
@@ -176,7 +176,7 @@ jobs:
   # request ran on a GitHub-hosted runner. So this job is on `ubuntu-latest` and
   # not on `vars.RUNNER_MAIN`, which is a self-hosted pool.
   sign:
-    name: submit the Linux signing requests
+    name: Submit the Linux signing requests
     needs: [guard, preflight]
     if: needs.preflight.outputs.mode == 'sign'
     runs-on: ubuntu-latest

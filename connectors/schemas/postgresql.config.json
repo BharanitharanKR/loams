@@ -2,103 +2,229 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/postgresql.config.json",
   "title": "PostgreSQL connector instance config (loams.flow/v1)",
-  "description": "One PostgreSQL connector instance's settings: where the database is, what to read or write, and how to split the read. Covers the batch source and the upsert sink of the ★ PostgreSQL connector (design §33 §8 row 2; CN1 plan Task 7). `password` and `tls.key_pem` resolve through the namespace's secret store (D189) and are exactly the manifest's `secrets` list. The sink's `key` is required by CN1 Task 1's rule that a sink declaring `upsert` declares a key.",
+  "description": "One PostgreSQL connector instance's settings, read by the native Postgres family (`loams_connector_postgres::PostgresFactory`, CN2 Task 10, OR-9): the ★ PostgreSQL connector (design §33 §8 row 2). `mode` picks the batch or CDC source, and a `table` makes the instance an upsert sink. `password` and `aws.*` hold the **names** of secrets in the namespace's store (D189), which the connector resolves when it connects; they are exactly the manifest's `secrets` list. CN1's `table`, `schema_name`, `key` and `password` keep their meaning.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["host", "database", "key"],
+  "required": [
+    "host",
+    "user"
+  ],
   "properties": {
-    "dsn": {
-      "description": "A libpq connection string, as an alternative to host/port/database/user. CN1 Task 7 uses tokio-postgres; the DSN wins when both are given.",
+    "host": {
+      "description": "The database host. Every connection goes through the SDK's egress check, after DNS.",
       "type": "string",
       "minLength": 1
     },
-    "host": { "description": "The database host.", "type": "string", "minLength": 1 },
-    "port": { "description": "The database port.", "type": "integer", "minimum": 1, "default": 5432 },
-    "database": { "description": "The database name.", "type": "string", "minLength": 1 },
-    "user": { "description": "The role the connector authenticates as.", "type": "string", "minLength": 1 },
+    "port": {
+      "description": "The database port.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "default": 5432
+    },
+    "database": {
+      "description": "The database name.",
+      "type": "string",
+      "minLength": 1,
+      "default": "postgres"
+    },
+    "user": {
+      "description": "The role the connector logs in as.",
+      "type": "string",
+      "minLength": 1
+    },
     "password": {
-      "description": "The role's password, or an AWS RDS IAM token when iam is configured. Resolved through the secret store (D189); never stored in the instance.",
+      "description": "The name of the secret holding the role's password, resolved through the namespace's secret store (D189); never the password itself. Absent: trust or peer authentication. Not used with `auth: iam`, where the password is a freshly minted RDS IAM token.",
       "type": "string",
       "minLength": 1,
       "writeOnly": true
     },
-    "schema_name": {
-      "description": "The schema holding the table.",
-      "type": "string",
-      "default": "public"
+    "auth": {
+      "description": "How the instance logs in: `basic` (or its alias `password`) with `password`, or `iam`, an AWS RDS IAM token minted per connection from the `aws` credentials (Amazon Aurora and RDS).",
+      "enum": [
+        "basic",
+        "password",
+        "iam"
+      ],
+      "default": "basic"
     },
-    "table": {
-      "description": "The table this instance reads or writes; may be omitted when a route names the table.",
-      "type": "string",
-      "minLength": 1
+    "aws": {
+      "description": "AWS credentials for `auth: iam`, each the **name** of a secret in the namespace's store (D189).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "region",
+        "access_key_id",
+        "secret_access_key"
+      ],
+      "properties": {
+        "region": {
+          "description": "The AWS region of the cluster, which the token is signed for.",
+          "type": "string",
+          "minLength": 1
+        },
+        "access_key_id": {
+          "description": "The name of the secret holding the AWS access key id.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "secret_access_key": {
+          "description": "The name of the secret holding the AWS secret access key.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "session_token": {
+          "description": "The name of the secret holding an AWS session token, for temporary credentials.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
     },
-    "partitions": {
-      "description": "Parallel workers the snapshot is split across, by primary-key range (CN1 Task 7).",
-      "type": "integer",
-      "minimum": 1,
-      "default": 8
+    "sslmode": {
+      "description": "`disable`, `require` (encrypt without verifying the certificate) or `verify-full` (verify the chain and the host name). Defaults to `disable`, or `verify-full` with `auth: iam`.",
+      "enum": [
+        "disable",
+        "require",
+        "verify-full"
+      ]
     },
-    "cursor_column": {
-      "description": "Incremental mode's high-water column (CN1 Task 7). Set it for an incremental read; without it the source takes a full snapshot.",
-      "type": "string",
-      "minLength": 1
+    "ca_pem": {
+      "description": "Extra trusted roots for `verify-full`, as PEM (the Amazon RDS CA bundle, for example); without it only the webpki roots are trusted.",
+      "type": "string"
     },
-    "key_column": {
-      "description": "The primary key the key-range split and the sink's upsert key use.",
-      "type": "string",
-      "minLength": 1
+    "mode": {
+      "description": "The source: `batch` reads each table in `tables` in key order as Arrow batches; `cdc` streams changes (pgoutput logical replication on Postgres, a sinkless changefeed on CockroachDB) after an initial snapshot.",
+      "enum": [
+        "batch",
+        "cdc"
+      ],
+      "default": "batch"
+    },
+    "tables": {
+      "description": "The tables the source reads, `schema.table` or `table` (schema `public`). A string is one table.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ]
     },
     "key": {
-      "description": "The sink's upsert key: INSERT … ON CONFLICT (key) DO UPDATE. Required because the manifest declares capabilities.sink.upsert: true (CN1 Task 1's semantic rule).",
+      "description": "Batch reads: the columns to page by. Sink: the upsert key, INSERT … ON CONFLICT (key) DO UPDATE. Defaults to the table's primary key. Declared because the manifest declares capabilities.sink.upsert: true (CN1 Task 1's semantic rule); CN1's single-column `key` is still accepted as a string.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      ]
+    },
+    "publication": {
+      "description": "CDC: a publication you manage. Without it the connector creates and owns `loams_<instance>` and drops it when the instance is deleted.",
       "type": "string",
       "minLength": 1
     },
-    "batch_rows": {
-      "description": "Rows per COPY chunk; CN1 Ruling 3 defaults the Arrow batch to 65536.",
-      "type": "integer",
-      "minimum": 1,
-      "default": 65536
+    "slot": {
+      "description": "CDC: the replication slot name. Default `loams_<namespace>_<instance>`.",
+      "type": "string",
+      "minLength": 1
     },
-    "append": {
-      "description": "Sink mode: append with COPY instead of upserting. False keeps the declared upsert behaviour.",
+    "snapshot": {
+      "description": "CDC: take the initial snapshot inside the slot's exported snapshot (`initial`), or start streaming at the slot's consistent point (`never`).",
+      "enum": [
+        "initial",
+        "never"
+      ],
+      "default": "initial"
+    },
+    "streaming": {
+      "description": "CDC: receive in-progress transactions (pgoutput protocol 2, PostgreSQL 14+), buffered per transaction until it commits.",
       "type": "boolean",
       "default": false
     },
-    "apply_deletes": {
-      "description": "Apply deletes for events carrying loamsop = d (§33 §6, CN1 Task 7's pg_delete_on_loamsop_d).",
+    "stream_buffer_bytes": {
+      "description": "CDC: the most one streamed in-progress transaction may buffer.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 67108864
+    },
+    "heartbeat_ms": {
+      "description": "CDC: the idle heartbeat (`pg_logical_emit_message`) that keeps the slot moving on a quiet database; 0 disables it.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 10000
+    },
+    "status_interval_ms": {
+      "description": "CDC: the Standby Status Update interval, which is also the keepalive.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 10000
+    },
+    "resolved_ms": {
+      "description": "CockroachDB changefeeds: the `resolved` timestamp interval. Read only on a CockroachDB target.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 1000
+    },
+    "table": {
+      "description": "Sink: the table rows are upserted into, `schema.table` or `table`. Setting it makes the instance a sink.",
+      "type": "string",
+      "minLength": 1
+    },
+    "schema_name": {
+      "description": "Sink: the schema an unqualified `table` is in (CN1's meaning).",
+      "type": "string",
+      "minLength": 1,
+      "default": "public"
+    },
+    "transactional": {
+      "description": "Sink: commit each batch in one transaction with the instance's row in `_loams_checkpoints`, fenced by the lease epoch (exactly once). False makes a plain at-least-once upsert sink.",
       "type": "boolean",
       "default": true
     },
-    "statement_timeout_ms": {
-      "description": "Server-side statement timeout for a COPY or an upsert batch.",
-      "type": "integer",
-      "minimum": 0,
-      "default": 0
+    "checkpoint_schema": {
+      "description": "Sink: the schema `_loams_checkpoints` lives in.",
+      "type": "string",
+      "minLength": 1,
+      "default": "public"
     },
-    "tls": {
-      "description": "TLS material. CN1 Task 7 verifies the server with verify-full.",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "enabled": { "description": "Whether TLS is on at all.", "type": "boolean", "default": false },
-        "ca_pem": { "description": "The CA bundle, as PEM.", "type": "string" },
-        "key_pem": {
-          "description": "The client certificate's private key, for verify-full with a client certificate. Resolved through the secret store (D189).",
-          "type": "string",
-          "writeOnly": true
-        },
-        "verify_full": { "description": "Whether the server certificate's hostname is verified.", "type": "boolean", "default": true }
+    "evolution": {
+      "description": "The schema evolution policy (see the schema-mapping guide).",
+      "enum": [
+        "additive",
+        "widen",
+        "pause"
+      ],
+      "default": "additive"
+    },
+    "lossy": {
+      "description": "Conversions allowed to lose information, by path (for example a `timestamp without time zone` column read as UTC).",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
       }
     },
-    "iam": {
-      "description": "AWS RDS IAM token auth (CN1 Task 7), which replaces the password.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["region"],
-      "properties": {
-        "region": { "description": "The AWS region of the instance.", "type": "string", "minLength": 1 },
-        "role_arn": { "description": "The role Loams assumes; the default chain is used when absent.", "type": "string" }
-      }
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
     }
   }
 }

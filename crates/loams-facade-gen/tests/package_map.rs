@@ -323,6 +323,10 @@ fn every_mapped_package_is_generated_by_the_crate_it_names() {
     assert_eq!(
         checked,
         vec![
+            // API2 Tasks 6 and 7: `loams-proto` compiles the console API for
+            // the Rust SDK (and `loams-apps-mock` for its server).
+            "loams.admin.v1".to_owned(),
+            "loams.auth.v1".to_owned(),
             "loams.instance.v1".to_owned(),
             "loams.live.v1".to_owned(),
             // GR1 Task 2: `loams-proto` compiles `operations.proto`, which

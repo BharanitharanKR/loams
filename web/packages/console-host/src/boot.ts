@@ -306,7 +306,9 @@ export async function boot(options: BootOptions): Promise<ConsoleHandle> {
   let reactRoot: { unmount(): void } | undefined;
   if (options.root) {
     const { renderRoot } = await import('./root.js');
-    reactRoot = renderRoot(options.root, slots, () => handle);
+    // The shared server-state cache (console-ui-stack decision 4) runs over the console's transport.
+    const transport = ctx.get('transport', true) as Transport | undefined;
+    reactRoot = renderRoot(options.root, slots, () => handle, transport);
   }
 
   const statusOf = (record: PluginRecord): PluginStatus => {

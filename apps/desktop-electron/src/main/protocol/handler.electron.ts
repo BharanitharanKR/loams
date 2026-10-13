@@ -5,6 +5,7 @@ import type { EngineState, ServerEntry } from "../../shared/contracts";
 import { isAgentdPath } from "../agentd/allowlist";
 import type { AgentdTarget } from "../agentd/discover";
 import { handleAgentdRequest } from "./agentd";
+import { upstream } from "./inflight";
 import { isProxied, proxyRequest } from "./proxy";
 import { routeRequest } from "./route";
 import { ensureCspMeta, resolveStatic } from "./static";
@@ -100,7 +101,8 @@ export function installAppProtocol(ses: Session, deps: AppProtocolDeps): void {
 				return await proxyRequest(
 					req,
 					route.target,
-					(r) => ses.fetch(r as Request),
+					(r) =>
+						upstream.run((signal) => ses.fetch(r as Request, { signal })),
 					route.pathname,
 				);
 			} catch (e) {

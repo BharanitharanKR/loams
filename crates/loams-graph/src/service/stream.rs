@@ -48,6 +48,8 @@ pub(crate) struct Chunks {
     pending: Option<pb::Row>,
     /// The statement's slots, held until the stream ends or is dropped (review fix 1, I4).
     slots: Option<Slots>,
+    /// The state the statement read, for a read's last chunk (GR1 Task 15).
+    token: Option<crate::durable::ConsistencyToken>,
 }
 
 impl Chunks {
@@ -69,7 +71,15 @@ impl Chunks {
             done: false,
             pending: None,
             slots: None,
+            token: None,
         }
+    }
+
+    /// The same chunks, the last carrying `token` when the statement wrote nothing (a write's
+    /// own token wins): the state the read saw (GR1 Task 15).
+    pub(crate) fn with_token(mut self, token: Option<crate::durable::ConsistencyToken>) -> Self {
+        self.token = token;
+        self
     }
 
     /// The same chunks, keeping `slots` until the last chunk is taken or the stream is dropped.
@@ -89,6 +99,8 @@ impl Chunks {
             chunk.consistency_token = commit.token.to_string();
             chunk.commit_epoch = commit.commit_epoch;
             chunk.counters = super::data::to_pb_counters(&commit.counters).into();
+        } else if let Some(token) = self.token {
+            chunk.consistency_token = token.to_string();
         }
     }
 }

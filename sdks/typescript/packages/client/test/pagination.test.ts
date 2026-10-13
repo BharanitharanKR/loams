@@ -154,11 +154,16 @@ describe('typescript_pagination_iterator', () => {
   });
 
   it('a_paged_call_from_the_corpus_yields_every_item', async () => {
-    // The first generated paged call is `live.admin.listDeployments` (LV1
-    // Task 10). Its binding, as the generator wrote it, drives the same
-    // iterator over a stub shaped like `ListDeploymentsResponse`.
-    const paged = MODULES.flatMap((module) => module.calls).find(
+    // The first generated paged call was `live.admin.listDeployments` (LV1
+    // Task 10); `loams.admin.v1`'s lists (API2 Task 7) sort before it now, so
+    // it is found by its RPC. Its binding, as the generator wrote it, drives
+    // the same iterator over a stub shaped like `ListDeploymentsResponse`.
+    const pagedCalls = MODULES.flatMap((module) => module.calls).filter(
       (call) => call.pagination !== null,
+    );
+    expect(pagedCalls.length).toBeGreaterThan(1);
+    const paged = pagedCalls.find(
+      (call) => call.rpc === 'loams.live.v1.LiveAdminService/ListDeployments',
     );
     expect(paged?.rpc).toBe('loams.live.v1.LiveAdminService/ListDeployments');
     expect(paged?.pagination).toEqual({

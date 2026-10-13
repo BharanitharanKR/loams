@@ -73,6 +73,14 @@ function mount(client: CanvasClient = quietClient()) {
   return { client, navigate, view };
 }
 
+/** React Flow lays nodes out a tick after the page title renders: wait for all of them. */
+async function allNodes() {
+  const n = seedProject().services.length;
+  await waitFor(() =>
+    expect(document.querySelectorAll('.react-flow__node').length).toBeGreaterThanOrEqual(n),
+  );
+}
+
 /** The React Flow node wrapper for a service id. */
 function nodeEl(container: HTMLElement, id: string): HTMLElement {
   const el = [...container.querySelectorAll<HTMLElement>('.react-flow__node')].find(
@@ -86,6 +94,7 @@ describe('CanvasPage', () => {
   it('draws every seeded service with its status and a sparkline', async () => {
     const { view } = mount();
     await screen.findByText('Storefront');
+    await allNodes();
     for (const s of seedProject().services) {
       const el = nodeEl(view.container, s.id);
       expect(el.getAttribute('aria-label')).toContain(s.name);
@@ -108,11 +117,13 @@ describe('CanvasPage', () => {
     fail = false;
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await screen.findByText('Storefront');
+    await allNodes();
   });
 
   it('opens the details panel on click and deep links to the product page', async () => {
     const { view, navigate } = mount();
     await screen.findByText('Storefront');
+    await allNodes();
     // React Flow mounts its nodes a tick after the page renders.
     const node = await waitFor(() => nodeEl(view.container, 'pg-main'));
     fireEvent.click(within(node).getByText('main'));
@@ -128,6 +139,7 @@ describe('CanvasPage', () => {
   it('moves the panel along a connection and closes it with Escape', async () => {
     const { view } = mount();
     await screen.findByText('Storefront');
+    await allNodes();
     fireEvent.click(within(nodeEl(view.container, 'conn-orders-cdc')).getByText('orders-cdc'));
     const panel = await screen.findByRole('complementary', { name: 'orders-cdc' });
     fireEvent.click(within(panel).getByRole('button', { name: 'Go to House analytics' }));
@@ -139,6 +151,7 @@ describe('CanvasPage', () => {
   it('navigates between nodes with the arrow keys and opens one with Enter', async () => {
     const { view } = mount();
     await screen.findByText('Storefront');
+    await allNodes();
     const repo = nodeEl(view.container, 'repo-storefront');
     repo.focus();
     fireEvent.keyDown(repo, { key: 'ArrowRight' });
@@ -155,6 +168,7 @@ describe('CanvasPage', () => {
     const save = vi.spyOn(client, 'savePositions');
     const { view } = mount(client);
     await screen.findByText('Storefront');
+    await allNodes();
     const repo = nodeEl(view.container, 'repo-storefront');
     repo.focus();
     fireEvent.keyDown(repo, { key: 'ArrowDown', shiftKey: true });
@@ -175,6 +189,7 @@ describe('CanvasPage', () => {
     const save = vi.spyOn(client, 'savePositions');
     mount(client);
     await screen.findByText('Storefront');
+    await allNodes();
     fireEvent.click(screen.getByRole('button', { name: 'Auto-layout' }));
     await waitFor(() => expect(save).toHaveBeenCalled());
     expect(Object.keys(save.mock.calls.at(-1)?.[1] ?? {}).sort()).toEqual(
@@ -189,6 +204,7 @@ describe('CanvasPage', () => {
     const create = vi.spyOn(client, 'createService');
     const { view } = mount(client);
     await screen.findByText('Storefront');
+    await allNodes();
     fireEvent.click(screen.getByRole('button', { name: 'Add service' }));
     const dialog = await screen.findByRole('dialog', { name: 'Add a service' });
     fireEvent.change(within(dialog).getByLabelText('Find a kind'), {
@@ -218,6 +234,7 @@ describe('CanvasPage', () => {
   it('shows why the client refused a new service', async () => {
     mount();
     await screen.findByText('Storefront');
+    await allNodes();
     fireEvent.click(screen.getByRole('button', { name: 'Add service' }));
     const dialog = await screen.findByRole('dialog', { name: 'Add a service' });
     fireEvent.click(within(dialog).getByLabelText(/^Postgres branch/));
@@ -237,19 +254,22 @@ describe('CanvasPage', () => {
     );
     mount(client);
     await screen.findByText('Storefront');
+    await allNodes();
     fireEvent.click(screen.getByRole('button', { name: 'Add service' }));
     const dialog = await screen.findByRole('dialog', { name: 'Add a service' });
     fireEvent.click(within(dialog).getByLabelText(/^Postgres branch/));
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'pg-new' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add service' }));
     await within(dialog).findByRole('button', { name: 'Adding…' });
-    expect(fireEvent(dialog, new Event('cancel', { cancelable: true }))).toBe(false);
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.getByRole('dialog', { name: 'Add a service' })).toBeTruthy();
     expect(
       (within(dialog).getByRole('button', { name: 'Close' }) as HTMLButtonElement).disabled,
     ).toBe(true);
     finish?.();
     expect(await within(dialog).findByText('stopped')).toBeTruthy();
-    expect(fireEvent(dialog, new Event('cancel', { cancelable: true }))).toBe(true);
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Add a service' })).toBeNull());
   });
 
   it('validates the name before calling the client', async () => {
@@ -257,6 +277,7 @@ describe('CanvasPage', () => {
     const create = vi.spyOn(client, 'createService');
     mount(client);
     await screen.findByText('Storefront');
+    await allNodes();
     fireEvent.click(screen.getByRole('button', { name: 'Add service' }));
     const dialog = await screen.findByRole('dialog', { name: 'Add a service' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add service' }));
@@ -277,6 +298,7 @@ describe('CanvasPage', () => {
     });
     const { view } = mount(client);
     await screen.findByText('Storefront');
+    await allNodes();
     await waitFor(() => expect(push).toBeDefined());
     await act(async () => push?.([{ serviceId: 'pg-main', status: 'failed' }]));
     await waitFor(() =>

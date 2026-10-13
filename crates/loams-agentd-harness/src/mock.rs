@@ -1,12 +1,15 @@
 //! Mock harness for engine/UI tests: replays a scripted event sequence.
 
+use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 
 use loams_agentd_proto::{
-    AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SteeringMode,
-    UserInputQuestion,
+    AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SteeringMode, ToolCall,
+    ToolDiff, UserInputAnswer, UserInputQuestion,
 };
 
 use crate::{Harness, HarnessError, RunControls};
@@ -14,6 +17,239 @@ use crate::{Harness, HarnessError, RunControls};
 #[derive(Debug)]
 pub struct MockHarness {
     pub script: Vec<AgentEvent>,
+}
+
+/// The edit knobs (SD1 Task 8), so Studio's tests get real diffs and
+/// approvals from a deterministic run.
+///
+/// - `LOAMS_DESKTOP_MOCK_EDIT=<path>[,<path>…]`: before the run's `Done`, edit
+///   each path (relative to the run's cwd) in order: create it, or append a
+///   line, `mock edit <n>`, where `n` is one more than the `mock edit` lines
+///   the file already holds (so turn 1 writes `mock edit 1`, the next turn
+///   `mock edit 2`). Each edit is an `editFile` tool call and its result,
+///   with the whole-file diff. Absolute paths, `..`, and paths that resolve
+///   outside the cwd through a symlink are refused with an error result.
+/// - `LOAMS_DESKTOP_MOCK_APPROVE=1`: before each edit, ask for approval
+///   (options `Allow` / `Deny`) and wait. A denial, or a dropped question,
+///   leaves the file untouched and makes the result an error.
+///
+/// The approval rides [`RunControls::request_input`], the only blocking
+/// host bridge a harness has today (plan SD1 ruling T8-2). Title runs never edit.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MockEdits {
+    pub paths: Vec<String>,
+    pub approve: bool,
+}
+
+impl MockEdits {
+    /// Read the knobs from the process environment.
+    pub fn from_env() -> Self {
+        Self::parse(
+            std::env::var("LOAMS_DESKTOP_MOCK_EDIT").ok().as_deref(),
+            std::env::var("LOAMS_DESKTOP_MOCK_APPROVE").ok().as_deref(),
+        )
+    }
+
+    /// Parse the two knob values: a comma-separated path list (blank entries
+    /// dropped) and a flag that is on unless empty or `0`.
+    pub fn parse(edit: Option<&str>, approve: Option<&str>) -> Self {
+        Self {
+            paths: edit
+                .unwrap_or_default()
+                .split(',')
+                .map(str::trim)
+                .filter(|p| !p.is_empty())
+                .map(str::to_owned)
+                .collect(),
+            approve: approve.is_some_and(|v| !v.is_empty() && v != "0"),
+        }
+    }
+}
+
+type RequestInput = Box<
+    dyn Fn(Vec<UserInputQuestion>) -> tokio::sync::oneshot::Receiver<Vec<UserInputAnswer>>
+        + Send
+        + Sync,
+>;
+
+/// One planned edit, fixed when the stream reaches it: the id, the line and
+/// the file's contents before the edit.
+struct EditStep {
+    index: usize,
+    id: String,
+    path: String,
+    turn: usize,
+    line: String,
+    /// The file to write, or why the path is refused.
+    target: Result<PathBuf, String>,
+    old: Option<String>,
+}
+
+const MOCK_EDIT_PREFIX: &str = "mock edit ";
+
+fn plan_edit(cwd: &Path, index: usize, path: &str) -> EditStep {
+    let relative = Path::new(path);
+    let inside = relative
+        .components()
+        .all(|c| matches!(c, Component::Normal(_) | Component::CurDir))
+        && relative
+            .components()
+            .any(|c| matches!(c, Component::Normal(_)));
+    let refused = |reason: String| EditStep {
+        index,
+        id: format!("mock-edit-refused-{index}"),
+        path: path.to_owned(),
+        turn: 0,
+        line: String::new(),
+        target: Err(reason),
+        old: None,
+    };
+    if !inside {
+        return refused(format!(
+            "refused: {path} is not a path inside the run's cwd"
+        ));
+    }
+    let target = cwd.join(relative);
+    let old = match std::fs::read_to_string(&target) {
+        Ok(text) => Some(text),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return refused(format!("refused: cannot read {path}: {e}")),
+    };
+    let turn = old.as_deref().map_or(0, |text| {
+        text.lines()
+            .filter(|l| l.starts_with(MOCK_EDIT_PREFIX))
+            .count()
+    }) + 1;
+    EditStep {
+        index,
+        id: format!("mock-edit-t{turn}-{index}"),
+        path: path.to_owned(),
+        turn,
+        line: format!("{MOCK_EDIT_PREFIX}{turn}\n"),
+        target: Ok(target),
+        old,
+    }
+}
+
+impl EditStep {
+    fn call(&self) -> AgentEvent {
+        AgentEvent::ToolCall {
+            id: self.id.clone(),
+            call: ToolCall::EditFile {
+                path: self.path.clone(),
+                old_string: None,
+                new_string: (!self.line.is_empty()).then(|| self.line.clone()),
+            },
+        }
+    }
+
+    fn failed(&self, message: String) -> AgentEvent {
+        AgentEvent::ToolResult {
+            id: self.id.clone(),
+            is_error: true,
+            output: Some(message),
+            diff: None,
+        }
+    }
+
+    async fn finish(
+        self,
+        cwd: PathBuf,
+        approve: bool,
+        request_input: Arc<RequestInput>,
+    ) -> AgentEvent {
+        let target = match &self.target {
+            Ok(target) => target.clone(),
+            Err(reason) => return self.failed(reason.clone()),
+        };
+        if approve {
+            let question = UserInputQuestion {
+                id: format!("mock-approve-t{}-{}", self.turn, self.index),
+                header: "Approval".into(),
+                question: format!("Allow the Mock harness to edit {}?", self.path),
+                options: vec!["Allow".into(), "Deny".into()],
+                prefill: None,
+                multiline: false,
+                multi_select: false,
+            };
+            let answers = request_input(vec![question]).await.unwrap_or_default();
+            let allowed = answers
+                .iter()
+                .any(|a| a.labels.iter().any(|l| l == "Allow"));
+            if !allowed {
+                return self.failed(format!("edit of {} denied by the user", self.path));
+            }
+        }
+        let mut new = self.old.clone().unwrap_or_default();
+        if !new.is_empty() && !new.ends_with('\n') {
+            new.push('\n');
+        }
+        new.push_str(&self.line);
+        if let Err(message) = write_inside(&cwd, &target, &new) {
+            return self.failed(format!("cannot write {}: {message}", self.path));
+        }
+        AgentEvent::ToolResult {
+            id: self.id.clone(),
+            is_error: false,
+            output: None,
+            diff: Some(ToolDiff {
+                path: self.path,
+                old_text: self.old,
+                new_text: new,
+            }),
+        }
+    }
+}
+
+/// Write `content` to `target`, refusing a target that is a symlink or whose
+/// directory resolves outside `cwd`.
+fn write_inside(cwd: &Path, target: &Path, content: &str) -> Result<(), String> {
+    let parent = target.parent().ok_or("no parent directory")?;
+    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let root = cwd.canonicalize().map_err(|e| e.to_string())?;
+    let dir = parent.canonicalize().map_err(|e| e.to_string())?;
+    if !dir.starts_with(&root) {
+        return Err("it resolves outside the run's cwd".into());
+    }
+    if std::fs::symlink_metadata(target).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err("it is a symlink".into());
+    }
+    std::fs::write(target, content).map_err(|e| e.to_string())
+}
+
+/// Splice the edits in before the script's `Done` (or at the end when the
+/// script has none). Each edit is planned only when the stream reaches it, so
+/// its tool call is out before the approval wait and the write.
+fn with_edits(
+    mut events: Vec<Result<AgentEvent, HarnessError>>,
+    cwd: &str,
+    edits: MockEdits,
+    request_input: RequestInput,
+) -> BoxStream<'static, Result<AgentEvent, HarnessError>> {
+    if edits.paths.is_empty() {
+        return futures::stream::iter(events).boxed();
+    }
+    let at = events
+        .iter()
+        .position(|e| matches!(e, Ok(AgentEvent::Done { .. })))
+        .unwrap_or(events.len());
+    let tail = events.split_off(at);
+    let cwd = PathBuf::from(cwd);
+    let request_input = Arc::new(request_input);
+    let approve = edits.approve;
+    let edit_events = futures::stream::iter(edits.paths.into_iter().enumerate()).flat_map(
+        move |(index, path)| {
+            let step = plan_edit(&cwd, index, &path);
+            let call = step.call();
+            let finish = step.finish(cwd.clone(), approve, Arc::clone(&request_input));
+            futures::stream::iter([Ok(call)])
+                .chain(futures::stream::once(async move { Ok(finish.await) }))
+        },
+    );
+    futures::stream::iter(events)
+        .chain(edit_events)
+        .chain(futures::stream::iter(tail))
+        .boxed()
 }
 
 /// The scripted question set for the `LOAMS_DESKTOP_MOCK_QUESTION` variant (exercises
@@ -96,13 +332,27 @@ impl Harness for MockHarness {
         request: RunRequest,
         controls: RunControls,
     ) -> Result<BoxStream<'static, Result<AgentEvent, HarnessError>>, HarnessError> {
-        self.run(request, controls).await
+        // A title run never edits files.
+        self.run_with(request, controls, MockEdits::default())
     }
 
     async fn run(
         &self,
-        _request: RunRequest,
+        request: RunRequest,
         controls: RunControls,
+    ) -> Result<BoxStream<'static, Result<AgentEvent, HarnessError>>, HarnessError> {
+        self.run_with(request, controls, MockEdits::from_env())
+    }
+}
+
+impl MockHarness {
+    /// [`Harness::run`] with the edit knobs given explicitly instead of read
+    /// from the environment.
+    pub fn run_with(
+        &self,
+        request: RunRequest,
+        controls: RunControls,
+        edits: MockEdits,
     ) -> Result<BoxStream<'static, Result<AgentEvent, HarnessError>>, HarnessError> {
         // Optional pacing knob for demos/manual testing: `LOAMS_DESKTOP_MOCK_DELAY_MS`
         // spaces the scripted events out so live-run UI states (working
@@ -573,10 +823,11 @@ impl Harness for MockHarness {
         let sub_delay_ms = std::env::var("LOAMS_DESKTOP_MOCK_SUBAGENT_DELAY_MS")
             .ok()
             .and_then(|v| v.parse::<u64>().ok());
+        let events = with_edits(events, &request.cwd, edits, controls.request_input);
         if delay_ms == 0 && sub_delay_ms.is_none() {
-            return Ok(futures::stream::iter(events).boxed());
+            return Ok(events);
         }
-        Ok(futures::stream::iter(events)
+        Ok(events
             .then(move |event| async move {
                 let pause = match (&event, sub_delay_ms) {
                     (Ok(AgentEvent::Subagent { .. }), Some(ms)) => {
@@ -588,5 +839,327 @@ impl Harness for MockHarness {
                 event
             })
             .boxed())
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod edit_tests {
+    use std::sync::{Arc, Mutex};
+
+    use futures::StreamExt;
+    use loams_agentd_proto::{
+        AgentEvent, DoneStatus, RunRequest, SandboxLevel, ToolCall, ToolDiff, UserInputAnswer,
+        UserInputQuestion,
+    };
+    use tokio::sync::{mpsc, oneshot};
+
+    use super::{MockEdits, MockHarness};
+    use crate::{CancellationToken, RunControls};
+
+    fn request(cwd: &std::path::Path) -> RunRequest {
+        RunRequest {
+            mcp: None,
+            prompt: "edit".into(),
+            harness: None,
+            model: None,
+            reasoning: None,
+            model_options: Default::default(),
+            cwd: cwd.to_string_lossy().into_owned(),
+            sandbox: SandboxLevel::WorkspaceWrite,
+            auto_approve: false,
+            attachments: Vec::new(),
+            worktree: None,
+            resume: None,
+        }
+    }
+
+    type Asked = Arc<Mutex<Vec<(Vec<UserInputQuestion>, bool)>>>;
+
+    /// Controls whose question bridge records each question set, whether
+    /// `probe` existed when it was asked, and answers with `label`.
+    fn controls(probe: std::path::PathBuf, label: &'static str, asked: Asked) -> RunControls {
+        let (_steer_tx, steering) = mpsc::channel(1);
+        RunControls {
+            execution_lease: None,
+            request_input: Box::new(move |questions: Vec<UserInputQuestion>| {
+                let (tx, rx) = oneshot::channel();
+                let answers = questions
+                    .iter()
+                    .map(|q| UserInputAnswer {
+                        question_id: q.id.clone(),
+                        labels: vec![label.into()],
+                    })
+                    .collect();
+                asked.lock().unwrap().push((questions, probe.exists()));
+                let _ = tx.send(answers);
+                rx
+            }),
+            steering,
+            interrupt: CancellationToken::new(),
+        }
+    }
+
+    fn harness() -> MockHarness {
+        MockHarness {
+            script: vec![
+                AgentEvent::TextDelta {
+                    text: "editing".into(),
+                },
+                AgentEvent::Done {
+                    status: DoneStatus::Completed,
+                    result: None,
+                    error: None,
+                    session_id: None,
+                },
+            ],
+        }
+    }
+
+    async fn run(
+        harness: &MockHarness,
+        cwd: &std::path::Path,
+        edits: &MockEdits,
+        controls: RunControls,
+    ) -> Vec<AgentEvent> {
+        harness
+            .run_with(request(cwd), controls, edits.clone())
+            .unwrap()
+            .map(Result::unwrap)
+            .collect()
+            .await
+    }
+
+    fn edit_call(id: &str, path: &str, line: &str) -> AgentEvent {
+        AgentEvent::ToolCall {
+            id: id.into(),
+            call: ToolCall::EditFile {
+                path: path.into(),
+                old_string: None,
+                new_string: Some(line.into()),
+            },
+        }
+    }
+
+    fn edit_result(id: &str, path: &str, old: Option<&str>, new: &str) -> AgentEvent {
+        AgentEvent::ToolResult {
+            id: id.into(),
+            is_error: false,
+            output: None,
+            diff: Some(ToolDiff {
+                path: path.into(),
+                old_text: old.map(Into::into),
+                new_text: new.into(),
+            }),
+        }
+    }
+
+    #[test]
+    fn mock_edit_knobs_parse() {
+        let edits = MockEdits::parse(Some(" notes.txt, ,src/new.txt "), Some("1"));
+        assert_eq!(edits.paths, vec!["notes.txt", "src/new.txt"]);
+        assert!(edits.approve);
+        let off = MockEdits::parse(None, Some("0"));
+        assert!(off.paths.is_empty());
+        assert!(!off.approve);
+        assert!(!MockEdits::parse(Some(""), None).approve);
+    }
+
+    #[tokio::test]
+    async fn mock_edit_writes_files_and_emits_tool_calls() {
+        let dir = tempfile::tempdir().unwrap();
+        // An existing file without a trailing newline is appended to on a new line.
+        std::fs::write(dir.path().join("notes.txt"), "kept").unwrap();
+        let edits = MockEdits {
+            paths: vec!["notes.txt".into(), "src/new.txt".into()],
+            approve: false,
+        };
+        let asked = Asked::default();
+        let mock = harness();
+        let first = run(
+            &mock,
+            dir.path(),
+            &edits,
+            controls(dir.path().join("x"), "Allow", asked.clone()),
+        )
+        .await;
+        assert_eq!(
+            first,
+            vec![
+                AgentEvent::TextDelta {
+                    text: "editing".into()
+                },
+                edit_call("mock-edit-t1-0", "notes.txt", "mock edit 1\n"),
+                edit_result(
+                    "mock-edit-t1-0",
+                    "notes.txt",
+                    Some("kept"),
+                    "kept\nmock edit 1\n"
+                ),
+                edit_call("mock-edit-t1-1", "src/new.txt", "mock edit 1\n"),
+                edit_result("mock-edit-t1-1", "src/new.txt", None, "mock edit 1\n"),
+                AgentEvent::Done {
+                    status: DoneStatus::Completed,
+                    result: None,
+                    error: None,
+                    session_id: None,
+                },
+            ]
+        );
+        assert!(
+            asked.lock().unwrap().is_empty(),
+            "no approval without the knob"
+        );
+
+        // The next turn appends its own line: the turn number comes from the file.
+        let second = run(
+            &mock,
+            dir.path(),
+            &edits,
+            controls(dir.path().join("x"), "Allow", asked),
+        )
+        .await;
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("notes.txt")).unwrap(),
+            "kept\nmock edit 1\nmock edit 2\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("src/new.txt")).unwrap(),
+            "mock edit 1\nmock edit 2\n"
+        );
+        assert_eq!(
+            second[1],
+            edit_call("mock-edit-t2-0", "notes.txt", "mock edit 2\n")
+        );
+
+        // Determinism: the same inputs give the same events.
+        let again = tempfile::tempdir().unwrap();
+        std::fs::write(again.path().join("notes.txt"), "kept").unwrap();
+        let replay = run(
+            &mock,
+            again.path(),
+            &edits,
+            controls(again.path().join("x"), "Allow", Asked::default()),
+        )
+        .await;
+        assert_eq!(replay, first);
+    }
+
+    #[tokio::test]
+    async fn mock_edit_refuses_paths_outside_the_cwd() {
+        let root = tempfile::tempdir().unwrap();
+        let cwd = root.path().join("repo");
+        std::fs::create_dir_all(&cwd).unwrap();
+        let outside = root.path().join("escape.txt");
+        let edits = MockEdits {
+            paths: vec![
+                "../escape.txt".into(),
+                outside.to_string_lossy().into_owned(),
+            ],
+            approve: true,
+        };
+        let asked = Asked::default();
+        let events = run(
+            &harness(),
+            &cwd,
+            &edits,
+            controls(outside.clone(), "Allow", asked.clone()),
+        )
+        .await;
+        assert!(!outside.exists(), "nothing written outside the cwd");
+        assert!(
+            asked.lock().unwrap().is_empty(),
+            "a refused path asks nothing"
+        );
+        let errors = events
+            .iter()
+            .filter(|e| matches!(e, AgentEvent::ToolResult { is_error: true, .. }))
+            .count();
+        assert_eq!(errors, 2);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn mock_edit_refuses_a_symlink_out_of_the_cwd() {
+        let root = tempfile::tempdir().unwrap();
+        let cwd = root.path().join("repo");
+        std::fs::create_dir_all(&cwd).unwrap();
+        std::os::unix::fs::symlink(root.path(), cwd.join("link")).unwrap();
+        let edits = MockEdits {
+            paths: vec!["link/escape.txt".into()],
+            approve: false,
+        };
+        let events = run(
+            &harness(),
+            &cwd,
+            &edits,
+            controls(cwd.join("x"), "Allow", Asked::default()),
+        )
+        .await;
+        assert!(!root.path().join("escape.txt").exists());
+        assert!(matches!(
+            &events[2],
+            AgentEvent::ToolResult { is_error: true, output: Some(o), .. } if o.contains("outside")
+        ));
+    }
+
+    #[tokio::test]
+    async fn mock_approve_requests_before_edit() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("notes.txt");
+        let edits = MockEdits {
+            paths: vec!["notes.txt".into()],
+            approve: true,
+        };
+        let mock = harness();
+
+        // Allowed: one question per edit, asked while the file is still absent.
+        let asked = Asked::default();
+        let events = run(
+            &mock,
+            dir.path(),
+            &edits,
+            controls(target.clone(), "Allow", asked.clone()),
+        )
+        .await;
+        {
+            let asked = asked.lock().unwrap();
+            assert_eq!(asked.len(), 1);
+            let (questions, existed) = &asked[0];
+            assert!(!existed, "approval requested before the write");
+            assert_eq!(questions.len(), 1);
+            assert_eq!(questions[0].id, "mock-approve-t1-0");
+            assert_eq!(questions[0].header, "Approval");
+            assert_eq!(questions[0].options, vec!["Allow", "Deny"]);
+            assert!(questions[0].question.contains("notes.txt"));
+        }
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "mock edit 1\n");
+        // The tool call is visible before the approval, the result after it.
+        assert_eq!(
+            events[1],
+            edit_call("mock-edit-t1-0", "notes.txt", "mock edit 1\n")
+        );
+        assert_eq!(
+            events[2],
+            edit_result("mock-edit-t1-0", "notes.txt", None, "mock edit 1\n")
+        );
+
+        // Denied: the file is untouched and the result is an error.
+        let asked = Asked::default();
+        let events = run(
+            &mock,
+            dir.path(),
+            &edits,
+            controls(target.clone(), "Deny", asked.clone()),
+        )
+        .await;
+        assert_eq!(asked.lock().unwrap().len(), 1);
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "mock edit 1\n");
+        assert!(matches!(
+            &events[2],
+            AgentEvent::ToolResult { is_error: true, output: Some(o), diff: None, .. }
+                if o.contains("denied")
+        ));
+        assert!(matches!(events.last(), Some(AgentEvent::Done { .. })));
     }
 }

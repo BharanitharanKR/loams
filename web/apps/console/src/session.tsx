@@ -82,7 +82,9 @@ export function SessionGate({ children }: { children: ReactNode }) {
         <h1>The console can't reach its API</h1>
         <p>{state.message}</p>
         <p>
-          In development, start the mock with <code>cargo run -p loams-console-mock</code>.
+          In development, start the mock with <code>cargo run -p loams-apps-mock</code> (it listens
+          on 127.0.0.1:8084, where the dev server proxies <code>/api</code>), or point{' '}
+          <code>LOAMS_API</code> at an engine.
         </p>
       </div>
     );
