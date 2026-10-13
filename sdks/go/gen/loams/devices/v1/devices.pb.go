@@ -1685,8 +1685,7 @@ const file_loams_devices_v1_devices_proto_rawDesc = "" +
 	"\x14UnregisterPushTarget\x12-.loams.devices.v1.UnregisterPushTargetRequest\x1a..loams.devices.v1.UnregisterPushTargetResponse\x12\x8c\x01\n" +
 	"\x1aGetNotificationPreferences\x123.loams.devices.v1.GetNotificationPreferencesRequest\x1a4.loams.devices.v1.GetNotificationPreferencesResponse\"\x03\x90\x02\x01\x12\x87\x01\n" +
 	"\x1aSetNotificationPreferences\x123.loams.devices.v1.SetNotificationPreferencesRequest\x1a4.loams.devices.v1.SetNotificationPreferencesResponse\x12u\n" +
-	"\x14SendTestNotification\x12-.loams.devices.v1.SendTestNotificationRequest\x1a..loams.devices.v1.SendTestNotificationResponseB\xb3\x01\n" +
-	"\x14com.loams.devices.v1B\fDevicesProtoP\x01Z+loams.dev/go/gen/loams/devices/v1;devicesv1\xa2\x02\x03LDX\xaa\x02\x10Loams.Devices.V1\xca\x02\x10Loams\\Devices\\V1\xe2\x02\x1cLoams\\Devices\\V1\\GPBMetadata\xea\x02\x12Loams::Devices::V1b\x06proto3"
+	"\x14SendTestNotification\x12-.loams.devices.v1.SendTestNotificationRequest\x1a..loams.devices.v1.SendTestNotificationResponseb\x06proto3"
 
 var (
 	file_loams_devices_v1_devices_proto_rawDescOnce sync.Once

@@ -439,9 +439,7 @@ const file_loams_live_v1_value_proto_rawDesc = "" +
 	"\x06fields\x18\x03 \x03(\v2).loams.live.v1.DocumentRecord.FieldsEntryR\x06fields\x1aO\n" +
 	"\vFieldsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12*\n" +
-	"\x05value\x18\x02 \x01(\v2\x14.loams.live.v1.ValueR\x05value:\x028\x01B\x9c\x01\n" +
-	"\x11com.loams.live.v1B\n" +
-	"ValueProtoP\x01Z%loams.dev/go/gen/loams/live/v1;livev1\xa2\x02\x03LLX\xaa\x02\rLoams.Live.V1\xca\x02\rLoams\\Live\\V1\xe2\x02\x19Loams\\Live\\V1\\GPBMetadata\xea\x02\x0fLoams::Live::V1b\x06proto3"
+	"\x05value\x18\x02 \x01(\v2\x14.loams.live.v1.ValueR\x05value:\x028\x01b\x06proto3"
 
 var (
 	file_loams_live_v1_value_proto_rawDescOnce sync.Once

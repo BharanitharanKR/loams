@@ -18,7 +18,7 @@ from connectrpc.protocol import ProtocolType
 from connectrpc.server import ConnectASGIApplication, ConnectWSGIApplication, DEFAULT_READ_MAX_BYTES, Endpoint, EndpointSync
 from pyqwest import Client, SyncClient
 
-from .live_pb2 import DeployRequest, DeployResponse, ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition, WatchRequest
+from .live_pb2 import ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition, WatchRequest
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator, Iterable, Iterator, Mapping
@@ -60,19 +60,13 @@ class LiveService(Protocol):
 
         Exposed on `loams.tables`, not on `loams.live`: §44 §7.2 splits the
         service into the session half (watch, modify) and the table half (query,
-        mutate, deploy), and both are facade names for these RPCs.
+        mutate), and both are facade names for these RPCs.
         """
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
     async def mutate(self, request: MutateRequest, ctx: RequestContext[MutateRequest, MutateResponse], /) -> MutateResponse:
         """
         Runs a mutation; returns its commit timestamp and result.
-        """
-        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
-
-    async def deploy(self, request: DeployRequest, ctx: RequestContext[DeployRequest, DeployResponse], /) -> DeployResponse:
-        """
-        Admin: deploys a function bundle and a schema.
         """
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
@@ -129,16 +123,6 @@ class LiveServiceASGIApplication(ConnectASGIApplication[LiveService]):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.mutate,
-                ),
-                "/loams.live.v1.LiveService/Deploy": Endpoint.unary(
-                    method=MethodInfo(
-                        name="Deploy",
-                        service_name="loams.live.v1.LiveService",
-                        input=DeployRequest,
-                        output=DeployResponse,
-                        idempotency_level=IdempotencyLevel.UNKNOWN,
-                    ),
-                    function=svc.deploy,
                 ),
             },
             interceptors=interceptors,
@@ -243,7 +227,7 @@ class LiveServiceClient(ConnectClient):
 
         Exposed on `loams.tables`, not on `loams.live`: §44 §7.2 splits the
         service into the session half (watch, modify) and the table half (query,
-        mutate, deploy), and both are facade names for these RPCs.
+        mutate), and both are facade names for these RPCs.
         """
         return await self.execute_unary(
             request=request,
@@ -281,29 +265,6 @@ class LiveServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
-    async def deploy(
-        self,
-        request: DeployRequest,
-        *,
-        headers: Headers | Mapping[str, str] | None = None, 
-        timeout_ms: int | None = None,
-    ) -> DeployResponse:
-        """
-        Admin: deploys a function bundle and a schema.
-        """
-        return await self.execute_unary(
-            request=request,
-            method=MethodInfo(
-                name="Deploy",
-                service_name="loams.live.v1.LiveService",
-                input=DeployRequest,
-                output=DeployResponse,
-                idempotency_level=IdempotencyLevel.UNKNOWN,
-            ),
-            headers=headers,
-            timeout_ms=timeout_ms,
-        )
-
 class LiveServiceSync(Protocol):
     def watch(self, request: WatchRequest, ctx: RequestContext[WatchRequest, Transition], /) -> Iterator[Transition]:
         """
@@ -330,19 +291,13 @@ class LiveServiceSync(Protocol):
 
         Exposed on `loams.tables`, not on `loams.live`: §44 §7.2 splits the
         service into the session half (watch, modify) and the table half (query,
-        mutate, deploy), and both are facade names for these RPCs.
+        mutate), and both are facade names for these RPCs.
         """
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
     def mutate(self, request: MutateRequest, ctx: RequestContext[MutateRequest, MutateResponse], /) -> MutateResponse:
         """
         Runs a mutation; returns its commit timestamp and result.
-        """
-        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
-
-    def deploy(self, request: DeployRequest, ctx: RequestContext[DeployRequest, DeployResponse], /) -> DeployResponse:
-        """
-        Admin: deploys a function bundle and a schema.
         """
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
@@ -397,16 +352,6 @@ class LiveServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.mutate,
-                ),
-                "/loams.live.v1.LiveService/Deploy": EndpointSync.unary(
-                    method=MethodInfo(
-                        name="Deploy",
-                        service_name="loams.live.v1.LiveService",
-                        input=DeployRequest,
-                        output=DeployResponse,
-                        idempotency_level=IdempotencyLevel.UNKNOWN,
-                    ),
-                    function=service.deploy,
                 ),
             },
             interceptors=interceptors,
@@ -509,7 +454,7 @@ class LiveServiceClientSync(ConnectClientSync):
 
         Exposed on `loams.tables`, not on `loams.live`: §44 §7.2 splits the
         service into the session half (watch, modify) and the table half (query,
-        mutate, deploy), and both are facade names for these RPCs.
+        mutate), and both are facade names for these RPCs.
         """
         return self.execute_unary(
             request=request,
@@ -540,28 +485,6 @@ class LiveServiceClientSync(ConnectClientSync):
                 service_name="loams.live.v1.LiveService",
                 input=MutateRequest,
                 output=MutateResponse,
-                idempotency_level=IdempotencyLevel.UNKNOWN,
-            ),
-            headers=headers,
-            timeout_ms=timeout_ms,
-        )
-    def deploy(
-        self,
-        request: DeployRequest,
-        *,
-        headers: Headers | Mapping[str, str] | None = None, 
-        timeout_ms: int | None = None,
-    ) -> DeployResponse:
-        """
-        Admin: deploys a function bundle and a schema.
-        """
-        return self.execute_unary(
-            request=request,
-            method=MethodInfo(
-                name="Deploy",
-                service_name="loams.live.v1.LiveService",
-                input=DeployRequest,
-                output=DeployResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

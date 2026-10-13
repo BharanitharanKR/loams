@@ -751,8 +751,7 @@ const file_loams_notifications_v1_notifications_proto_rawDesc = "" +
 	"\x13NotificationService\x12}\n" +
 	"\x11ListNotifications\x120.loams.notifications.v1.ListNotificationsRequest\x1a1.loams.notifications.v1.ListNotificationsResponse\"\x03\x90\x02\x01\x12}\n" +
 	"\x12WatchNotifications\x121.loams.notifications.v1.WatchNotificationsRequest\x1a2.loams.notifications.v1.WatchNotificationsResponse0\x01\x12]\n" +
-	"\bMarkRead\x12'.loams.notifications.v1.MarkReadRequest\x1a(.loams.notifications.v1.MarkReadResponseB\xe3\x01\n" +
-	"\x1acom.loams.notifications.v1B\x12NotificationsProtoP\x01Z7loams.dev/go/gen/loams/notifications/v1;notificationsv1\xa2\x02\x03LNX\xaa\x02\x16Loams.Notifications.V1\xca\x02\x16Loams\\Notifications\\V1\xe2\x02\"Loams\\Notifications\\V1\\GPBMetadata\xea\x02\x18Loams::Notifications::V1b\x06proto3"
+	"\bMarkRead\x12'.loams.notifications.v1.MarkReadRequest\x1a(.loams.notifications.v1.MarkReadResponseb\x06proto3"
 
 var (
 	file_loams_notifications_v1_notifications_proto_rawDescOnce sync.Once

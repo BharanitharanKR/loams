@@ -66,6 +66,7 @@ plugins:
       - Mloams/notifications/v1/notifications.proto=loams.dev/go/gen/loams/notifications/v1;notificationsv1
       - Mloams/operations/v1/operations.proto=loams.dev/go/gen/loams/operations/v1;operationsv1
       - Mloams/options/v1/options.proto=loams.dev/go/gen/loams/options/v1;optionsv1
+      - Mloams/live/v1/admin.proto=loams.dev/go/gen/loams/live/v1;livev1
       - Mloams/live/v1/catalog.proto=loams.dev/go/gen/loams/live/v1;livev1
       - Mloams/live/v1/idempotency.proto=loams.dev/go/gen/loams/live/v1;livev1
       - Mloams/live/v1/journal.proto=loams.dev/go/gen/loams/live/v1;livev1
@@ -84,6 +85,7 @@ plugins:
       - Mloams/notifications/v1/notifications.proto=loams.dev/go/gen/loams/notifications/v1;notificationsv1
       - Mloams/operations/v1/operations.proto=loams.dev/go/gen/loams/operations/v1;operationsv1
       - Mloams/options/v1/options.proto=loams.dev/go/gen/loams/options/v1;optionsv1
+      - Mloams/live/v1/admin.proto=loams.dev/go/gen/loams/live/v1;livev1
       - Mloams/live/v1/catalog.proto=loams.dev/go/gen/loams/live/v1;livev1
       - Mloams/live/v1/idempotency.proto=loams.dev/go/gen/loams/live/v1;livev1
       - Mloams/live/v1/journal.proto=loams.dev/go/gen/loams/live/v1;livev1

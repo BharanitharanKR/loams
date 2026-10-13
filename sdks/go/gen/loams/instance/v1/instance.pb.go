@@ -1112,8 +1112,7 @@ const file_loams_instance_v1_instance_proto_rawDesc = "" +
 	"\x0fInstanceService\x12r\n" +
 	"\vGetInstance\x12%.loams.instance.v1.GetInstanceRequest\x1a&.loams.instance.v1.GetInstanceResponse\"\x14\x92\xb5\x18\r\x12\vgetInstance\x90\x02\x01\x12^\n" +
 	"\x06WhoAmI\x12 .loams.instance.v1.WhoAmIRequest\x1a!.loams.instance.v1.WhoAmIResponse\"\x0f\x92\xb5\x18\b\x12\x06whoAmI\x90\x02\x01\x1aC\x8a\xb5\x18?\n" +
-	"\binstance\x123What this instance is, and who the caller is on it.B\xbb\x01\n" +
-	"\x15com.loams.instance.v1B\rInstanceProtoP\x01Z-loams.dev/go/gen/loams/instance/v1;instancev1\xa2\x02\x03LIX\xaa\x02\x11Loams.Instance.V1\xca\x02\x11Loams\\Instance\\V1\xe2\x02\x1dLoams\\Instance\\V1\\GPBMetadata\xea\x02\x13Loams::Instance::V1b\x06proto3"
+	"\binstance\x123What this instance is, and who the caller is on it.b\x06proto3"
 
 var (
 	file_loams_instance_v1_instance_proto_rawDescOnce sync.Once

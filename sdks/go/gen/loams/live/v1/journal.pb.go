@@ -253,8 +253,7 @@ const file_loams_live_v1_journal_proto_rawDesc = "" +
 	"\x16WRITE_KIND_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11WRITE_KIND_INSERT\x10\x01\x12\x16\n" +
 	"\x12WRITE_KIND_REPLACE\x10\x02\x12\x15\n" +
-	"\x11WRITE_KIND_DELETE\x10\x03B\x9e\x01\n" +
-	"\x11com.loams.live.v1B\fJournalProtoP\x01Z%loams.dev/go/gen/loams/live/v1;livev1\xa2\x02\x03LLX\xaa\x02\rLoams.Live.V1\xca\x02\rLoams\\Live\\V1\xe2\x02\x19Loams\\Live\\V1\\GPBMetadata\xea\x02\x0fLoams::Live::V1b\x06proto3"
+	"\x11WRITE_KIND_DELETE\x10\x03b\x06proto3"
 
 var (
 	file_loams_live_v1_journal_proto_rawDescOnce sync.Once

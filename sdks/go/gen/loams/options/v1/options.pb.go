@@ -245,8 +245,7 @@ const file_loams_options_v1_options_proto_rawDesc = "" +
 	"pagination\x18\x04 \x01(\tR\n" +
 	"pagination:Z\n" +
 	"\x06module\x12\x1f.google.protobuf.ServiceOptions\x18ц\x03 \x01(\v2\x1f.loams.options.v1.ModuleOptionsR\x06module:Y\n" +
-	"\x06facade\x12\x1e.google.protobuf.MethodOptions\x18҆\x03 \x03(\v2\x1f.loams.options.v1.FacadeOptionsR\x06facadeB\xb3\x01\n" +
-	"\x14com.loams.options.v1B\fOptionsProtoP\x01Z+loams.dev/go/gen/loams/options/v1;optionsv1\xa2\x02\x03LOX\xaa\x02\x10Loams.Options.V1\xca\x02\x10Loams\\Options\\V1\xe2\x02\x1cLoams\\Options\\V1\\GPBMetadata\xea\x02\x12Loams::Options::V1b\x06proto3"
+	"\x06facade\x12\x1e.google.protobuf.MethodOptions\x18҆\x03 \x03(\v2\x1f.loams.options.v1.FacadeOptionsR\x06facadeb\x06proto3"
 
 var (
 	file_loams_options_v1_options_proto_rawDescOnce sync.Once

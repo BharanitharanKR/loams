@@ -25,76 +25,54 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Where a deployment is in its life (design §45 §3.3).
-type DeploymentState int32
+type TableJobKind int32
 
 const (
-	DeploymentState_DEPLOYMENT_STATE_UNSPECIFIED DeploymentState = 0
-	// Its record is written; its schema is not applied yet.
-	DeploymentState_DEPLOYMENT_STATE_PENDING DeploymentState = 1
-	// A stricter validator scans existing data (LV1 plan Task 8).
-	DeploymentState_DEPLOYMENT_STATE_VALIDATING DeploymentState = 2
-	// A new index is backfilled (LV1 plan Task 9).
-	DeploymentState_DEPLOYMENT_STATE_BACKFILLING DeploymentState = 3
-	// The pointer names it: new calls run its functions.
-	DeploymentState_DEPLOYMENT_STATE_ACTIVE DeploymentState = 4
-	// A later deployment replaced it.
-	DeploymentState_DEPLOYMENT_STATE_SUPERSEDED DeploymentState = 5
-	// It never became active; `failure_reason` says why.
-	DeploymentState_DEPLOYMENT_STATE_FAILED DeploymentState = 6
-	// It is active, but its isolated workers crashed five times within a
-	// minute (design §45 §3.1). Calls are still served.
-	DeploymentState_DEPLOYMENT_STATE_DEGRADED DeploymentState = 7
+	TableJobKind_TABLE_JOB_KIND_UNSPECIFIED TableJobKind = 0
+	// A validation scan of a stricter validator (LV1 plan Task 8).
+	TableJobKind_TABLE_JOB_KIND_VALIDATE TableJobKind = 1
+	// The backfill of the table's new indexes (LV1 plan Task 9).
+	TableJobKind_TABLE_JOB_KIND_BACKFILL TableJobKind = 2
 )
 
-// Enum value maps for DeploymentState.
+// Enum value maps for TableJobKind.
 var (
-	DeploymentState_name = map[int32]string{
-		0: "DEPLOYMENT_STATE_UNSPECIFIED",
-		1: "DEPLOYMENT_STATE_PENDING",
-		2: "DEPLOYMENT_STATE_VALIDATING",
-		3: "DEPLOYMENT_STATE_BACKFILLING",
-		4: "DEPLOYMENT_STATE_ACTIVE",
-		5: "DEPLOYMENT_STATE_SUPERSEDED",
-		6: "DEPLOYMENT_STATE_FAILED",
-		7: "DEPLOYMENT_STATE_DEGRADED",
+	TableJobKind_name = map[int32]string{
+		0: "TABLE_JOB_KIND_UNSPECIFIED",
+		1: "TABLE_JOB_KIND_VALIDATE",
+		2: "TABLE_JOB_KIND_BACKFILL",
 	}
-	DeploymentState_value = map[string]int32{
-		"DEPLOYMENT_STATE_UNSPECIFIED": 0,
-		"DEPLOYMENT_STATE_PENDING":     1,
-		"DEPLOYMENT_STATE_VALIDATING":  2,
-		"DEPLOYMENT_STATE_BACKFILLING": 3,
-		"DEPLOYMENT_STATE_ACTIVE":      4,
-		"DEPLOYMENT_STATE_SUPERSEDED":  5,
-		"DEPLOYMENT_STATE_FAILED":      6,
-		"DEPLOYMENT_STATE_DEGRADED":    7,
+	TableJobKind_value = map[string]int32{
+		"TABLE_JOB_KIND_UNSPECIFIED": 0,
+		"TABLE_JOB_KIND_VALIDATE":    1,
+		"TABLE_JOB_KIND_BACKFILL":    2,
 	}
 )
 
-func (x DeploymentState) Enum() *DeploymentState {
-	p := new(DeploymentState)
+func (x TableJobKind) Enum() *TableJobKind {
+	p := new(TableJobKind)
 	*p = x
 	return p
 }
 
-func (x DeploymentState) String() string {
+func (x TableJobKind) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (DeploymentState) Descriptor() protoreflect.EnumDescriptor {
+func (TableJobKind) Descriptor() protoreflect.EnumDescriptor {
 	return file_loams_live_v1_catalog_proto_enumTypes[0].Descriptor()
 }
 
-func (DeploymentState) Type() protoreflect.EnumType {
+func (TableJobKind) Type() protoreflect.EnumType {
 	return &file_loams_live_v1_catalog_proto_enumTypes[0]
 }
 
-func (x DeploymentState) Number() protoreflect.EnumNumber {
+func (x TableJobKind) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use DeploymentState.Descriptor instead.
-func (DeploymentState) EnumDescriptor() ([]byte, []int) {
+// Deprecated: Use TableJobKind.Descriptor instead.
+func (TableJobKind) EnumDescriptor() ([]byte, []int) {
 	return file_loams_live_v1_catalog_proto_rawDescGZIP(), []int{0}
 }
 
@@ -112,7 +90,15 @@ type TableDef struct {
 	Indexes []*IndexDef `protobuf:"bytes,4,rep,name=indexes,proto3" json:"indexes,omitempty"`
 	// The id the next user index gets; ids are never reused, so the entries
 	// of a removed index can never be read as another index's.
-	NextIndexId   uint32 `protobuf:"varint,5,opt,name=next_index_id,json=nextIndexId,proto3" json:"next_index_id,omitempty"`
+	NextIndexId uint32 `protobuf:"varint,5,opt,name=next_index_id,json=nextIndexId,proto3" json:"next_index_id,omitempty"`
+	// The validator every write to the table must match (design §45 §4.1;
+	// LV1 plan Task 8), as the active deployment's schema declares it.
+	// Absent: none.
+	Validator *Validator `protobuf:"bytes,6,opt,name=validator,proto3" json:"validator,omitempty"`
+	// A stricter validator a deploy is checking the table's documents
+	// against: until that deploy activates or fails, every write must match
+	// it as well as `validator`. Absent: none.
+	Enforcing     *EnforcingValidator `protobuf:"bytes,7,opt,name=enforcing,proto3" json:"enforcing,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -182,6 +168,258 @@ func (x *TableDef) GetNextIndexId() uint32 {
 	return 0
 }
 
+func (x *TableDef) GetValidator() *Validator {
+	if x != nil {
+		return x.Validator
+	}
+	return nil
+}
+
+func (x *TableDef) GetEnforcing() *EnforcingValidator {
+	if x != nil {
+		return x.Enforcing
+	}
+	return nil
+}
+
+// A validator being enforced ahead of its deploy (LV1 plan Task 8).
+type EnforcingValidator struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Validator *Validator             `protobuf:"bytes,1,opt,name=validator,proto3" json:"validator,omitempty"`
+	// The deployment whose deploy is checking it (16 bytes).
+	Deployment    []byte `protobuf:"bytes,2,opt,name=deployment,proto3" json:"deployment,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnforcingValidator) Reset() {
+	*x = EnforcingValidator{}
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnforcingValidator) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnforcingValidator) ProtoMessage() {}
+
+func (x *EnforcingValidator) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnforcingValidator.ProtoReflect.Descriptor instead.
+func (*EnforcingValidator) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_catalog_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *EnforcingValidator) GetValidator() *Validator {
+	if x != nil {
+		return x.Validator
+	}
+	return nil
+}
+
+func (x *EnforcingValidator) GetDeployment() []byte {
+	if x != nil {
+		return x.Deployment
+	}
+	return nil
+}
+
+// A leased, checkpointed scan of one table's documents (LV1 plan Task 8):
+// the value of catalog record `0x01 ‖ 0x07 ‖ table_id:u32 BE ‖ kind:u8`.
+// Every batch is one transaction that reads this record, checks the lease,
+// visits the documents after `checkpoint` and writes the record back.
+type TableJobRecord struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The encoding version; 1 in LV1.
+	Format  uint32       `protobuf:"varint,1,opt,name=format,proto3" json:"format,omitempty"`
+	Kind    TableJobKind `protobuf:"varint,2,opt,name=kind,proto3,enum=loams.live.v1.TableJobKind" json:"kind,omitempty"`
+	TableId uint32       `protobuf:"varint,3,opt,name=table_id,json=tableId,proto3" json:"table_id,omitempty"`
+	// The deployment the job works for (16 bytes).
+	Deployment []byte `protobuf:"bytes,4,opt,name=deployment,proto3" json:"deployment,omitempty"`
+	// Who holds the lease, and until when (TSO physical time, ms). Another
+	// owner may take the job over once the lease has expired.
+	Owner          string `protobuf:"bytes,5,opt,name=owner,proto3" json:"owner,omitempty"`
+	LeaseExpiresMs uint64 `protobuf:"varint,6,opt,name=lease_expires_ms,json=leaseExpiresMs,proto3" json:"lease_expires_ms,omitempty"`
+	// The last document key done; empty before the first batch.
+	Checkpoint []byte `protobuf:"bytes,7,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
+	// Documents visited so far.
+	Scanned uint64 `protobuf:"varint,8,opt,name=scanned,proto3" json:"scanned,omitempty"`
+	// The scan reached the end of the table.
+	Done bool `protobuf:"varint,9,opt,name=done,proto3" json:"done,omitempty"`
+	// What the job found (a validation: the offending documents), at most
+	// 100.
+	Findings      []*JobFinding `protobuf:"bytes,10,rep,name=findings,proto3" json:"findings,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TableJobRecord) Reset() {
+	*x = TableJobRecord{}
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TableJobRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TableJobRecord) ProtoMessage() {}
+
+func (x *TableJobRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TableJobRecord.ProtoReflect.Descriptor instead.
+func (*TableJobRecord) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_catalog_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *TableJobRecord) GetFormat() uint32 {
+	if x != nil {
+		return x.Format
+	}
+	return 0
+}
+
+func (x *TableJobRecord) GetKind() TableJobKind {
+	if x != nil {
+		return x.Kind
+	}
+	return TableJobKind_TABLE_JOB_KIND_UNSPECIFIED
+}
+
+func (x *TableJobRecord) GetTableId() uint32 {
+	if x != nil {
+		return x.TableId
+	}
+	return 0
+}
+
+func (x *TableJobRecord) GetDeployment() []byte {
+	if x != nil {
+		return x.Deployment
+	}
+	return nil
+}
+
+func (x *TableJobRecord) GetOwner() string {
+	if x != nil {
+		return x.Owner
+	}
+	return ""
+}
+
+func (x *TableJobRecord) GetLeaseExpiresMs() uint64 {
+	if x != nil {
+		return x.LeaseExpiresMs
+	}
+	return 0
+}
+
+func (x *TableJobRecord) GetCheckpoint() []byte {
+	if x != nil {
+		return x.Checkpoint
+	}
+	return nil
+}
+
+func (x *TableJobRecord) GetScanned() uint64 {
+	if x != nil {
+		return x.Scanned
+	}
+	return 0
+}
+
+func (x *TableJobRecord) GetDone() bool {
+	if x != nil {
+		return x.Done
+	}
+	return false
+}
+
+func (x *TableJobRecord) GetFindings() []*JobFinding {
+	if x != nil {
+		return x.Findings
+	}
+	return nil
+}
+
+// One document a table job found.
+type JobFinding struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The document id, 16 bytes.
+	DocId []byte `protobuf:"bytes,1,opt,name=doc_id,json=docId,proto3" json:"doc_id,omitempty"`
+	// What is wrong, without values (field paths and types).
+	Detail        string `protobuf:"bytes,2,opt,name=detail,proto3" json:"detail,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *JobFinding) Reset() {
+	*x = JobFinding{}
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *JobFinding) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*JobFinding) ProtoMessage() {}
+
+func (x *JobFinding) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use JobFinding.ProtoReflect.Descriptor instead.
+func (*JobFinding) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_catalog_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *JobFinding) GetDocId() []byte {
+	if x != nil {
+		return x.DocId
+	}
+	return nil
+}
+
+func (x *JobFinding) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
 // A user index of a table. `_creationTime` and then `_id` are appended to
 // every index, so entries are unique and stably ordered.
 type IndexDef struct {
@@ -190,14 +428,20 @@ type IndexDef struct {
 	Id   uint32 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	// The indexed top-level fields, at most 16.
-	Fields        []string `protobuf:"bytes,3,rep,name=fields,proto3" json:"fields,omitempty"`
+	Fields []string `protobuf:"bytes,3,rep,name=fields,proto3" json:"fields,omitempty"`
+	// Where the index is in its life (LV1 plan Task 9). Unspecified: ready
+	// (an index defined before Task 9).
+	State IndexState `protobuf:"varint,4,opt,name=state,proto3,enum=loams.live.v1.IndexState" json:"state,omitempty"`
+	// The deployment whose deploy is backfilling it (16 bytes), while
+	// `state` is `INDEX_STATE_BACKFILLING`.
+	Deployment    []byte `protobuf:"bytes,5,opt,name=deployment,proto3" json:"deployment,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *IndexDef) Reset() {
 	*x = IndexDef{}
-	mi := &file_loams_live_v1_catalog_proto_msgTypes[1]
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -209,7 +453,7 @@ func (x *IndexDef) String() string {
 func (*IndexDef) ProtoMessage() {}
 
 func (x *IndexDef) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_catalog_proto_msgTypes[1]
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -222,7 +466,7 @@ func (x *IndexDef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IndexDef.ProtoReflect.Descriptor instead.
 func (*IndexDef) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_catalog_proto_rawDescGZIP(), []int{1}
+	return file_loams_live_v1_catalog_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *IndexDef) GetId() uint32 {
@@ -246,6 +490,20 @@ func (x *IndexDef) GetFields() []string {
 	return nil
 }
 
+func (x *IndexDef) GetState() IndexState {
+	if x != nil {
+		return x.State
+	}
+	return IndexState_INDEX_STATE_UNSPECIFIED
+}
+
+func (x *IndexDef) GetDeployment() []byte {
+	if x != nil {
+		return x.Deployment
+	}
+	return nil
+}
+
 // The app's own settings: the value of its catalog record `0x01 ‖ 0x05`
 // (R1 plan row T10-1), written when the app's runner first opens.
 type AppDef struct {
@@ -262,7 +520,7 @@ type AppDef struct {
 
 func (x *AppDef) Reset() {
 	*x = AppDef{}
-	mi := &file_loams_live_v1_catalog_proto_msgTypes[2]
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -274,7 +532,7 @@ func (x *AppDef) String() string {
 func (*AppDef) ProtoMessage() {}
 
 func (x *AppDef) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_catalog_proto_msgTypes[2]
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -287,7 +545,7 @@ func (x *AppDef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppDef.ProtoReflect.Descriptor instead.
 func (*AppDef) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_catalog_proto_rawDescGZIP(), []int{2}
+	return file_loams_live_v1_catalog_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *AppDef) GetFormat() uint32 {
@@ -319,8 +577,8 @@ type DeploymentRecord struct {
 	Id []byte `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
 	// SHA-256 of the bundle, 32 bytes.
 	BundleSha256 []byte `protobuf:"bytes,3,opt,name=bundle_sha256,json=bundleSha256,proto3" json:"bundle_sha256,omitempty"`
-	// The schema the deployment declares (only additive table creation in
-	// Task 6; validators and index changes in Tasks 8 and 9).
+	// The schema the deployment declares (additive table creation in Task 6,
+	// validators in Task 8, index changes in Task 9).
 	Schema *Schema `protobuf:"bytes,4,opt,name=schema,proto3" json:"schema,omitempty"`
 	// The TSO physical time of the deploy's first transaction, in ms.
 	CreatedAtMs uint64 `protobuf:"varint,5,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
@@ -333,13 +591,16 @@ type DeploymentRecord struct {
 	State  DeploymentState `protobuf:"varint,9,opt,name=state,proto3,enum=loams.live.v1.DeploymentState" json:"state,omitempty"`
 	// Why the deployment failed, when `state` is `DEPLOYMENT_STATE_FAILED`.
 	FailureReason string `protobuf:"bytes,10,opt,name=failure_reason,json=failureReason,proto3" json:"failure_reason,omitempty"`
+	// The functions its bundle exports (LV1 plan Task 10), by path; empty in
+	// a record written before Task 10.
+	Functions     []*FunctionInfo `protobuf:"bytes,11,rep,name=functions,proto3" json:"functions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DeploymentRecord) Reset() {
 	*x = DeploymentRecord{}
-	mi := &file_loams_live_v1_catalog_proto_msgTypes[3]
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -351,7 +612,7 @@ func (x *DeploymentRecord) String() string {
 func (*DeploymentRecord) ProtoMessage() {}
 
 func (x *DeploymentRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_catalog_proto_msgTypes[3]
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -364,7 +625,7 @@ func (x *DeploymentRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeploymentRecord.ProtoReflect.Descriptor instead.
 func (*DeploymentRecord) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_catalog_proto_rawDescGZIP(), []int{3}
+	return file_loams_live_v1_catalog_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *DeploymentRecord) GetFormat() uint32 {
@@ -437,24 +698,62 @@ func (x *DeploymentRecord) GetFailureReason() string {
 	return ""
 }
 
+func (x *DeploymentRecord) GetFunctions() []*FunctionInfo {
+	if x != nil {
+		return x.Functions
+	}
+	return nil
+}
+
 var File_loams_live_v1_catalog_proto protoreflect.FileDescriptor
 
 const file_loams_live_v1_catalog_proto_rawDesc = "" +
 	"\n" +
-	"\x1bloams/live/v1/catalog.proto\x12\rloams.live.v1\x1a\x18loams/live/v1/live.proto\"\x9d\x01\n" +
+	"\x1bloams/live/v1/catalog.proto\x12\rloams.live.v1\x1a\x19loams/live/v1/admin.proto\x1a\x18loams/live/v1/live.proto\"\x96\x02\n" +
 	"\bTableDef\x12\x16\n" +
 	"\x06format\x18\x01 \x01(\rR\x06format\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\rR\x02id\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x121\n" +
 	"\aindexes\x18\x04 \x03(\v2\x17.loams.live.v1.IndexDefR\aindexes\x12\"\n" +
-	"\rnext_index_id\x18\x05 \x01(\rR\vnextIndexId\"F\n" +
+	"\rnext_index_id\x18\x05 \x01(\rR\vnextIndexId\x126\n" +
+	"\tvalidator\x18\x06 \x01(\v2\x18.loams.live.v1.ValidatorR\tvalidator\x12?\n" +
+	"\tenforcing\x18\a \x01(\v2!.loams.live.v1.EnforcingValidatorR\tenforcing\"l\n" +
+	"\x12EnforcingValidator\x126\n" +
+	"\tvalidator\x18\x01 \x01(\v2\x18.loams.live.v1.ValidatorR\tvalidator\x12\x1e\n" +
+	"\n" +
+	"deployment\x18\x02 \x01(\fR\n" +
+	"deployment\"\xd9\x02\n" +
+	"\x0eTableJobRecord\x12\x16\n" +
+	"\x06format\x18\x01 \x01(\rR\x06format\x12/\n" +
+	"\x04kind\x18\x02 \x01(\x0e2\x1b.loams.live.v1.TableJobKindR\x04kind\x12\x19\n" +
+	"\btable_id\x18\x03 \x01(\rR\atableId\x12\x1e\n" +
+	"\n" +
+	"deployment\x18\x04 \x01(\fR\n" +
+	"deployment\x12\x14\n" +
+	"\x05owner\x18\x05 \x01(\tR\x05owner\x12(\n" +
+	"\x10lease_expires_ms\x18\x06 \x01(\x04R\x0eleaseExpiresMs\x12\x1e\n" +
+	"\n" +
+	"checkpoint\x18\a \x01(\fR\n" +
+	"checkpoint\x12\x18\n" +
+	"\ascanned\x18\b \x01(\x04R\ascanned\x12\x12\n" +
+	"\x04done\x18\t \x01(\bR\x04done\x125\n" +
+	"\bfindings\x18\n" +
+	" \x03(\v2\x19.loams.live.v1.JobFindingR\bfindings\";\n" +
+	"\n" +
+	"JobFinding\x12\x15\n" +
+	"\x06doc_id\x18\x01 \x01(\fR\x05docId\x12\x16\n" +
+	"\x06detail\x18\x02 \x01(\tR\x06detail\"\x97\x01\n" +
 	"\bIndexDef\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
-	"\x06fields\x18\x03 \x03(\tR\x06fields\"G\n" +
+	"\x06fields\x18\x03 \x03(\tR\x06fields\x12/\n" +
+	"\x05state\x18\x04 \x01(\x0e2\x19.loams.live.v1.IndexStateR\x05state\x12\x1e\n" +
+	"\n" +
+	"deployment\x18\x05 \x01(\fR\n" +
+	"deployment\"G\n" +
 	"\x06AppDef\x12\x16\n" +
 	"\x06format\x18\x01 \x01(\rR\x06format\x12%\n" +
-	"\x0ejournal_shards\x18\x02 \x01(\rR\rjournalShards\"\xe0\x02\n" +
+	"\x0ejournal_shards\x18\x02 \x01(\rR\rjournalShards\"\x9b\x03\n" +
 	"\x10DeploymentRecord\x12\x16\n" +
 	"\x06format\x18\x01 \x01(\rR\x06format\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\fR\x02id\x12#\n" +
@@ -467,16 +766,12 @@ const file_loams_live_v1_catalog_proto_rawDesc = "" +
 	"\x06parent\x18\b \x01(\fR\x06parent\x124\n" +
 	"\x05state\x18\t \x01(\x0e2\x1e.loams.live.v1.DeploymentStateR\x05state\x12%\n" +
 	"\x0efailure_reason\x18\n" +
-	" \x01(\tR\rfailureReason*\x8e\x02\n" +
-	"\x0fDeploymentState\x12 \n" +
-	"\x1cDEPLOYMENT_STATE_UNSPECIFIED\x10\x00\x12\x1c\n" +
-	"\x18DEPLOYMENT_STATE_PENDING\x10\x01\x12\x1f\n" +
-	"\x1bDEPLOYMENT_STATE_VALIDATING\x10\x02\x12 \n" +
-	"\x1cDEPLOYMENT_STATE_BACKFILLING\x10\x03\x12\x1b\n" +
-	"\x17DEPLOYMENT_STATE_ACTIVE\x10\x04\x12\x1f\n" +
-	"\x1bDEPLOYMENT_STATE_SUPERSEDED\x10\x05\x12\x1b\n" +
-	"\x17DEPLOYMENT_STATE_FAILED\x10\x06\x12\x1d\n" +
-	"\x19DEPLOYMENT_STATE_DEGRADED\x10\ab\x06proto3"
+	" \x01(\tR\rfailureReason\x129\n" +
+	"\tfunctions\x18\v \x03(\v2\x1b.loams.live.v1.FunctionInfoR\tfunctions*h\n" +
+	"\fTableJobKind\x12\x1e\n" +
+	"\x1aTABLE_JOB_KIND_UNSPECIFIED\x10\x00\x12\x1b\n" +
+	"\x17TABLE_JOB_KIND_VALIDATE\x10\x01\x12\x1b\n" +
+	"\x17TABLE_JOB_KIND_BACKFILL\x10\x02b\x06proto3"
 
 var (
 	file_loams_live_v1_catalog_proto_rawDescOnce sync.Once
@@ -491,24 +786,38 @@ func file_loams_live_v1_catalog_proto_rawDescGZIP() []byte {
 }
 
 var file_loams_live_v1_catalog_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_loams_live_v1_catalog_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_loams_live_v1_catalog_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_loams_live_v1_catalog_proto_goTypes = []any{
-	(DeploymentState)(0),     // 0: loams.live.v1.DeploymentState
-	(*TableDef)(nil),         // 1: loams.live.v1.TableDef
-	(*IndexDef)(nil),         // 2: loams.live.v1.IndexDef
-	(*AppDef)(nil),           // 3: loams.live.v1.AppDef
-	(*DeploymentRecord)(nil), // 4: loams.live.v1.DeploymentRecord
-	(*Schema)(nil),           // 5: loams.live.v1.Schema
+	(TableJobKind)(0),          // 0: loams.live.v1.TableJobKind
+	(*TableDef)(nil),           // 1: loams.live.v1.TableDef
+	(*EnforcingValidator)(nil), // 2: loams.live.v1.EnforcingValidator
+	(*TableJobRecord)(nil),     // 3: loams.live.v1.TableJobRecord
+	(*JobFinding)(nil),         // 4: loams.live.v1.JobFinding
+	(*IndexDef)(nil),           // 5: loams.live.v1.IndexDef
+	(*AppDef)(nil),             // 6: loams.live.v1.AppDef
+	(*DeploymentRecord)(nil),   // 7: loams.live.v1.DeploymentRecord
+	(*Validator)(nil),          // 8: loams.live.v1.Validator
+	(IndexState)(0),            // 9: loams.live.v1.IndexState
+	(*Schema)(nil),             // 10: loams.live.v1.Schema
+	(DeploymentState)(0),       // 11: loams.live.v1.DeploymentState
+	(*FunctionInfo)(nil),       // 12: loams.live.v1.FunctionInfo
 }
 var file_loams_live_v1_catalog_proto_depIdxs = []int32{
-	2, // 0: loams.live.v1.TableDef.indexes:type_name -> loams.live.v1.IndexDef
-	5, // 1: loams.live.v1.DeploymentRecord.schema:type_name -> loams.live.v1.Schema
-	0, // 2: loams.live.v1.DeploymentRecord.state:type_name -> loams.live.v1.DeploymentState
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	5,  // 0: loams.live.v1.TableDef.indexes:type_name -> loams.live.v1.IndexDef
+	8,  // 1: loams.live.v1.TableDef.validator:type_name -> loams.live.v1.Validator
+	2,  // 2: loams.live.v1.TableDef.enforcing:type_name -> loams.live.v1.EnforcingValidator
+	8,  // 3: loams.live.v1.EnforcingValidator.validator:type_name -> loams.live.v1.Validator
+	0,  // 4: loams.live.v1.TableJobRecord.kind:type_name -> loams.live.v1.TableJobKind
+	4,  // 5: loams.live.v1.TableJobRecord.findings:type_name -> loams.live.v1.JobFinding
+	9,  // 6: loams.live.v1.IndexDef.state:type_name -> loams.live.v1.IndexState
+	10, // 7: loams.live.v1.DeploymentRecord.schema:type_name -> loams.live.v1.Schema
+	11, // 8: loams.live.v1.DeploymentRecord.state:type_name -> loams.live.v1.DeploymentState
+	12, // 9: loams.live.v1.DeploymentRecord.functions:type_name -> loams.live.v1.FunctionInfo
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_loams_live_v1_catalog_proto_init() }
@@ -516,6 +825,7 @@ func file_loams_live_v1_catalog_proto_init() {
 	if File_loams_live_v1_catalog_proto != nil {
 		return
 	}
+	file_loams_live_v1_admin_proto_init()
 	file_loams_live_v1_live_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -523,7 +833,7 @@ func file_loams_live_v1_catalog_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_loams_live_v1_catalog_proto_rawDesc), len(file_loams_live_v1_catalog_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   4,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

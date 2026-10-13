@@ -138,8 +138,7 @@ const file_loams_live_v1_idempotency_proto_rawDesc = "" +
 	"expires_ms\x18\x03 \x01(\x04R\texpiresMs\x12\x1a\n" +
 	"\bfunction\x18\x04 \x01(\tR\bfunction\x12\x19\n" +
 	"\bstart_ts\x18\x05 \x01(\x04R\astartTs\x12\x1b\n" +
-	"\targs_hash\x18\x06 \x01(\fR\bargsHashB\xa2\x01\n" +
-	"\x11com.loams.live.v1B\x10IdempotencyProtoP\x01Z%loams.dev/go/gen/loams/live/v1;livev1\xa2\x02\x03LLX\xaa\x02\rLoams.Live.V1\xca\x02\rLoams\\Live\\V1\xe2\x02\x19Loams\\Live\\V1\\GPBMetadata\xea\x02\x0fLoams::Live::V1b\x06proto3"
+	"\targs_hash\x18\x06 \x01(\fR\bargsHashb\x06proto3"
 
 var (
 	file_loams_live_v1_idempotency_proto_rawDescOnce sync.Once

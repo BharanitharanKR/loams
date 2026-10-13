@@ -998,8 +998,7 @@ const file_loams_operations_v1_operations_proto_rawDesc = "" +
 	"\fGetOperation\x12(.loams.operations.v1.GetOperationRequest\x1a).loams.operations.v1.GetOperationResponse\"\x03\x90\x02\x01\x12n\n" +
 	"\x0eListOperations\x12*.loams.operations.v1.ListOperationsRequest\x1a+.loams.operations.v1.ListOperationsResponse\"\x03\x90\x02\x01\x12n\n" +
 	"\x0fWatchOperations\x12+.loams.operations.v1.WatchOperationsRequest\x1a,.loams.operations.v1.WatchOperationsResponse0\x01\x12l\n" +
-	"\x0fCancelOperation\x12+.loams.operations.v1.CancelOperationRequest\x1a,.loams.operations.v1.CancelOperationResponseB\xcb\x01\n" +
-	"\x17com.loams.operations.v1B\x0fOperationsProtoP\x01Z1loams.dev/go/gen/loams/operations/v1;operationsv1\xa2\x02\x03LOX\xaa\x02\x13Loams.Operations.V1\xca\x02\x13Loams\\Operations\\V1\xe2\x02\x1fLoams\\Operations\\V1\\GPBMetadata\xea\x02\x15Loams::Operations::V1b\x06proto3"
+	"\x0fCancelOperation\x12+.loams.operations.v1.CancelOperationRequest\x1a,.loams.operations.v1.CancelOperationResponseb\x06proto3"
 
 var (
 	file_loams_operations_v1_operations_proto_rawDescOnce sync.Once

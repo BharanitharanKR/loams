@@ -1750,8 +1750,7 @@ const file_loams_live_v1_live_proto_rawDesc = "" +
 	"\x06tables\x12\x05query\x12[\n" +
 	"\x06Mutate\x12\x1c.loams.live.v1.MutateRequest\x1a\x1d.loams.live.v1.MutateResponse\"\x14\x92\xb5\x18\x10\n" +
 	"\x06tables\x12\x06mutate\x1a@\x8a\xb5\x18<\n" +
-	"\x04live\x122Live sync: watch a query set over a server stream.\x18\x01B\x9b\x01\n" +
-	"\x11com.loams.live.v1B\tLiveProtoP\x01Z%loams.dev/go/gen/loams/live/v1;livev1\xa2\x02\x03LLX\xaa\x02\rLoams.Live.V1\xca\x02\rLoams\\Live\\V1\xe2\x02\x19Loams\\Live\\V1\\GPBMetadata\xea\x02\x0fLoams::Live::V1b\x06proto3"
+	"\x04live\x122Live sync: watch a query set over a server stream.\x18\x01b\x06proto3"
 
 var (
 	file_loams_live_v1_live_proto_rawDescOnce sync.Once

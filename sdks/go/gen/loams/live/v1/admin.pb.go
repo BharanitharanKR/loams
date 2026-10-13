@@ -1568,9 +1568,7 @@ const file_loams_live_v1_admin_proto_rawDesc = "" +
 	"\bTailLogs\x12\x1e.loams.live.v1.TailLogsRequest\x1a\x1f.loams.live.v1.TailLogsResponse\"\x0e\x92\xb5\x18\n" +
 	"\x12\btailLogs0\x01\x1a[\x8a\xb5\x18W\n" +
 	"\n" +
-	"live.admin\x12GLive administration: deploy, roll back, index status and function logs.\x18\x01B\x9c\x01\n" +
-	"\x11com.loams.live.v1B\n" +
-	"AdminProtoP\x01Z%loams.dev/go/gen/loams/live/v1;livev1\xa2\x02\x03LLX\xaa\x02\rLoams.Live.V1\xca\x02\rLoams\\Live\\V1\xe2\x02\x19Loams\\Live\\V1\\GPBMetadata\xea\x02\x0fLoams::Live::V1b\x06proto3"
+	"live.admin\x12GLive administration: deploy, roll back, index status and function logs.\x18\x01b\x06proto3"
 
 var (
 	file_loams_live_v1_admin_proto_rawDescOnce sync.Once
