@@ -41,7 +41,7 @@ replace loams.dev/go => ../../path/to/sdks/go
 
 | Path | Provenance |
 |---|---|
-| `gen/loams/**` | **Generated.** `protoc-gen-go` and `protoc-gen-connect-go` over `proto/` (D604). Reproduce with `buf generate --template sdks/go/buf.gen.go.yaml`. |
+| `gen/loams/**` | **Generated.** `protoc-gen-go` and `protoc-gen-connect-go` over `proto/` (D604). Reproduce with `scripts/sdk/gen.sh go` (or `buf generate --template sdks/go/buf.gen.go.yaml` from the repository root); CI's `scripts/sdk/drift.sh go` fails on a diff. |
 | `gen/facade/**` | **Hand-written for now.** The module catalogue, the binding table and the reason registry, transcribed from the `loams.options.v1` annotations. This is design §44 §7.3's Q604 fallback; the Go renderer (`crates/loams-facade-gen/src/go.rs`) does not exist yet. |
 | `modules.go` | **Hand-written for now.** One Go method per generated facade call, three to five lines each. Deleted when the renderer lands. |
 | everything else | **Hand-written runtime**, once: transport, credentials, retry, errors, tokens, pagination, streams. |
