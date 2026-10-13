@@ -74,6 +74,7 @@ jobs:
               - 'api/console/**'
               - 'proto/**'
               - 'buf*.yaml'
+              - 'scripts/studio/**'
             plugins:
               - *workspace
               - 'plugins/**'
@@ -146,6 +147,12 @@ jobs:
         run: pnpm nx run @loams/console:test --outputStyle=static
       - name: Other web tests, including UI where a test target exists
         run: pnpm nx run-many --projects='@loams/*' --exclude='@loams/console' --targets=test --parallel=2 --outputStyle=static
+      # Design §53 §9 (D912, D913): the T3 Code vendoring tool and every vendored file's
+      # header and provenance row. The tool never downloads anything in CI.
+      - name: Studio vendoring tool tests and provenance check
+        run: |
+          node --test scripts/studio/vendor.test.mjs
+          node scripts/studio/vendor.mjs check
 
   plugins:
     name: monorepo plugin build and tests
