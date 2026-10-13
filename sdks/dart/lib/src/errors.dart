@@ -56,6 +56,110 @@ class FeatureNotInVariantException extends LoamsException {
   FeatureNotInVariantException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
 }
 
+class HouseNotConfiguredException extends LoamsException {
+  HouseNotConfiguredException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class HouseSyntaxErrorException extends LoamsException {
+  HouseSyntaxErrorException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class HouseUnknownTableException extends LoamsException {
+  HouseUnknownTableException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class HouseUnknownDatabaseException extends LoamsException {
+  HouseUnknownDatabaseException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class HouseAccessDeniedException extends LoamsException {
+  HouseAccessDeniedException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class HouseReadOnlyException extends LoamsException {
+  HouseReadOnlyException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class HouseTimeoutException extends LoamsException {
+  HouseTimeoutException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class HouseMemoryLimitException extends LoamsException {
+  HouseMemoryLimitException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class HouseTooManyQueriesException extends LoamsException {
+  HouseTooManyQueriesException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class HouseQuotaExceededException extends LoamsException {
+  HouseQuotaExceededException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class HouseDisabledFunctionException extends LoamsException {
+  HouseDisabledFunctionException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class HouseCancelledException extends LoamsException {
+  HouseCancelledException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class HouseQueryNotFoundException extends LoamsException {
+  HouseQueryNotFoundException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class HouseQueryFailedException extends LoamsException {
+  HouseQueryFailedException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class ProjectNotFoundException extends LoamsException {
+  ProjectNotFoundException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class BranchHasChildrenException extends LoamsException {
+  BranchHasChildrenException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class BranchProtectedException extends LoamsException {
+  BranchProtectedException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class LsnOutOfRetentionException extends LoamsException {
+  LsnOutOfRetentionException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class EndpointExistsForBranchException extends LoamsException {
+  EndpointExistsForBranchException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class ComputeStartFailedException extends LoamsException {
+  ComputeStartFailedException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class QuotaExceededException extends LoamsException {
+  QuotaExceededException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class StorageUnavailableException extends LoamsException {
+  StorageUnavailableException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class SecretAlreadyIssuedException extends LoamsException {
+  SecretAlreadyIssuedException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class LiveBadCursorException extends LoamsException {
+  LiveBadCursorException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class LiveWorkerCrashedException extends LoamsException {
+  LiveWorkerCrashedException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class LiveDeployConflictException extends LoamsException {
+  LiveDeployConflictException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
 class TokenExpiredException extends LoamsException {
   TokenExpiredException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
 }
@@ -167,6 +271,58 @@ class ErrorParser {
         NotImplementedException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
     'feature_not_in_variant': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
         FeatureNotInVariantException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'house_not_configured': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        HouseNotConfiguredException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'house_syntax_error': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        HouseSyntaxErrorException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'house_unknown_table': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        HouseUnknownTableException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'house_unknown_database': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        HouseUnknownDatabaseException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'house_access_denied': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        HouseAccessDeniedException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'house_read_only': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        HouseReadOnlyException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'house_timeout': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        HouseTimeoutException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'house_memory_limit': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        HouseMemoryLimitException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'house_too_many_queries': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        HouseTooManyQueriesException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'house_quota_exceeded': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        HouseQuotaExceededException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'house_disabled_function': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        HouseDisabledFunctionException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'house_cancelled': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        HouseCancelledException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'house_query_not_found': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        HouseQueryNotFoundException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'house_query_failed': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        HouseQueryFailedException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'project_not_found': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        ProjectNotFoundException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'branch_has_children': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        BranchHasChildrenException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'branch_protected': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        BranchProtectedException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'lsn_out_of_retention': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        LsnOutOfRetentionException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'endpoint_exists_for_branch': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        EndpointExistsForBranchException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'compute_start_failed': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        ComputeStartFailedException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'quota_exceeded': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        QuotaExceededException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'storage_unavailable': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        StorageUnavailableException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'secret_already_issued': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        SecretAlreadyIssuedException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'live_bad_cursor': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        LiveBadCursorException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'live_worker_crashed': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        LiveWorkerCrashedException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'live_deploy_conflict': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        LiveDeployConflictException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
     'invalid_argument': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
         InvalidArgumentException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
     'not_found': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
