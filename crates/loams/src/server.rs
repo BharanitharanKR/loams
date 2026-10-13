@@ -376,6 +376,10 @@ pub struct GraphConfig {
     /// largest deadline a request may ask for (R0.8 (a), GR1 Task 6); Loams's own deadline
     /// answers the client at the request's limit either way.
     pub query_timeout: Duration,
+    /// How long an `at_least` read waits for the replica serving it to apply its token (config
+    /// only; §48 §7.2's `consistency_wait_ms`, default 5 s; GR1 Task 15). Past it the read is
+    /// `UNAVAILABLE`/`consistency_wait_timeout`.
+    pub consistency_wait: Duration,
     /// How long the shutdown phase `graph` waits for running statements (config only; default
     /// 10 s), and again for a maintenance pass in progress. A statement still running then is
     /// detached: its graph stays open until it ends or the process exits (it runs on a
@@ -401,6 +405,7 @@ impl GraphConfig {
             namespace_statements: loams_graph::limits::DEFAULT_NAMESPACE_STATEMENTS,
             limits: loams_graph::limits::StatementLimits::DEFAULT,
             query_timeout: loams_graph::engine::DEFAULT_QUERY_TIMEOUT,
+            consistency_wait: loams_graph::consistency::DEFAULT_CONSISTENCY_WAIT,
             shutdown_wait: loams_graph::service::admin::DEFAULT_SHUTDOWN_WAIT,
         }
     }
@@ -1290,7 +1295,8 @@ impl GraphRuntime {
             .with_namespace_statements(config.namespace_statements)
             .with_limits(config.limits)
             .with_checkpoint_policy(config.checkpoint)
-            .with_evict_policy(config.evict);
+            .with_evict_policy(config.evict)
+            .with_consistency_wait(config.consistency_wait);
         // A cluster's graph nodes own graphs by lease and forward to each other (GR1 Task 12);
         // a single node owns every graph and still fences its appends.
         if let Some(registry) = registry {

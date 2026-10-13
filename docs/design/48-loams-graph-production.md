@@ -231,6 +231,13 @@ SchemaChange    v1  { graph_id, lease_epoch, commit_epoch, statement, language }
 
 The token is D76's `{(stream, partition, offset)}` over the graph's implicit stream (one partition), returned in the response and in the `loams-consistency-token` header, as `loams.collection.v1` does. A replica is a follower that tails the stream and applies change sets to its own Grafeo instance (the same replay as §6.5).
 
+*As built by GR1 Task 15 (R15.1–R15.6):*
+- A graph's `replicas` followers run on the graph nodes ranked right after the owner's place in its rendezvous order. Each is an in-memory Grafeo instance, apart from the owned graphs, opened like an owner (snapshot and tail, or the whole stream) but with no lease. It refuses every write and tails the stream by long-polling it.
+- A follower opens on its first read and is closed by the eviction pass (idle, deleted, placed elsewhere, or this node took the lease).
+- `eventual` and `at_least` reads go to this node's follower when it runs one, and otherwise to the owner. `strong` reads and every write go to the owner.
+- Every answer carries a token: the write's own, or the serving replica's position after a read. The request header follows `loams.collection.v1`'s rule.
+- `consistency_wait` is server configuration (default 5 s).
+
 ### 7.3 Transactions
 
 - One statement is one transaction. `ExecuteBatch { atomic: true }` runs every statement in one Grafeo transaction, produces one change set and is acknowledged once; `atomic: false` runs each statement as its own transaction and reports per-statement results, with `committed_through` saying how far it got.
