@@ -35,14 +35,24 @@ loams-flow-proto = { path = "../loams-flow-proto" }
 # crate's runtime, not a shared dependency — the split `loams-proto` makes for
 # `buffa-types`.
 buffa = "0.9.2"
+# The connector SDK (CN2 Task 4): `metrics::InstanceMetrics` implements its
+# `ConnectorObserver` hook, so a native connector's pipeline feeds the metric
+# families and the Q359 activity counters (CN2 Task 24). The dependency runs
+# this way only: the SDK never depends on `loams-flow` (R4.4).
+loams-connector-sdk = { path = "../loams-connector-sdk" }
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_norway.workspace = true
 thiserror.workspace = true
+# `activity::ActivityPump::spawn`: the per-window timer (CN2 Task 24).
+tokio = { workspace = true, features = ["rt", "time"] }
 tracing.workspace = true
 
 [dev-dependencies]
+# Paused-clock tests of the activity window, and the SDK pipeline that feeds
+# the metrics (CN2 Task 24).
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "time", "test-util"] }
 # `Registry`, `check_use` and the licence gate are exercised over the real
 # `connectors/` tree, whose manifests carry semver `specVersion`s and the
 # config schemas are compared as JSON.

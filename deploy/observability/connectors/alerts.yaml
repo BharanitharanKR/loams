@@ -1,0 +1,100 @@
+# Loams Flow connector alerts (CN2 plan Task 24).
+#
+# Every series carries the labels namespace, instance, connector, runtime,
+# fallback and direction (and `split` only where a connector's splits are
+# bounded), written by `loams_flow::metrics::ConnectorMetrics`. Each alert
+# below has a firing case in alerts.test.yaml, which CI runs with
+# `promtool test rules` (fabric.yml job `connectors-alerts`, and the Rust test
+# `each_alert_fires_in_a_test`).
+#
+# The thresholds are CN2 Task 24's: instance down for more than 5 min; lag
+# above the instance's `lag_alert_seconds` (default 300); CDC position risk
+# above 0.8; DLQ growth; a restart loop (more than 5 restarts in 10 min);
+# sustained backpressure (more than half of each window paused, for 15 min).
+groups:
+  - name: loams-flow-connectors
+    rules:
+      # `loams_flow_connector_up` is 1 while the instance runs (or is paused
+      # by a schema change, which has its own error) and 0 once it failed or
+      # was fenced. A stopped instance is deregistered, so it never alerts.
+      - alert: LoamsConnectorInstanceDown
+        expr: |
+          max by (namespace, instance, connector, runtime, fallback, direction) (
+            loams_flow_connector_up
+          ) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Connector instance {{ $labels.namespace }}/{{ $labels.instance }} ({{ $labels.connector }}, {{ $labels.direction }}) has been down for more than 5 minutes"
+          description: "Read the instance's last_error from GetInstance; Auth and Fatal stop it until fixed, PositionLost needs a re-snapshot."
+
+      # The per-instance threshold is exported beside the lag, so an instance
+      # that sets `lag_alert_seconds` alerts on its own value.
+      - alert: LoamsConnectorLagHigh
+        expr: |
+          max by (namespace, instance, connector, runtime, fallback, direction) (
+            loams_flow_connector_lag_seconds
+          )
+          > on (namespace, instance, connector, runtime, fallback, direction)
+          max by (namespace, instance, connector, runtime, fallback, direction) (
+            loams_flow_connector_lag_alert_seconds
+          )
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Connector instance {{ $labels.namespace }}/{{ $labels.instance }} lags by {{ $value | humanizeDuration }}"
+          description: "Lag has stayed above the instance's lag_alert_seconds for 5 minutes."
+
+      # Replication slot WAL, binlog, oplog, CDC retention or stream trim
+      # headroom used up: past 1.0 the position is lost and the instance needs
+      # a re-snapshot.
+      - alert: LoamsConnectorCdcPositionAtRisk
+        expr: |
+          max by (namespace, instance, connector, runtime, fallback, direction) (
+            loams_flow_cdc_position_risk_ratio
+          ) > 0.8
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CDC position of {{ $labels.namespace }}/{{ $labels.instance }} is at {{ $value | humanizePercentage }} of its retention"
+          description: "The upstream log is close to discarding the instance's position. Clear the lag or raise the source's retention before the position is lost."
+
+      - alert: LoamsConnectorDlqGrowing
+        expr: |
+          sum by (namespace, instance, connector, runtime, fallback, direction) (
+            increase(loams_flow_connector_dlq_total[10m])
+          ) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Connector instance {{ $labels.namespace }}/{{ $labels.instance }} is sending events to its dead-letter topic"
+          description: "Events the connector cannot process are going to the DLQ with their errors; inspect the DLQ topic."
+
+      - alert: LoamsConnectorRestartLoop
+        expr: |
+          sum by (namespace, instance, connector, runtime, fallback, direction) (
+            increase(loams_flow_connector_restarts_total[10m])
+          ) > 5
+        labels:
+          severity: critical
+        annotations:
+          summary: "Connector instance {{ $labels.namespace }}/{{ $labels.instance }} restarted more than 5 times in 10 minutes"
+          description: "The runtime keeps restarting the instance; read last_error."
+
+      # Seconds paused per second, summed over the instance's source tasks: a
+      # value above 0.5 means more than half of each window was spent waiting
+      # for budget (the Fabric or the sink is slower than the source).
+      - alert: LoamsConnectorBackpressureSustained
+        expr: |
+          sum by (namespace, instance, connector, runtime, fallback, direction) (
+            rate(loams_flow_connector_budget_wait_seconds_total[5m])
+          ) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Connector instance {{ $labels.namespace }}/{{ $labels.instance }} has been paused by backpressure for more than half of the time for 15 minutes"
+          description: "Sources stop reading when budgets shrink to zero; the Fabric or the sink is the bottleneck."
