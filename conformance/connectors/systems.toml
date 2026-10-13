@@ -1,0 +1,587 @@
+# The real system behind every connector's suites (CN2 plan Task 6, owner
+# ruling OR-2). `loams-flow-conformance` reads this file: a harness may only
+# run against the services listed for its manifest, each service must be one
+# of the manifest's `systems`, and a Loams module never stands in for an
+# external system (it may appear only under `extra_targets`, tested after
+# the real one, and never counted toward `preview`).
+#
+# Service kinds (`ServiceKind` in the kit):
+#   container  a real system's image: a service of deploy/fabric/compose.yaml
+#   emulator   the vendor's (or a widely used) emulator, also a compose service
+#   fixture    exchanges recorded from the real system (`recorded_from`) under
+#              conformance/connectors/fixtures/<id>/ by `FixtureProxy`
+#   nightly    a real account, reached only by the scheduled
+#              `connectors-nightly` job; `env` names its repository secrets
+#
+# Every P2 manifest has an entry (test `every_p2_preview_manifest_has_a_harness`).
+# `family` is the crate `fabric/crates/loams-connector-<family>` (OR-6); `sdk`
+# is the SDK's own codecs (Task 5) and `fallback` the OR-4 fallback runtimes
+# (Task 22). `harness` is set by the family task that makes the manifest
+# `preview`: the harness's Rust path inside that crate. The CN1 ★ manifests
+# (P1) run on FL1's `connectors` profile and gain entries when Task 8 ports
+# them onto the SDK.
+
+[loams_modules]
+systems = [
+  "Loams collections (Elasticsearch API)",
+  "Loams collections (Qdrant API)",
+  "Loams House",
+  "Loams Postgres",
+  "Loams Fabric (Iggy)",
+  "Grafeo",
+]
+compose_prefix = "loams-"
+
+# ---------------------------------------------------------------- messaging --
+
+[systems.redpanda]
+systems = ["Redpanda"]
+family = "kafka"
+services = [
+  { kind = "container", compose = "redpanda", system = "Redpanda" },
+  { kind = "nightly", env = ["LOAMS_REDPANDA_BROKERS", "LOAMS_REDPANDA_SASL_USERNAME", "LOAMS_REDPANDA_SASL_PASSWORD"], system = "Redpanda" },
+]
+
+[systems.rabbitmq-amqp]
+systems = ["RabbitMQ"]
+family = "brokers"
+services = [{ kind = "container", compose = "rabbitmq", system = "RabbitMQ" }]
+
+[systems.activemq-jms]
+systems = ["ActiveMQ Artemis", "ActiveMQ Classic"]
+family = "brokers"
+services = [
+  { kind = "container", compose = "artemis", system = "ActiveMQ Artemis" },
+  { kind = "container", compose = "activemq", system = "ActiveMQ Classic" },
+]
+notes = ["JMS providers that do not speak AMQP 1.0 stay on the Camel fallback (OR-4)."]
+
+[systems.nats]
+systems = ["NATS"]
+family = "brokers"
+services = [{ kind = "container", compose = "nats", system = "NATS" }]
+
+[systems.pulsar]
+systems = ["Apache Pulsar"]
+family = "brokers"
+services = [{ kind = "container", compose = "pulsar", system = "Apache Pulsar" }]
+
+[systems.mqtt]
+systems = ["Eclipse Mosquitto"]
+family = "brokers"
+services = [{ kind = "container", compose = "mosquitto", system = "Eclipse Mosquitto" }]
+
+[systems.aws-sqs]
+systems = ["Amazon SQS"]
+family = "cloud"
+services = [
+  { kind = "emulator", compose = "floci", system = "Amazon SQS", vendor = "floci" },
+  { kind = "nightly", env = ["LOAMS_AWS_ACCESS_KEY_ID", "LOAMS_AWS_SECRET_ACCESS_KEY", "LOAMS_AWS_REGION"], system = "Amazon SQS" },
+]
+
+[systems.aws-sns]
+systems = ["Amazon SNS"]
+family = "cloud"
+services = [
+  { kind = "emulator", compose = "floci", system = "Amazon SNS", vendor = "floci" },
+  { kind = "nightly", env = ["LOAMS_AWS_ACCESS_KEY_ID", "LOAMS_AWS_SECRET_ACCESS_KEY", "LOAMS_AWS_REGION"], system = "Amazon SNS" },
+]
+
+[systems.eventbridge]
+systems = ["Amazon EventBridge"]
+family = "cloud"
+services = [
+  { kind = "emulator", compose = "floci", system = "Amazon EventBridge", vendor = "floci" },
+  { kind = "nightly", env = ["LOAMS_AWS_ACCESS_KEY_ID", "LOAMS_AWS_SECRET_ACCESS_KEY", "LOAMS_AWS_REGION"], system = "Amazon EventBridge" },
+]
+
+[systems.google-pub-sub]
+systems = ["Google Cloud Pub/Sub"]
+family = "cloud"
+services = [
+  { kind = "emulator", compose = "pubsub", system = "Google Cloud Pub/Sub", vendor = "Google" },
+  { kind = "nightly", env = ["LOAMS_GCP_PROJECT", "LOAMS_GCP_CREDENTIALS_JSON"], system = "Google Cloud Pub/Sub" },
+]
+notes = ["Exactly-once delivery and IAM run only in the nightly job (spike §5.10)."]
+
+[systems.azure-event-hubs]
+systems = ["Azure Event Hubs"]
+family = "kafka"
+services = [
+  { kind = "emulator", compose = "eventhubs", system = "Azure Event Hubs", vendor = "Microsoft" },
+  { kind = "nightly", env = ["LOAMS_EVENTHUBS_CONNECTION_STRING"], system = "Azure Event Hubs" },
+]
+notes = ["The emulator has no Kafka transactions: the target is narrowed to effectively_once (R0.19)."]
+
+[systems.azure-service-bus]
+systems = ["Azure Service Bus"]
+family = "brokers"
+services = [
+  { kind = "emulator", compose = "servicebus", system = "Azure Service Bus", vendor = "Microsoft" },
+  { kind = "nightly", env = ["LOAMS_SERVICEBUS_CONNECTION_STRING"], system = "Azure Service Bus" },
+]
+notes = ["Partitioned entities, large messages and AMQP over WebSockets run only nightly (spike §5.3)."]
+
+[systems.azure-event-grid]
+systems = ["Azure Event Grid"]
+family = "cloud"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/azure-event-grid", recorded_from = "Azure Event Grid" },
+  { kind = "nightly", env = ["LOAMS_EVENTGRID_ENDPOINT", "LOAMS_EVENTGRID_KEY"], system = "Azure Event Grid" },
+]
+
+[systems.redis-streams]
+systems = ["Redis"]
+family = "kv"
+services = [{ kind = "container", compose = "redis", system = "Redis" }]
+
+[systems.websocket]
+systems = ["WebSocket"]
+family = "brokers"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/websocket", recorded_from = "WebSocket (frames recorded from a public RFC 6455 server)" },
+]
+notes = ["The fixture holds recorded frames, replayed by the brokers family's own WebSocket replayer; FixtureProxy is HTTP only."]
+
+[systems.grpc]
+systems = ["gRPC"]
+family = "protocols"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/grpc", recorded_from = "gRPC (grpc-go interop server)" },
+]
+
+# --------------------------------------------------------------- relational --
+
+[systems.mariadb]
+systems = ["MariaDB"]
+family = "mysql"
+services = [{ kind = "container", compose = "mariadb", system = "MariaDB" }]
+
+[systems.sql-server]
+systems = ["SQL Server"]
+family = "sqlserver"
+services = [{ kind = "container", compose = "sqlserver", system = "SQL Server" }]
+
+[systems.oracle]
+systems = ["Oracle Database"]
+family = "fallback"
+services = [{ kind = "container", compose = "oracle", system = "Oracle Database" }]
+notes = ["Oracle batch and upsert run on the Camel fallback until Task 23 (OR-4)."]
+
+[systems.cockroachdb]
+systems = ["CockroachDB"]
+family = "postgres"
+services = [{ kind = "container", compose = "cockroachdb", system = "CockroachDB" }]
+
+[systems.aurora]
+systems = ["Amazon Aurora"]
+family = "postgres"
+services = [
+  { kind = "nightly", env = ["LOAMS_AURORA_POSTGRES_URL", "LOAMS_AURORA_MYSQL_URL"], system = "Amazon Aurora" },
+]
+extra_targets = [
+  { kind = "container", compose = "pgvector", system = "PostgreSQL" },
+  { kind = "container", compose = "mysql", system = "MySQL" },
+]
+notes = ["Aurora has no image: PostgreSQL and MySQL are extra targets in PR CI, never the system under test."]
+
+[systems.azure-sql]
+systems = ["Azure SQL Database"]
+family = "sqlserver"
+services = [
+  { kind = "nightly", env = ["LOAMS_AZURE_SQL_URL"], system = "Azure SQL Database" },
+]
+extra_targets = [{ kind = "container", compose = "sqlserver", system = "SQL Server" }]
+
+# -------------------------------------------------------------------- nosql --
+
+[systems.mongodb]
+systems = ["MongoDB"]
+family = "mongodb"
+services = [{ kind = "container", compose = "mongodb", system = "MongoDB" }]
+
+[systems.cassandra]
+systems = ["Apache Cassandra"]
+family = "kv"
+services = [{ kind = "container", compose = "cassandra", system = "Apache Cassandra" }]
+
+[systems.dynamodb]
+systems = ["Amazon DynamoDB"]
+family = "kv"
+services = [
+  { kind = "emulator", compose = "floci", system = "Amazon DynamoDB", vendor = "floci" },
+  { kind = "nightly", env = ["LOAMS_AWS_ACCESS_KEY_ID", "LOAMS_AWS_SECRET_ACCESS_KEY", "LOAMS_AWS_REGION"], system = "Amazon DynamoDB" },
+]
+
+[systems.valkey]
+systems = ["Valkey"]
+family = "kv"
+services = [{ kind = "container", compose = "valkey", system = "Valkey" }]
+
+# ---------------------------------------------------------- search, vector --
+
+[systems.opensearch]
+systems = ["OpenSearch"]
+family = "search"
+services = [{ kind = "container", compose = "opensearch", system = "OpenSearch" }]
+extra_targets = [
+  { kind = "container", compose = "loams-collections", system = "Loams collections (Elasticsearch API)" },
+]
+
+[systems.qdrant]
+systems = ["Qdrant"]
+family = "search"
+services = [{ kind = "container", compose = "qdrant", system = "Qdrant" }]
+extra_targets = [
+  { kind = "container", compose = "loams-collections", system = "Loams collections (Qdrant API)" },
+]
+
+[systems.pgvector]
+systems = ["pgvector"]
+family = "postgres"
+services = [{ kind = "container", compose = "pgvector", system = "pgvector" }]
+extra_targets = [{ kind = "container", compose = "loams-postgres", system = "Loams Postgres" }]
+
+# -------------------------------------------------------------------- graph --
+
+[systems.neo4j]
+systems = ["Neo4j"]
+family = "protocols"
+services = [{ kind = "container", compose = "neo4j", system = "Neo4j" }]
+
+[systems.grafeo]
+systems = ["Grafeo"]
+family = "protocols"
+services = [{ kind = "container", compose = "loams-graph", system = "Grafeo" }]
+notes = ["Grafeo is a Loams engine (D741): it is the system under test here, not a stand-in, so it may name a Loams service."]
+
+# ---------------------------------------------------- warehouse, lakehouse --
+
+[systems.redshift]
+systems = ["Amazon Redshift"]
+family = "analytics"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/redshift", recorded_from = "Amazon Redshift" },
+  { kind = "nightly", env = ["LOAMS_REDSHIFT_WORKGROUP", "LOAMS_REDSHIFT_DATABASE", "LOAMS_AWS_ACCESS_KEY_ID", "LOAMS_AWS_SECRET_ACCESS_KEY", "LOAMS_AWS_REGION"], system = "Amazon Redshift" },
+]
+
+[systems.databricks]
+systems = ["Databricks"]
+family = "analytics"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/databricks", recorded_from = "Databricks" },
+  { kind = "nightly", env = ["LOAMS_DATABRICKS_HOST", "LOAMS_DATABRICKS_TOKEN", "LOAMS_DATABRICKS_WAREHOUSE_ID"], system = "Databricks" },
+]
+
+[systems.duckdb]
+systems = ["DuckDB"]
+family = "analytics"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/duckdb", recorded_from = "DuckDB (database files written by the DuckDB CLI)" },
+]
+notes = ["DuckDB is in-process: the harness links the real library, and the fixture holds files the DuckDB CLI wrote."]
+
+[systems.trino]
+systems = ["Trino"]
+family = "analytics"
+services = [{ kind = "container", compose = "trino", system = "Trino" }]
+
+[systems.delta-lake]
+systems = ["Delta Lake"]
+family = "lakehouse"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/delta-lake", recorded_from = "Delta Lake (tables written by delta-spark)" },
+  { kind = "nightly", env = ["LOAMS_DELTA_TABLE_URI", "LOAMS_AWS_ACCESS_KEY_ID", "LOAMS_AWS_SECRET_ACCESS_KEY", "LOAMS_AWS_REGION"], system = "Delta Lake" },
+]
+
+# ----------------------------------------------------------- object storage --
+
+[systems.minio-rustfs]
+systems = ["RustFS", "MinIO"]
+family = "objects"
+services = [{ kind = "container", compose = "rustfs", system = "RustFS" }]
+notes = ["MinIO has no community image (R0.28): its coverage is an image built in CI from the last source release, or none."]
+
+[systems.cloudflare-r2]
+systems = ["Cloudflare R2"]
+family = "objects"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/cloudflare-r2", recorded_from = "Cloudflare R2" },
+  { kind = "nightly", env = ["LOAMS_R2_ACCOUNT_ID", "LOAMS_R2_ACCESS_KEY_ID", "LOAMS_R2_SECRET_ACCESS_KEY", "LOAMS_R2_BUCKET"], system = "Cloudflare R2" },
+]
+
+[systems.gcs]
+systems = ["Google Cloud Storage"]
+family = "objects"
+services = [
+  { kind = "emulator", compose = "fake-gcs", system = "Google Cloud Storage", vendor = "fake-gcs-server" },
+  { kind = "nightly", env = ["LOAMS_GCP_PROJECT", "LOAMS_GCP_CREDENTIALS_JSON", "LOAMS_GCS_BUCKET"], system = "Google Cloud Storage" },
+]
+
+[systems.azure-blob]
+systems = ["Azure Blob Storage"]
+family = "objects"
+services = [
+  { kind = "emulator", compose = "azurite", system = "Azure Blob Storage", vendor = "Microsoft (Azurite)" },
+  { kind = "nightly", env = ["LOAMS_AZURE_STORAGE_ACCOUNT", "LOAMS_AZURE_STORAGE_KEY"], system = "Azure Blob Storage" },
+]
+
+[systems.adls-gen2]
+systems = ["Azure Data Lake Storage Gen2"]
+family = "objects"
+services = [
+  { kind = "emulator", compose = "azurite", system = "Azure Data Lake Storage Gen2 (flat Blob operations only)", vendor = "Microsoft (Azurite)" },
+  { kind = "fixture", dir = "conformance/connectors/fixtures/adls-gen2", recorded_from = "Azure Data Lake Storage Gen2" },
+  { kind = "nightly", env = ["LOAMS_ADLS_ACCOUNT", "LOAMS_ADLS_KEY"], system = "Azure Data Lake Storage Gen2" },
+]
+notes = ["Azurite has no hierarchical namespace: DFS operations run on fixtures and nightly (R0.21)."]
+
+[systems.sftp]
+systems = ["OpenSSH SFTP"]
+family = "objects"
+services = [{ kind = "container", compose = "sftp", system = "OpenSSH SFTP" }]
+
+# ------------------------------------------------------------------ formats --
+
+[systems.csv-ndjson]
+systems = ["CSV / NDJSON"]
+family = "sdk"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/csv-ndjson", recorded_from = "CSV / NDJSON (files written by DuckDB and Apache Arrow)" },
+]
+
+[systems.protobuf]
+systems = ["Protobuf"]
+family = "sdk"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/protobuf", recorded_from = "Protobuf (descriptor sets and messages written by protoc)" },
+]
+
+# ---------------------------------------------------------------------- cdc --
+
+[systems.debezium-sql-server-oracle]
+systems = ["SQL Server", "Oracle Database"]
+family = "fallback"
+services = [
+  { kind = "container", compose = "sqlserver", system = "SQL Server" },
+  { kind = "container", compose = "oracle", system = "Oracle Database" },
+]
+notes = ["Task 2 splits this row into debezium-sqlserver and debezium-oracle (OR-13); each keeps its own container."]
+
+[systems.debezium-mongodb]
+systems = ["MongoDB"]
+family = "fallback"
+services = [{ kind = "container", compose = "mongodb", system = "MongoDB" }]
+
+[systems.dynamodb-streams]
+systems = ["Amazon DynamoDB Streams"]
+family = "kv"
+services = [
+  { kind = "emulator", compose = "floci", system = "Amazon DynamoDB Streams", vendor = "floci" },
+  { kind = "nightly", env = ["LOAMS_AWS_ACCESS_KEY_ID", "LOAMS_AWS_SECRET_ACCESS_KEY", "LOAMS_AWS_REGION"], system = "Amazon DynamoDB Streams" },
+]
+
+# --------------------------------------------------------- integration, saas --
+
+[systems.kestra-companion]
+systems = ["Kestra"]
+family = "http"
+services = [{ kind = "container", compose = "kestra", system = "Kestra" }]
+
+[systems.segment]
+systems = ["Segment"]
+family = "http"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/segment", recorded_from = "Segment" },
+  { kind = "nightly", env = ["LOAMS_SEGMENT_WRITE_KEY"], system = "Segment" },
+]
+
+[systems.sendgrid]
+systems = ["SendGrid"]
+family = "http"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/sendgrid", recorded_from = "SendGrid" },
+  { kind = "nightly", env = ["LOAMS_SENDGRID_API_KEY"], system = "SendGrid" },
+]
+
+[systems.amazon-ses]
+systems = ["Amazon SES"]
+family = "cloud"
+services = [
+  { kind = "emulator", compose = "floci", system = "Amazon SES", vendor = "floci" },
+  { kind = "nightly", env = ["LOAMS_AWS_ACCESS_KEY_ID", "LOAMS_AWS_SECRET_ACCESS_KEY", "LOAMS_AWS_REGION"], system = "Amazon SES" },
+]
+
+[systems.twilio-sms]
+systems = ["Twilio"]
+family = "http"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/twilio-sms", recorded_from = "Twilio" },
+  { kind = "nightly", env = ["LOAMS_TWILIO_ACCOUNT_SID", "LOAMS_TWILIO_AUTH_TOKEN"], system = "Twilio" },
+]
+
+[systems.posthog]
+systems = ["PostHog"]
+family = "http"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/posthog", recorded_from = "PostHog" },
+  { kind = "nightly", env = ["LOAMS_POSTHOG_HOST", "LOAMS_POSTHOG_API_KEY"], system = "PostHog" },
+]
+
+[systems.salesforce]
+systems = ["Salesforce"]
+family = "http"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/salesforce", recorded_from = "Salesforce" },
+  { kind = "nightly", env = ["LOAMS_SALESFORCE_INSTANCE_URL", "LOAMS_SALESFORCE_CLIENT_ID", "LOAMS_SALESFORCE_CLIENT_SECRET"], system = "Salesforce" },
+]
+notes = ["Salesforce CDC stays on the Camel fallback until Task 23 (OR-4)."]
+
+[systems.hubspot]
+systems = ["HubSpot"]
+family = "http"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/hubspot", recorded_from = "HubSpot" },
+  { kind = "nightly", env = ["LOAMS_HUBSPOT_TOKEN"], system = "HubSpot" },
+]
+
+[systems.zendesk]
+systems = ["Zendesk"]
+family = "http"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/zendesk", recorded_from = "Zendesk" },
+  { kind = "nightly", env = ["LOAMS_ZENDESK_SUBDOMAIN", "LOAMS_ZENDESK_USER", "LOAMS_ZENDESK_TOKEN"], system = "Zendesk" },
+]
+
+[systems.servicenow]
+systems = ["ServiceNow"]
+family = "http"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/servicenow", recorded_from = "ServiceNow" },
+  { kind = "nightly", env = ["LOAMS_SERVICENOW_INSTANCE", "LOAMS_SERVICENOW_USER", "LOAMS_SERVICENOW_PASSWORD"], system = "ServiceNow" },
+]
+
+[systems.stripe]
+systems = ["Stripe"]
+family = "http"
+services = [
+  { kind = "emulator", compose = "stripe-mock", system = "Stripe", vendor = "Stripe (stripe-mock)" },
+  { kind = "fixture", dir = "conformance/connectors/fixtures/stripe", recorded_from = "Stripe" },
+  { kind = "nightly", env = ["LOAMS_STRIPE_API_KEY"], system = "Stripe" },
+]
+notes = ["The nightly key is a test-mode key (OR-3)."]
+
+[systems.shopify]
+systems = ["Shopify"]
+family = "http"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/shopify", recorded_from = "Shopify" },
+  { kind = "nightly", env = ["LOAMS_SHOPIFY_SHOP", "LOAMS_SHOPIFY_TOKEN"], system = "Shopify" },
+]
+
+[systems.github]
+systems = ["GitHub"]
+family = "http"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/github", recorded_from = "GitHub" },
+  { kind = "nightly", env = ["LOAMS_GITHUB_TOKEN"], system = "GitHub" },
+]
+
+[systems.gitlab]
+systems = ["GitLab"]
+family = "http"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/gitlab", recorded_from = "GitLab" },
+  { kind = "nightly", env = ["LOAMS_GITLAB_TOKEN"], system = "GitLab" },
+]
+
+[systems.jira]
+systems = ["Jira"]
+family = "http"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/jira", recorded_from = "Jira" },
+  { kind = "nightly", env = ["LOAMS_JIRA_SITE", "LOAMS_JIRA_USER", "LOAMS_JIRA_TOKEN"], system = "Jira" },
+]
+
+[systems.slack]
+systems = ["Slack"]
+family = "http"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/slack", recorded_from = "Slack" },
+  { kind = "nightly", env = ["LOAMS_SLACK_BOT_TOKEN", "LOAMS_SLACK_SIGNING_SECRET"], system = "Slack" },
+]
+
+[systems.google-workspace]
+systems = ["Google Workspace"]
+family = "http"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/google-workspace", recorded_from = "Google Workspace" },
+  { kind = "nightly", env = ["LOAMS_GOOGLE_WORKSPACE_CREDENTIALS_JSON"], system = "Google Workspace" },
+]
+
+# ------------------------------------------- observability, infra, identity --
+
+[systems.prometheus]
+systems = ["Prometheus"]
+family = "protocols"
+services = [{ kind = "container", compose = "prometheus", system = "Prometheus" }]
+
+[systems.splunk]
+systems = ["Splunk"]
+family = "http"
+services = [{ kind = "container", compose = "splunk", system = "Splunk Enterprise" }]
+
+[systems.lambda-cloud-run-azure-functions]
+systems = ["AWS Lambda", "Google Cloud Run", "Azure Functions"]
+family = "protocols"
+services = [
+  { kind = "emulator", compose = "floci", system = "AWS Lambda", vendor = "floci" },
+  { kind = "nightly", env = ["LOAMS_AWS_ACCESS_KEY_ID", "LOAMS_AWS_SECRET_ACCESS_KEY", "LOAMS_AWS_REGION"], system = "AWS Lambda" },
+  { kind = "nightly", env = ["LOAMS_CLOUD_RUN_URL", "LOAMS_GCP_CREDENTIALS_JSON"], system = "Google Cloud Run" },
+  { kind = "nightly", env = ["LOAMS_AZURE_FUNCTIONS_URL", "LOAMS_AZURE_FUNCTIONS_KEY"], system = "Azure Functions" },
+]
+
+[systems.vault]
+systems = ["OpenBao", "HashiCorp Vault"]
+family = "http"
+services = [{ kind = "container", compose = "openbao", system = "OpenBao" }]
+notes = ["OpenBao speaks Vault's API and is the open image; HashiCorp Vault (BUSL) is not run."]
+
+[systems.keycloak]
+systems = ["Keycloak"]
+family = "http"
+services = [{ kind = "container", compose = "keycloak", system = "Keycloak" }]
+
+# ----------------------------------------------------------------- ai, protocol --
+
+[systems.openai]
+systems = ["OpenAI"]
+family = "protocols"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/openai", recorded_from = "OpenAI" },
+  { kind = "nightly", env = ["LOAMS_OPENAI_API_KEY"], system = "OpenAI" },
+]
+
+[systems.anthropic]
+systems = ["Anthropic"]
+family = "protocols"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/anthropic", recorded_from = "Anthropic" },
+  { kind = "nightly", env = ["LOAMS_ANTHROPIC_API_KEY"], system = "Anthropic" },
+]
+
+[systems.mcp]
+systems = ["MCP"]
+family = "protocols"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/mcp", recorded_from = "MCP (the protocol's reference servers)" },
+]
+notes = ["OR-15 moves MCP to P3; Task 2 drops this entry with the row."]
+
+[systems.graphql]
+systems = ["GraphQL"]
+family = "protocols"
+services = [
+  { kind = "fixture", dir = "conformance/connectors/fixtures/graphql", recorded_from = "GraphQL (GitHub GraphQL API)" },
+  { kind = "nightly", env = ["LOAMS_GITHUB_TOKEN"], system = "GraphQL (GitHub GraphQL API)" },
+]
