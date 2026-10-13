@@ -185,18 +185,18 @@ methods! {
         DeleteWorktree => Method("DeleteWorktree"),
         WatchStatus => Method("WatchWorkspaceGitStatus"),
         WatchChangeRequest => Method("WatchCheckoutChangeRequest"),
-        ListWorktrees => Gap { gap: "G1", task: "SD1 Task 9" },
-        CommitWorktree => Gap { gap: "G2", task: "SD1 Task 9" },
-        PushBranch => Gap { gap: "G3", task: "SD1 Task 9" },
-        CreateChangeRequest => Gap { gap: "G4", task: "SD1 Task 9" },
-        MergeBranch => Gap { gap: "G5", task: "SD1 Task 9" },
+        ListWorktrees => Method("ListWorktrees"),
+        CommitWorktree => Method("CommitWorktree"),
+        PushBranch => Method("PushBranch"),
+        CreateChangeRequest => Method("CreateChangeRequest"),
+        MergeBranch => Method("MergeBranch"),
     }
     DiffService {
         WatchCheckoutDiffs => Method("WatchCheckoutDiffs"),
         GetCheckoutDiff => Method("GetCheckoutDiff"),
         GetCheckoutFileDiffText => Method("GetCheckoutFileDiffText"),
         Discard => Method("DiscardWorkingTree"),
-        DiscardPaths => Gap { gap: "G21", task: "SD1 Task 9" },
+        DiscardPaths => Method("DiscardPaths"),
     }
     FileService {
         ListFolders => Method("ListFolders"),
@@ -246,6 +246,29 @@ methods! {
     }
 }
 
+/// The methods that write to git: a plugin calls them only with the
+/// `agentd:git-write` permission (§53 §8.3), and the UI asks the person to
+/// confirm each one (§8.1). `(service, method)`.
+pub const GIT_WRITE_METHODS: &[(&str, &str)] = &[
+    ("GitService", "CommitWorktree"),
+    ("GitService", "PushBranch"),
+    ("GitService", "CreateChangeRequest"),
+    ("GitService", "MergeBranch"),
+    ("GitService", "DeleteWorktree"),
+    ("DiffService", "Discard"),
+    ("DiffService", "DiscardPaths"),
+];
+
+/// The Connect paths of [`GIT_WRITE_METHODS`], sorted.
+pub fn git_write_paths() -> Vec<String> {
+    let mut paths: Vec<String> = GIT_WRITE_METHODS
+        .iter()
+        .map(|(service, method)| format!("/{PACKAGE}.{service}/{method}"))
+        .collect();
+    paths.sort();
+    paths
+}
+
 /// The row of a Connect method.
 pub fn twin_of(service: &str, method: &str) -> Option<&'static ConnectMethod> {
     CONNECT_METHODS
@@ -280,6 +303,15 @@ pub fn renderer_allowlist_ts() -> String {
         out.push_str(&format!("\t\"{path}\",\n"));
     }
     out.push_str("]);\n");
+    out.push_str(
+        "\n// The methods that write to git (SD1 Task 9): a plugin calls them only with\n\
+         // the `agentd:git-write` permission (§53 §8.3), after the person confirms.\n\
+         export const AGENTD_GIT_WRITE_METHODS: ReadonlySet<string> = new Set([\n",
+    );
+    for path in git_write_paths() {
+        out.push_str(&format!("\t\"{path}\",\n"));
+    }
+    out.push_str("]);\n");
     out
 }
 
@@ -307,6 +339,22 @@ mod tests {
                 !matches!(row.twin, Twin::Method("Hello" | "Shutdown")),
                 "{} runs a lifecycle method",
                 row.path()
+            );
+        }
+    }
+
+    #[test]
+    fn git_writes_are_served_owner_methods() {
+        for (service, method) in GIT_WRITE_METHODS {
+            let row = twin_of(service, method).expect("a Connect method");
+            let Twin::Method(name) = row.twin else {
+                panic!("{} is not served", row.path());
+            };
+            let spec = method_spec(name).expect("in METHODS");
+            assert_eq!(
+                spec.role,
+                loams_agentd_proto::rpc::Role::Owner,
+                "{name} is never open to mcp"
             );
         }
     }

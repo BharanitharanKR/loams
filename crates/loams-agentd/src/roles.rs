@@ -397,6 +397,32 @@ mod tests {
         }
     }
 
+    /// SD1 Task 9: an agent can never commit, push, merge, open a change
+    /// request or discard through the MCP shim (§53 §8.1).
+    #[tokio::test]
+    async fn git_writes_not_in_mcp_role() {
+        let run = mcp("main");
+        for method in [
+            methods::LIST_WORKTREES,
+            methods::COMMIT_WORKTREE,
+            methods::PUSH_BRANCH,
+            methods::CREATE_CHANGE_REQUEST,
+            methods::MERGE_BRANCH,
+            methods::DISCARD_PATHS,
+            methods::DISCARD_WORKING_TREE,
+            methods::DELETE_WORKTREE,
+        ] {
+            assert!(
+                !allowed(&run, method, json!({"chatId": "main", "cwd": "/work/main"})).await,
+                "{method}"
+            );
+            assert!(
+                allowed(&Identity::owner(), method, json!({})).await,
+                "{method}"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn mcp_may_call_only_the_shims_methods() {
         let run = mcp("main");

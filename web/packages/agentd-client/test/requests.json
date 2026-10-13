@@ -619,6 +619,73 @@
     }
   },
   {
+    "method": "DiscardPaths",
+    "params": {
+      "checkoutId": "checkout-1",
+      "paths": [
+        "src/main.rs"
+      ],
+      "expectedChecksum": "sum-1"
+    }
+  },
+  {
+    "method": "ListWorktrees",
+    "params": {
+      "repoPath": "/home/dev/project"
+    }
+  },
+  {
+    "method": "CommitWorktree",
+    "params": {
+      "checkoutId": "checkout-1",
+      "cwd": "/home/dev/project",
+      "message": "Fix the linker",
+      "paths": [
+        "src/main.rs"
+      ],
+      "all": false,
+      "amend": false,
+      "signoff": true,
+      "expectedChecksum": "sum-1"
+    }
+  },
+  {
+    "method": "PushBranch",
+    "params": {
+      "cwd": "/home/dev/project",
+      "remote": "origin",
+      "branch": "fix-linker",
+      "setUpstream": true,
+      "forceWithLease": false
+    }
+  },
+  {
+    "method": "CreateChangeRequest",
+    "params": {
+      "cwd": "/home/dev/project",
+      "provider": "forgejo",
+      "base": "main",
+      "head": "fix-linker",
+      "title": "Fix the linker",
+      "body": "Links again.",
+      "draft": false,
+      "linkIssue": "42"
+    }
+  },
+  {
+    "method": "MergeBranch",
+    "params": {
+      "repoPath": "/home/dev/project",
+      "source": "loams-desktop/fix-linker",
+      "target": "main",
+      "strategy": "squash",
+      "message": "Fix the linker",
+      "deleteSource": true,
+      "removeWorktree": true,
+      "expectedSourceHead": "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+    }
+  },
+  {
     "method": "GetCheckoutFileDiffText",
     "params": {
       "checkoutId": "checkout-1",
