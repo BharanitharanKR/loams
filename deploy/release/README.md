@@ -132,8 +132,11 @@ needs SSH and outbound internet only.
   unprivileged user namespaces) and the House does not start; keep `pods` there.
 - The House takes no `INSERT` into its tables until HS1 Task 12. On a kernel without Landlock
   TCP rules (before 6.7) the workers refuse to boot.
-- Live (7710), durable (8001), and the MySQL and Postgres wire listeners of the
-  engine are loopback only and are not forwarded over the tailnet.
+- Live's own listener (7710), durable (8001), and the MySQL and Postgres wire
+  listeners of the engine are loopback only and are not forwarded over the
+  tailnet. Live itself (`loams.live.v1`, with `LiveAdminService`) is served on
+  the engine's main port too, so it is reachable over the tailnet behind the
+  engine's auth like every other service.
 - TiDB starts with a passwordless root and the Postgres stack with default
   credentials; neither is forwarded over the tailnet by default.
 - `compute1` needs `TENANT_ID` and `TIMELINE_ID` (see

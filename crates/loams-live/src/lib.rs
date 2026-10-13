@@ -69,7 +69,7 @@ pub use limits::Limits;
 /// The store a [`LiveConfig`] names (LV1 row T20-9).
 pub use loams_kv::{Backend, EmbeddedConfig, StoreConfig};
 pub use readset::{ReadSetIndex, SubId};
-pub use service::{LiveHandle, LiveServer};
+pub use service::{LiveHandle, LiveRoutes, LiveServer};
 pub use session::{ClientState, SessionConfig, Sessions, Version};
 pub use subs::{SubKey, SubResult, SubsConfig, SubsStats, Subscriptions, Target, Tick};
 pub use txn::{

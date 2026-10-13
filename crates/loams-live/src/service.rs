@@ -15,6 +15,11 @@
 //! Connect, gRPC and gRPC-Web, JSON and binary, over HTTP/1.1 and HTTP/2
 //! (cleartext, loopback only), behind the [`Guard`] the engine passes (its
 //! authentication layer).
+//!
+//! The engine also serves both services on its main Connect port (LV1 plan
+//! Task 12, D688): [`LiveHandle::routes`] hands it the same service
+//! instances as [`LiveRoutes`], which it registers on its own router,
+//! behind that port's authentication layer.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -62,6 +67,7 @@ pub struct LiveHandle {
     /// The address the sync API listens on.
     pub addr: SocketAddr,
     store: Store,
+    routes: LiveRoutes,
     subs: Arc<Subscriptions>,
     sessions: Sessions,
     stop: CancellationToken,
@@ -154,8 +160,11 @@ impl LiveServer {
             engine,
             stop: stop.clone(),
         };
-        let rpc = Arc::new(admin).register(Arc::new(service).register(connectrpc::Router::new()));
-        let rpc = reflection(rpc);
+        let routes = LiveRoutes {
+            live: Arc::new(service),
+            admin: Arc::new(admin),
+        };
+        let rpc = reflection(routes.register(connectrpc::Router::new()));
         let mut app = axum::Router::new().fallback_service(rpc.into_axum_service());
         let guarded = guard.is_some();
         if let Some(guard) = guard {
@@ -181,6 +190,7 @@ impl LiveServer {
         Ok(LiveHandle {
             addr,
             store,
+            routes,
             subs,
             sessions,
             stop,
@@ -209,6 +219,13 @@ impl LiveHandle {
         self.sessions.len()
     }
 
+    /// The two services this server answers, for another router (the
+    /// engine's main port, LV1 plan Task 12). They share this server's
+    /// sessions, engine and log ring, and stop with it.
+    pub fn routes(&self) -> LiveRoutes {
+        self.routes.clone()
+    }
+
     /// Stops serving: ends every session's stream, stops the manager and the
     /// janitor, and waits up to 10 s for in-flight requests.
     pub async fn stop(self) {
@@ -219,6 +236,29 @@ impl LiveHandle {
             serve.abort();
         }
         let _ = self.janitor.await;
+    }
+}
+
+/// `LiveService` and `LiveAdminService` of one running [`LiveServer`], to
+/// register on another Connect router (LV1 plan Task 12). The router's
+/// owner puts its authentication in front of them, and names the caller
+/// with an [`admin::Caller`](crate::admin::Caller) for the admin service.
+#[derive(Clone)]
+pub struct LiveRoutes {
+    live: Arc<Live>,
+    admin: Arc<Admin>,
+}
+
+impl std::fmt::Debug for LiveRoutes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LiveRoutes").finish_non_exhaustive()
+    }
+}
+
+impl LiveRoutes {
+    /// `rpc` with both services' routes added.
+    pub fn register(&self, rpc: connectrpc::Router) -> connectrpc::Router {
+        self.admin.clone().register(self.live.clone().register(rpc))
     }
 }
 

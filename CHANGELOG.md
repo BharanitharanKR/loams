@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+- **Loams Live on the main port.** `LiveService` and `LiveAdminService` are served on the
+  engine's `--listen` port and on the `tailscale serve` target, behind the engine's auth, so
+  the console and SDKs reach Live over the tailnet (LV1 Task 12). Until Live has TLS of its own
+  (LV1 Task 18) a main port bound beyond loopback does not serve it. `--live-listen` still
+  serves the same API on Live's own loopback listener and is deprecated.
+
 ## [0.1.0-preview.2] - unreleased
 
 The second preview. Everything marked **Preview** in the [feature status table](docs/release/preview.md#feature-status)

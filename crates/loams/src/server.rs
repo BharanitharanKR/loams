@@ -1081,7 +1081,7 @@ impl LiveRuntime {
         };
         let layer = crate::auth::AuthLayerState::new(auth, &[]);
         let guard: loams_live::service::Guard = Arc::new(move |router: axum::Router| {
-            layer.wrap(router.layer(axum::middleware::from_fn(live_caller)))
+            layer.wrap(router.layer(axum::middleware::from_fn(crate::api::live::caller)))
         });
         let handle = loams_live::LiveServer::start_guarded(
             config,
@@ -1122,20 +1122,26 @@ impl LiveRuntime {
     }
 }
 
-/// Names the principal the authentication layer admitted for Loams Live's
-/// admin service (LV1 plan Task 10): its id, never its credential.
+/// The main port's state without Loams Live when `listen` is not loopback
+/// (`None`: serve `state` as it is). Until LV1 Task 18 brings TLS and the
+/// non-loopback rule, Live is served on a loopback main port and on the
+/// `tailscale serve` target only (itself loopback, reached over the tailnet
+/// with the tailnet's TLS); elsewhere the main port answers
+/// `feature_not_in_variant` for it, and the start says so once.
 #[cfg(feature = "live")]
-async fn live_caller(
-    mut request: axum::extract::Request,
-    next: axum::middleware::Next,
-) -> axum::response::Response {
-    if let Some(principal) = request.extensions().get::<crate::auth::Principal>() {
-        let caller = loams_live::admin::Caller {
-            id: principal.subject.clone(),
-        };
-        request.extensions_mut().insert(caller);
+fn without_live_beyond_loopback(state: &AppState, listen: SocketAddr) -> Option<AppState> {
+    if state.live.is_none() || listen.ip().is_loopback() {
+        return None;
     }
-    next.run(request).await
+    tracing::warn!(
+        %listen,
+        "Loams Live is not served on --listen {listen}: until it has TLS (LV1 Task 18) it is \
+         served on a loopback --listen and over the tailnet (LOAMS_TAILSCALE_LISTEN) only"
+    );
+    Some(AppState {
+        live: None,
+        ..state.clone()
+    })
 }
 
 /// Whether two PD endpoint lists name one cluster (the same endpoints, in
@@ -1177,10 +1183,20 @@ struct NodeSetup {
     forward_stats: Arc<ForwardStats>,
     extra_sources: Vec<Arc<dyn TaskSource>>,
     node_info: Option<Arc<dyn NodeInfo>>,
-    /// The authentication the start already built (for Loams Live's
-    /// listener, LV1 plan Task 10), so the node's surfaces share it; built
-    /// from the config when `None`.
+    /// What the start built before the node (Loams Live, and the
+    /// authentication its listener shares with the node's surfaces).
+    pre: Prebuilt,
+}
+
+/// What `start_with_live` builds before the node: the authentication (LV1
+/// plan Task 10), so Live's listener and the node's surfaces share it, built
+/// from the config when `None`; and Live's services for the main port (LV1
+/// plan Task 12).
+#[derive(Debug, Default)]
+struct Prebuilt {
     auth: Option<Arc<crate::auth::Auth>>,
+    #[cfg(feature = "live")]
+    live: Option<loams_live::LiveRoutes>,
 }
 
 /// Everything [`Server::assemble`] started, and the node's router.
@@ -1687,7 +1703,7 @@ impl Server {
         #[cfg(feature = "live")]
         let started = Self::start_with_live(config).await;
         #[cfg(not(feature = "live"))]
-        let started = Self::start_single(config, no_sweep(), None).await;
+        let started = Self::start_single(config, no_sweep(), Prebuilt::default()).await;
         started
     }
 
@@ -1726,7 +1742,11 @@ impl Server {
                 .collect();
             #[cfg(not(feature = "live-tikv"))]
             let sweep = no_sweep();
-            match Self::start_single(config, sweep, Some(auth)).await {
+            let pre = Prebuilt {
+                auth: Some(auth),
+                live: live.as_ref().map(|live| live.handle.routes()),
+            };
+            match Self::start_single(config, sweep, pre).await {
                 Ok(mut server) => {
                     server.live = live;
                     Ok(server)
@@ -1745,19 +1765,19 @@ impl Server {
     async fn start_single(
         config: ServerConfig,
         sweep: Sweep,
-        auth: Option<Arc<crate::auth::Auth>>,
+        pre: Prebuilt,
     ) -> Result<Self, ServerError> {
         let store = Store::from_url(&bucket_url(&config)?, Vec::<(String, String)>::new())?;
         #[cfg(feature = "tikv")]
         if let MetaBackend::Tikv(tikv) = &config.meta {
-            return Self::start_on_tikv(tikv.clone(), store, config, sweep, auth).await;
+            return Self::start_on_tikv(tikv.clone(), store, config, sweep, pre).await;
         }
         #[cfg(not(feature = "tikv"))]
         let Sweep = sweep;
         let mut meta_config = MetaConfig::new(NODE_ID, config.data_dir.join("meta"), store.clone());
         meta_config.snapshot_every = config.snapshot_every;
         let node = MetaNode::start(meta_config, &Router::new()).await?;
-        match Self::start_on(node.clone(), store, config, auth).await {
+        match Self::start_on(node.clone(), store, config, pre).await {
             Ok(server) => Ok(server),
             Err(err) => {
                 if let Err(shutdown) = node.shutdown().await {
@@ -1773,7 +1793,7 @@ impl Server {
         node: MetaNode,
         store: Store,
         config: ServerConfig,
-        auth: Option<Arc<crate::auth::Auth>>,
+        pre: Prebuilt,
     ) -> Result<Self, ServerError> {
         // A no-op once the node is initialized, so restarts keep their state.
         node.initialize([NODE_ID]).await?;
@@ -1785,7 +1805,7 @@ impl Server {
             MetaClientConfig::default(),
         );
         let meta_store: Arc<dyn MetaStore> = meta.clone().into();
-        let mut server = Self::serve_single(meta_store, store, config, auth).await?;
+        let mut server = Self::serve_single(meta_store, store, config, pre).await?;
         server.node = Some(node);
         server.meta = Some(meta);
         Ok(server)
@@ -1800,12 +1820,12 @@ impl Server {
         store: Store,
         config: ServerConfig,
         sweep: Sweep,
-        auth: Option<Arc<crate::auth::Auth>>,
+        pre: Prebuilt,
     ) -> Result<Self, ServerError> {
         let meta = loams_meta_tikv::TikvMeta::open(tikv).await?;
         let gc = TikvGc::start(&meta, sweep)?;
         let meta_store: Arc<dyn MetaStore> = Arc::new(meta);
-        match Self::serve_single(meta_store, store, config, auth).await {
+        match Self::serve_single(meta_store, store, config, pre).await {
             Ok(mut server) => {
                 server.tikv_gc = Some(gc);
                 Ok(server)
@@ -1823,7 +1843,7 @@ impl Server {
         meta_store: Arc<dyn MetaStore>,
         store: Store,
         mut config: ServerConfig,
-        auth: Option<Arc<crate::auth::Auth>>,
+        pre: Prebuilt,
     ) -> Result<Self, ServerError> {
         let (listener, local_addr) = bind(config.listen).await?;
         // After the leader, before the collection service (row T0-6).
@@ -1837,7 +1857,7 @@ impl Server {
             forward_stats: Arc::new(ForwardStats::default()),
             extra_sources: Vec::new(),
             node_info: None,
-            auth,
+            pre,
         };
         let parts = match Self::assemble(&mut config, store, setup).await {
             Ok(parts) => parts,
@@ -2169,7 +2189,7 @@ impl Server {
                 node: node.clone(),
                 join_changed,
             })),
-            auth: None,
+            pre: Prebuilt::default(),
         };
         // After the leader, before the collection service (row T0-6).
         let durable = match Durable::start(config, node_id).await {
@@ -2210,12 +2230,14 @@ impl Server {
             forward_stats,
             extra_sources,
             node_info,
-            auth,
+            pre,
         } = setup;
         // Built before anything is bound: a bad key file or OIDC setting
         // stops the start with nothing to undo. A cluster node is not
         // guarded (validate_auth keeps it off).
-        let auth = match (auth, &config.cluster) {
+        #[cfg(feature = "live")]
+        let live = pre.live;
+        let auth = match (pre.auth, &config.cluster) {
             (Some(auth), None) => auth,
             (None, None) => {
                 crate::auth::Auth::from_config(&config.auth).map_err(ServerError::Config)?
@@ -2639,16 +2661,27 @@ impl Server {
             house,
             #[cfg(feature = "git")]
             git: git.as_ref().map(|g| g.runtime.clone()),
+            #[cfg(feature = "live")]
+            live,
         };
         let (app, tailscale) = match (roles.gateway, config.cluster.is_some()) {
             (true, false) => {
+                #[cfg(feature = "live")]
+                let main_state = without_live_beyond_loopback(&state, config.listen);
                 let router = api::router(state);
+                #[cfg(feature = "live")]
+                let main_router = match main_state {
+                    Some(main_state) => api::router(main_state),
+                    None => router.clone(),
+                };
+                #[cfg(not(feature = "live"))]
+                let main_router = router.clone();
                 // The same API behind the layer that honours Tailscale
                 // identity headers; the main port strips them.
                 let tailscale = tailscale_listener.map(|(listener, addr)| {
-                    TailscaleTarget::start(listener, addr, tailscale_guard.wrap(router.clone()))
+                    TailscaleTarget::start(listener, addr, tailscale_guard.wrap(router))
                 });
-                (main_guard.wrap(router), tailscale)
+                (main_guard.wrap(main_router), tailscale)
             }
             (true, true) => (api::router(state), None),
             (false, _) => (api::internal_router(state), None),
