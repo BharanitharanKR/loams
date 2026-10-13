@@ -1659,6 +1659,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "loams-flow-conformance"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "http",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "loams-connector-sdk",
+ "loams-flow",
+ "serde",
+ "serde_json",
+ "serde_norway",
+ "thiserror",
+ "tokio",
+ "toml",
+]
+
+[[package]]
 name = "loams-flow-proto"
 version = "0.0.1"
 dependencies = [
