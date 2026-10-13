@@ -49,7 +49,7 @@ pub mod txn;
 pub use budget::{Budget, BudgetLease, BudgetPool, BudgetStats};
 pub use checkpoint::{Checkpoint, CheckpointStore};
 pub use delivery::{DeadLetter, DeadLetterQueue, Delivery};
-pub use egress::{AllowAll, DenyLocal, EgressCheck, EgressDenied};
+pub use egress::{AllowAll, DenyLocal, EgressCheck, EgressDenied, Resolve, SystemResolver};
 pub use envelope::{CdcOp, CloudEvent, EnvelopeBuilder, EnvelopeError, ids};
 pub use error::{BoxError, CheckpointError, ConnectorError, ErrorClass, FabricError};
 pub use fabric::{FabricAck, FabricReader, FabricWriter};

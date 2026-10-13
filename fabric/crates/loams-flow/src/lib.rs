@@ -9,6 +9,11 @@
 //!   licence gate.
 //! * [`registry`] — every manifest under `connectors/registry/`, indexed by id and by
 //!   category, with [`registry::Filter`] for the catalog page's queries.
+//! * [`egress`] — CN2 Task 25's egress guard: [`egress::EgressPolicy`] at validation and,
+//!   through the SDK's hook, after DNS at connect; the NetworkPolicy for fallback pods.
+//! * [`secrets`] — the `SecretStore`s (file for dev, Kubernetes for production), the
+//!   fallback pods' secret mounts and the fallback log filter (CN2 Task 25).
+//! * [`overlay`] — refusal of executable or file-reading content in fallback overlays.
 //!
 //! The YAML is the source and the protobuf form mirrors it key for key, so
 //! [`manifest::ConnectorSpec::to_proto`] and [`manifest::ConnectorSpec::from_proto`]
@@ -35,8 +40,11 @@
 //! Names: Loams, `loams-flow`, `loams.flow.v1`, `io.loams.dev.*` (owner rulings,
 //! 2026-10-01).
 
+pub mod egress;
 pub mod manifest;
+pub mod overlay;
 pub mod registry;
+pub mod secrets;
 pub mod validate;
 
 pub use manifest::{
