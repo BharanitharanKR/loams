@@ -1,0 +1,25 @@
+# Compose services for the placement tests: `ok-*` services are allowed, `bad-*` are
+# refused, each for the reason its name gives.
+services:
+  ok-redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v25.2.1
+    profiles: [connectors-ci-only]
+  ok-connect:
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-connect:dev
+    profiles: [connectors-ci-only]
+    volumes:
+      - ./drivers/oracle:/opt/loams-connect/drivers/oracle:ro
+  bad-redpanda-default:
+    image: docker.redpanda.com/redpandadata/redpanda:v25.2.1
+  bad-redpanda-connectors:
+    image: docker.redpanda.com/redpandadata/redpanda:v25.2.1
+    profiles: [connectors]
+  bad-ojdbc-default:
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-connect:dev
+    volumes:
+      - ./drivers/oracle:/opt/loams-connect/drivers/oracle:ro
+  bad-ojdbc-elsewhere:
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-connect:dev
+    profiles: [connectors-ci-only]
+    volumes:
+      - ./drivers/ojdbc11.jar:/usr/share/java/ojdbc11.jar:ro
