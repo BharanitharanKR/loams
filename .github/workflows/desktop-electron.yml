@@ -73,7 +73,8 @@ jobs:
         id: platforms
         env:
           # A push to dev only runs on desktop paths (see `on:`), and a dispatch asks for everything.
-          ALL: ${{ github.event_name != 'pull_request' || steps.filter.outputs.desktop == 'true' }}
+          # All five on a pull request into main (the full tier), on dispatch and on a desktop change.
+          ALL: ${{ github.event_name != 'pull_request' || github.base_ref == 'main' || steps.filter.outputs.desktop == 'true' }}
           # The runners are repository variables so either pool can be swapped when GitHub's macOS
           # capacity runs short (on 2026-10-13 the arm64 pool queued jobs for hours). A build whose
           # runner is the other architecture is cross-compiled: MACOS_X64_RUNNER=macos-15 builds x64
