@@ -958,7 +958,11 @@ impl Manager {
                 }
                 Err(e) => return Err(e),
             };
-            if self.refresh_for(&batch, at).await {
+            // What this tick serves: the deployment it adopts, else the adopted one.
+            let serving = adopt
+                .as_ref()
+                .map_or_else(|| self.serving.deployment(), Serving::deployment);
+            if self.refresh_for(&batch, at, serving).await {
                 // Not acknowledged: the next tick adopts what the refresh
                 // serves and reads this batch again.
                 return Ok(true);
@@ -1039,15 +1043,15 @@ impl Manager {
     }
 
     /// Refreshes the engine at `at` when `batch` holds an activation of a
-    /// deployment it does not serve, that this manager has not refreshed for
+    /// deployment other than `serving` (what this tick runs), that this manager has not refreshed for
     /// yet (LV1 plan Task 11); returns whether it did. A refresh that fails
     /// logs its error (the janitor's refresh retries) and counts as done, so
     /// a bundle that does not load never holds the ticks.
-    async fn refresh_for(&mut self, batch: &journal::Batch, at: Ts) -> bool {
+    async fn refresh_for(&mut self, batch: &journal::Batch, at: Ts, serving: Option<Ulid>) -> bool {
         let Some(engine) = &self.engine else {
             return false;
         };
-        let serving = self.serving.deployment().map(|d| d.to_string());
+        let serving = serving.map(|d| d.to_string());
         let mut found = false;
         for (shard, seq, entry) in &batch.entries {
             let activation = entry.catalog.iter().any(|c| {
