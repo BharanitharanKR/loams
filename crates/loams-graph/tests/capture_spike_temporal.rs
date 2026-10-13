@@ -3,16 +3,17 @@
 //! `cargo test -p loams-graph --features grafeo-temporal --test capture_spike_temporal`. The
 //! feature exists only to reproduce these measurements; no build Loams ships enables it. With it,
 //! Grafeo versions properties and labels per epoch, so a session pinned *below* the current epoch
-//! reads the values of its epoch. Three gaps make it unusable for client isolation in 0.5.43:
+//! reads the values of its epoch. Three gaps made it unusable for client isolation in 0.5.43:
 //!
 //! * `GrafeoDB::gc` prunes versions below the oldest transaction, not the oldest pinned session,
 //!   and the pinned session then reads a property as `NULL` (and, in the probe of R9.6 with more
 //!   label versions, its labels as empty);
 //! * a session pinned *at* the current epoch, which is every client session while no write is
 //!   pending, reads the latest values, uncommitted ones included (`get_node_at_epoch`'s fast path);
-//! * setting a property and deleting its node in one transaction panics in a debug build
-//!   (`VersionLog::append` after a leftover `PENDING` entry), and leaves the version log out of
-//!   order in a release build.
+//! * setting a property and deleting its node in one transaction panicked in a debug build
+//!   (`VersionLog::append` after a leftover `PENDING` entry) and left the version log out of
+//!   order in a release build. The fork's LG-0004 fixes the order (`temporal_set_then_delete_commits`);
+//!   the other two remain, see the fork's `docs/loams/LG-0005-snapshot-isolation.md`.
 
 #![cfg(feature = "grafeo-temporal")]
 
@@ -89,22 +90,18 @@ fn canary_temporal_pin_at_current_reads_uncommitted() {
     txn.rollback().expect("rollback");
 }
 
-/// Debug builds only: the panic is a `debug_assert!`, and a release build corrupts the version
-/// log's order silently instead.
+/// R9.6's third defect, fixed by the fork's LG-0004: setting a property and deleting its node in
+/// one transaction panicked in a debug build (`VersionLog::append` after the set's `PENDING` entry)
+/// and left the version log out of order in a release build. The delete's tombstone now joins the
+/// transaction's `PENDING` entries, so the commit goes through and the node is gone.
 #[test]
-#[cfg(debug_assertions)]
-fn canary_temporal_set_then_delete_panics() {
+fn temporal_set_then_delete_commits() {
     let db = db();
     db.session().execute("INSERT (:P {k: 3})").expect("seed");
-    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        let mut txn = db.session();
-        txn.begin_transaction().expect("begin");
-        txn.execute("MATCH (n {k: 3}) SET n.x = 0").expect("set");
-        txn.execute("MATCH (n {k: 3}) DELETE n").expect("delete");
-        txn.commit()
-    }));
-    assert!(
-        outcome.is_err(),
-        "set-then-delete under temporal no longer panics: revisit R9.6"
-    );
+    let mut txn = db.session();
+    txn.begin_transaction().expect("begin");
+    txn.execute("MATCH (n {k: 3}) SET n.x = 0").expect("set");
+    txn.execute("MATCH (n {k: 3}) DELETE n").expect("delete");
+    txn.commit().expect("commit");
+    assert_eq!(db.node_count(), 0);
 }

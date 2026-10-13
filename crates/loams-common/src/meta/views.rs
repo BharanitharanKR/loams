@@ -144,6 +144,10 @@ pub struct WalCommit {
     /// The object's chunks, one per partition; offsets are assigned in this
     /// order.
     pub chunks: Vec<WalChunk>,
+    /// Leases the commit is made under (GR1 Task 12, D744): it is applied
+    /// only while every one of them is still at its epoch, checked atomically
+    /// with the offset assignment. Empty for an unfenced commit.
+    pub fences: Vec<Fence>,
 }
 
 /// A request to replace a run of WAL index entries of one partition with one

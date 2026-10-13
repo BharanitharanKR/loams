@@ -14,8 +14,8 @@
 //! lies under the session's or a project's; a run cannot answer its own
 //! session's questions.
 //!
-//! The method set is written out here until Task 9 generates the method
-//! table (`METHODS`) with a role per method.
+//! Which methods role `mcp` may call is the `role` column of the method
+//! table (`loams_agentd_proto::rpc::METHODS`, plan DD1 Task 9).
 
 use std::sync::Arc;
 
@@ -24,24 +24,14 @@ use std::path::{Component, Path};
 use async_trait::async_trait;
 use loams_agentd_doc::SessionCommandPayload;
 use loams_agentd_proto::SandboxLevel;
-use loams_agentd_proto::rpc::{FORBIDDEN_ROLE, Role};
+use loams_agentd_proto::rpc::{FORBIDDEN_ROLE, Role, method_spec};
 use loams_agentd_rpc::{Identity, Policy, RpcError, RunScope, methods};
 use loams_agentd_sessions::WorkspaceHost;
 
-/// The methods role `mcp` may call: the MCP shim's.
-pub const MCP_METHODS: &[&str] = &[
-    methods::LOCAL_DEVICE,
-    methods::ENGINE_INFO,
-    methods::LIST_HARNESSES,
-    methods::LIST_MODELS,
-    methods::WATCH_SPACES,
-    methods::WATCH_CHATS,
-    methods::WATCH_SESSIONS,
-    methods::WATCH_DOC_MESSAGES,
-    methods::QUEUE_COMMAND,
-    methods::QUEUE_MESSAGE,
-    methods::MUTATE,
-];
+/// Whether role `mcp` may call `method`: its row in the method table says so.
+fn mcp_may_call(method: &str) -> bool {
+    method_spec(method).is_some_and(|spec| spec.role == Role::Mcp)
+}
 
 /// Methods that act on one session, named by `sessionId` or the fork's `chatId`.
 const SESSION_METHODS: &[&str] = &[
@@ -252,7 +242,7 @@ impl DaemonPolicy {
         method: &str,
         params: &serde_json::Value,
     ) -> Result<(), RpcError> {
-        if !MCP_METHODS.contains(&method) {
+        if !mcp_may_call(method) {
             return Err(forbidden(format!("{method} needs role owner")));
         }
         let outside = || forbidden(format!("{method} on a session outside this run's"));
@@ -402,7 +392,7 @@ mod tests {
 
     #[tokio::test]
     async fn owner_may_call_anything() {
-        for method in ["ResolveApproval", "StopEngine", "Mutate", "AnythingAtAll"] {
+        for method in ["ResolveApproval", "Shutdown", "Mutate", "AnythingAtAll"] {
             assert!(allowed(&Identity::owner(), method, json!({"op": "deleteChat"})).await);
         }
     }
@@ -412,7 +402,7 @@ mod tests {
         let run = mcp("main");
         for method in [
             "ResolveApproval",
-            methods::STOP_ENGINE,
+            methods::SHUTDOWN,
             methods::WRITE_WORKSPACE_FILE,
             methods::OPEN_TERMINAL,
             methods::INSTALL_HARNESS,

@@ -1,0 +1,26 @@
+# Cloudflare R2 — a target profile on the native objects family (CN2 OR-2,
+# Task 13). R2 speaks the S3 API, so `loams_connector_objects::s3` serves it:
+# the account endpoint `https://<account-id>.r2.cloudflarestorage.com` and
+# `region: auto`. The sink publishes with `If-None-Match: *`, which R2
+# documents for PutObject; that a conflicting PUT answers 412 is unverified
+# until the nightly records it (R0.22, R13.5).
+#
+# Its suite runs against R2 itself (OR-2): fixtures recorded from R2 in PR CI
+# once a recording exists, and a real bucket nightly (`LOAMS_R2_*`, see
+# conformance/connectors/systems.toml). No container stands in for it.
+#
+# narrows: `source.streaming` — R2 has no event notifications, so the source
+# lists on `source.poll_interval_ms` and never streams. The manifest that
+# names this profile carries a `narrows: source.streaming …` note (R7.3).
+apiVersion: loams.flow/v1
+kind: Profile
+id: cloudflare-r2
+profile_kind: target
+module: objects
+system:
+  name: Cloudflare R2
+  service: { fixture: conformance/connectors/fixtures/cloudflare-r2 }
+defaults:
+  region: auto
+narrows:
+  - source.streaming

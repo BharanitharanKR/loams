@@ -281,6 +281,17 @@ mod dyn_compatible {
         ) -> MetaResult<Option<StreamState>> {
             unimplemented!()
         }
+        async fn ensure_graph_stream(&self, _: NamespaceId, _: &str) -> MetaResult<StreamId> {
+            unimplemented!()
+        }
+        async fn drop_graph_stream(
+            &self,
+            _: NamespaceId,
+            _: &str,
+            _: Option<Fence>,
+        ) -> MetaResult<Option<StreamId>> {
+            unimplemented!()
+        }
         async fn create_link(
             &self,
             _: NamespaceId,

@@ -11,6 +11,10 @@ import { configDefaults } from 'vitest/config';
 // one listener, unless LOAMS_API points at an engine.
 const api = process.env.LOAMS_API ?? 'http://127.0.0.1:8084';
 
+// Where the console is mounted. The engine serves it at /ui/ (design §19 §3);
+// a standalone dev server can serve it at the root with LOAMS_UI_BASE=/.
+const base = process.env.LOAMS_UI_BASE ?? '/ui/';
+
 const require = createRequire(import.meta.url);
 
 /**
@@ -74,8 +78,8 @@ function cspMeta(): Plugin {
 }
 
 export default defineConfig({
-  base: '/ui/',
-  plugins: [react(), tailwindcss(), sandboxAssets('/ui/'), cspMeta()],
+  base,
+  plugins: [react(), tailwindcss(), sandboxAssets(base), cspMeta()],
   server: {
     port: 5173,
     proxy: {

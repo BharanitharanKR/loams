@@ -1,0 +1,139 @@
+{
+  "recorded_from": "GitHub",
+  "synthetic": true,
+  "docs": [
+    "https://docs.github.com/en/rest/issues/issues#list-repository-issues",
+    "https://docs.github.com/en/rest/using-the-rest-api/using-pagination-in-the-rest-api"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "issues",
+    "config": {
+      "owner": "loams-labs",
+      "repo": "demo",
+      "base_url": "{proxy}"
+    },
+    "secrets": {
+      "token": "synthetic-github-token"
+    },
+    "expect": 3
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repos/loams-labs/demo/issues?direction=asc&per_page=100&sort=updated&state=all",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json",
+          "link": "<https://api.github.com/repositories/42/issues?direction=asc&page=2&per_page=100&sort=updated&state=all>; rel=\"next\", <https://api.github.com/repositories/42/issues?direction=asc&page=2&per_page=100&sort=updated&state=all>; rel=\"last\"",
+          "x-ratelimit-remaining": "4998",
+          "x-ratelimit-reset": "1759323600"
+        },
+        "body": {
+          "json": [
+            {
+              "id": 1001,
+              "node_id": "I_kwDOAAAAA1",
+              "number": 1,
+              "title": "Crash on start",
+              "body": "Steps to reproduce",
+              "state": "open",
+              "labels": [
+                {
+                  "id": 7,
+                  "name": "bug"
+                }
+              ],
+              "milestone": {
+                "title": "v1"
+              },
+              "assignees": [
+                {
+                  "login": "octo-ada"
+                }
+              ],
+              "user": {
+                "login": "octo-grace"
+              },
+              "html_url": "https://github.com/loams-labs/demo/issues/1",
+              "created_at": "2026-09-01T10:00:00Z",
+              "updated_at": "2026-09-01T10:00:00Z"
+            },
+            {
+              "id": 1002,
+              "node_id": "I_kwDOAAAAA2",
+              "number": 2,
+              "title": "Docs typo",
+              "body": null,
+              "state": "closed",
+              "labels": [
+                {
+                  "id": 7,
+                  "name": "docs"
+                },
+                {
+                  "id": 7,
+                  "name": "good first issue"
+                }
+              ],
+              "milestone": null,
+              "assignees": [
+                {
+                  "login": "octo-ada"
+                }
+              ],
+              "user": {
+                "login": "octo-grace"
+              },
+              "html_url": "https://github.com/loams-labs/demo/issues/2",
+              "created_at": "2026-09-01T10:00:00Z",
+              "updated_at": "2026-09-02T10:00:00Z"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/repositories/42/issues?direction=asc&page=2&per_page=100&sort=updated&state=all",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json",
+          "x-ratelimit-remaining": "4997",
+          "x-ratelimit-reset": "1759323600"
+        },
+        "body": {
+          "json": [
+            {
+              "id": 1003,
+              "node_id": "I_kwDOAAAAA3",
+              "number": 3,
+              "title": "Add export",
+              "body": "Please add CSV export",
+              "state": "open",
+              "labels": [],
+              "milestone": null,
+              "assignees": [],
+              "user": {
+                "login": "octo-grace"
+              },
+              "html_url": "https://github.com/loams-labs/demo/issues/3",
+              "created_at": "2026-09-01T10:00:00Z",
+              "updated_at": "2026-09-03T10:00:00Z"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -88,18 +88,22 @@ manifests() {
 # self-test can drive it against a throwaway repository.
 compare() {
   local name="$1" committed="$2" facade="$3" stubs="${4:-}"
-  if [ ! -e "$facade" ]; then
+  # Tracked, not merely present: the facade was just generated, so it exists
+  # whether or not anything is committed there, and an untracked file has no
+  # diff for git to report.
+  if ! git ls-files --error-unmatch -- "$facade" >/dev/null 2>&1; then
     skipped=$((skipped + 1))
     echo "drift: $name: $facade is not in the repository yet (SDK2 owns sdks/$name/); the facade did generate cleanly, so there is nothing to drift from"
-    return
-  fi
-  if git diff --quiet -- "$facade" && git diff --cached --quiet -- "$facade"; then
+  elif git diff --quiet -- "$facade" && git diff --cached --quiet -- "$facade"; then
     echo "drift: $name: $facade is what the protos generate"
   else
     problem "$name: $facade is stale: run 'scripts/sdk/gen.sh $name' and commit the result"
   fi
   if [ "$committed" = "yes" ] && [ -n "$stubs" ] && [ -d "$stubs" ]; then
-    if git diff --quiet -- "$stubs" && git diff --cached --quiet -- "$stubs"; then
+    # New files count too: a proto file added to a bound package generates a
+    # stub nothing has committed, and `git diff` does not see untracked files.
+    if git diff --quiet -- "$stubs" && git diff --cached --quiet -- "$stubs" \
+      && [ -z "$(git ls-files --others --exclude-standard -- "$stubs")" ]; then
       echo "drift: $name: $stubs is what the protos generate"
     else
       problem "$name: $stubs is stale: run 'scripts/sdk/gen.sh $name' and commit the result"
@@ -137,26 +141,41 @@ check_language() {
     *) steps=("$facade") ;;
   esac
 
-  [ -n "$STUBS_TEMPLATE" ] || true
+  local facade_was_there=no
+  [ -e "$FACADE_OUT" ] && facade_was_there=yes
   if [ -n "$STUBS_TEMPLATE" ]; then
     cp "$STUBS_TEMPLATE" "$scratch/$name.stubs.yaml"
   fi
+  local generated=yes
   for template in "${steps[@]}"; do
     [ -n "$template" ] || continue
     if ! "$out" generate --template "$template" >/dev/null 2>"$scratch/buf.err"; then
       sed 's/^/  /' "$scratch/buf.err" >&2 || true
       problem "$name: buf generate failed on $template"
-      return
+      generated=no
+      break
     fi
   done
-  for extra in $EXTRA_TEMPLATES; do
-    [ -n "$extra" ] || continue
-    "$out" generate --template "$extra" >/dev/null 2>&1 \
-      || note "$name: $extra did not generate (a buf.build rate limit is the usual cause); that output is not drift-checked this run"
-  done
+  if [ "$generated" = yes ]; then
+    for extra in $EXTRA_TEMPLATES; do
+      [ -n "$extra" ] || continue
+      "$out" generate --template "$extra" >/dev/null 2>&1 \
+        || note "$name: $extra did not generate (a buf.build rate limit is the usual cause); that output is not drift-checked this run"
+    done
 
-  checked=$((checked + 1))
-  compare "$name" "$STUBS_COMMITTED" "$FACADE_OUT" "$STUBS_OUT"
+    checked=$((checked + 1))
+    compare "$name" "$STUBS_COMMITTED" "$FACADE_OUT" "$STUBS_OUT"
+  fi
+
+  # A facade that is not committed (Go's, until its generated facade replaces
+  # the Q604 hand-written one) was written only to check that it generates; take
+  # it out again, whether or not the stubs generated after it, rather than leave
+  # an untracked package in the module.
+  if [ "$facade_was_there" = no ] \
+    && ! git ls-files --error-unmatch -- "$FACADE_OUT" >/dev/null 2>&1; then
+    rm -f "$FACADE_OUT"
+    rmdir "$(dirname "$FACADE_OUT")" 2>/dev/null || true
+  fi
 }
 
 # --- --self-test -------------------------------------------------------------
@@ -226,6 +245,15 @@ self_test() {
   check "a missing facade is counted as skipped, not as clean" 1 "$skipped"
   check "a missing facade is not a failure on its own" 0 "$problems"
 
+  # So is one that generation wrote but nothing has committed: it exists on
+  # disk, and it has no diff only because git does not track it.
+  printf 'generated\n' > "$repo/gen/untracked.py"
+  problems=0
+  skipped=0
+  probe python no "$repo/gen/untracked.py"
+  check "an uncommitted facade is counted as skipped, not as clean" 1 "$skipped"
+  rm -f "$repo/gen/untracked.py"
+
   # The stubs of a language that checks them in are compared too: clean is clean,
   # and an edited one is drift.
   git -C "$repo" checkout -q -- gen/facade.py
@@ -242,6 +270,18 @@ self_test() {
   skipped=0
   probe go yes "$repo/gen/facade.py" "$repo/genstubs"
   check "an edited stubs tree is drift" 1 "$problems"
+  git -C "$repo" checkout -q -- genstubs/a.go
+  printf 'package genstubs\n' > "$repo/genstubs/b.go"
+  problems=0
+  skipped=0
+  probe go yes "$repo/gen/facade.py" "$repo/genstubs"
+  check "a new, uncommitted stub is drift" 1 "$problems"
+  # A language with no committed facade (Go's, while it is the Q604 fallback)
+  # still has its committed stubs compared.
+  problems=0
+  skipped=0
+  probe go yes "$repo/gen/absent.py" "$repo/genstubs"
+  check "stubs are compared when the facade is not committed" 1 "$problems"
 
   echo "  $passed/$total passed"
   [ "$passed" -eq "$total" ]
@@ -283,7 +323,7 @@ if [ "$checked" -eq 0 ] && [ "$problems" -eq 0 ]; then
   problem "no language was checked; is $templates_dir populated?"
 fi
 
-echo "drift: $checked language(s) checked, $skipped with no committed output, $problems problem(s)"
+echo "drift: $checked language(s) checked, $skipped with no committed facade, $problems problem(s)"
 if [ "$problems" -ne 0 ]; then
   exit 1
 fi

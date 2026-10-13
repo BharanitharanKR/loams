@@ -24,6 +24,12 @@ inproc-worker = ["loams-house/inproc-worker", "dep:loams-chdb-sys"]
 [dependencies]
 clap.workspace = true
 loams-house = { path = "../loams-house" }
+# `house-cache`, the workers' only way to the bucket (HS1 Task 9), and the cache
+# configuration it is built with.
+loams-house-cache = { path = "../loams-house-cache" }
+loams-cache = { path = "../../../crates/loams-cache" }
+# The catalog's metadata files go to `--store` (HS1 Task 10).
+loams-store = { path = "../../../crates/loams-store" }
 # `--single-node`'s generated local key.
 uuid.workspace = true
 # The front runs on a multi-threaded runtime and stops on SIGINT or SIGTERM.

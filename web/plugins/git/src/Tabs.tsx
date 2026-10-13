@@ -44,7 +44,7 @@ export function Tabs<K extends string>(p: {
       <div
         role="tablist"
         aria-label={p.label}
-        className="flex gap-1 border-0 border-b border-solid border-line"
+        className="flex gap-1 border-0 border-b border-solid border-rule"
         onKeyDown={onKeyDown}
       >
         {p.tabs.map((t, i) => {

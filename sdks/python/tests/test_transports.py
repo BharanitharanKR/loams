@@ -1,7 +1,7 @@
 """Transport option plumbing, and the two paths that refuse to guess.
 
 `loams.runtime.transports` decides which of Connect / gRPC / gRPC-Web a client
-speaks and hands the result to `connect-python`. Coverage measured with stdlib
+speaks and hands the result to `connectrpc`. Coverage measured with stdlib
 `trace --count` showed its error paths unrun -- and an error path is the one kind
 of line that only matters when something is wrong, which is exactly when nobody
 wants to discover it raises the wrong thing.
@@ -10,12 +10,12 @@ So the focus here is the refusals:
 
 - an unknown protocol name lists the ones that exist, rather than a `KeyError`;
 - a transport with no base URL says so, rather than handing `None` to
-  `connect-python` and getting an `AttributeError` three frames deeper.
+  `connectrpc` and getting an `AttributeError` three frames deeper.
 
 Plus `merge`, whose job is to let a `Loams` fill in its own address while a
 caller who set one keeps it, and `headers_of`, which has to preserve the caller's
 mapping rather than alias it -- the SDK hands that dict straight to
-`connect-python`, which may keep it.
+`connectrpc`, which may keep it.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def test_the_unknown_protocol_error_does_not_chain_a_key_error() -> None:
 
 
 def test_a_transport_with_no_base_url_says_so() -> None:
-    """`connect-python` would otherwise fail on `None` several frames deeper."""
+    """`connectrpc` would otherwise fail on `None` several frames deeper."""
     with pytest.raises(ValueError) as caught:
         make_sync_client(TransportOptions())
     assert "base_url" in str(caught.value), (
@@ -148,13 +148,13 @@ def test_the_async_client_is_a_different_class() -> None:
 
 
 def test_no_caller_headers_stays_none() -> None:
-    """`None` and `{}` are not the same to `connect-python`: `None` means the
+    """`None` and `{}` are not the same to `connectrpc`: `None` means the
     client applies its own defaults, an empty dict means "no headers at all"."""
     assert headers_of(None) is None
 
 
 def test_caller_headers_are_copied_not_aliased() -> None:
-    """The dict goes straight to `connect-python`, which may hold it, so a later
+    """The dict goes straight to `connectrpc`, which may hold it, so a later
     mutation by the caller would otherwise change the client's headers."""
     original = {"x-request-id": "abc"}
     handed_over = headers_of(original)

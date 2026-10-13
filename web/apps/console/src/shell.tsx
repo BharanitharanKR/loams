@@ -162,7 +162,7 @@ export function Shell() {
 
           <div className="side-foot">
             {window.loamsDesktop && (
-              <a href="/ui/cordis.html">
+              <a href={`${import.meta.env.BASE_URL}cordis.html`}>
                 <Monitor size={16} aria-hidden="true" /> Desktop
               </a>
             )}

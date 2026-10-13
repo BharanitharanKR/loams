@@ -1,0 +1,70 @@
+{
+  "recorded_from": "Kestra",
+  "synthetic": true,
+  "docs": [
+    "https://kestra.io/plugins/core/trigger/io.kestra.plugin.core.trigger.webhook"
+  ],
+  "scenario": {
+    "direction": "sink",
+    "resource": "trigger",
+    "config": {
+      "server_url": "{proxy}",
+      "namespace": "loams",
+      "flow_id": "import"
+    },
+    "secrets": {
+      "username": "synthetic-kestra-user",
+      "password": "synthetic-kestra-password",
+      "webhook_key": "synthetic-webhook-key"
+    },
+    "input": [
+      {
+        "order": "A-1",
+        "amount": 19
+      }
+    ],
+    "expect": 1
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/main/executions/webhook/loams/import/<redacted>",
+        "headers": {},
+        "body": {
+          "json": {
+            "order": "A-1",
+            "amount": 19
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "id": "5K1mqPDbVRrzM0oC7Tf6sE",
+            "namespace": "loams",
+            "flowId": "import",
+            "flowRevision": 1,
+            "state": {
+              "current": "CREATED",
+              "histories": [
+                {
+                  "state": "CREATED",
+                  "date": "2026-10-01T12:00:00Z"
+                }
+              ]
+            },
+            "trigger": {
+              "id": "webhook",
+              "type": "io.kestra.plugin.core.trigger.Webhook"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

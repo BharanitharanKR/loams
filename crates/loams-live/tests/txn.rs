@@ -1111,6 +1111,69 @@ async fn journal_shard_count_is_stored_per_app_and_changes_only_while_empty(stor
 }
 live_test!(journal_shard_count_is_stored_per_app_and_changes_only_while_empty);
 
+/// `{}`: (first call only) tells the test it has started and waits for its
+/// go, then inserts one document into `t`. Counts its calls.
+struct PausedInsert {
+    started: Notify,
+    go: Notify,
+    calls: AtomicUsize,
+}
+
+impl Function for PausedInsert {
+    fn name(&self) -> &str {
+        "test:paused_insert"
+    }
+    fn kind(&self) -> FnKind {
+        FnKind::Mutation
+    }
+    fn call<'a>(
+        &'a self,
+        txn: &'a mut LiveTxn<'_>,
+        _args: LiveValue,
+    ) -> BoxFuture<'a, Result<LiveValue, LiveError>> {
+        Box::pin(async move {
+            if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                self.started.notify_one();
+                self.go.notified().await;
+            }
+            txn.insert("t", fields(&[("n", LiveValue::I64(1))])).await?;
+            Ok(LiveValue::Null)
+        })
+    }
+}
+
+/// R1's fence (`catalog::set_journal_shards` locks every head of the old
+/// count): a mutation that read the old count and commits after the change
+/// conflicts and reruns on the new count, on the embedded store as on TiKV
+/// (the journal is empty, so every head it locks is absent).
+async fn journal_shard_change_fences_a_mutation_in_flight(store: TestStore) {
+    let r = open_with(&store, 4, Limits::default(), RunnerOptions::default()).await;
+    let f = Arc::new(PausedInsert {
+        started: Notify::new(),
+        go: Notify::new(),
+        calls: AtomicUsize::new(0),
+    });
+    let in_flight = {
+        let (r, f) = (r.clone(), f.clone());
+        tokio::spawn(async move { r.mutate(f, obj(&[]), None).await })
+    };
+    f.started.notified().await;
+    r.set_journal_shards(8)
+        .await
+        .expect("the journal is still empty");
+    f.go.notify_one();
+    let m = in_flight
+        .await
+        .expect("the task")
+        .expect("the mutation commits");
+    assert_eq!(m.attempts, 2, "the mutation reran past the shard change");
+    assert_eq!(f.calls.load(Ordering::SeqCst), 2);
+    let heads = heads(&r).await;
+    assert_eq!(heads.len(), 8);
+    assert_eq!(heads.iter().sum::<u64>(), 1, "one entry, on the new count");
+}
+live_test!(journal_shard_change_fences_a_mutation_in_flight);
+
 /// Semantics 3: an expired idempotency record no longer replays, and the
 /// janitor deletes expired records and keeps live ones.
 async fn janitor_sweeps_expired_idempotency_records(store: TestStore) {
@@ -1388,52 +1451,3 @@ async fn patch_by_id_finds_the_table_of_the_id(store: TestStore) {
     assert!(matches!(e, Err(LiveError::NotFound(_))), "{e:?}");
 }
 live_test!(patch_by_id_finds_the_table_of_the_id);
-
-/// Review of #73 (Task 13's deploy gate): `try_quiesce` is refused while a
-/// mutation is in flight, and while it is held a new mutation waits at
-/// admission until it drops.
-async fn quiesce_refuses_in_flight_mutations_and_holds_new_ones(store: TestStore) {
-    let r = open(&store).await;
-    let id = insert(&r, "counters", &[("n", LiveValue::I64(0))]).await;
-    let f = Arc::new(Increment {
-        read: Notify::new(),
-        go: Notify::new(),
-        first: AtomicBool::new(false),
-        seen: Mutex::new(Vec::new()),
-    });
-    let in_flight = {
-        let (r, f) = (r.clone(), f.clone());
-        tokio::spawn(async move {
-            r.mutate(f, obj(&[("id", s(&id.to_string()))]), None)
-                .await
-                .expect("commits")
-        })
-    };
-    f.read.notified().await;
-    assert!(r.try_quiesce().is_none(), "a mutation is in flight");
-    f.go.notify_one();
-    in_flight.await.expect("the task");
-
-    let gate = r.try_quiesce().expect("nothing in flight");
-    let waiting = {
-        let r = r.clone();
-        tokio::spawn(async move {
-            mutate(
-                &r,
-                sys(PATCH),
-                obj(&[
-                    ("id", s(&id.to_string())),
-                    ("fields", obj(&[("n", LiveValue::I64(5))])),
-                ]),
-            )
-            .await
-        })
-    };
-    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-    assert!(!waiting.is_finished(), "held at admission");
-    assert_eq!(field(&get(&r, id).await, "n"), LiveValue::I64(1));
-    drop(gate);
-    waiting.await.expect("the task");
-    assert_eq!(field(&get(&r, id).await, "n"), LiveValue::I64(5));
-}
-live_test!(quiesce_refuses_in_flight_mutations_and_holds_new_ones);

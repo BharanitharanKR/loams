@@ -7,7 +7,7 @@ package dev.loams.gen.loams.live.v1;
 
 /**
  * <pre>
- * A deployed schema: tables and their indexes (validators arrive in R2).
+ * A deployed schema: tables, their indexes and their validators.
  * </pre>
  *
  * Protobuf type {@code loams.live.v1.Schema}
@@ -249,7 +249,7 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * A deployed schema: tables and their indexes (validators arrive in R2).
+   * A deployed schema: tables, their indexes and their validators.
    * </pre>
    *
    * Protobuf type {@code loams.live.v1.Schema}

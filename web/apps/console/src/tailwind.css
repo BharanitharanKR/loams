@@ -4,7 +4,8 @@
  * existing page). Colours, fonts and the easing curve map onto the @loams/ui
  * tokens (packages/ui/src/tokens.css) with `inline`, so a utility emits
  * `var(--op-*)` directly and light/dark switching stays with the token sheet.
- * Tailwind's default palette is cleared: colours come only from the tokens.
+ * Tailwind's default palette is cleared: colours come only from the tokens
+ * (docs/design/console-ui-stack.md).
  *
  * Utilities sit in a cascade layer, so unlayered @loams/ui and console CSS
  * wins over them. Use utilities for layout and spacing around components.
@@ -49,8 +50,14 @@
   --font-mono: var(--loams-font-mono);
   --ease-op: var(--op-ease);
 
-  /* Panels keep hard corners; anything you press is a pill. */
+  /* Spacing, corners and shadows are tokens too: panels keep hard corners,
+     anything you press is a pill. */
+  --spacing: var(--op-space);
   --radius-*: initial;
-  --radius-none: 0;
-  --radius-pill: 999px;
+  --radius-none: var(--op-radius);
+  --radius-sm: var(--op-radius-sm);
+  --radius-pill: var(--op-radius-pill);
+  --shadow-*: initial;
+  --shadow-pop: var(--op-shadow-pop);
+  --shadow-modal: var(--op-shadow-modal);
 }

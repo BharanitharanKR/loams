@@ -448,9 +448,10 @@ pub const HOST_FUNCTIONS: &[HostFunction] = &[
 /// the namespace's own objects, and generators. The rest describe the host
 /// (`disks`, `server_settings`, `asynchronous_metrics`, `macros`,
 /// `user_directories`, `certificates`, `stack_trace`, …) or the engine's
-/// internals, and are `344` (§49 §13.1). `databases`, `tables`, `columns` and
-/// `parts` become Loams's own in HS1 Task 11. `information_schema` is allowed
-/// whole: its views name only these.
+/// internals, and are `344` (§49 §13.1). `databases`, `tables`, `columns`,
+/// `parts`, `processes` and `errors` are the House's own ([`crate::system`],
+/// HS1 Task 11). `information_schema` is allowed whole: its views name only
+/// these (chDB's, which list the worker's views of the statement).
 pub const ALLOWED_SYSTEM_TABLES: &[&str] = &[
     "one",
     "numbers",
@@ -485,8 +486,9 @@ pub const ALLOWED_SYSTEM_TABLES: &[&str] = &[
     "metrics",
 ];
 
-/// The database a session reads, which `merge()` may name: `default` until HS1
-/// Task 10 maps databases onto the namespace's catalog.
+/// The database `merge()` may name besides the current one. HS1 Task 11 builds
+/// every catalog database as views in the worker, but only for the statement
+/// that names it; `merge(db, …)` of another database stays refused.
 pub const OWN_DATABASE: &str = "default";
 
 /// The statements an `EXPLAIN AST` may open with (fix round 1): what the surface
@@ -505,6 +507,10 @@ pub const STATEMENT_ROOTS: &[&str] = &[
     "ExistsViewQuery",
     "ExistsDictionaryQuery",
     "DropQuery",
+    // HS1 Task 10: `ALTER TABLE … ADD COLUMN` of a lake table, whose column
+    // defaults the deny list reads before the catalog changes; every other
+    // `ALTER` is refused by the front before any worker is asked.
+    "AlterQuery",
 ];
 
 /// The `SHOW` forms a statement may use, by the label chDB's `EXPLAIN AST` gives
@@ -567,6 +573,54 @@ pub fn check_engine(engine: &str, temporary: bool) -> Result<(), ChError> {
     Ok(())
 }
 
+/// Database engines a `CREATE DATABASE` may not name (`344`, HS1 Task 10; the
+/// Task 5 fix round's note): they read or write the host, the network or another
+/// system (chDB 26.9's `system.database_engines`, measured).
+pub const DENIED_DATABASE_ENGINES: &[&str] = &[
+    "Filesystem",
+    "DataLakeCatalog",
+    "Backup",
+    "SQLite",
+    "MySQL",
+    "MaterializedMySQL",
+    "PostgreSQL",
+    "MaterializedPostgreSQL",
+    "S3",
+    "HDFS",
+    "URL",
+    "Remote",
+    "RemoteSecure",
+    "Replicated",
+];
+
+/// The database engine a House database is: a namespace of the catalog, which
+/// ClickHouse calls `Atomic` (its default).
+pub const ALLOWED_DATABASE_ENGINES: &[&str] = &["Atomic"];
+
+/// Database engines that are harmless but not what a House database is: `48`.
+/// `the_database_engine_lists_follow_chdb` fails when chDB has an engine on none of
+/// the three lists.
+pub const OTHER_DATABASE_ENGINES: &[&str] =
+    &["Ordinary", "Memory", "Lazy", "Dictionary", "Overlay"];
+
+/// `344` for a database engine on [`DENIED_DATABASE_ENGINES`] (or one no list
+/// knows), `48` for one of [`OTHER_DATABASE_ENGINES`].
+pub fn check_database_engine(engine: &str) -> Result<(), ChError> {
+    if listed(ALLOWED_DATABASE_ENGINES, engine) {
+        return Ok(());
+    }
+    if listed(OTHER_DATABASE_ENGINES, engine) {
+        return Err(ChError::not_implemented(format!(
+            "Database engine {engine} is not on the House's surface: a House database is a \
+             catalog namespace (ENGINE = Atomic, the default)"
+        )));
+    }
+    Err(disabled(format!(
+        "Database engine {engine} is disabled on the House: it reads or writes outside the \
+         namespace's tables"
+    )))
+}
+
 /// `344` for a statement on [`DENIED_STATEMENTS`].
 pub fn denied_statement(what: &str) -> ChError {
     disabled(format!(
@@ -617,6 +671,9 @@ pub enum Node {
     Engine(String),
     /// An identifier, possibly qualified (`system.disks`).
     Identifier(String),
+    /// A table an `EXPLAIN AST` names (`TableIdentifier`), possibly qualified:
+    /// checked as an identifier, and what HS1 Task 11's reads pin.
+    Table(String),
     /// A literal, as written (`'default'`, `UInt64_1`).
     Constant(String),
     /// The names of a `SETTINGS` clause (query tree only).
@@ -759,7 +816,11 @@ impl QueryTree {
                 let name = name.strip_suffix(')').map_or(name, |n| {
                     n.rsplit_once(" (children ").map_or(name, |(n, _)| n)
                 });
-                return Node::Identifier(name.to_string());
+                return if prefix == "TableIdentifier " {
+                    Node::Table(name.to_string())
+                } else {
+                    Node::Identifier(name.to_string())
+                };
             }
         }
         if let Some(rest) = label.strip_prefix("Literal ") {
@@ -775,7 +836,7 @@ impl QueryTree {
 
     /// The argument nodes of a function or table function: an AST
     /// `ExpressionList`'s children, or a query tree's `ARGUMENTS` → `LIST`'s.
-    fn arguments(&self, at: usize) -> Vec<usize> {
+    pub(crate) fn arguments(&self, at: usize) -> Vec<usize> {
         let children = |of: usize| {
             self.entries
                 .iter()
@@ -919,7 +980,7 @@ pub fn check(tree: &QueryTree) -> Result<(), ChError> {
                 }
             }
             Node::Engine(name) => check_engine(name, !tree.shared_create)?,
-            Node::Identifier(name) => check_identifier(name)?,
+            Node::Identifier(name) | Node::Table(name) => check_identifier(name)?,
             Node::Settings(names) => {
                 if let Some(name) = names.iter().find(|n| is_denied_setting(n)) {
                     return Err(setting_refused(name));

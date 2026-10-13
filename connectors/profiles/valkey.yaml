@@ -1,0 +1,17 @@
+# Valkey — a target profile on the native key-value family (CN2 OR-2, Task 14).
+# Valkey speaks RESP, so `loams-connector-kv`'s Redis implementation serves it;
+# its own manifest names this profile, and its suite runs against Valkey itself
+# (BSD-3-Clause, compose service `valkey`), never against Redis. Valkey 8
+# serves every capability the manifest declares, so nothing is narrowed; a
+# capability a Valkey suite finds missing is added to `narrows` with a
+# `narrows:` note on the manifest.
+apiVersion: loams.flow/v1
+kind: Profile
+id: valkey
+profile_kind: target
+module: kv
+system:
+  name: Valkey
+  service: { compose: valkey }
+defaults: {}
+narrows: []

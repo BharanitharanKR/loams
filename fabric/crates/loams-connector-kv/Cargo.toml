@@ -1,0 +1,77 @@
+[package]
+name = "loams-connector-kv"
+description = "The Loams key-value and wide-column connector family (CN2 OR-6, Task 14): Redis and Valkey keys and Streams, DynamoDB, DynamoDB Streams and Cassandra, on the connector SDK."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[features]
+# The conformance harnesses (`harness`), which link the kit and through it
+# `loams-flow` (and so `protoc`). Off in a normal build, so the family crate
+# depends only on the SDK and its protocol crates (OR-6); the crate's own
+# tests turn it on through the self dev-dependency below.
+conformance = ["dep:loams-flow-conformance", "dep:loams-flow", "dep:serde_norway"]
+
+[dependencies]
+# Every family crate depends on the SDK and its protocol crates only (OR-6).
+loams-connector-sdk = { path = "../loams-connector-sdk" }
+# The SDK's own async-trait pin (0.1.92 in fabric/Cargo.lock).
+async-trait = "0.1.89"
+# DynamoDB's `B` attributes as JSON, and the Redis entries that are not UTF-8.
+base64.workspace = true
+bytes.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Event ids from item contents (design §33 §6: an unchanged item re-read has
+# the same id).
+sha2.workspace = true
+tokio = { workspace = true, features = ["sync", "time", "rt", "macros"] }
+tracing.workspace = true
+# Arrow batches reaching a sink are written row by row (the SDK's NDJSON codec
+# renders each row as a JSON object).
+arrow-array.workspace = true
+# The Cassandra family's `TypeMapper` (Task 5's contract) maps CQL types to
+# Arrow fields. Same 59 line, already locked.
+arrow-schema.workspace = true
+
+# Redis and Valkey (RESP2) — spike §1.2, R0.5: 1.7.1 (2026-09-25),
+# BSD-3-Clause. No default features: only the async connection over a stream
+# the SDK opened (`sdk::net`, egress-checked after DNS) and the Streams
+# commands. TLS is the SDK's rustls, not the crate's own.
+redis = { version = "=1.7.1", default-features = false, features = ["aio", "tokio-comp", "streams"] }
+# Cassandra (CQL native protocol v4) — spike §1.2: 1.9.0 (2026-09-15), MIT OR
+# Apache-2.0. No default features. TLS (`rustls-023`) is not built in Task 14
+# (ruling R14.7).
+scylla = { version = "=1.9.0", default-features = false }
+# DynamoDB and DynamoDB Streams — spike §1.3, R0.11: the 2026-09-25 batch,
+# Apache-2.0. **Without `default-https-client`**: R0.11's feature set would
+# compile aws-lc-sys (whose licence includes the OpenSSL licence, outside
+# deny.toml's allow list) and a second TLS stack; instead the clients send
+# every request through `sdk::http::client` (ring, egress-checked after DNS),
+# wired in as the SDK's `HttpClient` (ruling R14.3).
+aws-sdk-dynamodb = { version = "=1.128.0", default-features = false, features = ["rt-tokio"] }
+aws-sdk-dynamodbstreams = { version = "=1.115.0", default-features = false, features = ["rt-tokio"] }
+# The pieces of the AWS runtime the custom HTTP client and the static
+# credentials are written against; all already locked by the two clients.
+aws-credential-types = "=1.3.0"
+aws-smithy-runtime-api = { version = "=1.18.0", features = ["client"] }
+aws-smithy-types = "=1.8.1"
+http.workspace = true
+
+loams-flow-conformance = { path = "../loams-flow-conformance", optional = true }
+loams-flow = { path = "../loams-flow", optional = true }
+# The family's registry manifests are YAML, read as `loams-flow` reads them.
+serde_norway = { workspace = true, optional = true }
+
+[dev-dependencies]
+# The crate's own tests run with its conformance harnesses.
+loams-connector-kv = { path = ".", features = ["conformance"] }
+loams-flow-conformance = { path = "../loams-flow-conformance" }
+loams-flow = { path = "../loams-flow" }
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "test-util"] }
+
+[lints]
+workspace = true

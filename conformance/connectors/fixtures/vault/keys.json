@@ -1,0 +1,52 @@
+{
+  "recorded_from": "OpenBao",
+  "synthetic": true,
+  "docs": [
+    "https://openbao.org/api-docs/secret/kv/kv-v2/",
+    "https://developer.hashicorp.com/vault/api-docs/secret/kv/kv-v2"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "keys",
+    "config": {
+      "address": "{proxy}"
+    },
+    "secrets": {
+      "api_key": "synthetic-vault-token"
+    },
+    "expect": 2
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v1/secret/metadata/?list=true",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "request_id": "8e1f5a0b-0000-4c1d-9e2f-0123456789ab",
+            "lease_id": "",
+            "renewable": false,
+            "lease_duration": 0,
+            "data": {
+              "keys": [
+                "app/",
+                "billing"
+              ]
+            },
+            "wrap_info": null,
+            "warnings": null,
+            "auth": null
+          }
+        }
+      }
+    }
+  ]
+}

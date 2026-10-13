@@ -1,0 +1,1 @@
+"C:\Users\r&d 50% $x\AppData\Local\Loams Desktop\agentd\runtime\0.2.1\loams-agentd.exe" run --service --config "C:\Users\r&d 50% $x\AppData\Roaming\Loams Desktop\agentd\config.toml"

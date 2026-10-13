@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, SystemTime};
 
 use loams_agentd_doc::SidecarPayload;
-use serde::Serialize;
+pub use loams_agentd_proto::ToolOutputChunk;
 
 use crate::EngineError;
 
@@ -59,24 +59,6 @@ impl Default for ToolOutputLimits {
             archived_retention: TOOL_OUTPUT_ARCHIVED_RETENTION,
         }
     }
-}
-
-/// One page of a stored output (`FetchToolBlob`'s reply).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ToolOutputChunk {
-    /// The page's text. A page never splits a UTF-8 character.
-    pub text: String,
-    /// Body offset of the page.
-    pub offset: u64,
-    /// Body bytes in the page; the next page starts at `offset + len`.
-    pub len: u64,
-    /// Body bytes stored.
-    pub total: u64,
-    /// The output was cut at the per-file cap when it was written.
-    pub truncated: bool,
-    /// This page reaches the end of the stored body.
-    pub eof: bool,
 }
 
 #[derive(Debug, Clone)]

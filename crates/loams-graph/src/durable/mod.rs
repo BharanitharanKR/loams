@@ -10,9 +10,11 @@
 //! * [`append`]: [`GraphLog`], the log as the graphs use it: append a group, read the stream back.
 //! * [`idempotency`]: `key → first run`, rebuilt from the stream on open.
 //!
-//! A graph's local Grafeo files are a cache (I4). Until snapshots (Task 13) and recovery from them
-//! (Task 14), opening a durable graph rebuilds it from its whole stream into a fresh engine
-//! (R11.4), and a graph whose append failed is rebuilt the same way before it serves again.
+//! A graph's local Grafeo files are a cache (I4). [`crate::recovery`] (GR1 Task 14) chooses what
+//! an engine starts from, its [`Base`]: the local cache a clean close left, the manifest's newest
+//! usable snapshot, or nothing (the whole stream). [`Durable::open`] then replays the records
+//! after the base. A graph whose append failed is rebuilt the same way before it serves again,
+//! never from its local files.
 
 pub mod append;
 pub mod idempotency;
@@ -26,8 +28,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use grafeo::GrafeoDB;
 use loams_common::StreamId;
+use loams_log::OffsetRecord;
 
-pub use append::{AppendFault, GraphLog, GroupCommit, stream_name};
+pub use append::{AppendFault, GraphLog, GroupCommit, is_fenced, stream_name};
 pub use visibility::Visibility;
 
 use crate::GraphId;
@@ -126,6 +129,13 @@ pub struct DurableSpec {
     /// and appends them as its first record, if its stream is still empty (R11.5). Cleared once
     /// the graph has opened, so a reload never trusts local files.
     pub adopt: bool,
+    /// The owner lease this engine serves under (GR1 Task 12): every append carries it, and the
+    /// metastore refuses one once the lease has moved on. `None` appends unfenced (tests of the
+    /// write path alone).
+    pub fence: Option<loams_common::meta::Fence>,
+    /// Where the graph's snapshots are read from when its stream has been trimmed below them
+    /// (GR1 Task 13). `None` opens only an untrimmed stream.
+    pub snapshots: Option<crate::snapshot::SnapshotSource>,
 }
 
 impl fmt::Debug for DurableSpec {
@@ -133,14 +143,15 @@ impl fmt::Debug for DurableSpec {
         f.debug_struct("DurableSpec")
             .field("stream", &self.stream)
             .field("adopt", &self.adopt)
+            .field("fence", &self.fence)
             .finish_non_exhaustive()
     }
 }
 
-/// Two specs agree when they name the same stream.
+/// Two specs agree when they name the same stream under the same lease epoch.
 impl PartialEq for DurableSpec {
     fn eq(&self, other: &Self) -> bool {
-        self.stream == other.stream
+        self.stream == other.stream && self.fence == other.fence
     }
 }
 
@@ -161,12 +172,36 @@ pub(crate) struct Durable {
     pub(crate) log: GraphLog,
     pub(crate) graph: GraphId,
     pub(crate) stream: StreamId,
+    /// The owner lease every append carries (GR1 Task 12).
+    pub(crate) fence: Option<loams_common::meta::Fence>,
     pub(crate) lane: WriteLane,
     pub(crate) position: Position,
     pub(crate) idempotency: Mutex<Idempotency>,
     /// The next record's `txn_seq` (one per record of either kind, R10.4). Changed only by the
     /// lane, under the exclusive gate.
     pub(crate) next_txn_seq: AtomicU64,
+    /// Bytes of records this engine appended since its last snapshot (the checkpointer's
+    /// "64 MiB of log" trigger, GR1 Task 13).
+    pub(crate) log_bytes: AtomicU64,
+    /// When this engine opened (the checkpointer's interval for a graph with no snapshot yet).
+    pub(crate) opened_at: std::time::Instant,
+    /// How many records its open applied on top of its base (GR1 Task 14's `Recovery`).
+    pub(crate) replayed: u64,
+}
+
+/// What a durable engine was restored from before its replay: a snapshot (GR1 Task 13) or a
+/// local cache (GR1 Task 14). The stream's records below `offset` are in the engine already, and
+/// `next_txn_seq` is the base's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Base {
+    /// The offset the base covers.
+    pub(crate) offset: u64,
+    /// The `txn_seq` the base's next record takes.
+    pub(crate) next_txn_seq: u64,
+    /// The idempotency index at `offset`, when the base kept it (a local cache does): the
+    /// records below `offset` are then not read at all. `None` (a snapshot) reads them for their
+    /// keys.
+    pub(crate) keys: Option<Vec<(String, u64, idempotency::Outcome)>>,
 }
 
 impl fmt::Debug for Durable {
@@ -189,8 +224,11 @@ impl Durable {
     }
 
     /// Opens a durable graph's state over `db`, a fresh engine (or, when `adopt`, the graph's
-    /// local files from before the log): replays the stream `from..to` into it, or appends the
-    /// adopted state as the first record, and checkpoints it (R9.5).
+    /// local files from before the log; or, with `base`, an engine restored from a snapshot or a
+    /// local cache): replays the stream `from..to` into it, or appends the adopted state as the
+    /// first record, and checkpoints it (R9.5). With `base`, the records below its offset are
+    /// only read for their idempotency keys and `txn_seq`s, since the base holds their effect,
+    /// and not even read when the base kept its keys.
     ///
     /// # Errors
     ///
@@ -202,20 +240,31 @@ impl Durable {
         graph: GraphId,
         bounds: (u64, u64),
         adopt: bool,
+        base: Option<Base>,
         persistent: bool,
     ) -> Result<Self, GraphError> {
         let (start, end) = bounds;
         let log = spec.log.clone();
         let now = log.now_ms();
         let mut idempotency = Idempotency::default();
-        let mut next_txn_seq = 1;
+        let mut next_txn_seq = base.as_ref().map_or(1, |base| base.next_txn_seq);
+        let applied_below = base.as_ref().map_or(0, |base| base.offset);
+        // A base that kept its keys needs nothing below its offset.
+        let mut read_from = start;
+        if let Some(keys) = base.as_ref().and_then(|base| base.keys.as_ref()) {
+            for (key, recorded, outcome) in keys {
+                idempotency.insert(key, *outcome, *recorded, now);
+            }
+            read_from = applied_below.max(start);
+        }
         let mut offset = end;
+        let mut replayed = 0;
         if adopt {
             let ops = baseline(db);
             if !ops.is_empty() {
                 let record = GraphRecord::ChangeSet(GraphChangeSet {
                     graph,
-                    lease_epoch: 0,
+                    lease_epoch: spec.fence.as_ref().map_or(0, |fence| fence.epoch),
                     commit_epoch: db.current_epoch().as_u64(),
                     txn_seq: next_txn_seq,
                     idempotency_key: None,
@@ -226,7 +275,11 @@ impl Durable {
                     GraphError::engine(format!("adopting the graph's local files: {err}"))
                 })?;
                 let ack = log
-                    .append(spec.stream, vec![lane::log_record(bytes, now)])
+                    .append(
+                        spec.stream,
+                        vec![lane::log_record(bytes, now)],
+                        spec.fence.as_ref(),
+                    )
                     .map_err(|err| {
                         tracing::warn!(error = %err, "appending an adopted graph failed");
                         GraphError::LogUnavailable(
@@ -238,60 +291,25 @@ impl Durable {
                 offset = ack.last_offset + 1;
             }
         } else {
-            if start > 0 {
-                // Trimmed below its start with no snapshot to begin from: Task 13 trims only
-                // below a snapshot, and Task 14 opens from it.
+            if start > applied_below {
+                // Trimmed above the snapshot the engine holds: records in between are lost. The
+                // checkpointer trims only at or below a snapshot it has committed (GR1 Task 13).
                 return Err(GraphError::LogUnavailable(format!(
-                    "the graph's stream starts at offset {start}, and graphs are not opened from \
-                     snapshots yet"
+                    "the graph's stream starts at offset {start}, above the {applied_below} its \
+                     snapshot covers"
                 )));
             }
-            for record in log.read(spec.stream, start, end)? {
-                let value = record.record.value.as_deref().unwrap_or_default();
-                let decoded = decode(value).map_err(|err| {
-                    GraphError::engine(format!(
-                        "record {} of the graph's stream: {err}",
-                        record.offset
-                    ))
-                })?;
-                let (seq, key, epoch) = match &decoded {
-                    GraphRecord::ChangeSet(change) => {
-                        if change.graph != graph {
-                            return Err(GraphError::engine(format!(
-                                "record {} of the graph's stream belongs to {}",
-                                record.offset, change.graph
-                            )));
-                        }
-                        apply_to_store(db, &change.ops)?;
-                        (change.txn_seq, &change.idempotency_key, change.commit_epoch)
-                    }
-                    GraphRecord::Schema(schema) => {
-                        // DDL is refused until Task 24 (R5.8), so no stream holds one yet; a
-                        // record that does is replayed by running it, as §48 §6.3 says.
-                        let session = db.session_with_role(grafeo_engine::auth::Role::Admin);
-                        session.execute(&schema.statement).map_err(|err| {
-                            GraphError::engine(format!("replaying record {}: {err}", record.offset))
-                        })?;
-                        (schema.txn_seq, &schema.idempotency_key, schema.commit_epoch)
-                    }
-                };
+            for record in log.read(spec.stream, read_from, end)? {
+                // Below the snapshot's offset the engine holds the record's effect already.
+                let apply = record.offset >= applied_below;
+                let (seq, applied) =
+                    replay_record(db, graph, &record, apply, &mut idempotency, now)?;
                 next_txn_seq = next_txn_seq.max(seq + 1);
-                if let Some(key) = key {
-                    let recorded = u64::try_from(record.record.timestamp_ms).unwrap_or(0);
-                    idempotency.insert(
-                        key,
-                        idempotency::Outcome {
-                            token_offset: record.offset + 1,
-                            commit_epoch: epoch,
-                        },
-                        recorded,
-                        now,
-                    );
-                }
+                replayed += u64::from(applied);
             }
         }
         // Replayed writes bypass Grafeo's WAL (R9.5): checkpoint before the local files stand for
-        // anything. Task 14 is what trusts them; until then this keeps them consistent.
+        // anything. They stand for an offset only once a clean close stamps them (GR1 Task 14).
         if persistent {
             db.wal_checkpoint().map_err(|err| {
                 GraphError::engine(format!("checkpointing the rebuilt graph: {err}"))
@@ -301,12 +319,76 @@ impl Durable {
         Ok(Self {
             graph,
             stream: spec.stream,
+            fence: spec.fence.clone(),
             lane: WriteLane::default(),
             position: Position::new(offset, db.current_epoch().as_u64(), counts),
             idempotency: Mutex::new(idempotency),
             next_txn_seq: AtomicU64::new(next_txn_seq),
+            log_bytes: AtomicU64::new(0),
+            opened_at: std::time::Instant::now(),
+            replayed,
             log,
         })
+    }
+
+    /// Applies the records a follower fetched from its stream (GR1 Task 15): every record from
+    /// its position on, in order, with their idempotency keys and `txn_seq`s, then publishes the
+    /// new position, which wakes every read waiting for a token. Records below the position are
+    /// skipped. The caller holds the gate exclusively.
+    ///
+    /// # Errors
+    ///
+    /// As a replay's, and [`GraphError::Engine`] for a gap in the records.
+    pub(crate) fn follow(
+        &self,
+        db: &GrafeoDB,
+        records: &[OffsetRecord],
+    ) -> Result<u64, GraphError> {
+        let mut offset = self.position.offset();
+        let now = self.log.now_ms();
+        let mut applied = 0;
+        let mut idempotency = self
+            .idempotency
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for record in records {
+            // Below the position: a fetch that overlapped the last one.
+            if record.offset < offset {
+                continue;
+            }
+            if record.offset != offset {
+                return Err(GraphError::engine(format!(
+                    "the graph's stream skipped from offset {offset} to {}",
+                    record.offset
+                )));
+            }
+            let (seq, _) = replay_record(db, self.graph, record, true, &mut idempotency, now)?;
+            self.next_txn_seq.fetch_max(seq + 1, Ordering::AcqRel);
+            offset = record.offset + 1;
+            applied += 1;
+        }
+        if applied > 0 {
+            self.position.publish(
+                offset,
+                db.current_epoch().as_u64(),
+                (db.node_count() as u64, db.edge_count() as u64),
+            );
+        }
+        Ok(applied)
+    }
+
+    /// The idempotency index, for the stamp a clean close leaves beside the local files (GR1
+    /// Task 14).
+    pub(crate) fn idempotency_entries(&self) -> Vec<(String, u64, idempotency::Outcome)> {
+        self.idempotency
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .entries()
+    }
+
+    /// The lease epoch this engine's appends carry (0 when unfenced).
+    pub(crate) fn lease_epoch(&self) -> u64 {
+        self.fence.as_ref().map_or(0, |fence| fence.epoch)
     }
 
     /// The next `txn_seq`, taken. Only the lane calls it, under the exclusive gate. A group that
@@ -315,6 +397,64 @@ impl Durable {
     pub(crate) fn take_txn_seq(&self) -> u64 {
         self.next_txn_seq.fetch_add(1, Ordering::AcqRel)
     }
+}
+
+/// Reads one record of graph `graph`'s stream: applies it to `db` when `apply` (a record a base
+/// already holds is only read), and records its idempotency key. Answers its `txn_seq` and
+/// whether it was applied. Shared by an open's replay and a follower's tail (GR1 Task 15).
+fn replay_record(
+    db: &GrafeoDB,
+    graph: GraphId,
+    record: &OffsetRecord,
+    apply: bool,
+    idempotency: &mut Idempotency,
+    now: u64,
+) -> Result<(u64, bool), GraphError> {
+    let value = record.record.value.as_deref().unwrap_or_default();
+    let decoded = decode(value).map_err(|err| {
+        GraphError::engine(format!(
+            "record {} of the graph's stream: {err}",
+            record.offset
+        ))
+    })?;
+    let (seq, key, epoch) = match &decoded {
+        GraphRecord::ChangeSet(change) => {
+            if change.graph != graph {
+                return Err(GraphError::engine(format!(
+                    "record {} of the graph's stream belongs to {}",
+                    record.offset, change.graph
+                )));
+            }
+            if apply {
+                apply_to_store(db, &change.ops)?;
+            }
+            (change.txn_seq, &change.idempotency_key, change.commit_epoch)
+        }
+        GraphRecord::Schema(schema) => {
+            if apply {
+                // DDL is refused until Task 24 (R5.8), so no stream holds one yet; a record
+                // that does is replayed by running it, as §48 §6.3 says.
+                let session = db.session_with_role(grafeo_engine::auth::Role::Admin);
+                session.execute(&schema.statement).map_err(|err| {
+                    GraphError::engine(format!("replaying record {}: {err}", record.offset))
+                })?;
+            }
+            (schema.txn_seq, &schema.idempotency_key, schema.commit_epoch)
+        }
+    };
+    if let Some(key) = key {
+        let recorded = u64::try_from(record.record.timestamp_ms).unwrap_or(0);
+        idempotency.insert(
+            key,
+            idempotency::Outcome {
+                token_offset: record.offset + 1,
+                commit_epoch: epoch,
+            },
+            recorded,
+            now,
+        );
+    }
+    Ok((seq, apply))
 }
 
 /// The whole graph as one change set: every node, then every edge (R11.5).

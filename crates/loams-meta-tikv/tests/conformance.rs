@@ -272,6 +272,7 @@ fn wal(meta: &TikvMeta, object: &str, chunks: Vec<WalChunk>) -> WalCommit {
         object: object.to_string(),
         created_at_ms: meta.now_ms(),
         chunks,
+        fences: Vec::new(),
     }
 }
 

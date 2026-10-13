@@ -1,0 +1,49 @@
+# GitHub issues and Jira issues -> ItsPlane issues (CN1 Task 15, D628), on
+# native runtimes (CN2 Task 20, OR-11). Replaces
+# connect/routes/templates/itsplane-import.yaml.tmpl, and adds the Jira source
+# that template deferred to the P2 wave: both are issue trackers with a title,
+# a body and a state, so each source projects onto ItsPlane's fields and both
+# write one topic, which the native `itsplane` sink (CN1 Task 15) reads.
+#
+# ItsPlane allows 100 requests/s per key with no remaining-budget header, so
+# the sink budgets rather than reads; idempotence is the event id (the source
+# item's content id) as the sink's idempotency key.
+apiVersion: loams.flow/v1
+kind: ImportRoute
+id: itsplane-import
+parameters: [owner, repo, jira_site, jira_jql, itsplane_project]
+topic: flow-import-itsplane
+sources:
+  - connector: github
+    config:
+      resource: issues
+      owner: "{route.owner}"
+      repo: "{route.repo}"
+      poll_interval_ms: 300000
+      auth: { token: github_token }
+      projection:
+        name: /title
+        description: "{/body}\n\n---\nImported from {/html_url}"
+        priority: medium
+        source_url: /html_url
+    secrets: [github_token]
+  - connector: jira
+    config:
+      resource: issues
+      site: "{route.jira_site}"
+      jql: "{route.jira_jql}"
+      poll_interval_ms: 300000
+      auth: { username: jira_user, password: jira_api_token }
+      projection:
+        name: /fields/summary
+        description: "Imported from Jira {/key} ({/fields/status/name})"
+        priority: medium
+        labels: /fields/labels
+        source_url: /self
+    secrets: [jira_user, jira_api_token]
+sink:
+  connector: itsplane
+  config:
+    project_key: "{route.itsplane_project}"
+    max_concurrent_requests: 8
+  secrets: [api_key]

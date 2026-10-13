@@ -1,0 +1,99 @@
+{
+  "recorded_from": "GitLab",
+  "synthetic": true,
+  "docs": [
+    "https://docs.gitlab.com/api/issues/",
+    "https://docs.gitlab.com/api/rest/#pagination"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "issues",
+    "config": {
+      "project": "loams/demo",
+      "base_url": "{proxy}/api/v4"
+    },
+    "secrets": {
+      "api_key": "synthetic-gitlab-token"
+    },
+    "expect": 3
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v4/projects/loams%2Fdemo/issues?order_by=updated_at&per_page=100&scope=all&sort=asc",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json",
+          "link": "<https://gitlab.com/api/v4/projects/loams%2Fdemo/issues?order_by=updated_at&page=2&per_page=100&scope=all&sort=asc>; rel=\"next\"",
+          "x-next-page": "2"
+        },
+        "body": {
+          "json": [
+            {
+              "id": 77,
+              "iid": 1,
+              "project_id": 3,
+              "title": "Issue 1",
+              "description": "From GitLab",
+              "state": "opened",
+              "labels": [
+                "import"
+              ],
+              "web_url": "https://gitlab.com/loams/demo/-/issues/1",
+              "updated_at": "2026-09-01T10:00:00.000Z"
+            },
+            {
+              "id": 78,
+              "iid": 2,
+              "project_id": 3,
+              "title": "Issue 2",
+              "description": "From GitLab",
+              "state": "opened",
+              "labels": [
+                "import"
+              ],
+              "web_url": "https://gitlab.com/loams/demo/-/issues/2",
+              "updated_at": "2026-09-02T10:00:00.000Z"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v4/projects/loams%2Fdemo/issues?order_by=updated_at&page=2&per_page=100&scope=all&sort=asc",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": [
+            {
+              "id": 79,
+              "iid": 3,
+              "project_id": 3,
+              "title": "Issue 3",
+              "description": "From GitLab",
+              "state": "opened",
+              "labels": [
+                "import"
+              ],
+              "web_url": "https://gitlab.com/loams/demo/-/issues/3",
+              "updated_at": "2026-09-03T10:00:00.000Z"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

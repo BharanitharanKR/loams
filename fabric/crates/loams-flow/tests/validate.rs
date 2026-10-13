@@ -358,12 +358,17 @@ fn semantic_rules_each_refuse() {
 /// refusal names the connector, the capability and the manifest version.
 #[test]
 fn check_use_refuses_undeclared() {
-    // `postgresql` declares a polling (non-streaming) source and no CDC: the routing
-    // answer for a CDC route is the `debezium-postgres` manifest (CN1 Ruling 7).
-    let postgresql = load(connectors_root().join("registry/postgresql.yaml"));
+    // `snowflake` declares a batch source and no CDC, so a CDC route is refused.
+    // (`postgresql` was the example until CN2 Task 2 gave it native CDC, OR-9.)
+    let snowflake = load(connectors_root().join("registry/snowflake.yaml"));
     assert_eq!(
-        check_use(&postgresql, &uses_cdc()).unwrap_err().capability,
+        check_use(&snowflake, &uses_cdc()).unwrap_err().capability,
         "cdc"
+    );
+    let postgresql = load(connectors_root().join("registry/postgresql.yaml"));
+    assert!(
+        check_use(&postgresql, &uses_cdc()).is_ok(),
+        "CN2 Task 2: postgresql declares native CDC (OR-9)"
     );
 
     // `clickhouse` is an append-only sink: a route that upserts needs a manifest that
@@ -389,10 +394,10 @@ fn check_use_refuses_undeclared() {
     // the error must name.
     let error = check_use(&clickhouse, &uses_exactly_once()).unwrap_err();
     assert_eq!(error.connector, "clickhouse");
-    assert_eq!(error.spec_version, "1.0.0");
+    assert_eq!(error.spec_version, "1.1.0");
     assert_eq!(
         error.to_string(),
-        "clickhouse (manifest specVersion 1.0.0) does not declare the capability delivery.sink"
+        "clickhouse (manifest specVersion 1.1.0) does not declare the capability delivery.sink"
     );
 
     // And the same uses against a manifest that declares them all pass, so the three
@@ -416,10 +421,15 @@ fn check_use_refuses_undeclared() {
         check_use(&debezium, &uses_cdc()).is_ok(),
         "debezium-postgres declares cdc"
     );
-    // Kafka's sink is idempotent but at-least-once, so `exactly_once` stays refused
-    // even though the sink dedupes: the manifest is what the route is checked against.
+    // Kafka's sink is exactly-once through its transactional mode (CN2 Task 9). The
+    // same manifest with only the idempotent producer's `effectively_once` refuses
+    // `exactly_once` even though the sink dedupes: the manifest is what the route is
+    // checked against.
     let kafka = load(connectors_root().join("registry/kafka.yaml"));
-    assert!(check_use(&kafka, &uses_exactly_once()).is_err());
+    assert!(check_use(&kafka, &uses_exactly_once()).is_ok());
+    let mut idempotent_only = kafka.clone();
+    idempotent_only.capabilities.delivery.sink = Delivery::EffectivelyOnce;
+    assert!(check_use(&idempotent_only, &uses_exactly_once()).is_err());
 }
 
 fn uses_cdc() -> Uses {
@@ -668,91 +678,110 @@ fn preview_requires_contract_suite() {
     );
 }
 
-/// The manifest with one field changed, and its R-CN2-6 warnings.
-fn warnings_for(mutate: impl FnOnce(&mut Value)) -> Vec<ManifestError> {
+/// The manifest with one field changed, and what R-CN2-6 says about it: its refusals
+/// since CN2 Task 2 made the rule an error, and nothing on the warning channel.
+fn native_first_findings(mutate: impl FnOnce(&mut Value)) -> Vec<ManifestError> {
     let schema = ManifestSchema::embedded().expect("the manifest schema compiles");
     let mut value = kafka_example();
     mutate(&mut value);
-    let spec = validate_manifest(&value, schema.validator())
-        .unwrap_or_else(|errors| panic!("the case must validate: {errors:?}"));
-    semantic_warnings(&spec)
+    let errors = match validate_manifest(&value, schema.validator()) {
+        Ok(spec) => {
+            assert!(
+                semantic_warnings(&spec).is_empty(),
+                "R-CN2-6 no longer warns once it is an error"
+            );
+            Vec::new()
+        }
+        Err(errors) => errors,
+    };
+    errors
+        .into_iter()
+        .filter(|error| error.path.starts_with("runtime"))
+        .collect()
 }
 
 /// R-CN2-6 (OR-1): a P1 or P2 direction runs native by default unless a
-/// `fallback-only:` note gives one of OR-4's reasons. Until Task 2 assigns the
-/// runtimes it is a warning, so the registry as built still loads.
+/// `fallback-only:` note gives one of OR-4's reasons. CN2 Task 2 assigned the
+/// runtimes and made it an error, so a manifest that breaks it no longer loads.
 #[test]
 fn p1_p2_default_runtime_is_native_or_explained() {
+    const {
+        assert!(
+            NATIVE_FIRST_ENFORCED,
+            "R-CN2-6 is an error since CN2 Task 2 assigned the runtimes"
+        );
+    }
     // Native in both directions: nothing to say.
-    assert!(warnings_for(|_| {}).is_empty());
+    assert!(native_first_findings(|_| {}).is_empty());
 
-    // A P2 manifest on Camel with no note is warned about.
-    let warnings = warnings_for(|value| {
+    // A P2 manifest on Camel with no note is refused.
+    let errors = native_first_findings(|value| {
         value["starred"] = Value::Bool(false);
         value["priority"] = Value::String("P2".to_string());
         value["runtime"]["kind"] = Value::String("camel".to_string());
         value["runtime"]["ref"] = Value::String("jdbc".to_string());
     });
     assert!(
-        has_path(&warnings, "runtime"),
-        "R-CN2-6: a P2 camel default with no note must be warned about, got {warnings:?}"
+        has_path(&errors, "runtime"),
+        "R-CN2-6: a P2 camel default with no note must be refused, got {errors:?}"
     );
 
     // A per-direction override is named by its own path.
-    let warnings = warnings_for(|value| {
+    let errors = native_first_findings(|value| {
         value["runtime"]["sink"] = serde_json::json!({ "kind": "iggy", "ref": "kafka_sink" });
     });
     assert!(
-        has_path(&warnings, "runtime.sink") && !has_path(&warnings, "runtime"),
-        "R-CN2-6: only the overridden direction is non-native, got {warnings:?}"
+        has_path(&errors, "runtime.sink") && !has_path(&errors, "runtime"),
+        "R-CN2-6: only the overridden direction is non-native, got {errors:?}"
     );
 
-    // A `fallback-only:` note that names an OR-4 reason explains it.
-    let warnings = warnings_for(|value| {
-        value["runtime"]["kind"] = Value::String("camel".to_string());
-        value["notes"] = serde_json::json!(["fallback-only: generic JDBC is a Java API"]);
-    });
-    assert!(
-        warnings.is_empty(),
-        "R-CN2-6: an OR-4 reason explains a non-native default, got {warnings:?}"
-    );
+    // A `fallback-only:` note that names an OR-4 reason explains it, the Camel runtime
+    // row's reason (CN2 Task 2) included.
+    for note in [
+        "fallback-only: generic JDBC is a Java API",
+        "fallback-only: the Camel runtime itself, which OR-4 keeps as the fallback runtime",
+    ] {
+        let errors = native_first_findings(|value| {
+            value["runtime"]["kind"] = Value::String("camel".to_string());
+            value["notes"] = serde_json::json!([note]);
+        });
+        assert!(
+            errors.is_empty(),
+            "R-CN2-6: {note:?} explains a non-native default, got {errors:?}"
+        );
+    }
 
     // A note that is not `fallback-only:`, or gives no OR-4 reason, does not.
     for note in [
         "narrows: no transactions",
         "fallback-only: we have not written it yet",
+        "fallback-only: camel is convenient",
     ] {
-        let warnings = warnings_for(|value| {
+        let errors = native_first_findings(|value| {
             value["runtime"]["kind"] = Value::String("camel".to_string());
             value["notes"] = serde_json::json!([note]);
         });
         assert!(
-            has_path(&warnings, "runtime"),
-            "R-CN2-6: {note:?} does not explain a camel default, got {warnings:?}"
+            has_path(&errors, "runtime"),
+            "R-CN2-6: {note:?} does not explain a camel default, got {errors:?}"
         );
     }
 
     // P3 is CN3's and outside OR-1.
-    let warnings = warnings_for(|value| {
+    let errors = native_first_findings(|value| {
         value["starred"] = Value::Bool(false);
         value["priority"] = Value::String("P3".to_string());
         value["runtime"]["kind"] = Value::String("camel".to_string());
     });
-    assert!(warnings.is_empty(), "R-CN2-6 covers P1 and P2 only");
+    assert!(errors.is_empty(), "R-CN2-6 covers P1 and P2 only");
 
-    // Until Task 2 assigns the runtimes, the rule is a warning and not an error.
-    const {
-        assert!(
-            !NATIVE_FIRST_ENFORCED,
-            "R-CN2-6 becomes an error in CN2 Task 2, not before"
-        );
-    }
+    // The refusal comes through the rules every load runs, not a side channel.
     let errors = rules_for(|value| {
         value["runtime"]["kind"] = Value::String("camel".to_string());
     });
     assert!(
-        errors.is_empty(),
-        "R-CN2-6 is a warning, not an error, until Task 2, got {errors:?}"
+        has_path(&errors, "runtime"),
+        "R-CN2-6 is an error since CN2 Task 2, got {errors:?}"
     );
 }
 

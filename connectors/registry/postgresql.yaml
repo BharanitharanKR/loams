@@ -1,68 +1,85 @@
-# PostgreSQL — ★ connector 2 of §33 §8; CN1 plan Task 7.
-# Runtime: native Rust, loams_flow::connectors::postgres (design §33 §5, D354).
-# §33 §4 rule 2: the manifest describes the runtime Loams ships, so this is the
-# native batch source and the native upsert sink.  Appendix A's Streaming cell
-# says Y for PostgreSQL because the *Iggy* `postgres_sink` alternative is
-# streaming; §8's Direction column ("source (batch), sink (upsert)") is the
-# runtime-specific truth recorded here, and the Iggy alternative is named in the
-# comment on `runtime` below.
+# PostgreSQL — ★ connector 2 of §33 §8; CN1 plan Task 7, built by CN2 Task 10.
+# Runtime: native Rust, the Postgres family `loams_connector_postgres`
+# (CN2 OR-6, OR-9; plan ruling R10.9): `tokio-postgres` for SQL, the family's
+# own CopyBoth client for logical replication and `pg_walstream` to decode
+# pgoutput. One `PostgresFactory` serves this manifest and the target
+# profiles `aurora-postgres`, `cockroachdb` and `pgvector`.
+# The source is a batch read (binary `COPY` in primary-key order, Arrow
+# batches) or, with `mode: cdc`, a pgoutput slot with an initial snapshot
+# handed off at the slot's consistent point (R10.3). The sink upserts and is
+# exactly once: each batch commits in one transaction with the instance's row
+# in `_loams_checkpoints`, fenced by the lease epoch (R10.12).
+# CN1's alternatives are the declared fallbacks: Iggy's `postgres_source` and
+# `postgres_sink` here, and Debezium Server through the `debezium-postgres`
+# manifest. Status stays `preview` (★) until the family's suites are green in
+# CI (OR-23). Minor bump: the runtime moved and capabilities widened.
 apiVersion: loams.flow/v1
 kind: Connector
 id: postgresql
 name: PostgreSQL
-specVersion: 1.0.0
+specVersion: 1.2.0
 category: relational
 priority: P1
 starred: true
 status: preview
 runtime:
   kind: native
-  ref: loams_flow::connectors::postgres
-  version: "tokio-postgres 0.7 / adbc_driver_manager 0.24"
-  # Streaming sinks may instead run through Iggy's `postgres_sink` (CN1 Task 7,
-  # §33 §8 row 2); §33 §4 rule 2 records the alternative runtime in a comment
-  # rather than in a second registry entry.
+  ref: loams_connector_postgres::PostgresFactory
+  version: "tokio-postgres 0.7.18 / pg_walstream 0.9.0"
+  fallback:
+    kind: iggy
+    ref: postgres                 # postgres_source and postgres_sink (CN2 R2.3)
+    directions: [source, sink]
+    replaced_by: CN2 Task 10
 licence:
   component: Apache-2.0
   dependencies:
     tokio-postgres: MIT
-    adbc-driver-postgres: Apache-2.0   # the Postgres ADBC driver for bulk loads (D356; licences.toml)
+    postgres-protocol: Apache-2.0          # MIT OR Apache-2.0 (licences.toml); floor 0.6.12 (R0.5)
+    pg_walstream: BSD-3-Clause             # the pgoutput decoder only (R10.1)
 capabilities:
   source:
-    streaming: false              # §33 §8: "source (batch)"
+    streaming: true               # CN2 OR-9: native CDC streams changes
     batch: true
-    cdc: false                    # external Postgres CDC is Debezium's or Iggy's job (D357)
+    cdc: true                     # pgoutput logical replication with a snapshot handoff (R10.3)
     webhook: false
     resumable: true
-    position: the exported snapshot id or the cursor_column value
-    # §33 §6: a batch read's as-of position is the exported snapshot id (the
-    # REPEATABLE READ snapshot the parallel workers share, CN1 Task 7); in
-    # incremental mode it is the cursor_column high-water mark.
+    position: batch reads, the last key delivered per table; CDC, the end LSN of the last whole transaction delivered (the slot's flush LSN)
   sink:
-    streaming: false
+    streaming: true
     batch: true
-    transactional: true           # one transaction per batch, so a batch is atomic (CN1 Task 7)
+    transactional: true           # one transaction per batch, with the checkpoint row in _loams_checkpoints (R10.12)
     upsert: true                  # INSERT … ON CONFLICT (key) DO UPDATE; `key` is in the config schema
-    delete: true                  # deletes for loamsop = d (CN1 Task 7, §33 §6)
-    idempotent: true              # the upsert by the declared key dedupes a redelivered batch
-  delivery: { source: at_least_once, sink: at_least_once }
-  ordering: per_key               # batches are partitioned by the declared key (D356)
+    delete: true                  # loamsop = d deletes by key
+    idempotent: true              # the upsert by key dedupes a redelivered batch
+  delivery: { source: at_least_once, sink: exactly_once }
+    # Source: a snapshot cut short by a crash restarts under a new slot, and its
+    # rows arrive again with new ids, so at least once (R10.3). Sink: exactly
+    # once with `transactional: true` (the default); `transactional: false` is
+    # a plain at-least-once upsert sink.
+  ordering: per_key               # CDC changes in commit order; batch reads in key order
   formats: [cloudevents-binary, cloudevents-structured, json, arrow]
-    # Arrow because a batch read's events carry Arrow IPC stream bytes
-    # (Ruling 3: datacontenttype application/vnd.apache.arrow.stream).
+    # Arrow for the batch reads and the snapshot (application/vnd.apache.arrow.stream);
+    # JSON for CDC changes.
   schema: { registry: none, evolution: backward }
-    # No registry: COPY's binary format carries the types.  Additive evolution
-    # only, which is what §33 §7's additive table evolution allows.
+    # `evolution: additive` by default: ADD COLUMN emits a schema-change event
+    # and later rows carry the column; anything the policy refuses pauses.
   bulk: { arrow: true, max_batch_rows: 65536 }
-  backpressure: pull              # the parallel COPY workers pull from the table
-auth: [basic, mtls, iam]          # §33 Appendix A.2 (the third is AWS RDS IAM tokens)
+  backpressure: pull              # batches are read as the budget allows; the slot's flush LSN waits for the Fabric
+auth: [basic, iam]
+    # basic: a password by secret name; iam: AWS RDS IAM tokens minted per
+    # connection. Client certificates (mtls) are not built: TLS is server-side
+    # only, with `ca_pem` for extra roots.
 config:
   $ref: schemas/postgresql.config.json
-secrets: [password, tls.key_pem]
+secrets: [password, aws.access_key_id, aws.secret_access_key, aws.session_token]
 envelope:
   emits: io.loams.dev.flow.postgresql.rows.v1
   consumes: "*"
   passthrough: false              # a row batch is not a producer's CloudEvent (§33 §6)
 limits: { batch_rows: 65536, batch_bytes: 8388608 }   # Ruling 3's defaults
-conformance: [contract, roundtrip, kill-restart, dup-check, bulk]
+conformance: [contract, roundtrip, kill-restart, dup-check, exactly-once, cdc, bulk, schema-evolution, backpressure, auth]
 docs: docs/guides/connectors/postgresql.md
+notes:
+  - "events: batch reads emit `rows` (Arrow); CDC emits `change` (JSON, and the snapshot as Arrow batches with loamsop = r) and `schema-change`, with ids <slot>/<commit LSN>/<ordinal> that ingest deduplicates (CN2 Task 10, R10.5)"
+  - "cdc: needs wal_level = logical and a role with REPLICATION; the slot is kept on stop and dropped on delete, with a Loams-owned publication (R10.11)"

@@ -1,0 +1,12 @@
+{
+  "assistantMessageId": "msg-1",
+  "cwd": "/home/dev/project",
+  "harness": "claude-code",
+  "model": "claude-sonnet",
+  "sessionId": "claude-session-1",
+  "tools": [
+    "Bash",
+    "Read"
+  ],
+  "type": "sessionStarted"
+}

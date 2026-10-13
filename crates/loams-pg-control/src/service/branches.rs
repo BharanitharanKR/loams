@@ -150,11 +150,11 @@ pub(crate) fn new_guard(project_id: &str, branch_id: &str) -> BranchGuardRec {
     }
 }
 
-fn live(state: BranchState) -> bool {
+pub(crate) fn live(state: BranchState) -> bool {
     matches!(state, BranchState::Creating | BranchState::Ready)
 }
 
-fn view(branch: Versioned<BranchRec>, project: &ProjectRec) -> BranchView {
+pub(crate) fn view(branch: Versioned<BranchRec>, project: &ProjectRec) -> BranchView {
     BranchView {
         is_default: project.default_branch_id.as_deref() == Some(branch.record.id.as_str()),
         branch,
@@ -186,7 +186,7 @@ impl<N: NeonRead> PgService<N> {
 
     /// The guard of a branch, and its version (`None`: absent, which reads
     /// as no children and not deleting).
-    async fn guard(
+    pub(crate) async fn guard(
         &self,
         project_id: &str,
         branch_id: &str,

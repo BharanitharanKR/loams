@@ -1,0 +1,80 @@
+{
+  "recorded_from": "PostHog",
+  "synthetic": true,
+  "docs": [
+    "https://posthog.com/docs/api/capture"
+  ],
+  "scenario": {
+    "direction": "sink",
+    "resource": "events",
+    "config": {
+      "base_url": "{proxy}"
+    },
+    "secrets": {
+      "api_key": "phc_synthetic",
+      "token": "phx_synthetic"
+    },
+    "input": [
+      {
+        "event": "signed_up",
+        "distinct_id": "u-1",
+        "properties": {
+          "plan": "pro"
+        },
+        "timestamp": "2026-10-01T12:00:00Z"
+      },
+      {
+        "event": "signed_up",
+        "distinct_id": "u-2",
+        "properties": {
+          "plan": "pro"
+        },
+        "timestamp": "2026-10-01T12:00:00Z"
+      }
+    ],
+    "expect": 2
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/batch/",
+        "headers": {},
+        "body": {
+          "json": {
+            "api_key": "<scrubbed>",
+            "batch": [
+              {
+                "event": "signed_up",
+                "distinct_id": "u-1",
+                "properties": {
+                  "plan": "pro"
+                },
+                "timestamp": "2026-10-01T12:00:00Z"
+              },
+              {
+                "event": "signed_up",
+                "distinct_id": "u-2",
+                "properties": {
+                  "plan": "pro"
+                },
+                "timestamp": "2026-10-01T12:00:00Z"
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "status": "Ok"
+          }
+        }
+      }
+    }
+  ]
+}

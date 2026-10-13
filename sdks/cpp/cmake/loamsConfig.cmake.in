@@ -1,0 +1,25 @@
+# The Loams C++ SDK's CMake config package.
+#
+#   find_package(loams 0.1 CONFIG REQUIRED)
+#   target_link_libraries(app PRIVATE loams::loams)
+#
+# The dependencies are found the way CMakeLists.txt finds them: protobuf's link
+# line from pkg-config (it is the only place Abseil's libraries are listed),
+# libcurl and Threads. The protobuf runtime must be the release the committed
+# stubs were generated for; a mismatch is a compile error from protobuf's own
+# version guard in the generated headers.
+
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+find_dependency(CURL)
+find_dependency(PkgConfig)
+if(NOT TARGET PkgConfig::LOAMS_PROTOBUF)
+  pkg_check_modules(LOAMS_PROTOBUF REQUIRED IMPORTED_TARGET protobuf)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/loamsTargets.cmake")
+
+set(LOAMS_SDK_VERSION "@LOAMS_SDK_VERSION@")
+check_required_components(loams)

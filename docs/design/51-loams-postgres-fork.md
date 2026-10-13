@@ -160,15 +160,15 @@ Not forked, but fetched by upstream's build: `neondatabase/pgrag` (Apache-2.0, `
 ### 3.4 Patch queue (D803)
 
 - **Trailer.** Each commit after the fork point (`neon-fork-point`) carries `Loams-Patch: LP-<nnnn>` (several commits may share an id). In the Postgres fork, merge commits of upstream Postgres carry `Loams-Sync: <tag or sha>`.
-- **Inventory.** `LOAMS_PATCHES.md` at the root of `main`, one row per id: title, area (`build`, `ci`, `licence`, `storage`, `compute`, `postgres`, `extension`, `pg18`, `pg19`, `rebrand`), owner, since, origin (`loams`, or `cherry-pick neondatabase/neon <sha>`), and the condition that drops it, if any. After the hard fork it is mainly the Apache-2.0 §4(b) statement of changes against Neon.
-- **Check.** `scripts/loams/check-patches.py` lists `git log neon-fork-point..HEAD --no-merges` and fails when a commit has no trailer or a trailer has no row. It runs in the gate.
+- **Inventory.** `LOAMS_PATCHES.md` at the root of `main`, one row per id: title, area (`build`, `ci`, `licence`, `storage`, `compute`, `postgres`, `extension`, `pg18`, `pg19`, `rebrand`), owner, since, origin, and the condition that drops it, if any. After the hard fork it is mainly the Apache-2.0 §4(b) statement of changes against Neon. *As built (NF1 Task 4 rulings 1–2):* origin is `loams-only`, `upstreamable` or `cherry-pick` (the commit then carries `(cherry picked from neondatabase/neon <sha>)`), and a table "Commits without a trailer" maps commits that reached `main` before the rule (`1218fb7a`, LP-0001) to their id. A dropped patch keeps its row, since its commits stay in history.
+- **Check.** `scripts/loams/check-patches.py` lists `git log neon-fork-point..HEAD --no-merges` and fails when a commit has no trailer (and is not in the table above) or a trailer has no row. It runs in the gate. *As built (NF1 Task 4 ruling 3):* it also fails a row without a commit and a cherry-pick without its line, and checks the file's format.
 - **Review.** Every quarter, on the Postgres minor release day, a maintainer walks the inventory: Postgres-fork rows that upstream Postgres made unnecessary are dropped, and `loams-postgres` rows are kept current. Dropping is a revert commit, never history rewriting.
 - **The first entries.** LP-0001 is the decoder trim (`1218fb7a`). LP-0002 to LP-0006 are D808's hygiene patches.
 
 ### 3.5 Governance (D804)
 
-- **CODEOWNERS** in each fork, replacing Neon's teams with `@ostrium-labs/loams-postgres-maintainers` (storage, compute, CI), `@ostrium-labs/postgres-maintainers` (`vendor/`, `pgxn/`, `compute/`) and `@ostrium-labs/security` (`deny.toml`, `.github/`, `LOAMS_PATCHES.md`, `NOTICE`). **At least two people** are in each maintainer team. The teams are an owner action.
-- **Branch protection** on `main` and `loams/*`: a PR, one CODEOWNER approval, the gate's required checks, DCO, no force-push, no deletion.
+- **CODEOWNERS** in each fork, replacing Neon's teams with `@ostrium-labs/loams-postgres-maintainers` (storage, compute, CI), `@ostrium-labs/postgres-maintainers` (`vendor/`, `pgxn/`, `compute/`) and `@ostrium-labs/security` (`deny.toml`, `.github/`, `LOAMS_PATCHES.md`, `NOTICE`, `CODEOWNERS`, `SECURITY.md`). **At least two people** are in each maintainer team. The teams are an owner action. *As built (NF1 Task 5 rulings 1–2):* until the teams exist, each section is owned by the organisation's admins and names its team in a comment; the DCO check also exempts the commits in `LOAMS_PATCHES.md`'s "Commits without a trailer" table (`1218fb7a`), read from the pull request's base, never from the pull request.
+- **Branch protection** (target) on `main` and `loams/*`: a PR, one CODEOWNER approval, the gate's required checks, DCO, no force-push, no deletion. *As built (NF1 Task 3 ruling 4, Task 4 ruling 6, Task 5 ruling 3):* no status check is required yet, because Actions are disabled on `loams-postgres`; `dco` and `patches` are added when they are enabled.
 - **DCO.** The same `check-dco.sh` as Loams. Neon's history is exempt (the check starts at `neon-fork-point`).
 - **The fork network.** The repository stays in `neondatabase/neon`'s fork network until GitHub support detaches it (Q730, an owner action). Until then PRs name the base `ostrium-labs/loams-postgres:main` explicitly.
 - **The bot.** A GitHub App, `loams-postgres-bot`, with `contents: write` and `pull_requests: write` on the eight forks and `ostrium-labs/loams` (and `packages: write` for image pushes). It pushes Postgres branches from the `loams-postgres` repository's CI and opens pin PRs on Loams. The owner creates it, or approves the controller creating it through GitHub's App manifest flow (Q733).
@@ -188,7 +188,7 @@ Not forked, but fetched by upstream's build: `neondatabase/pgrag` (Apache-2.0, `
 
 ### 3.7 Security (D805)
 
-- **Reporting.** Private vulnerability reporting is enabled on every fork. `SECURITY.md` points at Loams' policy (`security@ostriumlabs.com`, acknowledgement within 3 business days).
+- **Reporting.** Private vulnerability reporting is enabled on every unarchived fork. `SECURITY.md` points at Loams' policy (`security@ostriumlabs.com`, acknowledgement within 3 business days). *As built (NF1 Task 5 ruling 4):* enabled on the six unarchived forks; `SECURITY.md` on `loams-postgres`, `postgres` (`loams/meta`), `tokio-epoll-uring` and `pg_session_jwt`.
 - **Monitoring** (`loams-advisories.yml`, daily):
   - `cargo deny check advisories` on the fork's `Cargo.lock`;
   - Trivy (or Grype) scans of every pinned digest, covering Debian packages and extension binaries;
@@ -196,7 +196,7 @@ Not forked, but fetched by upstream's build: `neondatabase/pgrag` (Apache-2.0, `
   - GitHub advisories on `pgdogdev/pgdog`, each extension's upstream and the small forks' original upstreams; `neondatabase/neon` is watched as a signal only, since no fix is expected from it;
   - `cargo fuzz` targets for the WAL decoder and the page-service and proxy protocol parsers, run nightly for 30 minutes each (new with the hard fork: nobody else fuzzes this code).
 
-  A finding opens an issue labelled with severity and a due date.
+  A finding opens an issue labelled with severity and a due date. *As built (NF1 Task 6 rulings 1–7):* `scripts/loams/sla.py` files every finding into a private tracker (`ostrium-labs/loams-postgres-security`, an owner action), one issue per finding key, labelled `sev:critical|high|pg-minor|other` with a due date from the table below; a hand-filed issue with a `sev:` label gets one too, and an overdue issue is labelled `overdue` and escalated once. Crashes of these fork targets never reach a public repository, run log or artifact (this repository's own `sqlgate-fuzz` and `agentd-fuzz` jobs are not covered by this). The fuzz targets are `fuzz/` in `loams-postgres` (`wal_decoder_record`, `page_service_request`, `proxy_startup`, `proxy_scram`); the proxy targets run without AddressSanitizer (jemalloc's unprefixed malloc).
 - **Targets (target, Q724):**
 
   | Finding | Images published by |

@@ -1,0 +1,47 @@
+# Jira (Cloud) — an HTTP-API profile (CN2 OR-11, Task 20). Written from
+# Atlassian's public REST API v3 reference:
+#   Issue search (enhanced JQL, nextPageToken):
+#     https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-get
+#   Create issue: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post
+#   Basic auth with an API token: https://developer.atlassian.com/cloud/jira/platform/basic-auth-for-rest-apis/
+#   Rate limiting: https://developer.atlassian.com/cloud/jira/platform/rate-limiting/
+#   Webhook secrets (X-Hub-Signature, sha256=): https://developer.atlassian.com/cloud/jira/platform/webhooks/
+# `site` is the `<site>.atlassian.net` name; `jql` selects the issues (the
+# default is every issue ordered by update). `auth.username` names the account
+# email's secret and `auth.password` the API token's. The Jira → ItsPlane
+# import route reads `issues`.
+apiVersion: loams.flow/v1
+kind: Profile
+id: jira
+profile_kind: http-api
+module: http
+system:
+  name: Jira
+  service: { fixture: conformance/connectors/fixtures/jira }
+defaults:
+  jql: "order by updated ASC"
+narrows: []
+http:
+  base_url: "https://{config.site}.atlassian.net"
+  auth: { scheme: basic }
+  headers: { Accept: application/json }
+  resources:
+    issues:
+      list:
+        method: GET
+        path: "/rest/api/3/search/jql"
+        items: "/issues"
+        cursor: { next: "/nextPageToken", param: nextPageToken }
+        key: "/key"
+        query:
+          jql: "{config.jql}"
+          maxResults: "100"
+          fields: "summary,status,issuetype,project,priority,labels,updated"
+      create:
+        method: POST
+        path: "/rest/api/3/issue"
+  rate_limit:
+    requests: 100
+    per_seconds: 10
+    honour_headers: ["Retry-After"]
+  webhook: { scheme: github, header: X-Hub-Signature }

@@ -69,3 +69,6 @@ breaking:
     # `loams.house.v1` is `unstable: true` until HS1's GA (Task 38), which
     # removes this line; until then its fields are only added, never changed.
     - proto/loams/house
+    # `loams.repos.v1` (Loams Git, GT1 Task 12) is `unstable: true` until GT1
+    # GA, which removes this line and the option.
+    - proto/loams/repos

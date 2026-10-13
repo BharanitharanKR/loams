@@ -4,17 +4,23 @@
 //! A table is created on its first insert unless a schema is deployed
 //! ([`table_for_insert`]); [`define_table`] creates a table or changes its
 //! indexes, and refuses an index change on a non-empty table (R1 plan
-//! Ruling 5). Table ids come from the catalog counter, from 1; index ids from
-//! the table's `next_index_id`, from 2, and are never reused.
+//! Ruling 5; a deploy changes the indexes of a non-empty table online, LV1
+//! plan Task 9, through [`IndexState`]). Table ids come from the catalog
+//! counter, from 1; index ids from the table's `next_index_id`, from 2, and
+//! are never reused. A table's
+//! [`TableValidation`] (LV1 plan Task 8) rides in its record, so every write
+//! that loads the table has its validators.
 
-use buffa::Message;
+use buffa::{Message, MessageField};
 use loams_kv::Txn;
+use ulid::Ulid;
 
 use crate::cursor::CursorKey;
 use crate::docs::Reads;
 use crate::ids::{IndexId, TableId};
 use crate::journal::MAX_SHARDS;
 use crate::keys::AppKeys;
+use crate::validate::Validator;
 use crate::{Limits, LiveError, pb};
 
 /// The longest table or index name, in bytes.
@@ -37,6 +43,37 @@ pub struct TableDef {
     pub indexes: Vec<IndexDef>,
     /// The id the next user index gets.
     pub next_index_id: u32,
+    /// The validators its writes must match (LV1 plan Task 8).
+    pub validation: TableValidation,
+}
+
+/// A table's validators (design §45 §4.1; LV1 plan Task 8): the one every
+/// write must match, as the active deployment's schema declares it, and a
+/// stricter one a deploy is checking the table's documents against, which
+/// writes must match too until that deploy activates or fails.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TableValidation {
+    pub validator: Option<Validator>,
+    pub enforcing: Option<Enforcing>,
+}
+
+/// A validator enforced ahead of its deploy, which is checking it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Enforcing {
+    pub validator: Validator,
+    pub deployment: Ulid,
+}
+
+impl TableValidation {
+    /// The validators a write must match, with the deployment checking the
+    /// second one.
+    pub fn validators(&self) -> impl Iterator<Item = (&Validator, Option<Ulid>)> {
+        self.validator.iter().map(|v| (v, None)).chain(
+            self.enforcing
+                .iter()
+                .map(|e| (&e.validator, Some(e.deployment))),
+        )
+    }
 }
 
 /// A user index: up to 16 top-level fields, then `_creationTime` and `_id`.
@@ -45,6 +82,44 @@ pub struct IndexDef {
     pub id: IndexId,
     pub name: String,
     pub fields: Vec<String>,
+    pub state: IndexState,
+}
+
+/// Where a user index is in its life (LV1 plan Task 9, design §45 §4.2;
+/// row T9-2). A table may hold a ready index and a backfilling one of the
+/// same name (a deploy that changes the index's fields); a name resolves
+/// to the ready one ([`TableDef::index_named`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IndexState {
+    /// Every write maintains it, and `deployment`'s backfill job writes the
+    /// entries of the documents already there; a query on it is
+    /// [`LiveError::IndexNotReady`]. The swap of `deployment` makes it
+    /// ready.
+    Backfilling { deployment: Ulid },
+    /// Queries read it; every write maintains it.
+    Ready,
+    /// No write maintains it and no query finds it; its entries are being
+    /// deleted, then the definition goes
+    /// ([`drop_indexes`](crate::backfill::drop_indexes)).
+    Dropping,
+}
+
+impl IndexState {
+    /// The name in messages and statuses.
+    pub fn name(self) -> &'static str {
+        match self {
+            IndexState::Backfilling { .. } => "backfilling",
+            IndexState::Ready => "ready",
+            IndexState::Dropping => "dropping",
+        }
+    }
+}
+
+impl IndexDef {
+    /// Whether writes maintain its entries (it is not being dropped).
+    pub fn maintained(&self) -> bool {
+        self.state != IndexState::Dropping
+    }
 }
 
 /// A user index as a schema declares it: a name and its fields.
@@ -55,24 +130,64 @@ pub struct IndexSpec {
 }
 
 impl TableDef {
-    /// The index of this id: `None` for `by_id` (it has no entries) and for
-    /// an unknown id; the built-in `by_creation_time` has no fields.
+    /// The fields of the index of this id: `None` for `by_id` (it has no
+    /// entries), for an unknown id and for an index being dropped; the
+    /// built-in `by_creation_time` has no fields. A query reads the index
+    /// only once it is ready ([`TableDef::readable`]).
     pub fn index_fields(&self, id: IndexId) -> Option<&[String]> {
         if id == IndexId::BY_CREATION_TIME {
             return Some(&[]);
         }
         self.indexes
             .iter()
-            .find(|i| i.id == id)
+            .find(|i| i.id == id && i.maintained())
             .map(|i| i.fields.as_slice())
     }
 
-    /// The id of the index named `name`, built-ins included.
+    /// Refuses a read of index `id` unless it is ready (or built in): a
+    /// backfilling index is [`LiveError::IndexNotReady`], one being dropped
+    /// or unknown [`LiveError::NotFound`].
+    pub fn readable(&self, id: IndexId) -> Result<(), LiveError> {
+        if id == IndexId::BY_ID || id == IndexId::BY_CREATION_TIME {
+            return Ok(());
+        }
+        match self.indexes.iter().find(|i| i.id == id) {
+            Some(i) if i.state == IndexState::Ready => Ok(()),
+            Some(i) if i.maintained() => Err(LiveError::IndexNotReady(format!(
+                "index '{}' of table '{}' is still backfilling; query it once the deploy that \
+                 adds it is active",
+                i.name, self.name
+            ))),
+            _ => Err(LiveError::NotFound(format!(
+                "index {} of table '{}'",
+                id.0, self.name
+            ))),
+        }
+    }
+
+    /// The user index a query naming `name` reads: the ready one of that
+    /// name, else a backfilling one (whose read is then refused); never one
+    /// being dropped.
+    pub fn index_named(&self, name: &str) -> Option<&IndexDef> {
+        let named = || self.indexes.iter().filter(|i| i.name == name);
+        named()
+            .find(|i| i.state == IndexState::Ready)
+            .or_else(|| named().find(|i| i.maintained()))
+    }
+
+    /// The ready user indexes, in definition order (what the active
+    /// deployment's schema declares).
+    pub fn ready_indexes(&self) -> impl Iterator<Item = &IndexDef> {
+        self.indexes.iter().filter(|i| i.state == IndexState::Ready)
+    }
+
+    /// The id of the index named `name`, built-ins included
+    /// ([`index_named`](Self::index_named)).
     pub fn index_id(&self, name: &str) -> Option<IndexId> {
         match name {
             BY_ID => Some(IndexId::BY_ID),
             BY_CREATION_TIME => Some(IndexId::BY_CREATION_TIME),
-            _ => self.indexes.iter().find(|i| i.name == name).map(|i| i.id),
+            _ => self.index_named(name).map(|i| i.id),
         }
     }
 
@@ -85,14 +200,44 @@ impl TableDef {
             indexes: self
                 .indexes
                 .iter()
-                .map(|i| pb::IndexDef {
-                    id: i.id.0,
-                    name: i.name.clone(),
-                    fields: i.fields.clone(),
-                    ..Default::default()
+                .map(|i| {
+                    let (state, deployment) = match i.state {
+                        IndexState::Backfilling { deployment } => (
+                            pb::IndexState::INDEX_STATE_BACKFILLING,
+                            deployment.to_bytes().to_vec(),
+                        ),
+                        IndexState::Ready => (pb::IndexState::INDEX_STATE_READY, Vec::new()),
+                        IndexState::Dropping => (pb::IndexState::INDEX_STATE_DROPPING, Vec::new()),
+                    };
+                    pb::IndexDef {
+                        id: i.id.0,
+                        name: i.name.clone(),
+                        fields: i.fields.clone(),
+                        state: state.into(),
+                        deployment,
+                        ..Default::default()
+                    }
                 })
                 .collect(),
             next_index_id: self.next_index_id,
+            validator: self
+                .validation
+                .validator
+                .as_ref()
+                .map(|v| MessageField::some(v.to_proto()))
+                .unwrap_or_default(),
+            enforcing: self
+                .validation
+                .enforcing
+                .as_ref()
+                .map(|e| {
+                    MessageField::some(pb::EnforcingValidator {
+                        validator: MessageField::some(e.validator.to_proto()),
+                        deployment: e.deployment.to_bytes().to_vec(),
+                        ..Default::default()
+                    })
+                })
+                .unwrap_or_default(),
             ..Default::default()
         }
     }
@@ -111,13 +256,68 @@ impl TableDef {
             indexes: p
                 .indexes
                 .into_iter()
-                .map(|i| IndexDef {
-                    id: IndexId(i.id),
-                    name: i.name,
-                    fields: i.fields,
+                .map(|i| {
+                    let state = match i.state.as_known() {
+                        Some(
+                            pb::IndexState::INDEX_STATE_UNSPECIFIED
+                            | pb::IndexState::INDEX_STATE_READY,
+                        ) => IndexState::Ready,
+                        Some(pb::IndexState::INDEX_STATE_DROPPING) => IndexState::Dropping,
+                        Some(pb::IndexState::INDEX_STATE_BACKFILLING) => {
+                            let deployment: [u8; 16] =
+                                i.deployment.as_slice().try_into().map_err(|_| {
+                                    LiveError::Corrupt(format!(
+                                        "table record: index '{}' backfills for a {}-byte \
+                                         deployment",
+                                        i.name,
+                                        i.deployment.len()
+                                    ))
+                                })?;
+                            IndexState::Backfilling {
+                                deployment: Ulid::from_bytes(deployment),
+                            }
+                        }
+                        None => {
+                            return Err(LiveError::Corrupt(format!(
+                                "table record: index '{}' in an unknown state {:?}",
+                                i.name, i.state
+                            )));
+                        }
+                    };
+                    Ok(IndexDef {
+                        id: IndexId(i.id),
+                        name: i.name,
+                        fields: i.fields,
+                        state,
+                    })
                 })
-                .collect(),
+                .collect::<Result<_, LiveError>>()?,
             next_index_id: p.next_index_id,
+            validation: TableValidation {
+                validator: p.validator.as_option().map(stored_validator).transpose()?,
+                enforcing: p
+                    .enforcing
+                    .as_option()
+                    .map(|e| {
+                        let validator = e.validator.as_option().ok_or_else(|| {
+                            LiveError::Corrupt(
+                                "table record: an enforcing entry with no validator".into(),
+                            )
+                        })?;
+                        let deployment: [u8; 16] =
+                            e.deployment.as_slice().try_into().map_err(|_| {
+                                LiveError::Corrupt(format!(
+                                    "table record: a {}-byte enforcing deployment",
+                                    e.deployment.len()
+                                ))
+                            })?;
+                        Ok::<_, LiveError>(Enforcing {
+                            validator: stored_validator(validator)?,
+                            deployment: Ulid::from_bytes(deployment),
+                        })
+                    })
+                    .transpose()?,
+            },
         })
     }
 
@@ -126,6 +326,11 @@ impl TableDef {
             .map_err(|e| LiveError::Corrupt(format!("table record: {e}")))?;
         TableDef::from_proto(p)
     }
+}
+
+/// A validator read from a stored record.
+fn stored_validator(p: &pb::Validator) -> Result<Validator, LiveError> {
+    Validator::from_proto(p).map_err(|e| LiveError::Corrupt(format!("table record: {e}")))
 }
 
 /// Checks a table or index name: 1 to 64 bytes of ASCII letters, digits and
@@ -223,6 +428,11 @@ pub async fn define_table(
     let Some(mut table) = load_table(txn, app, name).await? else {
         return create_table(txn, app, name, indexes, limits).await;
     };
+    if table.indexes.iter().any(|i| i.state != IndexState::Ready) {
+        return Err(LiveError::FailedPrecondition(format!(
+            "table '{name}' has an index change in progress (a deploy's backfill or drop)"
+        )));
+    }
     let same = table.indexes.len() == indexes.len()
         && table
             .indexes
@@ -260,6 +470,7 @@ pub async fn define_table(
             id,
             name: spec.name.clone(),
             fields: spec.fields.clone(),
+            state: IndexState::Ready,
         });
     }
     table.indexes = defs;
@@ -297,10 +508,12 @@ async fn create_table(
                     id: IndexId(index_id - 1),
                     name: spec.name.clone(),
                     fields: spec.fields.clone(),
+                    state: IndexState::Ready,
                 }
             })
             .collect(),
         next_index_id: index_id,
+        validation: TableValidation::default(),
     };
     txn.put(&counter, next.to_be_bytes().to_vec()).await?;
     txn.put(&app.table_name(name), id.to_be_bytes().to_vec())
@@ -496,6 +709,17 @@ fn app_def(shards: u16) -> Vec<u8> {
         ..Default::default()
     }
     .encode_to_vec()
+}
+
+/// Writes `table`'s record in `txn`.
+pub(crate) async fn put_table(
+    txn: &mut Txn,
+    app: &AppKeys,
+    table: &TableDef,
+) -> Result<(), LiveError> {
+    txn.put(&app.table(table.id), table.to_proto().encode_to_vec())
+        .await?;
+    Ok(())
 }
 
 fn decode_u32(bytes: &[u8], what: &str) -> Result<u32, LiveError> {

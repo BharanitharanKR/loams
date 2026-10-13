@@ -26,7 +26,15 @@ NAME_SUFFIXES = (".rs", ".toml", ".yaml", ".yml", ".json", ".tpl", ".sql", ".pro
 BILLING_WORDS = frozenset(w + s for w in ("plan", "price", "invoice", "credit", "meter",
                                            "billable", "usage") for s in ("", "s"))
 # Names of other crates that only look like billing words.
-ALLOWED_NAMES = frozenset({"FaultPlan"})  # loams-kv's fault injection
+ALLOWED_NAMES = frozenset({
+    "FaultPlan",  # loams-kv's fault injection
+    # X.509 key usage (PG2 Task 10's compute certificates): rcgen's and
+    # x509-parser's own names, not billing.
+    "KeyUsagePurpose", "ExtendedKeyUsagePurpose", "key_usages", "extended_key_usages",
+    "extended_key_usage",
+    # A Postgres GUC name (PG2 Task 11's settable parameters).
+    "plan_cache_mode",
+})
 TOKEN = re.compile(r"[A-Za-z0-9_]+")
 CAMEL = re.compile(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|[0-9]+")
 

@@ -33,6 +33,7 @@
 #include "loams/client.hpp"
 #include "loams/devices/v1/devices.pb.h"
 #include "loams/instance/v1/instance.pb.h"
+#include "loams/live/v1/admin.pb.h"
 #include "loams/live/v1/live.pb.h"
 #include "loams/notifications/v1/notifications.pb.h"
 #include "loams/operations/v1/operations.pb.h"
@@ -131,7 +132,7 @@ class TablesModule {
   void Query(live_v1::QueryRequest* request, live_v1::QueryResponse* response);
   /// `LiveService/Mutate`, through the `tables` name.
   void Mutate(live_v1::MutateRequest* request, live_v1::MutateResponse* response);
-  /// `LiveService/Deploy`, through the `tables` name.
+  /// `LiveAdminService/Deploy` (LV1 Task 10), through the `tables` name.
   void Deploy(live_v1::DeployRequest* request, live_v1::DeployResponse* response);
 
  private:

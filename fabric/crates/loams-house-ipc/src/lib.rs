@@ -47,6 +47,13 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+pub mod policy;
+
+/// Whether this build has the test-only hooks (`test-hooks`): `Frame::Abort`,
+/// `Frame::Probe`, and the worker's `--test-open-acl` (HS1 ruling R-ACL.1), which
+/// a worker built without them refuses as an unknown argument.
+pub const TEST_HOOKS: bool = cfg!(feature = "test-hooks");
+
 /// The protocol's name, for logs and the `Ready` check.
 pub const PROTOCOL_NAME: &str = "hsw1";
 
@@ -272,6 +279,11 @@ pub struct Ready {
     /// tell an unknown setting (`115`) from a known, disallowed one (`164`)
     /// without libchdb (HS1 Task 4).
     pub settings: Vec<String>,
+    /// The loopback endpoint the worker reads the bucket through
+    /// (`--s3-endpoint`, `http://127.0.0.1:9180/` when sealed), which the
+    /// front's read views name (HS1 Task 11); `None` when it reads no bucket
+    /// (an in-process worker).
+    pub s3_endpoint: Option<String>,
 }
 
 /// ClickHouse's class of a statement (`chdb_query_class`).
@@ -370,6 +382,10 @@ pub struct Execute {
     pub input: Option<InputSpec>,
     /// How the result's blocks reach the front (HS1 R8.12).
     pub output: Output,
+    /// The statement's current database (`USE`, the `database` parameter),
+    /// set on its user connection before it runs (HS1 Task 11): unqualified
+    /// names resolve to the read views there. `None` leaves the connection's.
+    pub database: Option<String>,
 }
 
 /// How a result's blocks are written into `Chunk` frames.

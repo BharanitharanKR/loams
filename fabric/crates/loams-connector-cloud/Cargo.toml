@@ -1,0 +1,44 @@
+[package]
+name = "loams-connector-cloud"
+description = "The Loams cloud messaging connector family (CN2 Task 19, OR-6): Amazon SQS, SNS, EventBridge and Kinesis (the Kinesis ★), Google Cloud Pub/Sub and Azure Event Grid, on the connector SDK, over each service's documented HTTP protocol."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+# Every family crate depends on the SDK and its protocol crates only (OR-6).
+# The protocols here are plain HTTPS (AWS JSON 1.0/1.1 and Query, Pub/Sub
+# REST, Event Grid), so every request goes through `sdk::http::client` and
+# its egress check after DNS (CN2 R19.1): no AWS or Google SDK is linked.
+loams-connector-sdk = { path = "../loams-connector-sdk" }
+# The SDK's own async-trait pin (0.1.92 in fabric/Cargo.lock).
+async-trait = "0.1.89"
+# Kinesis record data, Pub/Sub message data, JWT segments, SNS signatures.
+base64.workspace = true
+bytes.workspace = true
+http.workspace = true
+# RSA: SNS message signatures (SHA1withRSA and SHA256withRSA verification)
+# and the RS256 JWT of a Google service account. 0.17.14 is already in
+# fabric/Cargo.lock (rustls). Apache-2.0 AND ISC.
+ring = "0.17.14"
+serde.workspace = true
+serde_json.workspace = true
+# SigV4's canonical-request hashes and HMAC (the HTTP family's RFC 2104
+# implementation, CN2 R7.9), and FIFO deduplication ids that hash a long id.
+sha2.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tracing.workspace = true
+
+[dev-dependencies]
+http-body-util.workspace = true
+# The fake services the unit halves of the tests run against, as the SDK's
+# and the HTTP family's tests use hyper's server.
+hyper = { workspace = true, features = ["server", "http1"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+tokio = { workspace = true, features = ["macros", "net", "rt", "rt-multi-thread", "sync", "time", "test-util"] }
+
+[lints]
+workspace = true

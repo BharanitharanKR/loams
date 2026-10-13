@@ -1,9 +1,188 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/azure-event-hubs.config.json",
-  "title": "Azure Event Hubs instance config (placeholder)",
-  "description": "Placeholder for a Azure Event Hubs instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "Azure Event Hubs connector instance config (loams.flow/v1)",
+  "description": "One Azure Event Hubs connector instance's settings, read by the native Kafka family (`loams_connector_kafka::kafka`, CN2 Task 9, OR-22) through the namespace's Kafka endpoint under the `azure-event-hubs` target profile. The profile's defaults set `security_protocol: sasl_ssl`, SASL `plain` and the username `$ConnectionString`, so an instance gives `brokers` (<namespace>.servicebus.windows.net:9093), `topics` (the event hub), `group_id` (the Event Hubs consumer group) and `sasl.password`. The keys are the Kafka connector's less the schema registry (R9.8). `sasl.password` and `tls.key_pem` hold the **names** of secrets in the namespace's store (D189) and are exactly the manifest's `secrets` list.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "brokers",
+    "topics"
+  ],
+  "properties": {
+    "brokers": {
+      "description": "Bootstrap brokers as host:port, comma separated. Required: there is no default cluster.",
+      "type": "string",
+      "minLength": 1
+    },
+    "topics": {
+      "description": "Topics this instance reads or writes. A route narrows the set further (§33 D355, `source` in a route).",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "group_id_prefix": {
+      "description": "The consumer group, when group_id is not set: without either the group is `loams-<ns>-<instance>`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "group_id": {
+      "description": "The full consumer group id; it wins over group_id_prefix. On Event Hubs this is the Event Hubs consumer group, for example $Default.",
+      "type": "string",
+      "minLength": 1
+    },
+    "enable_idempotence": {
+      "description": "The idempotent producer (enable.idempotence=true with acks=all). It may not be turned off, which is why the manifest declares sink.idempotent: true.",
+      "type": "boolean",
+      "default": true
+    },
+    "acks": {
+      "description": "The producer's acks setting. all is required with the idempotent producer.",
+      "type": "string",
+      "enum": [
+        "all",
+        "-1",
+        "0",
+        "1"
+      ],
+      "default": "all"
+    },
+    "max_poll_records": {
+      "description": "Records per poll at most.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "auto_offset_reset": {
+      "description": "Where a group with no committed offset starts. earliest replays the topic; CN1 defaults to latest so a new instance does not ingest history.",
+      "type": "string",
+      "enum": [
+        "earliest",
+        "latest",
+        "none"
+      ],
+      "default": "latest"
+    },
+    "security_protocol": {
+      "description": "The transport security. Without sasl_* no sasl block is read; with it the sasl block is required.",
+      "type": "string",
+      "enum": [
+        "plaintext",
+        "ssl",
+        "sasl_plaintext",
+        "sasl_ssl"
+      ],
+      "default": "ssl"
+    },
+    "sasl": {
+      "description": "SASL material. The profile's defaults give the mechanism (plain) and the username ($ConnectionString), so an instance names only the password secret.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mechanism": {
+          "description": "The SASL mechanism (the manifest's auth slugs sasl-plain, sasl-scram-256, sasl-scram-512). OAUTHBEARER, and with it aws-msk-iam, is not built (R9.6).",
+          "type": "string",
+          "enum": [
+            "plain",
+            "scram-sha-256",
+            "scram-sha-512"
+          ],
+          "default": "scram-sha-512"
+        },
+        "username": {
+          "description": "The SASL username.",
+          "type": "string",
+          "minLength": 1
+        },
+        "password": {
+          "description": "The **name** of the secret holding the SASL password (the namespace's connection string on Event Hubs), resolved through the secret store (D189).",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      },
+      "required": [
+        "password"
+      ]
+    },
+    "tls": {
+      "description": "TLS material. Present only when security_protocol ends with _ssl or is ssl.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "Whether TLS is on at all.",
+          "type": "boolean",
+          "default": true
+        },
+        "ca_pem": {
+          "description": "The CA bundle that verifies the broker, as PEM.",
+          "type": "string"
+        },
+        "cert_pem": {
+          "description": "The client certificate for mTLS, as PEM (not a secret).",
+          "type": "string"
+        },
+        "key_pem": {
+          "description": "The **name** of the secret holding the client private key for mTLS (PEM), resolved through the secret store (D189).",
+          "type": "string",
+          "writeOnly": true
+        },
+        "verify_full": {
+          "description": "Whether the broker certificate's hostname is verified.",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "delivery": {
+      "description": "The sink's delivery. The azure-event-hubs profile narrows sink.transactional (no Kafka transactions on Event Hubs, R0.19), so only effectively_once, the idempotent producer, is accepted; the factory refuses exactly_once.",
+      "type": "string",
+      "enum": [
+        "effectively_once"
+      ],
+      "default": "effectively_once"
+    },
+    "checkpoint_topic": {
+      "description": "The compacted topic the transactional sink keeps its checkpoint in (key <ns>/<instance>/<split>). Unused on Event Hubs, which has no transactional sink.",
+      "type": "string",
+      "minLength": 1,
+      "default": "__loams_checkpoints"
+    },
+    "create_checkpoint_topic": {
+      "description": "Create checkpoint_topic (compacted, one partition) when it is missing. Unused on Event Hubs, which has no transactional sink.",
+      "type": "boolean",
+      "default": true
+    },
+    "max_record_bytes": {
+      "description": "The largest record the sink writes (message.max.bytes); a larger event goes to the DLQ as poison.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 1000000
+    },
+    "transaction_timeout_ms": {
+      "description": "transaction.timeout.ms of the transactional producer. Unused on Event Hubs, which has no transactional sink.",
+      "type": "integer",
+      "minimum": 1000,
+      "default": 60000
+    },
+    "recover_timeout_ms": {
+      "description": "How long the transactional sink's recovery may read checkpoint_topic. Unused on Event Hubs, which has no transactional sink.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 60000
+    },
+    "poll_wait_ms": {
+      "description": "How long the source waits for a first record before it reports nothing.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 100
+    },
+    "pipeline": {
+      "description": "The connector SDK's per-instance pipeline overrides (max_batch_rows, max_batch_bytes, linger_ms, max_in_flight_batches, memory_budget_bytes, checkpoint_interval_ms, retry).",
+      "type": "object"
+    }
+  }
 }

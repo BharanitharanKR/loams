@@ -9,7 +9,18 @@
             "Name": "loams-conformance",
             "PartitionCount": "2",
             "ConsumerGroups": [
-              { "Name": "flow-conformance" }
+              {
+                "Name": "flow-conformance"
+              }
+            ]
+          },
+          {
+            "Name": "eh1",
+            "PartitionCount": 2,
+            "ConsumerGroups": [
+              {
+                "Name": "cg1"
+              }
             ]
           }
         ]

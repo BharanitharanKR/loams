@@ -2,6 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
 import { protocol, type Session } from "electron";
 import type { EngineState, ServerEntry } from "../../shared/contracts";
+import { upstream } from "./inflight";
 import { isProxied, proxyRequest } from "./proxy";
 import { routeRequest } from "./route";
 import { ensureCspMeta, resolveStatic } from "./static";
@@ -89,7 +90,8 @@ export function installAppProtocol(ses: Session, deps: AppProtocolDeps): void {
 				return await proxyRequest(
 					req,
 					route.target,
-					(r) => ses.fetch(r as Request),
+					(r) =>
+						upstream.run((signal) => ses.fetch(r as Request, { signal })),
 					route.pathname,
 				);
 			} catch (e) {

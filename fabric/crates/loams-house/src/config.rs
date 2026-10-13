@@ -220,8 +220,8 @@ impl std::str::FromStr for WorkersMode {
     }
 }
 
-/// The catalog of record (`--catalog=rest:<url>|local:<path>`; HS1 Task 10 uses
-/// it).
+/// The catalog of record (`--catalog=rest:<url>?warehouse=<name>|local:<path>`;
+/// HS1 Task 10).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CatalogSpec {
     /// An Iceberg REST catalog (Lakekeeper in production).

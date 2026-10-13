@@ -3,9 +3,11 @@
 //! One [`Auth`] guards every HTTP surface the engine serves to the network:
 //! the main port (Connect, gRPC, gRPC-Web, the native REST and the House
 //! proxy), the Qdrant REST and gRPC gateways, the Elasticsearch gateway and
-//! Flight SQL. The wire protocols (PostgreSQL, MySQL, native stream gRPC,
-//! Live, durable) already refuse any address but loopback, and the SQL gate
-//! has its own users; none of them is reachable from a tailnet.
+//! Flight SQL, and Loams Live's own listener (`LiveService` and
+//! `LiveAdminService`, LV1 plan Task 10). The wire protocols (PostgreSQL,
+//! MySQL, native stream gRPC, durable) already refuse any address but
+//! loopback, and the SQL gate has its own users; none of them is reachable
+//! from a tailnet.
 //!
 //! The mode comes from `LOAMS_AUTH_MODE` ([`AuthConfig::from_env`]):
 //!

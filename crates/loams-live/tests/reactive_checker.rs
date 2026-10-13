@@ -188,13 +188,13 @@ async fn reactive_checker_reports_unwired_disturbances(store: TestStore) {
         sessions: 1,
         tables: 1,
         ops: 20,
-        disturb: vec![Disturbance::AddIndex { at_op: 5 }],
+        disturb: vec![Disturbance::IdentityChange { at_op: 5 }],
     };
     let report = run_reactive_checker(store.fresh_root().await.store(), w).await;
     let kinds: Vec<ViolationKind> = report.violations.iter().map(|v| v.kind).collect();
     assert_eq!(kinds, [ViolationKind::Unwired], "{:?}", report.violations);
     assert!(
-        report.violations[0].detail.contains("Task 9"),
+        report.violations[0].detail.contains("Task 17"),
         "{:?}",
         report.violations
     );

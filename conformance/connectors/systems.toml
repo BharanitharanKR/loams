@@ -131,9 +131,14 @@ services = [
 ]
 
 [systems.redis-streams]
-systems = ["Redis"]
+systems = ["Redis", "Valkey"]
 family = "kv"
-services = [{ kind = "container", compose = "redis", system = "Redis" }]
+services = [
+  { kind = "container", compose = "valkey", system = "Valkey" },
+  { kind = "container", compose = "redis", system = "Redis" },
+]
+harness = "loams_connector_kv::harness::redis::Streams"
+notes = ["Run against Valkey 8 (connectors-p2) and Redis 8 (connectors-ci-only, OR-3), one harness each (CN2 Task 14)."]
 
 [systems.websocket]
 systems = ["WebSocket"]
@@ -168,10 +173,21 @@ family = "fallback"
 services = [{ kind = "container", compose = "oracle", system = "Oracle Database" }]
 notes = ["Oracle batch and upsert run on the Camel fallback until Task 23 (OR-4)."]
 
+# PostgreSQL is a ★ (P1) row; CN2 Task 10 builds its native connector
+# directly on the SDK (R0.2), so it gains its entry here rather than in
+# Task 8 (R10.9). The open `pgvector/pgvector` image is PostgreSQL 17 with
+# one extension, and stands for plain PostgreSQL too.
+[systems.postgresql]
+systems = ["PostgreSQL"]
+family = "postgres"
+services = [{ kind = "container", compose = "pgvector", system = "PostgreSQL" }]
+harness = "loams_connector_postgres::harness::PgHarness"
+
 [systems.cockroachdb]
 systems = ["CockroachDB"]
 family = "postgres"
 services = [{ kind = "container", compose = "cockroachdb", system = "CockroachDB" }]
+harness = "loams_connector_postgres::harness::PgHarness"
 
 [systems.aurora]
 systems = ["Amazon Aurora"]
@@ -184,6 +200,7 @@ extra_targets = [
   { kind = "container", compose = "mysql", system = "MySQL" },
 ]
 notes = ["Aurora has no image: PostgreSQL and MySQL are extra targets in PR CI, never the system under test."]
+harness = "loams_connector_postgres::harness::PgHarness"
 
 [systems.azure-sql]
 systems = ["Azure SQL Database"]
@@ -210,6 +227,7 @@ harness = "loams_connector_mongodb::conformance::MongoHarness"
 systems = ["Apache Cassandra"]
 family = "kv"
 services = [{ kind = "container", compose = "cassandra", system = "Apache Cassandra" }]
+harness = "loams_connector_kv::harness::cassandra::Cassandra"
 
 [systems.dynamodb]
 systems = ["Amazon DynamoDB"]
@@ -218,21 +236,41 @@ services = [
   { kind = "emulator", compose = "floci", system = "Amazon DynamoDB", vendor = "floci" },
   { kind = "nightly", env = ["LOAMS_AWS_ACCESS_KEY_ID", "LOAMS_AWS_SECRET_ACCESS_KEY", "LOAMS_AWS_REGION"], system = "Amazon DynamoDB" },
 ]
+harness = "loams_connector_kv::harness::dynamodb::DynamoDb"
 
 [systems.valkey]
 systems = ["Valkey"]
 family = "kv"
 services = [{ kind = "container", compose = "valkey", system = "Valkey" }]
+harness = "loams_connector_kv::harness::redis::ValkeyKeys"
 
 # ---------------------------------------------------------- search, vector --
+
+# Elasticsearch is ★ (P1) and moves to the native search family in CN2 Task 15
+# (OR-8), so it gains its entry here with that task rather than with Task 8.
+# Its image is a `ci-service` (AGPL-3.0 / SSPL / Elastic-2.0, OR-3).
+[systems.elasticsearch]
+systems = ["Elasticsearch"]
+family = "search"
+services = [{ kind = "container", compose = "elasticsearch", system = "Elasticsearch" }]
+extra_targets = [
+  { kind = "container", compose = "loams-collections", system = "Loams collections (Elasticsearch API)" },
+]
+harness = "loams_connector_search::conformance::SearchHarness"
 
 [systems.opensearch]
 systems = ["OpenSearch"]
 family = "search"
-services = [{ kind = "container", compose = "opensearch", system = "OpenSearch" }]
+services = [
+  { kind = "container", compose = "opensearch", system = "OpenSearch" },
+  # Amazon OpenSearch Service with SigV4 (`iam`), CN2 Task 15's
+  # opensearch_sigv4_nightly.
+  { kind = "nightly", env = ["LOAMS_AMAZON_OPENSEARCH_URL", "LOAMS_AWS_ACCESS_KEY_ID", "LOAMS_AWS_SECRET_ACCESS_KEY", "LOAMS_AWS_REGION"], system = "OpenSearch" },
+]
 extra_targets = [
   { kind = "container", compose = "loams-collections", system = "Loams collections (Elasticsearch API)" },
 ]
+harness = "loams_connector_search::conformance::SearchHarness"
 
 [systems.qdrant]
 systems = ["Qdrant"]
@@ -241,12 +279,14 @@ services = [{ kind = "container", compose = "qdrant", system = "Qdrant" }]
 extra_targets = [
   { kind = "container", compose = "loams-collections", system = "Loams collections (Qdrant API)" },
 ]
+harness = "loams_connector_search::conformance::SearchHarness"
 
 [systems.pgvector]
 systems = ["pgvector"]
 family = "postgres"
 services = [{ kind = "container", compose = "pgvector", system = "pgvector" }]
 extra_targets = [{ kind = "container", compose = "loams-postgres", system = "Loams Postgres" }]
+harness = "loams_connector_postgres::harness::PgHarness"
 
 # -------------------------------------------------------------------- graph --
 
@@ -365,14 +405,17 @@ services = [
 
 # ---------------------------------------------------------------------- cdc --
 
-[systems.debezium-sql-server-oracle]
-systems = ["SQL Server", "Oracle Database"]
+# Task 2 split `debezium-sql-server-oracle` into these two rows (OR-13); each
+# keeps its own container (merged with Task 6's estate in Task 20's branch).
+[systems.debezium-sqlserver]
+systems = ["SQL Server"]
 family = "fallback"
-services = [
-  { kind = "container", compose = "sqlserver", system = "SQL Server" },
-  { kind = "container", compose = "oracle", system = "Oracle Database" },
-]
-notes = ["Task 2 splits this row into debezium-sqlserver and debezium-oracle (OR-13); each keeps its own container."]
+services = [{ kind = "container", compose = "sqlserver", system = "SQL Server" }]
+
+[systems.debezium-oracle]
+systems = ["Oracle Database"]
+family = "fallback"
+services = [{ kind = "container", compose = "oracle", system = "Oracle Database" }]
 
 [systems.debezium-mongodb]
 systems = ["MongoDB"]
@@ -386,6 +429,7 @@ services = [
   { kind = "emulator", compose = "floci", system = "Amazon DynamoDB Streams", vendor = "floci" },
   { kind = "nightly", env = ["LOAMS_AWS_ACCESS_KEY_ID", "LOAMS_AWS_SECRET_ACCESS_KEY", "LOAMS_AWS_REGION"], system = "Amazon DynamoDB Streams" },
 ]
+harness = "loams_connector_kv::harness::dynamodb::DynamoDbStreams"
 
 # --------------------------------------------------------- integration, saas --
 

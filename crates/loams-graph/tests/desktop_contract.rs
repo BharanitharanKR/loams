@@ -403,12 +403,12 @@ async fn syntax_error_has_position() {
     }
 }
 
-/// Canary (Grafeo 0.5.43): in a result with ORDER BY, a relationship variable is answered as
-/// `INT64 0` instead of the relationship, so `execute_graph.json` has no ORDER BY. When this fails,
-/// the engine answers relationships in ordered results: add `ORDER BY a.name` to that fixture's
-/// statement, regenerate it, and delete this test.
+/// R7.6, fixed by the fork's LG-0003: Grafeo 0.5.43 answered a relationship variable as `INT64 0`
+/// in a result with ORDER BY on a property the RETURN does not project. Ordered or not, the
+/// relationships now come back as relationships, in the order asked for. (`execute_graph.json`
+/// still has no ORDER BY; it could take `ORDER BY a.name` now.)
 #[tokio::test]
-async fn canary_order_by_answers_a_relationship_as_zero() {
+async fn order_by_answers_relationships() {
     use pb::__buffa::oneof::value::Kind;
     let fixture = Fixture::start().await;
     let admin = seeded(&fixture).await;
@@ -421,34 +421,35 @@ async fn canary_order_by_answers_a_relationship_as_zero() {
             ..Default::default()
         })
     };
-    let kinds = |response: pb::ExecuteResponse| -> Vec<Option<Kind>> {
+    let column = |response: &pb::ExecuteResponse, index: usize| -> Vec<Option<Kind>> {
         let rows = response.rows.as_option().expect("rows").rows.clone();
         rows.into_iter()
-            .map(|row| row.values[0].kind.clone())
+            .map(|row| row.values[index].kind.clone())
             .collect()
     };
-    let unordered = kinds(
-        run("MATCH (a:Person)-[r:ACTED_IN]->(m:Movie) RETURN r")
-            .await
-            .expect("unordered"),
-    );
-    assert_eq!(unordered.len(), 3);
+    // Unordered, with the actor's name: the expected order, by name.
+    let unordered = run("MATCH (a:Person)-[r:ACTED_IN]->(m:Movie) RETURN a.name, r")
+        .await
+        .expect("unordered");
+    let mut by_name: Vec<(String, Option<Kind>)> = column(&unordered, 0)
+        .into_iter()
+        .zip(column(&unordered, 1))
+        .map(|(name, r)| match name {
+            Some(Kind::String(name)) => (name, r),
+            other => panic!("a name: {other:?}"),
+        })
+        .collect();
+    by_name.sort_by(|a, b| a.0.cmp(&b.0));
+    let expected: Vec<Option<Kind>> = by_name.into_iter().map(|(_, r)| r).collect();
+    assert_eq!(expected.len(), 3);
     assert!(
-        unordered
+        expected
             .iter()
             .all(|kind| matches!(kind, Some(Kind::Relationship(_)))),
-        "{unordered:?}"
+        "{expected:?}"
     );
-    let ordered = kinds(
-        run("MATCH (a:Person)-[r:ACTED_IN]->(m:Movie) RETURN r ORDER BY a.name")
-            .await
-            .expect("ordered"),
-    );
-    assert_eq!(ordered.len(), 3);
-    assert!(
-        ordered
-            .iter()
-            .all(|kind| matches!(kind, Some(Kind::Int64(0)))),
-        "Grafeo now answers relationships in ordered results; see this test's doc: {ordered:?}"
-    );
+    let ordered = run("MATCH (a:Person)-[r:ACTED_IN]->(m:Movie) RETURN r ORDER BY a.name")
+        .await
+        .expect("ordered");
+    assert_eq!(column(&ordered, 0), expected);
 }
