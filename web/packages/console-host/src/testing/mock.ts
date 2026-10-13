@@ -127,11 +127,12 @@ export function createMockControl(options: MockOptions = {}): MockControl {
     service(instance.InstanceService, {
       getInstance: () => ({
         instanceId: '01J9Z3MOCKINSTANCE00000000',
-        name: 'Loams (in-browser mock)',
+        name: 'Demo instance',
         edition: instance.Edition.OSS,
-        serverVersion: '0.0.1',
+        serverVersion: '0.1.0-preview.1',
         apiVersions,
-        features: { billing: false, ...options.features },
+        // `demo` tells the pages they show built-in sample data, not a server's.
+        features: { billing: false, demo: true, ...options.features },
         signInMethods: [{ kind: instance.SignInKind.NONE }],
       }),
       whoAmI: () => ({

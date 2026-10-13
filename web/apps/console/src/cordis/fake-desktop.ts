@@ -1,5 +1,5 @@
 // DEV ONLY: an in-browser fake of the Electron preload's `LoamsDesktopApi`,
-// so the desktop edition can be previewed at `/ui/cordis.html?desktop`
+// so the desktop edition can be previewed at `<base>cordis.html?desktop`
 // (main.tsx loads this behind `import.meta.env.DEV`; it must never reach a
 // production bundle, and main.test.ts checks the guard).
 //
@@ -50,7 +50,10 @@ function previewCatalog() {
   const load = Object.values(catalogFiles)[0];
   if (!load) {
     return Promise.reject(
-      new Error('connectors.json is missing: run `pnpm --filter @loams/desktop catalog`.'),
+      new Error(
+        'The connector catalog is not built in this preview. The dev server builds it on ' +
+          'start; if that failed, run `pnpm --filter @loams/desktop catalog` and reload.',
+      ),
     );
   }
   catalogJson ??= load();
@@ -319,7 +322,7 @@ export function createFakeDesktop(): LoamsDesktopApi {
   const later = (ms: number, fn: () => void) => globalThis.setTimeout(fn, ms);
 
   return {
-    version: '0.1.0-preview',
+    version: '0.1.0-preview.1',
     platform: 'linux',
     servers: {
       list: async () => ({ servers: [...data.servers], activeId: data.activeId }),
