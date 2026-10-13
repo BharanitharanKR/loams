@@ -3,7 +3,7 @@
 Status: **preview**, v0.1.0-preview.2 (the second preview; v0.1.0-preview.1 was published
 2026-10-12). What changed since preview.1 is in [What is new in preview.2](#what-is-new-in-preview2)
 and the [changelog](../../CHANGELOG.md). Everything listed as
-**Preview** in the [README's feature table](../../README.md#features) ships in this release.
+**Preview** in the [feature status table](#feature-status) ships in this release.
 Preview means built, tested in CI and usable, but not production ready: APIs, on-disk formats,
 flags and image layouts can still change without a migration path, and parts of the security
 model are not hardened yet (see [Security model](#security-model)).
@@ -134,6 +134,47 @@ flowchart LR
    not resolve and nothing answers.
 4. In `oidc` mode the engine verifies the token against the issuer's JWKS (fetched outbound,
    cached). The auth service never connects to your stack, and never sees your data.
+
+## Feature status
+
+**Preview** means it ships in the v0.1.0-preview.2 images and is built and tested in CI, but it is not production ready: APIs, formats and flags can still change between previews. **In progress** and **Planned** do not ship in v0.1.0-preview.2. Statuses describe the code on `dev`; check the source ref you deploy.
+
+| Feature | What you get | Status |
+|---|---|---|
+| Collections | Documents with a schema, stored as Lance (vectors, columns) plus Tantivy (full text) under one manifest; upserts and deletes by id | Preview |
+| Hybrid retrieval | Vector kNN, BM25 and filters fused with RRF in one query; SQL table functions `vector_search`, `text_search` and `rrf` | Preview |
+| Native REST API | Namespaces, streams, collections, links, hybrid query and SQL | Preview |
+| Arrow Flight SQL | SQL and Arrow results for any language with an ADBC or Flight SQL driver | Preview |
+| Qdrant API | Qdrant REST and gRPC, tested with `qdrant-client` 1.15 and 1.19 | Preview |
+| Elasticsearch subset | Document APIs, `_bulk`, `_search` with the core Query DSL, `knn`, hybrid and RRF, tested with `elasticsearch-py` 8.19 | Preview |
+| Streams and links | Partitioned streams with a native produce and fetch API; links apply streams to targets exactly once | Preview |
+| Hot tier | HNSW vector artifacts and pinned text splits in RAM and NVMe, with delta indexes for fresh writes | Preview |
+| Pinned scans | Read a collection's pinned Lance version directly with pylance, Ray, Polars or PyTorch | Preview |
+| Cluster mode | `loams cluster` with roles, rendezvous placement, read forwarding and write backpressure | Preview |
+| TiKV metastore | The catalog, leases and timestamp oracle on TiKV (`--meta tikv://…`, cargo feature `tikv`) | Preview |
+| Loams Durable | An embedded Resonate server: durable promises and tasks on SQLite (cargo feature `durable`) | Preview |
+| Durable store on TiKV | Durable execution state on TiKV for clusters | In progress |
+| Loams Live | A reactive document database: transactions, indexes, live queries and a TypeScript SDK, on an embedded store or on TiKV (`live-tikv`) | Preview. Deploys, rollback, validators and online index changes through `LiveAdminService` on the Live listener (loopback only in the compose stack). Cross-node pickup can take up to 60 s |
+| Loams Graph | `loams.graph.v1` on the main port, GQL on Grafeo (cargo feature `graph`) | Preview. Writes reach the Loams log before they are acknowledged, with a fenced single owner per graph, snapshots in the bucket and crash recovery (GR1 Tasks 11 to 14), on Loams' Grafeo fork |
+| Loams House | ClickHouse-compatible analytics on chDB in `loams-fabric`, with `loams.house.v1` proxied by the engine | Preview. `--profile house` serves its ClickHouse HTTP interface on your tailnet through its own sidecar, with chDB access control, statement checks and sealed workers. Not wired to the engine yet (the engine answers `house_not_configured`); `INSERT` into House tables arrives with HS1 Task 12 |
+| Loams SQL | MySQL-compatible SQL on a patched TiDB (`v8.5.8-loams.1`) over TiKV | Preview |
+| Loams Postgres | A fork of Neon whose storage lives on the bucket; the compose stack runs its storage and computes | Preview. The compose stack runs its storage and computes. The control plane provisions computes and endpoints (PG2 Tasks 1 to 12), but `pg-control` is not in the release images yet |
+| Postgres and MySQL wire | SQL over the Postgres and MySQL wire protocols, over collections | Preview |
+| Streaming gRPC API | Idempotent produce and streaming subscribe over gRPC | Preview |
+| Web console | The React console, hosted at `console.loams.dev`. Your own Vercel or Cloudflare deployment is coming soon | Preview. Several pages still use mocked clients; House and Analytics are not wired to the engine |
+| Engine auth | Tailscale identity (default), OIDC (JWTs checked against the issuer's JWKS), hashed API keys, or loopback-only (`LOAMS_AUTH_MODE`) | Preview |
+| Loams Git | Git on the bucket: a WAL, ref log, checkpoints, O(1) forks and GC, and `loams.repos.v1`'s repository catalog (cargo feature `git`) | In progress. No push or fetch path yet; not in the release images |
+| First-party connectors | Native source and sink connectors (Kafka family, Postgres CDC, object storage, key-value, search, brokers, cloud queues, HTTP APIs) on `loams-connector-sdk` | In progress. Not in the release images |
+| Self-hosting with Docker Compose | The whole stack in `deploy/release/compose.yaml`, reachable only over your Tailscale tailnet, locally or on your VMs with `byoc/install.sh` over SSH | Preview. Headscale is coming soon |
+| Graph expansion | GraphRAG expansion of 1 to 2 hops, planned together with the retrieval query | Planned |
+| Iceberg analytics | Iceberg tables through a REST catalog, readable by DuckDB, Spark, Trino and ClickHouse | Planned |
+| Kafka wire and OTLP | Kafka clients and OpenTelemetry logs ingest into streams | Planned |
+| Authorization and tenancy | Roles, per-namespace authorization, tenant quotas and a namespace router | Planned |
+| Native SDKs | Multi-language clients, generated API bindings, and shared runtime conformance fixtures; packages are not a stable published release | In progress |
+| MCP and analytics helpers | Agent tools and convenience integrations such as `to_arrow()` and `to_polars()` | Planned |
+| Loams Functions | A CPU-time serverless runtime on workerd, wasmtime and gVisor, with a Rust Dapr-style API | Planned |
+| Loams Jobs | Celery, BullMQ v6, PySpark (through Sail) and Flink SQL (through RisingWave) jobs run durably on Loams | Planned |
+| Self-hosting with GitOps | A Helm chart, a Kubernetes operator and Argo CD layouts | Planned |
 
 ## What is in the stack
 

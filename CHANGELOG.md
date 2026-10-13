@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [0.1.0-preview.2] - unreleased
 
-The second preview. Everything marked **Preview** in the [README's feature table](README.md#features)
+The second preview. Everything marked **Preview** in the [feature status table](docs/release/preview.md#feature-status)
 ships in it, built from `dev` with the work held back from preview.1 merged. Same shape as
 preview.1: you run the stack with Docker Compose over your own Tailscale tailnet and use the
 hosted console. Images are tagged `0.1.0-preview.2` and the rolling `:preview` (never
@@ -86,7 +86,7 @@ stack (`docker compose down -v`) rather than reusing preview.1 volumes. Start wi
 ## [0.1.0-preview.1] - 2026-10-12
 
 The first release of Loams, v0.1.0-preview.1, published as a **preview**: usable, tested in CI, not production
-ready. Everything marked **Preview** in the [README's feature table](README.md#features) ships in
+ready. Everything marked **Preview** in the [feature status table](docs/release/preview.md#feature-status) ships in
 it, and formats, APIs and flags can still change before the next preview. The entries after
 the known limitations, recorded before the preview was cut, are part of it too. Start with
 [`docs/release/preview.md`](docs/release/preview.md).
