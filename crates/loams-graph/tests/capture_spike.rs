@@ -9,7 +9,9 @@
 //! `pinned_epoch_survives_gc`). The rulings these answer are R9.1–R9.8 in the GR1 plan.
 //!
 //! Tests whose name starts with `canary_` pin an engine gap: they fail when Grafeo fixes it, and
-//! the failure message says which ruling to revisit.
+//! the failure message says which ruling to revisit. Loams builds Grafeo from its fork
+//! (`ostrium-labs/grafeo`, patch queue in its PATCHES.md); a test that names a patch (`LG-nnnn`)
+//! pins what that patch fixed.
 //!
 //! These are measurements of the build Loams ships, so they do not run with the spike-only
 //! `grafeo-temporal` feature; `tests/capture_spike_temporal.rs` holds what that feature changes.
@@ -22,7 +24,7 @@ use std::sync::{Arc, Barrier, Mutex};
 use grafeo::{Config, GrafeoDB, Role, Session, Value};
 use grafeo_common::types::EpochId;
 use loams_graph::Access;
-use loams_graph::changeset::capture::{CdcCapture, ChangeCapture};
+use loams_graph::changeset::capture::{CdcCapture, ChangeCapture, CommitEvents};
 use loams_graph::changeset::{ChangeOp, ElementKind, PropMap, apply_to_store};
 use loams_graph::classify::engine_classify;
 use proptest::prelude::*;
@@ -164,6 +166,10 @@ enum Outcome {
 /// One write transaction the way GR1 Task 11's lane runs it (§48 §6.2 steps 1–5): begin, run the
 /// statements, `prepare_commit().commit()`, then capture at the epoch that returns. The caller
 /// serialises calls (R0.5), so that epoch is the transaction's own.
+///
+/// The lane captures from the events the engine hands its commit listener (LG-0001,
+/// [`CommitEvents`]); this captures both ways and checks that the listener's epoch is the commit's
+/// and that both captures agree, so every workload below also tests the lane's path.
 fn run_txn(
     db: &GrafeoDB,
     capture: &CdcCapture<'_>,
@@ -172,6 +178,8 @@ fn run_txn(
 ) -> Outcome {
     let mut session = db.session();
     capture.begin(&mut session);
+    let listened = CommitEvents::default();
+    listened.listen(&session);
     session.begin_transaction().expect("begin");
     for statement in statements {
         if session.execute(statement).is_err() {
@@ -190,9 +198,18 @@ fn run_txn(
         .expect("prepare")
         .commit()
         .expect("commit");
+    let (listened_epoch, events) = listened.take().expect("the listener saw the commit");
+    assert_eq!(listened_epoch, epoch.as_u64(), "the listener's epoch");
+    let from_listener = capture.capture_events(events).map(|captured| captured.ops);
     match capture.take(epoch.as_u64()) {
-        Ok(ops) => Outcome::Committed(epoch.as_u64(), ops),
-        Err(_) => Outcome::Refused,
+        Ok(ops) => {
+            assert_eq!(from_listener.as_ref().ok(), Some(&ops), "listener vs log");
+            Outcome::Committed(epoch.as_u64(), ops)
+        }
+        Err(_) => {
+            assert!(from_listener.is_err(), "listener vs log: {from_listener:?}");
+            Outcome::Refused
+        }
     }
 }
 
@@ -505,15 +522,28 @@ fn replay_does_not_carry_the_engine_epoch() {
         false,
     ));
     assert_eq!(epoch, 1, "the fresh engine's epochs restart");
+
+    // Unless the replay carries it: `GrafeoDB::sync_epoch` (LG-0006) moves the rebuilt engine to
+    // the log's last commit epoch, and its next commit follows it.
+    let carried = rebuild(&log);
+    carried.sync_epoch(EpochId::new(5)).expect("sync the epoch");
+    let carried_capture = CdcCapture::new(&carried).expect("CDC is on");
+    let (epoch, _) = committed(run_txn(
+        &carried,
+        &carried_capture,
+        &["INSERT (:P {k: 9})".to_string()],
+        false,
+    ));
+    assert_eq!(epoch, 6, "the carried engine continues the log's epochs");
 }
 
-/// Measured (R9.8): Grafeo 0.5.43 commits a dangling edge when a transaction inserts an edge and
-/// then `DETACH DELETE`s a node that existed before it: the node goes, the new edge stays, and no
-/// event says the edge was deleted. The capture refuses such a commit, and the graph rebuilt from
-/// the log is the graph before it. A second shape of the same bug: when the node is new too, the
-/// `DETACH DELETE` deletes nothing. Fails when Grafeo fixes either (revisit R9.8).
+/// R9.8, fixed by the fork's LG-0004: Grafeo 0.5.43 committed a dangling edge when a transaction
+/// inserted an edge and then `DETACH DELETE`d a node that existed before it (the node went, the new
+/// edge stayed), and deleted nothing when the node was new too. With the patch `DETACH DELETE`
+/// takes the transaction's own edges: the commit captures cleanly, and the graph rebuilt from the
+/// log equals the engine. (The capture still refuses a dangling edge, as a guard.)
 #[test]
-fn canary_detach_delete_leaves_a_dangling_edge() {
+fn detach_delete_takes_the_transactions_own_edges() {
     let db = cdc_db();
     let capture = CdcCapture::new(&db).expect("CDC is on");
     let seed = committed(run_txn(
@@ -526,27 +556,20 @@ fn canary_detach_delete_leaves_a_dangling_edge() {
         "MATCH (a {k: 1}), (b {k: 2}) INSERT (a)-[:R]->(b)".to_string(),
         "MATCH (n {k: 2}) DETACH DELETE n".to_string(),
     ];
-    assert!(
-        matches!(run_txn(&db, &capture, &statements, false), Outcome::Refused),
-        "the dangling-edge commit is no longer produced: revisit R9.8"
-    );
+    let detached = committed(run_txn(&db, &capture, &statements, false));
+    // The edge was created and deleted by the same commit, so only the node's delete is logged.
+    assert_eq!(detached.1, vec![ChangeOp::DeleteNode { id: 1 }]);
     let engine = dump(&db);
-    assert_eq!(engine.nodes.len(), 1, "node k = 2 is gone in the engine");
+    assert_eq!((engine.nodes.len(), engine.edges.len()), (1, 0));
     assert_eq!(
-        engine.edges.values().next().map(|(_, _, dst, _)| *dst),
-        Some(1),
-        "its edge is not"
-    );
-    let rebuilt = dump(&rebuild(&[seed]));
-    assert_eq!(
-        (rebuilt.nodes.len(), rebuilt.edges.len()),
-        (2, 0),
-        "the log has the graph before it"
+        dump(&rebuild(&[seed, detached])),
+        engine,
+        "the log rebuilds it"
     );
 
     let db = cdc_db();
     let capture = CdcCapture::new(&db).expect("CDC is on");
-    let (_, ops) = committed(run_txn(
+    let created = committed(run_txn(
         &db,
         &capture,
         &[
@@ -555,11 +578,13 @@ fn canary_detach_delete_leaves_a_dangling_edge() {
         ],
         false,
     ));
+    let engine = dump(&db);
     assert_eq!(
-        (dump(&db).nodes.len(), ops.len()),
-        (2, 3),
-        "DETACH DELETE of a node created in the same transaction now deletes: revisit R9.8"
+        (engine.nodes.len(), engine.edges.len(), created.1.len()),
+        (1, 0, 1),
+        "DETACH DELETE of a node created in the same transaction deletes it and its edge"
     );
+    assert_eq!(dump(&rebuild(&[created])), engine);
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -1756,16 +1756,14 @@ mod admin {
         assert!(schema.labels.is_empty(), "{schema:?}");
     }
 
-    /// Canary for upstream Q679 (R0.8, R5.8): Grafeo's `query_timeout` does not apply to a
-    /// statement with parameters (`execute_with_params` has no deadline), so a parameterised
-    /// statement streaming rows runs past it while the same statement without parameters is
-    /// stopped. When this fails, Grafeo bounds the parameterised path: route every statement
-    /// through it again and drop `run_on_session`'s split.
+    /// Grafeo's `query_timeout` stops a statement with parameters as it stops one without (R0.8,
+    /// R5.8; upstream 0.5.43 ran `execute_with_params` with no deadline, fixed by the fork's
+    /// LG-0002), so both of `run_on_session`'s paths have the engine backstop.
     ///
     /// Run on the engine directly: through `GraphAdmin`, Loams's own deadline (Task 6) would
     /// answer both at the same 20 ms and hide what the engine does.
     #[test]
-    fn canary_query_timeout_does_not_stop_a_parameterised_statement() {
+    fn query_timeout_stops_a_parameterised_statement() {
         let engine = Engine::new().with_query_timeout(Some(Duration::from_millis(20)));
         let graph =
             loams_graph::Graph::open(&engine, "acme", "kg", loams_graph::OpenSpec::default())
@@ -1780,19 +1778,13 @@ mod admin {
             )
             .expect_err("unparameterised: stopped");
         assert_eq!(err.reason(), "graph_statement_timeout", "{err:?}");
-        let started = std::time::Instant::now();
-        let answer = graph
+        let err = graph
             .execute_with_params(
                 "MATCH (a:T), (b:T), (c:T) WHERE a.i > $min RETURN a.i, b.i, c.i",
                 [("min".to_string(), grafeo::Value::Int64(-1))].into(),
                 true,
             )
-            .expect("parameterised: not stopped by query_timeout (Q679 still open)");
-        assert_eq!(answer.rows.len(), 80 * 80 * 80);
-        assert!(
-            started.elapsed() > Duration::from_millis(20),
-            "{:?}",
-            started.elapsed()
-        );
+            .expect_err("parameterised: stopped too (LG-0002)");
+        assert_eq!(err.reason(), "graph_statement_timeout", "{err:?}");
     }
 }
