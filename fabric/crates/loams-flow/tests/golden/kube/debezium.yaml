@@ -1,0 +1,229 @@
+---
+apiVersion: v1
+data:
+  erp-cdc.application.properties: |
+    debezium.source.connector.class=io.debezium.connector.oracle.OracleConnector
+    debezium.source.database.password=${file:/var/run/loams/secrets/erp-oracle/password}
+    debezium.source.offset.storage.file.filename=/debezium/data/offsets.dat
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: loams-flow
+    loams.dev/connector: debezium-oracle
+    loams.dev/fallback: 'true'
+    loams.dev/instance: erp-cdc
+    loams.dev/namespace: '7'
+    loams.dev/runtime: debezium
+  name: loams-debezium-7-erp-cdc
+  namespace: loams-7
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: loams-flow
+    loams.dev/connector: debezium-oracle
+    loams.dev/fallback: 'true'
+    loams.dev/instance: erp-cdc
+    loams.dev/namespace: '7'
+    loams.dev/runtime: debezium
+  name: loams-debezium-7-erp-cdc
+  namespace: loams-7
+spec:
+  clusterIP: None
+  ports:
+  - name: metrics
+    port: 8080
+    protocol: TCP
+    targetPort: metrics
+  selector:
+    loams.dev/instance: erp-cdc
+    loams.dev/namespace: '7'
+    loams.dev/runtime: debezium
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  labels:
+    app.kubernetes.io/component: connector-egress
+    app.kubernetes.io/managed-by: loams-flow
+    loams.dev/connector: debezium-oracle
+    loams.dev/fallback: 'true'
+    loams.dev/instance: erp-cdc
+    loams.dev/namespace: '7'
+    loams.dev/runtime: debezium
+  name: loams-debezium-7-erp-cdc-egress
+  namespace: loams-7
+spec:
+  egress:
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 0.0.0.0/8
+        - 127.0.0.0/8
+        - 169.254.0.0/16
+        - 100.100.100.200/32
+        - 168.63.129.16/32
+        - 224.0.0.0/4
+        - 255.255.255.255/32
+        - 10.244.0.0/16
+        - 10.96.0.0/12
+        - 10.0.0.10/32
+    - ipBlock:
+        cidr: ::/0
+        except:
+        - ::/128
+        - ::1/128
+        - fe80::/10
+        - fd00:ec2::254/128
+        - ff00::/8
+  - to:
+    - ipBlock:
+        cidr: 10.20.30.0/24
+  - ports:
+    - port: 8080
+      protocol: TCP
+    - port: 8090
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: loams-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: loams-fabric
+  podSelector:
+    matchLabels:
+      loams.dev/instance: erp-cdc
+      loams.dev/namespace: '7'
+      loams.dev/runtime: debezium
+  policyTypes:
+  - Egress
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: loams-flow
+    loams.dev/connector: debezium-oracle
+    loams.dev/fallback: 'true'
+    loams.dev/instance: erp-cdc
+    loams.dev/namespace: '7'
+    loams.dev/runtime: debezium
+  name: loams-debezium-7-erp-cdc
+  namespace: loams-7
+spec:
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  replicas: 1
+  selector:
+    matchLabels:
+      loams.dev/instance: erp-cdc
+      loams.dev/namespace: '7'
+      loams.dev/runtime: debezium
+  serviceName: loams-debezium-7-erp-cdc
+  template:
+    metadata:
+      annotations:
+        loams.dev/config-hash: 7a95bbd1a9c90bcb
+      labels:
+        app.kubernetes.io/managed-by: loams-flow
+        loams.dev/connector: debezium-oracle
+        loams.dev/fallback: 'true'
+        loams.dev/instance: erp-cdc
+        loams.dev/namespace: '7'
+        loams.dev/runtime: debezium
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - env: []
+        image: quay.io/debezium/server@sha256:2222222222222222222222222222222222222222222222222222222222222222
+        imagePullPolicy: IfNotPresent
+        name: debezium-server
+        ports:
+        - containerPort: 8080
+          name: metrics
+          protocol: TCP
+        resources:
+          limits:
+            memory: 1536Mi
+          requests:
+            cpu: 250m
+            memory: 768Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /debezium/config
+          name: config
+          readOnly: true
+        - mountPath: /debezium/data
+          name: data
+          readOnly: false
+        - mountPath: /var/run/loams/secrets/erp-oracle
+          name: secret-0
+          readOnly: true
+        - mountPath: /tmp
+          name: tmp
+          readOnly: false
+      enableServiceLinks: false
+      securityContext:
+        fsGroup: 185
+        runAsGroup: 185
+        runAsNonRoot: true
+        runAsUser: 185
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: loams-connectors-fallback
+      volumes:
+      - configMap:
+          defaultMode: 292
+          items:
+          - key: erp-cdc.application.properties
+            path: application.properties
+          name: loams-debezium-7-erp-cdc
+        name: config
+      - name: secret-0
+        secret:
+          defaultMode: 256
+          items:
+          - key: password
+            path: password
+          optional: false
+          secretName: erp-oracle
+      - emptyDir:
+          sizeLimit: 256Mi
+        name: tmp
+  volumeClaimTemplates:
+  - metadata:
+      labels:
+        app.kubernetes.io/managed-by: loams-flow
+        loams.dev/connector: debezium-oracle
+        loams.dev/fallback: 'true'
+        loams.dev/instance: erp-cdc
+        loams.dev/namespace: '7'
+        loams.dev/runtime: debezium
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 10Gi

@@ -1,0 +1,8 @@
+---
+apiVersion: autoscaling/v1
+kind: Scale
+metadata:
+  name: loams-connectors-flow
+  namespace: loams-system
+spec:
+  replicas: 2

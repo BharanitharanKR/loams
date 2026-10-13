@@ -1,0 +1,650 @@
+---
+# Source: loams-connectors/templates/networkpolicies.yaml
+# Flow pods: only Prometheus reaches them (metrics and health). Their egress
+# is guarded in-process, per connection, by the SDK's egress hook (Task 25).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: loams-connectors-flow
+  namespace: loams-system
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: flow
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: loams-connectors
+      app.kubernetes.io/instance: loams-connectors
+      app.kubernetes.io/component: flow
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9464
+---
+# Source: loams-connectors/templates/networkpolicies.yaml
+# Fallback pods in loams-7: no egress at all until KubeRuntime's per-group
+# policy, rendered from the namespace's EgressPolicy, opens it (Kubernetes
+# unions policies, so this one only ever closes); ingress only for metrics.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: loams-connectors-fallback-default
+  namespace: loams-7
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: fallback
+spec:
+  podSelector:
+    matchLabels:
+      loams.dev/fallback: "true"
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9876
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8081
+  egress: []
+---
+# Source: loams-connectors/templates/networkpolicies.yaml
+# Fallback pods in loams-9: no egress at all until KubeRuntime's per-group
+# policy, rendered from the namespace's EgressPolicy, opens it (Kubernetes
+# unions policies, so this one only ever closes); ingress only for metrics.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: loams-connectors-fallback-default
+  namespace: loams-9
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: fallback
+spec:
+  podSelector:
+    matchLabels:
+      loams.dev/fallback: "true"
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9876
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8081
+  egress: []
+---
+# Source: loams-connectors/templates/flow-service.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: loams-connectors-flow
+  namespace: loams-system
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: flow
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: loams-connectors
+      app.kubernetes.io/instance: loams-connectors
+      app.kubernetes.io/component: flow
+---
+# Source: loams-connectors/templates/serviceaccounts.yaml
+# The flow pods' account: it reads instance secrets (`get` only, R25.9) and
+# manages the fallback objects in the served namespaces, so its token is
+# mounted.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: loams-connectors-flow
+  namespace: loams-system
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: flow
+automountServiceAccountToken: true
+---
+# Source: loams-connectors/templates/serviceaccounts.yaml
+# The fallback pods' account in loams-7: bound to no Role, token never
+# mounted (R25.9).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: loams-connectors-fallback
+  namespace: loams-7
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: fallback
+automountServiceAccountToken: false
+---
+# Source: loams-connectors/templates/serviceaccounts.yaml
+# The fallback pods' account in loams-9: bound to no Role, token never
+# mounted (R25.9).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: loams-connectors-fallback
+  namespace: loams-9
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: fallback
+automountServiceAccountToken: false
+---
+# Source: loams-connectors/templates/fleet-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loams-connectors-fleet
+  namespace: loams-system
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: flow
+data:
+  fleet.yaml: |
+    flow:
+      k8s_namespace: "loams-system"
+      deployment: "loams-connectors-flow"
+      min_replicas: 2
+      max_replicas: 8
+      pod_memory_bytes: 2147483648
+      max_instances_per_pod: 64
+    namespace_template: "loams-{ns}"
+    served_namespaces: [7, 9]
+    cluster:
+      pod_cidrs: ["10.244.0.0/16"]
+      service_cidrs: ["10.96.0.0/12"]
+      control_plane: ["10.0.0.10/32"]
+      control_plane_hosts: ["loams-api.loams-system.svc"]
+    fabric:
+      k8s_namespace: "loams-system"
+      pod_labels: {"app.kubernetes.io/name":"loams-fabric"}
+      ports: [8080, 8090]
+    fallback:
+      service_account: "loams-connectors-fallback"
+      secret_mount_root: "/var/run/loams/secrets"
+      camel:
+        image:
+          repository: "ghcr.io/ostrium-labs/loams-connect"
+          digest: "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        uid: 1001
+        metrics_port: 9876
+        metrics_path: "/observe/metrics"
+        resources:
+          cpu_request: "250m"
+          memory_request: "512Mi"
+          memory_limit: "1Gi"
+      debezium:
+        image:
+          repository: "quay.io/debezium/server"
+          digest: "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+        uid: 185
+        metrics_port: 8080
+        metrics_path: "/q/metrics"
+        resources:
+          cpu_request: "250m"
+          memory_request: "768Mi"
+          memory_limit: "1536Mi"
+        storage:
+          size: "10Gi"
+      iggy:
+        image:
+          repository: "ghcr.io/ostrium-labs/iggy-connectors"
+          digest: "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+        uid: 10001
+        metrics_port: 8081
+        metrics_path: "/metrics"
+        resources:
+          cpu_request: "100m"
+          memory_request: "128Mi"
+          memory_limit: "512Mi"
+---
+# Source: loams-connectors/templates/rbac.yaml
+# In the release namespace: the fleet's leader writes the flow Deployment's
+# scale (R26.7), and nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: loams-connectors-flow-scale
+  namespace: loams-system
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: flow
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    resourceNames: ["loams-connectors-flow"]
+    verbs: ["get", "update", "patch"]
+---
+# Source: loams-connectors/templates/rbac.yaml
+# In loams-7: read the instances' secrets (`get` only: no list, no watch;
+# R25.9) and manage the fallback objects KubeRuntime renders.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: loams-connectors-flow
+  namespace: loams-7
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: flow
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["configmaps", "services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+# Source: loams-connectors/templates/rbac.yaml
+# In loams-9: read the instances' secrets (`get` only: no list, no watch;
+# R25.9) and manage the fallback objects KubeRuntime renders.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: loams-connectors-flow
+  namespace: loams-9
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: flow
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["configmaps", "services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+# Source: loams-connectors/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: loams-connectors-flow-scale
+  namespace: loams-system
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: flow
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: loams-connectors-flow-scale
+subjects:
+  - kind: ServiceAccount
+    name: loams-connectors-flow
+    namespace: loams-system
+---
+# Source: loams-connectors/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: loams-connectors-flow
+  namespace: loams-7
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: flow
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: loams-connectors-flow
+subjects:
+  - kind: ServiceAccount
+    name: loams-connectors-flow
+    namespace: loams-system
+---
+# Source: loams-connectors/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: loams-connectors-flow
+  namespace: loams-9
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: flow
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: loams-connectors-flow
+subjects:
+  - kind: ServiceAccount
+    name: loams-connectors-flow
+    namespace: loams-system
+---
+# Source: loams-connectors/templates/flow-service.yaml
+# Metrics and health only: FlowService is loopback-only (D111).
+apiVersion: v1
+kind: Service
+metadata:
+  name: loams-connectors-flow
+  namespace: loams-system
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: flow
+spec:
+  selector:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/component: flow
+  ports:
+    - name: metrics
+      port: 9464
+      targetPort: metrics
+      protocol: TCP
+---
+# Source: loams-connectors/templates/flow-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loams-connectors-flow
+  namespace: loams-system
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: flow
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: loams-connectors
+      app.kubernetes.io/instance: loams-connectors
+      app.kubernetes.io/component: flow
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: loams-connectors
+        app.kubernetes.io/instance: loams-connectors
+        app.kubernetes.io/component: flow
+      annotations:
+        loams.dev/fleet-config-hash: "3d19f52eebcd7f16"
+    spec:
+      serviceAccountName: loams-connectors-flow
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: loams-connectors
+              app.kubernetes.io/instance: loams-connectors
+              app.kubernetes.io/component: flow
+      containers:
+        - name: flow
+          image: ghcr.io/ostrium-labs/loams-fabric@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          command: ["loams-fabric"]
+          args: ["flow", "--fleet-config", "/etc/loams-flow/fleet.yaml"]
+          env:
+            # The lease holder name: unique per pod (OR-16).
+            - name: LOAMS_FLOW_POD
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: LOAMS_FLOW_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          ports:
+            # FlowService itself listens on loopback only (D111); the pod
+            # exposes metrics and health.
+            - name: metrics
+              containerPort: 9464
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: metrics
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: metrics
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            limits:
+              memory: 3Gi
+            requests:
+              cpu: 500m
+              memory: 3Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: fleet
+              mountPath: /etc/loams-flow
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: fleet
+          configMap:
+            name: loams-connectors-fleet
+            defaultMode: 0444
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+---
+# Source: loams-connectors/templates/monitoring.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: loams-connectors-camel
+  namespace: loams-system
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: fallback
+spec:
+  selector:
+    matchLabels:
+      loams.dev/fallback: "true"
+      loams.dev/runtime: camel
+  namespaceSelector:
+    matchNames: ["loams-7","loams-9"]
+  podTargetLabels:
+    - loams.dev/namespace
+    - loams.dev/instance
+    - loams.dev/connector
+    - loams.dev/group
+  podMetricsEndpoints:
+    - port: metrics
+      path: /observe/metrics
+      interval: 30s
+---
+# Source: loams-connectors/templates/monitoring.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: loams-connectors-debezium
+  namespace: loams-system
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: fallback
+spec:
+  selector:
+    matchLabels:
+      loams.dev/fallback: "true"
+      loams.dev/runtime: debezium
+  namespaceSelector:
+    matchNames: ["loams-7","loams-9"]
+  podTargetLabels:
+    - loams.dev/namespace
+    - loams.dev/instance
+    - loams.dev/connector
+    - loams.dev/group
+  podMetricsEndpoints:
+    - port: metrics
+      path: /q/metrics
+      interval: 30s
+---
+# Source: loams-connectors/templates/monitoring.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: loams-connectors-iggy
+  namespace: loams-system
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: fallback
+spec:
+  selector:
+    matchLabels:
+      loams.dev/fallback: "true"
+      loams.dev/runtime: iggy
+  namespaceSelector:
+    matchNames: ["loams-7","loams-9"]
+  podTargetLabels:
+    - loams.dev/namespace
+    - loams.dev/instance
+    - loams.dev/connector
+    - loams.dev/group
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+---
+# Source: loams-connectors/templates/monitoring.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: loams-connectors-flow
+  namespace: loams-system
+  labels:
+    app.kubernetes.io/name: loams-connectors
+    app.kubernetes.io/instance: loams-connectors
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: loams-connectors-0.1.0
+    app.kubernetes.io/component: flow
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: loams-connectors
+      app.kubernetes.io/instance: loams-connectors
+      app.kubernetes.io/version: "0.1.0"
+      app.kubernetes.io/managed-by: Helm
+      helm.sh/chart: loams-connectors-0.1.0
+      app.kubernetes.io/component: flow
+  namespaceSelector:
+    matchNames: ["loams-system"]
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
