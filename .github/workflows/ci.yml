@@ -484,15 +484,17 @@ jobs:
       - name: doc tests
         run: cargo test --workspace --doc --locked
 
-  # The workspace tests compile once, on the heavy runner, into a nextest
-  # archive; two free GitHub-hosted runners then run it in partitions. One
-  # Blacksmith build instead of one per partition.
-  rust-build:
-    name: "Rust: build tests"
+  # The workspace tests, built and run in one job on the heavy runner. (A nextest
+  # archive moved to other runners broke the tests that spawn the built binary or
+  # read files through compile-time paths, so build and run stay together.)
+  rust-tests:
+    name: "Rust: tests"
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.rust == 'true') && needs.changes.outputs.heavy != 'false' }}
     runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
-    timeout-minutes: 60
+    # A hung test fails the job instead of holding the runner; nextest also
+    # terminates a loams-agentd* test after 3 minutes (.config/nextest.toml).
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7
       - name: protoc
@@ -501,50 +503,13 @@ jobs:
         with:
           save-if: ${{ github.event_name != 'pull_request' }}
       - uses: taiki-e/install-action@badb8c3638e0b773c6c17a6025c2306a8f1c4303 # nextest, 2026-10-02
-      - name: build the workspace tests into an archive
-        run: cargo nextest archive --workspace --locked --archive-file "$RUNNER_TEMP/nextest.tar.zst"
-      - name: archive size
-        run: ls -lh "$RUNNER_TEMP/nextest.tar.zst"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: nextest-archive
-          path: ${{ runner.temp }}/nextest.tar.zst
-          retention-days: 1
-          # Already zstd.
-          compression-level: 0
-
-  rust-tests:
-    name: "Rust: tests (${{ matrix.partition }}/2)"
-    needs: [changes, rust-build]
-    if: ${{ !cancelled() && needs.rust-build.result == 'success' }}
-    runs-on: ubuntu-24.04
-    # A hung test fails its partition instead of holding the runner; nextest
-    # also terminates a loams-agentd* test after 3 minutes (.config/nextest.toml).
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        partition: [1, 2]
-    steps:
-      # The archive's tests read fixtures from the source tree.
-      - uses: actions/checkout@v7
-      - uses: taiki-e/install-action@badb8c3638e0b773c6c17a6025c2306a8f1c4303 # nextest, 2026-10-02
       # The loams-agentd-harness tests run `#!/usr/bin/env node` and
-      # `#!/usr/bin/env python3` fixtures (harness stand-ins). The runner images
-      # ship both; pin Node here so the fixtures do not depend on the image.
+      # `#!/usr/bin/env python3` fixtures (harness stand-ins).
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: nextest-archive
-          path: ${{ runner.temp }}
       - name: workspace tests
-        run: >-
-          cargo nextest run
-          --archive-file "$RUNNER_TEMP/nextest.tar.zst"
-          --workspace-remap .
-          --partition hash:${{ matrix.partition }}/2
+        run: cargo nextest run --workspace --locked
 
   # The desktop agent daemon (design §50, DD1 Task 4). The headless guard
   # (D782) fails if a GUI, webview or audio crate enters loams-agentd's tree on
@@ -2281,7 +2246,6 @@ jobs:
       - repo-checks
       - check
       - windows-check
-      - rust-build
       - rust-tests
       - agentd
       - feature-tests
