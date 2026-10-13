@@ -706,7 +706,7 @@ describe("back-channel logout", () => {
       aud: CLIENT_ID,
       iat: Math.floor(Date.now() / 1000),
       jti: `jti-${Math.random()}`,
-      events: ["http://schemas.openid.net/event/backchannel-logout"],
+      events: { "http://schemas.openid.net/event/backchannel-logout": {} },
       ...overrides,
     };
     return new SignJWT(claims)
@@ -776,6 +776,65 @@ describe("back-channel logout", () => {
     expect(await allSessions(server.store)).toHaveLength(1);
   });
 
+  it("accepts a spec-shaped events claim (§2.4: an object holding an empty object)", async () => {
+    const { app: server } = await boot();
+    await server.login();
+    publishKey(idpKeys.jwk);
+
+    const token = await logoutToken({
+      sub: "user-1",
+      events: { "http://schemas.openid.net/event/backchannel-logout": {} },
+    });
+    const response = await post(server, `logout_token=${encodeURIComponent(token)}`);
+    expect(response.status).toBe(200);
+    expect(await allSessions(server.store)).toHaveLength(0);
+  });
+
+  it("rejects an ARRAY-shaped events claim, which is not the spec's shape", async () => {
+    const { app: server } = await boot();
+    await server.login();
+    publishKey(idpKeys.jwk);
+
+    const token = await logoutToken({
+      sub: "user-1",
+      events: ["http://schemas.openid.net/event/backchannel-logout"],
+    });
+    const response = await post(server, `logout_token=${encodeURIComponent(token)}`);
+    expect(response.status).toBe(400);
+    expect((await response.json()).code).toBe("logout_missing_event");
+    expect(await allSessions(server.store)).toHaveLength(1);
+  });
+
+  it("rejects an events object without the logout event member", async () => {
+    const { app: server } = await boot();
+    await server.login();
+    publishKey(idpKeys.jwk);
+
+    const token = await logoutToken({
+      sub: "user-1",
+      events: { "http://schemas.openid.net/event/some-other-event": {} },
+    });
+    const response = await post(server, `logout_token=${encodeURIComponent(token)}`);
+    expect(response.status).toBe(400);
+    expect((await response.json()).code).toBe("logout_missing_event");
+    expect(await allSessions(server.store)).toHaveLength(1);
+  });
+
+  it("rejects a logout event member that is not a JSON object", async () => {
+    const { app: server } = await boot();
+    await server.login();
+    publishKey(idpKeys.jwk);
+
+    const token = await logoutToken({
+      sub: "user-1",
+      events: { "http://schemas.openid.net/event/backchannel-logout": true },
+    });
+    const response = await post(server, `logout_token=${encodeURIComponent(token)}`);
+    expect(response.status).toBe(400);
+    expect((await response.json()).code).toBe("logout_missing_event");
+    expect(await allSessions(server.store)).toHaveLength(1);
+  });
+
   it("rejects a token signed by an unknown key", async () => {
     const { app: server } = await boot();
     await server.login();
@@ -787,7 +846,7 @@ describe("back-channel logout", () => {
       aud: CLIENT_ID,
       iat: Math.floor(Date.now() / 1000),
       jti: "forged",
-      events: ["http://schemas.openid.net/event/backchannel-logout"],
+      events: { "http://schemas.openid.net/event/backchannel-logout": {} },
       sub: "user-1",
     })
       .setProtectedHeader({ alg: "RS256", kid: KID })
