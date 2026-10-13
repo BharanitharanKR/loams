@@ -251,12 +251,12 @@ def record_consistency(session: ConsistencyTokenStore | None, response: object) 
     This reads the response **message** field, which is one of the two places
     D609 puts a token. The other is the response header `loams-consistency-token`
     -- the only one that currently carries anything, since no generated message
-    has a `consistency_token` field -- and `connect-python==0.9.0` has no call
+    has a `consistency_token` field -- and `connectrpc==0.12.1` has no call
     that returns response headers, so this function never sees it. Which is why
     a `ConsistencySession` stays empty in practice and `session_consistency=True`
     is inert rather than merely conservative. The Rust SDK reads the header
     (`token_from_headers` in `sdks/rust/src/request.rs`); closing this needs
-    connect-python to expose headers, not a change here.
+    connectrpc to expose headers, not a change here.
     """
     if session is None or response is None:
         return

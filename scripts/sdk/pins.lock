@@ -49,12 +49,10 @@ npm @connectrpc/connect 2.2.0 sha512-M63OQ1ZFcPUm85CuewJ9G9CMV8LjzGR9935xOnXNQGS
 # last release is 0.9.0 (2026-03-19); from 0.9.0 on the project publishes as
 # `connectrpc`, and the generator as `protoc-gen-connectrpc`.
 #
-# NOT YET IN THE SDK: `sdks/python` still runs `connect-python==0.9.0` and the
-# `buf.build/connectrpc/python:v0.9.0` plugin, so check-pins reports the Python
-# rows below until the runtime moves. 0.10 to 0.12 is a breaking runtime change
-# (error details become protobuf-py messages, the client takes `codec=` rather
-# than `proto_json=`), so it is its own PR with the regenerated stubs and the
-# runtime port; see the PR that renamed the BSR row.
+# 0.10 to 0.12 changed the runtime API the SDK uses: the client takes `codec=`
+# rather than `proto_json=` and defaults to protobuf-py, and error details are
+# protobuf-py `ErrorDetail`s. `sdks/python/src/loams/runtime/transports.py` and
+# `errors.py` carry the port.
 pypi connectrpc 0.12.1 da7ca41c6cd8d9ce640ad86ae325a71cd83dfdd1e43748976315cb4b0546fb69 the Connect runtime (sdist)
 pypi protoc-gen-connectrpc 0.12.1 dde1652e291be825c4e84e71d9398c6ddd3c5c50995f3872a78ea9e4e21464dc the code generator (sdist)
 # The maintained protobuf runtime, and the reason `sdks/python/buf.gen.proto.yaml`

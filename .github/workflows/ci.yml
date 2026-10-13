@@ -1347,7 +1347,7 @@ jobs:
       - name: the SDK's runtime dependencies are exact pins
         working-directory: sdks/python
         run: |
-          for pin in 'connect-python==' 'protobuf=='; do
+          for pin in 'connectrpc==' 'protobuf=='; do
             grep -qF "$pin" pyproject.toml || {
               echo "pyproject.toml must pin $pin exactly, not a range"; exit 1;
             }
