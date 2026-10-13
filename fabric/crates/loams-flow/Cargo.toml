@@ -12,6 +12,12 @@ authors.workspace = true
 # D352; D359's gate input), and a crate archive would not carry them.
 publish = false
 
+[features]
+# R-CN2-4 (CN2 plan Task 1): Camel directions are checked against the vendored
+# Camel catalog snapshot, which is CN2 Task 22's. Off by default, where the rule
+# is a no-op; on before Task 22 lands, it refuses every Camel direction.
+camel-catalog = []
+
 [dependencies]
 # `SecretStore`'s async API and the SDK traits it implements (CN2 Task 25).
 # 0.1.92 is already in fabric/Cargo.lock. MIT OR Apache-2.0.
@@ -25,6 +31,15 @@ indexmap.workspace = true
 # (2026-09-06), MIT OR Apache-2.0, no dependencies; the engine workspace
 # already pins the same version.
 ipnet = { version = "2.12.2", features = ["serde"] }
+# The connector SDK (CN2 OR-5), for the `Profile` type a `ConnectorContext`
+# carries (CN2 Task 7, plan ruling R4.4); (CN2 Task 24)
+# `metrics::InstanceMetrics` implements its `ConnectorObserver` hook, so a
+# native connector's pipeline feeds the metric families and the Q359
+# activity counters; and its `Secret`, `SecretResolver`, `EgressCheck` and HTTP
+# client, which the egress guard and the secret stores implement and use (CN2
+# Task 25). `loams-flow` depends on the SDK, never the reverse. Its own
+# dependencies are already in fabric/Cargo.lock.
+loams-connector-sdk = { path = "../loams-connector-sdk" }
 # `KubeSecretStore` trusts the cluster CA only. The SDK's rustls 0.23 with
 # `ring`, already in fabric/Cargo.lock.
 rustls = { version = "0.23.27", default-features = false, features = ["ring", "std", "tls12", "logging"] }
@@ -41,33 +56,26 @@ loams-flow-proto = { path = "../loams-flow-proto" }
 # crate's runtime, not a shared dependency — the split `loams-proto` makes for
 # `buffa-types`.
 buffa = "0.9.2"
-# The connector SDK (CN2 Task 4): `metrics::InstanceMetrics` implements its
-# `ConnectorObserver` hook, so a native connector's pipeline feeds the metric
-# families and the Q359 activity counters (CN2 Task 24); the egress guard and
-# the secret stores implement and use its `Secret`, `SecretResolver`,
-# `EgressCheck` and HTTP client (CN2 Task 25). The dependency runs this way
-# only: the SDK never depends on `loams-flow` (R4.4).
-loams-connector-sdk = { path = "../loams-connector-sdk" }
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_norway.workspace = true
 thiserror.workspace = true
 # `activity::ActivityPump::spawn`: the per-window timer (CN2 Task 24); the
-# secret stores' file reads (CN2 Task 25).
+# secret stores' file and Kubernetes reads (CN2 Task 25).
 tokio = { workspace = true, features = ["fs", "io-util", "rt", "sync", "time"] }
 tracing.workspace = true
 
 [dev-dependencies]
+# Paused-clock tests of the activity window, and the SDK pipeline that feeds
+# the metrics (CN2 Task 24); CN2 Task 25's egress, redirect and secret-store
+# tests run local servers.
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "test-util", "time"] }
 # `Registry`, `check_use` and the licence gate are exercised over the real
 # `connectors/` tree, whose manifests carry semver `specVersion`s and the
 # config schemas are compared as JSON.
 semver.workspace = true
 serde_json.workspace = true
-# Paused-clock tests of the activity window and the SDK pipeline that feeds
-# the metrics (CN2 Task 24); the egress, redirect and secret-store tests run
-# local servers (CN2 Task 25).
-tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "net", "io-util", "fs", "sync", "time", "test-util"] }
 
 [lints]
 workspace = true

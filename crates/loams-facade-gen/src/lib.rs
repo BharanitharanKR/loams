@@ -138,6 +138,15 @@ pub struct Call {
     /// The proto package the service is in, which is what the generated SDK
     /// imports its message types from.
     pub package: String,
+    /// The proto files that declare the request message, the response message
+    /// and the service (`loams/live/v1/admin.proto`), empty when the request
+    /// does not carry the file. A language that emits one module per proto
+    /// *file* rather than per package (Python's `_pb2`) imports from these, so
+    /// a package split over several files (`loams.live.v1`'s `live.proto` and
+    /// `admin.proto`, LV1 Task 10) imports each type from where it is.
+    pub input_file: String,
+    pub output_file: String,
+    pub service_file: String,
     pub idempotency: Idempotency,
     pub retry: Retry,
     pub streaming: Streaming,
@@ -307,6 +316,7 @@ pub fn model_from_request(
     // declare an `idempotency_key` field is a property of the message, not of
     // the method that takes it.
     let keyed_messages = keyed_messages(&fields)?;
+    let message_files = message_files(&fields)?;
     let mut modules: BTreeMap<String, Module> = BTreeMap::new();
     let mut packages: Vec<String> = Vec::new();
     for mut file in repeated_messages(&fields, 15)? {
@@ -314,6 +324,7 @@ pub fn model_from_request(
         let Some(package) = string_field(&file, 2)? else {
             continue;
         };
+        let file_name = string_field(&file, 1)?.unwrap_or_default();
         packages.push(package.clone());
         for mut service in repeated_messages(&file, 6)? {
             let service = service.fields()?;
@@ -349,6 +360,15 @@ pub fn model_from_request(
                         &keyed_messages,
                     )?;
                     call.module = module_name.clone();
+                    call.service_file = file_name.clone();
+                    call.input_file = message_files
+                        .get(call.input.trim_start_matches('.'))
+                        .cloned()
+                        .unwrap_or_default();
+                    call.output_file = message_files
+                        .get(call.output.trim_start_matches('.'))
+                        .cloned()
+                        .unwrap_or_default();
                     let derived = module_name != options.name;
                     let entry = modules
                         .entry(module_name.clone())
@@ -504,6 +524,9 @@ fn call_from(
         output: string_field(method, 3)?.unwrap_or_default(),
         service: format!("{package}.{service}"),
         package: package.to_owned(),
+        input_file: String::new(),
+        output_file: String::new(),
+        service_file: String::new(),
         idempotency,
         retry,
         streaming: if varint_field(method, 6).is_some_and(|value| value != 0) {
@@ -545,6 +568,44 @@ fn keyed_messages(request: &[(u32, Value<'_>)]) -> Result<BTreeSet<String>, Wire
         }
     }
     Ok(keyed)
+}
+
+/// The proto file that declares every message in the request, by fully
+/// qualified name (nested messages under their parent's file).
+/// `FileDescriptorProto.name` is 1.
+fn message_files(request: &[(u32, Value<'_>)]) -> Result<BTreeMap<String, String>, WireError> {
+    let mut files = BTreeMap::new();
+    for mut file in repeated_messages(request, 15)? {
+        let file = file.fields()?;
+        let Some(package) = string_field(&file, 2)? else {
+            continue;
+        };
+        let name = string_field(&file, 1)?.unwrap_or_default();
+        for mut message in repeated_messages(&file, 4)? {
+            let message = message.fields()?;
+            if let Some(leaf) = string_field(&message, 1)? {
+                collect_files(&message, &format!("{package}.{leaf}"), &name, &mut files)?;
+            }
+        }
+    }
+    Ok(files)
+}
+
+/// One message and its nested messages, into `files`.
+fn collect_files(
+    message: &[(u32, Value<'_>)],
+    full_name: &str,
+    file: &str,
+    files: &mut BTreeMap<String, String>,
+) -> Result<(), WireError> {
+    files.insert(full_name.to_owned(), file.to_owned());
+    for mut nested in repeated_messages(message, 3)? {
+        let nested = nested.fields()?;
+        if let Some(leaf) = string_field(&nested, 1)? {
+            collect_files(&nested, &format!("{full_name}.{leaf}"), file, files)?;
+        }
+    }
+    Ok(())
 }
 
 /// One message and its nested messages, into `keyed`.

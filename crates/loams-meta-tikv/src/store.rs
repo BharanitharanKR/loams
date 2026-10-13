@@ -109,6 +109,23 @@ impl MetaStore for TikvMeta {
         self.stream_state_impl(id).await
     }
 
+    async fn ensure_graph_stream(
+        &self,
+        namespace: NamespaceId,
+        graph: &str,
+    ) -> MetaResult<StreamId> {
+        self.ensure_graph_stream_impl(namespace, graph).await
+    }
+
+    async fn drop_graph_stream(
+        &self,
+        namespace: NamespaceId,
+        graph: &str,
+        fence: Option<Fence>,
+    ) -> MetaResult<Option<StreamId>> {
+        self.drop_graph_stream_impl(namespace, graph, fence).await
+    }
+
     async fn create_link(
         &self,
         namespace: NamespaceId,

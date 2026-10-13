@@ -1,0 +1,78 @@
+{
+  "recorded_from": "Amazon SES",
+  "synthetic": true,
+  "docs": [
+    "https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_ListSuppressedDestinations.html"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "suppressed",
+    "config": {
+      "region": "us-east-1",
+      "base_url": "{proxy}"
+    },
+    "secrets": {
+      "access_key_id": "AKIDEXAMPLE",
+      "secret_access_key": "synthetic-secret-access-key"
+    },
+    "expect": 3
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v2/email/suppression/addresses?PageSize=100",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "SuppressedDestinationSummaries": [
+              {
+                "EmailAddress": "bounce1@example.test",
+                "Reason": "BOUNCE",
+                "LastUpdateTime": 1759300000
+              },
+              {
+                "EmailAddress": "bounce2@example.test",
+                "Reason": "BOUNCE",
+                "LastUpdateTime": 1759300001
+              }
+            ],
+            "NextToken": "AAAAAQ"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v2/email/suppression/addresses?NextToken=AAAAAQ&PageSize=100",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "SuppressedDestinationSummaries": [
+              {
+                "EmailAddress": "complaint1@example.test",
+                "Reason": "COMPLAINT",
+                "LastUpdateTime": 1759300002
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

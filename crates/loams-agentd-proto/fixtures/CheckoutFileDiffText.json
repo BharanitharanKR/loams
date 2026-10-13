@@ -1,0 +1,10 @@
+{
+  "binary": false,
+  "diffChecksum": "sum-1",
+  "newContentHash": "h-new",
+  "newText": "fn main() { run(); }\n",
+  "oldContentHash": "h-old",
+  "oldText": "fn main() {}\n",
+  "stale": false,
+  "truncated": false
+}

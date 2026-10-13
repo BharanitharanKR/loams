@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use loams_common::StreamId;
-use loams_common::meta::{ApplyError, Consistency, MetaError, MetaStore, Retention, WalClass};
+use loams_common::meta::{Consistency, Fence, MetaError, MetaStore};
 use loams_log::{AppendAck, FetchRequest, LogConfig, LogError, LogReader, LogWriter, OffsetRecord};
 
 use crate::engine::GraphError;
@@ -135,6 +135,12 @@ impl GraphLog {
         }
     }
 
+    /// The metastore the log commits through.
+    #[must_use]
+    pub fn meta(&self) -> &Arc<dyn MetaStore> {
+        &self.inner.meta
+    }
+
     /// The group commit the lane uses.
     pub(crate) fn group(&self) -> GroupCommit {
         self.inner.group
@@ -162,7 +168,7 @@ impl GraphLog {
     /// The lane and the opens run on the statement pool, where this blocks on the runtime's
     /// handle. A caller already inside a runtime (a test calling the engine directly) gets a
     /// scoped thread, since a runtime thread cannot block on its own runtime.
-    fn wait<T: Send>(&self, future: impl Future<Output = T> + Send) -> T {
+    pub(crate) fn wait<T: Send>(&self, future: impl Future<Output = T> + Send) -> T {
         let runtime = &self.inner.runtime;
         if tokio::runtime::Handle::try_current().is_err() {
             return runtime.block_on(future);
@@ -175,40 +181,32 @@ impl GraphLog {
         })
     }
 
-    /// The implicit stream of graph `graph` in `namespace`: `graph.<gr_id>`, one partition,
+    /// The implicit stream of graph `graph` in `namespace`, `_graph.<gr_id>`: one partition,
     /// standard WAL class, never trimmed by retention (Task 13 trims it below its snapshots).
-    /// Creating it again answers the same stream.
+    /// The name is reserved, so only this metastore command creates it (GR1 Task 12). Creating it
+    /// again answers the same stream, and a stream of GR1 Task 11's name (`graph.<gr_id>`) is
+    /// renamed to it in place, keeping its id and records.
     pub(crate) async fn ensure_stream(
         meta: &Arc<dyn MetaStore>,
         namespace: loams_common::NamespaceId,
         graph: &str,
     ) -> Result<StreamId, MetaError> {
-        let name = stream_name(graph);
-        match meta
-            .create_stream(
-                namespace,
-                &name,
-                1,
-                WalClass::Standard,
-                Retention {
-                    max_age_ms: None,
-                    max_bytes: None,
-                },
-            )
-            .await
-        {
-            Ok(stream) | Err(MetaError::Rejected(ApplyError::StreamExists(stream))) => Ok(stream),
-            Err(err) => Err(err),
-        }
+        meta.ensure_graph_stream(namespace, graph).await
     }
 
-    /// Appends one group's records to `stream` as one batch, in order, and waits until they
-    /// are durable, at most [`GroupCommit::append_timeout`]: past it the answer is
-    /// [`LogError::CommitUnknown`]. Blocks (see [`GraphLog::wait`]).
+    /// Appends one group's records to `stream` as one batch, in order, under the owner's
+    /// `fence` (GR1 Task 12), and waits until they are durable, at most
+    /// [`GroupCommit::append_timeout`]: past it the answer is [`LogError::CommitUnknown`]. A
+    /// broken fence fails the append with `ApplyError::Fenced` and nothing of it is committed.
+    /// Blocks (see [`GraphLog::wait`]).
+    ///
+    /// Past the timeout the records may still be in the writer's buffer and commit later; the
+    /// reload that follows takes a new epoch first, so such a late commit is refused.
     pub(crate) fn append(
         &self,
         stream: StreamId,
         records: Vec<loams_log::Record>,
+        fence: Option<&Fence>,
     ) -> Result<AppendAck, LogError> {
         let limit = self.inner.group.append_timeout;
         let append = async {
@@ -226,7 +224,15 @@ impl GraphLog {
                     fault().await?;
                 }
             }
-            self.inner.writer.append(stream, 0, records).await
+            match fence {
+                Some(fence) => {
+                    self.inner
+                        .writer
+                        .append_fenced(stream, 0, records, fence.clone())
+                        .await
+                }
+                None => self.inner.writer.append(stream, 0, records).await,
+            }
         };
         self.wait(async {
             tokio::time::timeout(limit, append)
@@ -260,6 +266,26 @@ impl GraphLog {
                     (bounds.log_start_offset, bounds.high_watermark)
                 }))
         })
+    }
+
+    /// One fetch of `stream` from `offset`: the records there, or, at its end, those committed
+    /// within `max_wait` (none when nothing was). A follower's tail (GR1 Task 15).
+    pub(crate) async fn fetch(
+        &self,
+        stream: StreamId,
+        offset: u64,
+        max_wait: Duration,
+    ) -> Result<loams_log::FetchResponse, LogError> {
+        self.inner
+            .reader
+            .fetch(FetchRequest {
+                stream,
+                partition: 0,
+                offset,
+                max_bytes: REPLAY_FETCH_BYTES,
+                max_wait,
+            })
+            .await
     }
 
     /// Every record of `stream` in `from..to`, in offset order. Blocks.
@@ -310,12 +336,22 @@ impl GraphLog {
     }
 }
 
-/// The name of graph `graph`'s implicit stream (`graph.gr_<ULID>`). A stream a user creates may
-/// not start with `_`, as a collection's does; the graph's ULID makes the name unguessable before
-/// the graph exists (R11.2).
+/// The name of graph `graph`'s implicit stream, `_graph.gr_<ULID>` (GR1 Task 12). A stream a
+/// user creates may not start with `_`, so nobody else can create or seed it.
 #[must_use]
 pub fn stream_name(graph: &str) -> String {
-    format!("graph.{graph}")
+    loams_common::meta::graph_stream_name(graph)
+}
+
+/// Whether `err` is the metastore refusing an append whose owner lease moved on (GR1 Task 12).
+#[must_use]
+pub fn is_fenced(err: &LogError) -> bool {
+    matches!(
+        err,
+        LogError::Meta(MetaError::Rejected(
+            loams_common::meta::ApplyError::Fenced { .. }
+        ))
+    )
 }
 
 /// The log is unavailable: the detail goes to the server log, the client gets a generic message.

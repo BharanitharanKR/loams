@@ -1,0 +1,17 @@
+{
+  "questions": [
+    {
+      "header": "Branch",
+      "id": "q-1",
+      "multiSelect": false,
+      "multiline": false,
+      "options": [
+        "main",
+        "dev"
+      ],
+      "question": "Which branch?"
+    }
+  ],
+  "requestId": "req-1",
+  "type": "inputRequested"
+}

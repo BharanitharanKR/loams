@@ -2,6 +2,7 @@
 //!
 //! ```text
 //! ns/<ns_id>/repos/_names/<name>.json                 catalog record
+//! ns/<ns_id>/repos/_deleting/<repo_id>.json           deletion marker (T13.1)
 //! ns/<ns_id>/repos/<repo_id>/
 //!   head  wal/<seq:020>.lgw  checkpoints/<seq:020>.lgc  packs/<checksum>.lpk  gc/claims/<ulid>.json
 //!   ws/<ws_id>/{snap/<n:020>.lws, head, packs/<checksum>.lpk, salvage/<mount_id>/<ulid>.lws}
@@ -63,6 +64,30 @@ impl RepoPaths {
     /// The prefix of every catalog record in `ns`, for listings.
     pub fn names_prefix(ns: NamespaceId) -> String {
         format!("ns/{ns}/repos/_names/")
+    }
+
+    /// The name a catalog record path `…_names/<name>.json` holds.
+    pub fn parse_names_record(path: &str) -> Option<RepoName> {
+        let name = path.rsplit_once("_names/")?.1.strip_suffix(".json")?;
+        RepoName::parse(name).ok()
+    }
+
+    /// The deletion marker of repository `repo` in `ns` (GT1 Task 13, ruling
+    /// T13.1): create-only, keyed by the id so it never names a later
+    /// repository of the same name.
+    pub fn deleting_marker(ns: NamespaceId, repo: &RepoId) -> String {
+        format!("{}{repo}.json", Self::deleting_prefix(ns))
+    }
+
+    /// The prefix of every deletion marker in `ns`.
+    pub fn deleting_prefix(ns: NamespaceId) -> String {
+        format!("ns/{ns}/repos/_deleting/")
+    }
+
+    /// The repository a deletion marker path names.
+    pub fn parse_deleting_marker(path: &str) -> Option<RepoId> {
+        let id = path.rsplit_once("_deleting/")?.1.strip_suffix(".json")?;
+        RepoId::parse(id).ok()
     }
 
     /// The `head` hint (§36 §4.1).

@@ -1,0 +1,21 @@
+{
+  "change": {
+    "kind": "renamed",
+    "oldPath": "src/main.rs",
+    "operationId": "op-1",
+    "path": "src/lib.rs"
+  },
+  "checkoutId": "checkout-1",
+  "entry": {
+    "ignored": false,
+    "kind": "file",
+    "modifiedAt": "2026-10-12T09:30:00Z",
+    "mutationRevision": "rev-1",
+    "name": "main.rs",
+    "path": "src/main.rs",
+    "readOnly": false,
+    "size": 1024
+  },
+  "operationId": "op-1",
+  "status": "applied"
+}

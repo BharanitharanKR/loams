@@ -35,7 +35,7 @@ use std::path::{Component, Path, PathBuf};
 use buffa::{EnumValue, Enumeration};
 use serde::{Deserialize, Serialize};
 
-use crate::validate::ManifestSchema;
+use crate::validate::{Direction, ManifestSchema};
 
 /// §33 §4's `apiVersion`, `const` in `connectors/schema/connector.schema.json`.
 pub const API_VERSION: &str = "loams.flow/v1";
@@ -220,6 +220,7 @@ slug_enum!(
         AtMostOnce => "at_most_once" => DELIVERY_AT_MOST_ONCE,
         AtLeastOnce => "at_least_once" => DELIVERY_AT_LEAST_ONCE,
         ExactlyOnce => "exactly_once" => DELIVERY_EXACTLY_ONCE,
+        EffectivelyOnce => "effectively_once" => DELIVERY_EFFECTIVELY_ONCE,
 );
 
 slug_enum!(
@@ -297,6 +298,10 @@ slug_enum!(
         DupCheck => "dup-check" => SUITE_DUP_CHECK,
         Bulk => "bulk" => SUITE_BULK,
         Cdc => "cdc" => SUITE_CDC,
+        SchemaEvolution => "schema-evolution" => SUITE_SCHEMA_EVOLUTION,
+        Backpressure => "backpressure" => SUITE_BACKPRESSURE,
+        ExactlyOnce => "exactly-once" => SUITE_EXACTLY_ONCE,
+        Auth => "auth" => SUITE_AUTH,
 );
 
 /// §33 §4's `runtime`: which runtime runs this connector, and what it points at.
@@ -316,6 +321,96 @@ pub struct RuntimeSpec {
     /// crates and native builds. Absent on the generated stubs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    /// `runtime.source`: overrides `kind` and `reference` for the source direction
+    /// (CN2 OR-10). Only on a manifest that declares a source (R-CN2-1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<RuntimeOverride>,
+    /// `runtime.sink`: overrides `kind` and `reference` for the sink direction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sink: Option<RuntimeOverride>,
+    /// `runtime.profile`: a target or HTTP-API profile id under
+    /// `connectors/profiles/` (CN2 OR-2, OR-11). Only when every declared
+    /// direction runs native by default (R-CN2-2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+    /// `runtime.fallback`: the declared, temporary fallback runtime (CN2 OR-4),
+    /// never the default; an instance opts in with `runtime: fallback`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback: Option<FallbackSpec>,
+}
+
+/// One direction's runtime, overriding [`RuntimeSpec::kind`] and
+/// [`RuntimeSpec::reference`] for that direction (CN2 OR-10: one manifest per
+/// system, one runtime per direction).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeOverride {
+    /// The runtime for this direction.
+    pub kind: RuntimeKind,
+    /// What `kind` points at, with `runtime.ref`'s per-kind meaning.
+    #[serde(rename = "ref")]
+    pub reference: String,
+}
+
+/// `runtime.fallback` (CN2 OR-4): a Camel, Debezium or Iggy runtime an instance may
+/// opt into, in declared directions, until `replaced_by` replaces it (R-CN2-8).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FallbackSpec {
+    /// `camel`, `debezium` or `iggy` (R-CN2-8).
+    pub kind: RuntimeKind,
+    /// What `kind` points at, with `runtime.ref`'s per-kind meaning.
+    #[serde(rename = "ref")]
+    pub reference: String,
+    /// The directions the fallback serves, each declared under `capabilities`.
+    pub directions: Vec<Direction>,
+    /// The task that made this a fallback (`"CN2 Task 10"`), or `"CN2 Task 23"` for
+    /// the replacement queue. Never empty (R-CN2-8).
+    pub replaced_by: String,
+}
+
+/// Which runtime [`RuntimeSpec::for_direction`] is asked for: the default, or the
+/// declared fallback an instance opts into with `runtime: fallback` (CN2 OR-4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Choice {
+    /// The runtime the direction runs on unless the instance opts out.
+    #[default]
+    Default,
+    /// The declared fallback, which is never the default.
+    Fallback,
+}
+
+impl RuntimeSpec {
+    /// The runtime and reference `direction` runs on under `choice`.
+    ///
+    /// [`Choice::Default`] is the direction's override where there is one and the
+    /// top-level `kind` and `ref` otherwise, so it is always `Some`; it never returns
+    /// the fallback. [`Choice::Fallback`] is the fallback, and only when the fallback
+    /// declares `direction`; `None` otherwise. Whether the manifest declares the
+    /// direction at all is `capabilities`' business, which R-CN2-1 and R-CN2-8 tie
+    /// these blocks to.
+    pub fn for_direction(
+        &self,
+        direction: Direction,
+        choice: Choice,
+    ) -> Option<(RuntimeKind, &str)> {
+        match choice {
+            Choice::Default => {
+                let chosen = match direction {
+                    Direction::Source => self.source.as_ref(),
+                    Direction::Sink => self.sink.as_ref(),
+                };
+                Some(
+                    chosen.map_or((self.kind, self.reference.as_str()), |chosen| {
+                        (chosen.kind, chosen.reference.as_str())
+                    }),
+                )
+            }
+            Choice::Fallback => self
+                .fallback
+                .as_ref()
+                .filter(|fallback| fallback.directions.contains(&direction))
+                .map(|fallback| (fallback.kind, fallback.reference.as_str())),
+        }
+    }
 }
 
 /// §33 §4's `config: {$ref: …}` — where the instance-config JSON Schema lives.
@@ -382,6 +477,11 @@ pub struct SinkCaps {
     pub delete: bool,
     /// The sink itself dedupes retries, for example Kafka's idempotent producer.
     pub idempotent: bool,
+    /// The sink emits one reply event per input event to a declared reply topic
+    /// (CN2 OR-19), which needs an emitted type and a `reply_topic` config property
+    /// (R-CN2-3). False when the manifest omits it.
+    #[serde(default)]
+    pub reply: bool,
 }
 
 /// §33 §4's `capabilities.delivery`, one guarantee per direction. Every runtime is
@@ -459,6 +559,11 @@ pub struct EnvelopeDecl {
     /// `connector.schema.json` allows.
     #[serde(default)]
     pub passthrough: bool,
+    /// The source's ids are stable across re-reads, so ingest's `(source, id)` dedup
+    /// (D334) makes it effectively once (§33 §6, CN2 OR-7). False when the manifest
+    /// omits it.
+    #[serde(default)]
+    pub stable_ids: bool,
 }
 
 /// §33 §4's `limits`: the bounds the runtime enforces. An absent bound leaves the
@@ -531,6 +636,11 @@ pub struct ConnectorSpec {
     pub conformance: Vec<Suite>,
     /// The guide page, or `None` when a generated stub has none (CN1 Ruling 1).
     pub docs: Option<String>,
+    /// Free-form notes (CN2 Task 1), with the conventional prefixes `narrows: …`,
+    /// `fallback-only: …` (which R-CN2-6 reads) and `java-deferred: …`. Empty when
+    /// the manifest omits it, and then not written back.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
 }
 
 /// One problem with one manifest: which field, and what is wrong with it.
@@ -712,6 +822,7 @@ impl ConnectorSpec {
             limits: pb::Limits::from(self.limits.clone()).into(),
             conformance: self.conformance.iter().copied().map(Into::into).collect(),
             docs: self.docs.clone().unwrap_or_default(),
+            notes: self.notes.clone(),
             ..Default::default()
         })
     }
@@ -774,6 +885,7 @@ impl ConnectorSpec {
                 .map(|suite| suite.try_into())
                 .collect::<Result<Vec<Suite>, ProtoError>>()?,
             docs: (!proto.docs.is_empty()).then(|| proto.docs.clone()),
+            notes: proto.notes.clone(),
         })
     }
 }
@@ -787,21 +899,120 @@ impl From<RuntimeSpec> for pb::RuntimeRef {
             kind: spec.kind.into(),
             r#ref: spec.reference,
             version: spec.version.unwrap_or_default(),
+            source: spec.source.map(pb::RuntimeOverride::from).into(),
+            sink: spec.sink.map(pb::RuntimeOverride::from).into(),
+            profile: spec.profile.unwrap_or_default(),
+            fallback: spec.fallback.map(pb::FallbackSpec::from).into(),
             ..Default::default()
         }
     }
 }
 
-/// `pb::RuntimeRef` → [`RuntimeSpec`].
+/// `pb::RuntimeRef` → [`RuntimeSpec`]. The wire's empty `profile` is the YAML's
+/// absent one, as with `version`.
 impl TryFrom<pb::RuntimeRef> for RuntimeSpec {
     type Error = ProtoError;
 
     fn try_from(proto: pb::RuntimeRef) -> Result<Self, Self::Error> {
+        let source: Option<pb::RuntimeOverride> = proto.source.clone().into();
+        let sink: Option<pb::RuntimeOverride> = proto.sink.clone().into();
+        let fallback: Option<pb::FallbackSpec> = proto.fallback.clone().into();
         Ok(Self {
             kind: proto.kind.try_into()?,
             reference: proto.r#ref,
             version: (!proto.version.is_empty()).then_some(proto.version),
+            source: source.map(TryInto::try_into).transpose()?,
+            sink: sink.map(TryInto::try_into).transpose()?,
+            profile: (!proto.profile.is_empty()).then_some(proto.profile),
+            fallback: fallback.map(TryInto::try_into).transpose()?,
         })
+    }
+}
+
+/// [`RuntimeOverride`] → `pb::RuntimeOverride`.
+impl From<RuntimeOverride> for pb::RuntimeOverride {
+    fn from(spec: RuntimeOverride) -> Self {
+        Self {
+            kind: spec.kind.into(),
+            r#ref: spec.reference,
+            ..Default::default()
+        }
+    }
+}
+
+/// `pb::RuntimeOverride` → [`RuntimeOverride`].
+impl TryFrom<pb::RuntimeOverride> for RuntimeOverride {
+    type Error = ProtoError;
+
+    fn try_from(proto: pb::RuntimeOverride) -> Result<Self, Self::Error> {
+        Ok(Self {
+            kind: proto.kind.try_into()?,
+            reference: proto.r#ref,
+        })
+    }
+}
+
+/// [`FallbackSpec`] → `pb::FallbackSpec`.
+impl From<FallbackSpec> for pb::FallbackSpec {
+    fn from(spec: FallbackSpec) -> Self {
+        Self {
+            kind: spec.kind.into(),
+            r#ref: spec.reference,
+            directions: spec.directions.into_iter().map(Into::into).collect(),
+            replaced_by: spec.replaced_by,
+            ..Default::default()
+        }
+    }
+}
+
+/// `pb::FallbackSpec` → [`FallbackSpec`].
+impl TryFrom<pb::FallbackSpec> for FallbackSpec {
+    type Error = ProtoError;
+
+    fn try_from(proto: pb::FallbackSpec) -> Result<Self, Self::Error> {
+        Ok(Self {
+            kind: proto.kind.try_into()?,
+            reference: proto.r#ref,
+            directions: proto
+                .directions
+                .iter()
+                .map(Direction::try_from)
+                .collect::<Result<Vec<_>, _>>()?,
+            replaced_by: proto.replaced_by,
+        })
+    }
+}
+
+/// A manifest direction becomes `instance.proto`'s `Direction`, whose values carry
+/// no enum prefix (`SOURCE`, `SINK`).
+impl From<Direction> for EnumValue<pb::Direction> {
+    fn from(direction: Direction) -> Self {
+        match direction {
+            Direction::Source => pb::Direction::SOURCE.into(),
+            Direction::Sink => pb::Direction::SINK.into(),
+        }
+    }
+}
+
+/// `instance.proto`'s `Direction` back to a manifest direction. `BIDIRECTIONAL` is
+/// an instance's notion, not a manifest's, so like `_UNSPECIFIED` it has no YAML
+/// spelling.
+impl TryFrom<&EnumValue<pb::Direction>> for Direction {
+    type Error = ProtoError;
+
+    fn try_from(value: &EnumValue<pb::Direction>) -> Result<Self, Self::Error> {
+        match value {
+            EnumValue::Known(pb::Direction::SOURCE) => Ok(Self::Source),
+            EnumValue::Known(pb::Direction::SINK) => Ok(Self::Sink),
+            EnumValue::Known(other) => Err(ProtoError::NoYamlSpelling {
+                enum_name: "Direction",
+                value: other.proto_name().to_string(),
+            }),
+            EnumValue::Unknown(number) => Err(ProtoError::UnknownEnumValue {
+                enum_name: "Direction",
+                value: *number,
+            }),
+        }
     }
 }
 
@@ -854,6 +1065,7 @@ impl From<pb::SinkCaps> for SinkCaps {
             upsert: proto.upsert,
             delete: proto.delete,
             idempotent: proto.idempotent,
+            reply: proto.reply,
         }
     }
 }
@@ -868,6 +1080,7 @@ impl From<SinkCaps> for pb::SinkCaps {
             upsert: caps.upsert,
             delete: caps.delete,
             idempotent: caps.idempotent,
+            reply: caps.reply,
             ..Default::default()
         }
     }
@@ -981,6 +1194,7 @@ impl From<pb::EnvelopeDecl> for EnvelopeDecl {
             emits: proto.emits,
             consumes: proto.consumes,
             passthrough: proto.passthrough,
+            stable_ids: proto.stable_ids,
         }
     }
 }
@@ -992,6 +1206,7 @@ impl From<EnvelopeDecl> for pb::EnvelopeDecl {
             emits: decl.emits,
             consumes: decl.consumes,
             passthrough: decl.passthrough,
+            stable_ids: decl.stable_ids,
             ..Default::default()
         }
     }
@@ -1101,8 +1316,47 @@ pub fn load_manifest_value(
         schema.validator(),
         Some(&config_schema),
     )?;
+    check_profile_exists(file, &spec, root)?;
     spec.config_schema = config_schema;
     Ok(spec)
+}
+
+/// R-CN2-2's half that needs the `connectors/` root: a `runtime.profile` names a
+/// file `connectors/profiles/<id>.yaml` (the schema's id pattern keeps the name a
+/// plain file name), the profile validates, and it fits the manifest
+/// ([`crate::profile::check_manifest_profile`]: the module rule and a note per
+/// narrowing; CN2 Task 7).
+fn check_profile_exists(
+    file: &str,
+    spec: &ConnectorSpec,
+    root: &Path,
+) -> Result<(), Vec<ManifestError>> {
+    let Some(profile) = spec.runtime.profile.as_deref() else {
+        return Ok(());
+    };
+    let path = root.join("profiles").join(format!("{profile}.yaml"));
+    if path.is_file() {
+        let loaded = crate::profile::load_profile(&path).map_err(|error| {
+            vec![ManifestError::new(
+                "runtime.profile",
+                format!("{file}: the profile {profile:?} does not load: {error} (R-CN2-2)"),
+            )]
+        })?;
+        let errors = crate::profile::check_manifest_profile(spec, &loaded);
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    } else {
+        Err(vec![ManifestError::new(
+            "runtime.profile",
+            format!(
+                "{file}: the profile {profile:?} is not a file under profiles/ (expected \
+                 profiles/{profile}.yaml; R-CN2-2)"
+            ),
+        )])
+    }
 }
 
 /// The instance-config JSON Schema a manifest's `config.$ref` names, read relative to
@@ -1235,6 +1489,12 @@ mod tests {
         );
         compare("/properties/auth/items", &slugs!(AuthMethod));
         compare("/properties/conformance/items", &slugs!(Suite));
+        // CN2 Task 1's direction enum, which `Direction` spells by `Display`.
+        let directions: Vec<String> = Direction::ALL.iter().map(ToString::to_string).collect();
+        compare(
+            "/$defs/direction",
+            &directions.iter().map(String::as_str).collect::<Vec<_>>(),
+        );
     }
 
     #[test]

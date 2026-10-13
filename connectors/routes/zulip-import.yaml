@@ -1,0 +1,33 @@
+# Slack messages -> Zulip messages, topic per thread (CN1 Task 15, D628), on
+# native runtimes (CN2 Task 20, OR-11). Replaces
+# connect/routes/templates/zulip-import.yaml.tmpl: the source is the `slack`
+# HTTP-API profile's `messages` listing (conversations.history), projected to
+# a Zulip stream message; the native `zulip` sink (CN1 Task 15) posts it with
+# `Idempotency-Key: <event id>`, so a re-read posts nothing twice.
+#
+# Zulip allows 200 requests/60 s shared across every endpoint; the sink
+# self-throttles from its X-RateLimit-* headers and stops at
+# `rate_limit_floor`.
+apiVersion: loams.flow/v1
+kind: ImportRoute
+id: zulip-import
+parameters: [slack_channel, zulip_stream]
+topic: flow-import-slack-zulip
+sources:
+  - connector: slack
+    config:
+      resource: messages
+      channel: "{route.slack_channel}"
+      poll_interval_ms: 60000
+      auth: { token: slack_token }
+      projection:
+        type: stream
+        to: "{route.zulip_stream}"
+        topic: /thread_ts|/ts
+        content: "*<{/user}>*: {/text}"
+    secrets: [slack_token]
+sink:
+  connector: zulip
+  config:
+    rate_limit_floor: 10
+  secrets: [api_key]

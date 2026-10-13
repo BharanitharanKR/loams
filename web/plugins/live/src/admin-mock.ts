@@ -1,6 +1,8 @@
-// A fixture-backed LiveAdminApi, used until LiveAdminService (LV1 Task 10) is
-// served. State is per instance and in memory: activating a deployment here
-// changes nothing on any engine.
+// A fixture-backed LiveAdminApi for the tests and demos. State is per instance
+// and in memory: activating a deployment here changes nothing on any engine. It
+// follows the engine's rules (LV1 Tasks 6, 7, 10): the activation is a
+// compare-and-swap on the active deployment, and any recorded deployment can be
+// activated, a failed one too.
 
 import {
   DeployConflictError,
@@ -157,7 +159,14 @@ function line(
   level: LogLine['level'],
   text: string,
 ): LogLine {
-  return { ts: T0 + 2 * 3_600_000 + i * 1000, requestId, function: fn, level, line: text };
+  return {
+    ts: T0 + 2 * 3_600_000 + i * 1000,
+    requestId,
+    function: fn,
+    deployment: '01K7A0000000000000000000D3',
+    level,
+    line: text,
+  };
 }
 
 const abortError = () => new DOMException('aborted', 'AbortError');
@@ -211,12 +220,9 @@ export function createMockAdminApi(
       const target = find(id);
       const active = deployments.find((d) => d.state === 'active' || d.state === 'degraded');
       if ((active?.id ?? undefined) !== expectedActive) throw new DeployConflictError();
-      if (target.state === 'failed') {
-        throw new Error('A failed deployment cannot be activated.');
-      }
       if (active && active.id === id) return { ...target };
       deployments = deployments.map((d) => {
-        if (d.id === id) return { ...d, state: 'active', rolledBackFrom: active?.id };
+        if (d.id === id) return { ...d, state: 'active', failureReason: undefined };
         if (active && d.id === active.id) return { ...d, state: 'superseded' };
         return d;
       });

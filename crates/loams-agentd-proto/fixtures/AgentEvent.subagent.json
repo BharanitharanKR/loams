@@ -1,0 +1,8 @@
+{
+  "event": {
+    "text": "Reading",
+    "type": "textDelta"
+  },
+  "parentToolUseId": "call-1",
+  "type": "subagent"
+}

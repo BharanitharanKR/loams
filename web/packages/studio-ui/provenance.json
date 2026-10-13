@@ -1,0 +1,59 @@
+{
+  "upstream": "https://github.com/pingdotgg/t3code",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2026 T3 Tools Inc.",
+  "archives": [
+    {
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "url": "https://github.com/pingdotgg/t3code/archive/6524a8d43795dc543f7cfb572388cdea3662ad48.zip",
+      "sha256": "4d13a8e39bee303cc33797742187abe15c70c70c3879d2d4e4bc8a51b3bb14a3"
+    }
+  ],
+  "files": [
+    {
+      "path": "src/hooks/useMediaQuery.ts",
+      "upstreamPath": "apps/web/src/hooks/useMediaQuery.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "eca632a42f3da41b2d760916748fc3117c70efa39cd596388018bc22e06fe8b2",
+      "localSha256": "5e491d1f8b66e957b4bac3282f59a0feb626b6305743dd095f36add4291892f7",
+      "verdict": "as-is",
+      "group": "hooks"
+    },
+    {
+      "path": "src/hooks/useResizeDrag.ts",
+      "upstreamPath": "apps/web/src/hooks/useResizeDrag.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "8773970d4725de22166cb2bb78c807af6b1566d3aa3f1785cf8daed0bbdd6828",
+      "localSha256": "c08bb37585dcc8619203bb61081dfee5f636a0e09ca58c5e5158af9af411212b",
+      "verdict": "as-is",
+      "group": "hooks"
+    },
+    {
+      "path": "src/lib/AnimatedHeight.tsx",
+      "upstreamPath": "apps/web/src/components/AnimatedHeight.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "98857c40d6310e9563d3fcb5bfa06b016ae9ddc5764e0b116f0c55c4fdb3683c",
+      "localSha256": "d1079fc2afaee63c73470f5319d9f2cd1e36d71d7ab0347ad55f51db0a56ed27",
+      "verdict": "as-is",
+      "group": "lib"
+    },
+    {
+      "path": "src/lib/lruCache.ts",
+      "upstreamPath": "apps/web/src/lib/lruCache.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "02dd46cdf0eb7a3d0ad21b4d91304c7b35e4528b930d309b4049768761227e35",
+      "localSha256": "7dec44a0fef20045067b13786c6ec91ad9a4275ece621beabb67575c8262696c",
+      "verdict": "as-is",
+      "group": "lib"
+    },
+    {
+      "path": "src/lib/observeResize.ts",
+      "upstreamPath": "apps/web/src/lib/observeResize.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "78e4d11c6330b35d7379f5031f3a474f71a1a512f3537e52a9cde99b51a53d09",
+      "localSha256": "6bce0df42f2fca565697d8b2342ce1d92f01a77a5ec31583037ebd58c52615fc",
+      "verdict": "as-is",
+      "group": "lib"
+    }
+  ]
+}

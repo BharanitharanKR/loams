@@ -1,0 +1,190 @@
+{
+  "recorded_from": "Salesforce",
+  "synthetic": true,
+  "docs": [
+    "https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/queries.htm",
+    "https://developer.salesforce.com/docs/atlas.en-us.api_asynch.meta/api_asynch/query_get_job_results.htm",
+    "https://help.salesforce.com/s/articleView?id=xcloud.remoteaccess_oauth_refresh_token_flow.htm"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "bulk_query",
+    "config": {
+      "instance_url": "https://loams-test.my.salesforce.com",
+      "base_url": "{proxy}/services/data/v62.0",
+      "token_url": "{proxy}/services/oauth2/token",
+      "soql": "SELECT Id, Name FROM Account"
+    },
+    "secrets": {
+      "client_id": "synthetic-sf-client",
+      "client_secret": "synthetic-sf-secret",
+      "refresh_token": "synthetic-sf-refresh"
+    },
+    "expect": 3
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/oauth2/token",
+        "headers": {},
+        "body": {
+          "text": "grant_type=refresh_token&refresh_token=<redacted>&client_id=<redacted>&client_secret=<redacted>"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "access_token": "<scrubbed>",
+            "instance_url": "https://loams-test.my.salesforce.com",
+            "id": "https://login.salesforce.com/id/00DR0000000xxxx/005R0000000yyyy",
+            "token_type": "Bearer",
+            "issued_at": "1759320000000",
+            "signature": "<scrubbed>"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/data/v62.0/jobs/query",
+        "headers": {},
+        "body": {
+          "json": {
+            "operation": "query",
+            "query": "SELECT Id, Name FROM Account",
+            "contentType": "CSV"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "id": "750R0000000zlh9IAA",
+            "operation": "query",
+            "object": "Account",
+            "createdById": "005R0000000yyyy",
+            "createdDate": "2026-10-01T12:00:00.000+0000",
+            "systemModstamp": "2026-10-01T12:00:00.000+0000",
+            "state": "UploadComplete",
+            "concurrencyMode": "Parallel",
+            "contentType": "CSV",
+            "apiVersion": 62.0,
+            "lineEnding": "LF",
+            "columnDelimiter": "COMMA"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v62.0/jobs/query/750R0000000zlh9IAA",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "id": "750R0000000zlh9IAA",
+            "operation": "query",
+            "object": "Account",
+            "createdById": "005R0000000yyyy",
+            "createdDate": "2026-10-01T12:00:00.000+0000",
+            "systemModstamp": "2026-10-01T12:00:00.000+0000",
+            "state": "InProgress",
+            "concurrencyMode": "Parallel",
+            "contentType": "CSV",
+            "apiVersion": 62.0,
+            "lineEnding": "LF",
+            "columnDelimiter": "COMMA"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v62.0/jobs/query/750R0000000zlh9IAA",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "id": "750R0000000zlh9IAA",
+            "operation": "query",
+            "object": "Account",
+            "createdById": "005R0000000yyyy",
+            "createdDate": "2026-10-01T12:00:00.000+0000",
+            "systemModstamp": "2026-10-01T12:00:00.000+0000",
+            "state": "JobComplete",
+            "concurrencyMode": "Parallel",
+            "contentType": "CSV",
+            "apiVersion": 62.0,
+            "lineEnding": "LF",
+            "columnDelimiter": "COMMA",
+            "numberRecordsProcessed": 3,
+            "retries": 0,
+            "totalProcessingTime": 334
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v62.0/jobs/query/750R0000000zlh9IAA/results?maxRecords=50000",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/csv",
+          "sforce-locator": "MTAwMDA",
+          "sforce-numberofrecords": "2"
+        },
+        "body": {
+          "text": "\"Id\",\"Name\"\n\"001R0000006hfeZIAQ\",\"Acme, Inc.\"\n\"001R0000006hfeaIAA\",\"Globex\"\n"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v62.0/jobs/query/750R0000000zlh9IAA/results?locator=MTAwMDA&maxRecords=50000",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/csv",
+          "sforce-locator": "null",
+          "sforce-numberofrecords": "1"
+        },
+        "body": {
+          "text": "\"Id\",\"Name\"\n\"001R0000006hfebIAA\",\"Initech \"\"Labs\"\"\"\n"
+        }
+      }
+    }
+  ]
+}

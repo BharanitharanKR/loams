@@ -1,0 +1,22 @@
+{
+  "checkoutId": "checkout-1",
+  "directory": "src",
+  "entries": [
+    {
+      "ignored": false,
+      "kind": "file",
+      "modifiedAt": "2026-10-12T09:30:00Z",
+      "mutationRevision": "rev-1",
+      "name": "main.rs",
+      "path": "src/main.rs",
+      "readOnly": false,
+      "size": 1024
+    }
+  ],
+  "mutationCapabilities": {
+    "deleteEntry": true,
+    "moveEntry": true
+  },
+  "nextCursor": "cursor-2",
+  "truncated": false
+}

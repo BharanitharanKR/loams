@@ -58,7 +58,8 @@ pub fn lookup(name: &str) -> Option<Arc<dyn Function>> {
 }
 
 /// A table as `_system:tables` reports it: the implicit `by_id` and
-/// `by_creation_time` indexes first, then the user indexes.
+/// `by_creation_time` indexes first, then the ready user indexes (an index
+/// a deploy is backfilling or dropping is left out; LV1 plan Task 9).
 pub fn table_value(t: &TableDef) -> LiveValue {
     let index = |name: &str, fields: &[String]| {
         LiveValue::Object(BTreeMap::from([
@@ -70,7 +71,7 @@ pub fn table_value(t: &TableDef) -> LiveValue {
         ]))
     };
     let mut indexes = vec![index(BY_ID, &[]), index(BY_CREATION_TIME, &[])];
-    indexes.extend(t.indexes.iter().map(|i| index(&i.name, &i.fields)));
+    indexes.extend(t.ready_indexes().map(|i| index(&i.name, &i.fields)));
     LiveValue::Object(BTreeMap::from([
         ("name".to_string(), LiveValue::Str(t.name.clone())),
         ("id".to_string(), LiveValue::I64(i64::from(t.id.0))),
@@ -152,7 +153,7 @@ impl Function for System {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog::IndexDef;
+    use crate::catalog::{IndexDef, IndexState};
     use crate::{IndexId, TableId};
 
     #[test]
@@ -167,12 +168,32 @@ mod tests {
         let t = TableDef {
             id: TableId(3),
             name: "people".into(),
-            indexes: vec![IndexDef {
-                id: IndexId(IndexId::FIRST_USER),
-                name: "by_name".into(),
-                fields: vec!["name".into()],
-            }],
-            next_index_id: IndexId::FIRST_USER + 1,
+            indexes: vec![
+                IndexDef {
+                    id: IndexId(IndexId::FIRST_USER),
+                    name: "by_name".into(),
+                    fields: vec!["name".into()],
+                    state: IndexState::Ready,
+                },
+                // Backfilling and dropping indexes are not listed (LV1 plan
+                // Task 9).
+                IndexDef {
+                    id: IndexId(IndexId::FIRST_USER + 1),
+                    name: "by_age".into(),
+                    fields: vec!["age".into()],
+                    state: IndexState::Backfilling {
+                        deployment: ulid::Ulid::nil(),
+                    },
+                },
+                IndexDef {
+                    id: IndexId(IndexId::FIRST_USER + 2),
+                    name: "by_city".into(),
+                    fields: vec!["city".into()],
+                    state: IndexState::Dropping,
+                },
+            ],
+            next_index_id: IndexId::FIRST_USER + 3,
+            validation: Default::default(),
         };
         let LiveValue::Object(o) = table_value(&t) else {
             panic!("an object")

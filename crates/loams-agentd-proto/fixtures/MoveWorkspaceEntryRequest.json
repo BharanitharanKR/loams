@@ -1,0 +1,9 @@
+{
+  "chatId": "chat-1",
+  "destinationPath": "src/lib.rs",
+  "expectedCheckoutId": "checkout-1",
+  "expectedKind": "file",
+  "expectedSourceRevision": "rev-1",
+  "operationId": "op-1",
+  "sourcePath": "src/main.rs"
+}

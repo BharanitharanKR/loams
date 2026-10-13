@@ -50,6 +50,7 @@ from loams.devices.v1.devices_pb2 import (
     SendTestNotificationResponse,
 )
 from loams.runtime.errors import to_loams_error
+from loams.runtime.transports import TransportOptions, codec_of
 
 FIXTURES = pathlib.Path(__file__).resolve().parent.parent.parent / "fixtures"
 
@@ -190,8 +191,10 @@ class _CompactProtoJSONCodec:
         d = MessageToDict(message, use_integers_for_enums=False)  # type: ignore[arg-type]
         return json.dumps(d, separators=(",", ":")).encode("utf-8")
 
-    def decode(self, data: bytes | bytearray, message: object) -> object:
-        json_format.Parse(data, message, ignore_unknown_fields=True)  # type: ignore[arg-type]
+    def decode(self, data: bytes | bytearray, message_class: type) -> object:
+        # connectrpc 0.10+ passes the message *class* (0.9.0 passed an instance).
+        message = message_class()
+        json_format.Parse(data, message, ignore_unknown_fields=True)
         return message
 
 
@@ -256,7 +259,7 @@ def test_python_conformance_all_required_fixtures(endpoint: str) -> None:
             c = ConnectClientSync(
                 endpoint,
                 protocol=protocol,
-                proto_json=proto_json,
+                codec=codec_of(TransportOptions(proto_json=proto_json)),
                 send_compression=None,
             )
             if proto_json:

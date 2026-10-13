@@ -9,7 +9,8 @@
  * expiry checks. Each one exists to stop a specific forgery, and each is enforced here
  * rather than assumed:
  *
- *   `events` must contain the logout event URI
+ *   `events` must be a JSON object with a member named by the logout event URI
+ *       (OIDC Back-Channel Logout 1.0 §2.4), whose value is itself a JSON object.
  *       Without this, an ordinary ID token (which is a perfectly valid signed JWT from
  *       the same issuer and audience) would be accepted as a logout token and would
  *       destroy live sessions on presentation. This is the most important check here.
@@ -38,7 +39,11 @@ const MAX_LOGOUT_TOKEN_AGE_MS = 5 * 60 * 1000;
 export interface LogoutTokenClaims {
   sub?: string;
   sid?: string;
-  events?: string[];
+  /**
+   * OIDC Back-Channel Logout 1.0 §2.4: a JSON object whose member named by
+   * {@link LOGOUT_EVENT_URI} is a JSON object (usually `{}`).
+   */
+  events?: Record<string, unknown>;
   aud?: string | string[];
   jti?: string;
   /** Seconds since the epoch. Used for the freshness window. */
@@ -63,6 +68,19 @@ export interface BackChannelDeps {
   jwksUri: () => string | undefined;
   /** Reject a `jti` already seen. Defaults to an in-process set. */
   seenJti?: Set<string>;
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** True when `events` is an object carrying the logout event URI as an object member. */
+function hasLogoutEvent(events: unknown): boolean {
+  return (
+    isJsonObject(events) &&
+    Object.prototype.hasOwnProperty.call(events, LOGOUT_EVENT_URI) &&
+    isJsonObject(events[LOGOUT_EVENT_URI])
+  );
 }
 
 export class BackChannelLogoutVerifier {
@@ -113,14 +131,26 @@ export class BackChannelLogoutVerifier {
     const claims = payload as LogoutTokenClaims;
 
     // --- events: the check that stops a plain ID token being used as a logout token.
-    const events = Array.isArray(claims.events) ? claims.events : [];
-    if (!events.includes(LOGOUT_EVENT_URI)) {
+    // Per §2.4, `events` is an object (not an array) whose logout-event member is
+    // itself an object. Anything else -- a missing claim, an array, a member of the
+    // wrong type -- is refused.
+    if (!hasLogoutEvent(claims.events)) {
       throw new AuthError(
-        `Back-channel logout token is missing the required "events" claim value ` +
+        `Back-channel logout token is missing the required "events" claim member ` +
           `"${LOGOUT_EVENT_URI}". Got ${JSON.stringify(claims.events ?? null)}. A token ` +
           `without it is an ordinary ID token, and accepting one here would destroy live ` +
           `sessions on presentation of any valid token from this issuer.`,
         { code: "logout_missing_event", httpStatus: 400 },
+      );
+    }
+
+    // --- nonce: §2.6 requires a logout token that carries one to be refused, because
+    // only ID tokens carry a nonce.
+    if (payload.nonce !== undefined) {
+      throw new AuthError(
+        `Back-channel logout token carries a "nonce" claim, which a logout token must ` +
+          `not contain (OpenID Connect Back-Channel Logout 1.0 §2.6).`,
+        { code: "logout_token_invalid", httpStatus: 400 },
       );
     }
 

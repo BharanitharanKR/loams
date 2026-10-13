@@ -25,6 +25,7 @@ cargo run -p loams-agentd -- run --child --config .agentd-dev/config.toml
 - `agentd.json`, the discovery file (protocol, version, pid, port, start time and mode; removed on a clean exit);
 - `store/`, the sessions engine's data;
 - `adapters/`, the harnesses' managed ACP adapter installs;
+- `runtime/`, the installed binaries (see below);
 - `logs/agentd.log`, the daemon's own log (a supervisor's capture of stdout and stderr goes to `logs/agentd.stdout.log`).
 
 The RPC listens on `127.0.0.1` on an ephemeral port, which `agentd.json` names. `--child` (Loams Desktop starts and stops the daemon) or `--service` (the per-user service) sets the mode that `Hello` reports; without either flag, `[daemon] mode` in the config decides. `LOAMS_AGENTD_CONFIG` overrides `--config`.
@@ -32,6 +33,17 @@ The RPC listens on `127.0.0.1` on an ephemeral port, which `agentd.json` names. 
 Every WebSocket upgrade must carry `Authorization: Bearer <agentd.token>` and no `Origin`, with `Host: 127.0.0.1:<port>`; anything else is refused (401 or 403) before the RPC is served, and `Hello` must be the first call on a connection (design §50 §7).
 
 Exit codes: 0 stopped, 3 already running (a second `run` on the same directory prints `already running (pid …)`), 4 invalid config (the message names the key), 70 internal error.
+
+## The per-user service and the runtime directory
+
+A service never runs the binary from the app bundle. `install-runtime --from <resources/bin> --to <agentd>/runtime` copies `loams-agentd` and `loams` into `runtime/<VERSION>/`, checks each copy against the bundle's `SHA256SUMS`, switches `runtime/current` to it (a symlink; `current.txt` on Windows) and keeps the newest two versions. A failed check leaves `current` where it was.
+
+`service install|uninstall|start|stop|status --config <file>` manages the service that runs `runtime/current/loams-agentd run --service --config <file>`:
+- Linux: the systemd user unit `loams-agentd.service` (in `$XDG_CONFIG_HOME/systemd/user`), `daemon-reload`, then `enable --now`;
+- macOS: the LaunchAgent `dev.loams.agentd` (`~/Library/LaunchAgents`), with `launchctl bootstrap gui/<uid>`; launchd writes the daemon's stdout and stderr to `logs/agentd.stdout.log`;
+- Windows: the Run value `LoamsAgentd` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. There `run --service` is a parent that runs `run --worker` in a Job Object and restarts it after a crash (not after exit 0, 3 or 4), with a backoff of 1 to 30 s and at most 5 restarts in 10 minutes.
+
+No unit captures the environment; the daemon resolves the login shell's `PATH` when it starts. `service enable-linger` and `disable-linger` run `loginctl enable-linger|disable-linger "$USER"` on Linux (linger is off by default, and the daemon never turns it on itself) and answer `unsupported` elsewhere.
 
 The other subcommands are `-- status --config <file>`, `-- version` and `-- mcp`. The `mcp` subcommand is the stdio shim; the daemon injects it into each harness run with a token scoped to that run (`LOAMS_AGENTD_RUN_TOKEN`, `LOAMS_AGENTD_PORT`, `LOAMS_AGENTD_SESSION_ID`), so it is not useful on its own.
 

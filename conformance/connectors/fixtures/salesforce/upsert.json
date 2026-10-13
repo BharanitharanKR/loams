@@ -1,0 +1,120 @@
+{
+  "recorded_from": "Salesforce",
+  "synthetic": true,
+  "docs": [
+    "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_composite_sobjects_collections_upsert.htm",
+    "https://help.salesforce.com/s/articleView?id=xcloud.remoteaccess_oauth_refresh_token_flow.htm"
+  ],
+  "scenario": {
+    "direction": "sink",
+    "resource": "records",
+    "config": {
+      "instance_url": "https://loams-test.my.salesforce.com",
+      "base_url": "{proxy}/services/data/v62.0",
+      "token_url": "{proxy}/services/oauth2/token",
+      "soql": "SELECT Id, Name FROM Account",
+      "sobject": "Account",
+      "external_id_field": "External_Id__c"
+    },
+    "secrets": {
+      "client_id": "synthetic-sf-client",
+      "client_secret": "synthetic-sf-secret",
+      "refresh_token": "synthetic-sf-refresh"
+    },
+    "input": [
+      {
+        "attributes": {
+          "type": "Account"
+        },
+        "External_Id__c": "ext-1",
+        "Name": "Acme, Inc."
+      },
+      {
+        "attributes": {
+          "type": "Account"
+        },
+        "External_Id__c": "ext-2",
+        "Name": "Globex"
+      }
+    ],
+    "expect": 2
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/oauth2/token",
+        "headers": {},
+        "body": {
+          "text": "grant_type=refresh_token&refresh_token=<redacted>&client_id=<redacted>&client_secret=<redacted>"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "access_token": "<scrubbed>",
+            "instance_url": "https://loams-test.my.salesforce.com",
+            "id": "https://login.salesforce.com/id/00DR0000000xxxx/005R0000000yyyy",
+            "token_type": "Bearer",
+            "issued_at": "1759320000000",
+            "signature": "<scrubbed>"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "path": "/services/data/v62.0/composite/sobjects/Account/External_Id__c",
+        "headers": {},
+        "body": {
+          "json": {
+            "allOrNone": false,
+            "records": [
+              {
+                "attributes": {
+                  "type": "Account"
+                },
+                "External_Id__c": "ext-1",
+                "Name": "Acme, Inc."
+              },
+              {
+                "attributes": {
+                  "type": "Account"
+                },
+                "External_Id__c": "ext-2",
+                "Name": "Globex"
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": [
+            {
+              "id": "001R0000006hfeZIAQ",
+              "success": true,
+              "errors": [],
+              "created": false
+            },
+            {
+              "id": "001R0000006hfecIAA",
+              "success": true,
+              "errors": [],
+              "created": true
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

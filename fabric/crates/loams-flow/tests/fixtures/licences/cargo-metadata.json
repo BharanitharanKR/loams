@@ -1,0 +1,49 @@
+{
+  "packages": [
+    { "name": "loams-connector-fixture", "version": "0.1.0", "id": "path+file:///fabric/crates/loams-connector-fixture#0.1.0", "license": "Apache-2.0" },
+    { "name": "loams-flow", "version": "0.1.0", "id": "path+file:///fabric/crates/loams-flow#0.1.0", "license": "Apache-2.0" },
+    { "name": "good-crate", "version": "1.0.0", "id": "registry+https://github.com/rust-lang/crates.io-index#good-crate@1.0.0", "license": "MIT OR Apache-2.0" },
+    { "name": "deep-crate", "version": "2.0.0", "id": "registry+https://github.com/rust-lang/crates.io-index#deep-crate@2.0.0", "license": "Unicode-3.0" },
+    { "name": "dual-agpl", "version": "0.3.0", "id": "registry+https://github.com/rust-lang/crates.io-index#dual-agpl@0.3.0", "license": "(AGPL-3.0-only OR MIT) AND BSL-1.0" },
+    { "name": "old-style", "version": "0.1.0", "id": "registry+https://github.com/rust-lang/crates.io-index#old-style@0.1.0", "license": "MIT/Apache-2.0" },
+    { "name": "build-helper", "version": "0.1.0", "id": "registry+https://github.com/rust-lang/crates.io-index#build-helper@0.1.0", "license": "Apache-2.0 WITH LLVM-exception" },
+    { "name": "agpl-dev", "version": "1.0.0", "id": "registry+https://github.com/rust-lang/crates.io-index#agpl-dev@1.0.0", "license": "AGPL-3.0-only" },
+    { "name": "sspl-thing", "version": "1.0.0", "id": "registry+https://github.com/rust-lang/crates.io-index#sspl-thing@1.0.0", "license": "SSPL-1.0" }
+  ],
+  "workspace_members": [
+    "path+file:///fabric/crates/loams-connector-fixture#0.1.0",
+    "path+file:///fabric/crates/loams-flow#0.1.0"
+  ],
+  "resolve": {
+    "nodes": [
+      {
+        "id": "path+file:///fabric/crates/loams-connector-fixture#0.1.0",
+        "deps": [
+          { "pkg": "registry+https://github.com/rust-lang/crates.io-index#good-crate@1.0.0", "dep_kinds": [{ "kind": null }] },
+          { "pkg": "registry+https://github.com/rust-lang/crates.io-index#dual-agpl@0.3.0", "dep_kinds": [{ "kind": null }] },
+          { "pkg": "registry+https://github.com/rust-lang/crates.io-index#old-style@0.1.0", "dep_kinds": [{ "kind": null }] },
+          { "pkg": "registry+https://github.com/rust-lang/crates.io-index#build-helper@0.1.0", "dep_kinds": [{ "kind": "build" }] },
+          { "pkg": "registry+https://github.com/rust-lang/crates.io-index#agpl-dev@1.0.0", "dep_kinds": [{ "kind": "dev" }] }
+        ]
+      },
+      {
+        "id": "path+file:///fabric/crates/loams-flow#0.1.0",
+        "deps": [
+          { "pkg": "registry+https://github.com/rust-lang/crates.io-index#sspl-thing@1.0.0", "dep_kinds": [{ "kind": null }] }
+        ]
+      },
+      {
+        "id": "registry+https://github.com/rust-lang/crates.io-index#good-crate@1.0.0",
+        "deps": [
+          { "pkg": "registry+https://github.com/rust-lang/crates.io-index#deep-crate@2.0.0", "dep_kinds": [{ "kind": null }] }
+        ]
+      },
+      { "id": "registry+https://github.com/rust-lang/crates.io-index#deep-crate@2.0.0", "deps": [] },
+      { "id": "registry+https://github.com/rust-lang/crates.io-index#dual-agpl@0.3.0", "deps": [] },
+      { "id": "registry+https://github.com/rust-lang/crates.io-index#old-style@0.1.0", "deps": [] },
+      { "id": "registry+https://github.com/rust-lang/crates.io-index#build-helper@0.1.0", "deps": [] },
+      { "id": "registry+https://github.com/rust-lang/crates.io-index#agpl-dev@1.0.0", "deps": [] },
+      { "id": "registry+https://github.com/rust-lang/crates.io-index#sspl-thing@1.0.0", "deps": [] }
+    ]
+  }
+}

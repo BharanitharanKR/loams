@@ -73,6 +73,11 @@ EXPOSE 8123
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
   CMD curl -fsS http://127.0.0.1:8123/ping || exit 1
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/loams-fabric"]
-# A container has no netns sandbox to give the workers (it would need
-# CAP_SYS_ADMIN); the container is their boundary in the preview.
-CMD ["house", "--single-node", "--data-dir", "/var/lib/loams-house", "--sandbox", "none", "--unsafe-no-sandbox"]
+# Workers run sealed (L3). `pods` (Landlock with TCP rules, Linux 6.7 or later,
+# and seccomp) needs no privilege, so it works under Docker's and Podman's
+# default profiles; the container's own network is the network boundary, as a
+# pod's NetworkPolicy is in Kubernetes (compose.yaml gives the House a network
+# of its own). `--sandbox netns` also works where the container may create
+# unprivileged user namespaces (Podman's default). A worker whose sandbox
+# cannot be put in force refuses to boot.
+CMD ["house", "--single-node", "--data-dir", "/var/lib/loams-house", "--sandbox", "pods"]

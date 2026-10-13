@@ -29,7 +29,14 @@ arrow = { version = "59", features = ["ffi"] }
 # crates of the same 59 line, not the `arrow` umbrella: the front needs no CSV,
 # JSON or FFI. Apache-2.0.
 arrow-array = "59"
+# The connector SDK's codecs (CN2 Task 5): offsets and validity buffers for
+# nested arrays, and the CSV and NDJSON readers and writers that decode bytes
+# straight to a `RecordBatch`. All three were already in fabric/Cargo.lock
+# through the `arrow` umbrella. Apache-2.0.
+arrow-buffer = "59"
+arrow-csv = "59"
 arrow-ipc = "59"
+arrow-json = "59"
 arrow-schema = "59"
 # `bindgen` over the pinned `chdb.h` (FL2 Ruling 1). Task 0 measured that a
 # hand-written prototype segfaults, so the bindings are generated from the
@@ -157,6 +164,26 @@ tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
 toml = "1.1.6"
 thiserror = "2"
 tracing = "0.1"
+# Iceberg table metadata for the House's lake tables (HS1 Task 10, §49 §5): the
+# spec types (schemas, partition specs, sort orders, table metadata), the
+# metadata builder that applies a commit's updates, and the requirement checks.
+# 0.10.1 (2026-08-01) is HS1 R0.7's pin. It brings arrow 58 beside the
+# workspace's 59, so only `loams-house-lake` depends on it (R0.3); no default
+# features (no storage backend: R1.6). Apache-2.0.
+iceberg = { version = "0.10.1", default-features = false }
+# The local catalog of `--single-node` (HS1 Task 10, §49 §17): one SQLite file
+# whose metadata pointer is swapped with compare-and-set. 0.40.2 (2026-08-08) is
+# HS1 R0.7's pin; `bundled` builds SQLite itself, so no system library is
+# needed. MIT.
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+# The Iceberg REST catalog client (Lakekeeper, HS1 Task 10). 0.13.5 is already
+# in the graph through `object_store`; no default features, so it adds no TLS
+# stack of its own (an `https` catalog arrives with HS1 Task 20). MIT OR
+# Apache-2.0.
+reqwest = { version = "0.13", default-features = false }
+# `HouseCatalog`'s async methods behind `dyn` (HS1 Task 10). 0.1.92 is already
+# in the graph through iceberg. MIT OR Apache-2.0.
+async-trait = "0.1"
 # The blocking HTTP client `build.rs` fetches the libchdb release with, when
 # `LIBCHDB_DIR` is unset (FL2 Ruling 2). 3.x is the current line; the crate is
 # the only HTTP client a build may use, so it is deliberately small. MIT OR

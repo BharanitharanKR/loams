@@ -61,6 +61,7 @@ fn notes_schema() -> Schema {
                 name: "by_body".into(),
                 fields: vec!["body".into()],
             }],
+            ..TableSchema::default()
         }],
     }
 }
@@ -459,6 +460,7 @@ async fn invalid_bundle_fails_without_pointer_change(store: TestStore) {
             tables: vec![TableSchema {
                 name: "1bad".into(),
                 indexes: Vec::new(),
+                ..TableSchema::default()
             }],
         },
         Schema {
@@ -466,10 +468,12 @@ async fn invalid_bundle_fails_without_pointer_change(store: TestStore) {
                 TableSchema {
                     name: "twice".into(),
                     indexes: Vec::new(),
+                    ..TableSchema::default()
                 },
                 TableSchema {
                     name: "twice".into(),
                     indexes: Vec::new(),
+                    ..TableSchema::default()
                 },
             ],
         },
@@ -497,24 +501,39 @@ async fn invalid_bundle_fails_without_pointer_change(store: TestStore) {
     assert_eq!(all[0].state, DeploymentState::Active);
     assert_eq!(objects(&bundles).await.len(), 1);
 
-    // A schema the catalog refuses (an index change on an existing table
-    // waits for online index changes, LV1 plan Task 9) fails at step 4:
-    // its record says why, and the pointer stays.
+    // A schema the catalog refuses fails at step 4: its record says why,
+    // and the pointer stays. Here a new index (LV1 plan Task 9) whose
+    // entry for an existing document would pass `max_index_key_bytes`.
+    let insert = deploy::resolve(&app, INSERT).expect("_system:insert");
+    app.runner()
+        .mutate(
+            insert,
+            args(&[
+                ("table", LiveValue::Str("notes".into())),
+                (
+                    "fields",
+                    args(&[("big", LiveValue::Str("x".repeat(5_000)))]),
+                ),
+            ]),
+            None,
+        )
+        .await
+        .expect("an unindexed large field");
+    let mut too_large = notes_schema();
+    too_large.tables[0].indexes.push(IndexSpec {
+        name: "by_big".into(),
+        fields: vec!["big".into()],
+    });
     let err = deploy::deploy(
         &app,
         DeployRequest {
-            schema: Schema {
-                tables: vec![TableSchema {
-                    name: "notes".into(),
-                    indexes: Vec::new(),
-                }],
-            },
+            schema: too_large,
             ..request(bundle(2), Some(v1.record.id))
         },
         "a",
     )
     .await
-    .expect_err("an index change");
+    .expect_err("an index that cannot hold a document");
     assert!(matches!(err, LiveError::FailedPrecondition(_)), "{err}");
     assert!(err.to_string().contains("notes"), "{err}");
     assert_eq!(app.active(), Some(v1.record.id));
@@ -668,6 +687,7 @@ async fn system_functions_survive_any_deploy(store: TestStore) {
                 tables: vec![TableSchema {
                     name: "notes".into(),
                     indexes: Vec::new(),
+                    ..TableSchema::default()
                 }],
             },
             ..request(bundle(1), None)
@@ -738,6 +758,7 @@ async fn schema_creates_tables_additively(store: TestStore) {
             TableSchema {
                 name: "notes".into(),
                 indexes: Vec::new(),
+                ..TableSchema::default()
             },
             TableSchema {
                 name: "tags".into(),
@@ -745,6 +766,7 @@ async fn schema_creates_tables_additively(store: TestStore) {
                     name: "by_name".into(),
                     fields: vec!["name".into()],
                 }],
+                ..TableSchema::default()
             },
         ],
     };
@@ -898,9 +920,9 @@ impl Function for SevenFn {
     }
 }
 
-/// The server deploys over `LiveService.Deploy` and runs the deployment's
-/// functions for `Mutate` and `Query`; a server without a function runtime
-/// refuses the deploy.
+/// The server deploys over `LiveAdminService.Deploy` (LV1 Task 10) and runs
+/// the deployment's functions for `Mutate` and `Query`; a server without a
+/// function runtime refuses the deploy.
 async fn live_service_deploys_and_serves_functions(store: TestStore) {
     let mut config = store.live_config(APP);
     config.listen = "127.0.0.1:0".parse().expect("an address");
@@ -914,9 +936,10 @@ async fn live_service_deploys_and_serves_functions(store: TestStore) {
     )
     .await
     .expect("the server starts");
-    let uri = format!("http://{}", handle.addr).parse().expect("a uri");
-    let c = pb::LiveServiceClient::new(HttpClient::plaintext(), ClientConfig::new(uri));
-    let deployed = c
+    let uri: axum::http::Uri = format!("http://{}", handle.addr).parse().expect("a uri");
+    let c = pb::LiveServiceClient::new(HttpClient::plaintext(), ClientConfig::new(uri.clone()));
+    let admin = pb::LiveAdminServiceClient::new(HttpClient::plaintext(), ClientConfig::new(uri));
+    let deployed = admin
         .deploy(pb::DeployRequest {
             bundle: bundle(1),
             schema: MessageField::some(notes_schema().to_proto()),
@@ -925,7 +948,13 @@ async fn live_service_deploys_and_serves_functions(store: TestStore) {
         .await
         .expect("Deploy")
         .into_owned();
-    let id: Ulid = deployed.deployment_id.parse().expect("a ULID");
+    let id: Ulid = deployed
+        .deployment
+        .as_option()
+        .expect("a deployment")
+        .id
+        .parse()
+        .expect("a ULID");
     let mutated = c
         .mutate(pb::MutateRequest {
             function: "notes:add".into(),
@@ -949,26 +978,29 @@ async fn live_service_deploys_and_serves_functions(store: TestStore) {
         LiveValue::from_proto(counted.result.into_option().expect("a result")).expect("a value"),
         LiveValue::F64(1.0)
     );
-    // A second deploy replaces the first (the service deploys against the
-    // active deployment).
-    let again = c
+    // A second deploy replaces the first, against it.
+    let again = admin
         .deploy(pb::DeployRequest {
             bundle: bundle(2),
             schema: MessageField::some(notes_schema().to_proto()),
+            expected_active: Some(id.to_string()),
             ..Default::default()
         })
         .await
         .expect("a second Deploy")
         .into_owned();
-    assert_ne!(again.deployment_id, id.to_string());
+    assert_ne!(
+        again.deployment.as_option().expect("a deployment").id,
+        id.to_string()
+    );
     handle.stop().await;
 
     let bare = LiveServer::start(config, CancellationToken::new())
         .await
         .expect("a server without a runtime");
     let uri = format!("http://{}", bare.addr).parse().expect("a uri");
-    let c = pb::LiveServiceClient::new(HttpClient::plaintext(), ClientConfig::new(uri));
-    let e = c
+    let admin = pb::LiveAdminServiceClient::new(HttpClient::plaintext(), ClientConfig::new(uri));
+    let e = admin
         .deploy(pb::DeployRequest {
             bundle: bundle(3),
             ..Default::default()
@@ -1111,10 +1143,7 @@ async fn rollback_reapplies_previous_schema(store: TestStore) {
     assert!(!format!("{tables:?}").contains("by_len"), "{tables:?}");
     assert!(format!("{tables:?}").contains("by_body"), "{tables:?}");
 }
-live_test!(
-    #[ignore = "an index change on an existing table needs LV1 plan Task 9 (online index changes), which removes this ignore"]
-    rollback_reapplies_previous_schema
-);
+live_test!(rollback_reapplies_previous_schema);
 
 /// Version `n` of the app for the subscription tests: every query's result
 /// names `n`.
@@ -1509,6 +1538,7 @@ async fn janitor_fails_abandoned_pending_deploys(store: TestStore) {
         message: String::new(),
         parent: Some(v1.record.id),
         state: DeploymentState::Pending,
+        functions: Vec::new(),
     };
     app.runner()
         .store()

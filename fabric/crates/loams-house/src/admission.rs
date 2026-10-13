@@ -653,6 +653,8 @@ impl WorkerPool {
         match answer {
             Ok(Some(Frame::Done)) => {
                 worker.namespace = Some(namespace.to_string());
+                // Its bucket reads are the namespace's from here on (HS1 Task 9).
+                self.inner.launcher.bound(worker.shared.id(), namespace);
                 Ok(worker)
             }
             other => {

@@ -16,43 +16,7 @@ use serde::{Deserialize, Serialize};
 use loams_agentd_harness::{Harness, HarnessError, mock::MockHarness};
 use loams_agentd_proto::{AgentEvent, DoneStatus, HarnessId, ReasoningLevel, SteeringMode};
 
-/// What `ListHarnesses` reports per harness.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HarnessDescriptor {
-    pub id: HarnessId,
-    pub name: String,
-    pub supports_steering: bool,
-    pub steering_mode: SteeringMode,
-    pub reasoning_levels: Vec<ReasoningLevel>,
-    /// Whether the agent's CLI is present on the listing device (the settings
-    /// enable-gate). Defaults true so catalogs from engines predating the
-    /// field never read as uninstallable.
-    #[serde(default = "default_installed")]
-    pub installed: bool,
-    /// Explicit CLI installation is available on this listing device.
-    #[serde(default)]
-    pub can_install: bool,
-    /// Whether the listing device offers this harness (Settings → Providers).
-    /// `None` — the catalog came from an engine predating the setting — means
-    /// "unknown": consumers fall back to detection (see [`descriptor_enabled`]).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub enabled: Option<bool>,
-}
-
-impl HarnessDescriptor {
-    /// Whether this harness can accept a prompt inside the turn that is
-    /// currently running. Turn-boundary steering is still useful to the
-    /// automatic queue drain, but it is not the non-interrupting "Steer"
-    /// action exposed on an individual queued row.
-    pub fn steers_mid_turn(&self) -> bool {
-        self.supports_steering && self.steering_mode == SteeringMode::StepBoundary
-    }
-}
-
-fn default_installed() -> bool {
-    true
-}
+pub use loams_agentd_proto::{HarnessDescriptor, TitleSettings};
 
 /// Whether detection alone may switch a harness on. The mock always "resolves"
 /// but is a test rig, and counting it would let the last real agent be turned
@@ -97,16 +61,6 @@ struct HarnessPrefsFile {
     /// Read once, folded into `disabled`, and never written again.
     #[serde(skip_serializing)]
     enabled: Option<Vec<HarnessId>>,
-}
-
-/// Per-device automatic session title preferences.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct TitleSettings {
-    /// None follows the session harness, using a supported installed fallback.
-    pub harness: Option<HarnessId>,
-    /// None selects the cheapest model offered by the selected harness.
-    pub model: Option<String>,
 }
 
 type Factory = Box<dyn Fn() -> Result<Arc<dyn Harness>, HarnessError> + Send + Sync>;

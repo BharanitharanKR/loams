@@ -89,7 +89,8 @@ fn insert_format_kept() {
 /// with sqlparser's message and the hint; a read runs unchanged.
 #[test]
 fn unparseable_ddl_is_62_with_hint() {
-    let sql = "CREATE TABLE t (a UInt64 CODEC(ZSTD(3))) ENGINE = MergeTree ORDER BY a";
+    // A column CODEC was the form here until HS1 Task 10 made it lake DDL.
+    let sql = "ALTER TABLE t DELETE WHERE a = 1";
     let Classified::Unparsed { text, message, .. } = classify(sql).expect("classifies") else {
         panic!("sqlparser was expected not to parse this form");
     };

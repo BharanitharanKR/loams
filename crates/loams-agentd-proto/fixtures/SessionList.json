@@ -1,0 +1,10 @@
+[
+  {
+    "chatId": "chat-1",
+    "deviceId": "device-1",
+    "lastCompletedTurn": "turn-1",
+    "startedAt": "2026-10-12T09:30:00Z",
+    "status": "working",
+    "updatedAt": "2026-10-12T09:30:00Z"
+  }
+]

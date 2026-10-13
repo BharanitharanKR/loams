@@ -1,0 +1,38 @@
+# Segment — an HTTP-API profile (CN2 OR-11, Task 20). Written from Segment's
+# public documentation:
+#   HTTP Tracking API (/v1/batch, write key as the basic-auth user):
+#     https://segment.com/docs/connections/sources/catalog/libraries/server/http-api/
+#   Deduplication by messageId:
+#     https://segment.com/docs/guides/duplicate-data/
+#   Webhook destination signatures (X-Signature, HMAC-SHA1 of the body):
+#     https://segment.com/docs/connections/destinations/catalog/webhooks/
+# `auth.username` names the source write key's secret (no password). Segment
+# drops a repeated `messageId`, so the `batch` sink is effectively once when
+# each item carries one; the source is Segment's webhook destination posting to
+# the webhooks source (Task 8 routes it).
+apiVersion: loams.flow/v1
+kind: Profile
+id: segment
+profile_kind: http-api
+module: http
+system:
+  name: Segment
+  service: { fixture: conformance/connectors/fixtures/segment }
+defaults: {}
+narrows: []
+http:
+  base_url: "https://api.segment.io/v1"
+  auth: { scheme: basic }
+  resources:
+    batch:
+      create:
+        method: POST
+        path: "/batch"
+        batch: 100
+        key: "/messageId"
+        body: "/batch"
+  rate_limit:
+    requests: 1000
+    per_seconds: 1
+    honour_headers: ["Retry-After"]
+  webhook: { scheme: segment, header: X-Signature }

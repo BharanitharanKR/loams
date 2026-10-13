@@ -31,12 +31,7 @@ use axum::Router as AxumRouter;
 use buffa::enumeration::EnumValue;
 use connectrpc::{
     ConnectError, ErrorCode, ErrorDetail, RequestContext, Response, Router, ServiceRequest,
-    ServiceResult, ServiceStream,
-};
-use loams_live_proto::loams::live::v1::{
-    DeployRequest, DeployResponse, LiveService, LiveServiceExt, ModifyQuerySetRequest,
-    ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition,
-    WatchRequest,
+    ServiceResult,
 };
 use loams_proto::loams::errors::v1::ErrorInfo;
 use loams_proto::loams::instance::v1::{
@@ -129,15 +124,17 @@ const CATALOGUE: &[Package] = &[
         unstable: false,
     },
     Package {
-        // The live sync engine is a `full`-variant engine (§30 §8.2) and R1's
-        // `live` cargo feature has not merged, so no variant serves it yet.
-        // R1 Task 12 adds the engine and flips this row on under that
-        // feature; until then the package is listed, advertised as
-        // unavailable, and every one of its RPCs refuses with
-        // `feature_not_in_variant` (see `LiveAbsent`).
+        // Loams Live (design §45, D688; LV1 plan Task 12): served with the
+        // `live` cargo feature while Live runs (dev and standalone, unless
+        // `--no-live`), by the running Live server's own services
+        // (`super::live`); otherwise every RPC refuses with
+        // `feature_not_in_variant`. Unstable until LV1 Task 40.
         package: "loams.live.v1",
-        services: &["loams.live.v1.LiveService"],
-        available: false,
+        services: &[
+            "loams.live.v1.LiveService",
+            "loams.live.v1.LiveAdminService",
+        ],
+        available: cfg!(feature = "live"),
         unstable: true,
     },
     Package {
@@ -163,25 +160,39 @@ const CATALOGUE: &[Package] = &[
         available: true,
         unstable: true,
     },
+    Package {
+        // Loams Git (GT1 Task 12, design §36 §19.10, D834, ruling T0-10): served with the `git`
+        // cargo feature (`RepoService` from GT1 Task 13); otherwise every RPC answers
+        // `feature_not_in_variant` (`super::repos`). The package's other services join this row
+        // as GT1 Tasks 18, 25 and 61 give them RPCs. Unstable until GT1 GA.
+        package: "loams.repos.v1",
+        services: &["loams.repos.v1.RepoService"],
+        available: super::repos::SERVED,
+        unstable: true,
+    },
 ];
 
 /// What this running server serves beyond the build's catalogue: the graph
-/// runtime, and a healthy House front behind the proxy.
+/// runtime, Loams Live, and a healthy House front behind the proxy.
 #[derive(Clone, Copy, Debug)]
 struct Served {
     /// The graph runtime is on (not `--no-graph`, not a cluster node).
     graph: bool,
+    /// Loams Live runs and this router serves it (`super::live`).
+    live: bool,
     /// `[house] endpoint` is configured and answered its last health check.
     house: bool,
 }
 
 /// Whether a catalogue package is served by this running server: the build's `available`, and
 /// for `loams.graph.v1` also whether the graph runtime is on (`--no-graph`, cluster nodes), for
-/// `loams.house.v1` whether the House front is configured and healthy.
+/// `loams.live.v1` whether Live runs and this router serves it, for `loams.house.v1` whether the
+/// House front is configured and healthy.
 fn is_available(entry: &Package, served: Served) -> bool {
     entry.available
         && match entry.package {
             "loams.graph.v1" => served.graph,
+            "loams.live.v1" => served.live,
             super::house_proxy::PACKAGE => served.house,
             _ => true,
         }
@@ -211,9 +222,10 @@ fn statuses(served: Served) -> Vec<ServiceStatus> {
 /// repeated here. The registration is static, so `loams.house.v1`, whose
 /// health is another process's and changes while this one runs, is never in
 /// it: the catalogue's `available` is the place to ask.
-fn served_services(graph_served: bool) -> Vec<&'static str> {
+fn served_services(graph_served: bool, live_served: bool) -> Vec<&'static str> {
     let served = Served {
         graph: graph_served,
+        live: live_served,
         house: false,
     };
     CATALOGUE
@@ -233,6 +245,8 @@ static INSTANCE_ID: LazyLock<String> = LazyLock::new(|| Ulid::generate().to_stri
 struct Instance {
     /// Whether `loams.graph.v1` is served by this running server.
     graph_served: bool,
+    /// Whether `loams.live.v1` is served by this router.
+    live_served: bool,
     /// The House proxy, whose health decides `loams.house.v1`'s row.
     house: Option<Arc<super::house_proxy::HouseProxy>>,
 }
@@ -242,6 +256,7 @@ impl Instance {
     fn served(&self) -> Served {
         Served {
             graph: self.graph_served,
+            live: self.live_served,
             house: self.house.as_ref().is_some_and(|house| house.healthy()),
         }
     }
@@ -312,59 +327,6 @@ impl InstanceService for Instance {
             }),
             ..Default::default()
         })
-    }
-}
-
-/// `loams.live.v1.LiveService` as this binary answers it: every RPC refuses
-/// with `feature_not_in_variant`.
-///
-/// Registering the service rather than leaving its paths unrouted is what
-/// makes the failure typed. A caller gets the Connect code, the stable reason
-/// and the variant in `metadata` instead of a bare `404`, and
-/// `GetInstance.services[]` can list the package at all (§44 §4). R1 Task 12
-/// replaces this with the live engine.
-#[derive(Debug)]
-struct LiveAbsent;
-
-impl LiveService for LiveAbsent {
-    async fn watch(
-        &self,
-        _ctx: RequestContext,
-        _request: ServiceRequest<'_, WatchRequest>,
-    ) -> ServiceResult<ServiceStream<Transition>> {
-        Err(not_in_variant("loams.live.v1.LiveService/Watch"))
-    }
-
-    async fn modify_query_set(
-        &self,
-        _ctx: RequestContext,
-        _request: ServiceRequest<'_, ModifyQuerySetRequest>,
-    ) -> ServiceResult<ModifyQuerySetResponse> {
-        Err(not_in_variant("loams.live.v1.LiveService/ModifyQuerySet"))
-    }
-
-    async fn query(
-        &self,
-        _ctx: RequestContext,
-        _request: ServiceRequest<'_, QueryRequest>,
-    ) -> ServiceResult<QueryResponse> {
-        Err(not_in_variant("loams.live.v1.LiveService/Query"))
-    }
-
-    async fn mutate(
-        &self,
-        _ctx: RequestContext,
-        _request: ServiceRequest<'_, MutateRequest>,
-    ) -> ServiceResult<MutateResponse> {
-        Err(not_in_variant("loams.live.v1.LiveService/Mutate"))
-    }
-
-    async fn deploy(
-        &self,
-        _ctx: RequestContext,
-        _request: ServiceRequest<'_, DeployRequest>,
-    ) -> ServiceResult<DeployResponse> {
-        Err(not_in_variant("loams.live.v1.LiveService/Deploy"))
     }
 }
 
@@ -471,18 +433,22 @@ pub(crate) fn install_reflection(rpc: Router, also: &[&str]) -> Router {
 /// `/internal`, `/health` or `/ready`, so the two sets cannot collide.
 pub(crate) fn routes(state: &AppState, hot_default: bool) -> AxumRouter {
     let graph_served = super::graph::served(state);
+    let live_served = super::live::served(state);
     let mut rpc = Router::new();
     rpc = Arc::new(Instance {
         graph_served,
+        live_served,
         house: state.house.clone(),
     })
     .register(rpc);
-    rpc = Arc::new(LiveAbsent).register(rpc);
+    rpc = super::live::register(rpc, state);
     rpc = super::graph::register(rpc, state);
+    rpc = super::repos::register(rpc, state);
     rpc = super::connect_collections::register(rpc, state);
     rpc = super::connect_documents::register(rpc, state);
     rpc = super::connect_query::register(rpc, state);
-    let (rpc, _health) = connectrpc_health::install_static(rpc, served_services(graph_served));
+    let (rpc, _health) =
+        connectrpc_health::install_static(rpc, served_services(graph_served, live_served));
     let rpc = if state.reflection {
         // `loams.house.v1` is answered by the House layer around these
         // routes (`super::house_proxy`), not by a route of `rpc`.
@@ -501,6 +467,12 @@ pub(crate) fn routes(state: &AppState, hot_default: bool) -> AxumRouter {
     let mut axum = AxumRouter::new();
     for path in paths {
         axum = axum.route_service(&path, service.clone());
+    }
+    // Live's admin service records who deployed: the principal the port's
+    // authentication layer (outside these routes) admitted.
+    #[cfg(feature = "live")]
+    if live_served {
+        axum = axum.layer(axum::middleware::from_fn(super::live::caller));
     }
     // Inside `HotLayer`, and with this router's own Connect-shaped refusal of an
     // unusable `Loams-Hot` in front of it (`super::connect_hot`). Applied here

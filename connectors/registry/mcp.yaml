@@ -9,7 +9,7 @@ id: mcp
 name: MCP
 specVersion: 0.1.0
 category: ai
-priority: P2
+priority: P3
 starred: false
 status: planned
 runtime:

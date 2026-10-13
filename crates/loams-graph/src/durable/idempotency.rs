@@ -67,6 +67,22 @@ impl Idempotency {
         self.keys.is_empty()
     }
 
+    /// Every remembered key as `(key, recorded_ms, outcome)`, oldest first: what a local cache
+    /// keeps beside the engine's files, so reopening it reads no record below its offset (GR1
+    /// Task 14). [`Idempotency::insert`] of each, in this order, rebuilds the index.
+    #[must_use]
+    pub fn entries(&self) -> Vec<(String, u64, Outcome)> {
+        self.order
+            .iter()
+            .filter_map(|(at, key)| {
+                self.keys
+                    .get(key)
+                    .filter(|(recorded, _)| recorded == at)
+                    .map(|(recorded, outcome)| (key.clone(), *recorded, *outcome))
+            })
+            .collect()
+    }
+
     fn prune(&mut self, now_ms: u64) {
         while let Some((at, key)) = self.order.front() {
             let expired = now_ms.saturating_sub(*at) >= IDEMPOTENCY_WINDOW_MS;
@@ -121,6 +137,19 @@ mod tests {
         assert_eq!(index.len(), 1);
         index.insert("ancient", OUT, 0, IDEMPOTENCY_WINDOW_MS);
         assert_eq!(index.get("ancient", IDEMPOTENCY_WINDOW_MS), None);
+    }
+
+    #[test]
+    fn entries_rebuild_the_index() {
+        let mut index = Idempotency::default();
+        index.insert("a", OUT, 10, 10);
+        index.insert("b", OUT, 20, 20);
+        let mut rebuilt = Idempotency::default();
+        for (key, recorded, outcome) in index.entries() {
+            rebuilt.insert(&key, outcome, recorded, 30);
+        }
+        assert_eq!(rebuilt.entries(), index.entries());
+        assert_eq!(rebuilt.get("a", 30), Some(OUT));
     }
 
     #[test]

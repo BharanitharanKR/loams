@@ -26,6 +26,7 @@ use std::sync::Arc;
 
 pub mod budget;
 pub mod checkpoint;
+pub mod codecs;
 pub mod delivery;
 pub mod egress;
 pub mod envelope;
@@ -39,6 +40,7 @@ pub mod position;
 pub mod profile;
 pub mod ratelimit;
 pub mod retry;
+pub mod schema;
 pub mod secrets;
 pub mod sink;
 pub mod source;
@@ -59,7 +61,11 @@ pub use pipeline::{
     SinkPipeline, SourcePipeline,
 };
 pub use position::{InstanceKey, Position, SplitId};
-pub use profile::{HttpProfile, Profile, ProfileKind, SystemRef};
+pub use profile::{
+    AckSpec, AsyncJob, AuthScheme, BodyEncoding, CursorFrom, CursorSpec, HttpAuth, HttpMethod,
+    HttpProfile, HttpRateLimit, HttpResource, JobPoll, ListOp, OffsetSpec, Profile, ProfileKind,
+    RequestSpec, ResponseFormat, SystemRef, WebhookSpec, WriteOp,
+};
 pub use ratelimit::{Rate, RateLimit, RateLimiter};
 pub use retry::{RetryDecision, RetryPolicy};
 pub use secrets::{Scrubber, ScrubbingResolver, Secret, SecretRef, SecretResolver, StaticSecrets};

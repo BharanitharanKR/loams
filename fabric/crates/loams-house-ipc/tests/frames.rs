@@ -111,9 +111,22 @@ fn execute() -> impl Strategy<Value = Execute> {
             None => Output::Blocks,
             Some(max_buffered_bytes) => Output::Document { max_buffered_bytes },
         }),
+        option::of(text()),
     )
         .prop_map(
-            |(query_id, session, settings, views, sql, format, params, limits, input, output)| {
+            |(
+                query_id,
+                session,
+                settings,
+                views,
+                sql,
+                format,
+                params,
+                limits,
+                input,
+                output,
+                database,
+            )| {
                 Execute {
                     query_id,
                     session,
@@ -125,6 +138,7 @@ fn execute() -> impl Strategy<Value = Execute> {
                     limits,
                     input,
                     output,
+                    database,
                 }
             },
         )
@@ -138,9 +152,10 @@ fn frame() -> impl Strategy<Value = Frame> {
         text(),
         any::<u32>(),
         vec(text(), 0..4),
+        option::of(text()),
     )
         .prop_map(
-            |(protocol, pid, chdb_version, clickhouse_version, boot_ms, settings)| {
+            |(protocol, pid, chdb_version, clickhouse_version, boot_ms, settings, s3_endpoint)| {
                 Frame::Ready(Ready {
                     protocol,
                     pid,
@@ -148,6 +163,7 @@ fn frame() -> impl Strategy<Value = Frame> {
                     clickhouse_version,
                     boot_ms,
                     settings,
+                    s3_endpoint,
                 })
             },
         );

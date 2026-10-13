@@ -1,0 +1,11 @@
+{
+  "authors": [
+    {
+      "email": "dev@example.com",
+      "sha": "0123abcd"
+    }
+  ],
+  "cursor": 0,
+  "cwd": "/home/dev/project",
+  "limit": 100
+}

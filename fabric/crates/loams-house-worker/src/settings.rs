@@ -12,12 +12,69 @@
 //!   that open the host or the network ([`PINNED_OFF`], [`PINNED_VALUES`],
 //!   [`PINNED_PATHS`]), so a query's `SETTINGS` clause, which the front does not
 //!   parse for every statement, answers `452`.
-//! * **The grants** (HS1 R1.8, `config::GRANTS`) withhold `FILE`, `URL`, `REMOTE`,
-//!   `S3` outside the forwarder, `SYSTEM`, `CREATE FUNCTION` and dictionaries.
+//! * **Every other setting** chDB has is pinned too (HS1 R-ACL.1): the profile
+//!   leaves changeable only what `loams_house_ipc::policy` lists — the front's
+//!   allow-list and the settings the House's own statements set — and puts a
+//!   `<readonly/>` constraint on the rest ([`CHDB_SETTINGS`], [`changeable`]).
+//! * **The grants** (HS1 R1.8, R-ACL.1, `config::GRANTS`) hold no source at all
+//!   (`FILE`, `URL`, `S3`, `REMOTE`, `MYSQL`, … every `READ`/`WRITE` parameter),
+//!   no `SYSTEM`, `INTROSPECTION`, `CREATE TABLE`, `CREATE FUNCTION` or
+//!   dictionary; the read views reach the bucket as `SQL SECURITY NONE` views
+//!   that only the control connection can create.
 //! * **`display_name`** is the House's, so `displayName()` never names the host.
 //!
 //! R1.10's finding stands: `INTO OUTFILE` and `FROM INFILE` are carried out by
 //! chDB's client layer whatever these say, so they rest on L1 and L3.
+
+use std::collections::HashSet;
+use std::sync::OnceLock;
+
+/// Every query-level setting of the pinned chDB, as `system.settings` lists it:
+/// one name per line, followed by a tab and the setting it is an alias for when
+/// it is one; `#` lines are comments (HS1 R-ACL.1).
+pub const CHDB_SETTINGS: &str = include_str!("chdb_settings.tsv");
+
+/// `(name, alias_for)` for every line of [`CHDB_SETTINGS`].
+pub fn chdb_settings() -> impl Iterator<Item = (&'static str, Option<&'static str>)> {
+    CHDB_SETTINGS
+        .lines()
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(|line| match line.split_once('\t') {
+            Some((name, canonical)) => (name, Some(canonical)),
+            None => (line, None),
+        })
+}
+
+/// Whether the worker's profile leaves the canonical setting `name` changeable
+/// (HS1 R-ACL.1): it, or one of its aliases, is on the front's lists or is one
+/// the House's own statements set, and the profile does not pin it. Everything
+/// else gets a `<readonly/>` constraint.
+pub fn changeable(name: &str) -> bool {
+    static FREE: OnceLock<HashSet<&'static str>> = OnceLock::new();
+    FREE.get_or_init(|| {
+        let listed = |n: &str| {
+            loams_house_ipc::policy::on_the_lists(n)
+                || loams_house_ipc::policy::HOUSE_SETTINGS.contains(&n)
+        };
+        let pins: HashSet<&str> = pinned().collect();
+        chdb_settings()
+            .filter(|(name, _)| listed(name))
+            .map(|(name, alias_for)| alias_for.unwrap_or(name))
+            .filter(|canonical| !pins.contains(canonical))
+            .collect()
+    })
+    .contains(name)
+}
+
+/// The canonical settings the profile pins with `<readonly/>` beyond the named
+/// pins ([`pinned`]): every setting [`changeable`] does not leave free.
+pub fn pinned_by_default() -> impl Iterator<Item = &'static str> {
+    let pins: HashSet<&str> = pinned().collect();
+    chdb_settings()
+        .filter(|(_, alias_for)| alias_for.is_none())
+        .map(|(name, _)| name)
+        .filter(move |name| !changeable(name) && !pins.contains(name))
+}
 
 /// The query-level arguments of every user connection (HS1 R1.9).
 ///
@@ -156,6 +213,27 @@ mod tests {
     fn user_connections_are_readonly_without_ddl() {
         assert!(USER_CONNECTION_ARGS.contains(&"--readonly=2"));
         assert!(USER_CONNECTION_ARGS.contains(&"--allow_ddl=0"));
+    }
+
+    #[test]
+    fn the_profile_pins_all_but_the_lists() {
+        assert!(chdb_settings().count() > 1_800, "the whole list is read");
+        assert!(changeable("max_threads"));
+        assert!(changeable("output_format_json_quote_64bit_integers"));
+        assert!(changeable("iceberg_snapshot_id"), "the read views set it");
+        // An alias on the list frees its canonical setting.
+        assert!(changeable("allow_correlated_subqueries"));
+        assert!(!changeable("max_bytes_before_external_sort"));
+        assert!(
+            !changeable("input_format_values_interpret_expressions"),
+            "pinned"
+        );
+        let free: Vec<_> = chdb_settings()
+            .filter(|(n, a)| a.is_none() && changeable(n))
+            .collect();
+        assert!(free.len() < 400, "{} settings left free", free.len());
+        assert!(pinned_by_default().any(|n| n == "max_rows_to_group_by"));
+        assert!(!pinned_by_default().any(|n| n == "allow_introspection_functions"));
     }
 
     #[test]

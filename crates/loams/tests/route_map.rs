@@ -93,6 +93,8 @@ fn string_bindings(text: &str) -> Vec<(String, String)> {
         let line = line.trim();
         let rest = if let Some(rest) = line.strip_prefix("pub const ") {
             rest
+        } else if let Some(rest) = line.strip_prefix("pub(crate) const ") {
+            rest
         } else if let Some(rest) = line.strip_prefix("const ") {
             rest
         } else if let Some(rest) = line.strip_prefix("let ") {

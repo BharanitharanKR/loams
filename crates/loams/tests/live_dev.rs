@@ -316,7 +316,8 @@ fn live_workers_of(pid: u32) -> usize {
     found
 }
 
-/// LV1 plan Task 6: `loams dev` deploys a bundle over the Live API and runs
+/// LV1 plan Task 6: `loams dev` deploys a bundle over the Live admin API
+/// (`LiveAdminService`, Task 10) and runs
 /// its functions, in process by default and, with `--live-isolation
 /// isolated`, in `loams live-worker` children of the server. The deployment
 /// survives a restart: its bundle is in the data directory's bucket.
@@ -333,7 +334,7 @@ async fn dev_serves_deployed_functions() {
         use base64::Engine as _;
         let (status, body) = connect(
             dev.live,
-            "/loams.live.v1.LiveService/Deploy",
+            "/loams.live.v1.LiveAdminService/Deploy",
             &json!({
                 "bundle": base64::engine::general_purpose::STANDARD.encode(NOTES),
                 "schema": {},
@@ -341,7 +342,14 @@ async fn dev_serves_deployed_functions() {
         )
         .await;
         assert_eq!(status, 200, "{extra:?}: {body}");
-        assert!(body["deploymentId"].is_string(), "{body}");
+        assert!(body["deployment"]["id"].is_string(), "{body}");
+        assert_eq!(
+            body["deployment"]["state"], "DEPLOYMENT_STATE_ACTIVE",
+            "{body}"
+        );
+        // `loams dev` runs with authentication off: the loopback principal
+        // deployed it (LV1 plan Task 10).
+        assert_eq!(body["deployment"]["createdBy"], "dev-loopback", "{body}");
         let args = object(json!({ "body": { "stringValue": "hi" } }));
         let (status, body) = connect(
             dev.live,

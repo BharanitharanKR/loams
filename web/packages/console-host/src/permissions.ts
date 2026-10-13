@@ -35,6 +35,9 @@ export const PERMISSIONS = [
   // Console-only, granted through a visible host prompt.
   'ui:notifications',
   'ui:clipboard-write',
+  // Loams Studio (§53 §8.3, SD1 Task 15): loams-agentd, for first-party plugins only.
+  'agentd:use',
+  'agentd:git-write',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -68,7 +71,15 @@ export const METHOD_PERMISSIONS: Readonly<Record<string, Permission>> = {
 };
 
 /** Services a third-party plugin may never reach, whatever it declares. */
-export const NEVER_BRIDGED = new Set(['platform.stacks', 'platform.auth', 'session', 'transport']);
+export const NEVER_BRIDGED = new Set([
+  'platform.stacks',
+  'platform.auth',
+  'session',
+  'transport',
+  // loams-agentd runs agents and git on the person's machine (§53 §8.3, D918).
+  'rpc.agentd',
+  'desktop',
+]);
 
 export type Decision = { ok: true; permission: Permission } | { ok: false; reason: string };
 

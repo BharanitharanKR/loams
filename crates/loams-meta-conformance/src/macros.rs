@@ -89,6 +89,9 @@ macro_rules! for_each_case {
             // linearizable
             concurrent_cas_on_two_keys_is_linearizable,
             concurrent_wal_commits_are_linearizable,
+            a_fenced_commit_wal_is_refused_once_its_lease_moves,
+            graph_streams_are_reserved_idempotent_and_migrated,
+            drop_graph_stream_is_fenced_and_retires_its_objects,
         }
     };
 }

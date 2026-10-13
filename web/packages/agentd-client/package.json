@@ -1,0 +1,28 @@
+{
+  "name": "@loams/agentd-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The wire types, method table and session reducer of loams-agentd, generated from crates/loams-agentd-proto with ts-rs (design §50 §8, D789; plan DD1 Task 9). The Node client for Electron main follows in Task 10.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./src/types.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "typescript": "5.9.3",
+    "vitest": "5.0.3"
+  }
+}

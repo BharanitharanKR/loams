@@ -1,6 +1,8 @@
-name: Release packages (Linux + Windows)
+name: Release packages
 
-# Linux packages and the Windows zip for a published release. This is the piece
+# Linux packages, the Windows zip and the macOS tarballs of the `loams` binary for a
+# published release (the server stack itself ships as Linux containers; on macOS and
+# Windows it runs under Docker Desktop). This is the piece
 # that gives .github/workflows/release-sign.yml something to sign: its `sign`
 # job refuses to submit unless an .rpm is in the set (D625), because SignPath's
 # free Open Source Code Signing programme can sign `<rpm-sign>` and nothing else
@@ -16,6 +18,15 @@ name: Release packages (Linux + Windows)
 #   Linux    loams_<v>_amd64.deb, loams-<v>-1.x86_64.rpm,
 #            loams-<v>-1-x86_64.pkg.tar.zst  (+ .sig when a GPG key exists)
 #   Windows  loams-<v>-windows-x86_64.zip, holding loams.exe and the console
+#   macOS    loams-<v>-macos-arm64.tar.gz, loams-<v>-macos-x86_64.tar.gz, holding
+#            loams and the console. arm64 builds on macos-15, x86_64 on
+#            macos-15-intel (variables MACOS_ARM64_RUNNER / MACOS_X64_RUNNER swap
+#            them; a runner of the other architecture cross-compiles), stripped
+#            and ad-hoc signed:
+#            Apple Silicon will not run an arm64 binary with no signature at all.
+#            There is no Developer ID signature or notarization (no Apple
+#            certificate in this project yet), so a downloaded copy is quarantined
+#            and the notes carry the `xattr -d com.apple.quarantine` step.
 #
 # Signing, and the shape of the gate:
 #
@@ -27,6 +38,11 @@ name: Release packages (Linux + Windows)
 #     SignPath's <rpm-sign>. That is the whole reason the .rpm is built here.
 #   * Windows is unsigned, by decision (D620). There is no code-signing
 #     certificate in this project. The zip says so on its face.
+#   * macOS is ad-hoc signed only (see above), which is not an identity.
+#
+# Dispatch with dry_run: true to build every artifact from the dispatched ref and
+# keep them as workflow artifacts only: no release is read or written, so the
+# workflow can be tested on a branch.
 #
 # The gate is the same shape as release-sign.yml's: with no configuration the run
 # builds the artifacts, warns loudly that they are unsigned, and does not
@@ -56,6 +72,13 @@ on:
         type: boolean
         required: false
         default: false
+      dry_run:
+        description: >-
+          Build everything from the dispatched ref and keep the files as workflow
+          artifacts; attach nothing and touch no release. The tag input is ignored.
+        type: boolean
+        required: false
+        default: false
 
 # `contents: write` is what attaches the artifacts to the release. This workflow
 # does hold write permission, because attaching a package to a release is its
@@ -65,7 +88,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-package-${{ github.event.release.tag_name || inputs.tag || github.run_id }}
+  group: release-package-${{ inputs.dry_run && github.run_id || github.event.release.tag_name || inputs.tag || github.run_id }}
   # Two runs attaching to one release would interleave their asset lists.
   cancel-in-progress: false
 
@@ -80,13 +103,16 @@ jobs:
   # scripts and the packaging definitions, which is what makes the artifact
   # traceable to a reviewed commit.
   guard:
-    name: release tag guard
+    name: Tag guard
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
       tag: ${{ steps.guard.outputs.tag }}
       version: ${{ steps.guard.outputs.version }}
       mtime: ${{ steps.guard.outputs.mtime }}
+      # The commit every build job checks out: the tag's, or the dispatched one on a dry run.
+      ref: ${{ steps.guard.outputs.ref }}
+      dry_run: ${{ steps.guard.outputs.dry_run }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -99,8 +125,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag || github.event.release.tag_name }}
+          DRY_RUN: ${{ inputs.dry_run == true }}
         run: |
           set -euo pipefail
+          if [ "$DRY_RUN" = true ]; then
+            version=$(git show "$GITHUB_SHA:Cargo.toml" | python3 -c 'import tomllib,sys;print(tomllib.loads(sys.stdin.read())["workspace"]["package"]["version"])')
+            {
+              echo "tag=v$version"; echo "version=$version"
+              echo "mtime=$(git show -s --format=%cI "$GITHUB_SHA")"
+              echo "ref=$GITHUB_SHA"; echo "dry_run=true"
+            } >> "$GITHUB_OUTPUT"
+            echo "::notice::dry run: building $GITHUB_SHA as $version; nothing is attached to any release"
+            exit 0
+          fi
           test -n "$TAG" || { echo 'no release tag: dispatch with the tag input'; exit 1; }
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
             echo "$TAG is not a vX.Y.Z(-pre) tag"; exit 1
@@ -122,6 +159,8 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "mtime=$mtime" >> "$GITHUB_OUTPUT"
+          echo "ref=$tag_sha" >> "$GITHUB_OUTPUT"
+          echo "dry_run=false" >> "$GITHUB_OUTPUT"
           echo "$TAG ($version) is a published release on $RELEASE_BRANCH at $tag_sha, mtime $mtime"
 
   # Decides, out loud, whether this run signs. Same rule as release-sign.yml's
@@ -167,7 +206,7 @@ jobs:
           echo "::warning title=No signature was produced::The Linux packages are unsigned. The .rpm is unsigned until SignPath runs; the Windows zip is unsigned by decision. Do not describe this release as signed."
 
   linux:
-    name: Linux packages (deb, rpm, pkg.tar.zst)
+    name: "Linux: packages (deb, rpm, pkg.tar.zst)"
     needs: [guard, preflight]
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -175,8 +214,10 @@ jobs:
       assets: ${{ steps.collect.outputs.assets }}
       summary: ${{ steps.collect.outputs.summary }}
     steps:
+      # The tag's commit, not the dispatching branch's head: the packages are that release.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.guard.outputs.ref }}
           persist-credentials: false
       # Six build.rs scripts in this workspace shell out to protoc (see
       # docs/build-from-source/windows.md for the crate-by-crate list). CI
@@ -193,6 +234,9 @@ jobs:
           set -euo pipefail
           bash scripts/release/install-nfpm.sh "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          # GITHUB_PATH applies from the next step on; without this the self-test
+          # skipped every nFPM case and the package call below was never exercised.
+          export PATH="$RUNNER_TEMP/bin:$PATH"
           python3 scripts/release/build-artifacts.py --self-test
           python3 scripts/release/make-repo.py --self-test
 
@@ -234,9 +278,9 @@ jobs:
           set -euo pipefail
           out="$RUNNER_TEMP/packages"
           mkdir -p "$out"
-          nfpm package --version | tail -1
+          nfpm --version | tail -1
 
-          args=(--version "$VERSION" --binary target/release/loams
+          args=(package --version "$VERSION" --binary target/release/loams
                 --format deb --format rpm --format archlinux
                 --out "$out" --mtime "$MTIME")
 
@@ -264,6 +308,7 @@ jobs:
           ls -l "$out"
 
       - name: attach the packages to the release
+        if: needs.guard.outputs.dry_run != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.guard.outputs.tag }}
@@ -308,15 +353,17 @@ jobs:
           retention-days: 30
 
   windows:
-    name: Windows zip (unsigned)
+    name: "Windows: zip (unsigned)"
     needs: [guard]
     runs-on: windows-latest
-    timeout-minutes: 120
+    # A cold Windows build of the workspace takes about an hour.
+    timeout-minutes: 150
     outputs:
       assets: ${{ steps.collect.outputs.assets }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.guard.outputs.ref }}
           persist-credentials: false
       # Documented, per crate, in docs/build-from-source/windows.md: six build.rs
       # scripts need protoc, and aws-lc-sys needs NASM on windows+x86_64 unless
@@ -356,6 +403,9 @@ jobs:
           rustc -Vv
           cargo -V
           (Get-Item target/release/loams.exe).Length
+          # The smoke test: the binary starts and reports its version.
+          ./target/release/loams.exe --version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: build the Windows zip
         id: package
@@ -374,6 +424,7 @@ jobs:
           Get-ChildItem $out
 
       - name: attach the zip to the release
+        if: needs.guard.outputs.dry_run != 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -399,12 +450,117 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # One job edits the release notes, so the Linux and Windows notes cannot
+  # The macOS tarballs. The runners are repository variables so either macOS pool
+  # can be swapped when GitHub's capacity runs short; a runner of the other
+  # architecture cross-compiles (x86_64 on Apple Silicon is smoke-tested under
+  # Rosetta; arm64 on Intel cannot be run there).
+  macos:
+    name: "macOS: tarball (${{ matrix.arch }})"
+    needs: [guard]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: arm64, target: aarch64-apple-darwin, runner: "${{ vars.MACOS_ARM64_RUNNER || 'macos-15' }}" }
+          - { arch: x86_64, target: x86_64-apple-darwin, runner: "${{ vars.MACOS_X64_RUNNER || 'macos-15-intel' }}" }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.guard.outputs.ref }}
+          persist-credentials: false
+      - name: protoc
+        run: brew install protobuf
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: release-macos-${{ matrix.arch }}
+
+      # Required here, unlike the Linux packages: the tarball is the whole
+      # install, so one without the console would not be the same artifact.
+      - name: the web console
+        run: |
+          set -euo pipefail
+          cd web
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm build
+          test -f apps/console/dist/index.html
+
+      - name: build the server binary
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          rustup target add "$TARGET"
+          cargo build --release -j 4 -p loams --bin loams --locked --target "$TARGET"
+
+      # Strip (the release profile keeps symbols: ~470 MB) and then sign
+      # ad-hoc, in that order: stripping invalidates the linker's signature, and
+      # Apple Silicon refuses an arm64 binary whose signature is missing or broken.
+      - name: strip, ad-hoc sign, smoke test
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/loams"
+          cp "target/$TARGET/release/loams" "$bin"
+          strip -x "$bin"
+          codesign --force --sign - "$bin"
+          codesign --verify --strict --verbose=2 "$bin"
+          file "$bin"
+          ls -l "$bin"
+          host=$(uname -m)
+          if [ "$TARGET" = "$host-apple-darwin" ] || { [ "$host" = arm64 ] && [ "$TARGET" = aarch64-apple-darwin ]; }; then
+            "$bin" --version
+          elif [ "$TARGET" = x86_64-apple-darwin ]; then
+            # Cross-built on Apple Silicon: run it under Rosetta, which the image may lack.
+            arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
+            arch -x86_64 "$bin" --version
+          else
+            # Cross-built on Intel, which cannot run it: check the architecture only.
+            echo "::notice::arm64 binary cross-built on an Intel runner; not executed here"
+            [ "$(lipo -archs "$bin")" = arm64 ]
+          fi
+
+      - name: build the macOS tarball
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+          MTIME: ${{ needs.guard.outputs.mtime }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/macos"
+          python3 scripts/release/build-artifacts.py macos-tar --version "$VERSION" \
+            --binary "$RUNNER_TEMP/loams" --arch "$ARCH" \
+            --console web/apps/console/dist --out "$out" --mtime "$MTIME"
+          ls -l "$out"
+
+      - name: attach the tarball to the release
+        if: needs.guard.outputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.guard.outputs.tag }}
+        run: |
+          set -euo pipefail
+          echo "::warning::the macOS binary is ad-hoc signed only (no Developer ID, not notarized); a downloaded copy is quarantined until the user clears it"
+          gh release upload "$TAG" "$RUNNER_TEMP"/macos/* --clobber --repo "$GITHUB_REPOSITORY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: loams-macos-${{ matrix.arch }}-${{ needs.guard.outputs.tag }}
+          path: ${{ runner.temp }}/macos
+          if-no-files-found: error
+          retention-days: 30
+
+  # One job edits the release notes, so the Linux, Windows and macOS notes cannot
   # interleave. The warnings here are the point: a reader who downloads a file
   # from this release must not have to guess whether it is signed.
   notes:
-    name: release notes
-    needs: [guard, linux, windows]
+    name: Release notes
+    needs: [guard, linux, windows, macos]
+    # Also after a failed build: whatever was attached still needs its signature status.
+    if: ${{ always() && needs.guard.result == 'success' && needs.guard.outputs.dry_run != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -415,11 +571,16 @@ jobs:
           LINUX_ASSETS: ${{ needs.linux.outputs.assets }}
           LINUX_SUMMARY: ${{ needs.linux.outputs.summary }}
           WINDOWS_ASSETS: ${{ needs.windows.outputs.assets }}
+          VERSION: ${{ needs.guard.outputs.version }}
+          # No checkout in this job, so gh needs the repository named.
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          # The macOS rows come from what is actually attached, not from the matrix.
+          mac_assets=$(gh release view "$TAG" --json assets -q '.assets[].name' | grep -E '^loams-.*-macos-.*\.tar\.gz$' || true)
           {
             echo
-            echo "## Linux packages and the Windows zip"
+            echo "## Linux packages, the Windows zip and the macOS tarballs"
             echo
             echo "### Linux"
             echo
@@ -449,17 +610,39 @@ jobs:
             echo "> not a malware detection, and it clears once the user unblocks the file. Building from"
             echo "> source produces no such prompt: [\`docs/build-from-source/windows.md\`](../../docs/build-from-source/windows.md)."
             echo
+            echo "### macOS"
+            echo
+            echo "| File | Signature |"
+            echo "|---|---|"
+            if [ -z "$mac_assets" ]; then
+              echo "| (none: the macOS build failed) | |"
+            fi
+            printf '%s\n' "$mac_assets" | while read -r name; do
+              [ -n "$name" ] || continue
+              echo "| \`$name\` | **ad-hoc only** (no Developer ID, not notarized) |"
+            done
+            echo
+            echo "> The binary carries an ad-hoc signature, which Apple Silicon needs to run it at all, but no"
+            echo "> Developer ID, so Gatekeeper quarantines a downloaded copy. Clear the flag once after unpacking:"
+            echo ">"
+            echo "> \`\`\`sh"
+            echo "> tar -xzf loams-$VERSION-macos-arm64.tar.gz"
+            echo "> xattr -dr com.apple.quarantine loams-$VERSION-macos-arm64"
+            echo "> ./loams-$VERSION-macos-arm64/loams --version"
+            echo "> \`\`\`"
+            echo ">"
+            echo "> The server stack itself (Postgres, the images in this release) runs as Linux containers;"
+            echo "> on macOS and Windows use Docker Desktop with the attached compose bundle."
+            echo
             echo "### Not in this release"
             echo
-            echo "- **No macOS artifact.** macOS is unsigned and unbuilt by decision; build it yourself"
-            echo "  ([\`docs/build-from-source/macos.md\`](../../docs/build-from-source/macos.md))."
             echo "- **No Android APK.** There is no Android or Gradle project in this repository."
             echo "- **No AUR package in-tree.** A PKGBUILD is at [\`release/aur/PKGBUILD\`](../../release/aur/PKGBUILD);"
             echo "  the AUR submission path is documented in [\`release/aur/README.md\`](../../release/aur/README.md)."
           } >> "$RUNNER_TEMP/notes.md"
 
           body=$(gh release view "$TAG" --json body -q .body)
-          marker="## Linux packages and the Windows zip"
+          marker="## Linux packages, the Windows zip and the macOS tarballs"
           case "$body" in
             *"$marker"*)
               echo "the release notes already carry the packaging section; leaving them alone"

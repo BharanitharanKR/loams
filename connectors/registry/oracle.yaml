@@ -3,11 +3,13 @@
 # and `--check` fails CI when the two disagree (CN1 Task 2: appendix_matches_csv).
 # oracle: a planned stub with no capability detail (D353); a hand-written manifest
 # replaces it, and the generator never rewrites an id listed in handwritten.txt.
+# CN2 Task 2 declares its directions and each one's default runtime (OR-1, R-CN2-6);
+# its family task fills in the rest.
 apiVersion: loams.flow/v1
 kind: Connector
 id: oracle
 name: Oracle
-specVersion: 0.1.0
+specVersion: 0.2.0
 category: relational
 priority: P2
 starred: false
@@ -18,6 +20,20 @@ runtime:
 licence:
   component: Apache-2.0
 capabilities:
+  source:
+    streaming: true
+    batch: true
+    cdc: true
+    webhook: false
+    resumable: true
+    position: oracle-scn
+  sink:
+    streaming: true
+    batch: true
+    transactional: false
+    upsert: false
+    delete: false
+    idempotent: false
   delivery:
     source: at_least_once
     sink: at_least_once
@@ -44,3 +60,6 @@ envelope:
 limits: {}
 conformance: []
 docs: null
+notes:
+  - 'fallback-only: Oracle client is proprietary (OR-4); batch and MERGE upsert run on the Camel `sql` component with the user-supplied ojdbc; replaced_by: CN2 Task 23'
+  - 'cdc: Oracle''s change capture runs on `debezium-oracle` (LogMiner) until CN2 Task 23''s verdict (OR-9, OR-13)'

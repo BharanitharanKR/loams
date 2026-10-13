@@ -1,7 +1,7 @@
 """Transports (design §44 §4, D612).
 
 One port serves the Connect protocol, gRPC and gRPC-Web (D600), so the only
-question a client has is which of those to speak. `connect-python` implements
+question a client has is which of those to speak. `connectrpc` implements
 all three behind one client, chosen with a `ProtocolType`:
 
 - **Connect** (the default) is unary over `POST` and server streams over the
@@ -14,7 +14,7 @@ all three behind one client, chosen with a `ProtocolType`:
 - **gRPC-Web** is the framing a browser sends. Python does not need it, but an
   edge that only speaks gRPC-Web does, so it is one argument away.
 
-**Request compression is off by default.** `connect-python` gzips requests
+**Request compression is off by default.** `connectrpc` gzips requests
 unless told otherwise, and that is the wrong default for an SDK: it breaks any
 peer or recording that compares request bytes — the conformance corpus does
 exactly that — and it costs CPU on messages that are usually small. A caller who
@@ -27,12 +27,16 @@ from collections.abc import Iterable, Mapping
 from typing import Final
 
 from connectrpc.client import ConnectClient, ConnectClientSync
+from connectrpc.codec import Codec
+from connectrpc.compat import google_protobuf_binary_codec, google_protobuf_json_codec
 from connectrpc.compression import Compression
 from connectrpc.protocol import ProtocolType
+from google.protobuf.message import Message
 
 __all__ = [
     "PROTOCOLS",
     "TransportOptions",
+    "codec_of",
     "make_async_client",
     "make_sync_client",
     "protocol_of",
@@ -109,11 +113,26 @@ def _address(options: TransportOptions) -> str:
     return options.base_url.rstrip("/")
 
 
+def codec_of(options: TransportOptions) -> Codec[Message, Message]:
+    """The `google.protobuf` codec `proto_json` names.
+
+    `connectrpc` 0.10 replaced the client's `proto_json=` flag with `codec=` and
+    made its own `protobuf-py` runtime the default, so the codec is chosen here.
+    The SDK's messages are `google.protobuf` ones (`protobuf=google` in
+    `buf.gen.proto.yaml`), so it is always the `compat` pair. JSON keeps
+    `ignore_unknown_fields=False`, which is what `connectrpc` 0.9.0's JSON
+    codec did: a field this SDK does not know is an error, not silently dropped.
+    """
+    if options.proto_json:
+        return google_protobuf_json_codec(ignore_unknown_fields=False)
+    return google_protobuf_binary_codec()
+
+
 def make_sync_client(options: TransportOptions) -> ConnectClientSync:
-    """The default client: Connect over the protocol `connect-python` speaks."""
+    """The default client: Connect over the protocol `connectrpc` speaks."""
     return ConnectClientSync(
         _address(options),
-        proto_json=options.proto_json,
+        codec=codec_of(options),
         protocol=options.protocol,
         accept_compression=options.accept_compression,
         send_compression=options.send_compression,
@@ -126,7 +145,7 @@ def make_async_client(options: TransportOptions) -> ConnectClient:
     """`make_sync_client` for `AsyncLoams`."""
     return ConnectClient(
         _address(options),
-        proto_json=options.proto_json,
+        codec=codec_of(options),
         protocol=options.protocol,
         accept_compression=options.accept_compression,
         send_compression=options.send_compression,

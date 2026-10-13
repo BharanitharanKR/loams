@@ -52,16 +52,20 @@ impl Snapshot {
         let Some(project) = ctx.store.get::<ProjectRec>(&key).await? else {
             return Ok(None);
         };
-        let branches = all::<S, BranchRec>(
+        // Endpoints before branches: an endpoint's branch committed before
+        // the endpoint, and is removed only after it (under this lease), so
+        // every listed endpoint's branch is in the later branch listing
+        // unless it is really gone (PR #453 review).
+        let endpoints = all::<S, EndpointRec>(
             &ctx.store,
-            &BranchPrefix {
+            &EndpointPrefix {
                 project_id: project_id.into(),
             },
         )
         .await?;
-        let endpoints = all::<S, EndpointRec>(
+        let branches = all::<S, BranchRec>(
             &ctx.store,
-            &EndpointPrefix {
+            &BranchPrefix {
                 project_id: project_id.into(),
             },
         )
@@ -76,6 +80,14 @@ impl Snapshot {
     /// Whether a pass has anything to do (without the lease).
     pub fn needs_work<S, N>(&self, ctx: &Ctx<S, N>) -> bool {
         let p = &self.project.record;
+        if ctx.computes.is_some()
+            && self
+                .endpoints
+                .iter()
+                .any(|e| super::endpoint::needs_work(&e.record))
+        {
+            return true;
+        }
         let any = |state| self.branches.iter().any(|b| b.record.state == state);
         match p.state {
             ProjectState::Creating | ProjectState::Deleting => true,

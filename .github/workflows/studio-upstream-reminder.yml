@@ -1,0 +1,47 @@
+name: Studio upstream reminder
+
+# Design §53 §9.4 (D915), SD1 Task 1: once a month, open (or update) one issue
+# saying a T3 Code upstream check is due. This job downloads nothing from
+# upstream and checks out nothing: the check itself is run by hand with
+# scripts/studio/vendor.mjs fetch and scripts/studio/upstream-report.mjs.
+on:
+  schedule:
+    - cron: '17 6 1 * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  remind:
+    name: T3 Code upstream check reminder
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the reminder issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          title='T3 Code upstream check due'
+          body="$(cat <<'EOF'
+          A monthly T3 Code upstream check is due (design §53 §9.4, D915).
+
+          1. `node scripts/studio/vendor.mjs fetch --commit <new sha> --out <new scratch dir outside the repo>`
+          2. `node scripts/studio/vendor.mjs fetch --commit <recorded sha> --out <old scratch dir>` (the commit in `web/packages/studio-ui/provenance.json`)
+          3. `node scripts/studio/upstream-report.mjs --from <old>/<top> --to <new>/<top>`
+          4. Re-sync one component group per PR; take upstream security fixes within 7 days.
+
+          Never run, install or build anything from the upstream tree. Close this issue when the check is done.
+          EOF
+          )"
+          number="$(gh issue list --repo "$REPO" --state open \
+            --search "in:title T3 Code upstream check due" --json number,title \
+            --jq "map(select(.title == \"${title}\")) | .[0].number // empty")"
+          if [[ -n "$number" ]]; then
+            gh issue comment "$number" --repo "$REPO" --body "Still due as of $(date -u +%Y-%m-%d)."
+          else
+            gh issue create --repo "$REPO" --title "$title" --body "$body"
+          fi

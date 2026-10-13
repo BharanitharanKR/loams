@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'envelopes.dart';
 import 'errors.dart';
 

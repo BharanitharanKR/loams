@@ -1,0 +1,49 @@
+[package]
+name = "loams-connector-kafka"
+description = "The Loams Kafka-protocol connector family (CN2 Task 9, OR-6): a native Kafka source (topic-partition splits, consumer-group offsets committed after the Fabric acknowledges) and sink (the idempotent producer, or Kafka transactions with the checkpoint in `__loams_checkpoints`), serving Apache Kafka and, as target profiles, Redpanda and Azure Event Hubs' Kafka endpoint."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+# Every family crate depends on the SDK and its protocol crates only (OR-6).
+loams-connector-sdk = { path = "../loams-connector-sdk" }
+# The SDK's own async-trait pin (0.1.92 in fabric/Cargo.lock).
+async-trait = "0.1.89"
+base64.workspace = true
+bytes.workspace = true
+# Awaiting a batch's delivery reports together. Already in fabric/Cargo.lock.
+futures.workspace = true
+# The Confluent schema registry client (R5.4) over `sdk::http::client`.
+http.workspace = true
+# The Kafka client (CN2 Task 0, spike §1.1, R0.18, R0.19): rdkafka 0.39.0
+# (2026-01-25, MIT) over rdkafka-sys 4.10.0+2.12.1, which builds the bundled
+# librdkafka 2.12.1 (BSD-2-Clause) with `make`. Only this crate compiles it
+# (OR-6, Global Constraints). Features (R9.1): `tokio` for the async producer
+# and consumer; `libz` and `zstd` so gzip- and zstd-compressed topics can be
+# read (librdkafka has lz4 and snappy built in; zstd-sys is already in the
+# lock through parquet); `ssl-vendored` for TLS (Event Hubs' 9093, any `ssl`
+# or `sasl_ssl` cluster), building OpenSSL from source so the binary does not
+# depend on the host's libssl. No `gssapi` (Kerberos is not a declared auth
+# method) and no `curl` (OIDC token fetch, not declared).
+rdkafka = { version = "=0.39.0", default-features = false, features = ["tokio", "libz", "zstd", "ssl-vendored"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net"] }
+tracing.workspace = true
+
+[dev-dependencies]
+# The fake schema registry.
+http-body-util.workspace = true
+hyper = { workspace = true, features = ["server", "http1"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+# Reading the profile and manifest YAML in `eventhubs_narrows_are_declared`.
+serde_norway.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "test-util"] }
+
+[lints]
+workspace = true

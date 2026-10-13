@@ -13,7 +13,7 @@ This document turns that into decisions **D600–D619** and open questions **Q60
 1. **One API.** Every application call to Loams is a Connect/gRPC RPC in a `loams.<service>.v1` package, served by the single `loams` binary on one port. Connect serves gRPC, gRPC-Web and the Connect protocol on that port; a Connect unary call is an HTTP `POST` with a JSON body, so `curl` works without a bespoke REST layer (§4).
 2. **The bespoke REST APIs go.** The native REST under `/v1/namespaces/...` (M1.2), the console's OpenAPI `/api/v1/...` (§19 P9, `api/console/openapi.json`), the internal node-to-node HTTP and any other hand-written JSON endpoint are replaced by RPCs, with a migration table (§5) and one release of deprecation shims.
 3. **The compatibility surfaces stay.** The Qdrant REST and gRPC APIs, the Elasticsearch REST API, Postgres wire, the Kafka gateway, Flight SQL, the Resonate HTTP protocol, MySQL (Vitess, WeSQL), Git Smart HTTP and MCP exist so **unmodified third-party clients work**. Removing them would break the drop-in promise (§6). They are adapters over the same internal services.
-4. **One SDK shape in every language.** One client object with namespaced modules: `loams.vector.search(...)`, `loams.search`, `loams.sql`, `loams.streams`, `loams.tables`, `loams.graph`, `loams.live`, `loams.durable`, `loams.jobs`, `loams.git`, `loams.systemone`, `loams.bot`, `loams.admin` and the rest (§7). The module/method surface is **generated from annotations on the protos**, so 13 languages cannot drift (D606).
+4. **One SDK shape in every language.** One client object with namespaced modules: `loams.vector.search(...)`, `loams.search`, `loams.sql`, `loams.streams`, `loams.tables`, `loams.graph`, `loams.live`, `loams.durable`, `loams.jobs`, `loams.repos`, `loams.systemone`, `loams.bot`, `loams.admin` and the rest (§7). The module/method surface is **generated from annotations on the protos**, so 13 languages cannot drift (D606).
 5. **Every language gRPC officially supports** (13, §9): C++, C#, Dart, Go, Java, Kotlin, Node/TypeScript, Objective-C, PHP, Python, Ruby, Rust, Swift. Connect where an official Connect library exists; gRPC elsewhere. This **supersedes the earlier "Java SDKs deferred" ruling** for generated clients (D612).
 6. **One toolchain, one pipeline.** `buf generate` with remote plugins per language, a thin runtime per language, a conformance suite per SDK against a shared test server, and publishing from CI with trusted publishing where the registry has it (§10, §11, issue #254).
 
@@ -39,7 +39,7 @@ This document turns that into decisions **D600–D619** and open questions **Q60
 | Console `/api/v1` OpenAPI (31 paths incl. OAuth and well-known) | `api/console/openapi.json` | REST |
 | SDKs: `@loams/live` | `sdks/typescript/packages/live` | Connect (protobuf-es) |
 | SDKs planned: `loams-client` (Python), `@loams/client` (TS), both REST (M1.6, #198) | `docs/plans/2026-09-24-m1.6-sdks-mcp.md` | REST |
-| Designed, not yet on `dev`: `loams.jobs.v1` (§26), `loams.flow.v1` (§32), `loams.git.v1` (§36), `loams.collab.v1`/`loams.bot.v1`/`loams.factory.v1` (§39), `loams.systemone.v1` (§40, `SystemOneService`), `loams.console.v1` (`PluginService`, AP1a) | design docs | Connect (planned) |
+| Designed, not yet on `dev`: `loams.jobs.v1` (§26), `loams.flow.v1` (§32), `loams.repos.v1` (§36 §19.10; protos from GT1 Task 12), `loams.collab.v1`/`loams.bot.v1`/`loams.factory.v1` (§39), `loams.systemone.v1` (§40, `SystemOneService`), `loams.console.v1` (`PluginService`, AP1a) | design docs | Connect (planned) |
 
 D101 (OpenAPI for the native REST, then a Go SDK) and M1.6 Ruling 1 ("the SDKs target only the native REST API") are **superseded** (D604); the fixture corpus idea survives as the conformance corpus (§10.4).
 
@@ -176,13 +176,13 @@ Language idiom rules (D606): module and method names are the proto names in the 
 | `loams.sql` | `loams.sql.v1` | API1 |
 | `loams.streams` | `loams.stream.v1` | API1 |
 | `loams.links` | `loams.link.v1` | API1 |
-| `loams.tables`, `loams.live` | `loams.live.v1`: `tables` wraps `Query`, `Mutate`, `Deploy`; `live` wraps `Watch`, `ModifyQuerySet`. `loams.live.worker.v1` is internal: the frames between the server and its sandboxed function workers (LV1 Ruling 5), never served or in an SDK | exists (R1); the worker protocol LV1 Task 5 |
+| `loams.tables`, `loams.live`, `loams.live.admin` | `loams.live.v1`: `tables` wraps `Query`, `Mutate`; `live` wraps `Watch`, `ModifyQuerySet`; `live.admin` wraps `LiveAdminService` (`Deploy`, `ListDeployments`, `GetDeployment`, `ActivateDeployment`, `GetIndexStatus`, `TailLogs`; D689, LV1 Task 10). `loams.live.worker.v1` is internal: the frames between the server and its sandboxed function workers (LV1 Ruling 5), never served or in an SDK | exists (R1); the worker protocol LV1 Task 5 |
 | `loams.graph` | `loams.graph.v1` (M3; §07, §48) | served with the `graph` feature (GR1 Task 5); `feature_not_in_variant` otherwise; unstable until GR1e |
 | `loams.durable`, `loams.operations`, `loams.approvals` | durable engine control (start/signal/inspect) in `loams.durable.v1`; `loams.operations.v1`; `loams.approvals.v1` | partial (D1, AP0) |
 | `loams.jobs` | `loams.jobs.v1` (§26) | when J1 lands |
 | `loams.flow` | `loams.flow.v1` (§32) | when FL lands |
 | `loams.house` | `loams.house.v1` `HouseService` (§49 §18) | served by `loams-fabric house`; the main port proxies `/loams.house.v1.*` to `[house] endpoint` and lists it as available while that endpoint is healthy, `house_not_configured` otherwise (HS1 Task 7); RPCs in HS1 Task 8; unstable until HS1 Task 38 |
-| `loams.git` | `loams.git.v1` control plane: repos, refs, tokens, mirrors, caches (data path stays Git Smart HTTP, D603) | when GT lands |
+| `loams.repos` | `loams.repos.v1` `RepoService`, `WorkspaceService`, `ObjectService`, `EnvService`: repositories, refs, workspaces, objects and history, sealed env (§36 §19.10, D834). The data path stays Git Smart HTTP (D603); the on-disk formats are crate-local in `loams-git`, never served (GT1 Ruling 20) | GT1: protos in Task 12; `RepoService` served with the `loams` feature `git` from Task 13, `feature_not_in_variant` otherwise; unstable until GT1 GA |
 | `loams.systemone` | `loams.systemone.v1` `SystemOneService` (`Decide`, `DecideBatch`, `ListBackends`, `SelfTest`) | SO1 |
 | `loams.collab`, `loams.bot`, `loams.factory` | `loams.collab.v1`, `loams.bot.v1`, `loams.factory.v1` (§39) | SF |
 | `loams.instance`, `loams.devices`, `loams.notifications` | AP0 packages | exists |

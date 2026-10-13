@@ -9,7 +9,7 @@ apiVersion: loams.flow/v1
 kind: Connector
 id: debezium-postgres
 name: Debezium-Postgres
-specVersion: 1.0.0
+specVersion: 1.1.0
 category: cdc
 priority: P1
 starred: true
@@ -60,3 +60,5 @@ envelope:
 limits: { max_record_bytes: 16777216 }
 conformance: [contract, kill-restart, cdc]
 docs: docs/guides/connectors/debezium-postgres.md
+notes:
+  - "fallback-only: Debezium Server CDC, the opt-in fallback of `postgresql`'s native CDC (OR-4, OR-8); replaced_by: CN2 Task 10"

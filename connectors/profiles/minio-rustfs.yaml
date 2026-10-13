@@ -1,0 +1,20 @@
+# MinIO / RustFS — a target profile on the native objects family (CN2 OR-2,
+# Task 13). Both speak the S3 API, so `loams_connector_objects::s3` serves
+# them; the instance's `endpoint` names the server, and `allow_http` is for a
+# development server only. The sink publishes with `If-None-Match: *`, and
+# the suite's `conditional_put_refuses_overwrite` proves the server refuses.
+#
+# Its suite runs against RustFS 1.0.1 (Apache-2.0) in PR CI, compose service
+# `rustfs`. MinIO's half waits for `connectors-ci-only` to build an image
+# from its last source release (AGPL, a `ci-service`, never shipped; R0.28).
+# No capability is narrowed.
+apiVersion: loams.flow/v1
+kind: Profile
+id: minio-rustfs
+profile_kind: target
+module: objects
+system:
+  name: MinIO / RustFS
+  service: { compose: rustfs }
+defaults: {}
+narrows: []

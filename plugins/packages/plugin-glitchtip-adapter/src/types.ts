@@ -177,7 +177,9 @@ export function parseGlitchtipPaginationHeaders(headers: Headers): GlitchtipPagi
 function cursorFromLink(link: string | null | undefined, rel: string): string | undefined {
   if (link === null || link === undefined) return undefined;
   for (const part of link.split(",")) {
-    const match = part.match(/<([^>]+)>\s*;\s*rel\s*=\s*"?([^";]+)"?/);
+    // Anchored: every link-value starts with `<`, and an unanchored scan is quadratic
+    // on an upstream header full of unclosed `<`.
+    const match = part.trim().match(/^<([^>]+)>\s*;\s*rel\s*=\s*"?([^";]+)"?/);
     if (!match) continue;
     if (match[2]!.trim() !== rel) continue;
     const cursor = new URL(match[1]!, "http://placeholder.test").searchParams.get("cursor");

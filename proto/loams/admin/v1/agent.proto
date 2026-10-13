@@ -1,0 +1,325 @@
+syntax = "proto3";
+
+// Agents, their tokens and trust policies, and service accounts (design §44
+// §5.2, §19 §4–§5; API2 Task 7). Replaces the console's
+// `/api/v1/projects/{project}/agents`, `/api/v1/agents/...` and
+// `/api/v1/projects/{project}/service-accounts` REST routes, one RPC per
+// route. Revoking a token is `KeyService/RevokeToken` (`key.proto`), as §44
+// §5.2 puts it. The package rules are in `common.proto`.
+package loams.admin.v1;
+
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+import "loams/admin/v1/common.proto";
+import "loams/options/v1/options.proto";
+
+// Agents, their tokens and trust policies, and service accounts.
+service AgentService {
+  option (loams.options.v1.module) = {
+    name: "admin.agents"
+    summary: "Agents, their tokens and trust policies, and service accounts."
+  };
+
+  // A project's agents. (replaces `GET /api/v1/projects/{project}/agents`)
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {
+      name: "list"
+      pagination: "agents:next_page_token"
+    };
+  }
+  // Creates an agent by name in a project.
+  // (replaces `POST /api/v1/projects/{project}/agents`)
+  rpc CreateAgent(CreateAgentRequest) returns (CreateAgentResponse) {
+    option (loams.options.v1.facade) = {name: "create"};
+  }
+  // One agent. (replaces `GET /api/v1/agents/{agent}`)
+  rpc GetAgent(GetAgentRequest) returns (GetAgentResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {name: "get"};
+  }
+  // Changes the fields named in `update_mask`. (replaces `PATCH /api/v1/agents/{agent}`)
+  rpc UpdateAgent(UpdateAgentRequest) returns (UpdateAgentResponse) {
+    option idempotency_level = IDEMPOTENT;
+    option (loams.options.v1.facade) = {name: "update"};
+  }
+  // Suspends an agent and revokes its live tokens.
+  // (replaces `POST /api/v1/agents/{agent}/suspend`)
+  rpc SuspendAgent(SuspendAgentRequest) returns (SuspendAgentResponse) {
+    option idempotency_level = IDEMPOTENT;
+    option (loams.options.v1.facade) = {name: "suspend"};
+  }
+  // Lets a suspended agent get tokens again.
+  // (replaces `POST /api/v1/agents/{agent}/resume`)
+  rpc ResumeAgent(ResumeAgentRequest) returns (ResumeAgentResponse) {
+    option idempotency_level = IDEMPOTENT;
+    option (loams.options.v1.facade) = {name: "resume"};
+  }
+  // An agent's live tokens. (replaces `GET /api/v1/agents/{agent}/tokens`)
+  rpc ListAgentTokens(ListAgentTokensRequest) returns (ListAgentTokensResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {
+      name: "listTokens"
+      pagination: "tokens:next_page_token"
+    };
+  }
+  // The workload identities an agent trusts.
+  // (replaces `GET /api/v1/agents/{agent}/trust-policies`)
+  rpc ListTrustPolicies(ListTrustPoliciesRequest) returns (ListTrustPoliciesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {
+      name: "listTrustPolicies"
+      pagination: "trust_policies:next_page_token"
+    };
+  }
+  // Adds a trust policy by name. (replaces `POST /api/v1/agents/{agent}/trust-policies`)
+  rpc CreateTrustPolicy(CreateTrustPolicyRequest) returns (CreateTrustPolicyResponse) {
+    option (loams.options.v1.facade) = {name: "createTrustPolicy"};
+  }
+  // A project's service accounts.
+  // (replaces `GET /api/v1/projects/{project}/service-accounts`)
+  rpc ListServiceAccounts(ListServiceAccountsRequest) returns (ListServiceAccountsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {
+      name: "listServiceAccounts"
+      pagination: "service_accounts:next_page_token"
+    };
+  }
+  // Creates a service account by name.
+  // (replaces `POST /api/v1/projects/{project}/service-accounts`)
+  rpc CreateServiceAccount(CreateServiceAccountRequest) returns (CreateServiceAccountResponse) {
+    option (loams.options.v1.facade) = {name: "createServiceAccount"};
+  }
+}
+
+// What an agent may do in one environment.
+message PolicyRule {
+  // The environment's slug.
+  string environment = 1;
+  // Actions such as "collections:read", "query" or "mcp:tools" (the console
+  // contract's `Action`). A string, as OAuth scopes are, so a new action
+  // needs no proto change.
+  repeated string actions = 2;
+  // The collections the rule covers; empty covers every collection.
+  repeated string collections = 3;
+}
+
+// An agent's rate limits.
+message AgentLimits {
+  int32 requests_per_s = 1;
+  int32 concurrent_queries = 2;
+}
+
+// Whether an agent may get tokens.
+enum AgentStatus {
+  AGENT_STATUS_UNSPECIFIED = 0;
+  AGENT_STATUS_ACTIVE = 1;
+  AGENT_STATUS_SUSPENDED = 2;
+}
+
+// An agent: a non-human principal that gets short-lived tokens (§19 §4).
+message Agent {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  // The project's slug.
+  string project = 4;
+  // The user or team accountable for it.
+  SubjectRef owner = 5;
+  AgentStatus status = 6;
+  repeated PolicyRule policy = 7;
+  // The longest token lifetime it may be issued, in seconds.
+  int32 max_token_ttl_s = 8;
+  AgentLimits limits = 9;
+  google.protobuf.Timestamp created_at = 10;
+  // Unset when the agent has never been active.
+  google.protobuf.Timestamp last_active_at = 11;
+  int32 active_tokens = 12;
+}
+
+// How an agent got a token (§19 §5.2).
+enum TokenFlow {
+  TOKEN_FLOW_UNSPECIFIED = 0;
+  // A workload identity exchanged under a trust policy.
+  TOKEN_FLOW_FEDERATION = 1;
+  // A person's session delegated to the agent (RFC 8693 `act`).
+  TOKEN_FLOW_DELEGATION = 2;
+  // Vended by the instance to a runtime it manages.
+  TOKEN_FLOW_VENDING = 3;
+}
+
+// A live token of an agent. The token itself is never returned.
+message AgentToken {
+  // The token's id (the JWT `jti`), which `KeyService/RevokeToken` takes.
+  string jti = 1;
+  // The agent's id.
+  string agent = 2;
+  // The environment's slug.
+  string environment = 3;
+  repeated string scopes = 4;
+  TokenFlow flow = 5;
+  // The token's `sub`.
+  string subject = 6;
+  // The person the agent acts for (delegation); unset otherwise.
+  SubjectRef acting_for = 7;
+  google.protobuf.Timestamp issued_at = 8;
+  google.protobuf.Timestamp expires_at = 9;
+}
+
+// A workload identity an agent trusts (§19 §5.2 flow 1).
+message TrustPolicy {
+  string id = 1;
+  // The agent's id.
+  string agent = 2;
+  string name = 3;
+  // The OIDC issuer of the workload's token.
+  string issuer = 4;
+  string audience = 5;
+  // A glob over the workload token's `sub`, for example "repo:acme/docs:*".
+  string subject_pattern = 6;
+  // The environment slugs a token from this policy may reach.
+  repeated string environments = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+// A service account: a principal for API keys that is not a person.
+message ServiceAccount {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  // The project's slug.
+  string project = 4;
+  google.protobuf.Timestamp created_at = 5;
+  int32 key_count = 6;
+  // Unset when the account has never been used.
+  google.protobuf.Timestamp last_active_at = 7;
+}
+
+message ListAgentsRequest {
+  // The project's slug.
+  string project = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListAgentsResponse {
+  repeated Agent agents = 1;
+  string next_page_token = 2;
+}
+
+message CreateAgentRequest {
+  // The project's slug.
+  string project = 1;
+  string name = 2;
+  string description = 3;
+  // A user or a team; `name` is not read.
+  SubjectRef owner = 4;
+  repeated PolicyRule policy = 5;
+  // 0 takes the server's default.
+  int32 max_token_ttl_s = 6;
+  AgentLimits limits = 7;
+}
+
+message CreateAgentResponse {
+  Agent agent = 1;
+}
+
+message GetAgentRequest {
+  // The agent's id.
+  string agent = 1;
+}
+
+message GetAgentResponse {
+  Agent agent = 1;
+}
+
+message UpdateAgentRequest {
+  // The agent, by `id`, with the new values; only the fields named in
+  // `update_mask` are read.
+  Agent agent = 1;
+  // `description`, `policy`, `max_token_ttl_s` and `limits`.
+  google.protobuf.FieldMask update_mask = 2;
+}
+
+message UpdateAgentResponse {
+  Agent agent = 1;
+}
+
+message SuspendAgentRequest {
+  // The agent's id.
+  string agent = 1;
+}
+
+message SuspendAgentResponse {
+  Agent agent = 1;
+}
+
+message ResumeAgentRequest {
+  // The agent's id.
+  string agent = 1;
+}
+
+message ResumeAgentResponse {
+  Agent agent = 1;
+}
+
+message ListAgentTokensRequest {
+  // The agent's id.
+  string agent = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListAgentTokensResponse {
+  repeated AgentToken tokens = 1;
+  string next_page_token = 2;
+}
+
+message ListTrustPoliciesRequest {
+  // The agent's id.
+  string agent = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListTrustPoliciesResponse {
+  repeated TrustPolicy trust_policies = 1;
+  string next_page_token = 2;
+}
+
+message CreateTrustPolicyRequest {
+  // The agent's id.
+  string agent = 1;
+  string name = 2;
+  string issuer = 3;
+  string audience = 4;
+  string subject_pattern = 5;
+  repeated string environments = 6;
+}
+
+message CreateTrustPolicyResponse {
+  TrustPolicy trust_policy = 1;
+}
+
+message ListServiceAccountsRequest {
+  // The project's slug.
+  string project = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListServiceAccountsResponse {
+  repeated ServiceAccount service_accounts = 1;
+  string next_page_token = 2;
+}
+
+message CreateServiceAccountRequest {
+  // The project's slug.
+  string project = 1;
+  string name = 2;
+  string description = 3;
+}
+
+message CreateServiceAccountResponse {
+  ServiceAccount service_account = 1;
+}

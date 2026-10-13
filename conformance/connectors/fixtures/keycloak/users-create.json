@@ -1,0 +1,111 @@
+{
+  "recorded_from": "Keycloak",
+  "synthetic": true,
+  "docs": [
+    "https://www.keycloak.org/docs-api/latest/rest-api/index.html"
+  ],
+  "scenario": {
+    "direction": "sink",
+    "resource": "users",
+    "config": {
+      "server_url": "{proxy}",
+      "realm": "loams"
+    },
+    "secrets": {
+      "client_id": "synthetic-kc-client",
+      "client_secret": "synthetic-kc-secret"
+    },
+    "input": [
+      {
+        "username": "ada",
+        "enabled": true,
+        "email": "ada@example.test",
+        "firstName": "Ada"
+      },
+      {
+        "username": "grace",
+        "enabled": true,
+        "email": "grace@example.test",
+        "firstName": "Grace"
+      }
+    ],
+    "expect": 2
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/realms/master/protocol/openid-connect/token",
+        "headers": {},
+        "body": {
+          "text": "grant_type=client_credentials&client_id=<redacted>&client_secret=<redacted>"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "access_token": "<scrubbed>",
+            "expires_in": 60,
+            "refresh_expires_in": 0,
+            "token_type": "Bearer",
+            "not-before-policy": 0,
+            "scope": "profile email"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/admin/realms/loams/users",
+        "headers": {},
+        "body": {
+          "json": {
+            "username": "ada",
+            "enabled": true,
+            "email": "ada@example.test",
+            "firstName": "Ada"
+          }
+        }
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "content-type": "application/json",
+          "location": "http://keycloak.test/admin/realms/loams/users/5e6f7a8b-0000-4c1d-9e2f-0123456789ab"
+        },
+        "body": "empty"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/admin/realms/loams/users",
+        "headers": {},
+        "body": {
+          "json": {
+            "username": "grace",
+            "enabled": true,
+            "email": "grace@example.test",
+            "firstName": "Grace"
+          }
+        }
+      },
+      "response": {
+        "status": 409,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "errorMessage": "User exists with same username"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+# Redpanda — a target profile on the native Kafka family (CN2 OR-2, Task 9).
+# Shared contracts' example, verbatim. Redpanda speaks the Kafka protocol, so
+# `loams-connector-kafka` serves it; its own manifest (Task 2) names this
+# profile, and its suite runs against Redpanda itself (BSL, a `ci-service`,
+# OR-3), never against Apache Kafka. A capability a Redpanda suite finds
+# missing is added to `narrows` with a `narrows:` note on the manifest.
+apiVersion: loams.flow/v1
+kind: Profile
+id: redpanda
+profile_kind: target
+module: kafka
+system:
+  name: Redpanda
+  service: { compose: redpanda }
+defaults: {}
+narrows: []
