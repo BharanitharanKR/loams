@@ -385,6 +385,10 @@ HAND_WRITTEN_FAMILY_ROWS: dict[str, tuple[str, ...]] = {
     "kv": ("cassandra", "dynamodb", "dynamodb-streams", "redis-streams", "valkey"),  # R14.1
     "search": ("opensearch", "qdrant"),  # R15.5
     "mongodb": ("mongodb",),  # R16.12
+    "protocols": (  # R21.12
+        "anthropic", "grafeo", "graphql", "grpc", "lambda-cloud-run-azure-functions", "neo4j",
+        "openai", "prometheus",
+    ),
     "brokers": (  # R18.1
         "activemq-jms", "azure-service-bus", "mqtt", "nats", "pulsar", "rabbitmq-amqp", "websocket",
     ),

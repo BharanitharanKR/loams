@@ -343,7 +343,7 @@ const A18: [&str; 3] = ["forgejo", "itsplane", "zulip"];
 /// connectors and left the manifest to CN2 Task 2, and the follow-up replaced the generated
 /// stubs with them (`gen_registry.py`'s `HAND_WRITTEN_FAMILY_ROWS`). Hand-written, unstarred
 /// and still `planned` until their suites are green in CI (OR-23).
-const HAND_WRITTEN_UNSTARRED_P2: [&str; 34] = [
+const HAND_WRITTEN_UNSTARRED_P2: [&str; 41] = [
     "grafeo",
     // The kafka family (R9.7).
     "azure-event-hubs",
@@ -373,6 +373,14 @@ const HAND_WRITTEN_UNSTARRED_P2: [&str; 34] = [
     "qdrant",
     // The mongodb family (R16.12).
     "mongodb",
+    // The protocols family (R21.12); grafeo heads the list (D634).
+    "anthropic",
+    "graphql",
+    "grpc",
+    "lambda-cloud-run-azure-functions",
+    "neo4j",
+    "openai",
+    "prometheus",
     // The brokers family (R18.1).
     "activemq-jms",
     "azure-service-bus",
@@ -387,6 +395,15 @@ const HAND_WRITTEN_UNSTARRED_P2: [&str; 34] = [
     "azure-event-grid",
     "eventbridge",
     "google-pub-sub",
+];
+
+/// The manifests whose sink replies (CN2 OR-19, R-CN2-3): the protocols family's
+/// request-reply sinks (R21.6, R21.12).
+const REPLYING_SINKS: [&str; 4] = [
+    "anthropic",
+    "grpc",
+    "lambda-cloud-run-azure-functions",
+    "openai",
 ];
 
 /// Ruling 11's row count, after D628 added A.18's three to the précis' 200, D634 added
@@ -1337,14 +1354,19 @@ fn existing_205_manifests_still_validate() {
             .unwrap_or_else(|errors| panic!("{id}: must still validate: {errors:?}"));
         assert_eq!(again.runtime, spec.runtime, "{id}: runtime survives");
         assert_eq!(again.notes, spec.notes, "{id}: notes survive");
-        // No manifest claims a reply yet: OR-19's `sink.reply` needs a `reply_topic`
-        // in the config schema (R-CN2-3), which Task 21 writes.
-        assert!(
-            spec.capabilities
-                .sink
-                .as_ref()
-                .is_none_or(|sink| !sink.reply),
-            "{id}: reply defaults to false"
+        // OR-19's `sink.reply` needs a `reply_topic` in the config schema (R-CN2-3),
+        // which the protocols family's registry follow-up wrote (R21.12): exactly
+        // its four request-reply sinks reply, and every other manifest defaults to
+        // false.
+        let replies = spec
+            .capabilities
+            .sink
+            .as_ref()
+            .is_some_and(|sink| sink.reply);
+        assert_eq!(
+            replies,
+            REPLYING_SINKS.contains(&id),
+            "{id}: only the protocols family's request-reply sinks declare sink.reply"
         );
     }
 

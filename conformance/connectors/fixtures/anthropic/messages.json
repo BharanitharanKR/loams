@@ -1,0 +1,86 @@
+{
+  "recorded_from": "Anthropic",
+  "synthetic": true,
+  "docs": [
+    "https://docs.anthropic.com/en/api/messages",
+    "https://docs.anthropic.com/en/api/rate-limits",
+    "https://docs.anthropic.com/en/api/errors"
+  ],
+  "scenario": {
+    "config": {
+      "model": "claude-opus-5-5",
+      "api_key": "anthropic-key",
+      "base_url": "{proxy}",
+      "max_tokens": 1024,
+      "prompt": { "system": "You label support tickets.", "user": "Label: {{/text}}" },
+      "reply_topic": "tickets.labels"
+    },
+    "secrets": { "anthropic-key": "synthetic-sk-ant-0000000000000000" },
+    "events": [
+      { "id": "ticket-41-v1", "subject": "ticket-41", "data": { "text": "printer is on fire" } },
+      { "id": "ticket-43-v1", "subject": "ticket-43", "data": { "text": "server overloaded" } }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages",
+        "body": {
+          "json": {
+            "model": "claude-opus-5-5",
+            "max_tokens": 1024,
+            "system": "You label support tickets.",
+            "messages": [ { "role": "user", "content": "Label: printer is on fire" } ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json",
+          "request-id": "req_synthetic0001",
+          "anthropic-ratelimit-requests-limit": "50",
+          "anthropic-ratelimit-requests-remaining": "49",
+          "anthropic-ratelimit-requests-reset": "2026-10-13T08:00:30Z"
+        },
+        "body": {
+          "json": {
+            "id": "msg_synthetic0001",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-opus-5-5",
+            "content": [ { "type": "text", "text": "urgent" } ],
+            "stop_reason": "end_turn",
+            "stop_sequence": null,
+            "usage": { "input_tokens": 21, "output_tokens": 3 }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages",
+        "body": {
+          "json": {
+            "model": "claude-opus-5-5",
+            "max_tokens": 1024,
+            "system": "You label support tickets.",
+            "messages": [ { "role": "user", "content": "Label: server overloaded" } ]
+          }
+        }
+      },
+      "response": {
+        "status": 529,
+        "headers": { "content-type": "application/json", "request-id": "req_synthetic0002" },
+        "body": {
+          "json": {
+            "type": "error",
+            "error": { "type": "overloaded_error", "message": "Overloaded" }
+          }
+        }
+      }
+    }
+  ]
+}

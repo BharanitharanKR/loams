@@ -1,0 +1,104 @@
+{
+  "recorded_from": "OpenAI",
+  "synthetic": true,
+  "docs": [
+    "https://platform.openai.com/docs/api-reference/chat/create",
+    "https://platform.openai.com/docs/guides/rate-limits",
+    "https://platform.openai.com/docs/guides/error-codes"
+  ],
+  "scenario": {
+    "config": {
+      "model": "gpt-4o-mini",
+      "api_key": "openai-key",
+      "base_url": "{proxy}",
+      "max_tokens": 256,
+      "prompt": { "system": "You label support tickets.", "user": "Label: {{/text}}" },
+      "reply_topic": "tickets.labels"
+    },
+    "secrets": { "openai-key": "synthetic-sk-openai-0000000000000000" },
+    "events": [
+      { "id": "ticket-41-v1", "subject": "ticket-41", "data": { "text": "printer is on fire" } },
+      { "id": "ticket-42-v1", "subject": "ticket-42", "data": { "text": "too many requests" } }
+    ]
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/chat/completions",
+        "body": {
+          "json": {
+            "model": "gpt-4o-mini",
+            "messages": [
+              { "role": "system", "content": "You label support tickets." },
+              { "role": "user", "content": "Label: printer is on fire" }
+            ],
+            "max_completion_tokens": 256
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json",
+          "x-ratelimit-limit-requests": "5000",
+          "x-ratelimit-remaining-requests": "4999",
+          "x-ratelimit-reset-requests": "12ms",
+          "x-request-id": "req_synthetic0001"
+        },
+        "body": {
+          "json": {
+            "id": "chatcmpl-synthetic0001",
+            "object": "chat.completion",
+            "created": 1791878400,
+            "model": "gpt-4o-mini-2024-07-18",
+            "choices": [
+              {
+                "index": 0,
+                "message": { "role": "assistant", "content": "urgent", "refusal": null },
+                "logprobs": null,
+                "finish_reason": "stop"
+              }
+            ],
+            "usage": { "prompt_tokens": 19, "completion_tokens": 2, "total_tokens": 21 }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/chat/completions",
+        "body": {
+          "json": {
+            "model": "gpt-4o-mini",
+            "messages": [
+              { "role": "system", "content": "You label support tickets." },
+              { "role": "user", "content": "Label: too many requests" }
+            ],
+            "max_completion_tokens": 256
+          }
+        }
+      },
+      "response": {
+        "status": 429,
+        "headers": {
+          "content-type": "application/json",
+          "retry-after": "2",
+          "x-ratelimit-remaining-requests": "0",
+          "x-ratelimit-reset-requests": "2s"
+        },
+        "body": {
+          "json": {
+            "error": {
+              "message": "Rate limit reached for requests per min. Please try again in 2s.",
+              "type": "requests",
+              "param": null,
+              "code": "rate_limit_exceeded"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
