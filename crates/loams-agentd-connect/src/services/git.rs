@@ -4,7 +4,6 @@ use connectrpc::{RequestContext, ServiceRequest, ServiceResult, ServiceStream};
 use loams_agentd_proto as rs;
 
 use super::{Agentd, stream, unary};
-use crate::error;
 use crate::map::{MapError, Wire, from_default_msg, msg, opt_msg};
 use crate::proto::loams::agentd::v1 as pb;
 
@@ -226,43 +225,75 @@ impl pb::GitService for Agentd {
     async fn list_worktrees(
         &self,
         _ctx: RequestContext,
-        _request: ServiceRequest<'_, pb::ListWorktreesRequest>,
+        request: ServiceRequest<'_, pb::ListWorktreesRequest>,
     ) -> ServiceResult<pb::ListWorktreesResponse> {
-        Err(error::not_implemented("ListWorktrees", "G1, SD1 Task 9"))
+        unary!(
+            self,
+            request,
+            ListWorktrees,
+            |req| rs::RepoPathParams {
+                repo_path: req.repo_path,
+            },
+            |worktrees| pb::ListWorktreesResponse {
+                worktrees: worktrees.0.to_pb(),
+                ..Default::default()
+            }
+        )
     }
 
     async fn commit_worktree(
         &self,
         _ctx: RequestContext,
-        _request: ServiceRequest<'_, pb::CommitWorktreeRequest>,
+        request: ServiceRequest<'_, pb::CommitWorktreeRequest>,
     ) -> ServiceResult<pb::CommitWorktreeResponse> {
-        Err(error::not_implemented("CommitWorktree", "G2, SD1 Task 9"))
+        unary!(
+            self,
+            request,
+            CommitWorktree,
+            |req| Wire::from_pb(req)?,
+            |reply| reply.to_pb()
+        )
     }
 
     async fn push_branch(
         &self,
         _ctx: RequestContext,
-        _request: ServiceRequest<'_, pb::PushBranchRequest>,
+        request: ServiceRequest<'_, pb::PushBranchRequest>,
     ) -> ServiceResult<pb::PushBranchResponse> {
-        Err(error::not_implemented("PushBranch", "G3, SD1 Task 9"))
+        unary!(
+            self,
+            request,
+            PushBranch,
+            |req| Wire::from_pb(req)?,
+            |reply| reply.to_pb()
+        )
     }
 
     async fn create_change_request(
         &self,
         _ctx: RequestContext,
-        _request: ServiceRequest<'_, pb::CreateChangeRequestRequest>,
+        request: ServiceRequest<'_, pb::CreateChangeRequestRequest>,
     ) -> ServiceResult<pb::CreateChangeRequestResponse> {
-        Err(error::not_implemented(
-            "CreateChangeRequest",
-            "G4, SD1 Task 9",
-        ))
+        unary!(
+            self,
+            request,
+            CreateChangeRequest,
+            |req| Wire::from_pb(req)?,
+            |reply| reply.to_pb()
+        )
     }
 
     async fn merge_branch(
         &self,
         _ctx: RequestContext,
-        _request: ServiceRequest<'_, pb::MergeBranchRequest>,
+        request: ServiceRequest<'_, pb::MergeBranchRequest>,
     ) -> ServiceResult<pb::MergeBranchResponse> {
-        Err(error::not_implemented("MergeBranch", "G5, SD1 Task 9"))
+        unary!(
+            self,
+            request,
+            MergeBranch,
+            |req| Wire::from_pb(req)?,
+            |reply| reply.to_pb()
+        )
     }
 }

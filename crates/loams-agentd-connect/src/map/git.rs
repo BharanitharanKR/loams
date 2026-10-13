@@ -170,3 +170,94 @@ wire_struct!(rs::WatchCheckoutChangeRequestParams => pb::WatchChangeRequestReque
     cwd => cwd,
     branch => branch,
 });
+
+// Worktrees and git writes (§53 §6.5 G1–G5, SD1 Task 9).
+
+wire_struct!(rs::WorktreeInfo => pb::WorktreeInfo {
+    path => path,
+    branch => branch,
+    head => head,
+    checkout_id => checkout_id,
+    chat_ids => chat_ids,
+    dirty => dirty,
+    ahead => ahead,
+    behind => behind,
+    last_activity_ms => last_activity_ms,
+});
+
+wire_struct!(rs::CommitWorktreeParams => pb::CommitWorktreeRequest {
+    checkout_id => checkout_id,
+    cwd => cwd,
+    message => message,
+    paths => paths,
+    all => all,
+    amend => amend,
+    signoff => signoff,
+    expected_checksum => expected_checksum,
+});
+
+wire_struct!(rs::CommitWorktreeReply => pb::CommitWorktreeResponse {
+    sha => sha,
+    summary => summary,
+});
+
+wire_struct!(rs::PushBranchParams => pb::PushBranchRequest {
+    cwd => cwd,
+    remote => remote,
+    branch => branch,
+    set_upstream => set_upstream,
+    force_with_lease => force_with_lease,
+});
+
+wire_struct!(rs::PushBranchReply => pb::PushBranchResponse {
+    remote => remote,
+    ref_name => r#ref,
+    url => url,
+});
+
+wire_enum!(rs::ChangeRequestProvider => pb::ChangeRequestProvider {
+    Forgejo => CHANGE_REQUEST_PROVIDER_FORGEJO,
+    Github => CHANGE_REQUEST_PROVIDER_GITHUB,
+});
+
+wire_struct!(rs::CreateChangeRequestParams => pb::CreateChangeRequestRequest {
+    cwd => cwd,
+    provider => provider,
+    base => base,
+    head => head,
+    title => title,
+    body => body,
+    draft => draft,
+    link_issue => link_issue,
+});
+
+wire_struct!(rs::CreateChangeRequestReply => pb::CreateChangeRequestResponse {
+    provider => provider,
+    number => number,
+    url => url,
+    state => state,
+});
+
+wire_enum!(rs::MergeStrategy => pb::MergeStrategy {
+    Merge => MERGE_STRATEGY_MERGE,
+    Squash => MERGE_STRATEGY_SQUASH,
+    Rebase => MERGE_STRATEGY_REBASE,
+    Ff => MERGE_STRATEGY_FAST_FORWARD,
+});
+
+wire_struct!(rs::MergeBranchParams => pb::MergeBranchRequest {
+    repo_path => repo_path,
+    source => source,
+    target => target,
+    strategy => strategy,
+    message => message,
+    delete_source => delete_source,
+    remove_worktree => remove_worktree,
+    expected_source_head => expected_source_head,
+});
+
+// `conflicts` stays empty: a conflict is the `merge_conflict` error, whose
+// `ErrorInfo.metadata["paths"]` lists them (SD1 Shared contracts).
+wire_struct!(rs::MergeBranchReply => pb::MergeBranchResponse {
+    sha => sha,
+});

@@ -11,6 +11,7 @@ export const AGENTD_RENDERER_METHODS: ReadonlySet<string> = new Set([
 	"/loams.agentd.v1.AttachmentService/UploadChunk",
 	"/loams.agentd.v1.AttachmentService/UploadCommit",
 	"/loams.agentd.v1.DiffService/Discard",
+	"/loams.agentd.v1.DiffService/DiscardPaths",
 	"/loams.agentd.v1.DiffService/GetCheckoutDiff",
 	"/loams.agentd.v1.DiffService/GetCheckoutFileDiffText",
 	"/loams.agentd.v1.DiffService/WatchCheckoutDiffs",
@@ -25,12 +26,17 @@ export const AGENTD_RENDERER_METHODS: ReadonlySet<string> = new Set([
 	"/loams.agentd.v1.FileService/SearchMentions",
 	"/loams.agentd.v1.FileService/WatchFiles",
 	"/loams.agentd.v1.FileService/WriteFile",
+	"/loams.agentd.v1.GitService/CommitWorktree",
+	"/loams.agentd.v1.GitService/CreateChangeRequest",
 	"/loams.agentd.v1.GitService/CreateWorktree",
 	"/loams.agentd.v1.GitService/DeleteWorktree",
 	"/loams.agentd.v1.GitService/FetchAll",
 	"/loams.agentd.v1.GitService/ListBranches",
 	"/loams.agentd.v1.GitService/ListGitHistory",
 	"/loams.agentd.v1.GitService/ListRefs",
+	"/loams.agentd.v1.GitService/ListWorktrees",
+	"/loams.agentd.v1.GitService/MergeBranch",
+	"/loams.agentd.v1.GitService/PushBranch",
 	"/loams.agentd.v1.GitService/ResolveGitAvatars",
 	"/loams.agentd.v1.GitService/SearchGitHistory",
 	"/loams.agentd.v1.GitService/SwitchRef",
@@ -106,4 +112,16 @@ export const AGENTD_RENDERER_METHODS: ReadonlySet<string> = new Set([
 	"/loams.agentd.v1.ThreadService/WatchSidebarPreferences",
 	"/loams.agentd.v1.ThreadService/WatchThreads",
 	"/loams.agentd.v1.ThreadService/WatchTranscript",
+]);
+
+// The methods that write to git (SD1 Task 9): a plugin calls them only with
+// the `agentd:git-write` permission (§53 §8.3), after the person confirms.
+export const AGENTD_GIT_WRITE_METHODS: ReadonlySet<string> = new Set([
+	"/loams.agentd.v1.DiffService/Discard",
+	"/loams.agentd.v1.DiffService/DiscardPaths",
+	"/loams.agentd.v1.GitService/CommitWorktree",
+	"/loams.agentd.v1.GitService/CreateChangeRequest",
+	"/loams.agentd.v1.GitService/DeleteWorktree",
+	"/loams.agentd.v1.GitService/MergeBranch",
+	"/loams.agentd.v1.GitService/PushBranch",
 ]);

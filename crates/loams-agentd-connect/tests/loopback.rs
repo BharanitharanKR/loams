@@ -236,9 +236,9 @@ async fn connect_unary_and_stream_work() {
 #[tokio::test]
 async fn gaps_and_bad_requests_answer_connect_errors() {
     let daemon = Daemon::start().await;
-    let git = pb::GitServiceClient::new(HttpClient::plaintext(), daemon.config());
-    let error = git
-        .list_worktrees(pb::ListWorktreesRequest::default())
+    let threads = pb::ThreadServiceClient::new(HttpClient::plaintext(), daemon.config());
+    let error = threads
+        .list_checkpoints(pb::ListCheckpointsRequest::default())
         .await
         .unwrap_err();
     assert_eq!(error.code, ErrorCode::Unimplemented);
@@ -259,5 +259,159 @@ async fn gaps_and_bad_requests_answer_connect_errors() {
     let host = host.host.as_option().unwrap();
     assert!(host.features.iter().any(|feature| feature == "studio.v1"));
     assert!(!host.device_id.is_empty());
+    daemon.stop().await;
+}
+
+fn git(cwd: &std::path::Path, args: &[&str]) -> String {
+    let output = std::process::Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).trim().to_owned()
+}
+
+/// SD1 Task 9: the git writes are served over Connect and answer what the
+/// ndjson wire answers, their refusals with the Shared contracts' codes.
+#[tokio::test]
+async fn git_writes_over_connect() {
+    let daemon = Daemon::start().await;
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "user.name", "Loams Test"]);
+    git(&repo, &["config", "user.email", "test@loams.invalid"]);
+    git(&repo, &["config", "commit.gpgsign", "false"]);
+    std::fs::write(repo.join("notes.txt"), "first\n").unwrap();
+    git(&repo, &["add", "."]);
+    git(&repo, &["commit", "-q", "-m", "initial"]);
+    git(&repo, &["checkout", "-q", "-b", "feature"]);
+    std::fs::write(repo.join("notes.txt"), "feature\n").unwrap();
+    git(&repo, &["commit", "-q", "-am", "feature"]);
+    let feature = git(&repo, &["rev-parse", "HEAD"]);
+    git(&repo, &["checkout", "-q", "main"]);
+    std::fs::write(repo.join("notes.txt"), "main\n").unwrap();
+    git(&repo, &["commit", "-q", "-am", "main"]);
+    let repo_path = repo.canonicalize().unwrap().to_string_lossy().into_owned();
+
+    let git_service = pb::GitServiceClient::new(HttpClient::plaintext(), daemon.config());
+    // A repository the daemon doesn't know is refused.
+    let error = git_service
+        .list_worktrees(pb::ListWorktreesRequest {
+            repo_path: repo_path.clone(),
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, ErrorCode::InvalidArgument);
+
+    daemon
+        .ndjson
+        .call(methods::ADD_REPO, serde_json::json!({ "path": repo_path }))
+        .await
+        .unwrap();
+    let listed = git_service
+        .list_worktrees(pb::ListWorktreesRequest {
+            repo_path: repo_path.clone(),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_owned();
+    let ndjson: rs::WorktreeList = daemon
+        .ndjson
+        .call_as(
+            methods::LIST_WORKTREES,
+            serde_json::json!({ "repoPath": repo_path }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(listed.worktrees, ndjson.0.to_pb());
+    assert_eq!(listed.worktrees.len(), 1);
+    assert_eq!(listed.worktrees[0].branch, "main");
+
+    // A stale checksum is failed_precondition (`stale_diff`).
+    std::fs::write(repo.join("notes.txt"), "edited\n").unwrap();
+    let diff = pb::DiffServiceClient::new(HttpClient::plaintext(), daemon.config())
+        .get_checkout_diff(pb::GetCheckoutDiffRequest {
+            cwd: repo_path.clone(),
+            mode: "working".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_owned();
+    let diff = diff.diff.as_option().unwrap().clone();
+    let error = git_service
+        .commit_worktree(pb::CommitWorktreeRequest {
+            checkout_id: diff.checkout_id.clone(),
+            cwd: repo_path.clone(),
+            message: "edit".into(),
+            all: true,
+            expected_checksum: "stale".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, ErrorCode::FailedPrecondition);
+    assert!(
+        error
+            .message
+            .as_deref()
+            .unwrap_or_default()
+            .starts_with("stale_diff")
+    );
+    let committed = git_service
+        .commit_worktree(pb::CommitWorktreeRequest {
+            checkout_id: diff.checkout_id,
+            cwd: repo_path.clone(),
+            message: "edit".into(),
+            all: true,
+            expected_checksum: diff.checksum,
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_owned();
+    assert_eq!(committed.sha, git(&repo, &["rev-parse", "HEAD"]));
+    assert_eq!(committed.summary, "edit");
+
+    // A conflict is `aborted` (`merge_conflict`), with a clean tree.
+    let head = git(&repo, &["rev-parse", "HEAD"]);
+    let error = git_service
+        .merge_branch(pb::MergeBranchRequest {
+            repo_path: repo_path.clone(),
+            source: "feature".into(),
+            target: "main".into(),
+            strategy: pb::MergeStrategy::MERGE_STRATEGY_MERGE.into(),
+            expected_source_head: feature,
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, ErrorCode::Aborted);
+    assert_eq!(
+        error.message.as_deref(),
+        Some("merge_conflict: [\"notes.txt\"]")
+    );
+    assert_eq!(error.details.len(), 1, "the ErrorInfo with its paths");
+    assert_eq!(git(&repo, &["rev-parse", "HEAD"]), head);
+    assert_eq!(git(&repo, &["status", "--porcelain"]), "");
+
+    // An unset strategy is bad_params.
+    let error = git_service
+        .merge_branch(pb::MergeBranchRequest {
+            repo_path: repo_path.clone(),
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, ErrorCode::InvalidArgument);
     daemon.stop().await;
 }

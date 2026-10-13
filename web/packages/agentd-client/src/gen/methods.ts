@@ -20,13 +20,18 @@ import type { CheckoutDiff } from "./CheckoutDiff";
 import type { CheckoutDiffList } from "./CheckoutDiffList";
 import type { CheckoutFileDiffText } from "./CheckoutFileDiffText";
 import type { CloneRepoParams } from "./CloneRepoParams";
+import type { CommitWorktreeParams } from "./CommitWorktreeParams";
+import type { CommitWorktreeReply } from "./CommitWorktreeReply";
 import type { CompleteAgentLoginParams } from "./CompleteAgentLoginParams";
+import type { CreateChangeRequestParams } from "./CreateChangeRequestParams";
+import type { CreateChangeRequestReply } from "./CreateChangeRequestReply";
 import type { CreateRepoParams } from "./CreateRepoParams";
 import type { CreateWorktreeOutcome } from "./CreateWorktreeOutcome";
 import type { CreateWorktreeParams } from "./CreateWorktreeParams";
 import type { DeleteProjectActionParams } from "./DeleteProjectActionParams";
 import type { DeleteWorkspaceEntryRequest } from "./DeleteWorkspaceEntryRequest";
 import type { DeleteWorktreeParams } from "./DeleteWorktreeParams";
+import type { DiscardPathsParams } from "./DiscardPathsParams";
 import type { DiscardWorkingTreeParams } from "./DiscardWorkingTreeParams";
 import type { DiscardWorkingTreeReply } from "./DiscardWorkingTreeReply";
 import type { DismissHarnessUpdateParams } from "./DismissHarnessUpdateParams";
@@ -61,6 +66,8 @@ import type { ListProjectActionsParams } from "./ListProjectActionsParams";
 import type { ListWorkspaceDirectoryRequest } from "./ListWorkspaceDirectoryRequest";
 import type { LocalDeviceReply } from "./LocalDeviceReply";
 import type { LoginIdParams } from "./LoginIdParams";
+import type { MergeBranchParams } from "./MergeBranchParams";
+import type { MergeBranchReply } from "./MergeBranchReply";
 import type { ModelList } from "./ModelList";
 import type { MoveQueuedMessageParams } from "./MoveQueuedMessageParams";
 import type { MoveWorkspaceEntryRequest } from "./MoveWorkspaceEntryRequest";
@@ -72,6 +79,8 @@ import type { PreviewSnapshot } from "./PreviewSnapshot";
 import type { ProjectActionRun } from "./ProjectActionRun";
 import type { ProjectActionSetup } from "./ProjectActionSetup";
 import type { ProjectActionsSnapshot } from "./ProjectActionsSnapshot";
+import type { PushBranchParams } from "./PushBranchParams";
+import type { PushBranchReply } from "./PushBranchReply";
 import type { QueueCommandParams } from "./QueueCommandParams";
 import type { QueueCommandReply } from "./QueueCommandReply";
 import type { QueueMessageParams } from "./QueueMessageParams";
@@ -128,6 +137,7 @@ import type { WorkspaceFileText } from "./WorkspaceFileText";
 import type { WorkspaceGitStatusFrame } from "./WorkspaceGitStatusFrame";
 import type { WorkspaceImageChunk } from "./WorkspaceImageChunk";
 import type { WorkspaceMutationOutcome } from "./WorkspaceMutationOutcome";
+import type { WorktreeList } from "./WorktreeList";
 import type { WriteTerminalParams } from "./WriteTerminalParams";
 import type { WriteWorkspaceFileOutcome } from "./WriteWorkspaceFileOutcome";
 import type { WriteWorkspaceFileRequest } from "./WriteWorkspaceFileRequest";
@@ -152,6 +162,11 @@ export const ERROR_CODES = [
   "keyring_unavailable",
   "limit_exceeded",
   "harness_unsupported",
+  "stale_diff",
+  "merge_conflict",
+  "nothing_to_commit",
+  "push_rejected",
+  "provider_not_configured",
 ] as const;
 
 export type AgentdErrorCode = (typeof ERROR_CODES)[number];
@@ -240,6 +255,12 @@ export const METHODS = [
   { name: "WatchCheckoutChangeRequest", kind: "stream", params: "WatchCheckoutChangeRequestParams", result: "CheckoutChangeRequestStatus", role: "owner", renderer: true },
   { name: "GetCheckoutDiff", kind: "unary", params: "GetCheckoutDiffParams", result: "CheckoutDiff", role: "owner", renderer: true },
   { name: "DiscardWorkingTree", kind: "unary", params: "DiscardWorkingTreeParams", result: "DiscardWorkingTreeReply", role: "owner", renderer: true },
+  { name: "DiscardPaths", kind: "unary", params: "DiscardPathsParams", result: "Empty", role: "owner", renderer: true },
+  { name: "ListWorktrees", kind: "unary", params: "RepoPathParams", result: "WorktreeList", role: "owner", renderer: true },
+  { name: "CommitWorktree", kind: "unary", params: "CommitWorktreeParams", result: "CommitWorktreeReply", role: "owner", renderer: true },
+  { name: "PushBranch", kind: "unary", params: "PushBranchParams", result: "PushBranchReply", role: "owner", renderer: true },
+  { name: "CreateChangeRequest", kind: "unary", params: "CreateChangeRequestParams", result: "CreateChangeRequestReply", role: "owner", renderer: true },
+  { name: "MergeBranch", kind: "unary", params: "MergeBranchParams", result: "MergeBranchReply", role: "owner", renderer: true },
   { name: "GetCheckoutFileDiffText", kind: "unary", params: "GetCheckoutFileDiffTextRequest", result: "CheckoutFileDiffText", role: "owner", renderer: true },
   { name: "ListAgentAccounts", kind: "unary", params: "ListAgentAccountsParams", result: "AgentAccountsSnapshot", role: "owner", renderer: true },
   { name: "ActivateAgentAccount", kind: "unary", params: "AgentAccountParams", result: "AgentAccountsSnapshot", role: "owner", renderer: true },
@@ -334,6 +355,12 @@ export type Methods = {
   WatchCheckoutChangeRequest: { params: WatchCheckoutChangeRequestParams; result: CheckoutChangeRequestStatus; kind: "stream"; role: "owner"; renderer: true };
   GetCheckoutDiff: { params: GetCheckoutDiffParams; result: CheckoutDiff; kind: "unary"; role: "owner"; renderer: true };
   DiscardWorkingTree: { params: DiscardWorkingTreeParams; result: DiscardWorkingTreeReply; kind: "unary"; role: "owner"; renderer: true };
+  DiscardPaths: { params: DiscardPathsParams; result: Empty; kind: "unary"; role: "owner"; renderer: true };
+  ListWorktrees: { params: RepoPathParams; result: WorktreeList; kind: "unary"; role: "owner"; renderer: true };
+  CommitWorktree: { params: CommitWorktreeParams; result: CommitWorktreeReply; kind: "unary"; role: "owner"; renderer: true };
+  PushBranch: { params: PushBranchParams; result: PushBranchReply; kind: "unary"; role: "owner"; renderer: true };
+  CreateChangeRequest: { params: CreateChangeRequestParams; result: CreateChangeRequestReply; kind: "unary"; role: "owner"; renderer: true };
+  MergeBranch: { params: MergeBranchParams; result: MergeBranchReply; kind: "unary"; role: "owner"; renderer: true };
   GetCheckoutFileDiffText: { params: GetCheckoutFileDiffTextRequest; result: CheckoutFileDiffText; kind: "unary"; role: "owner"; renderer: true };
   ListAgentAccounts: { params: ListAgentAccountsParams; result: AgentAccountsSnapshot; kind: "unary"; role: "owner"; renderer: true };
   ActivateAgentAccount: { params: AgentAccountParams; result: AgentAccountsSnapshot; kind: "unary"; role: "owner"; renderer: true };

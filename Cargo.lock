@@ -7840,11 +7840,13 @@ version = "0.1.0-preview.2"
 dependencies = [
  "anyhow",
  "async-trait",
+ "axum 0.8.9",
  "base64 0.22.1",
  "chrono",
  "futures",
  "gethostname",
  "ignore",
+ "keyring",
  "libc",
  "loams-agentd-doc",
  "loams-agentd-harness",
