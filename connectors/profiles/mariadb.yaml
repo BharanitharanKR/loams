@@ -1,0 +1,21 @@
+# MariaDB — a target profile on the native MySQL family (CN2 OR-2, Task 11).
+# MariaDB speaks the MySQL protocol and writes a row binlog that
+# `loams-connector-mysql` reads with the same decoder, but its GTIDs are
+# `domain-server-sequence`, resumed through `@slave_connect_state` (R0.7), and
+# its GTID events (0xA2, 0xA3) are its own; the family detects MariaDB from
+# the server's handshake and switches to them. MariaDB logs v1 row events and
+# keeps `binlog_row_metadata` at MINIMAL by default, so the schema history
+# names the columns (R11.5). The suite runs against real MariaDB 11.8 LTS
+# (GPL-2.0, compose service `mariadb`), never against MySQL. MariaDB's
+# compressed binlog events (`log_bin_compress`) are refused, not narrowed:
+# the guide says to turn it off.
+apiVersion: loams.flow/v1
+kind: Profile
+id: mariadb
+profile_kind: target
+module: mysql
+system:
+  name: MariaDB
+  service: { compose: mariadb }
+defaults: {}
+narrows: []

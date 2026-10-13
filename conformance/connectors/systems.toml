@@ -152,10 +152,20 @@ services = [
 
 # --------------------------------------------------------------- relational --
 
+# MySQL is a ★ (P1) row; CN2 Task 11 builds its native connector directly
+# on the SDK (R0.2), so it gains its entry here rather than in Task 8
+# (R11.9, as R10.9 did for PostgreSQL).
+[systems.mysql]
+systems = ["MySQL"]
+family = "mysql"
+services = [{ kind = "container", compose = "mysql", system = "MySQL" }]
+harness = "loams_connector_mysql::harness::MyHarness"
+
 [systems.mariadb]
 systems = ["MariaDB"]
 family = "mysql"
 services = [{ kind = "container", compose = "mariadb", system = "MariaDB" }]
+harness = "loams_connector_mysql::harness::MyHarness"
 
 [systems.sql-server]
 systems = ["SQL Server"]
@@ -176,8 +186,11 @@ services = [{ kind = "container", compose = "cockroachdb", system = "CockroachDB
 [systems.aurora]
 systems = ["Amazon Aurora"]
 family = "postgres"
+# One nightly service per engine (R11.10): each family's harness needs only
+# its own cluster's URL.
 services = [
-  { kind = "nightly", env = ["LOAMS_AURORA_POSTGRES_URL", "LOAMS_AURORA_MYSQL_URL"], system = "Amazon Aurora" },
+  { kind = "nightly", env = ["LOAMS_AURORA_POSTGRES_URL"], system = "Amazon Aurora" },
+  { kind = "nightly", env = ["LOAMS_AURORA_MYSQL_URL"], system = "Amazon Aurora" },
 ]
 extra_targets = [
   { kind = "container", compose = "pgvector", system = "PostgreSQL" },
