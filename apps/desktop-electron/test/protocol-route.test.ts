@@ -47,6 +47,17 @@ describe("routeRequest", () => {
 		});
 	});
 
+	it("live_goes_to_the_main_port_when_the_engine_serves_it_there", () => {
+		// LV1 Task 12: the supervisor sets liveUrl to the main port's url.
+		expect(
+			routeRequest(
+				"/loams.live.v1.LiveAdminService/Deploy",
+				local,
+				ready("http://127.0.0.1:8084"),
+			),
+		).toEqual({ kind: "forward", target: "http://127.0.0.1:8084" });
+	});
+
 	it("live_without_engine_503", () => {
 		const r = routeRequest("/loams.live.v1.X/Y", local, ready());
 		expect(r).toMatchObject({

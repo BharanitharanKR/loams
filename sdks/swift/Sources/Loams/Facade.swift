@@ -22,8 +22,11 @@
 // same fallback the Go SDK took, for the same reason, and Go records the same
 // provenance note at the top of its own facade.
 //
-// **Do not grow it.** If a call is missing, the proto is missing the
-// `loams.options.v1` annotation — see `docs/design/13-decision-log.md` Q604.
+// **Do not grow it** beyond what the protos annotate. If a call is missing, the
+// proto is missing the `loams.options.v1` annotation — see
+// `docs/design/13-decision-log.md` Q604. `live.admin` (LV1 Task 10,
+// `proto/loams/live/v1/admin.proto`) is annotated, which is why it is here: it is
+// the TypeScript and Rust facades' `live.admin` module, call for call.
 //
 // When the renderer lands, this file is deleted and `scripts/sdk/gen.sh swift`
 // writes a replacement with the same exported names. That is why every type here
@@ -210,14 +213,23 @@ public struct ModuleBinding: Sendable, Equatable {
 enum LoamsService {
     static let instance = "loams.instance.v1.InstanceService"
     static let live = "loams.live.v1.LiveService"
+    /// `proto/loams/live/v1/admin.proto` (LV1 Task 10): deploys, rollbacks, index
+    /// status and logs. Same package as ``live``, separate service, so the
+    /// engine can authorize it on its own.
+    static let liveAdmin = "loams.live.v1.LiveAdminService"
 }
 
 /// Every annotated service, as the module catalogue, ordered by module name.
 ///
-/// `instance` and `live` are the two modules the current protos annotate.
-/// `tables` is a **derived** module: a second facade name for `loams.live.v1`'s
-/// RPCs, which is why `guard(_:"tables")` and `guard(_:"live")` answer the same
-/// question and one refusal on either means the engine is absent.
+/// `instance`, `live` and `live.admin` are the modules the protos this SDK
+/// speaks annotate. `tables` is a **derived** module: a second facade name for
+/// `loams.live.v1`'s RPCs, which is why `guard(_:"tables")` and `guard(_:"live")`
+/// answer the same question and one refusal on either means the engine is
+/// absent. `live.admin` shares that package too.
+///
+/// `Deploy` is `live.admin`'s, not `tables`': LV1 Task 10 moved it from
+/// `LiveService` to `LiveAdminService`, and the engine no longer serves
+/// `loams.live.v1.LiveService/Deploy` (T10-7, T12-1).
 public let loamsModules: [ModuleBinding] = [
     ModuleBinding(
         name: "instance",
@@ -285,6 +297,91 @@ public let loamsModules: [ModuleBinding] = [
         ]
     ),
     ModuleBinding(
+        name: "live.admin",
+        summary: "Live administration: deploy, roll back, index status and function logs.",
+        service: LoamsService.liveAdmin,
+        package: "loams.live.v1",
+        unstable: true,
+        calls: [
+            CallBinding(
+                module: "live.admin",
+                name: "ActivateDeployment",
+                protoName: "activateDeployment",
+                method: "ActivateDeployment",
+                rpc: LoamsService.liveAdmin + "/ActivateDeployment",
+                service: LoamsService.liveAdmin,
+                package: "loams.live.v1",
+                idempotency: .none,
+                retry: .manual,
+                streaming: .unary
+            ),
+            CallBinding(
+                module: "live.admin",
+                name: "Deploy",
+                protoName: "deploy",
+                method: "Deploy",
+                rpc: LoamsService.liveAdmin + "/Deploy",
+                service: LoamsService.liveAdmin,
+                package: "loams.live.v1",
+                idempotency: .none,
+                retry: .manual,
+                streaming: .unary
+            ),
+            // The three reads have no `idempotency_level`; `FacadeOptions.retry_safe`
+            // (admin.proto) is what makes them `.safe`, as in the TypeScript and
+            // Rust facades.
+            CallBinding(
+                module: "live.admin",
+                name: "GetDeployment",
+                protoName: "getDeployment",
+                method: "GetDeployment",
+                rpc: LoamsService.liveAdmin + "/GetDeployment",
+                service: LoamsService.liveAdmin,
+                package: "loams.live.v1",
+                idempotency: .none,
+                retry: .safe,
+                streaming: .unary
+            ),
+            CallBinding(
+                module: "live.admin",
+                name: "GetIndexStatus",
+                protoName: "getIndexStatus",
+                method: "GetIndexStatus",
+                rpc: LoamsService.liveAdmin + "/GetIndexStatus",
+                service: LoamsService.liveAdmin,
+                package: "loams.live.v1",
+                idempotency: .none,
+                retry: .safe,
+                streaming: .unary
+            ),
+            CallBinding(
+                module: "live.admin",
+                name: "ListDeployments",
+                protoName: "listDeployments",
+                method: "ListDeployments",
+                rpc: LoamsService.liveAdmin + "/ListDeployments",
+                service: LoamsService.liveAdmin,
+                package: "loams.live.v1",
+                idempotency: .none,
+                retry: .safe,
+                streaming: .unary,
+                pagination: Pagination(itemsField: "deployments", nextPageTokenField: "next_page_token")
+            ),
+            CallBinding(
+                module: "live.admin",
+                name: "TailLogs",
+                protoName: "tailLogs",
+                method: "TailLogs",
+                rpc: LoamsService.liveAdmin + "/TailLogs",
+                service: LoamsService.liveAdmin,
+                package: "loams.live.v1",
+                idempotency: .none,
+                retry: .manual,
+                streaming: .server
+            ),
+        ]
+    ),
+    ModuleBinding(
         name: "tables",
         summary: "",
         service: LoamsService.live,
@@ -292,18 +389,6 @@ public let loamsModules: [ModuleBinding] = [
         unstable: true,
         derived: true,
         calls: [
-            CallBinding(
-                module: "tables",
-                name: "Deploy",
-                protoName: "deploy",
-                method: "Deploy",
-                rpc: LoamsService.live + "/Deploy",
-                service: LoamsService.live,
-                package: "loams.live.v1",
-                idempotency: .none,
-                retry: .manual,
-                streaming: .unary
-            ),
             CallBinding(
                 module: "tables",
                 name: "Mutate",

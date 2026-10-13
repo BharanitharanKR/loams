@@ -177,8 +177,23 @@ public let queryRequestTypeName = "loams.live.v1.QueryRequest"
 /// The proto type name of `loams.live.v1.LiveService/Mutate`'s request.
 public let mutateRequestTypeName = "loams.live.v1.MutateRequest"
 
-/// The proto type name of `loams.live.v1.LiveService/Deploy`'s request.
+/// The proto type name of `loams.live.v1.LiveAdminService/Deploy`'s request.
 public let deployRequestTypeName = "loams.live.v1.DeployRequest"
+
+/// The proto type name of `loams.live.v1.LiveAdminService/ListDeployments`'s request.
+public let listDeploymentsRequestTypeName = "loams.live.v1.ListDeploymentsRequest"
+
+/// The proto type name of `loams.live.v1.LiveAdminService/GetDeployment`'s request.
+public let getDeploymentRequestTypeName = "loams.live.v1.GetDeploymentRequest"
+
+/// The proto type name of `loams.live.v1.LiveAdminService/ActivateDeployment`'s request.
+public let activateDeploymentRequestTypeName = "loams.live.v1.ActivateDeploymentRequest"
+
+/// The proto type name of `loams.live.v1.LiveAdminService/GetIndexStatus`'s request.
+public let getIndexStatusRequestTypeName = "loams.live.v1.GetIndexStatusRequest"
+
+/// The proto type name of `loams.live.v1.LiveAdminService/TailLogs`'s request.
+public let tailLogsRequestTypeName = "loams.live.v1.TailLogsRequest"
 
 /// The proto type name of `loams.live.v1.LiveService/ModifyQuerySet`'s request.
 public let modifyQuerySetRequestTypeName = "loams.live.v1.ModifyQuerySetRequest"

@@ -21,6 +21,15 @@ All notable changes to this project are documented here. The format follows [Kee
   the console and SDKs reach Live over the tailnet (LV1 Task 12). Until Live has TLS of its own
   (LV1 Task 18) a main port bound beyond loopback does not serve it. `--live-listen` still
   serves the same API on Live's own loopback listener and is deprecated.
+- **The Swift SDK deploys through `live.admin`.** `client.live.admin` wraps
+  `LiveAdminService` (deploy, list and get deployments, activate, index status, log tail), as
+  in the TypeScript and Rust SDKs; `client.tables.deploy` is deprecated and forwards there,
+  since the engine no longer serves `LiveService/Deploy`. Paged calls now follow the wire's
+  `nextPageToken`.
+- **The desktop app reaches Live on the engine's main port** and no longer passes the
+  deprecated `--live-listen` to an engine that serves Live there, so its engine log has no
+  deprecation warning. If another engine holds Live's default port (127.0.0.1:7710), it still
+  moves Live's own listener so the engine starts.
 - **The console's Live deployments page talks to the engine.** It uses `LiveAdminService`
   (deploy history, rollback by activation, a deployment's functions with their validators,
   and the function log tail) instead of sample data, and is on in the browser console, no

@@ -97,8 +97,8 @@ an SDK method in thirteen languages.
    ```
 
    A service with no `module` option is not in the SDK, and a method with no
-   `facade` option is not exposed — which is how an admin-only RPC such as
-   `LiveService/Deploy` stays out of every SDK by default.
+   `facade` option is not exposed — which is how an internal RPC stays out of
+   every SDK by default.
 
 2. `pnpm --filter @loams/client generate` (or `scripts/sdk/gen.sh typescript`).
 3. `pnpm --filter @loams/client typecheck && pnpm --filter @loams/client test`.

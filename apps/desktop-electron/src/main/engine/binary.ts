@@ -24,7 +24,17 @@ export interface EngineArgsOpts {
 	 * embedded store by default (`--live-store`, LV1 Task 23). `pd`: the
 	 * TiKV stack's PD, when one is set.
 	 */
-	live: { supported: boolean; embedded?: boolean; pd?: string };
+	live: {
+		supported: boolean;
+		embedded?: boolean;
+		pd?: string;
+		/**
+		 * Leave Live's own listener on its default address and omit the
+		 * deprecated `--live-listen`: an engine that serves Live on `--listen`
+		 * (LV1 Task 12, ruling T12-4) prints a deprecation warning for it.
+		 */
+		defaultListener?: boolean;
+	};
 }
 
 /**
@@ -51,7 +61,8 @@ export function engineArgs({ dataDir, ports, live }: EngineArgsOpts): string[] {
 	];
 	if (live.supported) {
 		if (ports.live !== undefined && (live.pd || live.embedded)) {
-			a.push("--live-listen", `127.0.0.1:${ports.live}`);
+			if (!live.defaultListener)
+				a.push("--live-listen", `127.0.0.1:${ports.live}`);
 			// An engine with `--live-store` selects TiKV through it (its
 			// `--live-pd` is deprecated); an older one only has `--live-pd`.
 			if (live.pd)
@@ -94,27 +105,48 @@ export function liveSupportFromHelp(help: string): LiveSupport {
 	return /tikv:\/\//.test(store) ? "embedded+tikv" : "embedded";
 }
 
-const probeCache = new Map<string, LiveSupport>();
+/**
+ * Whether the binary serves Live on its main port (`--listen`): an engine from LV1 Task 12 on
+ * says so in `--live-listen`'s help ("Deprecated: Live is served on --listen (D688)"). An older
+ * engine serves Live only on its own listener.
+ */
+export function liveOnMainPortFromHelp(help: string): boolean {
+	const flag = flagHelp(help, "--live-listen");
+	return flag !== null && /served on --listen/.test(flag);
+}
 
-/** `<bin> dev --help` once per binary path + mtime; live is an optional cargo feature. */
-export async function probeLiveSupport(bin: string): Promise<LiveSupport> {
+const helpCache = new Map<string, Promise<string | null>>();
+
+/** `<bin> dev --help` once per binary path + mtime; null when it cannot run. */
+function probeHelp(bin: string): Promise<string | null> {
 	let key = bin;
 	try {
 		key = `${bin}:${statSync(bin).mtimeMs}`;
 	} catch {
-		return "none";
+		return Promise.resolve(null);
 	}
-	const hit = probeCache.get(key);
+	const hit = helpCache.get(key);
 	if (hit !== undefined) return hit;
-	const supported = await new Promise<LiveSupport>((resolve) => {
+	const help = new Promise<string | null>((resolve) => {
 		execFile(
 			bin,
 			["dev", "--help"],
 			{ timeout: 10_000, maxBuffer: 4 * 1024 * 1024 },
-			(err, stdout, stderr) =>
-				resolve(err ? "none" : liveSupportFromHelp(`${stdout}\n${stderr}`)),
+			(err, stdout, stderr) => resolve(err ? null : `${stdout}\n${stderr}`),
 		);
 	});
-	probeCache.set(key, supported);
-	return supported;
+	helpCache.set(key, help);
+	return help;
+}
+
+/** The binary's Live support from `dev --help`; live is an optional cargo feature. */
+export async function probeLiveSupport(bin: string): Promise<LiveSupport> {
+	const help = await probeHelp(bin);
+	return help === null ? "none" : liveSupportFromHelp(help);
+}
+
+/** Whether the binary serves Live on `--listen` (`liveOnMainPortFromHelp`). */
+export async function probeLiveOnMainPort(bin: string): Promise<boolean> {
+	const help = await probeHelp(bin);
+	return help !== null && liveOnMainPortFromHelp(help);
 }
