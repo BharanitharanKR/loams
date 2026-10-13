@@ -243,13 +243,15 @@ describe('CanvasPage', () => {
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'pg-new' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add service' }));
     await within(dialog).findByRole('button', { name: 'Adding…' });
-    expect(fireEvent(dialog, new Event('cancel', { cancelable: true }))).toBe(false);
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.getByRole('dialog', { name: 'Add a service' })).toBeTruthy();
     expect(
       (within(dialog).getByRole('button', { name: 'Close' }) as HTMLButtonElement).disabled,
     ).toBe(true);
     finish?.();
     expect(await within(dialog).findByText('stopped')).toBeTruthy();
-    expect(fireEvent(dialog, new Event('cancel', { cancelable: true }))).toBe(true);
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Add a service' })).toBeNull());
   });
 
   it('validates the name before calling the client', async () => {
