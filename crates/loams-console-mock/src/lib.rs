@@ -1,6 +1,9 @@
 //! A mock of the console API with seed data (design §19 P10).
 //!
 //! The contract is `api/console/openapi.json`; the seed is `seed/seed.json`.
+//! [`CONNECT_RPCS`] maps each operation to the `loams.auth.v1` or
+//! `loams.admin.v1` RPC that replaces it (API2 Tasks 6 and 7), which
+//! `loams-apps-mock` serves from this seed beside the REST routes.
 //! [`routes`] turns the seed into one concrete response per path, and
 //! [`register`] installs them on an [`httpmock::MockServer`]. The mock is
 //! static: a `POST` answers with a plausible created object, and the next
@@ -644,6 +647,237 @@ pub fn routes(seed: &Value, signed_in: bool) -> Result<Vec<Route>> {
     }
     Ok(r)
 }
+
+/// Where each operation of the contract goes on Connect (design §44 §5.2, API2
+/// Tasks 6 and 7): `(method, path template, RPC)`, with `None` for a protocol
+/// endpoint that stays HTTP (D602). `docs/api/route-map.md` says the same in
+/// prose; `tests/contract.rs` holds the two together and to the contract, and
+/// `loams-apps-mock`'s `tests/console_rpc.rs` calls every RPC named here.
+///
+/// The one rename from §44 §5.2 is `GetEnvironmentUsage`, which is
+/// `GetEnvironmentActivity`: API2's global constraint forbids an RPC named
+/// for billing (D220, D552).
+pub const CONNECT_RPCS: &[(&str, &str, Option<&str>)] = &[
+    (
+        "GET",
+        "/api/v1/instance",
+        Some("loams.instance.v1.InstanceService/GetInstance"),
+    ),
+    (
+        "POST",
+        "/api/v1/setup",
+        Some("loams.auth.v1.AuthService/CompleteSetup"),
+    ),
+    (
+        "GET",
+        "/api/v1/session",
+        Some("loams.auth.v1.AuthService/GetSession"),
+    ),
+    (
+        "POST",
+        "/api/v1/session",
+        Some("loams.auth.v1.AuthService/CreateSession"),
+    ),
+    (
+        "DELETE",
+        "/api/v1/session",
+        Some("loams.auth.v1.AuthService/DeleteSession"),
+    ),
+    ("GET", "/api/v1/auth/oidc/{provider}/start", None),
+    (
+        "GET",
+        "/api/v1/org",
+        Some("loams.admin.v1.OrgService/GetOrg"),
+    ),
+    (
+        "PATCH",
+        "/api/v1/org",
+        Some("loams.admin.v1.OrgService/UpdateOrg"),
+    ),
+    (
+        "GET",
+        "/api/v1/org/members",
+        Some("loams.admin.v1.OrgService/ListMembers"),
+    ),
+    (
+        "DELETE",
+        "/api/v1/org/members/{user}",
+        Some("loams.admin.v1.OrgService/RemoveMember"),
+    ),
+    (
+        "GET",
+        "/api/v1/org/invitations",
+        Some("loams.admin.v1.OrgService/ListInvitations"),
+    ),
+    (
+        "POST",
+        "/api/v1/org/invitations",
+        Some("loams.admin.v1.OrgService/CreateInvitation"),
+    ),
+    (
+        "GET",
+        "/api/v1/teams",
+        Some("loams.admin.v1.OrgService/ListTeams"),
+    ),
+    (
+        "POST",
+        "/api/v1/teams",
+        Some("loams.admin.v1.OrgService/CreateTeam"),
+    ),
+    (
+        "GET",
+        "/api/v1/teams/{team}",
+        Some("loams.admin.v1.OrgService/GetTeam"),
+    ),
+    (
+        "POST",
+        "/api/v1/teams/{team}/members",
+        Some("loams.admin.v1.OrgService/AddTeamMember"),
+    ),
+    (
+        "GET",
+        "/api/v1/projects",
+        Some("loams.admin.v1.ProjectService/ListProjects"),
+    ),
+    (
+        "POST",
+        "/api/v1/projects",
+        Some("loams.admin.v1.ProjectService/CreateProject"),
+    ),
+    (
+        "GET",
+        "/api/v1/projects/{project}",
+        Some("loams.admin.v1.ProjectService/GetProject"),
+    ),
+    (
+        "GET",
+        "/api/v1/projects/{project}/access",
+        Some("loams.admin.v1.ProjectService/ListAccess"),
+    ),
+    (
+        "POST",
+        "/api/v1/projects/{project}/access",
+        Some("loams.admin.v1.ProjectService/GrantAccess"),
+    ),
+    (
+        "GET",
+        "/api/v1/projects/{project}/environments",
+        Some("loams.admin.v1.ProjectService/ListEnvironments"),
+    ),
+    (
+        "POST",
+        "/api/v1/projects/{project}/environments",
+        Some("loams.admin.v1.ProjectService/CreateEnvironment"),
+    ),
+    (
+        "GET",
+        "/api/v1/projects/{project}/environments/{environment}",
+        Some("loams.admin.v1.ProjectService/GetEnvironment"),
+    ),
+    (
+        "GET",
+        "/api/v1/projects/{project}/environments/{environment}/usage",
+        Some("loams.admin.v1.ProjectService/GetEnvironmentActivity"),
+    ),
+    (
+        "GET",
+        "/api/v1/projects/{project}/agents",
+        Some("loams.admin.v1.AgentService/ListAgents"),
+    ),
+    (
+        "POST",
+        "/api/v1/projects/{project}/agents",
+        Some("loams.admin.v1.AgentService/CreateAgent"),
+    ),
+    (
+        "GET",
+        "/api/v1/agents/{agent}",
+        Some("loams.admin.v1.AgentService/GetAgent"),
+    ),
+    (
+        "PATCH",
+        "/api/v1/agents/{agent}",
+        Some("loams.admin.v1.AgentService/UpdateAgent"),
+    ),
+    (
+        "POST",
+        "/api/v1/agents/{agent}/suspend",
+        Some("loams.admin.v1.AgentService/SuspendAgent"),
+    ),
+    (
+        "POST",
+        "/api/v1/agents/{agent}/resume",
+        Some("loams.admin.v1.AgentService/ResumeAgent"),
+    ),
+    (
+        "GET",
+        "/api/v1/agents/{agent}/tokens",
+        Some("loams.admin.v1.AgentService/ListAgentTokens"),
+    ),
+    (
+        "GET",
+        "/api/v1/agents/{agent}/trust-policies",
+        Some("loams.admin.v1.AgentService/ListTrustPolicies"),
+    ),
+    (
+        "POST",
+        "/api/v1/agents/{agent}/trust-policies",
+        Some("loams.admin.v1.AgentService/CreateTrustPolicy"),
+    ),
+    (
+        "DELETE",
+        "/api/v1/tokens/{jti}",
+        Some("loams.admin.v1.KeyService/RevokeToken"),
+    ),
+    (
+        "GET",
+        "/api/v1/projects/{project}/service-accounts",
+        Some("loams.admin.v1.AgentService/ListServiceAccounts"),
+    ),
+    (
+        "POST",
+        "/api/v1/projects/{project}/service-accounts",
+        Some("loams.admin.v1.AgentService/CreateServiceAccount"),
+    ),
+    (
+        "GET",
+        "/api/v1/projects/{project}/environments/{environment}/keys",
+        Some("loams.admin.v1.KeyService/ListKeys"),
+    ),
+    (
+        "POST",
+        "/api/v1/projects/{project}/environments/{environment}/keys",
+        Some("loams.admin.v1.KeyService/CreateKey"),
+    ),
+    (
+        "DELETE",
+        "/api/v1/keys/{key}",
+        Some("loams.admin.v1.KeyService/RevokeKey"),
+    ),
+    (
+        "GET",
+        "/api/v1/audit",
+        Some("loams.admin.v1.AuditService/ListAuditEvents"),
+    ),
+    ("POST", "/api/v1/oauth/token", None),
+    ("GET", "/api/v1/oauth/authorize", None),
+    (
+        "POST",
+        "/api/v1/oauth/consent",
+        Some("loams.auth.v1.AuthService/DecideConsent"),
+    ),
+    ("GET", "/.well-known/oauth-protected-resource", None),
+    ("GET", "/.well-known/oauth-authorization-server", None),
+    ("GET", "/.well-known/jwks.json", None),
+];
+
+/// The RPCs of `loams.auth.v1` and `loams.admin.v1` that no REST route
+/// answered before: the sign-in providers (which `GET /api/v1/instance`
+/// carried) and the audit watch.
+pub const CONNECT_ONLY_RPCS: &[&str] = &[
+    "loams.auth.v1.AuthService/ListProviders",
+    "loams.admin.v1.AuditService/WatchAuditEvents",
+];
 
 /// The engine data API routes the mock serves beside the contract.
 pub const ENGINE_TEMPLATES: [&str; 4] = [

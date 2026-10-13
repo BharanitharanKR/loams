@@ -106,6 +106,8 @@ Served on the cluster listener before the API router (`meta_rpc::router`). See r
 
 The real server does not serve `/api/v1` yet (the gateway work is AP4/MT1); only `loams-apps-mock` does, from the contract. `loams-console-mock` keeps the contract and the seed and its `routes()` list, and `loams-apps-mock::console` mounts that list over axum on the same listener as the app protos, so the console, the desktop, the phone apps and the SDKs all point at one address. Tests: `crates/loams-console-mock/tests/contract.rs` (`every_operation_has_a_mock_and_every_mock_an_operation`, `every_mocked_body_matches_its_response_schema`, `the_server_answers_from_the_seed`) and the console's `web/apps/console` tests over `openapi-fetch`. Services are in `loams.admin.v1` unless noted.
 
+**On Connect (API2 Tasks 6 and 7, mock half).** Every `app` row below is also served over Connect by `loams-apps-mock` (`src/admin/`), from the same resolved seed as the REST route, as the RPC in its Target RPC column; `loams-console-mock`'s `CONNECT_RPCS` is the same table as code, and `tests/contract.rs` (`connect_rpcs_cover_the_contract_and_agree_with_the_route_map`) holds it to this page and to the contract. Two RPCs answer no REST route: `AuthService/ListProviders` (the `sign_in` part of `GET /api/v1/instance`) and `AuditService/WatchAuditEvents`. The tests are `crates/loams-apps-mock/tests/console_rpc.rs`: each console route test ported with `_rpc`, `mock_rest_and_connect_answer_alike`, `create_key_returns_secret_once` and `watch_audit_resumes_from_cursor`. The server does not serve `loams.auth.v1` or `loams.admin.v1` yet: `crates/loams/src/api/connect_admin.rs` is the server half of Task 7. The REST routes stay until API2 Task 11.
+
 | Method | Route | Kind | Target RPC | Internal call | Existing tests |
 |---|---|---|---|---|---|
 | GET | `/api/v1/instance` | app | `loams.instance.v1.InstanceService/GetInstance` (exists, AP0) | console mock seed | console mock contract tests |
@@ -132,7 +134,7 @@ The real server does not serve `/api/v1` yet (the gateway work is AP4/MT1); only
 | GET | `/api/v1/projects/{project}/environments` | app | `ProjectService/ListEnvironments` | console mock seed | console mock contract tests |
 | POST | `/api/v1/projects/{project}/environments` | app | `ProjectService/CreateEnvironment` | console mock seed | console mock contract tests |
 | GET | `/api/v1/projects/{project}/environments/{environment}` | app | `ProjectService/GetEnvironment` | console mock seed | console mock contract tests |
-| GET | `/api/v1/projects/{project}/environments/{environment}/usage` | app | `ProjectService/GetEnvironmentUsage` | console mock seed | console mock contract tests |
+| GET | `/api/v1/projects/{project}/environments/{environment}/usage` | app | `ProjectService/GetEnvironmentActivity` (§44's `GetEnvironmentUsage`, renamed: API2 ruling 6/7.4) | console mock seed | console mock contract tests |
 | GET | `/api/v1/projects/{project}/agents` | app | `AgentService/ListAgents` | console mock seed | console mock contract tests |
 | POST | `/api/v1/projects/{project}/agents` | app | `AgentService/CreateAgent` | console mock seed | console mock contract tests |
 | GET | `/api/v1/agents/{agent}` | app | `AgentService/GetAgent` | console mock seed | console mock contract tests |
