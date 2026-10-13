@@ -189,7 +189,7 @@ test("electron smoke", async () => {
 			BrowserWindow.getAllWindows()[0]?.getTitle(),
 		);
 		expect(title).toBe("Loams Desktop");
-		expect(page.url()).toContain("loams-app://console/ui/cordis.html");
+		expect(page.url()).toContain("loams-app://console/ui/");
 
 		// 2. The server switcher shows Local with a ready engine.
 		const switcher = page.locator(".lc-server-switch");

@@ -8,7 +8,16 @@ import { ensureCspMeta, resolveStatic } from "./static";
 
 export const APP_SCHEME = "loams-app";
 
-export type LocalShim = (pathname: string, method: string) => Response | null;
+/**
+ * Answers a request itself when the active server is the local engine, or
+ * returns null. `forward` sends the request on to the engine, for an answer the
+ * shim only amends (local-shim.ts).
+ */
+export type LocalShim = (
+	pathname: string,
+	req: Request,
+	forward: () => Promise<Response>,
+) => Promise<Response> | null;
 
 export interface AppProtocolDeps {
 	distRoot: string;
@@ -81,17 +90,19 @@ export function installAppProtocol(ses: Session, deps: AppProtocolDeps): void {
 						headers: { "content-type": "application/json" },
 					},
 				);
-			if (server.kind === "local") {
-				const shimmed = deps.localShim(url.pathname, req.method);
-				if (shimmed) return shimmed;
-			}
-			try {
-				return await proxyRequest(
+			const forward = () =>
+				proxyRequest(
 					req,
 					route.target,
 					(r) => ses.fetch(r as Request),
 					route.pathname,
 				);
+			try {
+				if (server.kind === "local") {
+					const shimmed = deps.localShim(url.pathname, req, forward);
+					if (shimmed) return await shimmed;
+				}
+				return await forward();
 			} catch (e) {
 				return new Response(
 					JSON.stringify({

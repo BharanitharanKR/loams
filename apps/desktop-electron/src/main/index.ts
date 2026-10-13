@@ -14,10 +14,10 @@ import {
 import type { EngineState } from "../shared/contracts";
 import { VERSION_ARG } from "../shared/version";
 import { registerChatIpc } from "./agent/ipc.electron";
-import { registerAgentdIpc } from "./agentd/ipc.electron";
-import { createAgentdService } from "./agentd/setup";
 import type { ChatService } from "./agent/service";
 import { registerTools } from "./agent/tools";
+import { registerAgentdIpc } from "./agentd/ipc.electron";
+import { createAgentdService } from "./agentd/setup";
 import { appPaths } from "./app-paths";
 import { ConnectorCatalog, catalogPath } from "./connectors/catalog";
 import { registerConnectorsIpc } from "./connectors/ipc.electron";
@@ -173,7 +173,7 @@ function createWindow(): BrowserWindow {
 		}
 	});
 	win.once("ready-to-show", () => win.show());
-	void win.loadURL("loams-app://console/ui/cordis.html");
+	void win.loadURL("loams-app://console/ui/");
 	return win;
 }
 

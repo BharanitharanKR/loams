@@ -5,10 +5,11 @@ import {
 	permissionDecision,
 } from "../src/main/security/policy";
 
-const HOME = "loams-app://console/ui/cordis.html";
+const HOME = "loams-app://console/ui/";
 
 describe("navigation_matrix", () => {
 	const rows: [string, string, "allow" | "external" | "deny"][] = [
+		[HOME, "loams-app://console/ui/#/servers", "allow"],
 		[HOME, "loams-app://console/ui/cordis.html#/servers", "allow"],
 		[HOME, "loams-app://console/ui/projects/x", "allow"],
 		[HOME, "loams-app://console/", "allow"],
@@ -64,7 +65,7 @@ describe("permission_matrix", () => {
 });
 
 describe("assert_trusted_sender_rejects_other_frames", () => {
-	const top = { url: "loams-app://console/ui/cordis.html", parent: null };
+	const top = { url: "loams-app://console/ui/", parent: null };
 	it("accepts the top console frame", () => {
 		expect(() => assertTrustedSender({ senderFrame: top })).not.toThrow();
 	});

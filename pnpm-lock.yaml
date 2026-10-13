@@ -99,6 +99,9 @@ importers:
         specifier: 2.22.0
         version: 2.22.0(pg@8.23.0)
     devDependencies:
+      '@bufbuild/protobuf':
+        specifier: 2.16.0
+        version: 2.16.0
       '@loams-plugins/plugin-forgejo-adapter':
         specifier: workspace:*
         version: link:../../plugins/packages/plugin-forgejo-adapter
@@ -120,6 +123,9 @@ importers:
       '@loams-plugins/plugin-zulip-adapter':
         specifier: workspace:*
         version: link:../../plugins/packages/plugin-zulip-adapter
+      '@loams/proto':
+        specifier: workspace:*
+        version: link:../../web/packages/proto
       '@playwright/test':
         specifier: 1.63.0
         version: 1.63.0
