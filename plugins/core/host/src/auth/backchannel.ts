@@ -144,6 +144,16 @@ export class BackChannelLogoutVerifier {
       );
     }
 
+    // --- nonce: §2.6 requires a logout token that carries one to be refused, because
+    // only ID tokens carry a nonce.
+    if (payload.nonce !== undefined) {
+      throw new AuthError(
+        `Back-channel logout token carries a "nonce" claim, which a logout token must ` +
+          `not contain (OpenID Connect Back-Channel Logout 1.0 §2.6).`,
+        { code: "logout_token_invalid", httpStatus: 400 },
+      );
+    }
+
     // --- aud: jwtVerify already checked this, but restated because it is load-bearing.
     const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
     if (!audiences.includes(config.clientId)) {

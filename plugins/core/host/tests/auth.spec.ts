@@ -776,6 +776,23 @@ describe("back-channel logout", () => {
     expect(await allSessions(server.store)).toHaveLength(1);
   });
 
+  it("rejects a logout token that carries a nonce (§2.6)", async () => {
+    const { app: server } = await boot();
+    await server.login();
+    publishKey(idpKeys.jwk);
+
+    const token = await logoutToken({
+      sub: "user-1",
+      nonce: "n",
+      events: { "http://schemas.openid.net/event/backchannel-logout": {} },
+    });
+    const response = await post(server, `logout_token=${encodeURIComponent(token)}`);
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.code).toBe("logout_token_invalid");
+    expect(await allSessions(server.store)).toHaveLength(1);
+  });
+
   it("accepts a spec-shaped events claim (§2.4: an object holding an empty object)", async () => {
     const { app: server } = await boot();
     await server.login();
