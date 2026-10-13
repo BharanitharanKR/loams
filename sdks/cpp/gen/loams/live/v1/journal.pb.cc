@@ -33,6 +33,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2fjournal_2eproto, /* tracker*/ nullptr,},
         // ::loams::live::v1::WriteRecord
         {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2fjournal_2eproto, /* tracker*/ nullptr,},
+        // ::loams::live::v1::CatalogChange
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2fjournal_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -220,6 +222,166 @@ const ::_pbi::ClassData* WriteRecord_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class CatalogChange::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CatalogChange>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CatalogChange, _impl_._has_bits_);
+};
+
+constexpr CatalogChange::ParseTableT_ CatalogChange::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CatalogChange, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::MpUnknownFields,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::loams::live::v1::CatalogChange>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .loams.live.v1.CatalogChangeKind kind = 1 [json_name = "kind"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CatalogChange, _impl_.kind_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CatalogChange, _impl_.kind_)}},
+      // optional uint32 table_id = 2 [json_name = "tableId"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CatalogChange, _impl_.table_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(CatalogChange, _impl_.table_id_)}},
+      // string deployment = 3 [json_name = "deployment"];
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CatalogChange, _impl_.deployment_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .loams.live.v1.CatalogChangeKind kind = 1 [json_name = "kind"];
+      {PROTOBUF_FIELD_OFFSET(CatalogChange, _impl_.kind_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // optional uint32 table_id = 2 [json_name = "tableId"];
+      {PROTOBUF_FIELD_OFFSET(CatalogChange, _impl_.table_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string deployment = 3 [json_name = "deployment"];
+      {PROTOBUF_FIELD_OFFSET(CatalogChange, _impl_.deployment_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\33\0\0\12\0\0\0\0"
+      "loams.live.v1.CatalogChange"
+      "deployment"
+    }},
+  };
+}
+
+
+inline constexpr CatalogChange::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : deployment_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        kind_{static_cast< ::loams::live::v1::CatalogChangeKind >(0)},
+        table_id_{0u} {}
+
+template <typename>
+constexpr CatalogChange::CatalogChange(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : Super_(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CatalogChange::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CatalogChange(arena);
+}
+constexpr auto CatalogChange::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(CatalogChange), alignof(CatalogChange));
+}
+constexpr auto CatalogChange::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CatalogChange::MergeImpl,
+          Super_::GetNewImpl<CatalogChange>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CatalogChange::SharedDtor,
+          Super_::GetClearImpl<CatalogChange>(), &CatalogChange::ByteSizeLong,
+              &CatalogChange::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CatalogChange, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[2],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_loams_2flive_2fv1_2fjournal_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CatalogChangeGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CatalogChangeGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CatalogChange_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CatalogChange::InternalGenerateClassData_(
+            _default, &CatalogChange_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CatalogChange>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CatalogChangeGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CatalogChange _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CatalogChange>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CatalogChangeGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CatalogChangeGlobalsTypeInternal CatalogChange_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CatalogChange_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CatalogChange_globals_.GetClassData();
+#else
+  return CatalogChange_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class JournalEntry::_Internal {
  public:
   using HasBits = decltype(::std::declval<JournalEntry>()._impl_._has_bits_);
@@ -232,12 +394,12 @@ constexpr JournalEntry::ParseTableT_ JournalEntry::InternalGenerateParseTable_(c
     {
       PROTOBUF_FIELD_OFFSET(JournalEntry, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
-      1,  // num_aux_entries
+      5,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -246,13 +408,10 @@ constexpr JournalEntry::ParseTableT_ JournalEntry::InternalGenerateParseTable_(c
       ::_pbi::TcParser::GetTable<::loams::live::v1::JournalEntry>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string request_id = 4 [json_name = "requestId"];
-      {::_pbi::TcParser::FastUS1,
-       {34, 2, 0,
-        PROTOBUF_FIELD_OFFSET(JournalEntry, _impl_.request_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 commit_hint_ms = 1 [json_name = "commitHintMs"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JournalEntry, _impl_.commit_hint_ms_), 3>(),
-       {8, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(JournalEntry, _impl_.commit_hint_ms_), 4>(),
+       {8, 4, 0,
         PROTOBUF_FIELD_OFFSET(JournalEntry, _impl_.commit_hint_ms_)}},
       // repeated .loams.live.v1.WriteRecord writes = 2 [json_name = "writes"];
       {::_pbi::TcParser::FastMtR1,
@@ -260,25 +419,42 @@ constexpr JournalEntry::ParseTableT_ JournalEntry::InternalGenerateParseTable_(c
         PROTOBUF_FIELD_OFFSET(JournalEntry, _impl_.writes_)}},
       // string function = 3 [json_name = "function"];
       {::_pbi::TcParser::FastUS1,
-       {26, 1, 0,
+       {26, 2, 0,
         PROTOBUF_FIELD_OFFSET(JournalEntry, _impl_.function_)}},
+      // string request_id = 4 [json_name = "requestId"];
+      {::_pbi::TcParser::FastUS1,
+       {34, 3, 0,
+        PROTOBUF_FIELD_OFFSET(JournalEntry, _impl_.request_id_)}},
+      // repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];
+      {::_pbi::TcParser::FastMtR1,
+       {42, 1, 1,
+        PROTOBUF_FIELD_OFFSET(JournalEntry, _impl_.catalog_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 commit_hint_ms = 1 [json_name = "commitHintMs"];
-      {PROTOBUF_FIELD_OFFSET(JournalEntry, _impl_.commit_hint_ms_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(JournalEntry, _impl_.commit_hint_ms_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // repeated .loams.live.v1.WriteRecord writes = 2 [json_name = "writes"];
       {PROTOBUF_FIELD_OFFSET(JournalEntry, _impl_.writes_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // string function = 3 [json_name = "function"];
-      {PROTOBUF_FIELD_OFFSET(JournalEntry, _impl_.function_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      {PROTOBUF_FIELD_OFFSET(JournalEntry, _impl_.function_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string request_id = 4 [json_name = "requestId"];
-      {PROTOBUF_FIELD_OFFSET(JournalEntry, _impl_.request_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      {PROTOBUF_FIELD_OFFSET(JournalEntry, _impl_.request_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];
+      {PROTOBUF_FIELD_OFFSET(JournalEntry, _impl_.catalog_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
         {::_pbi::TcParser::GetTable<::loams::live::v1::WriteRecord>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::WriteRecord_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::loams::live::v1::CatalogChange>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::loams::live::v1::CatalogChange_globals_},
         #endif
     }},
     {{
@@ -297,6 +473,11 @@ inline constexpr JournalEntry::Impl_::Impl_(
       : writes_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::loams::live::v1::JournalEntry,
             PROTOBUF_FIELD_OFFSET(::loams::live::v1::JournalEntry, _impl_.writes_)>()
+         }
+        ,
+        catalog_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::loams::live::v1::JournalEntry,
+            PROTOBUF_FIELD_OFFSET(::loams::live::v1::JournalEntry, _impl_.catalog_)>()
          }
         ,
         function_(
@@ -403,7 +584,7 @@ const ::_pbi::ClassData* JournalEntry_get_class_data() {
 }  // namespace live
 }  // namespace loams
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_loams_2flive_2fv1_2fjournal_2eproto[1];
+    file_level_enum_descriptors_loams_2flive_2fv1_2fjournal_2eproto[2];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_loams_2flive_2fv1_2fjournal_2eproto = nullptr;
 const ::uint32_t
@@ -411,15 +592,17 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::JournalEntry, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::JournalEntry, _impl_.commit_hint_ms_),
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::JournalEntry, _impl_.writes_),
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::JournalEntry, _impl_.function_),
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::JournalEntry, _impl_.request_id_),
-        3,
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::JournalEntry, _impl_.catalog_),
+        4,
         0,
-        1,
         2,
+        3,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::WriteRecord, _impl_._has_bits_),
         8, // hasbit index offset
@@ -433,46 +616,68 @@ const ::uint32_t
         4,
         0,
         1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::CatalogChange, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::CatalogChange, _impl_.kind_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::CatalogChange, _impl_.table_id_),
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::CatalogChange, _impl_.deployment_),
+        1,
+        2,
+        0,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::loams::live::v1::JournalEntry)},
-        {11, sizeof(::loams::live::v1::WriteRecord)},
+        {13, sizeof(::loams::live::v1::WriteRecord)},
+        {26, sizeof(::loams::live::v1::CatalogChange)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::loams::live::v1::JournalEntry_globals_,
         &::loams::live::v1::WriteRecord_globals_,
+        &::loams::live::v1::CatalogChange_globals_,
 };
 const char descriptor_table_protodef_loams_2flive_2fv1_2fjournal_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\033loams/live/v1/journal.proto\022\rloams.liv"
-    "e.v1\"\243\001\n\014JournalEntry\022$\n\016commit_hint_ms\030"
+    "e.v1\"\333\001\n\014JournalEntry\022$\n\016commit_hint_ms\030"
     "\001 \001(\004R\014commitHintMs\0222\n\006writes\030\002 \003(\0132\032.lo"
     "ams.live.v1.WriteRecordR\006writes\022\032\n\010funct"
     "ion\030\003 \001(\tR\010function\022\035\n\nrequest_id\030\004 \001(\tR"
-    "\trequestId\"\305\001\n\013WriteRecord\022\031\n\010table_id\030\001"
-    " \001(\rR\007tableId\022\025\n\006doc_id\030\002 \001(\014R\005docId\022,\n\004"
-    "kind\030\003 \001(\0162\030.loams.live.v1.WriteKindR\004ki"
-    "nd\022,\n\022index_keys_removed\030\004 \003(\014R\020indexKey"
-    "sRemoved\022(\n\020index_keys_added\030\005 \003(\014R\016inde"
-    "xKeysAdded*m\n\tWriteKind\022\032\n\026WRITE_KIND_UN"
-    "SPECIFIED\020\000\022\025\n\021WRITE_KIND_INSERT\020\001\022\026\n\022WR"
-    "ITE_KIND_REPLACE\020\002\022\025\n\021WRITE_KIND_DELETE\020"
-    "\003b\006proto3"
+    "\trequestId\0226\n\007catalog\030\005 \003(\0132\034.loams.live"
+    ".v1.CatalogChangeR\007catalog\"\305\001\n\013WriteReco"
+    "rd\022\031\n\010table_id\030\001 \001(\rR\007tableId\022\025\n\006doc_id\030"
+    "\002 \001(\014R\005docId\022,\n\004kind\030\003 \001(\0162\030.loams.live."
+    "v1.WriteKindR\004kind\022,\n\022index_keys_removed"
+    "\030\004 \003(\014R\020indexKeysRemoved\022(\n\020index_keys_a"
+    "dded\030\005 \003(\014R\016indexKeysAdded\"\222\001\n\rCatalogCh"
+    "ange\0224\n\004kind\030\001 \001(\0162 .loams.live.v1.Catal"
+    "ogChangeKindR\004kind\022\036\n\010table_id\030\002 \001(\rH\000R\007"
+    "tableId\210\001\001\022\036\n\ndeployment\030\003 \001(\tR\ndeployme"
+    "ntB\013\n\t_table_id*m\n\tWriteKind\022\032\n\026WRITE_KI"
+    "ND_UNSPECIFIED\020\000\022\025\n\021WRITE_KIND_INSERT\020\001\022"
+    "\026\n\022WRITE_KIND_REPLACE\020\002\022\025\n\021WRITE_KIND_DE"
+    "LETE\020\003*\367\001\n\021CatalogChangeKind\022#\n\037CATALOG_"
+    "CHANGE_KIND_UNSPECIFIED\020\000\022%\n!CATALOG_CHA"
+    "NGE_KIND_TABLE_CREATED\020\001\022\037\n\033CATALOG_CHAN"
+    "GE_KIND_INDEXES\020\002\022!\n\035CATALOG_CHANGE_KIND"
+    "_VALIDATOR\020\003\022,\n(CATALOG_CHANGE_KIND_DEPL"
+    "OYMENT_ACTIVATED\020\004\022$\n CATALOG_CHANGE_KIN"
+    "D_APP_SETTINGS\020\005b\006proto3"
 };
 static ::absl::once_flag descriptor_table_loams_2flive_2fv1_2fjournal_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_loams_2flive_2fv1_2fjournal_2eproto = {
     false,
     false,
-    529,
+    984,
     descriptor_table_protodef_loams_2flive_2fv1_2fjournal_2eproto,
     "loams/live/v1/journal.proto",
     &descriptor_table_loams_2flive_2fv1_2fjournal_2eproto_once,
     nullptr,
     0,
-    2,
+    3,
     schemas,
     file_message_globals,
     TableStruct_loams_2flive_2fv1_2fjournal_2eproto::offsets,
@@ -489,6 +694,13 @@ WriteKind_descriptor() {
 }
 PROTOBUF_CONSTINIT const uint32_t WriteKind_internal_data_[] = {
     262144u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+CatalogChangeKind_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_loams_2flive_2fv1_2fjournal_2eproto);
+  return file_level_enum_descriptors_loams_2flive_2fv1_2fjournal_2eproto[1];
+}
+PROTOBUF_CONSTINIT const uint32_t CatalogChangeKind_internal_data_[] = {
+    393216u, 0u, };
 // ===================================================================
 
 JournalEntry::JournalEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
@@ -510,6 +722,13 @@ PROTOBUF_NDEBUG_INLINE JournalEntry::Impl_::Impl_(
               ::loams::live::v1::JournalEntry,
               PROTOBUF_FIELD_OFFSET(::loams::live::v1::JournalEntry, _impl_.writes_)>()
           , arena, from.writes_
+        }
+        ,
+        catalog_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::loams::live::v1::JournalEntry,
+              PROTOBUF_FIELD_OFFSET(::loams::live::v1::JournalEntry, _impl_.catalog_)>()
+          , arena, from.catalog_
         }
         ,
         function_(arena, from.function_),
@@ -539,6 +758,11 @@ PROTOBUF_NDEBUG_INLINE JournalEntry::Impl_::Impl_(
       : writes_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::loams::live::v1::JournalEntry,
             PROTOBUF_FIELD_OFFSET(::loams::live::v1::JournalEntry, _impl_.writes_)>()
+         }
+        ,
+        catalog_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::loams::live::v1::JournalEntry,
+            PROTOBUF_FIELD_OFFSET(::loams::live::v1::JournalEntry, _impl_.catalog_)>()
          }
         ,
         function_(arena),
@@ -597,14 +821,17 @@ PROTOBUF_NOINLINE void JournalEntry::Clear() {
   ::uint32_t cached_has_bits [[maybe_unused]] = 0;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.writes_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      this_._impl_.function_.ClearNonDefaultToEmpty();
+      _impl_.catalog_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      this_._impl_.function_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       this_._impl_.request_id_.ClearNonDefaultToEmpty();
     }
   }
@@ -633,7 +860,7 @@ PROTOBUF_NOINLINE void JournalEntry::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 commit_hint_ms = 1 [json_name = "commitHintMs"];
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_commit_hint_ms() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -654,7 +881,7 @@ PROTOBUF_NOINLINE void JournalEntry::Clear() {
   }
 
   // string function = 3 [json_name = "function"];
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (!this_._internal_function().empty()) {
       const ::std::string& _s = this_._internal_function();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -664,12 +891,24 @@ PROTOBUF_NOINLINE void JournalEntry::Clear() {
   }
 
   // string request_id = 4 [json_name = "requestId"];
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (!this_._internal_request_id().empty()) {
       const ::std::string& _s = this_._internal_request_id();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "loams.live.v1.JournalEntry.request_id");
       target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_catalog_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_catalog().Get(i);
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          5, repfield, repfield.GetCachedSize(), target,
+          stream);
     }
   }
 
@@ -696,7 +935,7 @@ PROTOBUF_NOINLINE void JournalEntry::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // repeated .loams.live.v1.WriteRecord writes = 2 [json_name = "writes"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_writes_size();
@@ -704,22 +943,29 @@ PROTOBUF_NOINLINE void JournalEntry::Clear() {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // string function = 3 [json_name = "function"];
+    // repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1UL * this_._internal_catalog_size();
+      for (const auto& msg : this_._internal_catalog()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // string function = 3 [json_name = "function"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (!this_._internal_function().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_function());
       }
     }
     // string request_id = 4 [json_name = "requestId"];
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (!this_._internal_request_id().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_request_id());
       }
     }
     // uint64 commit_hint_ms = 1 [json_name = "commitHintMs"];
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_commit_hint_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_commit_hint_ms());
@@ -744,13 +990,18 @@ void JournalEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_writes()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
           from._internal_writes());
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_catalog()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_catalog());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (!from._internal_function().empty()) {
         _this->_internal_set_function(from._internal_function());
       } else {
@@ -759,7 +1010,7 @@ void JournalEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (!from._internal_request_id().empty()) {
         _this->_internal_set_request_id(from._internal_request_id());
       } else {
@@ -768,7 +1019,7 @@ void JournalEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_commit_hint_ms() != 0) {
         _this->_impl_.commit_hint_ms_ = from._impl_.commit_hint_ms_;
       }
@@ -794,6 +1045,7 @@ void JournalEntry::InternalSwap(JournalEntry* PROTOBUF_RESTRICT PROTOBUF_NONNULL
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.writes_.InternalSwap(&other->_impl_.writes_);
+  _impl_.catalog_.InternalSwap(&other->_impl_.catalog_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.function_, &other->_impl_.function_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.request_id_, &other->_impl_.request_id_, arena);
   swap(_impl_.commit_hint_ms_, other->_impl_.commit_hint_ms_);
@@ -1157,6 +1409,280 @@ void WriteRecord::InternalSwap(WriteRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
 }
 
 ::google::protobuf::Metadata WriteRecord::GetMetadata() const {
+  return Super_::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+CatalogChange::CatalogChange(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : Super_(arena, CatalogChange_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : Super_(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:loams.live.v1.CatalogChange)
+}
+PROTOBUF_NDEBUG_INLINE CatalogChange::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::loams::live::v1::CatalogChange& from_msg)
+      : _has_bits_{from._has_bits_},
+        deployment_(arena, from.deployment_) {}
+
+CatalogChange::CatalogChange(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CatalogChange& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : Super_(arena, CatalogChange_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : Super_(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CatalogChange* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, kind_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, kind_),
+           offsetof(Impl_, table_id_) -
+               offsetof(Impl_, kind_) +
+               sizeof(Impl_::table_id_));
+
+  // @@protoc_insertion_point(copy_constructor:loams.live.v1.CatalogChange)
+}
+PROTOBUF_NDEBUG_INLINE CatalogChange::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : deployment_(arena) {}
+
+inline void CatalogChange::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, kind_),
+           0,
+           offsetof(Impl_, table_id_) -
+               offsetof(Impl_, kind_) +
+               sizeof(Impl_::table_id_));
+}
+CatalogChange::~CatalogChange() {
+  // @@protoc_insertion_point(destructor:loams.live.v1.CatalogChange)
+  SharedDtor(*this);
+}
+inline void CatalogChange::SharedDtor(MessageLite& self) {
+  CatalogChange& this_ = static_cast<CatalogChange&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.deployment_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CatalogChange_class_data_ =
+        CatalogChange::InternalGenerateClassData_(CatalogChange_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CatalogChange::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CatalogChange_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CatalogChange_class_data_.tc_table);
+  return CatalogChange_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CatalogChange::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CatalogChange_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CatalogChange_globals_));
+  return CatalogChange_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CatalogChange::ParseTableT_
+    CatalogChange::_table_ =
+        CatalogChange::InternalGenerateParseTable_(CatalogChange_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CatalogChange::Clear() {
+  auto& this_ [[maybe_unused]] = *this;
+  // @@protoc_insertion_point(message_clear_start:loams.live.v1.CatalogChange)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    this_._impl_.deployment_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+    ::memset(&this_._impl_.kind_, 0,
+             static_cast<::size_t>(
+                 reinterpret_cast<char*>(&this_._impl_.table_id_) -
+                 reinterpret_cast<char*>(&this_._impl_.kind_)) +
+                 sizeof(_impl_.table_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CatalogChange::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CatalogChange& this_ = static_cast<const CatalogChange&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CatalogChange::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CatalogChange& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:loams.live.v1.CatalogChange)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .loams.live.v1.CatalogChangeKind kind = 1 [json_name = "kind"];
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          1, this_._internal_kind(), target);
+    }
+  }
+
+  // optional uint32 table_id = 2 [json_name = "tableId"];
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+        2, this_._internal_table_id(), target);
+  }
+
+  // string deployment = 3 [json_name = "deployment"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_deployment().empty()) {
+      const ::std::string& _s = this_._internal_deployment();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "loams.live.v1.CatalogChange.deployment");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:loams.live.v1.CatalogChange)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CatalogChange::ByteSizeLong(const MessageLite& base) {
+  const CatalogChange& this_ = static_cast<const CatalogChange&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CatalogChange::ByteSizeLong() const {
+  const CatalogChange& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:loams.live.v1.CatalogChange)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // string deployment = 3 [json_name = "deployment"];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_deployment().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_deployment());
+      }
+    }
+    // .loams.live.v1.CatalogChangeKind kind = 1 [json_name = "kind"];
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_kind() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_kind());
+      }
+    }
+    // optional uint32 table_id = 2 [json_name = "tableId"];
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+          this_._internal_table_id());
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CatalogChange::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CatalogChange*>(&to_msg);
+  auto& from = static_cast<const CatalogChange&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:loams.live.v1.CatalogChange)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_deployment().empty()) {
+        _this->_internal_set_deployment(from._internal_deployment());
+      } else {
+        if (_this->_impl_.deployment_.IsDefault()) {
+          _this->_internal_set_deployment("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_kind() != 0) {
+        _this->_impl_.kind_ = from._impl_.kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _this->_impl_.table_id_ = from._impl_.table_id_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CatalogChange::CopyFrom(const CatalogChange& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:loams.live.v1.CatalogChange)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CatalogChange::InternalSwap(CatalogChange* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.deployment_, &other->_impl_.deployment_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CatalogChange, _impl_.table_id_)
+      + sizeof(CatalogChange::_impl_.table_id_)
+      - PROTOBUF_FIELD_OFFSET(CatalogChange, _impl_.kind_)>(
+          reinterpret_cast<char*>(&_impl_.kind_),
+          reinterpret_cast<char*>(&other->_impl_.kind_));
+}
+
+::google::protobuf::Metadata CatalogChange::GetMetadata() const {
   return Super_::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

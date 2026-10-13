@@ -35,9 +35,11 @@
 //!    record `failed` with the reason;
 //! 6. a dropped index's entries are deleted in the background
 //!    ([`backfill::drop_indexes`], also each janitor round);
-//! 7. the `catalog` journal entry that switches every node at one tick is
-//!    Task 11's. Until then a node picks up another node's deploy when it
-//!    [refreshes](AppEngine::refresh) (the server does each janitor round).
+//! 7. the swap's transaction appends a `catalog` journal entry
+//!    (`DEPLOYMENT_ACTIVATED`, LV1 plan Task 11), and every node's
+//!    subscription manager [refreshes](AppEngine::refresh_at) at the tick
+//!    that contains it, so every node switches at one tick. The janitor's
+//!    refresh each round stays as a backstop.
 //!
 //! **Rollback** (LV1 plan Task 7) is [`activate`]: an earlier deployment
 //! goes through the same path with its stored bundle and schema (its bundle
@@ -125,6 +127,10 @@ const ABANDONED_VALIDATION: &str = "the deploy did not finish validating its str
 
 /// The records a [`PageRequest`] returns by default.
 pub const DEFAULT_PAGE: usize = 100;
+
+/// The `function` of the journal entry an activation appends (LV1 plan
+/// Task 11).
+pub const ACTIVATION: &str = "live.deploy.activate";
 
 /// The most records one page returns.
 pub const MAX_PAGE: usize = 1000;
@@ -569,6 +575,19 @@ impl AppEngine {
             );
         })?;
         match pointer {
+            Some(id) => self.serve_id(id, at).await,
+            None => Ok(None),
+        }
+    }
+
+    /// [`refresh`](Self::refresh) at `at`: serves the deployment the pointer
+    /// names in the snapshot at `at`, from `at` on. The subscription manager
+    /// calls it at the tick whose journal holds another node's activation
+    /// (LV1 plan Task 11), so the new deployment serves from that tick.
+    pub async fn refresh_at(&self, at: Ts) -> Result<Option<Ulid>, LiveError> {
+        let _switch = self.inner.switch.lock().await;
+        let mut snap = snapshot(self.inner.runner.store(), at).await?;
+        match read_pointer(&mut snap, self.app_keys()).await? {
             Some(id) => self.serve_id(id, at).await,
             None => Ok(None),
         }
@@ -1562,6 +1581,19 @@ async fn swap(
                 .await?;
             txn.put(&keys.deployment_pointer(), id.to_bytes().to_vec())
                 .await?;
+            // Every node switches at the tick that contains this commit
+            // (LV1 plan Task 11).
+            catalog::record_changes(
+                txn,
+                &keys,
+                ACTIVATION,
+                vec![catalog::change(
+                    pb::CatalogChangeKind::CATALOG_CHANGE_KIND_DEPLOYMENT_ACTIVATED,
+                    None,
+                    Some(id),
+                )],
+            )
+            .await?;
             Ok(Swap::Done(Box::new((changes, record))))
         })
     })

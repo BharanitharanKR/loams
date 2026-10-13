@@ -1,7 +1,8 @@
 //! The commit journal (design §20 §5.3, D119; R1 plan Task 9).
 //!
 //! Every mutation that writes appends one [`pb::JournalEntry`] to one of the
-//! app's journal shards, inside its own transaction: it reads the shard's
+//! app's journal shards, inside its own transaction, and so does every
+//! catalog change (LV1 plan Task 11, [`crate::catalog::record_changes`]): it reads the shard's
 //! head `h` at its start timestamp and writes the entry at `seq = h + 1` and
 //! the head `= h + 1`. Two mutations on one shard conflict on the head and
 //! one of them reruns (and picks a shard again). So each shard's sequence is
@@ -135,8 +136,8 @@ impl Journal {
     /// need not be `Send`; a rerun of the transaction draws again.
     ///
     /// Sets `commit_hint_ms` to the physical time of the transaction's start
-    /// timestamp. Refuses an entry without writes (read-only mutations write
-    /// none). A conflict on the head is a [`TxnError::Conflict`] of the
+    /// timestamp. Refuses an entry with neither writes nor catalog changes
+    /// (read-only mutations write none). A conflict on the head is a [`TxnError::Conflict`] of the
     /// commit, which the runner reruns.
     pub fn append<'a>(
         &'a self,
@@ -156,9 +157,10 @@ impl Journal {
         mut entry: pb::JournalEntry,
     ) -> Result<(u16, u64), LiveError> {
         self.check_shard(shard)?;
-        if entry.writes.is_empty() {
+        if entry.writes.is_empty() && entry.catalog.is_empty() {
             return Err(LiveError::invalid(
-                "a journal entry needs at least one write (read-only mutations write none)",
+                "a journal entry needs at least one write or catalog change (read-only \
+                 mutations write none)",
             ));
         }
         entry.commit_hint_ms = txn.start_ts().physical_ms();
@@ -857,13 +859,16 @@ fn decode_entry(value: &[u8]) -> Result<pb::JournalEntry, LiveError> {
 }
 
 /// Splits `entry` into chunks of at most [`MAX_CHUNK_BYTES`] encoded, in
-/// order, each with the entry's header fields.
+/// order, each with the entry's header fields. Its catalog changes (a few
+/// small records) ride in the first chunk, so a tailer sees them before the
+/// writes of the same entry.
 pub fn split(entry: pb::JournalEntry) -> Result<Vec<pb::JournalEntry>, LiveError> {
     let pb::JournalEntry {
         commit_hint_ms,
         writes,
         function,
         request_id,
+        catalog,
         ..
     } = entry;
     let header = pb::JournalEntry {
@@ -874,8 +879,11 @@ pub fn split(entry: pb::JournalEntry) -> Result<Vec<pb::JournalEntry>, LiveError
     };
     let header_len = header.encoded_len() as usize;
     let mut chunks = Vec::new();
-    let mut chunk = header.clone();
-    let mut len = header_len;
+    let mut chunk = pb::JournalEntry {
+        catalog,
+        ..header.clone()
+    };
+    let mut len = chunk.encoded_len() as usize;
     for write in writes {
         // The record, its field tag and its length prefix (at most 5 bytes).
         let write_len = write.encoded_len() as usize + 6;

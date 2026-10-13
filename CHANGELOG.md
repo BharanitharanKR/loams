@@ -26,6 +26,11 @@ All notable changes to this project are documented here. The format follows [Kee
   and the function log tail) instead of sample data, and is on in the browser console, no
   longer under "Demo data". It needs an engine that serves Live on its main port (LV1 Task
   12). Worker health is not shown until the engine reports it (LV1 Task 27).
+- **Loams Live switches every node at an activation's tick.** Every catalog change (a table
+  created, an index or validator changed, a deployment activated) is recorded in the commit
+  journal in its own transaction, and each node's subscription manager reloads at the tick
+  that holds it (LV1 Task 11). A deploy or rollback on one node no longer takes up to 60
+  seconds to reach live queries on another.
 
 ## [0.1.0-preview.2] - unreleased
 

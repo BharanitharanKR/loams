@@ -223,6 +223,9 @@ pub struct LiveTxn<'a> {
     /// The app's cursor key, read on the first page.
     cursor_key: Option<CursorKey>,
     output: CallOutput,
+    /// Catalog changes the mutation made (a table its first insert created),
+    /// recorded in its journal entry (LV1 plan Task 11).
+    catalog: Vec<pb::CatalogChange>,
     /// A storage error the next store call returns (tests only).
     fault: Option<TxnError>,
 }
@@ -264,6 +267,7 @@ impl<'a> LiveTxn<'a> {
             ctx: CallCtx::default(),
             cursor_key: None,
             output: CallOutput::default(),
+            catalog: Vec::new(),
             fault: None,
         }
     }
@@ -576,7 +580,8 @@ impl<'a> LiveTxn<'a> {
         let Access::Mutation(txn) = &mut self.access else {
             return Err(query_write("insert"));
         };
-        let def = catalog::table_for_insert(txn, self.app, table, self.limits).await?;
+        let (def, created) = catalog::table_for_insert(txn, self.app, table, self.limits).await?;
+        self.catalog.extend(created);
         let (id, record, bytes) =
             docs::insert_sized(txn, self.app, &def, fields, self.limits).await?;
         self.remember(&def);
@@ -1182,6 +1187,7 @@ async fn mutation_attempt(
     let usage = live.usage;
     let writes = std::mem::take(&mut live.writes);
     let output = std::mem::take(&mut live.output);
+    let created = std::mem::take(&mut live.catalog);
     drop(live);
     if writes.is_empty() {
         // Read-only: no journal entry and no idempotency record; a retry of
@@ -1233,6 +1239,7 @@ async fn mutation_attempt(
         writes,
         function: f.name().to_string(),
         request_id,
+        catalog: created,
         ..Default::default()
     };
     let position = journal.append_to(txn, shard, entry).await?;

@@ -24,17 +24,21 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1bloams/live/v1/journal.proto\x12\rloams.live.v1\"\xa3\x01\n\x0cJournalEntry\x12$\n\x0e\x63ommit_hint_ms\x18\x01 \x01(\x04R\x0c\x63ommitHintMs\x12\x32\n\x06writes\x18\x02 \x03(\x0b\x32\x1a.loams.live.v1.WriteRecordR\x06writes\x12\x1a\n\x08\x66unction\x18\x03 \x01(\tR\x08\x66unction\x12\x1d\n\nrequest_id\x18\x04 \x01(\tR\trequestId\"\xc5\x01\n\x0bWriteRecord\x12\x19\n\x08table_id\x18\x01 \x01(\rR\x07tableId\x12\x15\n\x06\x64oc_id\x18\x02 \x01(\x0cR\x05\x64ocId\x12,\n\x04kind\x18\x03 \x01(\x0e\x32\x18.loams.live.v1.WriteKindR\x04kind\x12,\n\x12index_keys_removed\x18\x04 \x03(\x0cR\x10indexKeysRemoved\x12(\n\x10index_keys_added\x18\x05 \x03(\x0cR\x0eindexKeysAdded*m\n\tWriteKind\x12\x1a\n\x16WRITE_KIND_UNSPECIFIED\x10\x00\x12\x15\n\x11WRITE_KIND_INSERT\x10\x01\x12\x16\n\x12WRITE_KIND_REPLACE\x10\x02\x12\x15\n\x11WRITE_KIND_DELETE\x10\x03\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1bloams/live/v1/journal.proto\x12\rloams.live.v1\"\xdb\x01\n\x0cJournalEntry\x12$\n\x0e\x63ommit_hint_ms\x18\x01 \x01(\x04R\x0c\x63ommitHintMs\x12\x32\n\x06writes\x18\x02 \x03(\x0b\x32\x1a.loams.live.v1.WriteRecordR\x06writes\x12\x1a\n\x08\x66unction\x18\x03 \x01(\tR\x08\x66unction\x12\x1d\n\nrequest_id\x18\x04 \x01(\tR\trequestId\x12\x36\n\x07\x63\x61talog\x18\x05 \x03(\x0b\x32\x1c.loams.live.v1.CatalogChangeR\x07\x63\x61talog\"\xc5\x01\n\x0bWriteRecord\x12\x19\n\x08table_id\x18\x01 \x01(\rR\x07tableId\x12\x15\n\x06\x64oc_id\x18\x02 \x01(\x0cR\x05\x64ocId\x12,\n\x04kind\x18\x03 \x01(\x0e\x32\x18.loams.live.v1.WriteKindR\x04kind\x12,\n\x12index_keys_removed\x18\x04 \x03(\x0cR\x10indexKeysRemoved\x12(\n\x10index_keys_added\x18\x05 \x03(\x0cR\x0eindexKeysAdded\"\x92\x01\n\rCatalogChange\x12\x34\n\x04kind\x18\x01 \x01(\x0e\x32 .loams.live.v1.CatalogChangeKindR\x04kind\x12\x1e\n\x08table_id\x18\x02 \x01(\rH\x00R\x07tableId\x88\x01\x01\x12\x1e\n\ndeployment\x18\x03 \x01(\tR\ndeploymentB\x0b\n\t_table_id*m\n\tWriteKind\x12\x1a\n\x16WRITE_KIND_UNSPECIFIED\x10\x00\x12\x15\n\x11WRITE_KIND_INSERT\x10\x01\x12\x16\n\x12WRITE_KIND_REPLACE\x10\x02\x12\x15\n\x11WRITE_KIND_DELETE\x10\x03*\xf7\x01\n\x11\x43\x61talogChangeKind\x12#\n\x1f\x43\x41TALOG_CHANGE_KIND_UNSPECIFIED\x10\x00\x12%\n!CATALOG_CHANGE_KIND_TABLE_CREATED\x10\x01\x12\x1f\n\x1b\x43\x41TALOG_CHANGE_KIND_INDEXES\x10\x02\x12!\n\x1d\x43\x41TALOG_CHANGE_KIND_VALIDATOR\x10\x03\x12,\n(CATALOG_CHANGE_KIND_DEPLOYMENT_ACTIVATED\x10\x04\x12$\n CATALOG_CHANGE_KIND_APP_SETTINGS\x10\x05\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'loams.live.v1.journal_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_WRITEKIND']._serialized_start=412
-  _globals['_WRITEKIND']._serialized_end=521
+  _globals['_WRITEKIND']._serialized_start=617
+  _globals['_WRITEKIND']._serialized_end=726
+  _globals['_CATALOGCHANGEKIND']._serialized_start=729
+  _globals['_CATALOGCHANGEKIND']._serialized_end=976
   _globals['_JOURNALENTRY']._serialized_start=47
-  _globals['_JOURNALENTRY']._serialized_end=210
-  _globals['_WRITERECORD']._serialized_start=213
-  _globals['_WRITERECORD']._serialized_end=410
+  _globals['_JOURNALENTRY']._serialized_end=266
+  _globals['_WRITERECORD']._serialized_start=269
+  _globals['_WRITERECORD']._serialized_end=466
+  _globals['_CATALOGCHANGE']._serialized_start=469
+  _globals['_CATALOGCHANGE']._serialized_end=615
 # @@protoc_insertion_point(module_scope)

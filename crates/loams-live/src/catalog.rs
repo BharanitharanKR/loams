@@ -10,6 +10,12 @@
 //! are never reused. A table's
 //! [`TableValidation`] (LV1 plan Task 8) rides in its record, so every write
 //! that loads the table has its validators.
+//!
+//! Every catalog change also appends a `catalog` journal entry in its own
+//! transaction (LV1 plan Task 11, [`record_changes`]): a table created, a
+//! table's indexes or validators changed ([`put_table`] compares the record
+//! with the stored one), a deployment activated. Every node's subscription
+//! manager sees it at the tick that contains it.
 
 use buffa::{Message, MessageField};
 use loams_kv::Txn;
@@ -18,7 +24,7 @@ use ulid::Ulid;
 use crate::cursor::CursorKey;
 use crate::docs::Reads;
 use crate::ids::{IndexId, TableId};
-use crate::journal::MAX_SHARDS;
+use crate::journal::{Journal, MAX_SHARDS};
 use crate::keys::AppKeys;
 use crate::validate::Validator;
 use crate::{Limits, LiveError, pb};
@@ -392,23 +398,31 @@ pub async fn list_tables(r: &mut impl Reads, app: &AppKeys) -> Result<Vec<TableD
 
 /// The table an insert into `name` writes to: the existing table, or a new
 /// one without user indexes when no schema is deployed (§20 §4.1). With a
-/// deployed schema, a missing table is [`LiveError::NotFound`].
+/// deployed schema, a missing table is [`LiveError::NotFound`]. A new
+/// table's `TABLE_CREATED` change is returned, not recorded: the mutation
+/// records it in its own journal entry (LV1 plan Task 11).
 pub async fn table_for_insert(
     txn: &mut Txn,
     app: &AppKeys,
     name: &str,
     limits: &Limits,
-) -> Result<TableDef, LiveError> {
+) -> Result<(TableDef, Option<pb::CatalogChange>), LiveError> {
     check_name("table", name)?;
     if let Some(table) = load_table(txn, app, name).await? {
-        return Ok(table);
+        return Ok((table, None));
     }
     if txn.get(&app.schema()).await?.is_some() {
         return Err(LiveError::NotFound(format!(
             "table '{name}' is not in the deployed schema"
         )));
     }
-    create_table(txn, app, name, &[], limits).await
+    let table = create_table(txn, app, name, &[], limits).await?;
+    let created = change(
+        pb::CatalogChangeKind::CATALOG_CHANGE_KIND_TABLE_CREATED,
+        Some(table.id),
+        None,
+    );
+    Ok((table, Some(created)))
 }
 
 /// Creates the table `name` with `indexes`, or changes an existing table's
@@ -426,7 +440,14 @@ pub async fn define_table(
     check_name("table", name)?;
     check_indexes(indexes, limits)?;
     let Some(mut table) = load_table(txn, app, name).await? else {
-        return create_table(txn, app, name, indexes, limits).await;
+        let table = create_table(txn, app, name, indexes, limits).await?;
+        let created = change(
+            pb::CatalogChangeKind::CATALOG_CHANGE_KIND_TABLE_CREATED,
+            Some(table.id),
+            None,
+        );
+        record_changes(txn, app, TABLE_CHANGE, vec![created]).await?;
+        return Ok(table);
     };
     if table.indexes.iter().any(|i| i.state != IndexState::Ready) {
         return Err(LiveError::FailedPrecondition(format!(
@@ -475,11 +496,11 @@ pub async fn define_table(
     }
     table.indexes = defs;
     table.next_index_id = next;
-    txn.put(&app.table(table.id), table.to_proto().encode_to_vec())
-        .await?;
+    put_table(txn, app, &table).await?;
     Ok(table)
 }
 
+/// Creates the table `name`; its caller records the change.
 async fn create_table(
     txn: &mut Txn,
     app: &AppKeys,
@@ -711,13 +732,93 @@ fn app_def(shards: u16) -> Vec<u8> {
     .encode_to_vec()
 }
 
-/// Writes `table`'s record in `txn`.
+/// Writes `table`'s record in `txn`, and records what changed from the
+/// stored record (LV1 plan Task 11): `TABLE_CREATED` for a new table,
+/// `INDEXES` and `VALIDATOR` for an existing one. Rewriting a record
+/// unchanged records nothing.
 pub(crate) async fn put_table(
     txn: &mut Txn,
     app: &AppKeys,
     table: &TableDef,
 ) -> Result<(), LiveError> {
+    let before = load_table_by_id(txn, app, table.id).await?;
     txn.put(&app.table(table.id), table.to_proto().encode_to_vec())
+        .await?;
+    record_changes(
+        txn,
+        app,
+        TABLE_CHANGE,
+        table_changes(before.as_ref(), table),
+    )
+    .await
+}
+
+/// The catalog changes from `before` (`None`: no table) to `after`.
+fn table_changes(before: Option<&TableDef>, after: &TableDef) -> Vec<pb::CatalogChange> {
+    let kinds = match before {
+        None => vec![pb::CatalogChangeKind::CATALOG_CHANGE_KIND_TABLE_CREATED],
+        Some(before) => {
+            let mut kinds = Vec::new();
+            if before.indexes != after.indexes || before.next_index_id != after.next_index_id {
+                kinds.push(pb::CatalogChangeKind::CATALOG_CHANGE_KIND_INDEXES);
+            }
+            if before.validation != after.validation {
+                kinds.push(pb::CatalogChangeKind::CATALOG_CHANGE_KIND_VALIDATOR);
+            }
+            kinds
+        }
+    };
+    kinds
+        .into_iter()
+        .map(|kind| change(kind, Some(after.id), None))
+        .collect()
+}
+
+/// The `function` of a journal entry that records table changes.
+pub const TABLE_CHANGE: &str = "live.catalog.table";
+
+/// The journal shard catalog entries go to. One shard, so a transaction
+/// that changes several records writes one more journal head, not several.
+pub const CATALOG_SHARD: u16 = 0;
+
+/// A catalog change of `kind`, about `table` or `deployment`.
+pub fn change(
+    kind: pb::CatalogChangeKind,
+    table: Option<TableId>,
+    deployment: Option<Ulid>,
+) -> pb::CatalogChange {
+    pb::CatalogChange {
+        kind: kind.into(),
+        table_id: table.map(|t| t.0),
+        deployment: deployment.map(|d| d.to_string()).unwrap_or_default(),
+        ..Default::default()
+    }
+}
+
+/// Appends `changes` to the app's journal in `txn`, as one entry whose
+/// function is `function` (LV1 plan Task 11), on [`CATALOG_SHARD`]. It
+/// commits with the change, so every tailer sees the change at the tick
+/// whose snapshot first contains it. Nothing is recorded before the app's
+/// runner first opened (no journal yet, so no tailer either).
+pub async fn record_changes(
+    txn: &mut Txn,
+    app: &AppKeys,
+    function: &str,
+    changes: Vec<pb::CatalogChange>,
+) -> Result<(), LiveError> {
+    if changes.is_empty() {
+        return Ok(());
+    }
+    let Some(shards) = load_journal_shards(txn, app).await? else {
+        return Ok(());
+    };
+    let entry = pb::JournalEntry {
+        function: function.to_string(),
+        catalog: changes,
+        ..Default::default()
+    };
+    Journal::new(app.clone(), shards)?
+        .append_to(txn, CATALOG_SHARD, entry)
         .await?;
     Ok(())
 }
