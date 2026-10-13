@@ -20,6 +20,16 @@
       "group": "k"
     },
     {
+      "path": "src/command-rank.ts",
+      "upstreamPath": "apps/web/src/components/CommandPalette.logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "2741456cbbae272e4538611ad32e8b3bca1c6d9a2a50f67ff1634fb5b9e8bb69",
+      "localSha256": "74c3e0431da844007b480dc952d91ea85ff5f7a516fc9acdc69df8374e8a9f46",
+      "verdict": "adapt",
+      "group": "h",
+      "note": "the ranking half (normalizeSearchText from lib/utils.ts, rankSearchFieldMatch, rankCommandPaletteItemMatch, filterCommandPaletteGroups); the item builders went to @loams/studio-ui src/palette/logic.ts"
+    },
+    {
       "path": "src/command.tsx",
       "upstreamPath": "apps/web/src/components/ui/command.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
