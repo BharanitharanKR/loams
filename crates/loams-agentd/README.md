@@ -34,6 +34,8 @@ Every WebSocket upgrade must carry `Authorization: Bearer <agentd.token>` and no
 
 Beside it, a second loopback listener serves `loams.agentd.v1`, the Connect surface Loams Studio reads (design §53 §6.1–§6.2, plan SD1 Task 5; crate `loams-agentd-connect`), on the port `agentd.json` names as `connectPort`. It keeps the same rules: the main token (`Authorization: Bearer <agentd.token>`; the MCP shim's run tokens are not accepted), `Host: 127.0.0.1:<connectPort>`, and a 403 for any `Origin`. Its handlers call the same engine dispatch as the ndjson methods, which stay as they are; `Shutdown` is not on it. Loams Desktop's renderer reaches it only through Electron main's protocol proxy (`loams-app://console/loams.agentd.v1.*`), which adds the token and lets through only the methods whose ndjson twin is `renderer: true`. `Hello` and `StudioService.GetHost` list the feature `studio.v1`.
 
+A third listener is off unless asked for: `serve --remote --listen <addr:port> --tls-cert <pem> --tls-key <pem> --issuer <url> --audience loams-agentd --subject <sub> --allow-origin <origin> [--allow-origin …] --config <path>`, or `[remote] enabled = true` in `config.toml` with the same keys (design §53 §6.3, D909; plan SD1 Task 7). It serves `loams.agentd.v1` to one person's browser console over TLS (HTTP/1.1 and HTTP/2): an OIDC access token from `--issuer` (its JWKS from discovery, cached, refetched for an unknown key at most once a minute), whose `aud` holds `--audience` and whose `sub` is `--subject`, from no `Origin` or one of the `--allow-origin`s (CORS for those only, never with credentials), in the role `studio`, which has every Studio method except the harness installers and the account logins (Q808). It never serves the ndjson wire, `Hello` or `Shutdown`. Every flag but `--allow-origin` is required, and a missing one exits 4 naming it; so does a certificate or key that cannot be used. The guide is [`docs/guides/studio/remote-agentd.md`](../../docs/guides/studio/remote-agentd.md).
+
 Exit codes: 0 stopped, 3 already running (a second `run` on the same directory prints `already running (pid …)`), 4 invalid config (the message names the key), 70 internal error.
 
 ## The per-user service and the runtime directory
@@ -97,6 +99,6 @@ Only the `new` rows may name a crate that does not exist yet. A crate added to t
 | `loams-agentd-tools` | Apache-2.0 | new | Loams and SQL tools (DD1 Tasks 20, 21) |
 | `loams-agentd-factory` | Apache-2.0 | new | Factory ops (DD1 Task 23) |
 | `loams-agentd-supervisor` | Apache-2.0 | new | The engine and stack supervisor (DD1 Tasks 14, 15) |
-| `loams-agentd-connect` | Apache-2.0 | new | `loams.agentd.v1`, the Connect surface for Loams Studio: the loopback listener beside the ndjson one (SD1 Tasks 4, 5) |
+| `loams-agentd-connect` | Apache-2.0 | new | `loams.agentd.v1`, the Connect surface for Loams Studio: the loopback listener beside the ndjson one, and the remote TLS listener (SD1 Tasks 4, 5, 7) |
 
 Changes that the Loams Authors make to the MIT crates are released under those crates' MIT licence.

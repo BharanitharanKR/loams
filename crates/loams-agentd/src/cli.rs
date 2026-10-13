@@ -25,6 +25,12 @@ pub enum Command {
     /// Run the daemon in the foreground: the sessions engine, its harnesses
     /// and the loopback RPC server.
     Run(RunArgs),
+    /// Run the daemon as `run` does, plus the remote Connect listener for
+    /// the browser console: `serve --remote --listen <addr:port> --tls-cert
+    /// <pem> --tls-key <pem> --issuer <url> --audience loams-agentd --subject
+    /// <sub> --allow-origin <origin> [--allow-origin …] --config <path>`.
+    /// Every flag but `--allow-origin` is required (design §53 §6.3).
+    Serve(ServeArgs),
     /// Serve the MCP (Model Context Protocol) server on stdin/stdout,
     /// proxying to the running daemon's RPC. Harness runs get it injected,
     /// with LOAMS_AGENTD_RUN_TOKEN, LOAMS_AGENTD_PORT and
@@ -116,6 +122,55 @@ impl RunArgs {
             (true, _) => Some(DaemonMode::Service),
             (_, true) => Some(DaemonMode::Child),
             _ => None,
+        }
+    }
+}
+
+/// `serve` (plan SD1 Task 7). The flags are optional to clap so that a
+/// missing one exits 4 naming it, as the Shared contracts say, rather than
+/// with clap's usage error.
+#[derive(Debug, Args)]
+pub struct ServeArgs {
+    /// Serve `loams.agentd.v1` to the browser console over TLS.
+    #[arg(long)]
+    pub remote: bool,
+    /// The address and port to listen on, for example 0.0.0.0:8443.
+    #[arg(long, value_name = "ADDR:PORT")]
+    pub listen: Option<String>,
+    /// The PEM certificate chain.
+    #[arg(long, value_name = "PEM")]
+    pub tls_cert: Option<PathBuf>,
+    /// The PEM private key.
+    #[arg(long, value_name = "PEM")]
+    pub tls_key: Option<PathBuf>,
+    /// The OIDC issuer, for example https://auth.example.com/application/o/loams/.
+    #[arg(long, value_name = "URL")]
+    pub issuer: Option<String>,
+    /// The audience access tokens must carry: loams-agentd.
+    #[arg(long, value_name = "AUDIENCE")]
+    pub audience: Option<String>,
+    /// The one subject (`sub`) admitted: the person this agentd serves.
+    #[arg(long, value_name = "SUB")]
+    pub subject: Option<String>,
+    /// A console origin allowed to call it (repeatable).
+    #[arg(long = "allow-origin", value_name = "ORIGIN")]
+    pub allow_origin: Vec<String>,
+    #[command(flatten)]
+    pub run: RunArgs,
+}
+
+impl ServeArgs {
+    /// The flags as the library reads them.
+    pub fn flags(&self) -> loams_agentd::remote::RemoteFlags {
+        loams_agentd::remote::RemoteFlags {
+            remote: self.remote,
+            listen: self.listen.clone(),
+            tls_cert: self.tls_cert.clone(),
+            tls_key: self.tls_key.clone(),
+            issuer: self.issuer.clone(),
+            audience: self.audience.clone(),
+            subject: self.subject.clone(),
+            allow_origin: self.allow_origin.clone(),
         }
     }
 }

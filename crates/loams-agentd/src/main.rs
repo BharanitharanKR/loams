@@ -16,7 +16,7 @@ mod status;
 use std::process::ExitCode;
 
 use clap::Parser;
-use cli::{Cli, Command, LoamsCommand, RunArgs, ServiceCommand};
+use cli::{Cli, Command, LoamsCommand, RunArgs, ServeArgs, ServiceCommand};
 use loams_agentd::config::Config;
 use loams_agentd::paths::Paths;
 use loams_agentd::server::{ServeOptions, serve};
@@ -72,7 +72,8 @@ fn main() -> ExitCode {
     attach_parent_console();
     let cli = Cli::parse();
     match cli.command {
-        Command::Run(args) => run(&args),
+        Command::Run(args) => run(&args, None),
+        Command::Serve(args) => serve_remote(&args),
         Command::Mcp(config) => {
             // `mcp` owns stdout for the protocol: a single log line on it
             // would corrupt the JSON-RPC stream, so diagnostics go to stderr.
@@ -201,10 +202,31 @@ fn service_result(result: Result<String, loams_agentd::service::ServiceError>) -
     }
 }
 
+/// `serve --remote …`: every flag is checked first (a missing one exits 4
+/// and names it), then it runs as `run` with the remote listener on
+/// (plan SD1 Task 7).
+fn serve_remote(args: &ServeArgs) -> ExitCode {
+    let flags = args.flags();
+    if let Err(error) = flags.settings() {
+        eprintln!("loams-agentd: {error}");
+        return ExitCode::from(EXIT_INVALID_CONFIG);
+    }
+    if args.run.config.resolve().is_none() {
+        eprintln!(
+            "loams-agentd: serve --remote needs --config (or {})",
+            cli::CONFIG_ENV
+        );
+        return ExitCode::from(EXIT_INVALID_CONFIG);
+    }
+    run(&args.run, Some(&flags))
+}
+
 /// `run`: config (exit 4), directory, lock (exit 3), then the server; any
 /// other failure exits 70 (design §50 §5.1). On Windows `run --service` is
-/// the parent that runs `run --worker` and restarts it.
-fn run(args: &RunArgs) -> ExitCode {
+/// the parent that runs `run --worker` and restarts it. `remote` holds
+/// `serve --remote`'s flags; without them `[remote]` decides, and it is off
+/// by default.
+fn run(args: &RunArgs, remote: Option<&loams_agentd::remote::RemoteFlags>) -> ExitCode {
     let Some(config_path) = args.config.resolve() else {
         eprintln!(
             "loams-agentd: run needs --config <path> (or {})",
@@ -224,6 +246,24 @@ fn run(args: &RunArgs) -> ExitCode {
         }
     };
     let mode = args.mode().unwrap_or(config.daemon.mode);
+    // The remote listener's TLS files and issuer are checked before the
+    // lock: a bad one is a config error (exit 4), like a bad config.toml.
+    let remote = match loams_agentd::remote::resolve(remote, &config.remote).and_then(|settings| {
+        settings
+            .map(|settings| {
+                loams_agentd::remote::options(
+                    &settings,
+                    loams_agentd_rpc::Limits::default().auth_failure_delay,
+                )
+            })
+            .transpose()
+    }) {
+        Ok(remote) => remote,
+        Err(error) => {
+            eprintln!("loams-agentd: {error}");
+            return ExitCode::from(EXIT_INVALID_CONFIG);
+        }
+    };
     let paths = match Paths::for_config(&config_path) {
         Ok(paths) => paths,
         Err(error) => {
@@ -272,6 +312,7 @@ fn run(args: &RunArgs) -> ExitCode {
                 config,
                 mode,
                 default_harness: harness_from_env(),
+                remote,
             }))
         });
     drop(lock);

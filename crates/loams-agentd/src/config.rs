@@ -17,9 +17,20 @@
 //! file_cap_bytes = 4194304
 //! budget_bytes = 1073741824
 //! archived_retention_days = 30
+//! [remote]                  # plan SD1 Task 7: `serve --remote` (D909)
+//! enabled = false
+//! listen = "0.0.0.0:8443"
+//! tls_cert = "/etc/loams-agentd/cert.pem"
+//! tls_key = "/etc/loams-agentd/key.pem"
+//! issuer = "https://auth.example.com/application/o/loams/"
+//! audience = "loams-agentd"
+//! subject = "<the enrolled person's sub>"
+//! allow_origins = ["https://console.example.com"]
 //! ```
 //!
-//! Every key is optional and has the default shown. A value of the wrong
+//! Every key is optional and has the default shown, except that `[remote]`
+//! has no defaults that open it up: it is off, and when `enabled = true`
+//! every one of its keys but `allow_origins` is required. A value of the wrong
 //! type or out of range makes the file invalid, and `run` exits 4 naming the
 //! key. Unknown keys are ignored, so a newer Loams Desktop can add settings
 //! that an older daemon does not know yet.
@@ -41,6 +52,23 @@ pub struct Config {
     pub engine: EngineConfig,
     pub daemon: DaemonConfig,
     pub tool_outputs: ToolOutputsConfig,
+    pub remote: RemoteConfig,
+}
+
+/// `[remote]`: the remote Connect listener for the browser console (design
+/// §53 §6.3, D909; plan SD1 Task 7). Off by default.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct RemoteConfig {
+    pub enabled: bool,
+    /// `addr:port`, for example `0.0.0.0:8443`.
+    pub listen: Option<String>,
+    pub tls_cert: Option<PathBuf>,
+    pub tls_key: Option<PathBuf>,
+    pub issuer: Option<String>,
+    pub audience: Option<String>,
+    pub subject: Option<String>,
+    pub allow_origins: Vec<String>,
 }
 
 /// `[paths]`: locations Loams Desktop owns. The supervisor (DD1 Tasks 14
@@ -189,6 +217,10 @@ impl Config {
                 return Err((format!("`{key}`"), "must be greater than 0".to_string()));
             }
         }
+        if self.remote.enabled {
+            crate::remote::RemoteSettings::from_config(&self.remote)
+                .map_err(|(key, message)| (format!("`remote.{key}`"), message))?;
+        }
         Ok(())
     }
 }
@@ -247,6 +279,43 @@ mod tests {
                 budget: 4096,
                 archived_retention: Duration::from_secs(7 * 24 * 60 * 60),
             }
+        );
+    }
+
+    #[test]
+    fn remote_is_off_and_needs_every_key_when_on() {
+        assert!(!Config::default().remote.enabled);
+        let config = Config::parse("[remote]\nlisten = \"0.0.0.0:8443\"\n").expect("parse");
+        assert!(!config.remote.enabled);
+        assert_eq!(
+            invalid("[remote]\nenabled = true\n").0,
+            "`remote.listen`",
+            "the first missing key"
+        );
+        let full = r#"
+            [remote]
+            enabled = true
+            listen = "127.0.0.1:8443"
+            tls_cert = "/c.pem"
+            tls_key = "/k.pem"
+            issuer = "https://auth.example.com/application/o/loams/"
+            audience = "loams-agentd"
+            subject = "s1"
+            allow_origins = ["https://console.example.com"]
+            "#;
+        let config = Config::parse(full).expect("parse");
+        assert!(config.remote.enabled);
+        assert_eq!(
+            invalid(&full.replace("listen = \"127.0.0.1:8443\"", "listen = \"here\"")).0,
+            "`remote.listen`"
+        );
+        assert_eq!(
+            invalid(&full.replace("https://console.example.com", "*")).0,
+            "`remote.allow_origins`"
+        );
+        assert_eq!(
+            invalid(&full.replace("subject = \"s1\"", "subject = \"\"")).0,
+            "`remote.subject`"
         );
     }
 
