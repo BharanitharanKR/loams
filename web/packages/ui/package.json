@@ -2,7 +2,7 @@
   "name": "@loams/ui",
   "version": "0.1.0",
   "description": "Loams's design system: tokens, the mark, grain textures and React primitives.",
-  "license": "Apache-2.0",
+  "license": "Apache-2.0 AND MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/ostrium-labs/loams",
@@ -34,7 +34,10 @@
   "files": [
     "dist",
     "src/*.css",
-    "README.md"
+    "README.md",
+    "NOTICE",
+    "LICENSE.t3code",
+    "provenance.json"
   ],
   "scripts": {
     "build": "tsup",

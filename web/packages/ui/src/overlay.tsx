@@ -3,6 +3,7 @@
 // from @loams/ui and never @base-ui/react directly, so focus handling, keyboard
 // behaviour and the look stay the same on every page.
 
+import { AlertDialog as BaseAlertDialog } from '@base-ui/react/alert-dialog';
 import { Combobox as BaseCombobox } from '@base-ui/react/combobox';
 import { Dialog as BaseDialog } from '@base-ui/react/dialog';
 import { Menu as BaseMenu } from '@base-ui/react/menu';
@@ -72,6 +73,129 @@ export function Dialog({
           </div>
           <div className="loams-dialog-body">{children}</div>
           {footer && <div className="loams-dialog-foot">{footer}</div>}
+        </BaseDialog.Popup>
+      </BaseDialog.Portal>
+    </BaseDialog.Root>
+  );
+}
+
+/* AlertDialog ----------------------------------------------------------------------- */
+
+/**
+ * A confirmation that interrupts: Base UI's alert dialog (role `alertdialog`), so a click
+ * on the scrim does not dismiss it and focus starts inside. Escape and Cancel call
+ * `onClose`; the confirm button calls `onConfirm`. While `pending`, nothing dismisses it.
+ */
+export function AlertDialog({
+  open,
+  onClose,
+  title,
+  children,
+  confirm,
+  cancel = 'Cancel',
+  onConfirm,
+  tone,
+  pending = false,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: ReactNode;
+  /** The consequence, read as the dialog's description. */
+  children?: ReactNode;
+  /** The confirm button's label: the action, never "OK". */
+  confirm: ReactNode;
+  cancel?: ReactNode;
+  onConfirm: () => void;
+  tone?: 'danger';
+  pending?: boolean;
+}) {
+  return (
+    <BaseAlertDialog.Root
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !pending) onClose();
+      }}
+    >
+      <BaseAlertDialog.Portal>
+        <BaseAlertDialog.Backdrop className="loams-dialog-scrim" />
+        <BaseAlertDialog.Popup className="loams-dialog">
+          <div className="grid gap-2 px-[18px] pt-4 pb-2">
+            <BaseAlertDialog.Title className="m-0 text-[1.05rem] font-[560]">
+              {title}
+            </BaseAlertDialog.Title>
+            {children && (
+              <BaseAlertDialog.Description className="m-0 text-[0.9rem] text-muted">
+                {children}
+              </BaseAlertDialog.Description>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 px-[18px] pt-2 pb-4">
+            <BaseAlertDialog.Close render={<Button variant="quiet" />} disabled={pending}>
+              {cancel}
+            </BaseAlertDialog.Close>
+            <Button
+              variant={tone === 'danger' ? 'danger' : 'primary'}
+              onClick={onConfirm}
+              disabled={pending}
+              aria-busy={pending || undefined}
+            >
+              {confirm}
+            </Button>
+          </div>
+        </BaseAlertDialog.Popup>
+      </BaseAlertDialog.Portal>
+    </BaseAlertDialog.Root>
+  );
+}
+
+/* Sheet ----------------------------------------------------------------------------- */
+
+const SHEET_SIDE = {
+  left: 'inset-y-0 left-0 w-[min(88vw,360px)] border-r data-starting-style:-translate-x-full data-ending-style:-translate-x-full',
+  right:
+    'inset-y-0 right-0 w-[min(88vw,420px)] border-l data-starting-style:translate-x-full data-ending-style:translate-x-full',
+  bottom:
+    'inset-x-0 bottom-0 max-h-[85dvh] border-t data-starting-style:translate-y-full data-ending-style:translate-y-full',
+} as const;
+
+/**
+ * A modal panel from one edge: the sidebar or the side panel on a narrow window, a
+ * bottom sheet on a phone. Focus is trapped, Escape and the scrim close it.
+ */
+export function Sheet({
+  open,
+  onClose,
+  title,
+  side = 'right',
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: ReactNode;
+  side?: keyof typeof SHEET_SIDE;
+  children: ReactNode;
+}) {
+  return (
+    <BaseDialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
+      <BaseDialog.Portal>
+        <BaseDialog.Backdrop className="loams-dialog-scrim" />
+        <BaseDialog.Popup
+          data-side={side}
+          className={cx(
+            'fixed z-[71] flex flex-col border-rule bg-surface text-ink shadow-modal outline-none ' +
+              'transition-transform duration-200 ease-op motion-reduce:transition-none',
+            SHEET_SIDE[side],
+          )}
+        >
+          <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-rule-soft px-3">
+            <BaseDialog.Title className="m-0 truncate text-[0.86rem] font-[540]">
+              {title}
+            </BaseDialog.Title>
+            <BaseDialog.Close render={<Button variant="quiet" size="icon" />} aria-label="Close">
+              ×
+            </BaseDialog.Close>
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto">{children}</div>
         </BaseDialog.Popup>
       </BaseDialog.Portal>
     </BaseDialog.Root>
