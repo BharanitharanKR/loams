@@ -6,7 +6,9 @@
 // Each package is also exported on its own path (`@loams/proto/approvals`),
 // which keeps a plugin's bundle to the services it uses.
 
+export * as admin from './admin.js';
 export * as approvals from './gen/loams/approvals/v1/approvals_pb.js';
+export * as auth from './gen/loams/auth/v1/auth_pb.js';
 export * as collection from './gen/loams/collection/v1/collection_pb.js';
 export * as documents from './gen/loams/collection/v1/document_pb.js';
 export * as query from './gen/loams/collection/v1/query_pb.js';
@@ -24,7 +26,7 @@ export * as operations from './gen/loams/operations/v1/operations_pb.js';
 // it, and protoc-gen-es writes that import into the generated descriptor.
 export * as options from './gen/loams/options/v1/options_pb.js';
 
-/** The proto packages this module generates, as `GetInstance.api_versions` names them. */
+/** The app proto packages this module generates, as `GetInstance.api_versions` names them. */
 export const APP_API_PACKAGES = [
   'loams.instance.v1',
   'loams.devices.v1',
@@ -34,3 +36,12 @@ export const APP_API_PACKAGES = [
 ] as const;
 
 export type AppApiPackage = (typeof APP_API_PACKAGES)[number];
+
+/**
+ * The console API packages (API2 Tasks 6 and 7), which replace
+ * `api/console/openapi.json`. `loams-apps-mock` serves both; the server serves
+ * them when API2 Task 7's server half lands.
+ */
+export const CONSOLE_API_PACKAGES = ['loams.auth.v1', 'loams.admin.v1'] as const;
+
+export type ConsoleApiPackage = (typeof CONSOLE_API_PACKAGES)[number];

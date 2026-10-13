@@ -36,6 +36,10 @@ inputs:
       - proto/loams/operations/v1
       - proto/loams/notifications/v1
       - proto/loams/live/v1
+      # The console API (API2 Tasks 6 and 7), which the facade's `loams.auth`
+      # and `loams.admin.*` modules bind.
+      - proto/loams/auth/v1
+      - proto/loams/admin/v1
 plugins:
   # `protoc --python_out`: the messages and service descriptors. It writes
   # `loams/<package path>/<file>_pb2.py`.

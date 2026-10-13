@@ -730,8 +730,9 @@ mod tests {
         assert_eq!(loams.inner.runtime.max_retries, DEFAULT_MAX_RETRIES);
         assert_eq!(
             loams.bindings().len(),
-            4,
-            "instance, live, live.admin and tables"
+            10,
+            "admin.agents, admin.audit, admin.keys, admin.org, admin.projects, auth, \
+             instance, live, live.admin and tables"
         );
     }
 
