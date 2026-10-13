@@ -32,13 +32,13 @@ healthcheck.
 | Image | Contains |
 |---|---|
 | `loams` | the engine, features `live,live-tikv,durable,graph,tikv,pgwire,mysql-wire,stream-grpc` |
-| `loams-fabric` | `loams-fabric house` and `loams-house-worker`, with the digest-pinned libchdb |
+| `loams-fabric` | `loams-fabric house` and `loams-house-worker`, with the digest-pinned libchdb; workers sealed with `--sandbox pods` by default |
 | `loams-agentd` | the agent daemon (optional) |
 
 ```sh
 deploy/release/build.sh loams                        # both platforms, local manifest list
 deploy/release/build.sh --platforms linux/amd64 loams
-deploy/release/build.sh --version 0.1.0-preview.1 --push   # CI on a tag
+deploy/release/build.sh --version 0.1.0-preview.2 --push   # CI on a tag
 ```
 
 ## On this machine
@@ -52,10 +52,27 @@ docker compose logs tailscale            # the node name, or a login URL
 ```
 
 Set the console's `LOAMS_ENGINE_URL` to `https://loams.<tailnet>.ts.net`.
-Profiles add `headscale` (coming soon, unsupported in 0.1.0-preview.1), `console` (the console from `LOAMS_CONSOLE_DIR`, with
+Profiles add `headscale` (coming soon, unsupported in 0.1.0-preview.2), `console` (the console from `LOAMS_CONSOLE_DIR`, with
 `/config.json` built from `LOAMS_ENGINE_URL`, `LOAMS_AUTH_ISSUER` and
-`LOAMS_AUTH_CLIENT_ID`), `agentd` and `house` (see Known gaps). Stop with `docker compose --profile '*'
+`LOAMS_AUTH_CLIENT_ID`), `agentd` and `house` (below). Stop with `docker compose --profile '*'
 down`; add `--volumes` to delete the data.
+
+### House
+
+```sh
+docker compose --profile house up -d house house-tailscale
+docker compose exec house cat /var/lib/loams-house/house.key   # user `default`'s password
+curl -u "default:$PASSWORD" https://loams-house.<tailnet>.ts.net/ --data-binary 'SELECT 1'
+```
+
+The House listens on its loopback only; `house-tailscale`, in its network
+namespace, serves it on the tailnet as `HOUSE_TS_HOSTNAME` (`loams-house`), with
+`HOUSE_TS_AUTHKEY` (or a reusable `TS_AUTHKEY`). It is on the `house` network,
+which nothing else joins. Workers run sealed: `HOUSE_SANDBOX=pods` (default;
+Landlock with TCP rules on Linux 6.7 or later, and seccomp) or `netns` (adds a
+user and network namespace per worker; needs unprivileged user namespaces in the
+container, as Podman allows). chDB's access control (R-ACL.1) and the statement
+checks are always on.
 
 ### Auth
 
@@ -70,9 +87,9 @@ audience `LOAMS_OIDC_AUDIENCE`; `apikey` checks hashed keys in
 `LOAMS_API_KEYS_FILE`, which compose points at `secrets/api-keys`. See
 `.env.example`.
 
-### Headscale (coming soon, unsupported in 0.1.0-preview.1)
+### Headscale (coming soon, unsupported in 0.1.0-preview.2)
 
-0.1.0-preview.1 supports one setup: your own Tailscale tailnet and the hosted
+0.1.0-preview.2 supports one setup: your own Tailscale tailnet and the hosted
 console. Headscale issues no `ts.net` HTTPS certificates, so the hosted console
 (served over HTTPS) cannot reach an engine on a Headscale tailnet. The profile
 stays in the bundle for a later release; the steps below are unsupported.
@@ -109,11 +126,11 @@ needs SSH and outbound internet only.
 
 - The engine does not reach the House yet. The House serves loopback plaintext
   only until TLS (D111, HS1 Task 20) and may not share the engine's network
-  namespace, so `loams.house.v1` answers `house_not_configured`;
-  `--profile house` runs it on its own.
-
-- House workers run without the netns sandbox (`--sandbox none`): it needs
-  `CAP_SYS_ADMIN` in a container. The container is their boundary.
+  namespace, so `loams.house.v1` answers `house_not_configured`; use the House's
+  own tailnet URL (`--profile house`).
+- `HOUSE_SANDBOX=netns` fails under Docker's default seccomp profile (no
+  unprivileged user namespaces); keep `pods` there. On a kernel without Landlock
+  TCP rules (before 6.7) the workers refuse to boot.
 - Live (7710), durable (8001), and the MySQL and Postgres wire listeners of the
   engine are loopback only and are not forwarded over the tailnet.
 - TiDB starts with a passwordless root and the Postgres stack with default

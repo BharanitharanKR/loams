@@ -1,18 +1,20 @@
-# Loams v0.1.0-preview.1: run the whole stack yourself
+# Loams v0.1.0-preview.2: run the whole stack yourself
 
-Status: **preview**, v0.1.0-preview.1, first published 2026-10-12. Everything listed as
+Status: **preview**, v0.1.0-preview.2 (the second preview; v0.1.0-preview.1 was published
+2026-10-12). What changed since preview.1 is in [What is new in preview.2](#what-is-new-in-preview2)
+and the [changelog](../../CHANGELOG.md). Everything listed as
 **Preview** in the [README's feature table](../../README.md#features) ships in this release.
 Preview means built, tested in CI and usable, but not production ready: APIs, on-disk formats,
 flags and image layouts can still change without a migration path, and parts of the security
 model are not hardened yet (see [Security model](#security-model)).
 
-v0.1.0-preview.1 ships one path: **your own Tailscale tailnet plus our hosted console at
+v0.1.0-preview.2 ships one path: **your own Tailscale tailnet plus our hosted console at
 `https://console.loams.dev`**. You run the Loams stack; we host the console and, for the
 optional `oidc` mode, the auth service.
 
 | Piece | Who runs it | Where |
 |---|---|---|
-| The engine stack: `loams`, TiDB on TiKV and PD, the Postgres stack | **You** | Docker Compose on your laptop, or on your own VMs (BYOC) with `deploy/release/byoc/install.sh` over SSH |
+| The engine stack: `loams`, TiDB on TiKV and PD, the House, the Postgres stack | **You** | Docker Compose on your laptop, or on your own VMs (BYOC) with `deploy/release/byoc/install.sh` over SSH |
 | The private network between your devices and the stack | **You** | Your own Tailscale tailnet |
 | The React console (static files) | Ostrium | `https://console.loams.dev` |
 | The auth service (OIDC issuer), only for `oidc` mode | Ostrium | `https://auth.loams.dev` |
@@ -22,7 +24,37 @@ through the Tailscale client on your own device.
 
 **Coming soon, not in this release:** the console on your own Vercel or Cloudflare project,
 self-service OIDC clients (`auth.loams.dev/register`), Headscale networks, one-click OAuth
-deploy, and House/Analytics wired to the engine.
+deploy, and the House wired to the engine (and so to the console's House page).
+
+## What is new in preview.2
+
+- **Loams House on your tailnet** (`--profile house`): the House gets its own Tailscale
+  sidecar and serves the ClickHouse HTTP interface at `https://loams-house.<tailnet>.ts.net`,
+  with chDB's access control (R-ACL.1), the statement checks (L1) and the workers' OS sandbox
+  (L3) all on. See [Loams House](#loams-house).
+- **Loams Graph** recovers from crashes: a fenced single owner per graph, snapshots in the
+  bucket and recovery, rehydration and idle eviction (GR1 Tasks 12 to 14), on Loams' Grafeo
+  fork (`ostrium-labs/grafeo` v0.5.43-loams.1).
+- **Loams Live** gains `LiveAdminService` (deploy, rollback, index status, function logs),
+  schema validators and online index changes (LV1 Tasks 8 to 10).
+- **Desktop and CLI on macOS and Windows:** see [Desktop and CLI](#desktop-and-cli).
+- **SDKs from package registries:** see [SDKs](#sdks).
+
+## Desktop and CLI
+
+<!-- PLACEHOLDER(rel2-platforms): the desktop app and CLI binaries for macOS and Windows in
+v0.1.0-preview.2 (downloads, signing status, install steps). Filled in through the release
+controller; do not edit here. -->
+
+_To be filled in before the tag: the desktop app and CLI for macOS and Windows._
+
+## SDKs
+
+<!-- PLACEHOLDER(rel2-sdks): which SDKs v0.1.0-preview.2 publishes to package registries, under
+which names, and how to install them. Filled in through the release controller; do not edit
+here. -->
+
+_To be filled in before the tag: the SDKs published to package registries._
 
 ## Architecture
 
@@ -47,6 +79,8 @@ flowchart LR
     tikv["tikv"]
     pd["pd"]
     pg["Postgres stack<br/>deploy/loams-postgres-dev"]
+    hts["house-tailscale sidecar<br/>TS_HOSTNAME=loams-house"]
+    house["house (profile house)<br/>own network"]
   end
 
   browser -- "1. load the console (HTTPS)" --> console
@@ -59,6 +93,8 @@ flowchart LR
   tidb --> tikv
   tikv --> pd
   loams --> pg
+  tsclient -- "ClickHouse HTTP over HTTPS" --> hts
+  hts -- "127.0.0.1:8123" --> house
   tsclient -.-> coord
   ts -.-> coord
 ```
@@ -87,19 +123,21 @@ its settings in `deploy/release/.env.example`.
 | `tikv` | TiKV | Metadata, Live transactions, TiDB's storage |
 | `tidb` | `ghcr.io/ostrium-labs/tidb:v8.5.8-loams.1` | Loams SQL (MySQL compatible) |
 | `loams` | `ghcr.io/ostrium-labs/loams` | The engine, built with `live,live-tikv,durable,graph,tikv,pgwire,mysql-wire,stream-grpc` |
-| `house` (profile `house`) | `ghcr.io/ostrium-labs/loams-fabric` | Loams House (the front, with `loams-house-worker` inside). Not started by default and not wired to the engine in this release: the engine answers `house_not_configured` |
+| `house` (profile `house`) | `ghcr.io/ostrium-labs/loams-fabric` | Loams House (the front, with `loams-house-worker` inside), on a network of its own. Not started by default; not wired to the engine yet (the engine answers `house_not_configured`) |
+| `house-tailscale` (profile `house`) | `tailscale/tailscale` | The House's own door: joins the tailnet as `loams-house` and serves its ClickHouse HTTP interface there |
 | Postgres stack | pinned in `deploy/pins/loams-postgres-images.toml` | Included from [`deploy/loams-postgres-dev`](../../deploy/loams-postgres-dev/README.md) |
 | `console` (profile `console`, optional) | static console | A local copy of the console, for local trials; the supported console is the hosted one |
 | `tailscale` | `tailscale/tailscale` | The stack's only door: joins the tailnet as `loams` and serves the engine there |
 | `headscale` (profile `headscale`) | Headscale | Coming soon, unsupported in this release (see [the tailnet](#the-tailnet)) |
 
 `ghcr.io/ostrium-labs/loams-agentd` (the agent daemon) is published too, and is optional.
-Images are tagged `0.1.0-preview.1` and the rolling `:preview`, never `:latest`. The compose
-file pins `0.1.0-preview.1` through `LOAMS_VERSION`. The patched TiDB image
+Images are tagged `0.1.0-preview.2` and the rolling `:preview`, never `:latest`. The compose
+file pins `0.1.0-preview.2` through `LOAMS_VERSION`. The patched TiDB image
 `ghcr.io/ostrium-labs/tidb:v8.5.8-loams.1` is public and amd64 only.
 
-Only the `tailscale` service is reachable from outside the compose network. Nothing binds
-`0.0.0.0` on the host by default.
+Only the `tailscale` service (and, with `--profile house`, `house-tailscale`) is reachable
+from outside the compose network, and only over your tailnet. Nothing binds `0.0.0.0` on the
+host by default.
 
 ## Quick start: fully local
 
@@ -165,7 +203,8 @@ deploy/release/byoc/install.sh -i ~/.ssh/id_ed25519 you@your-vm
 ```
 
 By default it starts `loams`, `tailscale` and `tidb`; `--all` starts every service,
-the Postgres stack included, and `--version` picks the image tag (default `0.1.0-preview.1`).
+the Postgres stack included, and `--version` picks the image tag (default `0.1.0-preview.2`).
+Add the House with `--services "loams tailscale tidb house house-tailscale"`.
 `byoc/uninstall.sh` removes it. To do it by hand instead, copy `deploy/release` to the VM,
 `cp .env.example .env`, set `TS_AUTHKEY` and run `docker compose up -d`.
 
@@ -181,21 +220,54 @@ local quick start. Nothing on the VM listens on its public address.
 **Headscale: coming soon, unsupported in this release.** The `headscale` profile and
 `TS_LOGIN_SERVER` exist in the compose file, but Headscale issues no `*.ts.net` HTTPS
 certificates, so the hosted console (HTTPS) cannot call the engine through it: the browser
-blocks it as mixed content. Use Tailscale for v0.1.0-preview.1.
+blocks it as mixed content. Use Tailscale for v0.1.0-preview.2.
 
 ## The console on your own Vercel or Cloudflare: coming soon
 
-Hosting the console on your own Vercel or Cloudflare project is not part of v0.1.0-preview.1.
+Hosting the console on your own Vercel or Cloudflare project is not part of v0.1.0-preview.2.
 Use `https://console.loams.dev`. Likewise not in this release: self-service OIDC clients at
 `auth.loams.dev/register` and one-click OAuth deploy.
+
+## Loams House
+
+`docker compose --profile house up -d` starts the House and its sidecar. Give the sidecar its own
+auth key in `HOUSE_TS_AUTHKEY` (or leave it empty to reuse `TS_AUTHKEY`, which must then be
+reusable); it joins the tailnet as `HOUSE_TS_HOSTNAME` (`loams-house`). Then, from a device on
+the tailnet:
+
+```sh
+docker compose exec house cat /var/lib/loams-house/house.key    # the password, made on first start
+curl -u "default:$PASSWORD" https://loams-house.<tailnet>.ts.net/ --data-binary 'SELECT version()'
+```
+
+Any ClickHouse HTTP client works the same way (port 443, TLS, user `default`). The House's
+security layers in this preview:
+
+- **chDB's access control first** (HS1 ruling R-ACL.1): the users workers run as have no
+  `SOURCES` grants and a constrained settings profile, so table functions and engines that
+  reach files, URLs or other databases are refused by ClickHouse itself; control DDL is
+  checked against the same rules (R11.11). The test-only `open_acl` is refused outside a test
+  build.
+- **The statement checks (L1)** stay as a second line.
+- **The workers' OS sandbox (L3)**, `HOUSE_SANDBOX`: `pods` (the default) applies Landlock
+  (reads of the code, writes to the worker's own directory, TCP only to its read proxy; needs
+  Linux 6.7 or later) and seccomp (no `execve`, no new processes, no namespaces, IP sockets
+  only), and needs no privilege, so it works under Docker's and Podman's default container
+  profiles, Docker Desktop included. `netns` adds a user and network namespace per worker with
+  only a loopback; it needs unprivileged user namespaces inside the container, which Podman
+  allows by default and Docker's default seccomp profile refuses. A worker whose sandbox cannot
+  be put in force refuses to boot, and the House answers with an error rather than run it
+  unsealed.
+- **Its own network.** The `house` network has no other member, so the House cannot reach TiKV,
+  TiDB, the engine or the Postgres stack, and none of them can reach it.
 
 ## Security model
 
 **What protects the engine in this preview:**
 
-- **Tailnet only.** The engine has no public address. Only the `tailscale` sidecar is
-  reachable from outside the compose network, and only for tailnet members your tailnet
-  policy allows. Nothing binds `0.0.0.0` on the host by default.
+- **Tailnet only.** The engine has no public address. Only the `tailscale` sidecar (and the
+  House's `house-tailscale`, with `--profile house`) is reachable from outside the compose
+  network, and only for tailnet members your tailnet policy allows. Nothing binds `0.0.0.0` on the host by default.
 - **Authentication on every request**, chosen by `LOAMS_AUTH_MODE`.
 - **The auth service never reaches your stack.** In `oidc` mode the engine fetches the
   issuer's JWKS outbound; the auth service sees sign-ins, not data.
@@ -218,11 +290,11 @@ The compose default is `tailscale`.
   are no per-namespace roles or tenant quotas yet (planned).
 - **Keep the other listeners inside the stack.** The tailnet sidecar serves the engine's main
   port. The Qdrant, Elasticsearch, Flight SQL, Postgres-wire and MySQL-wire listeners, Resonate
-  and the House's ClickHouse HTTP interface stay inside the compose network unless you publish
-  them. Do not publish them in this preview: the auth modes above are specified for the main
+  stay inside the compose network unless you publish them. The House's ClickHouse HTTP
+  interface is served only through its own sidecar, with the House's own user and password. Do not publish them in this preview: the auth modes above are specified for the main
   port, and the other listeners are not all reviewed against them.
-- **Traffic inside the compose network is plain text**, between `loams`, the House, TiDB, TiKV,
-  PD and the Postgres stack. The tailnet encrypts the hop from your device to the stack.
+- **Traffic inside the compose network is plain text**, between `loams`, TiDB, TiKV, PD and
+  the Postgres stack. The tailnet encrypts the hop from your device to the stack.
 - **The Postgres development stack uses default credentials** and `fsync = off` in its
   compute spec (see its [README](../../deploy/loams-postgres-dev/README.md)).
 - **No backups or upgrades are automated.** Back up the compose volumes yourself; a later
@@ -233,39 +305,44 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
 
 ## Known limitations
 
-- **SDKs.** Use the SDKs from the repository (`sdks/<language>`); none is published to a package
-  registry yet. Supported in this preview, each tested in CI against a live server: TypeScript,
-  Python, Go, Rust, C#, C++ and Swift. Coming soon: Java, Kotlin, Ruby, PHP, Dart and Objective-C.
+- **SDKs.** See [SDKs](#sdks) for what preview.2 publishes. <!-- PLACEHOLDER(rel2-sdks): replace
+  with the SDK limitations of preview.2. --> In preview.1 every SDK was used from the repository
+  (`sdks/<language>`), with TypeScript, Python, Go, Rust, C#, C++ and Swift tested in CI
+  against a live server.
 
-- **Loams Postgres:** the control plane runs (PG2 Tasks 1 to 9: projects, branches, roles,
-  databases, the reconcilers and the Neon upcall API), but computes and endpoints are not
-  provisioned through it yet. In this preview the Postgres stack runs Neon's storage and
-  computes from `deploy/loams-postgres-dev`, and tenants, timelines and computes are created
-  by hand as its README shows. Its images are pinned to Neon's last public build until the
+- **Loams Postgres:** the control plane can now provision computes and endpoints (PG2 Tasks
+  10 to 12: the compose compute runtime, the endpoint lifecycle and idle suspend), but
+  `pg-control` is not in the engine image: its compute runtime drives Docker, and the
+  self-hosted stack does not hand the engine a container runtime. In this preview the Postgres
+  stack runs Neon's storage and computes from `deploy/loams-postgres-dev`, and tenants,
+  timelines and computes are created by hand as its README shows. Its images are pinned to Neon's last public build until the
   fork's own builds (NF1 Task 14).
-- **Loams Graph:** durability is partial. Writes reach the Loams log before they are
-  acknowledged (GR1 Task 11, [#424](https://github.com/ostrium-labs/loams/pull/424)), but
-  crash recovery (GR1 Task 14) is not done. Keep a copy of graph data you cannot recreate.
+- **Loams Graph:** writes reach the Loams log before they are acknowledged and graphs recover
+  from snapshots and the log after a crash (GR1 Tasks 11 to 14). It is still a preview: keep a
+  copy of graph data you cannot recreate.
 - **Loams Live:** a change made on one node can take up to 60 seconds to reach live queries
-  on another node (cross-node pickup). The deploy flow (versioned deployments with compare-and-swap activation) is in
-  progress ([#419](https://github.com/ostrium-labs/loams/pull/419)). Documents, transactions,
-  indexes and live queries work.
-- **Loams House:** over the ClickHouse HTTP interface, a result larger than one engine block
-  (about 65 000 rows) in a format with a header or footer (JSON, CSVWithNames, Parquet, Arrow)
-  comes back malformed (HS1 ruling R8.4); the fix is pending. The `loams.house.v1` API, which the
-  console uses, is not affected.
-- **Console:** several pages (Jobs, Connectors, SQL, Postgres control plane, Live
+  on another node (cross-node pickup). `LiveAdminService` (deploy, rollback, index status,
+  logs) is served on the Live listener, which is loopback only in the compose stack and not
+  forwarded over the tailnet. Documents, transactions, indexes and live queries work.
+- **Loams House:** the engine does not reach it yet (its link needs TLS, HS1 Task 20), so
+  `loams.house.v1` and the console's House page answer `house_not_configured`; use the House's
+  own tailnet URL. Its user is a single generated local key until Task 20 brings Loams
+  identities. `pods` mode needs Landlock with TCP rules (Linux 6.7 or later; Docker Desktop
+  runs its own Linux kernel): on an older kernel the workers refuse to boot.
+- **Console:** several pages (Jobs, Connectors, SQL, Git, Postgres control plane, Live
   deployments) still run against mocked clients and show demonstration data, not your stack.
-  House and Analytics are not wired to the engine in this preview (`--profile house` exists,
-  but the engine answers `house_not_configured`).
+  House and Analytics are not wired to the engine in this preview.
 - **Durable on TiKV** is in progress: Loams Durable keeps its state in SQLite on the `loams`
   service's data.
-- **Not in this release:** Loams Git, connectors and jobs; Headscale networks; the console on
+- **Not in this release:** Loams Git (its storage core and repository catalog are built, but
+  there is no push or fetch path yet), first-party connectors (built and tested, but no image
+  hosts their runtime yet), Loams Jobs, the Loams SQL gate; Headscale networks; the console on
   your own Vercel or Cloudflare; self-service OIDC clients; one-click OAuth deploy.
 - **Browsers on Chromium** may ask for permission the first time a page on a public origin
   calls an address on your tailnet (Local Network Access). Allow it for the console's origin.
 - **No upgrade path between previews.** Formats can change; read the
-  [changelog](../../CHANGELOG.md) before pulling a new `:preview`.
+  [changelog](../../CHANGELOG.md) before pulling a new `:preview`. Moving from preview.1, start
+  a fresh stack (`docker compose down -v`, then `up -d` with `LOAMS_VERSION=0.1.0-preview.2`).
 
 ## Reporting issues
 
