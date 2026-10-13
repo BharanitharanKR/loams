@@ -380,6 +380,7 @@ HAND_WRITTEN_FAMILY_ROWS: dict[str, tuple[str, ...]] = {
     "brokers": (  # R18.1
         "activemq-jms", "azure-service-bus", "mqtt", "nats", "pulsar", "rabbitmq-amqp", "websocket",
     ),
+    "cloud": ("aws-sns", "aws-sqs", "azure-event-grid", "eventbridge", "google-pub-sub"),  # R19.6
 }
 HAND_WRITTEN_UNSTARRED_IDS: set[str] = (
     set(HANDWRITTEN_UNSTARRED)

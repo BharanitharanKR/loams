@@ -2,6 +2,9 @@ activemq-jms
 adbc
 arrow
 avro
+aws-sns
+aws-sqs
+azure-event-grid
 azure-event-hubs
 azure-service-bus
 bigquery
@@ -12,7 +15,9 @@ debezium-postgres
 dynamodb
 dynamodb-streams
 elasticsearch
+eventbridge
 forgejo
+google-pub-sub
 grafeo
 http
 iceberg

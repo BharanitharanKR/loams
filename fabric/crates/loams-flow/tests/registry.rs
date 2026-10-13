@@ -343,7 +343,7 @@ const A18: [&str; 3] = ["forgejo", "itsplane", "zulip"];
 /// connectors and left the manifest to CN2 Task 2, and the follow-up replaced the generated
 /// stubs with them (`gen_registry.py`'s `HAND_WRITTEN_FAMILY_ROWS`). Hand-written, unstarred
 /// and still `planned` until their suites are green in CI (OR-23).
-const HAND_WRITTEN_UNSTARRED_P2: [&str; 17] = [
+const HAND_WRITTEN_UNSTARRED_P2: [&str; 22] = [
     "grafeo",
     // The kafka family (R9.7).
     "azure-event-hubs",
@@ -365,6 +365,12 @@ const HAND_WRITTEN_UNSTARRED_P2: [&str; 17] = [
     "pulsar",
     "rabbitmq-amqp",
     "websocket",
+    // The cloud family (R19.6).
+    "aws-sns",
+    "aws-sqs",
+    "azure-event-grid",
+    "eventbridge",
+    "google-pub-sub",
 ];
 
 /// Ruling 11's row count, after D628 added A.18's three to the précis' 200, D634 added

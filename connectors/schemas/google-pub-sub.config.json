@@ -1,9 +1,80 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/google-pub-sub.config.json",
-  "title": "Google Pub/Sub instance config (placeholder)",
-  "description": "Placeholder for a Google Pub/Sub instance's settings. It is filled in when this connector is built: CN2 for the P2 rows, as first-party native connectors with declared fallbacks (CN2 OR-1, OR-4), and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "Google Pub/Sub connector instance config (loams.flow/v1)",
+  "description": "One Pub/Sub connector instance's settings, read by the native cloud family (`loams_connector_cloud::pubsub`, CN2 Task 19, over the REST API): the project, the subscription the source pulls and the topic the sink publishes to. `auth.credentials_json` holds the **name** of a secret (D189) and is exactly the manifest's `secrets` list. See docs/guides/connectors/google-pub-sub.md.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "project"
+  ],
+  "properties": {
+    "project": {
+      "description": "The Google Cloud project id.",
+      "type": "string",
+      "minLength": 1
+    },
+    "subscription": {
+      "description": "Source: the subscription pulled (required for the source).",
+      "type": "string",
+      "minLength": 1
+    },
+    "topic": {
+      "description": "Sink: the topic published to (required for the sink).",
+      "type": "string",
+      "minLength": 1
+    },
+    "endpoint": {
+      "description": "The API base URL, such as the emulator's http://pubsub:8085. Without `auth` an endpoint is required: the emulator takes no credentials.",
+      "type": "string",
+      "minLength": 1,
+      "default": "https://pubsub.googleapis.com"
+    },
+    "auth": {
+      "description": "Service-account credentials (the manifest's `sa` auth slug).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "credentials_json": {
+          "description": "The name of the secret holding a service-account key file (JSON); the connector signs an RS256 JWT with it and exchanges it at the key's token_uri. Resolved through the secret store (D189); never stored in the instance.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "ack_deadline_seconds": {
+      "description": "The ack deadline; it is extended at half this while an event waits for the Fabric.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 600,
+      "default": 60
+    },
+    "max_messages": {
+      "description": "Messages per pull.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "default": 100
+    },
+    "receivers": {
+      "description": "Pull loops run in parallel on the subscription.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64,
+      "default": 1
+    },
+    "ordering_key": {
+      "description": "Sink: `subject` makes each message's ordering key the event's subject.",
+      "enum": [
+        "subject",
+        "none"
+      ],
+      "default": "none"
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }
