@@ -60,3 +60,5 @@ envelope:
 limits: {}
 conformance: []
 docs: null
+notes:
+  - 'Vault (and OpenBao) is an external system here, not Loams'' own secret store: data written or read through it is data, and instance credentials still come from Loams'' SecretStore (CN2 Task 20; OR-21)'

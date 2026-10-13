@@ -1,0 +1,38 @@
+{
+  "recorded_from": "Splunk Enterprise",
+  "synthetic": true,
+  "docs": [
+    "https://docs.splunk.com/Documentation/Splunk/latest/RESTREF/RESTsearch#search.2Fv2.2Fjobs.2Fexport"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "search",
+    "config": {
+      "server_url": "{proxy}"
+    },
+    "secrets": {
+      "api_key": "synthetic-splunk-session"
+    },
+    "expect": 2,
+    "event": "log"
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/search/v2/jobs/export?earliest_time=-24h&output_mode=json&search=search%20index%3Dmain",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json; charset=UTF-8"
+        },
+        "body": {
+          "text": "{\"preview\":false,\"offset\":0,\"result\":{\"_raw\":\"GET /health 200\",\"_time\":\"2026-10-01T11:00:00.000+00:00\",\"host\":\"web-1\",\"sourcetype\":\"access_combined\"}}\n{\"preview\":false,\"offset\":1,\"lastrow\":true,\"result\":{\"_raw\":\"GET /login 302\",\"_time\":\"2026-10-01T11:00:01.000+00:00\",\"host\":\"web-2\",\"sourcetype\":\"access_combined\"}}\n"
+        }
+      }
+    }
+  ]
+}

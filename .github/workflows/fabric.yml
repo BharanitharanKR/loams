@@ -113,6 +113,14 @@ jobs:
               - "fabric/Cargo.lock"
               - "fabric/crates/loams-connector-sdk/**"
               - "fabric/crates/loams-connector-http/**"
+              # Task 20: the SaaS suites read the profiles, their fixtures and
+              # the import routes, through `loams-flow` and the kit.
+              - "fabric/crates/loams-flow/**"
+              - "fabric/crates/loams-flow-conformance/**"
+              - "connectors/profiles/**"
+              - "connectors/schema/profile.schema.json"
+              - "connectors/routes/**"
+              - "conformance/connectors/fixtures/**"
             # The conformance kit and the real-system estate (CN2 Task 6).
             # Every family's suites depend on all of it.
             conformance: &conformance
@@ -202,6 +210,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      # `loams-connector-http`'s SaaS suites (CN2 Task 20) load the real
+      # profiles through `loams-flow` and replay fixtures through the
+      # conformance kit, both of which link `loams-flow-proto`.
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: fabric -> target

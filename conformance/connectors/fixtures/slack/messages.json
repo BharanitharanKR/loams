@@ -1,0 +1,92 @@
+{
+  "recorded_from": "Slack",
+  "synthetic": true,
+  "docs": [
+    "https://docs.slack.dev/reference/methods/conversations.history",
+    "https://docs.slack.dev/apis/web-api/pagination"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "messages",
+    "config": {
+      "channel": "C0123456789",
+      "base_url": "{proxy}"
+    },
+    "secrets": {
+      "token": "synthetic-slack-token"
+    },
+    "expect": 3
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/conversations.history?channel=C0123456789&limit=200",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "ok": true,
+            "messages": [
+              {
+                "type": "message",
+                "user": "U012AB3CD",
+                "text": "Deploy is green",
+                "ts": "1759300000.000100"
+              },
+              {
+                "type": "message",
+                "user": "U012AB3CD",
+                "text": "Thanks!",
+                "ts": "1759300060.000200",
+                "thread_ts": "1759300000.000100"
+              }
+            ],
+            "has_more": true,
+            "pin_count": 0,
+            "response_metadata": {
+              "next_cursor": "bmV4dF90czoxNzU5MzAwMTIw"
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/conversations.history?channel=C0123456789&cursor=bmV4dF90czoxNzU5MzAwMTIw&limit=200",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "ok": true,
+            "messages": [
+              {
+                "type": "message",
+                "user": "U012AB3CD",
+                "text": "Release notes posted",
+                "ts": "1759300120.000300"
+              }
+            ],
+            "has_more": false,
+            "response_metadata": {
+              "next_cursor": ""
+            }
+          }
+        }
+      }
+    }
+  ]
+}

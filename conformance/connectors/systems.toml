@@ -359,14 +359,17 @@ services = [
 
 # ---------------------------------------------------------------------- cdc --
 
-[systems.debezium-sql-server-oracle]
-systems = ["SQL Server", "Oracle Database"]
+# Task 2 split `debezium-sql-server-oracle` into these two rows (OR-13); each
+# keeps its own container (merged with Task 6's estate in Task 20's branch).
+[systems.debezium-sqlserver]
+systems = ["SQL Server"]
 family = "fallback"
-services = [
-  { kind = "container", compose = "sqlserver", system = "SQL Server" },
-  { kind = "container", compose = "oracle", system = "Oracle Database" },
-]
-notes = ["Task 2 splits this row into debezium-sqlserver and debezium-oracle (OR-13); each keeps its own container."]
+services = [{ kind = "container", compose = "sqlserver", system = "SQL Server" }]
+
+[systems.debezium-oracle]
+systems = ["Oracle Database"]
+family = "fallback"
+services = [{ kind = "container", compose = "oracle", system = "Oracle Database" }]
 
 [systems.debezium-mongodb]
 systems = ["MongoDB"]

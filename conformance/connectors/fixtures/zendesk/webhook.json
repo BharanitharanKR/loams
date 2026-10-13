@@ -1,0 +1,42 @@
+{
+  "recorded_from": "Zendesk",
+  "synthetic": true,
+  "docs": [
+    "https://developer.zendesk.com/documentation/webhooks/verifying/"
+  ],
+  "scenario": {
+    "direction": "webhook",
+    "scheme": "zendesk",
+    "header": "X-Zendesk-Webhook-Signature",
+    "secret": "dGhpc19zZWNyZXRfaXNfZm9yX3Rlc3Rpbmdfb25seQ==",
+    "url": "https://hooks.loams.test/fabric/zendesk/tickets",
+    "now": 1759320000
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/fabric/zendesk/tickets",
+        "headers": {
+          "content-type": "application/json",
+          "x-zendesk-webhook-signature-timestamp": "2026-10-01T11:59:58Z",
+          "x-zendesk-webhook-signature": "8dxwHYE9feFja/u7Gv2/trnhHKWZxnF/N8oTcBOFSZc="
+        },
+        "body": {
+          "text": "{\"type\":\"zen:event-type:ticket.created\",\"detail\":{\"id\":\"35440\"}}"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "ok": true
+          }
+        }
+      }
+    }
+  ]
+}

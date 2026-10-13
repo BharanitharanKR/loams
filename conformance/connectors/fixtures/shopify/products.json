@@ -1,0 +1,98 @@
+{
+  "recorded_from": "Shopify",
+  "synthetic": true,
+  "docs": [
+    "https://shopify.dev/docs/api/admin-rest/2025-07/resources/product",
+    "https://shopify.dev/docs/api/admin-rest/usage/pagination"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "products",
+    "config": {
+      "shop": "loams-test",
+      "base_url": "{proxy}/admin/api/2025-07"
+    },
+    "secrets": {
+      "api_key": "synthetic-shopify-token"
+    },
+    "expect": 2
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/admin/api/2025-07/products.json?limit=250",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json",
+          "link": "<https://loams-test.myshopify.com/admin/api/2025-07/products.json?limit=250&page_info=eyJsYXN0X2lkIjo2MzI5MTAzOTJ9>; rel=\"next\""
+        },
+        "body": {
+          "json": {
+            "products": [
+              {
+                "id": 632910392,
+                "title": "Blue Widget",
+                "handle": "blue-widget",
+                "status": "active",
+                "vendor": "Loams Test",
+                "product_type": "Widget",
+                "created_at": "2026-09-01T10:00:00-04:00",
+                "updated_at": "2026-09-01T10:00:00-04:00",
+                "variants": [
+                  {
+                    "id": 808950810,
+                    "price": "19.00",
+                    "sku": "W-0"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/admin/api/2025-07/products.json?limit=250&page_info=eyJsYXN0X2lkIjo2MzI5MTAzOTJ9",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json",
+          "link": "<https://loams-test.myshopify.com/admin/api/2025-07/products.json?limit=250&page_info=eyJkaXJlY3Rpb24iOiJwcmV2In0>; rel=\"previous\""
+        },
+        "body": {
+          "json": {
+            "products": [
+              {
+                "id": 632910393,
+                "title": "Red Widget",
+                "handle": "red-widget",
+                "status": "active",
+                "vendor": "Loams Test",
+                "product_type": "Widget",
+                "created_at": "2026-09-01T10:00:00-04:00",
+                "updated_at": "2026-09-02T10:00:00-04:00",
+                "variants": [
+                  {
+                    "id": 808950811,
+                    "price": "19.00",
+                    "sku": "W-1"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

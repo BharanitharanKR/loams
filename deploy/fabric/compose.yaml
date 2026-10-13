@@ -231,6 +231,10 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: loams-test
+      # A bootstrap service-account client for the keycloak profile's
+      # client-credentials grant (CN2 Task 20); throwaway CI values.
+      KC_BOOTSTRAP_ADMIN_CLIENT_ID: loams-ci
+      KC_BOOTSTRAP_ADMIN_CLIENT_SECRET: loams-test
     ports: ["8180:8080"]
 
   kestra:

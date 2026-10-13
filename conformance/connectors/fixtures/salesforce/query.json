@@ -1,0 +1,121 @@
+{
+  "recorded_from": "Salesforce",
+  "synthetic": true,
+  "docs": [
+    "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/resources_query.htm",
+    "https://help.salesforce.com/s/articleView?id=xcloud.remoteaccess_oauth_refresh_token_flow.htm"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "query",
+    "config": {
+      "instance_url": "https://loams-test.my.salesforce.com",
+      "base_url": "{proxy}/services/data/v62.0",
+      "token_url": "{proxy}/services/oauth2/token",
+      "soql": "SELECT Id, Name FROM Account"
+    },
+    "secrets": {
+      "client_id": "synthetic-sf-client",
+      "client_secret": "synthetic-sf-secret",
+      "refresh_token": "synthetic-sf-refresh"
+    },
+    "expect": 3
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/services/oauth2/token",
+        "headers": {},
+        "body": {
+          "text": "grant_type=refresh_token&refresh_token=<redacted>&client_id=<redacted>&client_secret=<redacted>"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "access_token": "<scrubbed>",
+            "instance_url": "https://loams-test.my.salesforce.com",
+            "id": "https://login.salesforce.com/id/00DR0000000xxxx/005R0000000yyyy",
+            "token_type": "Bearer",
+            "issued_at": "1759320000000",
+            "signature": "<scrubbed>"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v62.0/query?q=SELECT%20Id%2C%20Name%20FROM%20Account",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "totalSize": 3,
+            "done": false,
+            "nextRecordsUrl": "/services/data/v62.0/query/01gR0000000nyTKIA0-2000",
+            "records": [
+              {
+                "attributes": {
+                  "type": "Account",
+                  "url": "/services/data/v62.0/sobjects/Account/001R0000006hfeZIAQ"
+                },
+                "Id": "001R0000006hfeZIAQ",
+                "Name": "Acme, Inc."
+              },
+              {
+                "attributes": {
+                  "type": "Account",
+                  "url": "/services/data/v62.0/sobjects/Account/001R0000006hfeaIAA"
+                },
+                "Id": "001R0000006hfeaIAA",
+                "Name": "Globex"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/services/data/v62.0/query/01gR0000000nyTKIA0-2000",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "totalSize": 3,
+            "done": true,
+            "records": [
+              {
+                "attributes": {
+                  "type": "Account",
+                  "url": "/services/data/v62.0/sobjects/Account/001R0000006hfebIAA"
+                },
+                "Id": "001R0000006hfebIAA",
+                "Name": "Initech"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

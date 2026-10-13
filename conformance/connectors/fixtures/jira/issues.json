@@ -1,0 +1,137 @@
+{
+  "recorded_from": "Jira",
+  "synthetic": true,
+  "docs": [
+    "https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-get"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "issues",
+    "config": {
+      "site": "loams-test",
+      "base_url": "{proxy}"
+    },
+    "secrets": {
+      "username": "synthetic-jira-user",
+      "password": "synthetic-jira-api-token"
+    },
+    "expect": 3
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/rest/api/3/search/jql?fields=summary%2Cstatus%2Cissuetype%2Cproject%2Cpriority%2Clabels%2Cupdated&jql=order%20by%20updated%20ASC&maxResults=100",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "issues": [
+              {
+                "id": "10001",
+                "key": "LOAMS-1",
+                "self": "https://loams-test.atlassian.net/rest/api/3/issue/10001",
+                "fields": {
+                  "summary": "Set up CI",
+                  "status": {
+                    "name": "To Do"
+                  },
+                  "issuetype": {
+                    "name": "Task"
+                  },
+                  "project": {
+                    "key": "LOAMS"
+                  },
+                  "priority": {
+                    "name": "Medium"
+                  },
+                  "labels": [
+                    "import"
+                  ],
+                  "updated": "2026-09-01T10:00:00.000+0000"
+                }
+              },
+              {
+                "id": "10002",
+                "key": "LOAMS-2",
+                "self": "https://loams-test.atlassian.net/rest/api/3/issue/10002",
+                "fields": {
+                  "summary": "Write docs",
+                  "status": {
+                    "name": "In Progress"
+                  },
+                  "issuetype": {
+                    "name": "Task"
+                  },
+                  "project": {
+                    "key": "LOAMS"
+                  },
+                  "priority": {
+                    "name": "Medium"
+                  },
+                  "labels": [
+                    "import"
+                  ],
+                  "updated": "2026-09-02T10:00:00.000+0000"
+                }
+              }
+            ],
+            "nextPageToken": "CAEaAggD",
+            "isLast": false
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/rest/api/3/search/jql?fields=summary%2Cstatus%2Cissuetype%2Cproject%2Cpriority%2Clabels%2Cupdated&jql=order%20by%20updated%20ASC&maxResults=100&nextPageToken=CAEaAggD",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "issues": [
+              {
+                "id": "10003",
+                "key": "LOAMS-3",
+                "self": "https://loams-test.atlassian.net/rest/api/3/issue/10003",
+                "fields": {
+                  "summary": "Ship",
+                  "status": {
+                    "name": "Done"
+                  },
+                  "issuetype": {
+                    "name": "Task"
+                  },
+                  "project": {
+                    "key": "LOAMS"
+                  },
+                  "priority": {
+                    "name": "Medium"
+                  },
+                  "labels": [
+                    "import"
+                  ],
+                  "updated": "2026-09-03T10:00:00.000+0000"
+                }
+              }
+            ],
+            "isLast": true
+          }
+        }
+      }
+    }
+  ]
+}

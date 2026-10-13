@@ -612,6 +612,22 @@ NATIVE_FIRST: dict[str, dict] = {
 }
 for _id in SAAS_PROFILES:
     NATIVE_FIRST[_id] = {"ref": family_ref("http", "http"), "profile": _id}
+# CN2 Task 20's notes on what its profiles mean (the profiles cite the vendor docs).
+NATIVE_FIRST["vault"]["notes"] = [
+    "Vault (and OpenBao) is an external system here, not Loams' own secret store: "
+    "data written or read through it is data, and instance credentials still come from "
+    "Loams' SecretStore (CN2 Task 20; OR-21)",
+]
+NATIVE_FIRST["splunk"]["notes"] = [
+    "the HEC sink counts a batch as written only once Splunk acknowledges it as indexed "
+    "(indexer acknowledgement); HEC does not deduplicate a resend, so delivery stays "
+    "at_least_once (CN2 Task 20, R20.8)",
+]
+NATIVE_FIRST["keycloak"]["notes"] = [
+    "the users and groups sinks create and count 409 (already present) as written: "
+    "effectively once by username or name, and an existing entry is left unchanged "
+    "(the admin API has no upsert by name; CN2 Task 20, R20.7)",
+]
 NATIVE_FIRST["salesforce"].update(
     position="replay-id",
     fallback=("camel", "salesforce", ["source"], "CN2 Task 23"),
@@ -1208,6 +1224,40 @@ def wanted_profiles(csv_rows: list[dict]) -> dict[str, tuple[str, str]]:
     return dict(sorted(wanted.items()))
 
 
+SYSTEMS_TOML = REPO_ROOT / "conformance" / "connectors" / "systems.toml"
+
+
+def profile_service(pid: str) -> str:
+    """The placeholder's `system.service`, which Task 7's profile schema requires: the real
+    system its suite runs against (OR-2), from conformance/connectors/systems.toml (Task 6) —
+    a compose container or emulator first, else a fixture, else the nightly account's
+    variables. `aurora-postgres` and `aurora-mysql` share the `aurora` entry, and each keeps
+    its own engine's variables. Without an entry, the fixture directory of the profile's id.
+    """
+    import tomllib
+
+    try:
+        systems = tomllib.loads(SYSTEMS_TOML.read_text(encoding="utf-8")).get("systems", {})
+    except OSError:
+        systems = {}
+    entry = systems.get(pid) or systems.get(pid.rsplit("-", 1)[0]) or {}
+    services = entry.get("services", [])
+    for kind in ("container", "emulator"):
+        for svc in services:
+            if svc.get("kind") == kind and svc.get("compose"):
+                return f"{{ compose: {svc['compose']} }}"
+    for svc in services:
+        if svc.get("kind") == "fixture" and svc.get("dir"):
+            return f"{{ fixture: {svc['dir']} }}"
+    for svc in services:
+        if svc.get("kind") == "nightly" and svc.get("env"):
+            env = list(svc["env"])
+            engine = pid.rsplit("-", 1)[-1].upper()
+            own = [v for v in env if f"_{engine}_" in v]
+            return "{ nightly: [" + ", ".join(own or env) + "] }"
+    return f"{{ fixture: conformance/connectors/fixtures/{pid} }}"
+
+
 def profile_yaml(pid: str, module: str, name: str) -> str:
     """A placeholder profile (CN2 Task 2), in Shared contracts' shape."""
     kind = "http-api" if module == "http" else "target"
@@ -1225,6 +1275,7 @@ def profile_yaml(pid: str, module: str, name: str) -> str:
         f"module: {module}",
         "system:",
         f"  name: {yaml_scalar(name)}",
+        f"  service: {profile_service(pid)}",
         "defaults: {}",
         "narrows: []",
     ]

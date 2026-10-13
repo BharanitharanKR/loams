@@ -11,5 +11,6 @@ profile_kind: target
 module: mysql
 system:
   name: MariaDB
+  service: { compose: mariadb }
 defaults: {}
 narrows: []

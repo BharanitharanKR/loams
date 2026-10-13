@@ -11,5 +11,6 @@ profile_kind: target
 module: kafka
 system:
   name: Azure Event Hubs
+  service: { compose: eventhubs }
 defaults: {}
 narrows: []

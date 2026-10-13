@@ -11,5 +11,6 @@ profile_kind: target
 module: search
 system:
   name: OpenSearch
+  service: { compose: opensearch }
 defaults: {}
 narrows: []

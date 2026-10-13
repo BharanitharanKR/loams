@@ -11,5 +11,6 @@ profile_kind: target
 module: postgres
 system:
   name: pgvector
+  service: { compose: pgvector }
 defaults: {}
 narrows: []

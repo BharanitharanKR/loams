@@ -7,7 +7,12 @@
 //!   `auth` block signs every request (`oauth2`, `bearer`, `basic`, `header`,
 //!   `aws-sigv4`) with credentials resolved from the secrets the instance config
 //!   names.
+//! * [`webhook`] — the webhook signature schemes a profile names (Task 20).
+//! * [`route`] — import routes on native profile sources and their
+//!   projections (Task 20).
 //!
 //! The HTTP and webhooks ★ connectors move here in CN2 Task 8.
 
 pub mod profile;
+pub mod route;
+pub mod webhook;

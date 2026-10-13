@@ -1,0 +1,57 @@
+{
+  "recorded_from": "Slack",
+  "synthetic": true,
+  "docs": [
+    "https://docs.slack.dev/reference/methods/chat.postMessage"
+  ],
+  "scenario": {
+    "direction": "sink",
+    "resource": "messages",
+    "config": {
+      "channel": "C0123456789",
+      "base_url": "{proxy}"
+    },
+    "secrets": {
+      "token": "synthetic-slack-token"
+    },
+    "input": [
+      {
+        "channel": "C0123456789",
+        "text": "Hello from Loams"
+      }
+    ],
+    "expect": 1
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/chat.postMessage",
+        "headers": {},
+        "body": {
+          "json": {
+            "channel": "C0123456789",
+            "text": "Hello from Loams"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "ok": true,
+            "channel": "C0123456789",
+            "ts": "1759320000.000400",
+            "message": {
+              "type": "message",
+              "text": "Hello from Loams"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

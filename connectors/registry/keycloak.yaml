@@ -60,3 +60,5 @@ envelope:
 limits: {}
 conformance: []
 docs: null
+notes:
+  - 'the users and groups sinks create and count 409 (already present) as written: effectively once by username or name, and an existing entry is left unchanged (the admin API has no upsert by name; CN2 Task 20, R20.7)'

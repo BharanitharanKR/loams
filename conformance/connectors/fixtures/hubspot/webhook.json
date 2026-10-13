@@ -1,0 +1,42 @@
+{
+  "recorded_from": "HubSpot",
+  "synthetic": true,
+  "docs": [
+    "https://developers.hubspot.com/docs/api/webhooks/validating-requests"
+  ],
+  "scenario": {
+    "direction": "webhook",
+    "scheme": "hubspot-v3",
+    "header": "X-HubSpot-Signature-v3",
+    "secret": "synthetic-hubspot-client-secret",
+    "url": "https://hooks.loams.test/fabric/hubspot/contacts?portal=7",
+    "now": 1759320000
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/fabric/hubspot/contacts?portal=7",
+        "headers": {
+          "content-type": "application/json",
+          "x-hubspot-signature-v3": "5v8WfHAcemwrbwHVkVL8AQOtnG/d9gAaA40tD0+VKMo=",
+          "x-hubspot-request-timestamp": "1759319998000"
+        },
+        "body": {
+          "text": "[{\"eventId\":1,\"subscriptionId\":42,\"portalId\":7,\"occurredAt\":1759319990000,\"subscriptionType\":\"contact.creation\",\"attemptNumber\":0,\"objectId\":101,\"changeSource\":\"CRM\",\"changeFlag\":\"NEW\",\"appId\":9}]"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "ok": true
+          }
+        }
+      }
+    }
+  ]
+}

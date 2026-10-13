@@ -1,0 +1,42 @@
+{
+  "recorded_from": "Slack",
+  "synthetic": true,
+  "docs": [
+    "https://docs.slack.dev/authentication/verifying-requests-from-slack"
+  ],
+  "scenario": {
+    "direction": "webhook",
+    "scheme": "slack",
+    "header": "X-Slack-Signature",
+    "secret": "synthetic-slack-signing-secret",
+    "url": "https://hooks.loams.test/fabric/slack/commands",
+    "now": 1759320000
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/fabric/slack/commands",
+        "headers": {
+          "content-type": "application/x-www-form-urlencoded",
+          "x-slack-request-timestamp": "1759319990",
+          "x-slack-signature": "v0=499c672d0614a8caf8c1cd454b57e763a08d5007b82510913c1b36d24a1f373e"
+        },
+        "body": {
+          "text": "token=synthetic&team_id=T1DC2JH3J&channel_id=C0123456789&user_id=U012AB3CD&command=%2Floams&text=status"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "ok": true
+          }
+        }
+      }
+    }
+  ]
+}

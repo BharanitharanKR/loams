@@ -1,0 +1,81 @@
+{
+  "recorded_from": "SendGrid",
+  "synthetic": true,
+  "docs": [
+    "https://www.twilio.com/docs/sendgrid/api-reference/mail-send/mail-send"
+  ],
+  "scenario": {
+    "direction": "sink",
+    "resource": "mail",
+    "config": {
+      "base_url": "{proxy}/v3"
+    },
+    "secrets": {
+      "token": "SG.synthetic"
+    },
+    "input": [
+      {
+        "personalizations": [
+          {
+            "to": [
+              {
+                "email": "ada@example.test"
+              }
+            ]
+          }
+        ],
+        "from": {
+          "email": "noreply@example.test"
+        },
+        "subject": "Hello",
+        "content": [
+          {
+            "type": "text/plain",
+            "value": "Hi Ada"
+          }
+        ]
+      }
+    ],
+    "expect": 1
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v3/mail/send",
+        "headers": {},
+        "body": {
+          "json": {
+            "personalizations": [
+              {
+                "to": [
+                  {
+                    "email": "ada@example.test"
+                  }
+                ]
+              }
+            ],
+            "from": {
+              "email": "noreply@example.test"
+            },
+            "subject": "Hello",
+            "content": [
+              {
+                "type": "text/plain",
+                "value": "Hi Ada"
+              }
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "content-type": "application/json",
+          "x-message-id": "kd8eYzqzQfu3m0b8xGkFQw"
+        },
+        "body": "empty"
+      }
+    }
+  ]
+}

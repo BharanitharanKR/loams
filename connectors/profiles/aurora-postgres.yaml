@@ -11,5 +11,6 @@ profile_kind: target
 module: postgres
 system:
   name: Aurora PostgreSQL
+  service: { nightly: [LOAMS_AURORA_POSTGRES_URL] }
 defaults: {}
 narrows: []

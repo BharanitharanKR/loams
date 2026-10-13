@@ -11,5 +11,6 @@ profile_kind: target
 module: analytics
 system:
   name: DuckDB
+  service: { fixture: conformance/connectors/fixtures/duckdb }
 defaults: {}
 narrows: []
