@@ -383,6 +383,7 @@ HAND_WRITTEN_FAMILY_ROWS: dict[str, tuple[str, ...]] = {
     "objects": ("adls-gen2", "azure-blob", "cloudflare-r2", "gcs", "minio-rustfs", "sftp"),  # R13.1
     "kv": ("cassandra", "dynamodb", "dynamodb-streams", "redis-streams", "valkey"),  # R14.1
     "search": ("opensearch", "qdrant"),  # R15.5
+    "mongodb": ("mongodb",),  # R16.12
     "brokers": (  # R18.1
         "activemq-jms", "azure-service-bus", "mqtt", "nats", "pulsar", "rabbitmq-amqp", "websocket",
     ),

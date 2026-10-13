@@ -4734,6 +4734,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "loams-connector-mongodb"
+version = "0.0.1"
+dependencies = [
+ "arrow-array 59.3.0",
+ "arrow-schema 59.3.0",
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "loams-connector-mongodb",
+ "loams-connector-sdk",
+ "loams-flow",
+ "loams-flow-conformance",
+ "ring",
+ "rustls",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-rustls",
+ "tracing",
+ "webpki-roots 1.0.9",
+]
+
+[[package]]
 name = "loams-connector-objects"
 version = "0.0.1"
 dependencies = [

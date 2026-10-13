@@ -14,6 +14,7 @@ import type { approvals, devices, instance, notifications, operations } from '@l
 import type { EnvironmentRef, SlotRegistry } from '@loams/slots';
 import type { ComponentType } from 'react';
 import type { ActionRegistry } from './actions.js';
+import type { ModeService } from './mode.js';
 
 /** What differs between the shells the console runs in (today: the browser). */
 export interface PlatformService {
@@ -101,6 +102,8 @@ export interface Services extends RpcServices {
   session: SessionService;
   /** The callable surface plugins register into (§42 §5, D569). */
   actions: ActionRegistry;
+  /** Console or Studio (§53 §4.2); the host provides it. */
+  mode: ModeService;
 }
 
 export type ServiceName = keyof Services;

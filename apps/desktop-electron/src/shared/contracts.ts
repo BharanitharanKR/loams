@@ -174,6 +174,8 @@ export interface LoamsDesktopApi {
 		onNavigate(cb: (path: string) => void): () => void; // deep links
 		/** Call once after subscribing with onNavigate; returns a link received before the page was ready. */
 		takePendingNavigation(): Promise<string | null>;
+		/** The OS folder picker (Studio's Add project, §53 §5.2); null when cancelled. */
+		pickFolder(title?: string): Promise<string | null>;
 		setBadge(count: number): Promise<void>; // pending approvals in tray
 	};
 	update: {
@@ -344,6 +346,10 @@ export const CH = {
 	agentdStop: "agentd:stop",
 	agentdBackgroundGet: "agentd:background-get",
 	agentdBackgroundSet: "agentd:background-set",
+	agentdRepos: "agentd:repos",
+	agentdAddRepo: "agentd:add-repo",
+	agentdCloneRepo: "agentd:clone-repo",
+	shellPickFolder: "shell:pick-folder",
 } as const;
 
 // ---- D675: the agent panel ----
@@ -565,6 +571,13 @@ export interface AgentdSession {
 	resumable: boolean;
 }
 
+/** A repository on the daemon's host (`ListRepos`, `AddRepo`, `CloneRepo`): a Studio project. */
+export interface AgentdRepo {
+	path: string;
+	name: string;
+	defaultBranch: string | null;
+}
+
 export interface LoamsDesktopApi {
 	agentd: {
 		status(): Promise<AgentdStatus>;
@@ -583,6 +596,17 @@ export interface LoamsDesktopApi {
 			get(): Promise<AgentdBackground>;
 			/** The consent dialog's answer, or a later change in Settings. */
 			set(v: "on" | "off"): Promise<IpcResult<void>>;
+		};
+		/**
+		 * Loams Studio's projects over the daemon's ndjson methods (SD1 Task 15), until
+		 * the Connect surface `loams.agentd.v1` reaches the renderer (SD1 Tasks 5-6).
+		 */
+		repos: {
+			list(): Promise<IpcResult<AgentdRepo[]>>;
+			/** An absolute folder path, usually from `shell.pickFolder()`. */
+			add(path: string): Promise<IpcResult<AgentdRepo>>;
+			/** An https, ssh or `user@host:path` git URL; anything else is `invalid_url`. */
+			clone(url: string): Promise<IpcResult<AgentdRepo>>;
 		};
 	};
 }

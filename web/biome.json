@@ -18,5 +18,23 @@
   "linter": { "enabled": true, "rules": { "preset": "recommended" } },
   "javascript": { "formatter": { "quoteStyle": "single" } },
   "css": { "parser": { "cssModules": false, "tailwindDirectives": true } },
-  "assist": { "actions": { "source": { "organizeImports": "on" } } }
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "overrides": [
+    {
+      "includes": ["packages/studio-ui/src/**"],
+      "javascript": { "formatter": { "quoteStyle": "double" } }
+    },
+    {
+      "includes": [
+        "packages/studio-ui/src/lib/observeResize.ts",
+        "packages/studio-ui/src/lib/AnimatedHeight.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": { "noAssignInExpressions": "off" },
+          "correctness": { "useExhaustiveDependencies": "off" }
+        }
+      }
+    }
+  ]
 }
