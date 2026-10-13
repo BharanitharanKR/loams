@@ -5,11 +5,10 @@ name: Desktop
 # Signing is a separate release step (SignPath for Windows, Apple credentials for macOS: D676, D677);
 # the macOS builds here carry only an ad-hoc signature, which Apple Silicon needs to run the app.
 #
-# What runs (the org has about 20 concurrent jobs, about 5 of them macOS; owner, 2026-10-13):
-# - pull request: Linux x64 only, unless it touches the desktop app, the desktop workflows or the
-#   packaging scripts; then all five platforms. A console (web/**) or plugin change only needs to
-#   know the console still packages and passes the Playwright smoke test.
-# - push to dev touching those desktop paths, and a manual dispatch: all five platforms.
+# What runs (two tiers, owner, 2026-10-13; the org has about 20 concurrent jobs, about 5 macOS):
+# - pull request into dev (fast tier): Linux x64 only, with the Playwright smoke test.
+# - pull request into main (the dev -> main release gate), push to main, a dispatch, and the
+#   nightly run on dev (nightly.yml dispatches this workflow): all five platforms.
 # - a release: desktop-electron-release.yml builds all five itself.
 on:
   pull_request:
@@ -23,11 +22,7 @@ on:
       - 'scripts/release/**'
       - '.github/workflows/desktop-*.yml'
   push:
-    branches: [dev]
-    paths:
-      - 'apps/desktop-electron/**'
-      - 'scripts/release/**'
-      - '.github/workflows/desktop-*.yml'
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -45,35 +40,18 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Which platforms this run builds. dorny/paths-filter is MIT-licensed; pinned to v4.0.3.
-  changes:
-    name: Changed paths
+  # Which platforms this run builds: Linux x64 alone on a pull request into dev, all five otherwise.
+  platforms:
+    name: Platforms
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      pull-requests: read
+    timeout-minutes: 5
     outputs:
       matrix: ${{ steps.platforms.outputs.matrix }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: github.event_name == 'pull_request'
-        with:
-          persist-credentials: false
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
-        if: github.event_name == 'pull_request'
-        id: filter
-        with:
-          filters: |
-            desktop:
-              - "apps/desktop-electron/**"
-              - "scripts/release/**"
-              - ".github/workflows/desktop-*.yml"
       - name: platforms
         id: platforms
         env:
-          # A push to dev only runs on desktop paths (see `on:`), and a dispatch asks for everything.
-          ALL: ${{ github.event_name != 'pull_request' || steps.filter.outputs.desktop == 'true' }}
+          ALL: ${{ github.event_name != 'pull_request' || github.base_ref == 'main' }}
           # The runners are repository variables so either pool can be swapped when GitHub's macOS
           # capacity runs short (on 2026-10-13 the arm64 pool queued jobs for hours). A build whose
           # runner is the other architecture is cross-compiled: MACOS_X64_RUNNER=macos-15 builds x64
@@ -99,13 +77,13 @@ jobs:
 
   package:
     name: "${{ matrix.area }}: package (${{ matrix.arch }})"
-    needs: changes
+    needs: platforms
     runs-on: ${{ matrix.runner }}
     # A cold Windows or macOS engine build takes about an hour on a GitHub-hosted runner.
     timeout-minutes: 150
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.platforms.outputs.matrix) }}
     env:
       LOAMS_DESKTOP_MAC_ARCH: ${{ matrix.mac_arch }}
       # electron-builder skips all macOS signing on a pull request unless told otherwise. This
