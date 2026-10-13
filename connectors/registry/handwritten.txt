@@ -3,9 +3,12 @@ arrow
 avro
 azure-event-hubs
 bigquery
+cassandra
 clickhouse
 debezium-mysql
 debezium-postgres
+dynamodb
+dynamodb-streams
 elasticsearch
 forgejo
 grafeo
@@ -20,8 +23,10 @@ opentelemetry
 parquet
 postgresql
 redis
+redis-streams
 redpanda
 s3
 snowflake
+valkey
 webhooks
 zulip

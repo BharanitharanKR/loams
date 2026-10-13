@@ -301,7 +301,10 @@ STARRED_RUNTIME: dict[str, tuple[str, str]] = {
     "webhooks": ("native", "loams_flow::connectors::webhook"),  # §8 #17, signed webhook routes
     "jdbc": ("camel", "jdbc"),  # §8 #18, the jdbc/sql components in loams-connect
     "kinesis": ("native", "loams_flow::connectors::kinesis"),  # §8 #19, aws-sdk-kinesis
-    "redis": ("native", "loams_flow::connectors::redis"),  # §8 #20, the redis crate
+    # §8 #20, the redis crate. CN1 Task 13 never built loams_flow::connectors::redis, so
+    # CN2 Task 14 built it in the kv family (R0.2, R14.2); the registry follow-up points
+    # the ★ there, as Task 8 would have.
+    "redis": ("native", "loams_connector_kv::redis::RedisFactory"),
     "opentelemetry": ("native", "loams_flow::connectors::otlp"),  # §8 #21, OTLP receiver in ingest
     # Not in §8: Appendix A's A.8 lists the Camel runtime itself as a P1 row. It is a
     # runtime, not a Loams-owned connector, so it is not starred (D358 names 21 Loams-owned
@@ -372,6 +375,7 @@ HANDWRITTEN_PREVIEW = set(HANDWRITTEN_UNSTARRED)
 # names the same ids (`HAND_WRITTEN_UNSTARRED_P2`).
 HAND_WRITTEN_FAMILY_ROWS: dict[str, tuple[str, ...]] = {
     "kafka": ("azure-event-hubs", "redpanda"),  # R9.7
+    "kv": ("cassandra", "dynamodb", "dynamodb-streams", "redis-streams", "valkey"),  # R14.1
 }
 HAND_WRITTEN_UNSTARRED_IDS: set[str] = (
     set(HANDWRITTEN_UNSTARRED)
@@ -537,12 +541,16 @@ NATIVE_FIRST: dict[str, dict] = {
     "azure-blob": {"ref": family_ref("objects", "azure_blob")},
     "adls-gen2": {"ref": family_ref("objects", "adls_gen2")},
     "sftp": {"ref": family_ref("objects", "sftp")},
-    # Task 14 — key-value and wide-column.
-    "valkey": {"ref": family_ref("kv", "redis"), "profile": "valkey"},
-    "redis-streams": {"ref": family_ref("kv", "redis_streams")},
-    "dynamodb": {"ref": family_ref("kv", "dynamodb"), "position": "dynamodb-stream-sequence"},
-    "dynamodb-streams": {"ref": family_ref("kv", "dynamodb_streams"), "position": "dynamodb-stream-sequence"},
-    "cassandra": {"ref": family_ref("kv", "cassandra")},
+    # Task 14 — key-value and wide-column. The refs name the factories the family's
+    # manifests name (R14.1): one RedisFactory serves redis, valkey and redis-streams.
+    "valkey": {"ref": family_ref("kv", "redis::RedisFactory"), "profile": "valkey"},
+    "redis-streams": {"ref": family_ref("kv", "redis::RedisFactory")},
+    "dynamodb": {"ref": family_ref("kv", "dynamodb::DynamoDbFactory"), "position": "dynamodb-stream-sequence"},
+    "dynamodb-streams": {
+        "ref": family_ref("kv", "ddbstreams::DynamoDbStreamsFactory"),
+        "position": "dynamodb-stream-sequence",
+    },
+    "cassandra": {"ref": family_ref("kv", "cassandra::CassandraFactory")},
     # Task 15 — search and vector.
     "opensearch": {"ref": family_ref("search", "elasticsearch"), "profile": "opensearch"},
     "qdrant": {"ref": family_ref("search", "qdrant")},

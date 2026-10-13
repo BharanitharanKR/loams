@@ -1,9 +1,25 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/redis-streams.config.json",
-  "title": "Redis Streams instance config (placeholder)",
-  "description": "Placeholder for a Redis Streams instance's settings. It is filled in when this connector is built: CN2 for the P2 rows, as first-party native connectors with declared fallbacks (CN2 OR-1, OR-4), and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "Redis Streams connector instance config (loams.flow/v1)",
+  "description": "One Redis Streams instance's settings (CN2 Task 14): the source reads streams through a consumer group with XREADGROUP and acknowledges with XACK only after the Fabric has the batch; the sink XADDs each event in CloudEvents binary mode. Served by loams-connector-kv against Redis and Valkey. `password` is the name of a secret in the namespace's secret store (D189).",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": ["url", "stream"],
+  "properties": {
+    "url": { "description": "redis://host[:port][/db] or rediss://… for TLS. Credentials in the URL are refused.", "type": "string", "minLength": 1 },
+    "user": { "description": "The ACL user.", "type": "string", "minLength": 1 },
+    "password": { "description": "The name of the secret holding the ACL password.", "type": "string", "minLength": 1, "writeOnly": true },
+    "database": { "description": "The logical database (overrides the URL's).", "type": "integer", "minimum": 0 },
+    "stream": { "description": "The stream key the source reads (one split), and the sink XADDs to.", "type": "string", "minLength": 1 },
+    "streams": { "description": "More stream keys for the source, one split each.", "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "consumer_group": { "description": "The consumer group; loams-<instance> when omitted.", "type": "string", "minLength": 1 },
+    "consumer_name": { "description": "The consumer name; the instance name when omitted.", "type": "string", "minLength": 1 },
+    "start_id": { "description": "Where a new consumer group starts: 0 (the whole stream) or $ (new entries only).", "type": "string", "default": "0" },
+    "ack_mode": { "description": "after-ack: XACK after the Fabric acknowledges (at least once). on-read: XREADGROUP NOACK (at most once).", "type": "string", "enum": ["after-ack", "on-read"], "default": "after-ack" },
+    "block_ms": { "description": "How long XREADGROUP blocks for new entries.", "type": "integer", "minimum": 1, "default": 1000 },
+    "count": { "description": "Entries per XREADGROUP call.", "type": "integer", "minimum": 1, "maximum": 10000, "default": 100 },
+    "pending_idle_ms": { "description": "Claim (XAUTOCLAIM) entries other consumers left pending this long, so a killed consumer's entries are not stranded.", "type": "integer", "minimum": 1 },
+    "max_len": { "description": "The sink's approximate MAXLEN trim.", "type": "integer", "minimum": 1 }
+  }
 }
