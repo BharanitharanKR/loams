@@ -241,17 +241,28 @@ extension LoamsMessage {
     }
 
     /// The message's `next_page_token`, or `nil` when there is no next page.
+    ///
+    /// A response decoded off the wire is proto3 JSON, whose key is the field's
+    /// `json_name` (`nextPageToken`); a message built in code uses the proto
+    /// name. Both are read, or the iterator would stop after the first page of
+    /// every real server response.
     public var nextPageToken: String? {
-        guard let value = loamsFields()[ProtoField.nextPageToken]?.stringValue,
-              !value.isEmpty else { return nil }
-        return value
+        loamsNonEmptyString(ProtoField.nextPageToken, json: "nextPageToken")
     }
 
-    /// The message's `consistency_token`, or `nil` when it carries none.
+    /// The message's `consistency_token`, or `nil` when it carries none. Both
+    /// spellings, as for ``nextPageToken``.
     public var consistencyToken: String? {
-        guard let value = loamsFields()[ProtoField.consistencyToken]?.stringValue,
-              !value.isEmpty else { return nil }
-        return value
+        loamsNonEmptyString(ProtoField.consistencyToken, json: "consistencyToken")
+    }
+
+    /// A non-empty string field under its proto name or its `json_name`.
+    func loamsNonEmptyString(_ proto: String, json: String) -> String? {
+        let fields = loamsFields()
+        for key in [proto, json] {
+            if let value = fields[key]?.stringValue, !value.isEmpty { return value }
+        }
+        return nil
     }
 
     /// Whether the message declares `idempotency_key` **at all**.
