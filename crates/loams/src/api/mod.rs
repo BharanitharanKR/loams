@@ -11,7 +11,9 @@
 
 mod collections;
 pub mod connect;
+mod connect_auth;
 mod connect_collections;
+mod connect_console;
 mod connect_documents;
 mod connect_errors;
 mod connect_hot;
@@ -144,6 +146,9 @@ pub struct AppState {
     /// node's repository sequencers; `None` when this node does not serve it.
     #[cfg(feature = "git")]
     pub git: Option<Arc<repos::GitRuntime>>,
+    /// The principal store, its authorizer and the setup gate, behind
+    /// `loams.auth.v1` and `loams.admin.v1` (API2 Tasks 6 and 7).
+    pub principals: crate::auth::Principals,
 }
 
 /// What a query node needs to run forwarded reads (plan M1.3 Task 11).
