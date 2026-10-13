@@ -49,4 +49,6 @@ plugins:
       - package=loams.operations.v1=loams_proto::loams::operations::v1
       - package=loams.notifications.v1=loams_proto::loams::notifications::v1
       - package=loams.live.v1=loams_live_proto::loams::live::v1
+      - package=loams.auth.v1=loams_proto::loams::auth::v1
+      - package=loams.admin.v1=loams_proto::loams::admin::v1
 clean: false
