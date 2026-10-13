@@ -163,3 +163,19 @@ direction = "source"
 family = "mongodb"
 status = "pending"
 owner = "CN2 Task 16"
+
+# --- sqlserver (CN2 Task 12): harnesses exist; benches pending ----------------
+
+[[connector]]
+id = "sql-server"
+direction = "source"
+family = "sqlserver"
+status = "pending"
+owner = "CN2 Task 12"
+
+[[connector]]
+id = "azure-sql"
+direction = "source"
+family = "sqlserver"
+status = "pending"
+owner = "CN2 Task 12"

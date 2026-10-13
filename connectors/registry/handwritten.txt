@@ -11,6 +11,7 @@ azure-blob
 azure-event-grid
 azure-event-hubs
 azure-service-bus
+azure-sql
 bigquery
 cassandra
 clickhouse
@@ -57,6 +58,7 @@ redpanda
 s3
 sftp
 snowflake
+sql-server
 valkey
 webhooks
 websocket
