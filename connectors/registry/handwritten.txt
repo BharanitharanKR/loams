@@ -36,6 +36,7 @@ jdbc
 kafka
 kinesis
 lambda-cloud-run-azure-functions
+mariadb
 minio-rustfs
 mongodb
 mqtt

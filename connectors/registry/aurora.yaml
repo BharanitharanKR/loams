@@ -60,6 +60,6 @@ limits: { batch_rows: 65536, batch_bytes: 8388608 }
 conformance: [contract, roundtrip, kill-restart, dup-check, exactly-once, cdc, bulk, schema-evolution, backpressure, auth]
 docs: docs/guides/connectors/aurora.md
 notes:
-  - 'engine: the instance''s `engine` setting chooses the family; `postgresql` runs this manifest''s ref with profile `aurora-postgres`, and `mysql` runs loams_connector_mysql::mysql with profile `aurora-mysql` (CN2 Tasks 10, 11)'
+  - 'engine: the instance''s `engine` setting chooses the family; `postgresql` runs this manifest''s ref with profile `aurora-postgres`, and `mysql` runs loams_connector_mysql::MysqlFactory with profile `aurora-mysql` (CN2 Tasks 10, 11)'
   - "events: batch reads emit `rows` (Arrow); CDC emits `change` and `schema-change` as on PostgreSQL (CN2 Task 10, R10.5)"
   - "tls: the profile defaults sslmode to require; verify-full needs ca_pem set to the Amazon RDS CA bundle, which is not in the webpki roots (R10.7)"

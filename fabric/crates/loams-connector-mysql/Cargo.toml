@@ -1,0 +1,53 @@
+[package]
+name = "loams-connector-mysql"
+description = "The Loams MySQL connector family (CN2 Task 11, OR-6): chunked batch reads, native row-binlog CDC with GTID positions and DBLog watermark snapshots, an exactly-once upsert sink, and the target profiles mariadb and aurora-mysql."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[features]
+# The conformance harnesses (`harness`), which link the kit and so
+# `loams-flow`. Off by default: a family crate depends only on the SDK and its
+# protocol crates (OR-6), and `loams-flow` will link this crate (`conn-mysql`).
+conformance = ["dep:loams-flow-conformance"]
+
+[dependencies]
+loams-connector-sdk = { path = "../loams-connector-sdk" }
+loams-flow-conformance = { path = "../loams-flow-conformance", optional = true }
+arrow-array.workspace = true
+arrow-buffer.workspace = true
+arrow-schema.workspace = true
+async-trait = "0.1.89"
+base64.workspace = true
+bytes.workspace = true
+# The MySQL wire protocol's packets, auth scrambles, binlog events, TABLE_MAP
+# and row decoding (R0.8). Without its default features: no C zlib, no
+# derive macros. The connection layer is this crate's own (ruling R11.1).
+mysql_common = { version = "=0.37.3", default-features = false, features = ["binlog"] }
+# mysql_common names flate2 without a backend; this picks the pure-Rust one.
+flate2.workspace = true
+rustls = { version = "0.23.27", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+# DDL in QUERY_EVENTs, parsed with the MySQL dialect for the schema history.
+sqlparser.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time", "net", "io-util"] }
+tokio-rustls = { version = "0.26.4", default-features = false, features = ["ring", "tls12", "logging"] }
+tracing.workspace = true
+webpki-roots = "1"
+
+[dev-dependencies]
+loams-connector-mysql = { path = ".", features = ["conformance"] }
+# Manifests for the kit's suites.
+loams-flow = { path = "../loams-flow" }
+loams-flow-conformance = { path = "../loams-flow-conformance" }
+serde_json.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "io-util", "test-util"] }
+
+[lints]
+workspace = true

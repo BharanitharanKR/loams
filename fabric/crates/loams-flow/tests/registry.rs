@@ -343,7 +343,7 @@ const A18: [&str; 3] = ["forgejo", "itsplane", "zulip"];
 /// connectors and left the manifest to CN2 Task 2, and the follow-up replaced the generated
 /// stubs with them (`gen_registry.py`'s `HAND_WRITTEN_FAMILY_ROWS`). Hand-written, unstarred
 /// and still `planned` until their suites are green in CI (OR-23).
-const HAND_WRITTEN_UNSTARRED_P2: [&str; 41] = [
+const HAND_WRITTEN_UNSTARRED_P2: [&str; 42] = [
     "grafeo",
     // The kafka family (R9.7).
     "azure-event-hubs",
@@ -352,6 +352,8 @@ const HAND_WRITTEN_UNSTARRED_P2: [&str; 41] = [
     "aurora",
     "cockroachdb",
     "pgvector",
+    // The mysql family (R11.9).
+    "mariadb",
     // The sqlserver family (R12.9).
     "azure-sql",
     "sql-server",

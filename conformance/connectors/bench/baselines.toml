@@ -164,6 +164,22 @@ family = "mongodb"
 status = "pending"
 owner = "CN2 Task 16"
 
+# --- mysql (CN2 Task 11): harnesses exist; benches pending ------------------
+
+[[connector]]
+id = "mysql"
+direction = "source"
+family = "mysql"
+status = "pending"
+owner = "CN2 Task 11"
+
+[[connector]]
+id = "mariadb"
+direction = "source"
+family = "mysql"
+status = "pending"
+owner = "CN2 Task 11"
+
 # --- sqlserver (CN2 Task 12): harnesses exist; benches pending ----------------
 
 [[connector]]
