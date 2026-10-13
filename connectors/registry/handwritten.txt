@@ -32,6 +32,7 @@ jdbc
 kafka
 kinesis
 minio-rustfs
+mongodb
 mqtt
 mysql
 nats
