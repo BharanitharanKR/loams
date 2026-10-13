@@ -90,7 +90,7 @@
 crates/loams-migrate/
   Cargo.toml
   src/lib.rs
-  src/formats.rs            (FormatId, FormatSpec, REGISTRY; Task 1)
+  src/formats.rs            (re-exports loams_common::formats; Task 1)
   src/stack.rs              (StackRecord, StoredVersions; Task 1)
   src/ledger.rs             (LedgerEntry, Ledger, MigrationLease; Task 2)
   src/migration.rs          (Migration, Class, Store, Step, Cursor, Estimate; Task 3)
@@ -129,7 +129,7 @@ docs/release/{preview.md,upgrades.md}, deploy/release/README.md, CHANGELOG.md   
 
 ## Shared contracts (all tasks use these names)
 
-### Rust (`loams-migrate`)
+### Rust (`loams-common::formats`, re-exported by `loams-migrate`, then `loams-migrate`'s own types)
 
 ```rust
 pub struct FormatId(pub &'static str);                 // "collection.manifest", "live.keys", "durable.sqlite", …
@@ -201,7 +201,7 @@ from    = "fresh"
 ## Execution order
 
 1. Task 0.
-2. **Core** (Tasks 1–7) in order; Task 5 can start beside Task 4.
+2. **Core** (Tasks 1–7) in order; Task 5 can start beside Task 4. Task 3 creates `release/upgrade-path.toml`, so nothing in the core waits for Task 11.
 3. **Snapshot and restore** (Tasks 8–10); Task 9 after Task 0's BR ruling.
 4. **Release data** (Task 11) beside Tasks 8–10.
 5. **CLI** (Tasks 12–14) after Tasks 7, 8 and 11.
@@ -240,11 +240,11 @@ Steps:
 
 ### Task 1: The format registry and the stack record
 
-**Files:** create `crates/loams-migrate/{Cargo.toml,src/lib.rs,src/formats.rs,src/stack.rs,tests/formats.rs}`; workspace `Cargo.toml`; one `#[test]` in each crate that owns a format (`loams-log`, `loams-collection`, `loams-meta`, `loams-live`, `loams-graph`, `loams-git`, `loams-durable`, `loams-pg-control`, fabric's House crate), as Task 0 listed.
+**Files:** create `crates/loams-common/src/formats.rs` (the only definition of `FormatId`, `FormatSpec`, `REGISTRY` and `check`) and `crates/loams-migrate/{Cargo.toml,src/lib.rs,src/formats.rs (a re-export only),src/stack.rs,tests/formats.rs}`; workspace `Cargo.toml`; one `#[test]` in each crate that owns a format (`loams-log`, `loams-collection`, `loams-meta`, `loams-live`, `loams-graph`, `loams-git`, `loams-durable`, `loams-pg-control`, fabric's House crate), as Task 0 listed.
 
 **Interfaces:** `FormatId`, `FormatSpec`, `REGISTRY`, `StackRecord` (postcard-encoded behind a one-byte value version, `0x01`), `StoredVersions::readable_by(&REGISTRY) -> Result<(), Unreadable>`, and `formats::check(id, found) -> Result<(), Unreadable>` accepting `min_read..=current`.
 
-**Readers move to the range.** §54 §17 lists the readers that check the exact version today (WAL, segment, `OPCM`, `OPPD`, `OPDL`, the record codec, the PK value, the split trailer, `OPDB`, hot artifacts and owner records, link counters, the TiKV metastore's `FORMAT`, Live's `format`, graph manifest, change-set and portable snapshot, Git's `DOC_VERSION`, `pg-control`'s `FORMAT`). Each calls `formats::check` instead. A crate cannot depend on `loams-migrate` without a cycle, so `FormatSpec`, `REGISTRY` and `check` live in `loams-common::formats`, and `loams-migrate` re-exports them. Formats with no version today (the Raft log and `meta.redb` records, pointer values, the graph catalog document, Live's `JournalEntry`, Git's `.lpk`, the House directory) are registered with `current = 1` and the rule "absent means 1"; none is rewritten.
+**Readers move to the range.** §54 §17 lists the readers that check the exact version today (WAL, segment, `OPCM`, `OPPD`, `OPDL`, the record codec, the PK value, the split trailer, `OPDB`, hot artifacts and owner records, link counters, the TiKV metastore's `FORMAT`, Live's `format`, graph manifest, change-set and portable snapshot, Git's `DOC_VERSION`, `pg-control`'s `FORMAT`). Each calls `formats::check` instead. Owning crates depend only on `loams-common` for this (never on `loams-migrate`), which keeps the graph acyclic. Formats with no version today (the Raft log and `meta.redb` records, pointer values, the graph catalog document, Live's `JournalEntry`, Git's `.lpk`, the House directory) are registered with `current = 1` and the rule "absent means 1"; none is rewritten.
 
 Tests:
 - `registry_ids_are_unique`
@@ -280,9 +280,9 @@ Commit `feat(migrate): ledger and migration lease in _system`. **PR size:** M (~
 
 ### Task 3: The `Migration` trait and the runner
 
-**Files:** `src/migration.rs`, `src/runner.rs`, `tests/runner.rs`, test-only migrations in `tests/support/`.
+**Files:** `src/migration.rs`, `src/runner.rs`, `tests/runner.rs`, test-only migrations in `tests/support/`; **creates `release/upgrade-path.toml`** with its first two entries (preview.2 `from = "fresh"`; preview.3 `from = "0.1.0-preview.2"` with an empty migration list that Tasks 5 and 10 fill). The runner's tests use their own path files in `tests/fixtures/paths/` (pre-release chains and a 0.1 patch line). Task 11 adds the checks, the manifest and the notes on top of this file.
 
-**Interfaces:** the trait of §54 §6.3 with `abandon`; `Runner::plan(target) -> Plan { from, to, steps: Vec<PlannedStep { id, class, estimate }> }`; `Runner::run(target, opts) -> Report`: takes the lease, checks adjacency against `release/upgrade-path.toml`'s compiled copy (`include_str!`), runs pending migrations in order, checkpoints each cursor in the ledger, calls `verify` after `Done`, writes the stack record last. Failpoints (`fail` crate, `failpoints` feature): `migrate::before_apply`, `migrate::after_apply_before_checkpoint`, `migrate::after_checkpoint`, `migrate::before_switch`, `migrate::after_switch_before_done`.
+**Interfaces:** the trait of §54 §6.3 with `abandon`; `Runner::plan(target) -> Plan { from, to, steps: Vec<PlannedStep { id, class, estimate }> }`; `Runner::run(target, opts) -> Report`: takes the lease, checks adjacency against `release/upgrade-path.toml`'s compiled copy (`include_str!`): exact-predecessor for pre-releases (`from = "0.1.0-preview.2"`), line-based from v0.1.0 (`from = "0.1"` accepts a stored 0.1.x with x < y, refuses x ≥ y, another line or a pre-release), and exact again for a new line's first minor; runs pending migrations in order, checkpoints each cursor in the ledger, calls `verify` after `Done`, writes the stack record last. Failpoints (`fail` crate, `failpoints` feature): `migrate::before_apply`, `migrate::after_apply_before_checkpoint`, `migrate::after_checkpoint`, `migrate::before_switch`, `migrate::after_switch_before_done`.
 
 Tests:
 - `plan_lists_pending_migrations_in_order`
@@ -292,6 +292,8 @@ Tests:
 - `crash_at_every_failpoint_converges` (each failpoint × each test migration; rerun; the result equals a clean run)
 - `failed_migration_leaves_old_data_readable`
 - `non_adjacent_source_refused` (`upgrade_step_not_adjacent`)
+- `patch_line_source_accepted` (0.1.1 → 0.1.4 runs only the migrations not `Done`)
+- `patch_line_newer_or_other_line_refused` (0.1.5 → 0.1.4, 0.0.9 → 0.1.4, 0.1.0-preview.9 → 0.1.4)
 - `point_of_no_return_needs_snapshot` (`snapshot_required` unless `--no-snapshot-i-accept-data-loss`)
 - `code_digest_mismatch_refuses_resume` (`migration_mismatch`)
 - `abandon_removes_partial_writes`
@@ -320,11 +322,13 @@ Commit `feat(loams): refuse to start on unreadable data`. **PR size:** M (~400 l
 
 **Files:** `src/adopt.rs`, `src/migrations/m0000_adopt_preview_2.rs`, `tests/adopt.rs`, `tests/fixtures/preview2/` (Task 0).
 
-**Interfaces:** `Fingerprint::check(cx) -> Result<Preview2, Mismatch { store, detail }>` per §54 §5.3 (metastore record kinds decode with preview.2's encodings; the bucket's pointer envelopes are at preview.2's versions; Live's keyspace decodes; the Durable schema level; the House layout if present). The migration writes the ledger entry and the stack record at `0.1.0-preview.2`; class `Reversible` (it only adds `_system/upgrade/*`, which preview.2 never reads).
+**Interfaces:** `Fingerprint::check(cx, declared_release: Option<&str>) -> Result<Preview2, Mismatch { store, detail }>` per §54 §5.3. It succeeds only with a positive marker: Task 0's data marker, or `declared_release == Some("0.1.0-preview.2")` (`loams migrate run --declared-release`, which the CLI fills from the stack directory's `LOAMS_VERSION` and the desktop from `.loams-stack-version`); decoding alone never suffices. (metastore record kinds decode with preview.2's encodings; the bucket's pointer envelopes are at preview.2's versions; Live's keyspace decodes; the Durable schema level; the House layout if present). The migration writes the ledger entry and the stack record at `0.1.0-preview.2`; class `Reversible` (it only adds `_system/upgrade/*`, which preview.2 never reads).
 
 Tests:
 - `preview2_fixture_is_recognised`
 - `preview1_fixture_is_refused` (a hand-made preview.1 shape; `stack_unrecognised`)
+- `decodable_store_without_marker_is_refused` (preview.2-shaped data, no data marker, no declared release)
+- `declared_preview2_with_decodable_data_is_adopted`
 - `corrupt_pointer_envelope_is_refused`
 - `adoption_is_idempotent`
 - `adoption_writes_only_system_upgrade_keys` (diff of the metastore before and after)
@@ -393,6 +397,7 @@ Commit `feat(migrate): snapshot and restore of Loams-owned stores`. **PR size:**
 **Files:** `src/snapshot/{tikv.rs,postgres.rs}`, `src/restore.rs`, `tests/snapshot.rs` (`#[ignore]` compose tests), `release/companions.toml` (BR by digest, if Q821 rules BR), `deploy/release/compose.yaml` (`upgrade-snapshots` mounted into `tikv` for BR).
 
 **Interfaces:**
+- Helpers (§54 §10.1's boundary): only the target `loams` image and, if Q821 rules it in, `pingcap/br@sha256:…`; each with `cap_drop: ALL`, `no-new-privileges`, a read-only root filesystem, no ports, no socket, the compose default network only; volumes limited to the step's data volumes and `upgrade-snapshots`; credentials limited to read-only mounts of `secrets/engine.env` (an `s3://` bucket) and the `pg-control` API key. The pageserver and safekeeper APIs are called from the `loams migrate` helper only.
 - TiKV (Q821 per Task 0): `--tikv br` runs BR as a helper container (`pingcap/br@sha256:…`) against `pd:2379` into `/snapshots/<id>/tikv`; restore goes into a fresh cluster at the snapshot's TiKV version (the CLI recreates `pd-data` and `tikv-data` first). `--tikv cold` copies both volumes with PD and TiKV stopped (done by the CLI's helper container; `migrate` records it in the manifest).
 - Postgres: `branch_every_timeline(pageserver | pg-control, name = "upgrade-<id>")`; `drain_safekeepers(timeout = 5 min)` waits for `remote_consistent_lsn ≥ flush_lsn` per timeline; restore through `RestoreBranch` or the pageserver's timeline swap; a cold copy of `pageserver-data` and `rustfs-data` when the Loams Postgres pins change (Q829).
 
@@ -403,6 +408,7 @@ Tests:
 - `postgres_restore_branch_swaps_back` (`#[ignore]`)
 - `safekeeper_recreate_waits_for_drain` (fake pageserver and safekeeper status servers; a lagging timeline blocks until it catches up, then times out with `postgres_not_drained`)
 - `cold_copy_requires_services_stopped`
+- `helper_containers_follow_the_boundary` (the rendered helper specs: caps, read-only root, networks, volumes and mounts as listed)
 
 Commit `feat(migrate): TiKV and Postgres snapshots`. **PR size:** L (~900 lines).
 
@@ -571,7 +577,7 @@ Commit `test(conformance): upgrade fixtures for every product`. **PR size:** L (
 
 **Files:** `.github/workflows/ci.yml` (job `upgrade-gate`, its path filter, full tier, `required`), `.github/workflows/nightly.yml`, `deploy/release/ci/compose.upgrade.yaml`, `docs/ci/README.md`.
 
-**Interfaces:** §54 §14 steps 1–6; the job runs on the heavy compose runner, builds the candidate images with `build.sh --platforms linux/amd64`, starts the previous release from its signed bundle with the CI override (no Tailscale, `apikey` auth, loopback port), runs Task 19's `write`, `loams upgrade --to`, `check`, `write-new`, the reversibility step for each `Reversible` migration, `rollback`, `check --expect-new-writes absent`, and (when all reversible) a second run with `rollback --keep-writes`; uploads the ledger, `snapshot.json`, `check`'s JSON, timings and logs. Runs on pull requests into `main`, in the nightly on `dev`, and on pull requests into `dev` labelled `ci:upgrade`.
+**Interfaces:** §54 §14 steps 1–6; the job runs on the heavy compose runner, builds the candidate images with `build.sh --platforms linux/amd64`, starts the previous release from its signed bundle with the CI override (no Tailscale, `apikey` auth, loopback port), runs Task 19's `write`, `loams upgrade --to`, `check`, `write-new`, the reversibility step (the previous release reads the fixtures **and** the candidate's new writes on the migrated data), `rollback`, `check --expect-new-writes absent`, and (when all reversible) a second run with `rollback --keep-writes` that checks the previous release reads both the fixtures and the post-upgrade writes; uploads the ledger, `snapshot.json`, `check`'s JSON, timings and logs. Runs on pull requests into `main`, in the nightly on `dev`, and on pull requests into `dev` labelled `ci:upgrade`.
 
 Tests:
 - `reversibility_step_fails_on_false_claim` (a planted test-only migration claiming `Reversible`, behind a CI-only feature, in a scratch run recorded in the PR)
