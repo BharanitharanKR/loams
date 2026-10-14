@@ -21,7 +21,9 @@ The console is a [cordis](https://github.com/cordiverse/cordis) v4 application: 
 | `packages/platform-web` (`@loams/platform-web`) | `platform` and `transport` in a browser |
 | `packages/proto` (`@loams/proto`) | Generated clients for the app protos (AP0) |
 | `packages/admin-ui` (`@loams/admin-ui`) | What the console's own pages share: page heads, the audit table, the activity chart, labels for the `loams.admin.v1` enums, the pages' styles; `./testing` has an in-memory `loams.auth.v1` and `loams.admin.v1` |
-| `plugins/*` | `shell` (layout, nav, `router`), `rpc` (`rpc.*` clients, gated on `api_versions`), `identity` (`session`, with the console's sign-in gate), the console's own pages (`account`: sign-in, setup, consent; `org`: overview, teams, members, settings; `projects`: projects, environments, access and the project switcher; `agents`; `audit`, live), `stack-status`, `namespaces`, `approvals`, and `sandbox` (the in-frame runtime) |
+| `packages/agentd-client` (`@loams/agentd-client`) | The `loams-agentd` wire types, the method table, the transcript reducers, and the Connect transports for `loams.agentd.v1` (desktop through Electron main, remote over TLS) |
+| `packages/studio-ui` (`@loams/studio-ui`) | Loams Studio's components, vendored from T3 Code (MIT) and rebuilt on `@loams/ui`; see its [README](packages/studio-ui/README.md) for the vendoring rules |
+| `plugins/*` | `shell` (layout, nav, `router`, the mode switcher and the command palette), `rpc` (`rpc.*` clients, gated on `api_versions`, and `rpc.agentd.*`), `identity` (`session`, with the console's sign-in gate), the console's own pages (`account`: sign-in, setup, consent; `org`: overview, teams, members, settings; `projects`: projects, environments, access and the project switcher; `agents`; `audit`, live), `stack-status`, `namespaces`, `approvals`, `sandbox` (the in-frame runtime), `studio` (Loams Studio) and the desktop's own plugins |
 | `examples/plugin-hello` | A third-party plugin that runs in a sandboxed frame |
 | `apps/console/catalog/base.yml` | The `oss` plugin set |
 
@@ -36,6 +38,12 @@ pnpm test                                    # Vitest, every package
 
 Third-party plugins are off unless the instance sets the `console.third_party_plugins` feature (the demo mock does): until the unified auth plan can vend attenuated tokens there is no server-side boundary for them. `window.loamsConsole` in the browser console shows the plugin table and `pending()`.
 
+### Console and Studio
+
+The console has two modes in one shell (design [§53](../docs/design/53-studio-ade.md) §4, D900–D902; plan SD1): **Console**, the cloud console, and **Studio**, the agentic development environment. A plugin's manifest names its modes (`"modes": ["console"]`, `["studio"]` or both; the default is `["console"]`), and the host's `mode` service filters the nav, pages, header controls and palette rows by mode. Switching (the header's segmented control, Mod+Shift+M, or the palette) never reloads the page. Studio's routes all start with `/studio`. The desktop opens in Studio and the browser in Console; after that, the last mode used on the device (`loams.shell.mode`). In the browser Studio is gated on the instance feature `studio` until SD1 Task 32; the dev server's `?demo` turns it on. Studio reaches `loams-agentd` over `loams.agentd.v1`; only first-party plugins with the `agentd:use` permission get those clients, and git writes also need `agentd:git-write`. The user guides are in [`docs/guides/studio`](../docs/guides/studio/index.md).
+
+### Connect
+
 The console speaks Connect: `loams.auth.v1` and `loams.admin.v1` (API2 Tasks 6, 7) through `@loams/proto` and `@connectrpc/connect-query`, over the console's one transport. Until the server serves them (API2 Task 7's server half), [`loams-apps-mock`](../crates/loams-apps-mock) serves them from the console seed on `:8084`, beside the app protos; the seed itself lives in [`loams-console-mock`](../crates/loams-console-mock). The console's pages appear only where `GetInstance.api_versions` names those packages.
 
 ## Develop
@@ -47,7 +55,15 @@ cargo run -p loams-apps-mock          # the console API mock on :8084 (add --sig
 cd web && pnpm install && pnpm dev       # the console on http://localhost:5173/ui/
 ```
 
-`pnpm dev` proxies the Connect paths (`/loams.<package>.<Service>/<Method>`), `/api`, `/v1`, `/.well-known`, `/health` and `/ready` to the mock. To use a real engine instead, set `LOAMS_API=http://127.0.0.1:8080`; `LOAMS_UI_BASE=/` serves the console at the root instead of `/ui/`.
+**`protoc` is needed for the Rust side.** `loams-apps-mock`'s build script (and `loams-agentd-connect`'s, for `loams-agentd`) generates its Connect code with `protoc`, the binary on `PATH` or the one `PROTOC` names; without it the build stops with "is protoc installed?". On Debian and Ubuntu, `sudo apt-get install -y protobuf-compiler libprotobuf-dev` (what CI does); elsewhere see [build from source](../docs/build-from-source/README.md). The web side needs no `protoc`: `@loams/proto`'s generated code is checked in, and `buf generate` is only for changing a `.proto`.
+
+`pnpm dev` proxies the Connect paths (`/loams.<package>.<Service>/<Method>`), `/api`, `/v1`, `/.well-known`, `/health` and `/ready` to the mock. To use a real engine instead, set `LOAMS_API=http://127.0.0.1:8080`.
+
+**`LOAMS_UI_BASE`** sets where the console is mounted (Vite's `base`): `/ui/` by default, as the engine serves it (design §19 §3). `LOAMS_UI_BASE=/ pnpm dev` serves it at the root, and the same variable applies to `pnpm build`. Old addresses (`/ui/cordis.html`, `/ui/teams`) are moved to the console's hash routes on load.
+
+Two dev-only entry points need no server at all (they exist only under `import.meta.env.DEV`; a production build drops them):
+- **`/ui/?demo`** is the browser edition on an in-browser mock of the app protos, with the sample third-party plugin and Studio turned on.
+- **`/ui/?desktop`** is the desktop edition on a fake `window.loamsDesktop` (`src/cordis/fake-desktop.ts`), with a fake agentd (`fake-agentd.ts`) that gives Studio sample projects, threads, worktrees, a run group and diffs. Any new `window.loamsDesktop` namespace needs a fake there too.
 
 ## Check and build
 

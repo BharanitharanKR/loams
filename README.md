@@ -37,6 +37,7 @@ Read the [pitch](docs/design/00-pitch.md) and the [architecture](docs/design/01-
 | **Loams SQL / Postgres** | MySQL on a patched TiDB; Postgres on our Neon fork, storage on the bucket |
 | **Loams Durable** | Durable promises and tasks for agent runs (an embedded Resonate server) |
 | **Console, desktop, CLI** | Hosted web console; Loams Desktop and the `loams` CLI for Linux, macOS and Windows |
+| **Loams Studio** | An agentic development environment in the console's Studio mode: coding agents (Claude Code, Codex, opencode and others) in threads with a git worktree each, diff review, git actions, terminals, previews and parallel runs, all through the `loams-agentd` daemon. On by default in Loams Desktop; in the browser it runs against a remote `loams-agentd` and is behind a feature flag ([guides](docs/guides/studio/index.md)) |
 | **SDKs** | TypeScript, Python, Go, Rust, C#, C++ and Swift (more languages coming) |
 
 **Coming next:** Loams Git (Git on the bucket), first-party connectors, graph expansion for GraphRAG, Iceberg analytics, Kafka wire, functions and jobs. The full status table is in [Running the preview](docs/release/preview.md); the plan is in the [roadmap](docs/design/12-roadmap-testing-risks.md).
