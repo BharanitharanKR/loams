@@ -54,15 +54,19 @@ impl Fake {
 
 #[async_trait]
 impl ComputeRuntime for Fake {
-    async fn ensure_address(&self, ep: &EndpointRec) -> Result<BackendAddr, RuntimeError> {
+    async fn ensure_address(
+        &self,
+        ns: &str,
+        ep: &EndpointRec,
+    ) -> Result<BackendAddr, RuntimeError> {
         self.record(format!(
-            "ensure_address {} {}",
+            "ensure_address {ns} {} {}",
             ep.id,
             ep.backend_addr.as_deref().unwrap_or("-")
         ))?;
         Ok(BackendAddr::new("127.0.0.1", 55500))
     }
-    async fn remove_address(&self, ep: &EndpointRec) -> Result<(), RuntimeError> {
+    async fn remove_address(&self, _ns: &str, ep: &EndpointRec) -> Result<(), RuntimeError> {
         self.record(format!("remove_address {}", ep.id))
     }
     async fn start(&self, c: &ComputeLaunch) -> Result<ComputeHandle, RuntimeError> {
@@ -74,17 +78,31 @@ impl ComputeRuntime for Fake {
             address: c.address.clone(),
         })
     }
-    async fn bind_address(&self, ep: &EndpointRec, c: &ComputeHandle) -> Result<(), RuntimeError> {
+    async fn bind_address(
+        &self,
+        _ns: &str,
+        ep: &EndpointRec,
+        c: &ComputeHandle,
+    ) -> Result<(), RuntimeError> {
         self.record(format!("bind_address {} {}", ep.id, c.compute_id))
     }
-    async fn stop(&self, compute_id: &ComputeId) -> Result<(), RuntimeError> {
-        self.record(format!("stop {compute_id}"))
+    async fn stop(&self, ns: &str, compute_id: &ComputeId) -> Result<(), RuntimeError> {
+        self.record(format!("stop {ns} {compute_id}"))
     }
-    async fn status(&self, compute_id: &ComputeId) -> Result<RuntimeStatus, RuntimeError> {
+    async fn status(
+        &self,
+        _ns: &str,
+        compute_id: &ComputeId,
+    ) -> Result<RuntimeStatus, RuntimeError> {
         self.record(format!("status {compute_id}"))?;
         Ok(RuntimeStatus::Exited { code: Some(3) })
     }
-    async fn resize(&self, compute_id: &ComputeId, cu: Cu) -> Result<ResizeOutcome, RuntimeError> {
+    async fn resize(
+        &self,
+        _ns: &str,
+        compute_id: &ComputeId,
+        cu: Cu,
+    ) -> Result<ResizeOutcome, RuntimeError> {
         self.record(format!("resize {compute_id} {}", cu.0))?;
         Ok(ResizeOutcome::Refused("no room".into()))
     }
@@ -162,7 +180,7 @@ async fn remote_round_trips_every_call() {
     let ep = endpoint();
     let id: ComputeId = CMP.parse().unwrap();
 
-    let addr = r.remote.ensure_address(&ep).await.unwrap();
+    let addr = r.remote.ensure_address("acme", &ep).await.unwrap();
     assert_eq!(addr, BackendAddr::new("127.0.0.1", 55500));
     let handle = r.remote.start(&launch()).await.unwrap();
     assert_eq!(handle.compute_id, id);
@@ -171,27 +189,27 @@ async fn remote_round_trips_every_call() {
         format!("http://{}:3080", CMP.to_lowercase())
     );
     assert_eq!(handle.address, Some(addr));
-    r.remote.bind_address(&ep, &handle).await.unwrap();
+    r.remote.bind_address("acme", &ep, &handle).await.unwrap();
     assert_eq!(
-        r.remote.status(&id).await.unwrap(),
+        r.remote.status("acme", &id).await.unwrap(),
         RuntimeStatus::Exited { code: Some(3) }
     );
     assert_eq!(
-        r.remote.resize(&id, Cu(4)).await.unwrap(),
+        r.remote.resize("acme", &id, Cu(4)).await.unwrap(),
         ResizeOutcome::Refused("no room".into())
     );
-    r.remote.stop(&id).await.unwrap();
-    r.remote.remove_address(&ep).await.unwrap();
+    r.remote.stop("acme", &id).await.unwrap();
+    r.remote.remove_address("acme", &ep).await.unwrap();
 
     assert_eq!(
         r.fake.calls(),
         [
-            format!("ensure_address {EP} 127.0.0.1:55500"),
+            format!("ensure_address acme {EP} 127.0.0.1:55500"),
             format!("start {CMP}"),
             format!("bind_address {EP} {CMP}"),
             format!("status {CMP}"),
             format!("resize {CMP} 4"),
-            format!("stop {CMP}"),
+            format!("stop acme {CMP}"),
             format!("remove_address {EP}"),
         ]
     );
@@ -222,7 +240,7 @@ async fn remote_errors_keep_their_kind() {
         },
     ] {
         *r.fake.fail.lock().unwrap() = Some(e.clone());
-        assert_eq!(r.remote.stop(&id).await.unwrap_err(), e);
+        assert_eq!(r.remote.stop("acme", &id).await.unwrap_err(), e);
     }
 }
 
@@ -256,12 +274,16 @@ async fn runner_refuses_a_wrong_or_missing_token() {
         matches!(&e, RuntimeError::Unavailable(m) if m.contains("refused the token")),
         "{e:?}"
     );
-    let e = r.remote.ensure_address(&endpoint()).await.unwrap_err();
+    let e = r
+        .remote
+        .ensure_address("acme", &endpoint())
+        .await
+        .unwrap_err();
     assert!(matches!(e, RuntimeError::Unavailable(_)), "{e:?}");
 
     let anonymous = reqwest::Client::new()
         .post(format!("{}/v1/stop", r.url))
-        .json(&serde_json::json!({ "compute_id": CMP }))
+        .json(&serde_json::json!({ "namespace": "acme", "compute_id": CMP }))
         .send()
         .await
         .unwrap();
@@ -307,11 +329,23 @@ async fn runner_refuses_malformed_launches_and_endpoints() {
 
     let mut ep = endpoint();
     ep.id = "ep-not-an-id".into();
-    let e = r.remote.ensure_address(&ep).await.unwrap_err();
+    let e = r.remote.ensure_address("acme", &ep).await.unwrap_err();
+    assert!(matches!(e, RuntimeError::InvalidArgument(_)), "{e:?}");
+    let e = r
+        .remote
+        .ensure_address("../etc", &endpoint())
+        .await
+        .unwrap_err();
+    assert!(matches!(e, RuntimeError::InvalidArgument(_)), "{e:?}");
+    let e = r
+        .remote
+        .stop("Acme Corp", &CMP.parse().unwrap())
+        .await
+        .unwrap_err();
     assert!(matches!(e, RuntimeError::InvalidArgument(_)), "{e:?}");
     let mut ep = endpoint();
     ep.project_id = "acme".into();
-    let e = r.remote.remove_address(&ep).await.unwrap_err();
+    let e = r.remote.remove_address("acme", &ep).await.unwrap_err();
     assert!(matches!(e, RuntimeError::InvalidArgument(_)), "{e:?}");
 
     let garbage = reqwest::Client::new()

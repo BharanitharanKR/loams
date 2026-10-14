@@ -90,13 +90,17 @@ impl FakeRuntime {
 
 #[async_trait]
 impl ComputeRuntime for FakeRuntime {
-    async fn ensure_address(&self, ep: &EndpointRec) -> Result<BackendAddr, RuntimeError> {
+    async fn ensure_address(
+        &self,
+        _ns: &str,
+        ep: &EndpointRec,
+    ) -> Result<BackendAddr, RuntimeError> {
         let mut inner = self.lock();
         let next = 55500 + u16::try_from(inner.ports.len()).expect("few ports");
         let port = *inner.ports.entry(ep.id.clone()).or_insert(next);
         Ok(BackendAddr::new("127.0.0.1", port))
     }
-    async fn remove_address(&self, ep: &EndpointRec) -> Result<(), RuntimeError> {
+    async fn remove_address(&self, _ns: &str, ep: &EndpointRec) -> Result<(), RuntimeError> {
         let mut inner = self.lock();
         if inner
             .computes
@@ -128,14 +132,19 @@ impl ComputeRuntime for FakeRuntime {
             address: c.address.clone(),
         })
     }
-    async fn bind_address(&self, ep: &EndpointRec, c: &ComputeHandle) -> Result<(), RuntimeError> {
+    async fn bind_address(
+        &self,
+        _ns: &str,
+        ep: &EndpointRec,
+        c: &ComputeHandle,
+    ) -> Result<(), RuntimeError> {
         let port = self.lock().ports.get(&ep.id).copied();
         match (port, &c.address) {
             (Some(p), Some(a)) if a.port == p => Ok(()),
             _ => Err(RuntimeError::InvalidArgument("not the endpoint's".into())),
         }
     }
-    async fn stop(&self, compute_id: &ComputeId) -> Result<(), RuntimeError> {
+    async fn stop(&self, _ns: &str, compute_id: &ComputeId) -> Result<(), RuntimeError> {
         let id = compute_id.to_string();
         let mut inner = self.lock();
         if inner.computes.remove(&id).is_some() {
@@ -143,14 +152,18 @@ impl ComputeRuntime for FakeRuntime {
         }
         Ok(())
     }
-    async fn status(&self, compute_id: &ComputeId) -> Result<RuntimeStatus, RuntimeError> {
+    async fn status(
+        &self,
+        _ns: &str,
+        compute_id: &ComputeId,
+    ) -> Result<RuntimeStatus, RuntimeError> {
         Ok(self
             .lock()
             .computes
             .get(&compute_id.to_string())
             .map_or(RuntimeStatus::Missing, |(_, s)| *s))
     }
-    async fn resize(&self, _: &ComputeId, _: Cu) -> Result<ResizeOutcome, RuntimeError> {
+    async fn resize(&self, _: &str, _: &ComputeId, _: Cu) -> Result<ResizeOutcome, RuntimeError> {
         Ok(ResizeOutcome::Unsupported)
     }
 }

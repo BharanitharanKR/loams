@@ -206,8 +206,8 @@ async fn compose_file_golden() {
         let dir = tempfile::tempdir().unwrap();
         let fake = Arc::new(Fake::default());
         let rt = open(dir.path(), &fake);
-        let a = rt.ensure_address(&endpoint(EP_A)).await.unwrap();
-        let b = rt.ensure_address(&endpoint(EP_B)).await.unwrap();
+        let a = rt.ensure_address("acme", &endpoint(EP_A)).await.unwrap();
+        let b = rt.ensure_address("acme", &endpoint(EP_B)).await.unwrap();
         for c in order {
             let l = if c == CMP_A {
                 launch(CMP_A, EP_A, &a, Cu(4))
@@ -236,7 +236,7 @@ async fn start_is_idempotent_by_compute_id() {
     let dir = tempfile::tempdir().unwrap();
     let fake = Arc::new(Fake::default());
     let rt = open(dir.path(), &fake);
-    let addr = rt.ensure_address(&endpoint(EP_A)).await.unwrap();
+    let addr = rt.ensure_address("acme", &endpoint(EP_A)).await.unwrap();
     let l = launch(CMP_A, EP_A, &addr, Cu(4));
     let first = rt.start(&l).await.unwrap();
     let second = rt.start(&l).await.unwrap();
@@ -263,7 +263,7 @@ async fn start_is_idempotent_by_compute_id() {
         ]
     );
     // A compute whose `up` failed is started again on the next call.
-    let other = rt.ensure_address(&endpoint(EP_B)).await.unwrap();
+    let other = rt.ensure_address("acme", &endpoint(EP_B)).await.unwrap();
     *fake.fail_up.lock().unwrap() = true;
     let lb = launch(CMP_B, EP_B, &other, Cu(4));
     let err = rt.start(&lb).await.unwrap_err();
@@ -275,7 +275,7 @@ async fn start_is_idempotent_by_compute_id() {
     *fake.fail_up.lock().unwrap() = false;
     rt.start(&lb).await.unwrap();
     assert_eq!(
-        rt.status(&CMP_B.parse().unwrap()).await.unwrap(),
+        rt.status("acme", &CMP_B.parse().unwrap()).await.unwrap(),
         RuntimeStatus::Running
     );
 }
@@ -287,22 +287,22 @@ async fn stop_missing_is_ok() {
     let dir = tempfile::tempdir().unwrap();
     let fake = Arc::new(Fake::default());
     let rt = open(dir.path(), &fake);
-    rt.stop(&CMP_A.parse().unwrap()).await.unwrap();
+    rt.stop("acme", &CMP_A.parse().unwrap()).await.unwrap();
     assert!(fake.calls().is_empty());
 
-    let addr = rt.ensure_address(&endpoint(EP_A)).await.unwrap();
+    let addr = rt.ensure_address("acme", &endpoint(EP_A)).await.unwrap();
     rt.start(&launch(CMP_A, EP_A, &addr, Cu(4))).await.unwrap();
-    rt.stop(&CMP_A.parse().unwrap()).await.unwrap();
+    rt.stop("acme", &CMP_A.parse().unwrap()).await.unwrap();
     assert_eq!(
         fake.subs().last().unwrap(),
         "rm cmp-01jz0000000000000000000003"
     );
     assert_eq!(
-        rt.status(&CMP_A.parse().unwrap()).await.unwrap(),
+        rt.status("acme", &CMP_A.parse().unwrap()).await.unwrap(),
         RuntimeStatus::Missing
     );
     let calls = fake.calls().len();
-    rt.stop(&CMP_A.parse().unwrap()).await.unwrap();
+    rt.stop("acme", &CMP_A.parse().unwrap()).await.unwrap();
     assert_eq!(fake.calls().len(), calls);
     // The compute's env file (its token) is gone with it.
     assert!(
@@ -325,14 +325,14 @@ async fn port_is_stable_across_restarts() {
     let fake = Arc::new(Fake::default());
     let a = {
         let rt = open(dir.path(), &fake);
-        let a = rt.ensure_address(&endpoint(EP_A)).await.unwrap();
-        assert_eq!(rt.ensure_address(&endpoint(EP_A)).await.unwrap(), a);
+        let a = rt.ensure_address("acme", &endpoint(EP_A)).await.unwrap();
+        assert_eq!(rt.ensure_address("acme", &endpoint(EP_A)).await.unwrap(), a);
         a
     };
     assert_eq!(a, BackendAddr::new("127.0.0.1", DEFAULT_PORT_RANGE.start));
     let rt = open(dir.path(), &fake);
-    assert_eq!(rt.ensure_address(&endpoint(EP_A)).await.unwrap(), a);
-    let b = rt.ensure_address(&endpoint(EP_B)).await.unwrap();
+    assert_eq!(rt.ensure_address("acme", &endpoint(EP_A)).await.unwrap(), a);
+    let b = rt.ensure_address("acme", &endpoint(EP_B)).await.unwrap();
     assert_ne!(a.port, b.port);
 
     // A record that names its address keeps it, even one the runtime's
@@ -341,21 +341,21 @@ async fn port_is_stable_across_restarts() {
     let rt2 = open(fresh.path(), &fake);
     let mut rec = endpoint(EP_B);
     rec.backend_addr = Some(b.to_string());
-    assert_eq!(rt2.ensure_address(&rec).await.unwrap(), b);
+    assert_eq!(rt2.ensure_address("acme", &rec).await.unwrap(), b);
     // …and the port is then taken for any other endpoint.
-    let c = rt2.ensure_address(&endpoint(EP_A)).await.unwrap();
+    let c = rt2.ensure_address("acme", &endpoint(EP_A)).await.unwrap();
     assert_ne!(c.port, b.port);
     // A record naming another endpoint's port is refused.
     let mut clash = endpoint("ep-01JZ0000000000000000000007");
     clash.backend_addr = Some(c.to_string());
-    let err = rt2.ensure_address(&clash).await.unwrap_err();
+    let err = rt2.ensure_address("acme", &clash).await.unwrap_err();
     assert!(matches!(err, RuntimeError::InvalidArgument(_)), "{err}");
 
     // Removing the address frees the port.
-    rt.remove_address(&endpoint(EP_A)).await.unwrap();
-    rt.remove_address(&endpoint(EP_A)).await.unwrap();
+    rt.remove_address("acme", &endpoint(EP_A)).await.unwrap();
+    rt.remove_address("acme", &endpoint(EP_A)).await.unwrap();
     let d = rt
-        .ensure_address(&endpoint("ep-01JZ0000000000000000000008"))
+        .ensure_address("acme", &endpoint("ep-01JZ0000000000000000000008"))
         .await
         .unwrap();
     assert_eq!(d, a);
@@ -369,7 +369,7 @@ async fn open_removes_tokens_of_unrecorded_computes() {
     let fake = Arc::new(Fake::default());
     {
         let rt = open(dir.path(), &fake);
-        let addr = rt.ensure_address(&endpoint(EP_A)).await.unwrap();
+        let addr = rt.ensure_address("acme", &endpoint(EP_A)).await.unwrap();
         rt.start(&launch(CMP_A, EP_A, &addr, Cu(4))).await.unwrap();
     }
     let env = dir.path().join("env");
@@ -379,10 +379,10 @@ async fn open_removes_tokens_of_unrecorded_computes() {
     assert!(env.join("cmp-01jz0000000000000000000003.env").exists());
     // The reopened runtime still knows the compute, and stops it.
     assert_eq!(
-        rt.status(&CMP_A.parse().unwrap()).await.unwrap(),
+        rt.status("acme", &CMP_A.parse().unwrap()).await.unwrap(),
         RuntimeStatus::Running
     );
-    rt.stop(&CMP_A.parse().unwrap()).await.unwrap();
+    rt.stop("acme", &CMP_A.parse().unwrap()).await.unwrap();
     assert!(!env.join("cmp-01jz0000000000000000000003.env").exists());
 }
 
@@ -396,10 +396,10 @@ async fn ports_run_out() {
         ..config(dir.path())
     };
     let rt = ComposeRuntime::open(cfg, fake).unwrap();
-    rt.ensure_address(&endpoint(EP_A)).await.unwrap();
-    rt.ensure_address(&endpoint(EP_B)).await.unwrap();
+    rt.ensure_address("acme", &endpoint(EP_A)).await.unwrap();
+    rt.ensure_address("acme", &endpoint(EP_B)).await.unwrap();
     let err = rt
-        .ensure_address(&endpoint("ep-01JZ0000000000000000000007"))
+        .ensure_address("acme", &endpoint("ep-01JZ0000000000000000000007"))
         .await
         .unwrap_err();
     assert!(matches!(err, RuntimeError::PortsExhausted { .. }), "{err}");
@@ -436,7 +436,7 @@ async fn a_new_compute_replaces_the_endpoints_previous_one() {
     let dir = tempfile::tempdir().unwrap();
     let fake = Arc::new(Fake::default());
     let rt = open(dir.path(), &fake);
-    let addr = rt.ensure_address(&endpoint(EP_A)).await.unwrap();
+    let addr = rt.ensure_address("acme", &endpoint(EP_A)).await.unwrap();
     rt.start(&launch(CMP_A, EP_A, &addr, Cu(4))).await.unwrap();
     let new = rt.start(&launch(CMP_A2, EP_A, &addr, Cu(4))).await.unwrap();
     assert_eq!(
@@ -454,9 +454,9 @@ async fn a_new_compute_replaces_the_endpoints_previous_one() {
     assert_eq!(new.address, Some(addr.clone()));
     let mut ep = endpoint(EP_A);
     ep.backend_addr = Some(addr.to_string());
-    rt.bind_address(&ep, &new).await.unwrap();
+    rt.bind_address("acme", &ep, &new).await.unwrap();
     assert_eq!(
-        rt.status(&CMP_A.parse().unwrap()).await.unwrap(),
+        rt.status("acme", &CMP_A.parse().unwrap()).await.unwrap(),
         RuntimeStatus::Missing
     );
 }
@@ -469,17 +469,23 @@ async fn status_and_resize() {
     let fake = Arc::new(Fake::default());
     let rt = open(dir.path(), &fake);
     let id = CMP_A.parse().unwrap();
-    assert_eq!(rt.status(&id).await.unwrap(), RuntimeStatus::Missing);
-    let addr = rt.ensure_address(&endpoint(EP_A)).await.unwrap();
+    assert_eq!(
+        rt.status("acme", &id).await.unwrap(),
+        RuntimeStatus::Missing
+    );
+    let addr = rt.ensure_address("acme", &endpoint(EP_A)).await.unwrap();
     rt.start(&launch(CMP_A, EP_A, &addr, Cu(4))).await.unwrap();
-    assert_eq!(rt.status(&id).await.unwrap(), RuntimeStatus::Running);
+    assert_eq!(
+        rt.status("acme", &id).await.unwrap(),
+        RuntimeStatus::Running
+    );
     fake.exit("loams-pg-acme", "cmp-01jz0000000000000000000003", 137);
     assert_eq!(
-        rt.status(&id).await.unwrap(),
+        rt.status("acme", &id).await.unwrap(),
         RuntimeStatus::Exited { code: Some(137) }
     );
     assert_eq!(
-        rt.resize(&id, Cu(8)).await.unwrap(),
+        rt.resize("acme", &id, Cu(8)).await.unwrap(),
         ResizeOutcome::Unsupported
     );
 }
@@ -494,7 +500,7 @@ async fn bad_launches_are_refused() {
     let dir = tempfile::tempdir().unwrap();
     let fake = Arc::new(Fake::default());
     let rt = open(dir.path(), &fake);
-    let addr = rt.ensure_address(&endpoint(EP_A)).await.unwrap();
+    let addr = rt.ensure_address("acme", &endpoint(EP_A)).await.unwrap();
     let good = launch(CMP_A, EP_A, &addr, Cu(4));
     let mut cases = Vec::new();
     let mut l = good.clone();
@@ -525,7 +531,7 @@ async fn bad_launches_are_refused() {
     let handle = rt.start(&good).await.unwrap();
     let mut other = endpoint(EP_B);
     other.backend_addr = Some(BackendAddr::new("127.0.0.1", addr.port + 1).to_string());
-    let err = rt.bind_address(&other, &handle).await.unwrap_err();
+    let err = rt.bind_address("acme", &other, &handle).await.unwrap_err();
     assert!(matches!(err, RuntimeError::InvalidArgument(_)), "{err}");
 }
 
@@ -538,7 +544,7 @@ async fn the_token_is_only_in_a_private_env_file() {
     let dir = tempfile::tempdir().unwrap();
     let fake = Arc::new(Fake::default());
     let rt = open(dir.path(), &fake);
-    let addr = rt.ensure_address(&endpoint(EP_A)).await.unwrap();
+    let addr = rt.ensure_address("acme", &endpoint(EP_A)).await.unwrap();
     rt.start(&launch(CMP_A, EP_A, &addr, Cu(4))).await.unwrap();
     let env = dir
         .path()
@@ -631,7 +637,7 @@ async fn network_reach_uses_the_service_name() {
         ..config(dir.path())
     };
     let rt = ComposeRuntime::open(cfg, fake.clone()).unwrap();
-    let addr = rt.ensure_address(&endpoint(EP_A)).await.unwrap();
+    let addr = rt.ensure_address("acme", &endpoint(EP_A)).await.unwrap();
     let h = rt.start(&launch(CMP_A, EP_A, &addr, Cu(4))).await.unwrap();
     assert_eq!(h.ctl_url, "http://cmp-01jz0000000000000000000003:3080");
     assert!(!fake.subs().iter().any(|s| s.starts_with("port ")));

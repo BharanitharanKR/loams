@@ -64,9 +64,9 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    BackendAddr, COMMAND_TIMEOUT, COMPUTE_CTL_INTERNAL_PORT, COMPUTE_CTL_PORT, COMPUTE_PG_PORT,
-    ComputeHandle, ComputeLaunch, ComputeRuntime, ResizeOutcome, RuntimeError, RuntimeStatus,
-    check_upcall_token, is_pinned,
+    BackendAddr, COMMAND_TIMEOUT, COMPUTE_CTL_PORT, COMPUTE_PG_PORT, ComputeHandle, ComputeLaunch,
+    ComputeRuntime, ResizeOutcome, RuntimeError, RuntimeStatus, check_upcall_token,
+    compute_ctl_args, is_pinned,
 };
 use crate::ids::ComputeId;
 use crate::model::{Cu, EndpointRec};
@@ -551,7 +551,14 @@ impl ComposeRuntime {
 
 #[async_trait]
 impl ComputeRuntime for ComposeRuntime {
-    async fn ensure_address(&self, ep: &EndpointRec) -> Result<BackendAddr, RuntimeError> {
+    // Ports are the host's, one range for every namespace: the compose
+    // runtime keys addresses by endpoint alone, and finds a compute's
+    // namespace in its own state.
+    async fn ensure_address(
+        &self,
+        _ns: &str,
+        ep: &EndpointRec,
+    ) -> Result<BackendAddr, RuntimeError> {
         let range = self.config.port_range.clone();
         let mut st = self.lock_state();
         let held_by = |ports: &PortsState, port: u16| {
@@ -597,7 +604,7 @@ impl ComputeRuntime for ComposeRuntime {
         Ok(BackendAddr::new(self.config.address_host(), port))
     }
 
-    async fn remove_address(&self, ep: &EndpointRec) -> Result<(), RuntimeError> {
+    async fn remove_address(&self, _ns: &str, ep: &EndpointRec) -> Result<(), RuntimeError> {
         let mut st = self.lock_state();
         if st
             .namespaces
@@ -730,7 +737,12 @@ impl ComputeRuntime for ComposeRuntime {
             .await
     }
 
-    async fn bind_address(&self, ep: &EndpointRec, c: &ComputeHandle) -> Result<(), RuntimeError> {
+    async fn bind_address(
+        &self,
+        _ns: &str,
+        ep: &EndpointRec,
+        c: &ComputeHandle,
+    ) -> Result<(), RuntimeError> {
         let recorded = ep
             .backend_addr
             .as_deref()
@@ -746,7 +758,7 @@ impl ComputeRuntime for ComposeRuntime {
         )))
     }
 
-    async fn stop(&self, compute_id: &ComputeId) -> Result<(), RuntimeError> {
+    async fn stop(&self, _ns: &str, compute_id: &ComputeId) -> Result<(), RuntimeError> {
         let id = compute_id.to_string();
         let Some((ns, _)) = self.find(&id) else {
             return Ok(());
@@ -759,7 +771,11 @@ impl ComputeRuntime for ComposeRuntime {
         self.remove(&ns, &id).await
     }
 
-    async fn status(&self, compute_id: &ComputeId) -> Result<RuntimeStatus, RuntimeError> {
+    async fn status(
+        &self,
+        _ns: &str,
+        compute_id: &ComputeId,
+    ) -> Result<RuntimeStatus, RuntimeError> {
         let id = compute_id.to_string();
         let Some((ns, _)) = self.find(&id) else {
             return Ok(RuntimeStatus::Missing);
@@ -767,7 +783,7 @@ impl ComputeRuntime for ComposeRuntime {
         self.ps(&ns, &service_name(&id)).await
     }
 
-    async fn resize(&self, _: &ComputeId, _: Cu) -> Result<ResizeOutcome, RuntimeError> {
+    async fn resize(&self, _: &str, _: &ComputeId, _: Cu) -> Result<ResizeOutcome, RuntimeError> {
         // A container's limits change only by recreating it, which is a
         // restart; computes are replaced instead (§46 §7.4: a move happens
         // only on restart).
@@ -849,23 +865,7 @@ fn render(config: &ComposeConfig, ns: &str, state: &NamespaceState) -> String {
     line("services:".into());
     for (id, svc) in &state.computes {
         let service = service_name(id);
-        let connstr = format!("postgresql://cloud_admin@127.0.0.1:{COMPUTE_PG_PORT}/postgres");
-        let args = [
-            "--pgdata",
-            "/var/db/postgres/compute",
-            "--pgbin",
-            "/usr/local/bin/postgres",
-            "--connstr",
-            &connstr,
-            "--compute-id",
-            id,
-            "--control-plane-uri",
-            &config.control_plane_uri,
-            "--external-http-port",
-            &COMPUTE_CTL_PORT.to_string(),
-            "--internal-http-port",
-            &COMPUTE_CTL_INTERNAL_PORT.to_string(),
-        ];
+        let args = compute_ctl_args(id, &config.control_plane_uri);
         line(format!("  {}:", q(&service)));
         line(format!("    image: {}", q(&svc.image)));
         line("    restart: \"no\"".into());
@@ -874,7 +874,7 @@ fn render(config: &ComposeConfig, ns: &str, state: &NamespaceState) -> String {
             q("/usr/local/bin/compute_ctl")
         ));
         line("    command:".into());
-        for a in args {
+        for a in &args {
             line(format!("      - {}", q(a)));
         }
         line("    env_file:".into());

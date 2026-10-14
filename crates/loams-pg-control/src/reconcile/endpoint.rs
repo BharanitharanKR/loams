@@ -484,6 +484,11 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         &self.cur.record
     }
 
+    /// The project's Loams namespace, which the runtime's calls name.
+    fn ns(&self) -> &str {
+        &self.snap.project.record.namespace
+    }
+
     async fn run(&mut self) -> Result<Step, ReconcileError> {
         let store = &self.act.ctx.store;
         for id in &self.cur.record.open_ops {
@@ -598,7 +603,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         self.act.renew().await?;
         self.c
             .runtime
-            .stop(&id)
+            .stop(self.ns(), &id)
             .await
             .map_err(|e| runtime_error("stopping the compute", &e))
     }
@@ -644,7 +649,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         self.act.renew().await?;
         self.c
             .runtime
-            .remove_address(self.ep())
+            .remove_address(self.ns(), self.ep())
             .await
             .map_err(|e| runtime_error("giving up the address", &e))?;
         let mut batch = self.without_compute()?;
@@ -904,7 +909,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
             return Ok(Step::Done);
         };
         self.act.renew().await?;
-        match self.c.runtime.status(&id).await {
+        match self.c.runtime.status(self.ns(), &id).await {
             Ok(RuntimeStatus::Exited { code }) => {
                 return self
                     .crash(&format!("the compute's container exited ({code:?})"))
@@ -950,7 +955,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
     /// the endpoint naming it.
     async fn create_compute(&mut self) -> Result<(), ReconcileError> {
         self.act.renew().await?;
-        let addr = match self.c.runtime.ensure_address(self.ep()).await {
+        let addr = match self.c.runtime.ensure_address(self.ns(), self.ep()).await {
             Ok(a) => a,
             Err(RuntimeError::InvalidArgument(why)) => {
                 tracing::error!(endpoint = %self.ep().id, why, "the runtime refused the endpoint's address");
@@ -1079,7 +1084,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         self.act.renew().await?;
         self.c
             .runtime
-            .bind_address(self.ep(), &handle)
+            .bind_address(self.ns(), self.ep(), &handle)
             .await
             .map_err(|e| runtime_error("binding the address", &e))?;
         let mut running = compute.record.clone();
@@ -1128,7 +1133,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
                 ReconcileError::Runtime(format!("compute id {}", compute.record.id))
             })?;
         self.act.renew().await?;
-        match self.c.runtime.status(&id).await {
+        match self.c.runtime.status(self.ns(), &id).await {
             Ok(RuntimeStatus::Exited { code }) => {
                 return self
                     .crash(&format!("the compute's container exited ({code:?})"))
