@@ -15,7 +15,7 @@ import { desktopFactory } from './factory.js';
 import { GitActionBus, withGitActions } from './git/bus.js';
 import { StudioContext } from './header.js';
 import { hostedAgentd } from './hosts/agentd.js';
-import { createStudioKeys } from './palette/commands.js';
+import { createStudioKeys, listenShellCommands } from './palette/commands.js';
 import { StudioPalette } from './palette/StudioPalette.js';
 import { routeOf, STUDIO_PAGES } from './routes.js';
 import { agentdPaletteSource } from './sidebar/paletteSource.js';
@@ -48,6 +48,7 @@ export { LAYOUT_DEFAULTS, LAYOUT_KEY, StudioLayout } from './layout/StudioLayout
 export {
   type CommandName,
   createStudioKeys,
+  listenShellCommands,
   StudioCommands,
   type StudioKeys,
   useStudioCommand,
@@ -105,7 +106,7 @@ const plugin: PluginModule = {
     const platform = service(ctx, 'platform');
     const desktop = platform.kind === 'desktop' ? service(ctx, 'desktop') : undefined;
     const agentd: StudioAgentd = desktop
-      ? studioAgentd(service(ctx, 'agentd'), desktop.shell)
+      ? studioAgentd(service(ctx, 'agentd'), desktop.shell, desktop.studio)
       : hostedAgentd();
     // The Factory group (SD1 Task 27): the desktop's factory bridge; on the web nothing
     // until SF1 (D922).
@@ -117,6 +118,8 @@ const plugin: PluginModule = {
     // Its git rows and commands are the open thread's toolbar's (SD1 Task 23, T24-6).
     const gitBus = new GitActionBus();
     const paletteSource = withGitActions(agentdPaletteSource(agentd), gitBus);
+    // The desktop menu's "New thread" (SD1 Task 28) runs `chat.new` like Mod+N.
+    ctx.effect(() => listenShellCommands(keys.commands));
 
     for (const page of STUDIO_PAGES) {
       ctx.effect(() =>

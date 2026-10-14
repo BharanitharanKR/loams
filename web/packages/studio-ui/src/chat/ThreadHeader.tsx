@@ -1,14 +1,14 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/chat/ChatHeader.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// the thread header's title and chips as props (harness and model, approval mode and sandbox, branch, usage; G20) with Stop and Find actions; no project favicon, rename, action menu or environment scope. Loams' changes are Apache-2.0.
+// the thread header's title and chips as props (harness and model, approval mode and sandbox, branch, usage; G20) with Stop, Find and Open in editor actions (the editor picker is the desktop's Settings › Studio); no project favicon, rename, action menu or environment scope. Loams' changes are Apache-2.0.
 
 // The thread header (SD1 Task 18, §53 §5.4). Everything here is the parent's data; the
 // header owns no state. Usage is token counts only (no prices; CONTRIBUTING's
 // open-core rule).
 
 import { Button, cx, Spinner } from "@loams/ui";
-import { GitBranch, Search, ShieldCheck, Square } from "lucide-react";
+import { FolderCode, GitBranch, Search, ShieldCheck, Square } from "lucide-react";
 import { memo, type ReactNode } from "react";
 
 export interface ThreadUsage {
@@ -29,6 +29,8 @@ export interface ThreadHeaderProps {
   running?: boolean;
   onInterrupt?: (() => void) | undefined;
   onFind?: (() => void) | undefined;
+  /** Opens the thread's checkout in the person's editor (the desktop only). */
+  onOpenInEditor?: (() => void) | undefined;
   compact?: boolean;
 }
 
@@ -60,6 +62,7 @@ export const ThreadHeader = memo(function ThreadHeader({
   running = false,
   onInterrupt,
   onFind,
+  onOpenInEditor,
   compact = false,
 }: ThreadHeaderProps) {
   const totalTokens =
@@ -128,6 +131,17 @@ export const ThreadHeader = memo(function ThreadHeader({
             onClick={onFind}
           >
             <Search className="size-3.5" aria-hidden />
+          </Button>
+        ) : null}
+        {onOpenInEditor ? (
+          <Button
+            size="icon"
+            variant="quiet"
+            aria-label="Open in editor"
+            title="Open in editor"
+            onClick={onOpenInEditor}
+          >
+            <FolderCode className="size-3.5" aria-hidden />
           </Button>
         ) : null}
         {running && onInterrupt ? (

@@ -4,9 +4,10 @@
 // composer (Task 19) and run groups (Task 25) read them. The web edition also
 // lists its agentd hosts (Hosts.tsx).
 
-import { Card, Checkbox, Field, Input, Select } from '@loams/ui';
-import { useState } from 'react';
-import type { StudioAgentd } from '../agentd.js';
+import type { StudioEditor, StudioEditorId, StudioNotifyPrefs } from '@loams/desktop/contracts';
+import { Card, Checkbox, Field, Input, Notice, Select, Spinner } from '@loams/ui';
+import { useEffect, useState } from 'react';
+import type { StudioAgentd, StudioDesktop } from '../agentd.js';
 import type { StudioKeys } from '../palette/commands.js';
 import { Hosts } from './Hosts.js';
 import { KeybindingsCard } from './Keybindings.js';
@@ -101,8 +102,89 @@ const APPROVAL_LABEL: Record<ApprovalMode, string> = {
   'full-access': 'Full access: never ask',
 };
 
+/** The notification choices as Electron main keeps them (SD1 Task 28). */
+export function notifyPrefsOf(s: StudioSettings): StudioNotifyPrefs {
+  return { turnDone: s.notifyTurnFinished, approval: s.notifyApprovalWaiting };
+}
+
+const EDITORS: { value: StudioEditorId; label: string }[] = [
+  { value: 'vscode', label: 'VS Code' },
+  { value: 'cursor', label: 'Cursor' },
+  { value: 'zed', label: 'Zed' },
+  { value: 'command', label: 'Another program…' },
+];
+
+/**
+ * "Open in editor" (Q810): VS Code, Cursor or Zed through their URL schemes, or a
+ * program picked in the OS file dialog. The choice is kept by Electron main.
+ */
+function EditorCard({ desktop }: { desktop: StudioDesktop }) {
+  const [editor, setEditor] = useState<StudioEditor | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    desktop.editor().then(
+      (e) => live && setEditor(e),
+      () => live && setEditor({ editor: 'vscode' }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [desktop]);
+  const choose = async (value: StudioEditorId) => {
+    setError(null);
+    if (value === 'command') {
+      const r = await desktop.chooseEditorCommand();
+      if (r.ok) setEditor(r.value);
+      else if (r.code !== 'cancelled') setError(r.message);
+      return;
+    }
+    const r = await desktop.setEditor(value);
+    if (r.ok) setEditor({ editor: value });
+    else setError(r.message);
+  };
+  return (
+    <Card title="Editor">
+      {editor ? (
+        <Field
+          label="Open threads in"
+          hint={
+            editor.editor === 'command' && editor.commandName
+              ? `Runs ${editor.commandName} with the thread's folder.`
+              : "Opens the thread's folder through the editor's link."
+          }
+        >
+          {(props) => (
+            <Select
+              {...props}
+              value={editor.editor}
+              onChange={(e) => void choose(e.target.value as StudioEditorId)}
+            >
+              {EDITORS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.value === 'command' && editor.commandName ? editor.commandName : o.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      ) : (
+        <Spinner label="Loading the editor choice" />
+      )}
+      {error && <Notice tone="danger" title={error} />}
+    </Card>
+  );
+}
+
 export function SettingsPage({ agentd, keys }: { agentd: StudioAgentd; keys?: StudioKeys }) {
   const [s, update] = useSettings();
+  // Electron main shows the daemon's notifications (SD1 Task 28): it keeps a copy of
+  // these two choices.
+  const desktop = agentd.desktop;
+  const { turnDone, approval } = notifyPrefsOf(s);
+  useEffect(() => {
+    void desktop?.setNotifications({ turnDone, approval }).catch(() => undefined);
+  }, [desktop, turnDone, approval]);
   return (
     <div className="mx-auto flex max-w-[760px] flex-col gap-5 px-6 py-8">
       <header>
@@ -170,8 +252,14 @@ export function SettingsPage({ agentd, keys }: { agentd: StudioAgentd; keys?: St
           </Field>
         </div>
       </Card>
+      {agentd.desktop && <EditorCard desktop={agentd.desktop} />}
       <Card title="Notifications">
         <div className="flex flex-col gap-2">
+          {agentd.desktop && (
+            <p className="m-0 text-sm text-muted">
+              Shown as system notifications while Loams Desktop is in the background.
+            </p>
+          )}
           <Checkbox
             label="When a turn finishes"
             checked={s.notifyTurnFinished}

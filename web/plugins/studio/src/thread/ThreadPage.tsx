@@ -72,9 +72,18 @@ export interface ThreadPageProps {
   navigate: (to: string) => void;
   /** Opens an http(s) link outside the console (the platform's opener). */
   openExternal?: (url: string) => void;
+  /**
+   * Desktop: opens the thread's checkout in the person's editor (SD1 Task 28, Q810).
+   * Electron main builds the editor's URL or argv; absent on the web.
+   */
+  openInEditor?: OpenInEditor;
 }
 
-export function ThreadPage({ threadId, navigate, openExternal }: ThreadPageProps) {
+export type OpenInEditor = (
+  path: string,
+) => Promise<{ ok: true } | { ok: false; code: string; message: string }>;
+
+export function ThreadPage({ threadId, navigate, openExternal, openInEditor }: ThreadPageProps) {
   const transport = useAgentdTransport();
   const store = useTranscriptStore(transport);
   if (!store) {
@@ -91,6 +100,7 @@ export function ThreadPage({ threadId, navigate, openExternal }: ThreadPageProps
       store={store}
       navigate={navigate}
       {...(openExternal ? { openExternal } : {})}
+      {...(openInEditor ? { openInEditor } : {})}
     />
   );
 }
@@ -100,6 +110,7 @@ function ThreadView({
   store,
   navigate,
   openExternal,
+  openInEditor,
 }: ThreadPageProps & { store: NonNullable<ReturnType<typeof useTranscriptStore>> }) {
   const transport = useAgentdTransport();
   const transcript = useThreadTranscript(store, threadId);
@@ -183,6 +194,25 @@ function ThreadView({
     [transport, cwd, threadId, restore, refetchCheckpoints],
   );
 
+  const onOpenInEditor = useMemo(
+    () =>
+      openInEditor && cwd
+        ? () => {
+            setNotice(null);
+            void openInEditor(cwd).then(
+              (r) => {
+                if (!r.ok) setNotice(`Open in editor failed: ${r.message}`);
+              },
+              (cause: unknown) =>
+                setNotice(
+                  `Open in editor failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+                ),
+            );
+          }
+        : undefined,
+    [openInEditor, cwd],
+  );
+
   // Find in thread.
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState('');
@@ -255,6 +285,7 @@ function ThreadView({
         running={running}
         onInterrupt={() => interrupt.mutate({ chatId: threadId })}
         onFind={() => setFindOpen(true)}
+        onOpenInEditor={onOpenInEditor}
       />
       {findOpen ? (
         <div className="absolute top-14 right-4 z-10">
@@ -291,7 +322,7 @@ function ThreadView({
       ) : null}
       {notice ? (
         <div className="flex items-center gap-2 px-4 pt-2">
-          <Notice tone={notice.startsWith('Restore failed') ? 'danger' : 'info'} title={notice} />
+          <Notice tone={/ failed: /.test(notice) ? 'danger' : 'info'} title={notice} />
           <Button size="sm" variant="quiet" onClick={() => setNotice(null)}>
             Dismiss
           </Button>

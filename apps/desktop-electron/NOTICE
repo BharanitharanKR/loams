@@ -6,10 +6,14 @@ Portions of this app are adapted from dsh-desktop
 Copyright (c) 2026 DataElement. Each adapted file starts with
 "Adapted from dataelement/dsh-desktop (MIT), <path>."
 
-Loams Studio (web/packages/studio-ui, bundled into the console) includes
-portions of T3 Code (https://github.com/pingdotgg/t3code), MIT License,
-Copyright (c) 2026 T3 Tools Inc. Files under web/packages/studio-ui/ marked in
-their headers are derived from T3 Code at the commit recorded in
-web/packages/studio-ui/provenance.json; the MIT licence text is in
+Loams Studio (web/packages/studio-ui and parts of web/packages/ui, bundled
+into the console) includes portions of T3 Code
+(https://github.com/pingdotgg/t3code), MIT License, Copyright (c) 2026 T3
+Tools Inc. Files marked in their headers are derived from T3 Code at the
+commit recorded in their package's provenance.json; the MIT licence text is in
 web/packages/studio-ui/LICENSE.t3code and must accompany distributions of
 those files.
+
+The installed app ships this NOTICE and LICENSE.t3code in its resources
+folder, and the console's own NOTICE and LICENSE.t3code beside the console
+bundle (resources/console).

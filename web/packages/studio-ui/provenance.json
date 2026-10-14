@@ -71,7 +71,7 @@
       "upstreamPath": "apps/web/src/components/chat/ChatHeader.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "9cbf611c6d61193ccd5c7a7cda5d9f3f5bb8b65faf5532a2c06b436e468a34d7",
-      "localSha256": "447ed7469dc876b24d0a2bc7ebac0ae55a2d1d7281288c9e721e16c3f87024b7",
+      "localSha256": "3eed89f8b2a7cd27895e891d57de0bf0da505656cd7580109b3da7145112b5a5",
       "verdict": "adapt",
       "group": "b"
     },

@@ -1,16 +1,24 @@
 import { createClient, createRouterTransport } from '@connectrpc/connect';
-import { boot, type PlatformService, type PluginModule } from '@loams/console-host';
+import {
+  boot,
+  type Mode,
+  type ModeService,
+  type PlatformService,
+  type PluginModule,
+  SHELL_COMMAND_EVENT,
+} from '@loams/console-host';
 import { createMockControl } from '@loams/console-host/testing';
 import { createWebPlatform } from '@loams/platform-web';
 import { instance } from '@loams/proto';
 import { describe, expect, it, vi } from 'vitest';
-import type { LoamsDesktopApi } from './index.js';
+import type { LoamsDesktopApi, ShellCommand } from './index.js';
 import {
   createElectronPlatform,
   desktopAgentdEndpoint,
   desktopFetch,
   instanceFeaturesInterceptor,
   wireDeepLinks,
+  wireShellCommands,
 } from './index.js';
 
 type Kind = 'local' | 'remote' | 'demo';
@@ -175,6 +183,73 @@ describe('platform-electron', () => {
     await wireDeepLinks(api, go);
     expect(order).toEqual(['subscribe', 'take']);
     expect(go).toHaveBeenCalledWith('/servers');
+  });
+
+  it('menu_switches_mode', () => {
+    // SD1 Task 28: the application menu's Studio, Console and Switch mode items.
+    const api = fakeApi();
+    let send: (c: ShellCommand) => void = () => {};
+    const shell = api.shell as unknown as { onCommand: (cb: typeof send) => () => void };
+    shell.onCommand = vi.fn((cb) => {
+      send = cb;
+      return () => {};
+    });
+    let current: Mode = 'studio';
+    const mode = {
+      get current() {
+        return current;
+      },
+      available: ['console', 'studio'] as const,
+      set: vi.fn((m: Mode) => {
+        current = m;
+      }),
+      onChange: () => () => {},
+      modesOf: () => ['console'] as const,
+    } as unknown as ModeService;
+    const target = new EventTarget();
+    wireShellCommands(api, mode, target);
+    send('mode.console');
+    expect(mode.set).toHaveBeenLastCalledWith('console');
+    send('mode.studio');
+    expect(mode.set).toHaveBeenLastCalledWith('studio');
+    send('mode.toggle');
+    expect(current).toBe('console');
+    send('mode.toggle');
+    expect(current).toBe('studio');
+  });
+
+  it('new_thread_runs_studio_chat_new_or_opens_studio', () => {
+    const api = fakeApi();
+    let send: (c: ShellCommand) => void = () => {};
+    (api.shell as unknown as { onCommand: unknown }).onCommand = (cb: typeof send) => {
+      send = cb;
+      return () => {};
+    };
+    let current: Mode = 'studio';
+    const set = vi.fn((m: Mode) => {
+      current = m;
+    });
+    const mode = {
+      get current() {
+        return current;
+      },
+      available: ['console', 'studio'],
+      set,
+    } as unknown as ModeService;
+    const target = new EventTarget();
+    wireShellCommands(api, mode, target);
+    // Studio is mounted and takes the command: nothing else happens.
+    const taken = vi.fn((e: Event) => e.preventDefault());
+    target.addEventListener(SHELL_COMMAND_EVENT, taken);
+    send('chat.new');
+    const event = taken.mock.calls[0]?.[0] as CustomEvent | undefined;
+    expect(event?.detail).toBe('chat.new');
+    expect(set).not.toHaveBeenCalled();
+    target.removeEventListener(SHELL_COMMAND_EVENT, taken);
+    // Nothing takes it (Console mode, or Studio not loaded yet): Studio's home opens.
+    current = 'console';
+    send('chat.new');
+    expect(set).toHaveBeenCalledWith('studio', { navigate: '/studio' });
   });
 
   it('browser_build_never_loads_desktop_plugins', async () => {
