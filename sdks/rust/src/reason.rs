@@ -147,6 +147,42 @@ pub enum Reason {
     LiveSchemaViolation,
     /// A Live function read an index a deploy is still backfilling.
     LiveIndexNotReady,
+    /// The caller's org role is below the one the admin RPC needs, or the caller is not in the org.
+    RoleRequired,
+    /// First-run setup has not created the org yet.
+    SetupRequired,
+    /// The call carried no credential.
+    TokenMissing,
+    /// The credential is not an API key, a session token or a JWT, or more than one Authorization header was sent.
+    TokenMalformed,
+    /// The API key was revoked, or the console session was signed out or its person left the org.
+    TokenRevoked,
+    /// The OIDC token's nbf is in the future.
+    TokenNotYetValid,
+    /// The OIDC token's signature does not verify.
+    TokenBadSignature,
+    /// The OIDC token is for another audience.
+    TokenWrongAudience,
+    /// The OIDC token is from an issuer this engine does not trust.
+    TokenWrongIssuer,
+    /// The OIDC token is signed with a key its issuer's JWKS does not have.
+    TokenUnknownKey,
+    /// The OIDC token is signed with an algorithm other than RS256 or EdDSA.
+    TokenAlgorithmNotAllowed,
+    /// No key file or metastore record admits the API key.
+    ApiKeyInvalid,
+    /// This engine's auth mode does not take this kind of credential.
+    CredentialNotAccepted,
+    /// A credential was sent in the query string.
+    CredentialInQueryString,
+    /// A cookie-authenticated call that is not a GET lacked the session's CSRF token.
+    CsrfTokenInvalid,
+    /// A valid OIDC or tailnet identity that is not on the engine's allowlist.
+    PrincipalNotAllowed,
+    /// A browser call from an origin the engine's CORS allowlist does not have.
+    CorsOriginNotAllowed,
+    /// The credential cannot be checked now: the issuer's JWKS or the principal store is unreachable.
+    AuthUnavailable,
     /// An argument is missing, malformed or out of range.
     InvalidArgument,
     /// The thing the call names does not exist.
@@ -237,6 +273,24 @@ impl Reason {
         Reason::LiveDeployConflict,
         Reason::LiveSchemaViolation,
         Reason::LiveIndexNotReady,
+        Reason::RoleRequired,
+        Reason::SetupRequired,
+        Reason::TokenMissing,
+        Reason::TokenMalformed,
+        Reason::TokenRevoked,
+        Reason::TokenNotYetValid,
+        Reason::TokenBadSignature,
+        Reason::TokenWrongAudience,
+        Reason::TokenWrongIssuer,
+        Reason::TokenUnknownKey,
+        Reason::TokenAlgorithmNotAllowed,
+        Reason::ApiKeyInvalid,
+        Reason::CredentialNotAccepted,
+        Reason::CredentialInQueryString,
+        Reason::CsrfTokenInvalid,
+        Reason::PrincipalNotAllowed,
+        Reason::CorsOriginNotAllowed,
+        Reason::AuthUnavailable,
         Reason::InvalidArgument,
         Reason::NotFound,
         Reason::AlreadyExists,
@@ -316,6 +370,24 @@ impl Reason {
             Reason::LiveDeployConflict => "live_deploy_conflict",
             Reason::LiveSchemaViolation => "live_schema_violation",
             Reason::LiveIndexNotReady => "live_index_not_ready",
+            Reason::RoleRequired => "role_required",
+            Reason::SetupRequired => "setup_required",
+            Reason::TokenMissing => "token_missing",
+            Reason::TokenMalformed => "token_malformed",
+            Reason::TokenRevoked => "token_revoked",
+            Reason::TokenNotYetValid => "token_not_yet_valid",
+            Reason::TokenBadSignature => "token_bad_signature",
+            Reason::TokenWrongAudience => "token_wrong_audience",
+            Reason::TokenWrongIssuer => "token_wrong_issuer",
+            Reason::TokenUnknownKey => "token_unknown_key",
+            Reason::TokenAlgorithmNotAllowed => "token_algorithm_not_allowed",
+            Reason::ApiKeyInvalid => "api_key_invalid",
+            Reason::CredentialNotAccepted => "credential_not_accepted",
+            Reason::CredentialInQueryString => "credential_in_query_string",
+            Reason::CsrfTokenInvalid => "csrf_token_invalid",
+            Reason::PrincipalNotAllowed => "principal_not_allowed",
+            Reason::CorsOriginNotAllowed => "cors_origin_not_allowed",
+            Reason::AuthUnavailable => "auth_unavailable",
             Reason::InvalidArgument => "invalid_argument",
             Reason::NotFound => "not_found",
             Reason::AlreadyExists => "already_exists",
@@ -366,6 +438,7 @@ impl Reason {
             | Reason::WorkspaceReadOnly
             | Reason::ObjectMissing
             | Reason::SecretDetected
+            | Reason::SetupRequired
             | Reason::FailedPrecondition => Code::FailedPrecondition,
             Reason::RequesterCannotApprove
             | Reason::DecisionProofInvalid
@@ -374,10 +447,26 @@ impl Reason {
             | Reason::OutOfScope
             | Reason::EnvAccessDenied
             | Reason::EnvForeignReference
+            | Reason::RoleRequired
+            | Reason::CsrfTokenInvalid
+            | Reason::PrincipalNotAllowed
+            | Reason::CorsOriginNotAllowed
             | Reason::PermissionDenied => Code::PermissionDenied,
             Reason::StepUpRequired
             | Reason::DeviceRevoked
             | Reason::TokenExpired
+            | Reason::TokenMissing
+            | Reason::TokenMalformed
+            | Reason::TokenRevoked
+            | Reason::TokenNotYetValid
+            | Reason::TokenBadSignature
+            | Reason::TokenWrongAudience
+            | Reason::TokenWrongIssuer
+            | Reason::TokenUnknownKey
+            | Reason::TokenAlgorithmNotAllowed
+            | Reason::ApiKeyInvalid
+            | Reason::CredentialNotAccepted
+            | Reason::CredentialInQueryString
             | Reason::Unauthenticated => Code::Unauthenticated,
             Reason::ReasonRequired
             | Reason::InvalidDecision
@@ -410,6 +499,7 @@ impl Reason {
             Reason::ComputeStartFailed
             | Reason::StorageUnavailable
             | Reason::SequencerUnavailable
+            | Reason::AuthUnavailable
             | Reason::Unavailable => Code::Unavailable,
             Reason::HouseTimeout | Reason::DeadlineExceeded => Code::DeadlineExceeded,
             Reason::RefStale | Reason::WorkspaceFenced | Reason::Aborted => Code::Aborted,
@@ -459,7 +549,7 @@ mod tests {
 
     #[test]
     fn every_reason_round_trips_through_its_wire_form() {
-        assert!(Reason::ALL.len() >= 73, "the registry has 73 rows");
+        assert!(Reason::ALL.len() >= 91, "the registry has 91 rows");
         for reason in Reason::ALL {
             assert_eq!(Reason::parse(reason.as_str()), Some(*reason));
         }

@@ -1,0 +1,20 @@
+{
+  "remove": [
+    "comment-2"
+  ],
+  "upsert": [
+    {
+      "body": "This loop never ends.",
+      "checkoutId": "checkout-1",
+      "createdAtMs": 1791797400000,
+      "diffChecksum": "sum-1",
+      "endLine": 14,
+      "id": "comment-1",
+      "line": 12,
+      "outdated": true,
+      "path": "src/main.rs",
+      "resolved": false,
+      "side": "new"
+    }
+  ]
+}

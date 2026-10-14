@@ -37,6 +37,9 @@ sha2 = "0.10"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "system-proxy"] }
 ignore.workspace = true
 nucleo-matcher.workspace = true
+# SearchWorkspaceContent's matcher (SD1 Task 11): linear time, already in
+# the lock through the workspace.
+regex.workspace = true
 # The Forgejo factory credential for CreateChangeRequest (SD1 Task 9), in the
 # daemon's keyring service `dev.loams.agentd` (design §50 §12).
 keyring.workspace = true

@@ -2026,8 +2026,9 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: .
-      - name: the generated API types match the contract
-        run: pnpm gen:api && git diff --exit-code -- apps/console/src/api/schema.d.ts
+      # The console speaks Connect through @loams/proto since API2 Task 10; it has no
+      # OpenAPI schema to regenerate (connect-console.test.ts holds that line), and the
+      # Connect stubs' drift is checked by "Protos: apps".
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test

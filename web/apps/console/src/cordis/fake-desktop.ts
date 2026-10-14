@@ -33,6 +33,7 @@ import type {
 } from '@loams/desktop/contracts';
 import { validateConfig } from '@loams/desktop/validate';
 import { createMockAgentdApi } from '@loams/plugin-desktop-agentd';
+import { installFakeAgentd } from './fake-agentd.js';
 
 // The generated connector catalog (apps/desktop-electron/scripts/connectors-catalog.mjs), the same
 // JSON the desktop app serves. Loaded lazily and only here, so it never reaches a production bundle.
@@ -344,6 +345,8 @@ function previewInfo({ fields, ...a }: (typeof PREVIEW_FACTORY_APPS)[number]): F
 }
 
 export function createFakeDesktop(): LoamsDesktopApi {
+  // Studio's daemon: a fake Connect agentd behind the desktop's agentd route (SD1 Task 17).
+  installFakeAgentd();
   const data = load();
   let engine: EngineState = readyState();
   // Ruling T23-8: the preview's TiKV stack never really runs, so choosing it
