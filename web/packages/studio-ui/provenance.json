@@ -205,7 +205,7 @@
       "localSha256": "cb86d289f0ac0da87ca445c8acca81b3260e58563f591184c720f5bdf9941230",
       "verdict": "adapt",
       "group": "e",
-      "note": "read-only (\u00a753 \u00a72.2); markdown through the caller's renderer until SD1 Task 18 (ruling T21-3)"
+      "note": "read-only (§53 §2.2); markdown through the caller's renderer until SD1 Task 18 (ruling T21-3)"
     },
     {
       "path": "src/files/SourceView.tsx",
@@ -567,6 +567,82 @@
       "localSha256": "810fb13961d99ee088901c0a84fdc2dfd611387358558add87585362904e00dd",
       "verdict": "as-is",
       "group": "thread-list"
+    },
+    {
+      "path": "src/git/actions.logic.ts",
+      "upstreamPath": "apps/web/src/components/GitActionsControl.logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "a2a3ee66a6b8ed769e1960d8b793ab174a317d63d0d9084b75fd2c2e1be60f4f",
+      "localSha256": "75016377090e9db87db7322f51a0ea59a2047b123cab581294ed0a3518589bfc",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
+      "path": "src/git/BranchSelector.tsx",
+      "upstreamPath": "apps/web/src/components/BranchToolbarBranchSelector.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "1181bda01d948a7257379a372c0e7de46c16af49a8b6e7deecd64c2549fb9787",
+      "localSha256": "2b9f94de2a3f62cb20179de0f9c0dcd93695fc54a68a17043477783c46eff9e3",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
+      "path": "src/git/BranchToolbar.logic.ts",
+      "upstreamPath": "apps/web/src/components/BranchToolbar.logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "2e0e7e84acfd52d6724a04699604932108bcc964c30f23f044f46a443de9b646",
+      "localSha256": "200e4501054b03d9c4875f547f3354ebf6fb317379d8699cdfa8b40b770f3bc9",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
+      "path": "src/git/BranchToolbar.tsx",
+      "upstreamPath": "apps/web/src/components/BranchToolbar.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "c5b51e7818aa86cb2214f3748c6349ae34747ff198b4d808d4d03c3dfae71142",
+      "localSha256": "f73ec450270236b914cbdf9d6075ba365b8a8320f5eec127396ae5e90ae198bf",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
+      "path": "src/git/EnvModeSelector.tsx",
+      "upstreamPath": "apps/web/src/components/BranchToolbarEnvModeSelector.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "b6eb78d5d71aaf5657ec3e4d4f2eef82d307673ad080d0464586369960e4db07",
+      "localSha256": "c869097298c23df87077d718fba1098e460554cf6d2524fadab7eb033a25f8dd",
+      "verdict": "adapt",
+      "group": "g",
+      "note": "also apps/web/src/components/PreviousWorktreeItemContent.tsx (19 lines), folded in"
+    },
+    {
+      "path": "src/git/GitActions.tsx",
+      "upstreamPath": "apps/web/src/components/GitActionsControl.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "6307222beeda72d6e5b083b80d887e9532f5f76df86dac8821439f202a59eab1",
+      "localSha256": "2baa8130c0af0aafa7917ecacc4bfae6c22abb923c87e2f60c58da74a8a25621",
+      "verdict": "adapt",
+      "group": "g",
+      "note": "one confirmation dialog per stacked action, over loams-agentd writes (SD1 rulings T23-1..T23-4)"
+    },
+    {
+      "path": "src/git/shared.ts",
+      "upstreamPath": "packages/shared/src/git.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "08e7d48d4465a4c967af6c2bd90706568dff7dffe2d15b4a6b81619adb18c0b7",
+      "localSha256": "6c4ed01904633ae5a528cfc82a08937ce5b6ba08fea4be97c956cb60fa5780d0",
+      "verdict": "adapt",
+      "group": "g",
+      "note": "only the ref-name helpers the toolbar and actions use; the inventory's target is sui/git/shared/"
+    },
+    {
+      "path": "src/git/WorktreeSetupCard.tsx",
+      "upstreamPath": "apps/web/src/components/chat/WorktreeSetupCard.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "940e21b4867c8d13614b6acaba5eb4ce8ac3e0ac00a1a63d07af207b99bcf402",
+      "localSha256": "84117dfeb5ad97d49f74a98885d14e10db2dafdac4ff92390858a4c7eff458d4",
+      "verdict": "adapt",
+      "group": "g",
+      "note": "the inventory's verdict is as-is (types adapted); adapted because T3's work-log row, shimmer and contracts snapshot are not in Studio"
     }
   ]
 }
