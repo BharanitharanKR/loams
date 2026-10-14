@@ -5,9 +5,9 @@
 
 mod common;
 
-use common::{StubHarness, opts, reference_spec, registry};
+use common::{ReplayingHarness, StubHarness, opts, reference_spec, registry};
 use loams_connector_sdk::{Profile, ProfileKind, SystemRef};
-use loams_flow::AuthMethod;
+use loams_flow::{AuthMethod, Direction};
 use loams_flow_conformance::reference::{ReferenceHarness, SERVICES};
 use loams_flow_conformance::{
     FaultPoint, RunEnv, Suite, SuiteOutcome, SuiteReport, SuiteResult, capability_checks, run_with,
@@ -87,6 +87,33 @@ async fn reference_connector_passes_its_suites() {
     )
     .await;
     assert!(report.green(), "{report}");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dup_check_bounds_the_direction_under_test() {
+    // The reference manifest's source is at least once and its sink exactly
+    // once. One replay per crash (two copies) is within the source's
+    // delivery, not the sink's.
+    let spec = reference_spec();
+    let env = ReferenceHarness::run_env();
+    let run = |direction| {
+        let h = ReplayingHarness {
+            services: SERVICES,
+            direction,
+            seeded: Default::default(),
+        };
+        let (env, spec) = (env.clone(), spec.clone());
+        async move { run_with(&env, &opts(), &spec, None, &h, &[Suite::DupCheck]).await }
+    };
+    let source = run(Some(Direction::Source)).await;
+    assert!(source.green(), "{source}");
+    for direction in [Some(Direction::Sink), None] {
+        let report = run(direction).await;
+        match &report.result(Suite::DupCheck).unwrap().outcome {
+            SuiteOutcome::Failed(m) => assert!(m.contains("exceed 1 copy"), "{m}"),
+            other => panic!("{direction:?}: two copies passed exactly-once: {other:?}"),
+        }
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

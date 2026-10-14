@@ -34,6 +34,7 @@ use std::fmt;
 use std::time::Duration;
 
 use async_trait::async_trait;
+pub use loams_flow::Direction;
 
 pub mod bench;
 pub mod capabilities;
@@ -271,6 +272,13 @@ pub trait ConnectorHarness: Send + Sync {
     /// The services this harness runs against (OR-2). Checked against
     /// `systems.toml` before any suite runs.
     fn services(&self) -> &[ServiceKind];
+    /// The direction this harness tests, when the connector has both: the
+    /// manifest's delivery for that direction is the one `dup-check` and
+    /// `kill-restart` hold it to. `None` (the default) keeps the kit's rule:
+    /// the sink's delivery when the connector has a sink, else the source's.
+    fn direction(&self) -> Option<Direction> {
+        None
+    }
     /// Write `n` records into the real system (a source's input, or the
     /// Fabric topic a sink reads). Cumulative until [`Self::reset`].
     async fn seed(&self, n: usize) -> Result<Seeded, HarnessError>;

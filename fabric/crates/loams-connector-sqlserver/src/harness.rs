@@ -1,5 +1,5 @@
 //! Conformance harnesses for the family (CN2 Task 6's kit, R6.2), against
-//! the real systems (OR-2): SQL Server 2022 Developer (compose service
+//! the real systems (OR-2): SQL Server 2025 Developer (compose service
 //! `sqlserver`, profile `connectors-ci-only`, a `ci-service`, OR-3) and Azure
 //! SQL Database (nightly, `LOAMS_AZURE_SQL_URL`).
 //!
@@ -32,8 +32,8 @@ use loams_connector_sdk::{
     SinkFactory, StaticSecrets,
 };
 use loams_flow_conformance::{
-    CdcReport, ConnectorHarness, CrashingReader, CrashingSinkFactory, CrashingWriter, FaultPoint,
-    FaultSwitch, HarnessError, KillTarget, MemoryReport, Observed, Seeded, ServiceKind,
+    CdcReport, ConnectorHarness, CrashingReader, CrashingSinkFactory, CrashingWriter, Direction,
+    FaultPoint, FaultSwitch, HarnessError, KillTarget, MemoryReport, Observed, Seeded, ServiceKind,
 };
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
@@ -50,7 +50,7 @@ const CLIENT_SECRET: &str = "entra-client-secret";
 /// The database the CI harness creates on the container.
 pub const DATABASE: &str = "loams";
 
-/// SQL Server 2022 Developer, a `ci-service` (`connectors-ci-only`).
+/// SQL Server 2025 Developer, a `ci-service` (`connectors-ci-only`).
 pub const SQL_SERVER: &[ServiceKind] = &[ServiceKind::Container {
     compose_service: "sqlserver",
     system: "SQL Server",
@@ -310,6 +310,9 @@ fn by_class(e: loams_connector_sdk::ConnectorError) -> HarnessError {
 
 static PREPARED: tokio::sync::OnceCell<()> = tokio::sync::OnceCell::const_new();
 
+/// Held across CDC metadata changes (see [`SqlHarness::cdc_exec`]).
+static CDC_DDL: Mutex<()> = Mutex::const_new(());
+
 impl SqlHarness {
     fn new(target: Target, role: Role, name: &str) -> Self {
         let services = match target {
@@ -490,9 +493,32 @@ impl SqlHarness {
         conn::exec(&mut c, sql, "harness").await.map_err(failed)
     }
 
+    /// Run a CDC metadata change (`sp_cdc_enable_table`, `sp_cdc_disable_table`)
+    /// or a DDL on a captured table. The caller holds [`CDC_DDL`]: tests run
+    /// in parallel in one process, and concurrent changes to the CDC
+    /// metadata deadlock each other (1205, wrapped in 22834). The capture
+    /// job can still be the other party, so a deadlock victim is retried.
+    async fn cdc_exec(&self, sql: &str) -> Result<(), HarnessError> {
+        let mut attempt = 0;
+        loop {
+            match self.exec(sql).await {
+                Err(HarnessError::Failed(m)) if m.contains("deadlock") && attempt < 5 => {
+                    attempt += 1;
+                    tokio::time::sleep(Duration::from_millis(250 * attempt)).await;
+                }
+                r => return r,
+            }
+        }
+    }
+
     /// Enable CDC on the harness's table under `capture_instance`.
     pub async fn enable_cdc(&self, capture_instance: &str) -> Result<(), HarnessError> {
-        self.exec(&format!(
+        let _turn = CDC_DDL.lock().await;
+        self.enable_cdc_locked(capture_instance).await
+    }
+
+    async fn enable_cdc_locked(&self, capture_instance: &str) -> Result<(), HarnessError> {
+        self.cdc_exec(&format!(
             "EXEC sys.sp_cdc_enable_table @source_schema = N'dbo', @source_name = {}, \
              @role_name = NULL, @supports_net_changes = 0, @capture_instance = {}",
             quote_literal(&self.table),
@@ -673,6 +699,15 @@ impl ConnectorHarness for SqlHarness {
         self.services
     }
 
+    /// The source roles are held to the manifest's source delivery
+    /// (`at_least_once`, R12.9), the sink to the sink's.
+    fn direction(&self) -> Option<Direction> {
+        Some(match self.role {
+            Role::Cdc | Role::Batch => Direction::Source,
+            Role::Sink { .. } => Direction::Sink,
+        })
+    }
+
     async fn seed(&self, n: usize) -> Result<Seeded, HarnessError> {
         let mut s = self.state.lock().await;
         let from = s.seeded;
@@ -763,21 +798,23 @@ impl ConnectorHarness for SqlHarness {
         let t = crate::types::quote_ident(&self.table);
         let applied = crate::types::quote_ident(&format!("{}_applied", self.table));
         let lit = quote_literal(&self.table);
+        // One CDC metadata change at a time in this process (see `cdc_exec`).
+        let _turn = CDC_DDL.lock().await;
         // Disable CDC on the table first: a captured table cannot be dropped.
         let _ = self
-            .exec(&format!(
+            .cdc_exec(&format!(
                 "IF EXISTS (SELECT 1 FROM sys.tables WHERE name = {lit} AND is_tracked_by_cdc = 1) \
                  EXEC sys.sp_cdc_disable_table @source_schema = N'dbo', @source_name = {lit}, \
                  @capture_instance = N'all'"
             ))
             .await;
-        self.exec(&format!(
+        self.cdc_exec(&format!(
             "DROP TABLE IF EXISTS [dbo].{t}; DROP TABLE IF EXISTS [dbo].{applied}; \
              CREATE TABLE [dbo].{t} (id bigint NOT NULL PRIMARY KEY, v nvarchar(100) NULL)"
         ))
         .await?;
         match self.role {
-            Role::Cdc => self.enable_cdc(&self.capture_instance()).await?,
+            Role::Cdc => self.enable_cdc_locked(&self.capture_instance()).await?,
             Role::Batch => {}
             Role::Sink { .. } => {
                 self.exec(&format!(
