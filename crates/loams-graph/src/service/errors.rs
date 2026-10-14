@@ -76,6 +76,7 @@ pub(crate) fn code_of(err: &GraphError) -> ErrorCode {
         GraphError::LogUnavailable(_) => ErrorCode::Unavailable,
         GraphError::OwnerMoved(_) => ErrorCode::Unavailable,
         GraphError::ConsistencyWaitTimeout { .. } => ErrorCode::Unavailable,
+        GraphError::Linked => ErrorCode::FailedPrecondition,
     }
 }
 

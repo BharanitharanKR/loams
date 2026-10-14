@@ -10,7 +10,8 @@
 //!   storage): Task 4. Until then `ListGraphs` answers every graph in one page and `DeleteGraph`
 //!   closes the graph and answers a finished operation with no id;
 //! * consistency tokens, commit epochs, counters and idempotency: Tasks 11 and 15;
-//! * LINKED graphs: Task 17. Restore, export and import: Task 29.
+//! * LINKED graphs, whose mapping is checked against the namespace's collections: the catalog
+//!   path ([`admin::GraphAdmin`], GR1 Task 17). Restore, export and import: Task 29.
 //!
 //! A graph is created under the engine's data directory, `<data_dir>/graphs/<graph_id>/`, or in
 //! memory when the engine has none (Task 3). No request names a path (Review Focus 4).
@@ -105,7 +106,7 @@ pub fn create_graph(
         return Err(refuse(
             ErrorCode::Unimplemented,
             "not_implemented",
-            "LINKED graphs are not served yet (GR1 Task 17)",
+            "a LINKED graph needs the graph catalog, which this engine-only service has not",
         ));
     }
     for language in &req.languages {

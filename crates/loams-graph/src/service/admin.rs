@@ -804,6 +804,11 @@ impl GraphAdmin {
                 .collect(),
             limits: limits_to(&meta.limits).into(),
             replicas: meta.replicas,
+            mapping: meta
+                .mapping
+                .as_ref()
+                .map(crate::mapping::GraphMapping::to_proto)
+                .into(),
             state: state.into(),
             stats: stats.into(),
             create_time: Timestamp {
@@ -983,6 +988,7 @@ impl GraphAdmin {
         };
         for _ in 0..2 {
             let graph = {
+                let linked = meta.mode == GraphMode::Linked;
                 let (engine, ns, nm, durable) = (
                     Arc::clone(&self.engine),
                     namespace.to_string(),
@@ -991,7 +997,7 @@ impl GraphAdmin {
                 );
                 self.on_pool(move || {
                     Graph::open_or_existing(&engine, &ns, &nm, || {
-                        let spec = OpenSpec::for_catalog(&engine, id);
+                        let spec = OpenSpec::for_catalog(&engine, id).linked(linked);
                         match durable {
                             Some(durable) => spec.durable(durable),
                             None => spec,
@@ -1113,16 +1119,11 @@ impl GraphAdmin {
         req: pb::CreateGraphRequest,
     ) -> Result<pb::Graph, ConnectError> {
         crate::engine::validate_names(&req.namespace, &req.name).map_err(map_engine)?;
-        if req.mode.as_known() == Some(pb::GraphMode::Linked) {
-            return Err(refuse(
-                ErrorCode::Unimplemented,
-                "not_implemented",
-                "LINKED graphs are not served yet (GR1 Task 17)",
-            ));
-        }
         check_replicas(req.replicas)?;
+        let (mode, mapping) = self.mode_of(&req).await?;
         let new = NewGraph {
-            mode: GraphMode::Owned,
+            mode,
+            mapping,
             languages: languages(&req.languages)?,
             limits: limits_from(req.limits.as_option(), self.timeout_ceiling()),
             replicas: req.replicas,
@@ -1135,6 +1136,72 @@ impl GraphAdmin {
             .await
             .map_err(map_catalog)?;
         Ok(self.message(&meta))
+    }
+
+    /// A `CreateGraph`'s mode and mapping (GR1 Task 17): an OWNED graph has no mapping, and a
+    /// LINKED one has a mapping valid on its own and against its collections' schemas.
+    async fn mode_of(
+        &self,
+        req: &pb::CreateGraphRequest,
+    ) -> Result<(GraphMode, Option<crate::mapping::GraphMapping>), ConnectError> {
+        let invalid =
+            |message: String| refuse(ErrorCode::InvalidArgument, "invalid_argument", message);
+        let given = req.mapping.as_option();
+        if req.mode.as_known() != Some(pb::GraphMode::Linked) {
+            if given.is_some_and(|m| !m.vertices.is_empty() || !m.edges.is_empty()) {
+                return Err(invalid(
+                    "a mapping is for a LINKED graph; an OWNED graph is written with GQL"
+                        .to_string(),
+                ));
+            }
+            return Ok((GraphMode::Owned, None));
+        }
+        let mapping = crate::mapping::GraphMapping::from_proto(
+            given.ok_or_else(|| invalid("a LINKED graph needs a mapping".to_string()))?,
+        );
+        mapping.check().map_err(|err| invalid(err.to_string()))?;
+        // The collections are the namespace's, read now: a mapping is checked when it is
+        // created, as an index is (a collection dropped later leaves its labels empty).
+        let meta = self.catalog.meta();
+        let namespace = self
+            .catalog
+            .namespace_id(&req.namespace)
+            .await
+            .map_err(map_catalog)?;
+        let mut schemas = std::collections::HashMap::new();
+        for collection in mapping
+            .vertices
+            .iter()
+            .map(|v| v.collection.as_str())
+            .chain(mapping.edges.iter().map(|e| e.collection.as_str()))
+        {
+            if schemas.contains_key(collection) {
+                continue;
+            }
+            let found = match namespace {
+                Some(namespace) => meta
+                    .resolve_collection(
+                        loams_common::meta::Consistency::Linearizable,
+                        namespace,
+                        collection,
+                    )
+                    .await
+                    .map_err(|err| {
+                        tracing::warn!(error = %err, "reading a LINKED graph's collections failed");
+                        refuse(
+                            ErrorCode::Unavailable,
+                            "unavailable",
+                            "the namespace's collections could not be read; retry",
+                        )
+                    })?,
+                None => None,
+            };
+            schemas.insert(collection.to_string(), found.map(|c| c.schema));
+        }
+        mapping
+            .check_against(|collection| schemas.get(collection).cloned().flatten())
+            .map_err(|err| invalid(err.to_string()))?;
+        Ok((GraphMode::Linked, Some(mapping)))
     }
 
     /// `GetGraph`.
@@ -1613,6 +1680,7 @@ impl GraphAdmin {
             fence: None,
             snapshots: self.snapshot_source(namespace).await?,
         };
+        let linked = meta.mode == GraphMode::Linked;
         let (engine, ns, nm) = (
             Arc::clone(replicas.engine()),
             namespace.to_string(),
@@ -1623,6 +1691,7 @@ impl GraphAdmin {
                 let spec = || {
                     OpenSpec::in_memory_for(id)
                         .follower()
+                        .linked(linked)
                         .durable(durable.clone())
                 };
                 let mut graph =

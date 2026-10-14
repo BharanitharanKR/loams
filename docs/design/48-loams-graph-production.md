@@ -365,6 +365,7 @@ Gremlin, GraphQL, SPARQL, SQL/PGQ and RDF stay compiled out. `QueryLanguage` kee
 - The link reads the source collection's implicit stream through M0.4's link framework (exactly-once apply by offsets) and turns each `DocOp` into change-set operations: an upsert of a vertex document is `UpsertNode` keyed by `(label, key)`; a delete is `DeleteNode` with its incident edges; an edge document is `UpsertEdge`.
 - **Dangling edges** (an edge whose endpoint does not exist yet, which LightRAG does): the link creates a **stub vertex** of the declared endpoint label with only its key and `_stub = true`, and the vertex's later upsert fills it. Q681 asks whether to skip instead, as §07 §7 did.
 - Vertices carry `_collection` and `_key`, which is how GraphRAG joins back to documents.
+- *As built by GR1 Task 17 (R17.1–R17.4):* the mapping is checked against the collections' schemas when the graph is created (a key or endpoint is `_pk` or a keyword, integer or UUID field; `TYPE FROM` a keyword or text field), it carries no projection (properties are the documents' fields), GQL writes to a LINKED graph are `FAILED_PRECONDITION`/`graph_is_linked`, and SQL's `CREATE GRAPH` parses into the same `GraphMapping` the RPC takes.
 
 ### 10.2 `stream → graph` and Flow
 

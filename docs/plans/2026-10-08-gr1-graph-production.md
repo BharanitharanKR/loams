@@ -1873,3 +1873,38 @@ Carried in: the per-graph gate stays (R9.3, LG-0005 ruling 2026-10-13), so a fol
 - `bucket_errors_are_retried_not_lost`.
 - `metastore_unavailable_stops_writes_not_reads`.
 - RED check: with a replay that skips the stream's last record, the kill matrix fails.
+
+### Task 17 (2026-10-15, on `gr1-b2-t17`, stacked on Task 16)
+
+**R17.1 The mapping (`src/mapping.rs`).**
+- `GraphMapping { vertices: [VertexMap { label, collection, key_field }], edges: [EdgeMap { name, type_field?, collection, source: Endpoint { label, field }, destination }] }`. It is the proto's `GraphMapping` field for field, so `from_proto` and `to_proto` are lossless; an absent `TYPE FROM` is the empty `type_field` on the wire.
+- **No projection (deviation from the plan's `props: Projection`).** A vertex's properties are its document's fields, and an edge's its edge document's, as §07 §2.1 says. That keeps the proto as it is (Q-T0-4). A projection can be added as a new field if a link ever needs one.
+- `check` validates the declaration on its own:
+  - one to 64 vertex labels, and at most 64 edges;
+  - unique labels and edge names, matching `[A-Za-z][A-Za-z0-9_]{0,63}` (a leading `_` is reserved for the links' `_stub`, `_collection` and `_key`, §48 §10.1);
+  - collection and field names of 1 to 255 bytes;
+  - edges only between declared labels.
+- `check_against` validates it against the collections' schemas:
+  - every collection exists;
+  - a vertex key and each endpoint field is `_pk` or a keyword, integer or UUID field;
+  - a `TYPE FROM` field is a keyword or text field.
+
+**R17.2 `CreateGraph` LINKED.**
+- A LINKED graph needs a mapping, and an OWNED one may not have one; either mistake is `INVALID_ARGUMENT`.
+- The mapping is checked when the graph is created, against the namespace's collections as they are then (`resolve_collection`, so an alias works). A collection dropped later leaves its labels empty and does not refuse the graph; Task 18's link reports it.
+- The catalog record keeps the mapping (`GraphMeta.mapping`), `GetGraph` answers it, and an idempotent replay must carry the same mapping.
+- The mapping is not in `UpdateGraph`'s mask. Changing it means a new graph, since the link would have to rebuild the graph anyway.
+
+**R17.3 GQL may only read a LINKED graph.**
+- The graph opens with `OpenSpec::linked`, on the owner and on followers. Every statement the gate classifies as a write (in `Execute`, `ExecuteBatch` or `ExecuteStream`) is refused with `FAILED_PRECONDITION`/`graph_is_linked` (`GraphError::Linked`) before it reaches the engine.
+- The links of Tasks 18 and 19 will write through the durable path below that check.
+
+**R17.4 `CREATE GRAPH` in SQL (`loams-query`, `sql::graph_ddl`).**
+- §07 §2.1's statement is parsed over DataFusion's own SQL tokenizer into `loams.graph.v1.GraphMapping`: the type both crates have, since `loams-query` is in the default build and must not depend on `loams-graph` (Grafeo). `loams-query` gains `loams-proto`, already a workspace crate.
+- Keywords are case-insensitive, names may be quoted, declarations may be separated by commas, and one trailing `;` is allowed. Anything after the statement is refused.
+- Running the statement (the SQL route handing it to `GraphAdmin::create_graph` with the `graph` feature) is not wired here. That goes with Task 38's docs and the SQL surface work, since the SQL route is read-only today.
+
+**R17.5 Tests.**
+- `loams-graph` `tests/links.rs`: `mapping_validates_against_schema` (six schema mistakes, both mode mistakes, nothing created by any of them), `type_from_column_maps_many_types` (also an idempotent replay with another mapping refused), `linked_graph_refuses_gql_writes`.
+- `loams-query` `tests/it/graph_ddl.rs`: `sql_create_graph_equals_rpc_mapping` (§07's example equals the mapping the RPC test sends; the relaxed form parses the same), `type_from_column_maps_many_types`, `malformed_create_graph_is_refused_with_what_was_expected`.
+- Unit tests in `mapping.rs`.

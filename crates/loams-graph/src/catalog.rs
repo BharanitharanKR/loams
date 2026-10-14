@@ -62,7 +62,8 @@ pub enum GraphMode {
     /// Written with GQL.
     #[default]
     Owned,
-    /// Fed by links (Task 17).
+    /// Fed by links from collections or streams through its mapping; read-only to GQL (GR1
+    /// Task 17).
     Linked,
 }
 
@@ -134,6 +135,9 @@ pub struct GraphMeta {
     /// client sets it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream: Option<loams_common::StreamId>,
+    /// A LINKED graph's mapping over collections (GR1 Task 17); `None` for an OWNED one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mapping: Option<crate::mapping::GraphMapping>,
 }
 
 /// How many write tokens a record remembers.
@@ -171,8 +175,10 @@ impl GraphMeta {
 /// What a new graph is created with.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NewGraph {
-    /// OWNED (LINKED is Task 17's).
+    /// OWNED, or LINKED with `mapping`.
     pub mode: GraphMode,
+    /// A LINKED graph's mapping, checked by the caller (GR1 Task 17).
+    pub mapping: Option<crate::mapping::GraphMapping>,
     /// Languages; empty means `["GQL"]`.
     pub languages: Vec<String>,
     /// Limits.
@@ -429,6 +435,7 @@ impl GraphCatalog {
                         || existing.languages != languages
                         || existing.limits != new.limits
                         || existing.replicas != new.replicas
+                        || existing.mapping != new.mapping
                     {
                         return Err(CatalogError::Invalid(format!(
                             "idempotency_key {:?} was used to create {namespace}/{name} with different settings",
@@ -461,6 +468,7 @@ impl GraphCatalog {
                 delete_key: None,
                 recent_writes: Vec::new(),
                 stream,
+                mapping: new.mapping.clone(),
             };
             // A graph being deleted under this name keeps its record (under its id) until it
             // is purged, so the name is free for the new one.
