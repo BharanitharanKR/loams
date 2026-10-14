@@ -16,6 +16,7 @@ export const SLOT_KINDS: Record<string, SlotKind> = {
   'shell.dock.right': 'single',
   'shell.header.server': 'list',
   'shell.nav.context': 'list',
+  'palette.command': 'list',
 };
 
 /**

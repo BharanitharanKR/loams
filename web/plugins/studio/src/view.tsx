@@ -2,12 +2,18 @@
 // daemon every route but Settings shows how to get one (`NotConnected`).
 
 import { Empty, Tabs } from '@loams/ui';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { StudioAgentd } from './agentd.js';
 import type { StudioFactory } from './factory.js';
 import { Home, ProjectPage } from './home/Home.js';
 import { NotConnected } from './home/states.js';
 import { StudioLayout } from './layout/StudioLayout.js';
+import {
+  createStudioKeys,
+  type StudioKeys,
+  useStudioCommand,
+  useStudioKeybindings,
+} from './palette/commands.js';
 import { ProjectsSidebar } from './projects/ProjectsSidebar.js';
 import { useProjects, useReach } from './projects/queries.js';
 import { PANELS, type Panel, type StudioRoute, studioHref } from './routes.js';
@@ -73,7 +79,15 @@ function Title({ agentd, route }: { agentd: StudioAgentd; route: StudioRoute }) 
   }
 }
 
-function Body({ agentd, route }: { agentd: StudioAgentd; route: StudioRoute }) {
+function Body({
+  agentd,
+  route,
+  keys,
+}: {
+  agentd: StudioAgentd;
+  route: StudioRoute;
+  keys: StudioKeys;
+}) {
   switch (route.kind) {
     case 'home':
       return (
@@ -102,8 +116,39 @@ function Body({ agentd, route }: { agentd: StudioAgentd; route: StudioRoute }) {
         </div>
       );
     case 'settings':
-      return <SettingsPage agentd={agentd} />;
+      return <SettingsPage agentd={agentd} keys={keys} />;
   }
+}
+
+/**
+ * The route's commands (SD1 Task 24): a new thread, settings, history, and on a thread
+ * its panels. Showing a panel that is already shown hides the panel, as upstream's
+ * toggles do.
+ */
+function useStudioRouteCommands(
+  keys: StudioKeys,
+  route: StudioRoute,
+  navigate: (to: string) => void,
+  connected: boolean,
+): void {
+  const { commands } = keys;
+  useStudioCommand(commands, 'chat.new', () => navigate('/studio'));
+  useStudioCommand(commands, 'settings.open', () => navigate('/studio/settings'));
+  useStudioCommand(commands, 'navigation.back', () => window.history.back());
+  useStudioCommand(commands, 'navigation.forward', () => window.history.forward());
+  const thread = route.kind === 'thread' && connected ? route : undefined;
+  const show = (panel: Panel) => () => {
+    if (!thread) return;
+    if ((thread.panel ?? 'diff') === panel) {
+      commands.run('rightPanel.toggle');
+      return;
+    }
+    navigate(studioHref({ ...thread, panel }));
+    commands.run('rightPanel.show');
+  };
+  useStudioCommand(commands, 'diff.toggle', thread ? show('diff') : undefined);
+  useStudioCommand(commands, 'files.toggle', thread ? show('files') : undefined);
+  useStudioCommand(commands, 'preview.toggle', thread ? show('preview') : undefined);
 }
 
 export function StudioView({
@@ -112,6 +157,7 @@ export function StudioView({
   route,
   navigate,
   hostParam,
+  keys: given,
 }: {
   agentd: StudioAgentd;
   /** The software factory (§53 §5.9): the desktop's bridge; none on the web until SF1. */
@@ -120,6 +166,8 @@ export function StudioView({
   navigate: (to: string) => void;
   /** Web: `?host=<id>` selects a registered agentd host, by id only (§53 §4.4). */
   hostParam?: string;
+  /** Studio's commands and keybindings (SD1 Task 24); the plugin shares one with its palette. */
+  keys?: StudioKeys;
 }) {
   useEffect(() => {
     if (hostParam) agentd.hosts?.select(hostParam);
@@ -127,6 +175,10 @@ export function StudioView({
   const reach = useReach(agentd);
   const connected = reach.state === 'ready' || route.kind === 'settings';
   const thread = route.kind === 'thread' ? route : undefined;
+  const [own] = useState(() => createStudioKeys({ edition: agentd.kind }));
+  const keys = given ?? own;
+  useStudioRouteCommands(keys, route, navigate, connected);
+  useStudioKeybindings(keys, { threadOpen: thread !== undefined && connected });
   return (
     <StudioLayout
       title={<Title agentd={agentd} route={route} />}
@@ -138,6 +190,7 @@ export function StudioView({
           {factory && <FactoryGroup factory={factory} />}
         </ProjectsSidebar>
       }
+      commands={keys.commands}
       panel={thread && connected ? <ThreadPanel route={thread} navigate={navigate} /> : undefined}
       drawer={
         thread && connected ? (
@@ -150,7 +203,7 @@ export function StudioView({
       }
     >
       {connected ? (
-        <Body agentd={agentd} route={route} />
+        <Body agentd={agentd} route={route} keys={keys} />
       ) : (
         <div className="p-6">
           <NotConnected agentd={agentd} reach={reach} />

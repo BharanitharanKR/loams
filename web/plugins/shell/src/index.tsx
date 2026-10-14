@@ -26,6 +26,15 @@ export {
   useModeShortcut,
 } from './mode-switcher.js';
 
+export {
+  isPaletteShortcut,
+  type PaletteModes,
+  type PaletteRow,
+  paletteModeOf,
+  type ScopedCommand,
+  ShellPalette,
+  scopePalette,
+} from './palette.js';
 export { compile, HashRouter, type HashSource, windowHash } from './router.js';
 
 const plugin: PluginModule = {
