@@ -34,8 +34,8 @@ use loams_connector_sdk::{
 use loams_flow::ConnectorSpec;
 use loams_flow_conformance::{
     ConnectorHarness, CrashingReader, CrashingSinkFactory, CrashingWriter, FaultPoint, FaultSwitch,
-    HarnessError, KillTarget, MemoryReport, Observed, Seeded, ServiceKind, Suite, SuiteReport,
-    Throttle,
+    HarnessError, KillTarget, MemoryReport, Observed, Seeded, ServiceKind, Suite, SuiteOutcome,
+    SuiteReport, Throttle,
 };
 use serde_json::Value;
 use tokio::sync::Mutex;
@@ -368,10 +368,17 @@ impl BrokerHarness {
     }
 }
 
-/// Assert a kit report is green, or entirely skipped (the stack is down).
+/// Assert a kit report is green, or entirely skipped because the stack is
+/// not up (the kit's "no service is up"). A broker that is up but never
+/// answers makes each suite skip as "service unavailable": that is a
+/// failure, not a skip, or a dead endpoint would pass.
 pub fn assert_green_or_skipped(report: &SuiteReport) {
     eprintln!("{report}");
-    if !report.results.is_empty() && report.skipped().len() == report.results.len() {
+    let stack_down = !report.results.is_empty()
+        && report.results.iter().all(
+            |r| matches!(&r.outcome, SuiteOutcome::Skipped(m) if m.starts_with("no service is up")),
+        );
+    if stack_down {
         return;
     }
     assert!(report.green(), "{report}");
