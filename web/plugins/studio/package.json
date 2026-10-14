@@ -56,8 +56,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@connectrpc/connect": "2.2.0",
+    "@loams/agentd-client": "workspace:*",
     "@loams/console-host": "workspace:*",
     "@loams/cordis": "workspace:*",
+    "@loams/proto": "workspace:*",
     "@loams/slots": "workspace:*",
     "@loams/studio-ui": "workspace:*",
     "@loams/ui": "workspace:*",

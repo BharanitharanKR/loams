@@ -6,10 +6,12 @@
 //   desktop: the existing `desktop.agentd` bridge (status, start) plus its `repos`
 //            group, which Electron main serves over the ndjson wire with the token
 //            it alone holds; the folder picker is `desktop.shell.pickFolder`.
-//   web:     a stub until Task 7's remote transport: no host is reachable, so
-//            Studio shows "Connect an agentd host". A client can be passed in (tests).
+//   web:     the selected remote agentd host over the web transport (SD1 Task 7,
+//            `hosts/agentd.ts`); with no host, Studio shows "Connect an agentd host".
+//            `webAgentd` is the fixed-client form the tests use.
 
 import type { AgentdStatus, IpcResult } from '@loams/desktop/contracts';
+import type { StudioHosts } from './hosts/agentd.js';
 
 /** Whether Studio can talk to a daemon right now. */
 export type Reach =
@@ -56,6 +58,8 @@ export interface StudioAgentd {
   cacheKey(): string;
   /** The connected agentd host, shown in the header (web). */
   host(): { id: string; name: string } | undefined;
+  /** Web: the registered hosts and the selection (Settings › Agentd hosts, `?host=`). */
+  hosts?: StudioHosts;
   /** Desktop: start the daemon. */
   start?(): Promise<void>;
   listProjects(): Promise<Project[]>;
@@ -160,14 +164,14 @@ export function desktopAgentd(bridge: DesktopBridge): StudioAgentd {
   };
 }
 
-/** A remote agentd's project methods; Task 7's transport provides one per host. */
+/** A remote agentd's project methods; `hosts/agentd.ts` makes one per host. */
 export interface AgentdProjectsClient {
   host: { id: string; name: string };
   listRepos(): Promise<Repo[]>;
   cloneRepo(url: string): Promise<Repo>;
 }
 
-/** Studio in the browser: a stub with no host until Task 7 (see the top of this file). */
+/** Studio in the browser with one fixed host client, or none (tests; see the top of this file). */
 export function webAgentd(o: { client?: AgentdProjectsClient } = {}): StudioAgentd {
   const client = o.client;
   // One object per state: `reach()` is a useSyncExternalStore snapshot.

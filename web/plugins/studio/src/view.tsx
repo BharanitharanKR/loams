@@ -2,7 +2,7 @@
 // daemon every route but Settings shows how to get one (`NotConnected`).
 
 import { Empty, Tabs } from '@loams/ui';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { StudioAgentd } from './agentd.js';
 import type { StudioFactory } from './factory.js';
 import { Home, ProjectPage } from './home/Home.js';
@@ -156,6 +156,7 @@ export function StudioView({
   factory,
   route,
   navigate,
+  hostParam,
   keys: given,
 }: {
   agentd: StudioAgentd;
@@ -163,9 +164,14 @@ export function StudioView({
   factory?: StudioFactory;
   route: StudioRoute;
   navigate: (to: string) => void;
+  /** Web: `?host=<id>` selects a registered agentd host, by id only (§53 §4.4). */
+  hostParam?: string;
   /** Studio's commands and keybindings (SD1 Task 24); the plugin shares one with its palette. */
   keys?: StudioKeys;
 }) {
+  useEffect(() => {
+    if (hostParam) agentd.hosts?.select(hostParam);
+  }, [agentd, hostParam]);
   const reach = useReach(agentd);
   const connected = reach.state === 'ready' || route.kind === 'settings';
   const thread = route.kind === 'thread' ? route : undefined;

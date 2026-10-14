@@ -8,15 +8,20 @@
 //!    token, `Origin`, `Host` and role checks (design §50 §7, [`rpc_server`]);
 //! 5. binds the `loams.agentd.v1` Connect listener on `127.0.0.1:0` behind the
 //!    same token, `Host` and `Origin` rules (design §53 §6.2, plan SD1 Task 5);
-//! 6. publishes `agentd.json`, with both ports;
-//! 7. runs until SIGTERM, Ctrl-C or `Shutdown`, then closes the listeners and
+//! 6. with `serve --remote` or `[remote] enabled = true` only, binds the
+//!    remote Connect listener (TLS, OIDC, the console origins, role `studio`;
+//!    design §53 §6.3, plan SD1 Task 7). It is off by default;
+//! 7. publishes `agentd.json`, with both loopback ports;
+//! 8. runs until SIGTERM, Ctrl-C or `Shutdown`, then closes the listeners and
 //!    every connection (awaiting their ndjson requests), stops the engine and
 //!    removes `agentd.json`.
 
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use loams_agentd_connect::{Agentd, ConnectListener, HostInfo, LoopbackOptions};
+use loams_agentd_connect::{
+    Agentd, ConnectListener, HostInfo, LoopbackOptions, RemoteListener, RemoteOptions,
+};
 use loams_agentd_proto::OkReply;
 use loams_agentd_proto::daemon::{DaemonMode, Discovery};
 use loams_agentd_proto::rpc::{AGENTD_PROTOCOL, calls};
@@ -41,6 +46,9 @@ pub struct ServeOptions {
     pub mode: DaemonMode,
     /// The harness for chats without a config row.
     pub default_harness: HarnessId,
+    /// The remote listener ([`crate::remote::options`]); `None`, the
+    /// default, leaves it off.
+    pub remote: Option<RemoteOptions>,
 }
 
 /// Run the daemon until it is asked to stop. See the module docs.
@@ -50,6 +58,7 @@ pub async fn serve(options: ServeOptions) -> anyhow::Result<()> {
         config,
         mode,
         default_harness,
+        remote,
     } = options;
     // A service starts with the manager's minimal PATH: resolve the login
     // shell's now, so harness CLIs are found (design §50 §5.1). Harness
@@ -113,6 +122,29 @@ pub async fn serve(options: ServeOptions) -> anyhow::Result<()> {
         }
     };
     let connect_port = connect.port();
+    // The remote listener serves the same services as the loopback one,
+    // behind its own checks; never the ndjson wire or the lifecycle.
+    let remote = match remote {
+        None => {
+            tracing::info!("the remote listener is off");
+            None
+        }
+        Some(options) => {
+            match RemoteListener::bind(
+                connect_services(runtime.core().rpc_service(), info),
+                options,
+            )
+            .await
+            {
+                Ok(remote) => Some(remote),
+                Err(error) => {
+                    connect.stop().await;
+                    runtime.shutdown().await;
+                    return Err(anyhow::Error::new(error).context("bind the remote listener"));
+                }
+            }
+        }
+    };
     let rpc = rpc_server(
         Arc::new(lifecycle),
         Arc::new(runtime.core().workspace.clone()),
@@ -127,6 +159,9 @@ pub async fn serve(options: ServeOptions) -> anyhow::Result<()> {
     // Stops accepting, ends every connection and awaits their requests, so
     // nothing calls into the engine while it shuts down.
     let stop_server = || async {
+        if let Some(remote) = remote {
+            remote.stop().await;
+        }
         connect.stop().await;
         let _ = server_stop.send(());
         match server.await {
