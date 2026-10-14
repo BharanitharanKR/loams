@@ -308,6 +308,12 @@ pub struct GitConfig {
     pub purge_every: Duration,
     /// How long a deleted repository is kept before it is purged (`GC_GRACE`, 1 h).
     pub purge_grace: Duration,
+    /// The git listener stock git authenticates against with git tokens (`--git-listen`, GT1
+    /// Task 16); loopback only until MT1 (D111). `None`: not served.
+    pub listen: Option<SocketAddr>,
+    /// The git token file (`--git-tokens`): SHA-256 hashes and their grants. Needed with
+    /// `listen`.
+    pub tokens: Option<PathBuf>,
 }
 
 #[cfg(feature = "git")]
@@ -318,6 +324,8 @@ impl Default for GitConfig {
             watch_heartbeat: Duration::from_secs(15),
             purge_every: Duration::from_secs(60),
             purge_grace: loams_git::limits::GC_GRACE,
+            listen: None,
+            tokens: None,
         }
     }
 }
@@ -500,6 +508,18 @@ impl ServerConfig {
             return Err(ServerError::Config(
                 "git.purge_every and git.watch_heartbeat must be greater than zero".to_string(),
             ));
+        }
+        #[cfg(feature = "git")]
+        if let Some(addr) = self.git.listen {
+            if !addr.ip().is_loopback() {
+                return Err(ServerError::GitListenNotLoopback { addr });
+            }
+            if self.git.tokens.is_none() {
+                return Err(ServerError::Config(
+                    "--git-listen needs --git-tokens: the git listener admits git tokens only"
+                        .to_string(),
+                ));
+            }
         }
         #[cfg(feature = "live")]
         if let Some(live) = &self.live {
@@ -722,6 +742,18 @@ pub enum ServerError {
          unified auth plan (D750, MT1); listen on a loopback address or pass --no-graph"
     )]
     GraphListenNotLoopback { addr: SocketAddr },
+    /// `--git-listen` is not a loopback address (GT1 Task 16, D111): the git listener's tokens
+    /// are a development file until MT1.
+    #[cfg(feature = "git")]
+    #[error(
+        "git listen on {addr}: only loopback addresses are served until the unified auth plan \
+         (D111)"
+    )]
+    GitListenNotLoopback { addr: SocketAddr },
+    /// The git listener could not be bound, or its token file read (GT1 Task 16).
+    #[cfg(feature = "git")]
+    #[error("the git listener on {addr}: {reason}")]
+    GitListen { addr: SocketAddr, reason: String },
     /// `--live-listen` is not a loopback address (D111, design §20 §7.1):
     /// the Live API has no authentication in R1.
     #[cfg(feature = "live")]
@@ -1417,6 +1449,8 @@ struct GitRuntimeHandle {
     runtime: Arc<crate::api::repos::GitRuntime>,
     stop: CancellationToken,
     purge: JoinHandle<()>,
+    /// The git listener (GT1 Task 16): its address and its serving task.
+    listener: Option<(SocketAddr, JoinHandle<()>)>,
 }
 
 #[cfg(feature = "git")]
@@ -1429,8 +1463,13 @@ impl GitRuntimeHandle {
         meta: Arc<dyn MetaStore>,
         store: Store,
         cluster: Option<loams_git::Cluster>,
+        listener: Option<(
+            tokio::net::TcpListener,
+            Arc<api::git_auth::LoopbackDevAuthorizer>,
+        )>,
     ) -> Self {
         let catalog = loams_git::BucketRepoCatalog::new(store.clone());
+        let meta_for_listener = meta.clone();
         let clock: Arc<dyn loams_git::Clock> = Arc::new(loams_git::SystemClock);
         let sequencers = match cluster {
             Some(cluster) => loams_git::RepoSequencers::clustered(store, clock, cluster),
@@ -1456,11 +1495,32 @@ impl GitRuntimeHandle {
                 }
             })
         };
+        let listener = listener.map(|(listener, authorizer)| {
+            let addr = listener.local_addr().unwrap_or_else(|_| {
+                config
+                    .listen
+                    .unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 0)))
+            });
+            let state = api::git_auth::GitHttp {
+                authorizer,
+                meta: meta_for_listener,
+                runtime: runtime.clone(),
+            };
+            let task = api::git_auth::serve_git_listener(listener, state, stop.clone());
+            tracing::info!(%addr, "serving the git listener");
+            (addr, task)
+        });
         Self {
             runtime,
             stop,
             purge,
+            listener,
         }
+    }
+
+    /// The git listener's address, when it is served.
+    fn listen_addr(&self) -> Option<SocketAddr> {
+        self.listener.as_ref().map(|(addr, _)| *addr)
     }
 
     /// Stops the purge (abandoning a pass that outlasts `PURGE_STOP_WAIT`), then every
@@ -1475,6 +1535,13 @@ impl GitRuntimeHandle {
         {
             tracing::warn!("a repository purge pass outlasted the shutdown wait; abandoned");
             purge.abort();
+        }
+        if let Some((_, listener)) = self.listener
+            && tokio::time::timeout(PURGE_STOP_WAIT, listener)
+                .await
+                .is_err()
+        {
+            tracing::warn!("the git listener outlasted the shutdown wait; abandoned");
         }
         self.runtime.sequencers.shutdown().await;
     }
@@ -2425,6 +2492,42 @@ impl Server {
             None => None,
         };
 
+        // Loams Git's listener (GT1 Task 16): bound, and its token file read, here, where a
+        // failure still has nothing to undo but the cache; served once the git runtime starts.
+        #[cfg(feature = "git")]
+        let git_listener = match config
+            .git
+            .listen
+            .filter(|_| roles.gateway && config.git.enabled)
+        {
+            Some(addr) => {
+                let bound = async {
+                    let tokens = config
+                        .git
+                        .tokens
+                        .as_deref()
+                        .ok_or_else(|| "--git-tokens is required".to_string())?;
+                    let authorizer =
+                        api::git_auth::LoopbackDevAuthorizer::load(tokens, meta_store.clone())?;
+                    let listener = tokio::net::TcpListener::bind(addr)
+                        .await
+                        .map_err(|err| err.to_string())?;
+                    Ok::<_, String>((listener, Arc::new(authorizer)))
+                }
+                .await;
+                match bound {
+                    Ok(bound) => Some(bound),
+                    Err(reason) => {
+                        if let Err(err) = cache.close().await {
+                            tracing::warn!(%err, "closing the cache after a failed start");
+                        }
+                        return Err(ServerError::GitListen { addr, reason });
+                    }
+                }
+            }
+            None => None,
+        };
+
         // Validated above, so this cannot fail. A node without the `log`
         // role still holds a writer (the service needs one), but serves no
         // write route, so it never appends.
@@ -2670,7 +2773,13 @@ impl Server {
                     config: loams_git::OwnerConfig::default(),
                 }
             });
-            GitRuntimeHandle::start(&config.git, meta_store.clone(), store.clone(), cluster)
+            GitRuntimeHandle::start(
+                &config.git,
+                meta_store.clone(),
+                store.clone(),
+                cluster,
+                git_listener,
+            )
         });
         let state = AppState {
             meta: meta_store.clone(),
@@ -2788,6 +2897,12 @@ impl Server {
     /// The address the HTTP API listens on.
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
+    }
+
+    /// The git listener's address (`--git-listen`, GT1 Task 16), when it is served.
+    #[cfg(feature = "git")]
+    pub fn git_listen_addr(&self) -> Option<SocketAddr> {
+        self.git.as_ref().and_then(GitRuntimeHandle::listen_addr)
     }
 
     /// How many scheduled graph catalog sweeps have completed, when Loams Graph is served

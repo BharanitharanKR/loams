@@ -535,6 +535,8 @@ The crates.io part of §15 §6's registry proxy; PyPI, npm and Go stay in W2.
 - **No ambient bucket credentials** in sandboxes: agents reach Git, the cache and the mirror through the gateway, or hold vended prefix credentials.
 - **Cache poisoning**: §8.3. **Supply chain**: §9's quarantine and audit.
 
+**As built (GT1b, Task 16; `crates/loams-git/src/auth.rs`, `crates/loams/src/api/git_auth.rs`, plan rulings T16.0–T16.5).** A `GitGrant` names one namespace, the repositories, an access level (`read` < `write` < `admin`), branch prefixes, cones, workspaces, environments (none unless named), a cache class and registry access. Stock git presents a git token on `--git-listen` (loopback only until MT1) as the HTTP Basic password or a Bearer token; the token file (`--git-tokens`) holds SHA-256 hashes and their grants. The namespace comes from the token: a URL naming another namespace, an uncovered repository and a missing one answer the same `404`. On the main port, `RepoService` callers are authorized by their org role: reads need `member`, administration `admin`, and the operator always passes. Pushes are checked with `GitGrant::check_push` (write access and branch prefixes) on the receive paths (Tasks 27, 50).
+
 ## 11. Usage hooks (D393)
 
 Exported per §27 (Prometheus, or OTLP delta metrics for per-repository cardinality, Q-UH-1), labels `org` and `namespace`:
