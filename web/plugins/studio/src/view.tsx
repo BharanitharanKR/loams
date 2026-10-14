@@ -22,6 +22,7 @@ import { FactoryGroup } from './sidebar/Factory.js';
 import { StudioSidebar } from './sidebar/Sidebar.js';
 import { useNewThread } from './sidebar/useThreadActions.js';
 import { DraftCard } from './thread/FactoryLinks.js';
+import { FilesTab } from './thread/LazyFilesTab.js';
 import { ThreadTerminalDrawer } from './thread/TerminalDrawer.js';
 
 const PANEL_LABEL: Record<Panel, string> = {
@@ -49,11 +50,15 @@ function ThreadPanel({
         onValueChange={(p) => navigate(studioHref({ ...route, panel: p }))}
         tabs={PANELS.map((p) => ({ value: p, label: PANEL_LABEL[p] }))}
       />
-      <div className="min-h-0 flex-1 overflow-auto py-4">
-        <Empty title={`No ${PANEL_LABEL[panel].toLowerCase()} yet`} seed={panel.length}>
-          This thread has nothing to show here.
-        </Empty>
-      </div>
+      {panel === 'files' ? (
+        <FilesTab threadId={route.threadId} {...(route.file ? { link: route.file } : {})} />
+      ) : (
+        <div className="min-h-0 flex-1 overflow-auto py-4">
+          <Empty title={`No ${PANEL_LABEL[panel].toLowerCase()} yet`} seed={panel.length}>
+            This thread has nothing to show here.
+          </Empty>
+        </div>
+      )}
     </div>
   );
 }

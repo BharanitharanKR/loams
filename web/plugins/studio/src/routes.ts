@@ -43,10 +43,47 @@ export function draftOf(params: Record<string, string>): ThreadDraft | undefined
   };
 }
 
+/**
+ * A file to show in the Files tab (`?panel=files&path=…&line=…&column=…`, SD1 Tasks 21
+ * and 22: a terminal's file links). The path is relative to the thread's checkout; an
+ * absolute path, `..`, a backslash or a control character is dropped, as is a line or
+ * column that is not a positive number. The daemon jails every read again.
+ */
+export interface FileLink {
+  path: string;
+  line?: number;
+  column?: number;
+}
+
+const MAX_PATH = 4096;
+
+function positive(value: string | undefined): number | undefined {
+  if (!value || !/^[1-9][0-9]{0,8}$/.test(value)) return undefined;
+  return Number(value);
+}
+
+/** The file link in a thread route's params, or undefined when it is missing or unsafe. */
+export function fileLinkOf(params: Record<string, string>): FileLink | undefined {
+  const path = params.path;
+  if (!path || path.length > MAX_PATH || path.startsWith('/') || path.includes('\\'))
+    return undefined;
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what is refused
+  if (/[\u0000-\u001f\u007f]/.test(path)) return undefined;
+  const parts = path.split('/');
+  if (parts.some((part) => part === '' || part === '.' || part === '..')) return undefined;
+  const line = positive(params.line);
+  const column = line === undefined ? undefined : positive(params.column);
+  return {
+    path,
+    ...(line !== undefined ? { line } : {}),
+    ...(column !== undefined ? { column } : {}),
+  };
+}
+
 export type StudioRoute =
   | { kind: 'home'; draft?: ThreadDraft }
   | { kind: 'project'; projectId: string }
-  | { kind: 'thread'; threadId: string; panel?: Panel }
+  | { kind: 'thread'; threadId: string; panel?: Panel; file?: FileLink }
   | { kind: 'group'; groupId: string }
   | { kind: 'settings' };
 
@@ -71,12 +108,15 @@ export function routeOf(
   switch (kind) {
     case 'project':
       return { kind, projectId: params.projectId ?? '' };
-    case 'thread':
+    case 'thread': {
+      const file = params.panel === 'files' ? fileLinkOf(params) : undefined;
       return {
         kind,
         threadId: params.threadId ?? '',
         ...(isPanel(params.panel) ? { panel: params.panel } : {}),
+        ...(file ? { file } : {}),
       };
+    }
     case 'group':
       return { kind, groupId: params.groupId ?? '' };
     case 'home': {
@@ -101,8 +141,17 @@ export function studioHref(route: StudioRoute): string {
     }
     case 'project':
       return `/studio/p/${encodeURIComponent(route.projectId)}`;
-    case 'thread':
-      return `/studio/t/${encodeURIComponent(route.threadId)}${route.panel ? `?panel=${route.panel}` : ''}`;
+    case 'thread': {
+      const q = new URLSearchParams();
+      if (route.panel) q.set('panel', route.panel);
+      if (route.panel === 'files' && route.file) {
+        q.set('path', route.file.path);
+        if (route.file.line !== undefined) q.set('line', String(route.file.line));
+        if (route.file.column !== undefined) q.set('column', String(route.file.column));
+      }
+      const query = q.toString();
+      return `/studio/t/${encodeURIComponent(route.threadId)}${query ? `?${query}` : ''}`;
+    }
     case 'group':
       return `/studio/g/${encodeURIComponent(route.groupId)}`;
     case 'settings':
