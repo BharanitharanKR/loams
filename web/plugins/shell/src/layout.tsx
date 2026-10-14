@@ -47,7 +47,8 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { iconFor } from './icons.js';
-import { ModeSwitcher, useMode, useModeShortcut } from './mode-switcher.js';
+import { MODE_LABEL, ModeSwitcher, useMode, useModeShortcut } from './mode-switcher.js';
+import { type ScopedCommand, ShellPalette } from './palette.js';
 import type { Crumb, HashRouter } from './router.js';
 
 export const DOCK_MIN = 320;
@@ -548,6 +549,100 @@ function Brand({
   );
 }
 
+/** Ctrl or Cmd, as the palette shows a shortcut's modifier. */
+function modKeys(...keys: string[]): string[] {
+  let mac = false;
+  try {
+    mac = /mac|iphone|ipad|ipod/i.test(navigator.platform);
+  } catch {
+    // No navigator (tests, workers): the Ctrl spelling.
+  }
+  return mac ? ['⌘', ...keys.map((k) => (k === 'Shift' ? '⇧' : k))] : ['Ctrl', ...keys];
+}
+
+/**
+ * The palette with the shell's own rows (SD1 Task 24): "Go to" for each mode's nav
+ * entries, and the general commands (switch mode, theme, agent panel).
+ */
+function Palette({
+  router,
+  mode,
+  dark,
+  toggleTheme,
+  dock,
+}: {
+  router: HashRouter;
+  mode?: ModeService;
+  dark: boolean;
+  toggleTheme: () => void;
+  dock?: { open: boolean; toggle: () => void };
+}) {
+  const sections = useSlot('shell.nav.section');
+  const legacy = useSlot('console.nav');
+  const current = useMode(mode);
+  const modesOf = (id: string) => mode?.modesOf(id) ?? ['console'];
+  const nav = (m: Mode): ScopedCommand[] => {
+    const seen = new Set<string>();
+    return navSections(sections, legacy, mode ? { mode: m, modesOf } : undefined).flatMap(
+      ([group, items]) =>
+        items
+          .filter((i) => !seen.has(i.href) && seen.add(i.href))
+          .map((i) => ({
+            id: `go:${i.href}`,
+            title: `Go to ${i.label}`,
+            group: 'Go to',
+            keywords: [group, i.href],
+            mode: m,
+            run: () => router.navigate(i.href),
+          })),
+    );
+  };
+  const other = mode?.available.find((m) => m !== current);
+  const general: ScopedCommand[] = [
+    ...(mode && other
+      ? [
+          {
+            id: 'mode',
+            title: `Switch to ${MODE_LABEL[other]}`,
+            group: 'General',
+            keywords: ['mode'],
+            shortcut: modKeys('Shift', 'M'),
+            mode: current,
+            run: () => mode.set(other),
+          },
+        ]
+      : []),
+    {
+      id: 'theme',
+      title: dark ? 'Use light theme' : 'Use dark theme',
+      group: 'General',
+      keywords: ['appearance', 'theme'],
+      mode: current,
+      run: toggleTheme,
+    },
+    ...(dock
+      ? [
+          {
+            id: 'dock',
+            title: dock.open ? 'Hide agent panel' : 'Show agent panel',
+            group: 'General',
+            keywords: ['agent', 'dock'],
+            shortcut: modKeys('J'),
+            mode: current,
+            run: dock.toggle,
+          },
+        ]
+      : []),
+  ];
+  return (
+    <ShellPalette
+      modes={mode ? { current, available: mode.available, modesOf } : undefined}
+      nav={nav}
+      general={general}
+    />
+  );
+}
+
 export function Layout({
   router,
   session,
@@ -725,6 +820,13 @@ export function Layout({
           </div>
         </div>
       </div>
+      <Palette
+        router={router}
+        mode={mode}
+        dark={dark}
+        toggleTheme={toggleTheme}
+        dock={hasDock ? { open, toggle } : undefined}
+      />
       <Toaster />
     </ToastProvider>
   );

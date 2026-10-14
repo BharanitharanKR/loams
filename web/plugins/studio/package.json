@@ -33,7 +33,8 @@
       "slots": [
         "console.page",
         "shell.nav.section",
-        "shell.header.server"
+        "shell.header.server",
+        "palette.command"
       ],
       "permissions": [
         "agentd:use",

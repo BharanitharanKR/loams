@@ -2,17 +2,71 @@
 // packages/shared/src/keybindings.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
 // the contracts' keybinding types restated as plain TypeScript; the defaults rebound to Studio's commands and kept clear of the shell's Mod+K, Mod+J and Mod+Shift+M. Loams' changes are Apache-2.0.
-import {
-  type KeybindingRule,
-  type KeybindingShortcut,
-  type KeybindingWhenNode,
-  MAX_KEYBINDINGS_COUNT,
-  MAX_WHEN_EXPRESSION_DEPTH,
-  MODEL_PICKER_JUMP_KEYBINDING_COMMANDS,
-  type ResolvedKeybindingRule,
-  type ResolvedKeybindingsConfig,
-  THREAD_JUMP_KEYBINDING_COMMANDS,
-} from "@t3tools/contracts";
+
+// Studio's keybinding model (SD1 Task 24; §53 §5.10): a binding is a key chord, a
+// command and an optional `when` clause over context flags (`terminalFocus`,
+// `threadOpen`…). Parsing, matching and compiling are upstream's; the types come from
+// T3 Code's contracts (Effect Schema there, plain TypeScript here), and the command list
+// and defaults are Studio's.
+
+export const MAX_KEYBINDING_VALUE_LENGTH = 64;
+export const MAX_KEYBINDING_WHEN_LENGTH = 256;
+export const MAX_WHEN_EXPRESSION_DEPTH = 64;
+export const MAX_KEYBINDINGS_COUNT = 256;
+
+/**
+ * The commands a Studio keybinding can run. Upstream's names where the command is
+ * upstream's; `files.toggle` and `settings.open` are Studio's. The shell's own keys
+ * (Mod+K the palette, Mod+J the agent panel, Mod+Shift+M the mode) are not here:
+ * the shell owns them in both modes.
+ */
+export const STUDIO_KEYBINDING_COMMANDS = [
+  "sidebar.toggle",
+  "navigation.back",
+  "navigation.forward",
+  "terminal.toggle",
+  "rightPanel.toggle",
+  "diff.toggle",
+  "files.toggle",
+  "preview.toggle",
+  "chat.new",
+  "settings.open",
+] as const;
+
+export type KeybindingCommand = (typeof STUDIO_KEYBINDING_COMMANDS)[number];
+
+export function isKeybindingCommand(value: unknown): value is KeybindingCommand {
+  return (STUDIO_KEYBINDING_COMMANDS as readonly unknown[]).includes(value);
+}
+
+export interface KeybindingRule {
+  key: string;
+  command: KeybindingCommand;
+  when?: string;
+}
+
+export interface KeybindingShortcut {
+  key: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+  modKey: boolean;
+}
+
+export type KeybindingWhenNode =
+  | { type: "identifier"; name: string }
+  | { type: "not"; node: KeybindingWhenNode }
+  | { type: "and"; left: KeybindingWhenNode; right: KeybindingWhenNode }
+  | { type: "or"; left: KeybindingWhenNode; right: KeybindingWhenNode };
+
+export interface ResolvedKeybindingRule {
+  command: KeybindingCommand;
+  shortcut: KeybindingShortcut;
+  whenAst?: KeybindingWhenNode;
+}
+
+export type ResolvedKeybindingsConfig = readonly ResolvedKeybindingRule[];
 
 export interface ShortcutEventLike {
   getModifierState?: (key: "AltGraph") => boolean;
@@ -124,93 +178,25 @@ type WhenToken =
   | { type: "lparen" }
   | { type: "rparen" };
 
+/**
+ * Studio's defaults: upstream's chords where Studio has the command, except
+ * `terminal.toggle`, which upstream binds to Mod+J (the shell's agent panel) and
+ * Studio binds to Ctrl+` as VS Code does. Upstream's Mod+Shift+M (the model picker)
+ * is the shell's mode switch, and Mod+K stays the shell's palette. The last of a
+ * command's chords is the one shown (Mod+N for a new thread).
+ */
 export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
-  { key: "mod+b", command: "sidebar.toggle" },
+  { key: "mod+b", command: "sidebar.toggle", when: "!editableFocus" },
   { key: "mod+[", command: "navigation.back", when: "!terminalFocus" },
   { key: "mod+]", command: "navigation.forward", when: "!terminalFocus" },
-  { key: "mod+j", command: "terminal.toggle" },
+  { key: "ctrl+`", command: "terminal.toggle" },
   { key: "mod+alt+b", command: "rightPanel.toggle" },
-  { key: "mod+shift+b", command: "threadPanel.toggle", when: "!terminalFocus" },
-  { key: "mod+t", command: "rightPanel.new", when: "rightPanelOpen && !terminalFocus" },
-  { key: "mod+d", command: "terminal.split", when: "terminalFocus" },
-  { key: "mod+shift+d", command: "terminal.splitVertical", when: "terminalFocus" },
-  { key: "mod+n", command: "terminal.new", when: "terminalFocus" },
-  { key: "mod+w", command: "terminal.close", when: "terminalFocus" },
-  { key: "mod+w", command: "rightPanel.close", when: "!terminalFocus" },
-  { key: "mod+shift+t", command: "view.reopenClosed" },
-  { key: "mod+d", command: "diff.toggle", when: "!terminalFocus" },
-  { key: "mod+shift+j", command: "preview.toggle" },
-  { key: "mod+r", command: "preview.refresh", when: "previewFocus" },
-  { key: "mod+l", command: "preview.focusUrl", when: "previewFocus" },
-  { key: "mod+=", command: "preview.zoomIn", when: "previewFocus" },
-  { key: "mod++", command: "preview.zoomIn", when: "previewFocus" },
-  { key: "mod+-", command: "preview.zoomOut", when: "previewFocus" },
-  { key: "mod+0", command: "preview.resetZoom", when: "previewFocus" },
-  { key: "mod+k", command: "commandPalette.toggle", when: "!terminalFocus" },
-  { key: "mod+p", command: "filePicker.toggle", when: "!terminalFocus" },
-  { key: "mod+shift+f", command: "projectSearch.toggle", when: "!terminalFocus" },
-  { key: "mod+u", command: "usage.open", when: "!terminalFocus" },
-  { key: "mod+alt+a", command: "theme.select", when: "!terminalFocus" },
-  { key: "mod+alt+shift+a", command: "appearance.cycle", when: "!terminalFocus" },
-  { key: "mod+alt+shift+t", command: "themeEditor.toggle" },
-  { key: "mod+s", command: "composer.stash", when: "!terminalFocus" },
-  { key: "mod+shift+enter", command: "thread.steerQueuedMessage", when: "!terminalFocus" },
-  { key: "alt+arrowup", command: "thread.editQueuedMessage", when: "composerFocus" },
-  { key: "mod+enter", command: "composer.sendAlternate", when: "composerFocus && turnRunning" },
-  {
-    key: "mod+enter",
-    command: "composer.sendBackground",
-    when: "composerFocus && draftThreadRoute",
-  },
-  {
-    key: "mod+alt+enter",
-    command: "composer.sendBackground",
-    when: "composerFocus && draftThreadRoute",
-  },
-  {
-    key: "mod+alt+enter",
-    command: "composer.sendAndNewThread",
-    when: "composerFocus && !draftThreadRoute",
-  },
-  { key: "mod+n", command: "chat.new", when: "!terminalFocus" },
+  { key: "mod+d", command: "diff.toggle", when: "threadOpen && !terminalFocus" },
+  { key: "mod+shift+e", command: "files.toggle", when: "threadOpen && !terminalFocus" },
+  { key: "mod+shift+j", command: "preview.toggle", when: "threadOpen" },
   { key: "mod+shift+o", command: "chat.new", when: "!terminalFocus" },
-  { key: "mod+shift+n", command: "chat.newLocal", when: "!terminalFocus" },
-  { key: "mod+alt+n", command: "chat.newWithoutProject", when: "!terminalFocus" },
-  { key: "mod+f", command: "chat.find", when: "!terminalFocus && !previewFocus" },
-  { key: "mod+shift+m", command: "modelPicker.toggle", when: "!terminalFocus" },
-  { key: "mod+shift+h", command: "composer.host", when: "!terminalFocus" },
-  { key: "mod+shift+e", command: "composer.effort", when: "!terminalFocus" },
-  { key: "mod+shift+a", command: "composer.mode", when: "!terminalFocus" },
-  { key: "mod+shift+x", command: "composer.workspace", when: "!terminalFocus" },
-  { key: "mod+shift+g", command: "composer.branch", when: "!terminalFocus" },
-  { key: "mod+shift+l", command: "composer.previousWorktree", when: "!terminalFocus" },
-  { key: "mod+shift+k", command: "pullRequest.copyNumber", when: "!terminalFocus" },
-  { key: "mod+shift+arrowup", command: "modelPicker.previousProvider", when: "modelPickerOpen" },
-  { key: "mod+shift+arrowdown", command: "modelPicker.nextProvider", when: "modelPickerOpen" },
-  { key: "mod+o", command: "editor.openFavorite" },
-  { key: "mod+shift+[", command: "thread.previous" },
-  { key: "mod+shift+]", command: "thread.next" },
-  { key: "mod+shift+c", command: "thread.copyReference", when: "!terminalFocus" },
-  { key: "mod+shift+s", command: "thread.settle", when: "!terminalFocus" },
-  { key: "mod+shift+p", command: "thread.pin", when: "!terminalFocus" },
-  { key: "mod+z", command: "thread.undo", when: "!terminalFocus && !editableFocus" },
-  ...THREAD_JUMP_KEYBINDING_COMMANDS.map((command, index) => ({
-    key: `mod+${index + 1}`,
-    command,
-    when: "!modelPickerOpen && isDesktop",
-  })),
-  ...MODEL_PICKER_JUMP_KEYBINDING_COMMANDS.map((command, index) => ({
-    key: `mod+${index + 1}`,
-    command,
-    when: "modelPickerOpen && isDesktop",
-  })),
-  { key: "c", command: "usage.cost", when: "usagePageOpen" },
-  { key: "t", command: "usage.tokens", when: "usagePageOpen" },
-  { key: "l", command: "usage.limits", when: "usagePageOpen" },
-  { key: "mod+shift+1", command: "usage.period.day", when: "usagePageOpen" },
-  { key: "mod+shift+2", command: "usage.period.week", when: "usagePageOpen" },
-  { key: "mod+shift+3", command: "usage.period.month", when: "usagePageOpen" },
-  { key: "mod+shift+4", command: "usage.period.quarter", when: "usagePageOpen" },
+  { key: "mod+n", command: "chat.new", when: "!terminalFocus" },
+  { key: "mod+,", command: "settings.open" },
 ];
 
 function normalizeKeyToken(token: string): string {
@@ -220,6 +206,7 @@ function normalizeKeyToken(token: string): string {
 }
 
 export function parseKeybindingShortcut(value: string): KeybindingShortcut | null {
+  if (value.length > MAX_KEYBINDING_VALUE_LENGTH) return null;
   const rawTokens = value
     .toLowerCase()
     .split("+")
@@ -333,6 +320,7 @@ function tokenizeWhenExpression(expression: string): WhenToken[] | null {
 }
 
 export function parseKeybindingWhenExpression(expression: string): KeybindingWhenNode | null {
+  if (expression.length > MAX_KEYBINDING_WHEN_LENGTH) return null;
   const tokens = tokenizeWhenExpression(expression);
   if (!tokens || tokens.length === 0) return null;
   let index = 0;

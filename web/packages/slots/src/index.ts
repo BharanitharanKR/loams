@@ -4,6 +4,7 @@ export { SLOT_KINDS, SlotRegistry } from './registry.js';
 export { Slot, SlotBoundary, SlotProvider, useSlot, useSlotRegistry } from './render.js';
 export type {
   EnvironmentRef,
+  PaletteCommand,
   SlotComponent,
   SlotEntry,
   SlotKind,
