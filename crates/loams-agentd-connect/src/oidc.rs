@@ -150,6 +150,8 @@ struct Discovery {
 #[derive(Debug, Deserialize)]
 struct Claims {
     sub: String,
+    /// Seconds since the epoch; required by the validation.
+    exp: u64,
 }
 
 /// Verifies the remote listener's bearer tokens.
@@ -297,6 +299,16 @@ impl Verifier {
     /// (`forbidden_role`) for a valid token of another subject, 503 when no
     /// signing keys can be had.
     pub async fn verify(&self, token: &str) -> Result<(), Rejection> {
+        self.verify_until(token).await.map(|_| ())
+    }
+
+    /// As [`Verifier::verify`], answering the token's `exp` (seconds since the
+    /// epoch): a preview ticket minted with it lasts no longer (SD1 Task 26).
+    ///
+    /// # Errors
+    ///
+    /// As [`Verifier::verify`].
+    pub async fn verify_until(&self, token: &str) -> Result<u64, Rejection> {
         let header = jsonwebtoken::decode_header(token)
             .map_err(|_| Rejection::unauthenticated("the bearer token is not a JWT"))?;
         if !matches!(header.alg, Algorithm::RS256 | Algorithm::EdDSA) {
@@ -337,7 +349,7 @@ impl Verifier {
                 message: "signed in, but this agentd serves another account (--subject)".to_owned(),
             });
         }
-        Ok(())
+        Ok(data.claims.exp)
     }
 }
 

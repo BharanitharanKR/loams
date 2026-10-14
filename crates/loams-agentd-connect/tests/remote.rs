@@ -130,6 +130,10 @@ struct Remote {
 
 impl Remote {
     async fn start(oidc: OidcOptions) -> Self {
+        Self::start_with_preview(oidc, None).await
+    }
+
+    async fn start_with_preview(oidc: OidcOptions, preview_port: Option<u16>) -> Self {
         let dir = tempfile::tempdir().unwrap();
         let config = EngineConfig {
             data_dir: dir.path().join("store"),
@@ -174,6 +178,7 @@ impl Remote {
                 oidc,
                 cors: CorsPolicy::new([CONSOLE]).unwrap(),
                 auth_failure_delay: Duration::from_millis(5),
+                preview_port,
             },
         )
         .await
@@ -714,5 +719,243 @@ async fn remote_streams_over_tls() {
         .unwrap();
     assert!(chunk.len() >= 5, "a Connect envelope");
     assert_eq!(chunk[0], 0, "a message, not the end of the stream");
+    remote.stop().await;
+}
+
+/// A stand-in for the daemon's preview proxy: echoes what reached it.
+async fn fake_preview_proxy() -> (u16, tokio::task::JoinHandle<()>) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let app = axum::Router::new().fallback(|request: axum::extract::Request| async move {
+        let header = |name: &str| {
+            request
+                .headers()
+                .get(name)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned)
+        };
+        axum::Json(json!({
+            "path": request.uri().to_string(),
+            "host": header("host"),
+            "authorization": header("authorization"),
+            "prefix": header("x-forwarded-prefix"),
+        }))
+    });
+    let task = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    (port, task)
+}
+
+impl Remote {
+    async fn get(&self, path: &str, headers: &[(&str, &str)]) -> Answer {
+        let mut request = self.client.get(self.url(path));
+        for (name, value) in headers {
+            request = request.header(*name, *value);
+        }
+        Answer::of(request.send().await.unwrap()).await
+    }
+
+    /// `POST /preview/-/ticket` for `preview`.
+    async fn ticket(&self, preview: &str, headers: &[(&str, &str)]) -> Answer {
+        let mut request = self
+            .client
+            .post(self.url("/preview/-/ticket"))
+            .header("content-type", "application/json")
+            .body(json!({ "preview": preview }).to_string());
+        for (name, value) in headers {
+            request = request.header(*name, *value);
+        }
+        Answer::of(request.send().await.unwrap()).await
+    }
+
+    /// The listener's own origin, as a preview page sends it.
+    fn own_origin(&self) -> String {
+        format!("https://localhost:{}", self.listener.local_addr().port())
+    }
+}
+
+#[tokio::test]
+async fn remote_preview_requires_token() {
+    let issuer = Issuer::start().await;
+    let (port, upstream) = fake_preview_proxy().await;
+    let remote = Remote::start_with_preview(options(&issuer), Some(port)).await;
+
+    // No token, a bad token, another subject: refused before the dev server.
+    let answer = remote.get("/preview/dev.my-app/", &[]).await;
+    assert_eq!(answer.status, 401, "{}", answer.body);
+    assert_eq!(answer.code(), Some("unauthenticated"));
+    let answer = remote
+        .get("/preview/dev.my-app/", &[("authorization", "Bearer x.y.z")])
+        .await;
+    assert_eq!(answer.status, 401, "{}", answer.body);
+    let other = bearer(&issuer.token(|claims| claims["sub"] = json!("someone-else")));
+    let answer = remote
+        .get("/preview/dev.my-app/", &[("authorization", &other)])
+        .await;
+    assert_eq!(answer.status, 403, "{}", answer.body);
+    // A ticket that was never minted, and a ticket request without a token.
+    let fake = format!("/preview/pt_{}/", "0".repeat(64));
+    let answer = remote.get(&fake, &[]).await;
+    assert_eq!(answer.status, 401, "{}", answer.body);
+    let answer = remote.ticket("dev.my-app", &[("origin", CONSOLE)]).await;
+    assert_eq!(answer.status, 401, "{}", answer.body);
+
+    // With the token: forwarded to the preview proxy under the preview's
+    // hostname, the prefix stripped, and the token never passed on.
+    let token = bearer(&issuer.token(|_| {}));
+    let answer = remote
+        .get(
+            "/preview/dev.my-app/src/main.tsx?v=1",
+            &[("authorization", &token)],
+        )
+        .await;
+    assert_eq!(answer.status, 200, "{}", answer.body);
+    assert_eq!(answer.body["path"], "/src/main.tsx?v=1");
+    assert_eq!(
+        answer.body["host"],
+        format!("dev.my-app.localhost:{port}").as_str()
+    );
+    assert_eq!(answer.body["authorization"], Value::Null);
+    assert_eq!(answer.body["prefix"], "/preview/dev.my-app");
+
+    // A ticket from the console reaches that preview only, without a token.
+    let minted = remote
+        .ticket(
+            "dev.my-app",
+            &[("origin", CONSOLE), ("authorization", &token)],
+        )
+        .await;
+    assert_eq!(minted.status, 200, "{}", minted.body);
+    assert!(minted.has_cors());
+    let base = minted.body["base"].as_str().unwrap().to_owned();
+    assert!(
+        base.starts_with("/preview/pt_") && base.ends_with('/'),
+        "{base}"
+    );
+    assert!(minted.body["expiresAtMs"].as_u64().unwrap() > now() * 1000);
+    let answer = remote.get(&format!("{base}index.html"), &[]).await;
+    assert_eq!(answer.status, 200, "{}", answer.body);
+    assert_eq!(answer.body["path"], "/index.html");
+    assert_eq!(
+        answer.body["host"],
+        format!("dev.my-app.localhost:{port}").as_str()
+    );
+    // A preview page may not mint tickets itself.
+    let own = remote.own_origin();
+    let answer = remote
+        .ticket("dev.my-app", &[("origin", &own), ("authorization", &token)])
+        .await;
+    assert_eq!(answer.status, 403, "{}", answer.body);
+    // Nonsense names are refused.
+    let answer = remote
+        .ticket("../etc", &[("origin", CONSOLE), ("authorization", &token)])
+        .await;
+    assert_eq!(answer.status, 400, "{}", answer.body);
+
+    remote.stop().await;
+    upstream.abort();
+}
+
+#[tokio::test]
+async fn remote_preview_frame_ancestors_restricted() {
+    let issuer = Issuer::start().await;
+    let (port, upstream) = fake_preview_proxy().await;
+    let remote = Remote::start_with_preview(options(&issuer), Some(port)).await;
+    let token = bearer(&issuer.token(|_| {}));
+    let minted = remote
+        .ticket(
+            "dev.my-app",
+            &[("origin", CONSOLE), ("authorization", &token)],
+        )
+        .await;
+    let base = minted.body["base"].as_str().unwrap().to_owned();
+
+    // Framable by the configured console only; no Referer carries the ticket
+    // away; no CORS for the console to read the page's bytes.
+    let answer = remote.get(&base, &[]).await;
+    assert_eq!(answer.status, 200, "{}", answer.body);
+    let csp: Vec<_> = answer
+        .headers
+        .get_all("content-security-policy")
+        .iter()
+        .map(|v| v.to_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(csp, vec![format!("frame-ancestors {CONSOLE}")]);
+    assert_eq!(answer.headers["referrer-policy"], "same-origin");
+    assert!(!answer.has_cors());
+
+    // Refusals carry it too.
+    let answer = remote.get("/preview/dev.my-app/", &[]).await;
+    assert_eq!(answer.status, 401);
+    assert_eq!(
+        answer.headers["content-security-policy"],
+        format!("frame-ancestors {CONSOLE}").as_str()
+    );
+
+    // The page's own origin may call its preview (fetch, HMR); another site
+    // may not, even with the ticket.
+    let own = remote.own_origin();
+    let answer = remote.get(&base, &[("origin", &own)]).await;
+    assert_eq!(answer.status, 200, "{}", answer.body);
+    let answer = remote
+        .get(&base, &[("origin", "https://evil.example")])
+        .await;
+    assert_eq!(answer.status, 403, "{}", answer.body);
+    assert!(answer.has_reason("origin_not_allowed"));
+    assert!(!answer.has_cors());
+    // The page's origin is still refused by the API.
+    let answer = remote
+        .post(
+            LIST_HARNESSES,
+            &[("origin", &own), ("authorization", &token)],
+        )
+        .await;
+    assert_eq!(answer.status, 403, "{}", answer.body);
+
+    // A preflight is answered for the console's ticket request only.
+    let preflight = remote
+        .client
+        .request(http::Method::OPTIONS, remote.url("/preview/-/ticket"))
+        .header("origin", CONSOLE)
+        .header("access-control-request-method", "POST")
+        .header(
+            "access-control-request-headers",
+            "authorization, content-type",
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(preflight.status().as_u16(), 204);
+    let preflight = remote
+        .client
+        .request(http::Method::OPTIONS, remote.url(&base))
+        .header("origin", CONSOLE)
+        .header("access-control-request-method", "GET")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(preflight.status().as_u16(), 403);
+
+    remote.stop().await;
+    upstream.abort();
+}
+
+#[tokio::test]
+async fn remote_preview_off_without_a_proxy() {
+    let issuer = Issuer::start().await;
+    let remote = Remote::start(options(&issuer)).await;
+    let token = bearer(&issuer.token(|_| {}));
+    let answer = remote
+        .ticket(
+            "dev.my-app",
+            &[("origin", CONSOLE), ("authorization", &token)],
+        )
+        .await;
+    assert_eq!(answer.status, 503, "{}", answer.body);
+    let answer = remote
+        .get("/preview/dev.my-app/", &[("authorization", &token)])
+        .await;
+    assert_eq!(answer.status, 503, "{}", answer.body);
     remote.stop().await;
 }

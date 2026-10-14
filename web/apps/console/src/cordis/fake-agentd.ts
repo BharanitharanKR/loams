@@ -13,6 +13,7 @@ import {
   GitService,
   HarnessId,
   HarnessService,
+  PreviewService,
   ProjectService,
   QueueService,
   ReasoningLevel,
@@ -211,6 +212,39 @@ function fakeRouter() {
                 req.chatId === 'demo-login'
                   ? [{ id: 'q1', text: 'Then add a regression test for the redirect.' }]
                   : [],
+            },
+            ctx.signal,
+          ),
+      })
+      .service(PreviewService, {
+        // The Preview tab's dev servers (SD1 Task 26).
+        watchPreviews: (_req, ctx) =>
+          once(
+            {
+              snapshot: {
+                proxyPort: 7331,
+                projectName: 'loams',
+                services: [
+                  {
+                    id: 'demo-web',
+                    name: 'web',
+                    hostname: 'laptop.loams.localhost',
+                    port: 5173,
+                    pid: 4242,
+                    projectName: 'loams',
+                    startedAtMs: ago(12),
+                  },
+                  {
+                    id: 'demo-api',
+                    name: 'api',
+                    hostname: 'laptop.loams-api.localhost',
+                    port: 3000,
+                    pid: 4243,
+                    projectName: 'loams',
+                    startedAtMs: ago(12),
+                  },
+                ],
+              },
             },
             ctx.signal,
           ),
