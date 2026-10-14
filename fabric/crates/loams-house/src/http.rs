@@ -77,7 +77,7 @@ use hyper_util::rt::{TokioIo, TokioTimer};
 use loams_house_ipc::{Execute, Limits, Output, Progress};
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tokio::sync::{Semaphore, mpsc};
 use tokio::task::JoinHandle;
 use tokio::time::Sleep;
@@ -116,7 +116,9 @@ const LINGER: Duration = Duration::from_secs(2);
 #[derive(Debug)]
 pub struct HouseHandle {
     addr: SocketAddr,
+    tls_addr: Option<SocketAddr>,
     accept: JoinHandle<()>,
+    tls_accept: Option<JoinHandle<()>>,
 }
 
 impl HouseHandle {
@@ -125,15 +127,27 @@ impl HouseHandle {
         self.addr
     }
 
+    /// The TLS listener's address, when it has one (HS1 Task 20).
+    pub fn tls_addr(&self) -> Option<SocketAddr> {
+        self.tls_addr
+    }
+
     /// Stops accepting connections.
     pub fn shutdown(self) {
+        self.abort();
+    }
+
+    fn abort(&self) {
         self.accept.abort();
+        if let Some(tls) = &self.tls_accept {
+            tls.abort();
+        }
     }
 }
 
 impl Drop for HouseHandle {
     fn drop(&mut self) {
-        self.accept.abort();
+        self.abort();
     }
 }
 
@@ -207,7 +221,23 @@ async fn serve_all(
     let addr = listener
         .local_addr()
         .map_err(|err| network("address", err))?;
+    // The TLS listener (HS1 Task 20): any address, never plaintext.
+    let (tls, tls_addr) = match &config.tls {
+        Some(tls) => {
+            config::check_tls_users(tls.listen, &config.users)?;
+            let listener = TcpListener::bind(tls.listen)
+                .await
+                .map_err(|err| network("bind the TLS listener", err))?;
+            let bound = listener
+                .local_addr()
+                .map_err(|err| network("the TLS listener's address", err))?;
+            let acceptor = tokio_rustls::TlsAcceptor::from(Arc::clone(&tls.config));
+            (Some((listener, acceptor)), Some(bound))
+        }
+        None => (None, None),
+    };
     let permits = Arc::new(Semaphore::new(config.max_connections.max(1)));
+    let tls_permits = Arc::clone(&permits);
     let unpin_pool = pool.clone();
     let sessions = SessionTable::new(
         config.max_live_sessions,
@@ -237,6 +267,7 @@ async fn serve_all(
         api,
         lake,
     });
+    let tls_shared = Arc::clone(&shared);
     let accept = tokio::spawn(async move {
         loop {
             let Ok(permit) = Arc::clone(&permits).acquire_owned().await else {
@@ -244,6 +275,7 @@ async fn serve_all(
             };
             match listener.accept().await {
                 Ok((stream, _)) => {
+                    let _ = stream.set_nodelay(true);
                     let shared = Arc::clone(&shared);
                     tokio::spawn(async move {
                         connection(stream, shared).await;
@@ -254,11 +286,53 @@ async fn serve_all(
             }
         }
     });
-    Ok(HouseHandle { addr, accept })
+    let tls_accept = match tls {
+        Some((listener, acceptor)) => {
+            let shared = Arc::clone(&tls_shared);
+            let permits = Arc::clone(&tls_permits);
+            Some(tokio::spawn(async move {
+                loop {
+                    let Ok(permit) = Arc::clone(&permits).acquire_owned().await else {
+                        return;
+                    };
+                    match listener.accept().await {
+                        Ok((stream, _)) => {
+                            let _ = stream.set_nodelay(true);
+                            let shared = Arc::clone(&shared);
+                            let acceptor = acceptor.clone();
+                            tokio::spawn(async move {
+                                // A handshake gets what a request body's frame
+                                // gets: `receive_timeout`.
+                                let handshake = tokio::time::timeout(
+                                    shared.config.receive_timeout,
+                                    acceptor.accept(stream),
+                                )
+                                .await;
+                                if let Ok(Ok(stream)) = handshake {
+                                    connection(stream, shared).await;
+                                }
+                                drop(permit);
+                            });
+                        }
+                        Err(_) => tokio::time::sleep(Duration::from_millis(10)).await,
+                    }
+                }
+            }))
+        }
+        None => None,
+    };
+    Ok(HouseHandle {
+        addr,
+        tls_addr,
+        accept,
+        tls_accept,
+    })
 }
 
-async fn connection(stream: TcpStream, shared: Arc<Shared>) {
-    let _ = stream.set_nodelay(true);
+async fn connection<S>(stream: S, shared: Arc<Shared>)
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
     let config = &shared.config;
     let io = TokioIo::new(IdleIo::new(stream, config.send_timeout));
     let mut builder = http1::Builder::new();
@@ -319,14 +393,14 @@ fn head_timeout(config: &HouseConfig) -> Duration {
 /// `receive_timeout`) and each head and idle gap (hyper's header timer,
 /// `keep_alive`).
 #[derive(Debug)]
-struct IdleIo {
-    stream: TcpStream,
+struct IdleIo<S> {
+    stream: S,
     write_idle: Duration,
     write_deadline: Option<Pin<Box<Sleep>>>,
 }
 
-impl IdleIo {
-    fn new(stream: TcpStream, write_idle: Duration) -> Self {
+impl<S> IdleIo<S> {
+    fn new(stream: S, write_idle: Duration) -> Self {
         Self {
             stream,
             write_idle,
@@ -350,7 +424,7 @@ impl IdleIo {
     }
 }
 
-impl AsyncRead for IdleIo {
+impl<S: AsyncRead + Unpin> AsyncRead for IdleIo<S> {
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -360,7 +434,7 @@ impl AsyncRead for IdleIo {
     }
 }
 
-impl AsyncWrite for IdleIo {
+impl<S: AsyncWrite + Unpin> AsyncWrite for IdleIo<S> {
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,

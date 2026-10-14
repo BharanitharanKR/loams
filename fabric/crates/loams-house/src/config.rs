@@ -85,6 +85,18 @@ pub struct HouseConfig {
     pub session_limits: crate::settings::SessionLimits,
     /// Sessions live at once (FL2 Ruling 10).
     pub max_live_sessions: usize,
+    /// The TLS listener (8443, HS1 Task 20), which may face other hosts:
+    /// where it listens and its rustls configuration ([`crate::tls`]).
+    pub tls: Option<TlsListener>,
+}
+
+/// A TLS listener (HS1 Task 20).
+#[derive(Clone, Debug)]
+pub struct TlsListener {
+    /// Where it listens; any address.
+    pub listen: SocketAddr,
+    /// Its certificate and protocols.
+    pub config: std::sync::Arc<rustls::ServerConfig>,
 }
 
 /// The bytes a `wait_end_of_query` spool keeps in memory before it moves to a file
@@ -105,6 +117,7 @@ impl Default for HouseConfig {
             wait_end_of_query_max_bytes: 1024 * 1024 * 1024,
             spool_budget_bytes: 8 * 1024 * 1024 * 1024,
             lake_insert_max_bytes: crate::insert::DEFAULT_MAX_INSERT_BYTES,
+            tls: None,
             default_buffer_size: 1024 * 1024,
             max_query_size: 256 * 1024,
             receive_timeout: Duration::from_secs(30),
@@ -131,6 +144,22 @@ pub fn check_listen(addr: SocketAddr) -> Result<(), HouseError> {
         "house listen on {addr}: only loopback addresses are served until the unified auth \
          plan (D111)"
     ))))
+}
+
+/// A TLS listener off loopback faces other hosts (HS1 Task 20): no user may
+/// sign in there without a password.
+pub fn check_tls_users(listen: SocketAddr, users: &[UserMap]) -> Result<(), HouseError> {
+    if listen.ip().is_loopback() {
+        return Ok(());
+    }
+    match users.iter().find(|u| u.verifies("")) {
+        Some(user) => Err(HouseError::from(ChError::bad_arguments(format!(
+            "house TLS listen on {listen}: user {:?} has an empty password, and a listener \
+             other hosts reach takes none",
+            user.user
+        )))),
+        None => Ok(()),
+    }
 }
 
 /// A development user (FL2 Task 2): a name, the SHA-256 of its password, the

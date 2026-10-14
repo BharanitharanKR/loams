@@ -101,12 +101,13 @@ pub mod sandbox;
 pub mod session;
 pub mod settings;
 pub mod system;
+pub mod tls;
 pub mod types;
 pub mod views;
 pub mod watchdog;
 
 pub use admission::{Collected, Event, Outcome, PoolConfig, PoolStats, WorkerLease, WorkerPool};
-pub use config::{CatalogSpec, HouseConfig, HouseFile, UserMap, WorkersMode};
+pub use config::{CatalogSpec, HouseConfig, HouseFile, TlsListener, UserMap, WorkersMode};
 pub use errors::{CODES, ChError, HouseError, MidStreamBody};
 pub use http::{HouseHandle, serve, serve_with_catalog, serve_with_lake};
 pub use sandbox::{CgroupLimits, Forward, ForwardSlot, ForwardTarget, SandboxMode, WorkerCgroups};
