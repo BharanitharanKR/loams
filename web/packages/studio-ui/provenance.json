@@ -57,11 +57,29 @@
       "note": "types from packages/contracts/src/keybindings.ts (Effect Schema) restated by hand; that file is not vendored"
     },
     {
+      "path": "src/keybindings/shortcutModifierState.ts",
+      "upstreamPath": "apps/web/src/shortcutModifierState.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "31bac3685e92bf3f16e810d1273aab6975ef748d166bf2b3780fe89e0289ad08",
+      "localSha256": "a4f21c1ae5ac5a612db26ef235c3329cf3dcbfa5780c76a49f2308a6fc2caa8b",
+      "verdict": "as-is",
+      "group": "keybindings"
+    },
+    {
       "path": "src/lib/AnimatedHeight.tsx",
       "upstreamPath": "apps/web/src/components/AnimatedHeight.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "98857c40d6310e9563d3fcb5bfa06b016ae9ddc5764e0b116f0c55c4fdb3683c",
       "localSha256": "d1079fc2afaee63c73470f5319d9f2cd1e36d71d7ab0347ad55f51db0a56ed27",
+      "verdict": "as-is",
+      "group": "lib"
+    },
+    {
+      "path": "src/lib/editableFocus.ts",
+      "upstreamPath": "apps/web/src/lib/editableFocus.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "35e6b2c3da0d395fc50debc6a5b8043788a55955fd163ba891db0622237aa836",
+      "localSha256": "1a39cdfcb57146895b6117d682bf602409c8c7c0cea1e1aa728c419666d34327",
       "verdict": "as-is",
       "group": "lib"
     },
@@ -92,6 +110,60 @@
       "verdict": "adapt",
       "group": "h",
       "note": "the ranking half lives in @loams/ui src/command-rank.ts, which the shell's palette also uses"
+    },
+    {
+      "path": "src/thread-list/actionMenu.ts",
+      "upstreamPath": "apps/web/src/components/threadActionMenu.logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "71eafa53a0a6967775fbdb61d50f435a10a74adc7a5dc7ffd551d00469a7a0f1",
+      "localSha256": "1e86e28d4bd02056f922edc5a13fc8b349db0d0d44a0418118b3c6b27fc87ea2",
+      "verdict": "adapt",
+      "group": "thread-list"
+    },
+    {
+      "path": "src/thread-list/logic.ts",
+      "upstreamPath": "apps/web/src/components/Sidebar.logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "808631b08619785303daf041b671f96eff28676cadda07524976d455f3fca259",
+      "localSha256": "cdb163130412536bddf8f98651ddb27938249d83f08af9ab51d9a4e990f900fa",
+      "verdict": "adapt",
+      "group": "thread-list"
+    },
+    {
+      "path": "src/thread-list/rules/threadSort.ts",
+      "upstreamPath": "packages/client-runtime/src/state/threadSort.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "6e56c7e546ba0e3b4179fc75f2c5d0997129fbef2e5bcee0b61decf72002bd3c",
+      "localSha256": "95807326044d62310e7a35f20ede03f57a3f84830ac93b1d331edfb8cf2e39a7",
+      "verdict": "adapt",
+      "group": "thread-list"
+    },
+    {
+      "path": "src/thread-list/StatusIndicators.tsx",
+      "upstreamPath": "apps/web/src/components/ThreadStatusIndicators.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "36d891d3bc73187b6c7daffb12ae784e71d7f8b852205e2c191641011d85e3ac",
+      "localSha256": "446804b34b8d3051477a3e2308f1972f8d75cb725dbe59dd157c963b39fd59f4",
+      "verdict": "adapt",
+      "group": "thread-list"
+    },
+    {
+      "path": "src/thread-list/threadSort.ts",
+      "upstreamPath": "apps/web/src/lib/threadSort.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "300a7b85cf3b66be7bbb39d84b6a0430e306b5525bab0c643c9024827f37bafb",
+      "localSha256": "63042c35049ee1be61069ce19c596afb192f316cd5413ecd9ba62bf6dde29564",
+      "verdict": "as-is",
+      "group": "thread-list"
+    },
+    {
+      "path": "src/thread-list/worktreeCleanup.ts",
+      "upstreamPath": "apps/web/src/worktreeCleanup.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "e5d1bb9e7190177be0143ad34cf49ac3cc44e09df5937d2764bdd77187070604",
+      "localSha256": "810fb13961d99ee088901c0a84fdc2dfd611387358558add87585362904e00dd",
+      "verdict": "as-is",
+      "group": "thread-list"
     }
   ]
 }
