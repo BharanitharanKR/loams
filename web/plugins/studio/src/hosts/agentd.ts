@@ -7,27 +7,16 @@
 // (`getToken`). Until then, in development, a token pasted in Settings, held in this
 // page's memory only (never stored) and flagged with a warning.
 
-import { createClient, type Transport } from '@connectrpc/connect';
+import type { Transport } from '@connectrpc/connect';
+import { createAgentdTransport } from '@loams/agentd-client/connect';
 import {
   type AgentdHost,
   createHostRegistry,
   type HostRegistry,
   hostFromParam,
 } from '@loams/agentd-client/hosts';
-import {
-  createRemoteAgentdTransport,
-  type TokenGetter,
-} from '@loams/agentd-client/transport-remote';
-import { ProjectService, type Repo as RepoPb } from '@loams/proto/agentd';
-import {
-  type AgentdProjectsClient,
-  isCloneUrl,
-  projectOf,
-  type Reach,
-  type Repo,
-  type StudioAgentd,
-  StudioError,
-} from '../agentd.js';
+import type { TokenGetter } from '@loams/agentd-client/transport-remote';
+import type { Reach, StudioAgentd } from '../agentd.js';
 
 /** The host controls Settings › Agentd hosts and `?host=` use. */
 export interface StudioHosts {
@@ -48,30 +37,12 @@ export interface StudioHosts {
   version(): number;
 }
 
-function repoOf(r: RepoPb | undefined): Repo {
-  if (!r) throw new StudioError('bad_reply', 'The agentd host answered without a repository');
-  return { path: r.path, name: r.name, defaultBranch: r.defaultBranch ?? null };
-}
-
-/** `ProjectService` on `transport`, as Studio's projects client. */
-export function remoteProjects(
-  host: { id: string; name: string },
-  transport: Transport,
-): AgentdProjectsClient {
-  const projects = createClient(ProjectService, transport);
-  return {
-    host,
-    listRepos: async () => (await projects.listRepos({})).repos.map(repoOf),
-    cloneRepo: async (url) => repoOf((await projects.cloneRepo({ url })).repo),
-  };
-}
-
 export interface HostedAgentdOptions {
   registry?: HostRegistry;
   /** The sign-in's access token for the audience `loams-agentd` (MT1); absent: pasted tokens. */
   getToken?: (host: AgentdHost) => TokenGetter;
-  /** Tests: the projects client of a host. */
-  clientFor?: (host: AgentdHost, getToken: TokenGetter) => AgentdProjectsClient;
+  /** Tests: the transport to a host (default: the web transport, SD1 Task 7). */
+  transportFor?: (host: AgentdHost, getToken: TokenGetter) => Transport;
 }
 
 /** Studio's agentd in the browser: the selected remote host. */
@@ -94,7 +65,7 @@ export function hostedAgentd(o: HostedAgentdOptions = {}): StudioAgentd & { host
     version += 1;
     for (const listener of [...listeners]) listener();
   };
-  let client: { id: string; projects: AgentdProjectsClient } | undefined;
+  let client: { id: string; transport: Transport } | undefined;
   registry.subscribe(() => {
     if (selectedId && !registry.get(selectedId)) selectedId = registry.list()[0]?.id;
     else if (!selectedId) selectedId = registry.list()[0]?.id;
@@ -102,24 +73,20 @@ export function hostedAgentd(o: HostedAgentdOptions = {}): StudioAgentd & { host
     notify();
   });
 
-  const projects = (): AgentdProjectsClient => {
+  /** The selected host's transport, made once per host and token source. */
+  const transport = (): Transport | undefined => {
     const host = selected();
-    if (!host || !hasToken(host.id)) {
-      throw new StudioError('no_host', 'No agentd host is connected');
-    }
+    if (!host || !hasToken(host.id)) return undefined;
     if (client?.id !== host.id) {
       const getToken = tokenOf(host);
       client = {
         id: host.id,
-        projects: o.clientFor
-          ? o.clientFor(host, getToken)
-          : remoteProjects(
-              { id: host.id, name: host.name },
-              createRemoteAgentdTransport({ kind: 'remote', baseUrl: host.url, getToken }),
-            ),
+        transport: o.transportFor
+          ? o.transportFor(host, getToken)
+          : createAgentdTransport({ kind: 'remote', baseUrl: host.url, getToken }),
       };
     }
-    return client.projects;
+    return client.transport;
   };
 
   const hosts: StudioHosts = {
@@ -164,11 +131,6 @@ export function hostedAgentd(o: HostedAgentdOptions = {}): StudioAgentd & { host
       const host = selected();
       return host ? { id: host.id, name: host.name } : undefined;
     },
-    listProjects: async () => (await projects().listRepos()).map(projectOf),
-    async cloneProject(url) {
-      if (!isCloneUrl(url))
-        throw new StudioError('invalid_url', 'Expected an https, ssh or user@host:path git URL');
-      return projectOf(await projects().cloneRepo(url));
-    },
+    transport,
   };
 }

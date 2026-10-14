@@ -416,6 +416,44 @@ async fn git_writes_over_connect() {
     daemon.stop().await;
 }
 
+/// SD1 Task 6: the renderer reaches `CloneRepo` directly through the proxy,
+/// so the daemon refuses what git would read as an option, a local path or a
+/// command transport, before git runs.
+#[tokio::test]
+async fn clone_repo_refuses_options_and_local_urls() {
+    let daemon = Daemon::start().await;
+    let projects = pb::ProjectServiceClient::new(HttpClient::plaintext(), daemon.config());
+    for url in [
+        "--upload-pack=touch pwned",
+        "-oProxyCommand=touch pwned",
+        "file:///etc",
+        "/etc",
+        "ext::sh -c touch% pwned",
+        "fd::17",
+        "https://example.com/a b.git",
+        "http://example.com/a.git",
+        "C:/repo",
+    ] {
+        let error = projects
+            .clone_repo(pb::CloneRepoRequest {
+                url: url.into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, ErrorCode::InvalidArgument, "{url}");
+        assert!(
+            error
+                .message
+                .as_deref()
+                .unwrap_or_default()
+                .starts_with("invalid_url"),
+            "{url}: {error:?}"
+        );
+    }
+    daemon.stop().await;
+}
+
 async fn git_async(cwd: &std::path::Path, args: &[&str]) -> String {
     let output = tokio::process::Command::new("git")
         .args(args)

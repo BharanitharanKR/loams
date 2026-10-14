@@ -1014,16 +1014,19 @@ importers:
 
   web/packages/agentd-client:
     dependencies:
+      '@bufbuild/protobuf':
+        specifier: 2.16.0
+        version: 2.16.0
       '@connectrpc/connect':
         specifier: 2.2.0
         version: 2.2.0(@bufbuild/protobuf@2.16.0)
       '@connectrpc/connect-web':
         specifier: 2.2.0
         version: 2.2.0(@bufbuild/protobuf@2.16.0)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.16.0))
-    devDependencies:
       '@loams/proto':
         specifier: workspace:*
         version: link:../proto
+    devDependencies:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
@@ -1091,6 +1094,9 @@ importers:
       '@connectrpc/connect-query':
         specifier: 'catalog:'
         version: 2.3.1(@bufbuild/protobuf@2.16.0)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.16.0))(@tanstack/query-core@5.104.1)(@tanstack/react-query@5.104.0(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@loams/agentd-client':
+        specifier: workspace:*
+        version: link:../agentd-client
       '@loams/cordis':
         specifier: workspace:*
         version: link:../cordis
@@ -1196,6 +1202,9 @@ importers:
       '@connectrpc/connect-web':
         specifier: 2.2.0
         version: 2.2.0(@bufbuild/protobuf@2.16.0)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.16.0))
+      '@loams/agentd-client':
+        specifier: workspace:*
+        version: link:../agentd-client
       '@loams/console-host':
         specifier: workspace:*
         version: link:../console-host
@@ -3095,9 +3104,15 @@ importers:
 
   web/plugins/studio:
     dependencies:
+      '@bufbuild/protobuf':
+        specifier: 2.16.0
+        version: 2.16.0
       '@connectrpc/connect':
         specifier: 2.2.0
         version: 2.2.0(@bufbuild/protobuf@2.16.0)
+      '@connectrpc/connect-query':
+        specifier: 'catalog:'
+        version: 2.3.1(@bufbuild/protobuf@2.16.0)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.16.0))(@tanstack/query-core@5.104.1)(@tanstack/react-query@5.104.0(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@loams/agentd-client':
         specifier: workspace:*
         version: link:../../packages/agentd-client

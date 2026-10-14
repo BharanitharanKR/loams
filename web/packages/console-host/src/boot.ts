@@ -361,7 +361,12 @@ export async function boot(options: BootOptions): Promise<ConsoleHandle> {
         name: entry.id,
         inject,
         apply: (c: Context, config: unknown) =>
-          plugin.apply(tier === 'core' ? c : guard(c, inject, record.id), config),
+          plugin.apply(
+            tier === 'core'
+              ? c
+              : guard(c, inject, record.id, { permissions: manifest.permissions }),
+            config,
+          ),
       },
       entry.config ?? {},
     );
@@ -407,6 +412,15 @@ export async function boot(options: BootOptions): Promise<ConsoleHandle> {
       record.reason = `third-party plugins need the "${THIRD_PARTY_FLAG}" instance feature`;
       thirdParty.push(record);
       continue;
+    }
+    // A first-party plugin reaches the daemon only with `agentd:use` (§53 §8.3, D918).
+    if (record.tier === 'first-party' && !manifest.permissions.includes('agentd:use')) {
+      const agentd = injectsAgentd(entry.inject ?? manifest.inject).filter((s) => s !== 'desktop');
+      if (agentd.length > 0) {
+        record.status = 'failed';
+        record.reason = `${agentd.join(', ')} needs the agentd:use permission`;
+        continue;
+      }
     }
     // Core plugins load in every mode; others wait for their mode's first entry.
     if (record.tier !== 'core' && !manifest.modes.includes(bootMode)) {

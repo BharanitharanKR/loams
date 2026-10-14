@@ -92,6 +92,10 @@ export function createWebPlatform(options: WebPlatformOptions = {}): PluginModul
         'transport',
         options.transport ?? createConnectTransport({ baseUrl, useBinaryFormat: true, fetch }),
       );
+      // No `agentd.endpoint` yet: the browser reaches a remote agentd through the
+      // host registry of SD1 Task 7, which provides it here (an `AgentdService` over
+      // `createAgentdTransport({ kind: 'remote', … })`). Until then `agentd` says
+      // "no host" and Studio shows "Connect an agentd host".
     },
   };
 }

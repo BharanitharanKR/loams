@@ -2,25 +2,13 @@
 // empty states without agentd, adding a project on each edition, and the layout.
 
 import { validateManifest } from '@loams/console-host';
-import { createMockAgentdApi } from '@loams/plugin-desktop-agentd';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import pkg from '../package.json';
-import {
-  type AgentdProjectsClient,
-  desktopAgentd,
-  type StudioAgentd,
-  webAgentd,
-} from '../src/agentd.js';
+import type { StudioAgentd } from '../src/agentd.js';
 import { LAYOUT_DEFAULTS, LAYOUT_KEY, StudioLayout } from '../src/layout/StudioLayout.js';
 import { StudioView } from '../src/view.js';
-
-function wrap(children: ReactNode) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
-}
+import { desktopFake, webFake, wrap } from './fakes.js';
 
 /** jsdom has no matchMedia: answer every query with `wide`. */
 function viewport(wide: boolean) {
@@ -30,13 +18,6 @@ function viewport(wide: boolean) {
     addEventListener: () => {},
     removeEventListener: () => {},
   })) as unknown as typeof window.matchMedia;
-}
-
-function desktopFake(o: { running?: boolean; folder?: string | null } = {}) {
-  const mock = createMockAgentdApi({ running: o.running ?? true, background: 'off' });
-  const pickFolder = vi.fn(async () => (o.folder === undefined ? '/home/omar/src/site' : o.folder));
-  const agentd = desktopAgentd({ agentd: mock.api, shell: { pickFolder } });
-  return { agentd, mock, pickFolder };
 }
 
 function show(
@@ -68,7 +49,7 @@ describe('the plugin', () => {
     expect(m.tier).toBe('first-party');
     expect(m.permissions).toEqual(['agentd:use', 'agentd:git-write']);
     expect(m.inject).toEqual(
-      expect.arrayContaining(['router', 'slots', 'mode', 'platform', 'flags', 'desktop']),
+      expect.arrayContaining(['router', 'slots', 'mode', 'platform', 'flags', 'agentd', 'desktop']),
     );
   });
 });
@@ -86,16 +67,14 @@ describe('empty states', () => {
   });
 
   it('empty_state_without_host_web', async () => {
-    show(webAgentd());
+    show(webFake().agentd);
     expect(await screen.findByText('Connect an agentd host')).toBeTruthy();
     const link = screen.getByRole('link', { name: 'Agentd hosts' });
     expect(link.getAttribute('href')).toBe('#/studio/settings');
   });
 
   it('no projects, then no threads', async () => {
-    const mock = createMockAgentdApi({ running: true, background: 'off', repos: [] });
-    const agentd = desktopAgentd({ agentd: mock.api, shell: { pickFolder: async () => null } });
-    show(agentd);
+    show(desktopFake({ repos: [], folder: null }).agentd);
     expect(await screen.findByText('No projects yet')).toBeTruthy();
     cleanup();
     const withOne = desktopFake();
@@ -111,41 +90,35 @@ describe('empty states', () => {
 
 describe('adding a project', () => {
   it('add_project_desktop_uses_folder_picker', async () => {
-    const { agentd, mock, pickFolder } = desktopFake();
+    const { agentd, daemon, pickFolder } = desktopFake();
     show(agentd);
     const sidebar = await screen.findByRole('navigation', { name: 'Projects' });
     await within(sidebar).findByRole('link', { name: /loams/ });
     fireEvent.click(screen.getByRole('button', { name: 'Add project' }));
     await waitFor(() => expect(pickFolder).toHaveBeenCalledOnce());
-    await waitFor(() => expect(mock.calls).toContain('repos.add:/home/omar/src/site'));
+    // ProjectService.AddRepo over the agentd transport, not the desktop bridge.
+    await waitFor(() => expect(daemon.calls).toContain('AddRepo:/home/omar/src/site'));
     expect(await within(sidebar).findByRole('link', { name: /^site/ })).toBeTruthy();
     // No URL dialog on the desktop.
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('a cancelled folder picker adds nothing', async () => {
-    const { agentd, mock, pickFolder } = desktopFake({ folder: null });
+    const { agentd, daemon, pickFolder } = desktopFake({ folder: null });
     show(agentd);
     await screen.findByRole('navigation', { name: 'Projects' });
     fireEvent.click(await screen.findByRole('button', { name: 'Add project' }));
     await waitFor(() => expect(pickFolder).toHaveBeenCalled());
-    expect(mock.calls.filter((c) => c.startsWith('repos.add'))).toEqual([]);
+    expect(daemon.calls.filter((c) => c.startsWith('AddRepo'))).toEqual([]);
   });
 
   it('add_project_web_clones', async () => {
-    const cloned: string[] = [];
-    const repos = [{ path: '/srv/src/loams', name: 'loams', defaultBranch: 'dev' }];
-    const client: AgentdProjectsClient = {
+    const { agentd, daemon } = webFake({
       host: { id: 'h1', name: 'build box' },
-      listRepos: async () => repos,
-      cloneRepo: async (url) => {
-        cloned.push(url);
-        const repo = { path: '/srv/src/api', name: 'api', defaultBranch: 'main' };
-        repos.push(repo);
-        return repo;
-      },
-    };
-    show(webAgentd({ client }));
+      repos: [{ path: '/srv/src/loams', name: 'loams', defaultBranch: 'dev' }],
+    });
+    const cloned = () => daemon.calls.filter((c) => c.startsWith('CloneRepo:'));
+    show(agentd);
     fireEvent.click(await screen.findByRole('button', { name: 'Add project' }));
     const dialog = await screen.findByRole('dialog');
     const input = within(dialog).getByLabelText('Repository URL');
@@ -153,10 +126,12 @@ describe('adding a project', () => {
     fireEvent.change(input, { target: { value: 'file:///etc' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Clone' }));
     expect(await within(dialog).findByText(/https, ssh or user@host:path/)).toBeTruthy();
-    expect(cloned).toEqual([]);
+    expect(cloned()).toEqual([]);
     fireEvent.change(input, { target: { value: 'https://git.example.com/acme/api.git' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Clone' }));
-    await waitFor(() => expect(cloned).toEqual(['https://git.example.com/acme/api.git']));
+    await waitFor(() =>
+      expect(cloned()).toEqual(['CloneRepo:https://git.example.com/acme/api.git']),
+    );
     const sidebar = screen.getByRole('navigation', { name: 'Projects' });
     expect(await within(sidebar).findByRole('link', { name: /api/ })).toBeTruthy();
   });

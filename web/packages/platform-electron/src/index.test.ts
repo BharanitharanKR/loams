@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { LoamsDesktopApi } from './index.js';
 import {
   createElectronPlatform,
+  desktopAgentdEndpoint,
   desktopFetch,
   instanceFeaturesInterceptor,
   wireDeepLinks,
@@ -244,5 +245,55 @@ describe('platform-electron', () => {
     await settle();
     expect(applied).toBe(true);
     await handle.dispose();
+  });
+});
+
+describe('the agentd endpoint (SD1 Task 6)', () => {
+  it('follows the daemon status, and offers a transport only while it runs', async () => {
+    type Status = Parameters<Parameters<LoamsDesktopApi['agentd']['onStatus']>[0]>[0];
+    let status: Status = { state: 'stopped', dataDir: '/tmp/agentd' };
+    const listeners = new Set<(s: Status) => void>();
+    const emit = (s: Status) => {
+      status = s;
+      for (const l of listeners) l(s);
+    };
+    const agentd = {
+      status: async () => status,
+      onStatus: (cb: (s: Status) => void) => {
+        listeners.add(cb);
+        return () => void listeners.delete(cb);
+      },
+      start: async () => {
+        emit({ state: 'unavailable', reason: 'not yet' });
+        return { ok: true as const, value: undefined };
+      },
+    } as unknown as LoamsDesktopApi['agentd'];
+    const transport = createRouterTransport(() => {});
+    const endpoint = desktopAgentdEndpoint({ agentd }, transport);
+    expect(endpoint.reach()).toEqual({ state: 'checking' });
+    await vi.waitFor(() => expect(endpoint.reach()).toEqual({ state: 'stopped' }));
+    expect(endpoint.transport()).toBeUndefined();
+    const seen: unknown[] = [];
+    endpoint.subscribe(() => seen.push(endpoint.reach()));
+    emit({
+      state: 'running',
+      mode: 'child',
+      version: '0.2.1',
+      protocol: 1,
+      pid: 1,
+      startedAtMs: 1,
+      dataDir: '/tmp/agentd',
+      draining: false,
+      runningTurns: 0,
+      pendingApprovals: 0,
+    });
+    expect(endpoint.reach()).toEqual({ state: 'ready' });
+    expect(endpoint.transport()).toBe(transport);
+    // The same snapshot until the state changes (useSyncExternalStore).
+    expect(endpoint.reach()).toBe(endpoint.reach());
+    await endpoint.start?.();
+    expect(endpoint.reach()).toEqual({ state: 'unavailable', reason: 'not yet' });
+    expect(endpoint.transport()).toBeUndefined();
+    expect(seen).toHaveLength(2);
   });
 });

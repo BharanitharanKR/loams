@@ -11,6 +11,10 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./query": {
+      "types": "./src/query.ts",
+      "default": "./src/query.ts"
+    },
     "./testing": {
       "types": "./src/testing/index.ts",
       "default": "./src/testing/index.ts"
@@ -24,6 +28,7 @@
   "dependencies": {
     "@bufbuild/protobuf": "2.16.0",
     "@connectrpc/connect": "2.2.0",
+    "@loams/agentd-client": "workspace:*",
     "@loams/cordis": "workspace:*",
     "@loams/proto": "workspace:*",
     "@loams/slots": "workspace:*",

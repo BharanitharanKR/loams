@@ -1,6 +1,7 @@
 // One Studio page: the layout of §53 §5.1 around the route's view. Without a
 // daemon every route but Settings shows how to get one (`NotConnected`).
 
+import { AgentdScope } from '@loams/console-host/query';
 import { Empty, Tabs } from '@loams/ui';
 import { useEffect, useState } from 'react';
 import type { StudioAgentd } from './agentd.js';
@@ -151,7 +152,7 @@ function useStudioRouteCommands(
   useStudioCommand(commands, 'preview.toggle', thread ? show('preview') : undefined);
 }
 
-export function StudioView({
+function StudioPage({
   agentd,
   factory,
   route,
@@ -210,5 +211,14 @@ export function StudioView({
         </div>
       )}
     </StudioLayout>
+  );
+}
+
+/** A Studio page, with connect-query reading the daemon over `agentd`'s transport. */
+export function StudioView(props: Parameters<typeof StudioPage>[0]) {
+  return (
+    <AgentdScope agentd={props.agentd}>
+      <StudioPage {...props} />
+    </AgentdScope>
   );
 }

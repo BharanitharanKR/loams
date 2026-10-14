@@ -1,15 +1,16 @@
 // @loams/plugin-studio: Loams Studio, the agentic development environment in the
 // console (design §53; SD1 Task 15). `modes: ["studio"]`, so the host applies it
 // the first time Studio mode is entered. It registers Studio's routes, its nav
-// entries and its header context; it reaches loams-agentd through the desktop
-// bridge on the desktop, and on the web through the selected remote agentd host
-// (SD1 Task 7, hosts/agentd.ts; `?host=<id>` selects one).
+// entries and its header context. It reaches loams-agentd through the console's
+// `agentd` service on the desktop (SD1 Task 6), and on the web through the selected
+// remote agentd host (SD1 Task 7, hosts/agentd.ts; `?host=<id>` selects one), in
+// both cases with connect-query over the host's transport (agentd.ts).
 
 import { type PluginModule, service } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
 // Brings in the `desktop` service type (a module augmentation of `Services`).
 import type {} from '@loams/platform-electron';
-import { desktopAgentd, type StudioAgentd } from './agentd.js';
+import { type StudioAgentd, studioAgentd } from './agentd.js';
 import { desktopFactory } from './factory.js';
 import { StudioContext } from './header.js';
 import { hostedAgentd } from './hosts/agentd.js';
@@ -20,14 +21,12 @@ import { routeOf, STUDIO_PAGES } from './routes.js';
 import { StudioView } from './view.js';
 
 export {
-  type AgentdProjectsClient,
-  type DesktopBridge,
-  desktopAgentd,
   isCloneUrl,
   type Project,
+  projectOf,
   type Reach,
   type StudioAgentd,
-  webAgentd,
+  studioAgentd,
 } from './agentd.js';
 export {
   desktopFactory,
@@ -38,7 +37,6 @@ export {
 export {
   type HostedAgentdOptions,
   hostedAgentd,
-  remoteProjects,
   type StudioHosts,
 } from './hosts/agentd.js';
 export { LAYOUT_DEFAULTS, LAYOUT_KEY, StudioLayout } from './layout/StudioLayout.js';
@@ -73,13 +71,15 @@ export { StudioView } from './view.js';
 const plugin: PluginModule = {
   name: 'studio',
   // `desktop` only on the desktop edition: the catalog rows narrow this list.
-  inject: ['router', 'slots', 'mode', 'platform', 'flags'],
+  inject: ['router', 'slots', 'mode', 'platform', 'flags', 'agentd'],
   apply(ctx: Context) {
     const router = service(ctx, 'router');
     const slots = service(ctx, 'slots');
     const platform = service(ctx, 'platform');
     const desktop = platform.kind === 'desktop' ? service(ctx, 'desktop') : undefined;
-    const agentd: StudioAgentd = desktop ? desktopAgentd(desktop) : hostedAgentd();
+    const agentd: StudioAgentd = desktop
+      ? studioAgentd(service(ctx, 'agentd'), desktop.shell)
+      : hostedAgentd();
     // The Factory group (SD1 Task 27): the desktop's factory bridge; on the web nothing
     // until SF1 (D922).
     const factory = desktop?.factory ? desktopFactory(desktop) : undefined;
