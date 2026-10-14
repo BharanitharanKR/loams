@@ -39,6 +39,7 @@ use serde_json::{Value, json};
 use tokio::sync::Mutex;
 use tokio_postgres::Client;
 
+use crate::batch::BatchPos;
 use crate::config::Target;
 use crate::decode::CdcPos;
 use crate::{PostgresFactory, conn};
@@ -174,6 +175,17 @@ pub enum Role {
     Batch,
     /// The Fabric into the upsert sink (exactly-once unless `plain`).
     Sink { transactional: bool },
+}
+
+/// Whether a batch checkpoint holds only finished splits.
+fn batch_finished(cp: Option<loams_connector_sdk::Checkpoint>) -> bool {
+    cp.is_some_and(|cp| {
+        !cp.splits.is_empty()
+            && cp
+                .splits
+                .values()
+                .all(|p| BatchPos::from_position(p).is_ok_and(|b| b.done))
+    })
 }
 
 struct State {
@@ -612,6 +624,14 @@ impl ConnectorHarness for PgHarness {
             return Err(failed("already running"));
         }
         s.epoch += 1;
+        // A batch run that finished has nothing left to resume: starting
+        // again is the next run (a new as-of, the whole table read again),
+        // as a scheduled batch job's next run is. The kit's bench restarts
+        // each round after seeding more; resuming the finished run would
+        // read nothing and never settle.
+        if self.role == Role::Batch && batch_finished(s.store.get(&self.instance)) {
+            s.store = MemoryCheckpointStore::new();
+        }
         let ctx = self.context()?;
         let factory = PostgresFactory::new(self.target);
         let handle = match self.role {
@@ -757,10 +777,18 @@ impl ConnectorHarness for PgHarness {
         self.seed(3).await?;
         self.start().await?;
         self.settle(Duration::from_secs(60)).await?;
+        // Three round trips: a multi-statement query is one implicit
+        // transaction, and CockroachDB does not let a transaction write a
+        // column it added (42703).
         self.exec(&format!(
             "INSERT INTO {t} (id, v) VALUES (100, 'new'); UPDATE {t} SET v = 'changed' WHERE id = 0; \
-             DELETE FROM {t} WHERE id = 1; ALTER TABLE {t} ADD COLUMN note text; \
-             INSERT INTO {t} (id, v, note) VALUES (101, 'after-ddl', 'n')"
+             DELETE FROM {t} WHERE id = 1"
+        ))
+        .await?;
+        self.exec(&format!("ALTER TABLE {t} ADD COLUMN note text"))
+            .await?;
+        self.exec(&format!(
+            "INSERT INTO {t} (id, v, note) VALUES (101, 'after-ddl', 'n')"
         ))
         .await?;
         let wait = |pred: Box<dyn Fn(&[CloudEvent]) -> bool + Send + Sync>| async move {
