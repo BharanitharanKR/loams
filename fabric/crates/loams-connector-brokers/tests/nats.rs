@@ -34,22 +34,30 @@ fn with(mut v: Value, k: &str, x: Value) -> Value {
     v
 }
 
-/// A stream `<tag>` holding `<tag>.in` and `<tag>.out`, with a short
-/// duplicate window for the dedup test.
-async fn stream(tag: &str) -> Result<(), String> {
+/// The streams of a run: `<tag>` holds `<tag>.in` and `<tag>_out` holds
+/// `<tag>.out`, each with a duplicate window for the dedup test. They must be
+/// two streams: JetStream deduplicates `Nats-Msg-Id` per stream, and the sink
+/// republishes each seeded event under its own id, so one stream holding both
+/// subjects drops every output message as a duplicate of its input.
+async fn streams(tag: &str) -> Result<(), String> {
     let client = async_nats::connect(url())
         .await
         .map_err(|e| e.to_string())?;
     let js = jetstream::new(client);
-    let _ = js.delete_stream(tag).await;
-    js.create_stream(jetstream::stream::Config {
-        name: tag.to_owned(),
-        subjects: vec![format!("{tag}.in"), format!("{tag}.out")],
-        duplicate_window: Duration::from_secs(120),
-        ..Default::default()
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    for (name, subject) in [
+        (tag.to_owned(), format!("{tag}.in")),
+        (format!("{tag}_out"), format!("{tag}.out")),
+    ] {
+        let _ = js.delete_stream(&name).await;
+        js.create_stream(jetstream::stream::Config {
+            name,
+            subjects: vec![subject],
+            duplicate_window: Duration::from_secs(120),
+            ..Default::default()
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -68,11 +76,11 @@ fn plan() -> Plan {
             drain: with(
                 base(),
                 "source",
-                json!({"stream": tag, "durable": "loams-drain", "filter_subject": format!("{tag}.out"), "poll_wait_ms": 200}),
+                json!({"stream": format!("{tag}_out"), "durable": "loams-drain", "filter_subject": format!("{tag}.out"), "poll_wait_ms": 200}),
             ),
         }),
         setup: Box::new(|c: Configs| {
-            Box::pin(async move { stream(c.source["source"]["stream"].as_str().unwrap()).await })
+            Box::pin(async move { streams(c.source["source"]["stream"].as_str().unwrap()).await })
         }),
         subscribe_first: false,
         // The compose server has no accounts configured: key, jwt and mtls
@@ -110,7 +118,7 @@ async fn nats_jetstream_resumes_and_dedupes_msg_id() {
         return;
     }
     let tag = format!("dedup{}", std::process::id());
-    stream(&tag).await.unwrap();
+    streams(&tag).await.unwrap();
     let f = nats::factory();
     let mut sink = open_sink(
         f.as_ref(),

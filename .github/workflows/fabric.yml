@@ -228,9 +228,14 @@ jobs:
       - name: clippy
         working-directory: fabric
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # The House tests start sealed workers: each enters its own user and
+      # network namespace (HS1 R6.8), which Ubuntu 24.04's AppArmor refuses an
+      # unprivileged process by default (`/proc/self/setgroups`: EACCES).
+      - name: allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: tests
         working-directory: fabric
-        run: cargo test --workspace --locked
+        run: cargo test --workspace --locked --no-fail-fast
       # The licence gate for the fabric image (design §33 D359) reads
       # fabric/deny.toml; taiki-e/install-action is the pin ci.yml already uses.
       - uses: taiki-e/install-action@badb8c3638e0b773c6c17a6025c2306a8f1c4303 # nextest, 2026-10-02
@@ -289,7 +294,7 @@ jobs:
         run: cargo clippy -p loams-connector-sdk -p loams-connector-http --all-targets --locked -- -D warnings
       - name: tests
         working-directory: fabric
-        run: cargo test -p loams-connector-sdk -p loams-connector-http --locked
+        run: cargo test -p loams-connector-sdk -p loams-connector-http --locked --no-fail-fast
 
   # CN2 owns this job (Task 6): the conformance kit alone — its suites run
   # against the SDK's reference connector, and its estate tests read
@@ -317,7 +322,7 @@ jobs:
         run: cargo clippy -p loams-flow-conformance --all-targets --locked -- -D warnings
       - name: tests
         working-directory: fabric
-        run: cargo test -p loams-flow-conformance --locked
+        run: cargo test -p loams-flow-conformance --locked --no-fail-fast
       - name: the compose estate parses
         run: docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only config --quiet
 
@@ -400,7 +405,7 @@ jobs:
           LOAMS_CONNECTORS_P2_STACK: "1"
           # The Kafka family's ★ Apache Kafka suite (CN2 Task 9).
           LOAMS_CONNECTORS_STACK: ${{ matrix.family == 'kafka' && '1' || '' }}
-        run: cargo test -p "loams-connector-$FAMILY" --locked
+        run: cargo test -p "loams-connector-$FAMILY" --locked --no-fail-fast
       - name: service logs
         if: failure() && steps.plan.outputs.run == 'true'
         run: docker compose -f deploy/fabric/compose.yaml --profile "$PROFILE" logs --no-color --tail 200
@@ -473,7 +478,7 @@ jobs:
         working-directory: fabric
         env:
           LOAMS_CONNECTORS_CI_ONLY_STACK: "1"
-        run: cargo test -p "loams-connector-$FAMILY" --locked
+        run: cargo test -p "loams-connector-$FAMILY" --locked --no-fail-fast
       - name: service logs
         if: failure() && steps.plan.outputs.run == 'true'
         run: docker compose -f deploy/fabric/compose.yaml --profile "$PROFILE" logs --no-color --tail 200
@@ -625,7 +630,7 @@ jobs:
         env:
           LOAMS_CONNECTORS_P2_STACK: "1"
           LOAMS_CONNECTORS_CI_ONLY_STACK: "1"
-        run: cargo test -p "loams-connector-$FAMILY" --locked
+        run: cargo test -p "loams-connector-$FAMILY" --locked --no-fail-fast
       - name: down
         if: always() && steps.plan.outputs.run == 'true'
         run: docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only down -v
@@ -778,6 +783,8 @@ jobs:
         run: |
           docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only \
             config --format json > "$RUNNER_TEMP/compose.json"
+          # Every family's benches run; the step fails at the end if any did.
+          failed=""
           for family in $BENCH_FAMILIES; do
             services=""
             for p in connectors-p2 connectors-ci-only; do
@@ -789,9 +796,14 @@ jobs:
               docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only \
                 up -d --wait --wait-timeout 900 $services
             fi
-            (cd fabric && cargo test --release --locked -p "loams-connector-$family" --test bench -- --test-threads=1)
+            (cd fabric && cargo test --release --locked -p "loams-connector-$family" --test bench -- --test-threads=1) \
+              || failed="$failed $family"
             docker compose -f deploy/fabric/compose.yaml --profile connectors-p2 --profile connectors-ci-only down -v
           done
+          if [ -n "$failed" ]; then
+            echo "::error::benches failed:$failed"
+            exit 1
+          fi
       - name: check against the baselines (15 % regression budget)
         run: fabric/target/release/loams-connectors-bench check --reports "$RUNNER_TEMP/bench"
       # The reports are the calibration runs. actions/upload-artifact is Apache-2.0.

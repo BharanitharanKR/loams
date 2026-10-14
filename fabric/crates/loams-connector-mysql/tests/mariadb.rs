@@ -135,10 +135,32 @@ async fn mariadb_binlog_purged_is_fatal_with_resnapshot_hint() {
         .expect("status")
         .get(0, "File")
         .expect("a binlog file");
-    admin
-        .exec(&format!("PURGE BINARY LOGS TO '{current}'"))
-        .await
-        .expect("purge");
+    // MariaDB keeps a binlog InnoDB may still need for crash recovery
+    // (note 1375) until its transactions are checkpointed, so the purge is
+    // repeated until it has removed everything before `current`.
+    let purged = eventually(SETTLE, || {
+        let (h, current) = (&h, &current);
+        async move {
+            let Ok(mut admin) = h.admin().await else {
+                return false;
+            };
+            if admin
+                .exec(&format!("PURGE BINARY LOGS TO '{current}'"))
+                .await
+                .is_err()
+            {
+                return false;
+            }
+            admin
+                .query("SHOW BINARY LOGS")
+                .await
+                .ok()
+                .and_then(|r| r.get(0, "Log_name"))
+                .is_some_and(|first| first == *current)
+        }
+    })
+    .await;
+    assert!(purged, "the binary logs before {current} were never purged");
     h.start().await.expect("restart");
     let failed = eventually(SETTLE, || async {
         h.status()

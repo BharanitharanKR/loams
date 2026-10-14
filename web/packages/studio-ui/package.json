@@ -31,6 +31,10 @@
       "types": "./src/approvals/index.ts",
       "default": "./src/approvals/index.ts"
     },
+    "./groups": {
+      "types": "./src/groups/index.ts",
+      "default": "./src/groups/index.ts"
+    },
     "./preview": {
       "types": "./src/preview/index.ts",
       "default": "./src/preview/index.ts"

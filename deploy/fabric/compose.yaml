@@ -57,7 +57,20 @@ services:
     image: apache/activemq:6.3.2@sha256:fb98e5b8bc1ecc67ad19b0b982c00575fa12d54866f3cde9fa5b0ec1241631c2
     profiles: [connectors-p2]
     labels: { io.loams.licence: "Apache-2.0", io.loams.ci-service: "false" }
+    # The 6.x image ships its AMQP connector commented out (only OpenWire
+    # listens), so 5672 reset every connection: enable it before starting.
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        sed -i 's|<!-- \(<transportConnector name="amqp"[^>]*/>\) -->|\1|' "$$ACTIVEMQ_HOME/conf/activemq.xml"
+        exec /usr/local/bin/entrypoint.sh activemq console
     ports: ["61617:61616", "5674:5672"]
+    # Ready once the AMQP port accepts connections.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/5672"]
+      interval: 2s
+      retries: 60
 
   nats:
     image: nats:2.15.0@sha256:cd3fcd4ecdda44e3a66728a5334af0a959bc3979b32810e033d1c547241cd0f4
