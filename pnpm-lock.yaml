@@ -33,6 +33,12 @@ catalogs:
     '@types/react-dom':
       specifier: 19.3.0
       version: 19.3.0
+    '@xterm/addon-fit':
+      specifier: 0.11.0
+      version: 0.11.0
+    '@xterm/xterm':
+      specifier: 6.0.0
+      version: 6.0.0
     '@xyflow/react':
       specifier: 12.12.0
       version: 12.12.0
@@ -54,6 +60,9 @@ catalogs:
     zod:
       specifier: 3.25.76
       version: 3.25.76
+    zustand:
+      specifier: 5.0.14
+      version: 5.0.14
 
 overrides:
   vite-plus@1.0.0>vite: npm:@voidzero-dev/vite-plus-core@1.0.0
@@ -1318,9 +1327,18 @@ importers:
       '@tanstack/react-virtual':
         specifier: 'catalog:'
         version: 3.14.13(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@xterm/addon-fit':
+        specifier: 'catalog:'
+        version: 0.11.0
+      '@xterm/xterm':
+        specifier: 'catalog:'
+        version: 6.0.0
       lucide-react:
         specifier: 'catalog:'
         version: 1.48.0(react@19.3.0)
+      zustand:
+        specifier: 'catalog:'
+        version: 5.0.14(@types/react@19.3.0)(react@19.3.0)(use-sync-external-store@1.7.0(react@19.3.0))
     devDependencies:
       '@testing-library/react':
         specifier: 16.3.3
@@ -5543,6 +5561,12 @@ packages:
     resolution: {integrity: sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA==}
     engines: {node: '>=10.0.0'}
 
+  '@xterm/addon-fit@0.11.0':
+    resolution: {integrity: sha512-jYcgT6xtVYhnhgxh3QgYDnnNMYTcf8ElbxxFzX0IZo+vabQqSPAjC3c1wJrKB5E19VwQei89QCiZZP86DCPF7g==}
+
+  '@xterm/xterm@6.0.0':
+    resolution: {integrity: sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==}
+
   '@xyflow/react@12.12.0':
     resolution: {integrity: sha512-74oXI0Rgm1Eu33cHQAd74J6oVgCH9mbFyTVQbsGgp2kmWwh0HdtBr2VP04z8mbPD+M/xO69nqG5dDEt7/EN2rQ==}
     peerDependencies:
@@ -8688,6 +8712,24 @@ packages:
       react:
         optional: true
 
+  zustand@5.0.14:
+    resolution: {integrity: sha512-/8tAspM5LMPr28b3fwLYrtdj77ECpfZviaP75CMTnwO8ISyaE4GDIG/9rDDYq/cH9D2Xw2A2RXglLInmVBQB/g==}
+    engines: {node: '>=12.20.0'}
+    peerDependencies:
+      '@types/react': '>=18.0.0'
+      immer: '>=9.0.6'
+      react: '>=18.0.0'
+      use-sync-external-store: '>=1.2.0'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      immer:
+        optional: true
+      react:
+        optional: true
+      use-sync-external-store:
+        optional: true
+
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
@@ -10594,6 +10636,10 @@ snapshots:
     optional: true
 
   '@xmldom/xmldom@0.8.15': {}
+
+  '@xterm/addon-fit@0.11.0': {}
+
+  '@xterm/xterm@6.0.0': {}
 
   '@xyflow/react@12.12.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
@@ -14283,5 +14329,11 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.3.0
       react: 19.3.0
+
+  zustand@5.0.14(@types/react@19.3.0)(react@19.3.0)(use-sync-external-store@1.7.0(react@19.3.0)):
+    optionalDependencies:
+      '@types/react': 19.3.0
+      react: 19.3.0
+      use-sync-external-store: 1.7.0(react@19.3.0)
 
   zwitch@2.0.4: {}

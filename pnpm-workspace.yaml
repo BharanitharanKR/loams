@@ -33,6 +33,11 @@ catalog:
   # Studio's file viewer and diff panel (SD1 Tasks 20, 21; rulings T0-4, T0-5):
   # Apache-2.0. 1.5.1, because 1.5.2 is under 14 days old until 2026-10-19.
   '@pierre/diffs': 1.5.1
+  # Studio's terminals (SD1 Task 22; D920, Q818): DD1's xterm.js pin, MIT, 2025-12-22.
+  '@xterm/xterm': 6.0.0
+  '@xterm/addon-fit': 0.11.0
+  # Client-only UI stores (Q819), MIT, 2026-05-28: the version T3 Code uses.
+  zustand: 5.0.14
 
 # Keep Vite+ isolated from the console's ordinary Vite/Vitest toolchain.
 overrides:

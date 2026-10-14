@@ -15,7 +15,8 @@
 //!   ([`Reconciler`]); with `--runtime compose` it drives computes through
 //!   the compose runtime ([`ComputesConfig`], Task 11), or through a
 //!   compute runner that holds the container runtime's socket instead of
-//!   this process (`--compute-runner`, [`PgRunner`], R-REL.1), each compute
+//!   this process (`--compute-runner`, [`PgRunner`], R-REL.1), or with
+//!   `--runtime kubernetes` as Pods and Services (Task 13), each compute
 //!   running the pinned image of its project's Postgres major, and
 //!   suspends the computes that sit idle for their endpoint's suspend
 //!   timeout (Task 12; no PgDog fronts them until PG2c, so their activity
@@ -112,9 +113,8 @@ pub enum PgRuntime {
     /// compose: computes are compose services ([`ComputesConfig`]);
     /// secrets in the age-encrypted file under the data directory.
     Compose,
-    /// Kubernetes: secrets as Secrets in `namespace`. Computes on
-    /// Kubernetes are Task 13's: until then endpoints are recorded but no
-    /// compute starts.
+    /// Kubernetes: secrets as Secrets in `namespace`; computes as Pods in
+    /// `loams-pg-<ns>` (feature `postgres-kubernetes`, Task 13).
     Kubernetes { namespace: String },
 }
 
@@ -146,6 +146,11 @@ pub struct ComputesConfig {
     /// command here (R-REL.1). The compose settings above are then the
     /// runner's, and unused.
     pub runner: Option<RunnerClient>,
+    /// With `--runtime kubernetes`: the Pods' `runtimeClassName`.
+    pub runtime_class: Option<String>,
+    /// With `--runtime kubernetes`: the cluster's DNS domain
+    /// (`cluster.local` when unset).
+    pub cluster_domain: Option<String>,
 }
 
 /// A compute runner, as `pg-control` reaches it (`--compute-runner`).
@@ -175,6 +180,8 @@ impl Default for ComputesConfig {
             ctl_reach: CtlReach::Host,
             image_overrides: BTreeMap::new(),
             runner: None,
+            runtime_class: None,
+            cluster_domain: None,
         }
     }
 }
@@ -446,9 +453,63 @@ fn compose_runtime(
 
 /// The compute runtime (the compose runtime here, or a compute runner) and
 /// what the reconciler drives computes with.
+/// The compose runtime here, or a compute runner (`--runtime compose`).
+fn compose_or_runner(
+    config: &PgControlConfig,
+    settings: &ComputesConfig,
+    upcall_addr: SocketAddr,
+) -> Result<Arc<dyn ComputeRuntime>, PgControlError> {
+    Ok(match &settings.runner {
+        Some(runner) => Arc::new(
+            RemoteRuntime::new(runner.url.clone(), runner.token.clone())
+                .map_err(|e| PgControlError::Runtime(e.to_string()))?,
+        ),
+        None => Arc::new(compose_runtime(
+            settings,
+            config.data_dir.join("compose"),
+            upcall_addr,
+        )?),
+    })
+}
+
+/// The Kubernetes runtime (`--runtime kubernetes`, Task 13): Pods and
+/// Services in `loams-pg-<ns>`, each compute with a certificate from the
+/// compute CA in the secret store (R10.7).
+#[cfg(feature = "postgres-kubernetes")]
+async fn kube_runtime(
+    settings: &ComputesConfig,
+    secrets: &dyn SecretStore,
+) -> Result<Arc<dyn ComputeRuntime>, PgControlError> {
+    use loams_pg_control::runtime::kubernetes::{KubeConfig, KubeRuntime};
+    let runtime_error = |e: &dyn fmt::Display| PgControlError::Runtime(e.to_string());
+    let Some(uri) = &settings.control_plane_uri else {
+        return Err(PgControlError::Config(
+            "--runtime kubernetes needs --compute-control-plane-uri: the upcall Service as the \
+             computes reach it"
+                .into(),
+        ));
+    };
+    let mut kube = KubeConfig::new(uri.clone());
+    kube.runtime_class.clone_from(&settings.runtime_class);
+    if let Some(domain) = &settings.cluster_domain {
+        kube.cluster_domain.clone_from(domain);
+    }
+    let ca =
+        loams_pg_control::runtime::certs::load_or_create_ca(secrets, std::time::SystemTime::now())
+            .await
+            .map_err(|e| runtime_error(&e))?;
+    Ok(Arc::new(
+        KubeRuntime::from_environment(kube, Some(ca))
+            .await
+            .map_err(|e| runtime_error(&e))?,
+    ))
+}
+
+/// What the reconciler drives computes with, through `runtime`.
 fn computes(
     config: &PgControlConfig,
     settings: &ComputesConfig,
+    runtime: Arc<dyn ComputeRuntime>,
     keys: &Arc<ComputeKeys>,
     clock: &Clock,
     upcall_addr: SocketAddr,
@@ -460,17 +521,6 @@ fn computes(
              listen where they reach it (--pg-upcall-listen 0.0.0.0:7690)"
         );
     }
-    let runtime: Arc<dyn ComputeRuntime> = match &settings.runner {
-        Some(runner) => Arc::new(
-            RemoteRuntime::new(runner.url.clone(), runner.token.clone())
-                .map_err(|e| PgControlError::Runtime(e.to_string()))?,
-        ),
-        None => Arc::new(compose_runtime(
-            settings,
-            config.data_dir.join("compose"),
-            upcall_addr,
-        )?),
-    };
     let images = compute_images(&settings.image_overrides)?;
     Ok(Computes::new(
         runtime,
@@ -567,15 +617,31 @@ impl PgControl {
         let upcall_addr = upcall.local_addr();
         let computes = match (&config.runtime, &config.computes) {
             (PgRuntime::Compose, Some(settings)) => {
-                Some(computes(&config, settings, &keys, &clock, upcall_addr)?)
+                let runtime = compose_or_runner(&config, settings, upcall_addr)?;
+                Some(computes(
+                    &config,
+                    settings,
+                    runtime,
+                    &keys,
+                    &clock,
+                    upcall_addr,
+                )?)
             }
-            (PgRuntime::Kubernetes { .. }, Some(_)) => {
-                tracing::warn!(
-                    "--runtime kubernetes runs no computes until PG2 Task 13: endpoints are \
-                     recorded, and none starts"
-                );
-                None
+            #[cfg(feature = "postgres-kubernetes")]
+            (PgRuntime::Kubernetes { .. }, Some(settings)) => {
+                let runtime = kube_runtime(settings, secrets.as_ref()).await?;
+                Some(computes(
+                    &config,
+                    settings,
+                    runtime,
+                    &keys,
+                    &clock,
+                    upcall_addr,
+                )?)
             }
+            // Without the feature, open_secrets refused the runtime already.
+            #[cfg(not(feature = "postgres-kubernetes"))]
+            (PgRuntime::Kubernetes { .. }, Some(_)) => None,
             (_, None) => None,
         };
 

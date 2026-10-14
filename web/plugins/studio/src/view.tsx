@@ -22,6 +22,7 @@ import { SettingsPage } from './settings/Settings.js';
 import { FactoryGroup } from './sidebar/Factory.js';
 import { DraftCard } from './thread/FactoryLinks.js';
 import { FilesTab } from './thread/LazyFilesTab.js';
+import { ThreadTerminalDrawer } from './thread/TerminalDrawer.js';
 
 const PANEL_LABEL: Record<Panel, string> = {
   diff: 'Diff',
@@ -164,6 +165,7 @@ function StudioPage({
   navigate,
   hostParam,
   keys: given,
+  openExternal,
 }: {
   agentd: StudioAgentd;
   /** The software factory (§53 §5.9): the desktop's bridge; none on the web until SF1. */
@@ -174,6 +176,8 @@ function StudioPage({
   hostParam?: string;
   /** Studio's commands and keybindings (SD1 Task 24); the plugin shares one with its palette. */
   keys?: StudioKeys;
+  /** Opens an http(s) link outside Studio (the platform's; a terminal's links, SD1 Task 22). */
+  openExternal?: (url: string) => Promise<void>;
 }) {
   useEffect(() => {
     if (hostParam) agentd.hosts?.select(hostParam);
@@ -200,11 +204,12 @@ function StudioPage({
       panel={thread && connected ? <ThreadPanel route={thread} navigate={navigate} /> : undefined}
       drawer={
         thread && connected ? (
-          <div className="p-3">
-            <Empty title="No terminals" seed={5}>
-              Terminals for this thread's worktree open here.
-            </Empty>
-          </div>
+          <ThreadTerminalDrawer
+            threadId={thread.threadId}
+            keys={keys}
+            navigate={navigate}
+            {...(openExternal ? { openExternal } : {})}
+          />
         ) : undefined
       }
     >

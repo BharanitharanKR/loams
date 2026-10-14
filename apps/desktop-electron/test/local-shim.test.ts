@@ -42,6 +42,8 @@ const engine = (type: "application/json" | "application/proto") => () => {
 		serverVersion: "1.2.3",
 		apiVersions: ["loams.instance.v1", "loams.graph.v1"],
 		features: { live: true },
+		// A fresh engine with authentication off: its setup gate is open.
+		setupRequired: true,
 	});
 	const body =
 		type === "application/proto"
@@ -108,12 +110,20 @@ describe("local shim", () => {
 				"loams.graph.v1",
 				"loams.auth.v1",
 			]);
-			if (type === "application/proto")
+			if (type === "application/proto") {
 				expect((answer as instance.GetInstanceResponse).features).toEqual({
 					live: true,
 					local: true,
 					desktop: true,
 				});
+				expect((answer as instance.GetInstanceResponse).setupRequired).toBe(
+					false,
+				);
+			} else {
+				expect(
+					(answer as { setupRequired?: boolean }).setupRequired ?? false,
+				).toBe(false);
+			}
 		}
 	});
 

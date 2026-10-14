@@ -25,7 +25,10 @@
     "@pierre/diffs": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-virtual": "catalog:",
-    "lucide-react": "catalog:"
+    "@xterm/addon-fit": "catalog:",
+    "@xterm/xterm": "catalog:",
+    "lucide-react": "catalog:",
+    "zustand": "catalog:"
   },
   "peerDependencies": {
     "react": ">=19",
