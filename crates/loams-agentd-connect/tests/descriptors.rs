@@ -239,9 +239,14 @@ fn every_studio_method_has_rpc() {
             .find(|row| format!("{}/{}", row.service, row.method) == *method)
             .unwrap();
         // A gap is marked as one until its task serves it with the ndjson
-        // method of the same name.
+        // method of the same name, or of its §53 §6.5 name where the Connect
+        // RPC is named after its service (G23: `FileService.SearchContent`
+        // is `SearchWorkspaceContent`).
         let served = SERVED_GAPS.contains(gap);
-        let rpc = method.split('/').nth(1).unwrap();
+        let rpc = match *gap {
+            "G23" => "SearchWorkspaceContent",
+            _ => method.split('/').nth(1).unwrap(),
+        };
         assert!(
             if served {
                 row.twin == Twin::Method(rpc)
@@ -258,8 +263,12 @@ fn every_studio_method_has_rpc() {
     }
 }
 
-/// The §53 §6.5 gaps a task has served: G1–G5 and G21 (SD1 Task 9).
-const SERVED_GAPS: &[&str] = &["G1", "G2", "G3", "G4", "G5", "G21"];
+/// The §53 §6.5 gaps a task has served: G1–G5 and G21 (SD1 Task 9); G8–G11
+/// and G23 (SD1 Task 11).
+const SERVED_GAPS: &[&str] = &[
+    "G1", "G2", "G3", "G4", "G5", "G21", // SD1 Task 9
+    "G8", "G9", "G10", "G11", "G23", // SD1 Task 11
+];
 
 #[test]
 fn connect_methods_match_descriptors() {

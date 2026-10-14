@@ -23,12 +23,14 @@ import type { CloneRepoParams } from "./CloneRepoParams";
 import type { CommitWorktreeParams } from "./CommitWorktreeParams";
 import type { CommitWorktreeReply } from "./CommitWorktreeReply";
 import type { CompleteAgentLoginParams } from "./CompleteAgentLoginParams";
+import type { ContentSearchMatch } from "./ContentSearchMatch";
 import type { CreateChangeRequestParams } from "./CreateChangeRequestParams";
 import type { CreateChangeRequestReply } from "./CreateChangeRequestReply";
 import type { CreateRepoParams } from "./CreateRepoParams";
 import type { CreateWorktreeOutcome } from "./CreateWorktreeOutcome";
 import type { CreateWorktreeParams } from "./CreateWorktreeParams";
 import type { DeleteProjectActionParams } from "./DeleteProjectActionParams";
+import type { DeleteReviewCommentParams } from "./DeleteReviewCommentParams";
 import type { DeleteWorkspaceEntryRequest } from "./DeleteWorkspaceEntryRequest";
 import type { DeleteWorktreeParams } from "./DeleteWorktreeParams";
 import type { DiscardPathsParams } from "./DiscardPathsParams";
@@ -75,6 +77,8 @@ import type { MutateParams } from "./MutateParams";
 import type { MutateReply } from "./MutateReply";
 import type { OkReply } from "./OkReply";
 import type { OpenTerminalParams } from "./OpenTerminalParams";
+import type { PostReviewToChangeRequestParams } from "./PostReviewToChangeRequestParams";
+import type { PostReviewToChangeRequestReply } from "./PostReviewToChangeRequestReply";
 import type { PreviewSnapshot } from "./PreviewSnapshot";
 import type { ProjectActionRun } from "./ProjectActionRun";
 import type { ProjectActionSetup } from "./ProjectActionSetup";
@@ -98,11 +102,16 @@ import type { RepoPathParams } from "./RepoPathParams";
 import type { RepoRefList } from "./RepoRefList";
 import type { ResizeTerminalParams } from "./ResizeTerminalParams";
 import type { ResolveGitAvatarsParams } from "./ResolveGitAvatarsParams";
+import type { ResolveReviewCommentParams } from "./ResolveReviewCommentParams";
+import type { ReviewComment } from "./ReviewComment";
+import type { ReviewCommentsFrame } from "./ReviewCommentsFrame";
 import type { Role } from "./Role";
 import type { RunProjectActionParams } from "./RunProjectActionParams";
 import type { SearchFilesParams } from "./SearchFilesParams";
 import type { SearchGitHistoryParams } from "./SearchGitHistoryParams";
+import type { SearchWorkspaceContentParams } from "./SearchWorkspaceContentParams";
 import type { SearchWorkspaceFilesRequest } from "./SearchWorkspaceFilesRequest";
+import type { SendReviewToThreadParams } from "./SendReviewToThreadParams";
 import type { SentReply } from "./SentReply";
 import type { SessionList } from "./SessionList";
 import type { SetHarnessEnabledParams } from "./SetHarnessEnabledParams";
@@ -129,6 +138,7 @@ import type { UpsertProjectActionParams } from "./UpsertProjectActionParams";
 import type { WatchCheckoutChangeRequestParams } from "./WatchCheckoutChangeRequestParams";
 import type { WatchDocMessagesParams } from "./WatchDocMessagesParams";
 import type { WatchPreviewsParams } from "./WatchPreviewsParams";
+import type { WatchReviewCommentsParams } from "./WatchReviewCommentsParams";
 import type { WatchWorkspaceFilesRequest } from "./WatchWorkspaceFilesRequest";
 import type { WorkspaceDirectoryPage } from "./WorkspaceDirectoryPage";
 import type { WorkspaceFileChanges } from "./WorkspaceFileChanges";
@@ -261,6 +271,13 @@ export const METHODS = [
   { name: "PushBranch", kind: "unary", params: "PushBranchParams", result: "PushBranchReply", role: "owner", renderer: true },
   { name: "CreateChangeRequest", kind: "unary", params: "CreateChangeRequestParams", result: "CreateChangeRequestReply", role: "owner", renderer: true },
   { name: "MergeBranch", kind: "unary", params: "MergeBranchParams", result: "MergeBranchReply", role: "owner", renderer: true },
+  { name: "WatchReviewComments", kind: "stream", params: "WatchReviewCommentsParams", result: "ReviewCommentsFrame", role: "owner", renderer: true },
+  { name: "UpsertReviewComment", kind: "unary", params: "ReviewComment", result: "IdReply", role: "owner", renderer: true },
+  { name: "DeleteReviewComment", kind: "unary", params: "DeleteReviewCommentParams", result: "IdReply", role: "owner", renderer: true },
+  { name: "ResolveReviewComment", kind: "unary", params: "ResolveReviewCommentParams", result: "IdReply", role: "owner", renderer: true },
+  { name: "SendReviewToThread", kind: "unary", params: "SendReviewToThreadParams", result: "QueueCommandReply", role: "owner", renderer: true },
+  { name: "PostReviewToChangeRequest", kind: "unary", params: "PostReviewToChangeRequestParams", result: "PostReviewToChangeRequestReply", role: "owner", renderer: true },
+  { name: "SearchWorkspaceContent", kind: "stream", params: "SearchWorkspaceContentParams", result: "ContentSearchMatch", role: "owner", renderer: true },
   { name: "GetCheckoutFileDiffText", kind: "unary", params: "GetCheckoutFileDiffTextRequest", result: "CheckoutFileDiffText", role: "owner", renderer: true },
   { name: "ListAgentAccounts", kind: "unary", params: "ListAgentAccountsParams", result: "AgentAccountsSnapshot", role: "owner", renderer: true },
   { name: "ActivateAgentAccount", kind: "unary", params: "AgentAccountParams", result: "AgentAccountsSnapshot", role: "owner", renderer: true },
@@ -361,6 +378,13 @@ export type Methods = {
   PushBranch: { params: PushBranchParams; result: PushBranchReply; kind: "unary"; role: "owner"; renderer: true };
   CreateChangeRequest: { params: CreateChangeRequestParams; result: CreateChangeRequestReply; kind: "unary"; role: "owner"; renderer: true };
   MergeBranch: { params: MergeBranchParams; result: MergeBranchReply; kind: "unary"; role: "owner"; renderer: true };
+  WatchReviewComments: { params: WatchReviewCommentsParams; result: ReviewCommentsFrame; kind: "stream"; role: "owner"; renderer: true };
+  UpsertReviewComment: { params: ReviewComment; result: IdReply; kind: "unary"; role: "owner"; renderer: true };
+  DeleteReviewComment: { params: DeleteReviewCommentParams; result: IdReply; kind: "unary"; role: "owner"; renderer: true };
+  ResolveReviewComment: { params: ResolveReviewCommentParams; result: IdReply; kind: "unary"; role: "owner"; renderer: true };
+  SendReviewToThread: { params: SendReviewToThreadParams; result: QueueCommandReply; kind: "unary"; role: "owner"; renderer: true };
+  PostReviewToChangeRequest: { params: PostReviewToChangeRequestParams; result: PostReviewToChangeRequestReply; kind: "unary"; role: "owner"; renderer: true };
+  SearchWorkspaceContent: { params: SearchWorkspaceContentParams; result: ContentSearchMatch; kind: "stream"; role: "owner"; renderer: true };
   GetCheckoutFileDiffText: { params: GetCheckoutFileDiffTextRequest; result: CheckoutFileDiffText; kind: "unary"; role: "owner"; renderer: true };
   ListAgentAccounts: { params: ListAgentAccountsParams; result: AgentAccountsSnapshot; kind: "unary"; role: "owner"; renderer: true };
   ActivateAgentAccount: { params: AgentAccountParams; result: AgentAccountsSnapshot; kind: "unary"; role: "owner"; renderer: true };

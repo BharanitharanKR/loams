@@ -46,3 +46,9 @@ pub const FEATURE: &str = "studio.v1";
 /// The daemon feature of the worktree list and the git writes (§53 §6.5 G1–G5,
 /// G21; SD1 Task 9).
 pub const GIT_WRITE_FEATURE: &str = "git.write";
+
+/// The daemon feature of the review comments (§53 §6.5 G8–G11; SD1 Task 11).
+pub const REVIEW_FEATURE: &str = "review";
+
+/// The daemon feature of the content search (§53 §6.5 G23; SD1 Task 11).
+pub const CONTENT_SEARCH_FEATURE: &str = "content-search";
