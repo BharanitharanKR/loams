@@ -22,6 +22,7 @@ import { createClient, type Transport } from '@connectrpc/connect';
 import { skipToken } from '@connectrpc/connect-query';
 import { useAgentdQuery, useAgentdTransport } from '@loams/console-host/query';
 import {
+  ApprovalService,
   GitService,
   type HarnessDescriptor,
   HarnessId,
@@ -94,6 +95,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { applyNewThreadApprovalMode } from '../sidebar/useThreadActions.js';
 import { agentdFilesSource } from './files-source.js';
 import { isBusy, useChat, useQueue, useSessionStatus } from './live.js';
 import { mentionsFor, useMentions } from './mentions.js';
@@ -208,6 +210,7 @@ function ComposerWithDaemon({
       threads: createClient(ThreadService, transport),
       queue: createClient(QueueService, transport),
       groups: createClient(RunGroupService, transport),
+      approvals: createClient(ApprovalService, transport),
     }),
     [transport],
   );
@@ -402,6 +405,8 @@ function ComposerWithDaemon({
         } else {
           const chatId = isNew ? newId() : draftKey;
           const firstRunInWorktree = isNew && project && worktreeMode === 'worktree';
+          // Settings › Studio's approval mode, before the first run (SD1 Task 30).
+          if (isNew) await applyNewThreadApprovalMode(clients.approvals, chatId);
           await clients.threads.send({
             chatId,
             messageId: newId(),

@@ -159,9 +159,17 @@ pub fn is_remote_git_url(url: &str) -> bool {
         return false;
     }
     if let Some((scheme, rest)) = url.split_once("://") {
-        let host = rest.split(['/', ':', '?', '#']).next().unwrap_or_default();
-        let host = host.rsplit('@').next().unwrap_or_default();
-        return matches!(scheme, "https" | "ssh" | "git") && !host.is_empty();
+        let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+        let (userinfo, host_port) = authority.rsplit_once('@').unwrap_or(("", authority));
+        let user = userinfo.split(':').next().unwrap_or_default();
+        let host = host_port.split(':').next().unwrap_or_default();
+        // An ssh host or user that starts with `-` reaches ssh as an option
+        // (`ssh://-oProxyCommand=…/x`); git refuses it too, and so do we
+        // (SD1 Task 30).
+        return matches!(scheme, "https" | "ssh" | "git")
+            && !host.is_empty()
+            && !host.starts_with('-')
+            && !user.starts_with('-');
     }
     // scp-like: user@host:path, with a host that is not a drive letter.
     let Some((user_host, path)) = url.split_once(':') else {
@@ -176,6 +184,22 @@ pub fn is_remote_git_url(url: &str) -> bool {
                 .all(|c| c.is_ascii_alphanumeric() || "._-".contains(c) || extra.contains(c))
     };
     word(user, "") && word(host, "") && !host.starts_with('-') && word(path, "/~")
+}
+
+/// The folder under `{data_dir}/repos` that `CloneRepo` clones `url` into:
+/// the URL's last path segment without `.git` (`repo` when there is none).
+/// Never `.` or `..`, which would name `repos` itself or the data directory
+/// (SD1 Task 30), and never a path.
+pub fn clone_dir_name(url: &str) -> Option<String> {
+    let name = url
+        .trim()
+        .trim_end_matches('/')
+        .trim_end_matches(".git")
+        .rsplit(['/', ':'])
+        .next()
+        .filter(|s| !s.is_empty())
+        .unwrap_or("repo");
+    (name != "." && name != ".." && !name.contains(['/', '\\', '\0'])).then(|| name.to_owned())
 }
 
 struct ReposInner {
@@ -454,13 +478,9 @@ impl Repos {
                 "invalid_url: expected an https, ssh or user@host:path git URL".into(),
             ));
         }
-        let name = trimmed
-            .trim_end_matches(".git")
-            .rsplit(['/', ':'])
-            .next()
-            .filter(|s| !s.is_empty())
-            .unwrap_or("repo")
-            .to_string();
+        let name = clone_dir_name(trimmed).ok_or_else(|| {
+            EngineError::Other("invalid_url: the URL names no repository folder".into())
+        })?;
         let repos_dir = self.inner.data_dir.join("repos");
         let target = repos_dir.join(&name);
         if target.exists() {
@@ -2258,6 +2278,45 @@ pub(crate) fn hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// SD1 Task 30: ssh options through the host or user, and a clone folder
+    /// that names the data directory.
+    #[test]
+    fn clone_urls_refuse_option_hosts_and_dot_folders() {
+        for ok in [
+            "https://example.com/o/r.git",
+            "ssh://git@example.com:22/o/r",
+            "git@example.com:o/r.git",
+        ] {
+            assert!(is_remote_git_url(ok), "{ok}");
+            assert!(clone_dir_name(ok).is_some(), "{ok}");
+        }
+        for bad in [
+            "ssh://-oProxyCommand=x/r",
+            "ssh://git@-oProxyCommand=x/r",
+            "ssh://-u@example.com/r",
+            "ssh://u:p@-oProxyCommand=x/r",
+            "git@-host:o/r",
+        ] {
+            assert!(!is_remote_git_url(bad), "{bad}");
+        }
+        assert_eq!(
+            clone_dir_name("https://example.com/o/r.git").as_deref(),
+            Some("r")
+        );
+        assert_eq!(
+            clone_dir_name("https://example.com/").as_deref(),
+            Some("example.com")
+        );
+        assert_eq!(clone_dir_name("git@example.com:r").as_deref(), Some("r"));
+        for dots in [
+            "https://example.com/..",
+            "https://example.com/.",
+            "https://e.com/x/..git",
+        ] {
+            assert_eq!(clone_dir_name(dots), None, "{dots}");
+        }
+    }
 
     #[test]
     fn session_home_requires_an_explicit_usable_directory() {

@@ -87,6 +87,35 @@ export function hostedConfig(env = process.env, { requireAuth = false } = {}) {
   return config;
 }
 
+/**
+ * LOAMS_AGENTD_ORIGINS: the origins of the remote agentd hosts (`loams-agentd serve
+ * --remote`, §53 §6.3) this console may reach, separated by spaces or commas. Each is
+ * an exact `https://host[:port]` (http only on loopback): no wildcard, path, query or
+ * credentials. Studio calls them over Connect and frames their previews, so they join
+ * the CSP's `connect-src` and `frame-src` (SD1 Task 30, ruling T26-9; as §39's console
+ * lists the factory apps' origins). Each host must list this console in its own
+ * `--allow-origin`. Unset: Studio on the web can reach no agentd host.
+ */
+export function agentdOrigins(env = process.env) {
+  const raw = get(env, 'LOAMS_AGENTD_ORIGINS');
+  if (!raw) return [];
+  const origins = [];
+  for (const value of raw.split(/[\s,]+/).filter(Boolean)) {
+    if (value.includes('*')) {
+      throw new Error(`LOAMS_AGENTD_ORIGINS: name each agentd host, not ${value}`);
+    }
+    const url = secureUrl(value, `LOAMS_AGENTD_ORIGINS entry ${JSON.stringify(value)}`);
+    if (url.username || url.password || (url.pathname !== '/' && url.pathname !== '')) {
+      throw new Error(
+        `LOAMS_AGENTD_ORIGINS entry ${JSON.stringify(value)} must be an origin ` +
+          `(scheme://host[:port]), such as ${url.origin}`,
+      );
+    }
+    if (!origins.includes(url.origin)) origins.push(url.origin);
+  }
+  return origins;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const out = process.argv[2];
   if (!out) {

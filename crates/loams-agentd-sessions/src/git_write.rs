@@ -198,11 +198,21 @@ pub fn redact(text: &str) -> String {
 // Validation
 // ---------------------------------------------------------------------------
 
-/// A path relative to a checkout: not empty, not absolute, no `..`, no NUL.
+/// A path relative to a checkout: not empty, not absolute, no `..`, no NUL,
+/// and never inside a `.git` directory (SD1 Task 30: git's own files are not
+/// the person's changes, as `WorkspaceRelativePath` already rules).
 pub fn checkout_relative(path: &str) -> Result<&str, GitWriteError> {
     let invalid = || bad(format!("paths must be relative to the checkout: {path:?}"));
     if path.is_empty() || path.contains('\0') || path.starts_with('/') || path.starts_with('\\') {
         return Err(invalid());
+    }
+    if path
+        .split(['/', '\\'])
+        .any(|part| part.eq_ignore_ascii_case(".git"))
+    {
+        return Err(bad(format!(
+            "paths inside .git are not the checkout's: {path:?}"
+        )));
     }
     for component in Path::new(path).components() {
         match component {
@@ -801,7 +811,18 @@ mod tests {
     fn relative_paths_only() {
         assert!(checkout_relative("src/main.rs").is_ok());
         assert!(checkout_relative("./a").is_ok());
-        for path in ["", "/etc/passwd", "../x", "a/../../x", "a\0b", "\\x"] {
+        assert!(checkout_relative(".gitignore").is_ok());
+        for path in [
+            "",
+            "/etc/passwd",
+            "../x",
+            "a/../../x",
+            "a\0b",
+            "\\x",
+            ".git/config",
+            "sub/.GIT/hooks/pre-commit",
+            ".git",
+        ] {
             assert!(checkout_relative(path).is_err(), "{path:?}");
         }
     }

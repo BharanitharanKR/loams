@@ -40,7 +40,7 @@ use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::service::TowerToHyperService;
 use rustls::pki_types::pem::{self, PemObject};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{Mutex, Semaphore, oneshot};
 use tokio::task::{JoinHandle, JoinSet};
 
 use crate::cors::{self, CorsPolicy};
@@ -50,6 +50,17 @@ use crate::services::Agentd;
 
 /// How long a client has to finish the TLS handshake.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Connections served at once; one more is closed as soon as it is accepted
+/// (SD1 Task 30: the listener faces the network, and each connection holds a
+/// task and a TLS session).
+pub const MAX_CONNECTIONS: usize = 256;
+
+/// Refused credentials waiting out the failure delay at once; one more is
+/// answered at once with `resource_exhausted`, so queued failures cannot pile
+/// up behind the serialized delay (the ndjson listener's
+/// `Limits::max_pending_upgrades`, SD1 Task 30).
+pub const MAX_PENDING_FAILURES: usize = 32;
 
 /// How the remote listener runs.
 #[derive(Debug, Clone)]
@@ -128,6 +139,8 @@ pub struct RemoteGuard {
     delay: Duration,
     /// Serializes refused tokens, so a failure's delay holds back the next.
     gate: Mutex<()>,
+    /// Bounds the refused requests queued behind `gate`.
+    waiting: Semaphore,
     previews: crate::preview::Previews,
 }
 
@@ -149,6 +162,7 @@ impl RemoteGuard {
             cors,
             delay,
             gate: Mutex::new(()),
+            waiting: Semaphore::new(MAX_PENDING_FAILURES),
         }))
     }
 
@@ -162,11 +176,27 @@ impl RemoteGuard {
         &self.previews
     }
 
-    /// The refused-credential delay, one failure at a time.
-    pub async fn fail_delay(&self) {
+    /// The refused-credential delay, one failure at a time. `false` when
+    /// [`MAX_PENDING_FAILURES`] are already waiting: the caller answers
+    /// [`too_many_failures`] at once instead of queueing.
+    pub async fn fail_delay(&self) -> bool {
+        let Ok(_waiting) = self.waiting.try_acquire() else {
+            return false;
+        };
         let _gate = self.gate.lock().await;
         tokio::time::sleep(self.delay).await;
+        true
     }
+}
+
+/// The answer to a refused credential while [`MAX_PENDING_FAILURES`] others
+/// wait out their delay.
+pub(crate) fn too_many_failures() -> Response {
+    refuse(
+        ErrorCode::ResourceExhausted,
+        None,
+        "too many refused requests at once; try again shortly",
+    )
 }
 
 /// A running remote listener.
@@ -252,6 +282,13 @@ async fn accept_loop(
                         continue;
                     }
                 };
+                // Reap finished connections first, so the cap counts live ones.
+                while connections.try_join_next().is_some() {}
+                if connections.len() >= MAX_CONNECTIONS {
+                    tracing::warn!(peer_port = peer.port(), "remote: too many connections; closed one");
+                    drop(tcp);
+                    continue;
+                }
                 let acceptor = acceptor.clone();
                 let service = TowerToHyperService::new(app.clone());
                 connections.spawn(async move {
@@ -370,7 +407,9 @@ pub(crate) async fn authenticate(
                     code = rejection.code.as_str(),
                     "remote: refused a request without a valid token"
                 );
-                guard.fail_delay().await;
+                if !guard.fail_delay().await {
+                    return Err(too_many_failures());
+                }
             }
             Err(refuse(rejection.code, rejection.reason, &rejection.message))
         }
@@ -426,5 +465,44 @@ mod tests {
         assert_eq!(bearer(b"Bearer "), None);
         assert_eq!(bearer(b"Bearer a b"), None);
         assert_eq!(bearer(b"Basic abc"), None);
+    }
+
+    /// SD1 Task 30: refused credentials can't queue without bound behind the
+    /// serialized delay; one more than [`MAX_PENDING_FAILURES`] is answered
+    /// at once.
+    #[tokio::test]
+    async fn remote_pending_failures_are_bounded() {
+        let guard = RemoteGuard::new(
+            OidcOptions::new(
+                "https://issuer.test/application/o/loams/",
+                "loams-agentd",
+                "s1",
+            ),
+            CorsPolicy::default(),
+            Duration::from_secs(3600),
+            None,
+        )
+        .unwrap();
+        let mut waiting = Vec::new();
+        for _ in 0..MAX_PENDING_FAILURES {
+            let guard = Arc::clone(&guard);
+            waiting.push(tokio::spawn(async move { guard.fail_delay().await }));
+        }
+        // Let every waiter take its place.
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
+        let refused = tokio::time::timeout(Duration::from_millis(1), guard.fail_delay())
+            .await
+            .expect("the extra failure is answered without waiting");
+        assert!(!refused, "the extra failure must not queue");
+        assert_eq!(
+            too_many_failures().status(),
+            StatusCode::TOO_MANY_REQUESTS,
+            "resource_exhausted is a 429"
+        );
+        for task in waiting {
+            task.abort();
+        }
     }
 }

@@ -49,8 +49,7 @@ Studio does all its work through `loams-agentd`, the per-user agent daemon (D906
 
 These parts of SD1 are not on `dev` yet:
 
-- **A few approval follow-ups** (SD1 ruling T13-16): no mode switch in the thread header, and no mode set for threads started from a project page's composer. See [Approvals](approvals.md#not-built-yet).
-- **The browser console's Content-Security-Policy for remote hosts** (SD1 Task 30, ruling T26-9). See [Remote agentd](remote-agentd.md#the-consoles-content-security-policy).
+- **An approval follow-up** (SD1 ruling T13-16): no mode switch in the thread header. See [Approvals](approvals.md#not-built-yet).
 - **A sign-in that issues the agentd token** (MT1). Until then the browser asks you to paste a token per host.
 - **Studio in the browser by default** (SD1 Task 32), and the factory apps in the browser (SF1, D922).
-- **End-to-end tests on both editions** (SD1 Task 29) and the security review (SD1 Task 30).
+- **End-to-end tests on both editions** (SD1 Task 29). The security review is [Studio's threat model](../../security/studio-threat-model.md) (SD1 Task 30).

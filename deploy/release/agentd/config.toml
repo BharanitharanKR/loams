@@ -1,0 +1,6 @@
+# loams-agentd's config for `--profile agentd` (crates/loams-agentd/README.md).
+# Every key is optional; the daemon refuses to start without this file, so it
+# ships empty. Mounted read-only at /home/loams/agentd/config.toml; the daemon
+# keeps its token, lock and store in that directory (the agentd-data volume).
+# Paths a key names (for example [remote] tls_cert) go under /etc/loams-agentd,
+# where this folder is mounted.

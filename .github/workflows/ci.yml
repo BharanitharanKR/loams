@@ -2000,6 +2000,52 @@ jobs:
           path: crates/loams-agentd-rpc/fuzz/artifacts
           if-no-files-found: ignore
 
+  # SD1 Task 30: Loams Studio's untrusted input to the daemon. The Connect
+  # decoders and mappings behind every loams.agentd.v1 method, the remote
+  # listener's OIDC tokens, every ndjson method's typed params, and the path,
+  # URL and ref jails. Each cargo-fuzz target runs 60 s from its seed corpus
+  # (the full tier and the nightly); the same invariants run on seeds in
+  # `cargo test`.
+  agentd-connect-fuzz:
+    name: "Agentd: Studio fuzzing"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.agentd == 'true'))) }}
+    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    # Four targets x 60 s plus the build (the sessions crate is large).
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: nightly toolchain (libFuzzer instrumentation)
+        run: rustup toolchain install nightly-2026-09-24 --profile minimal
+      - name: protoc (the generated loams.agentd.v1 code)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev
+      - uses: taiki-e/install-action@badb8c3638e0b773c6c17a6025c2306a8f1c4303 # nextest, 2026-10-02
+        with:
+          tool: cargo-fuzz@0.13.2
+      # cargo-fuzz has no --locked: check fuzz/Cargo.lock is current first.
+      - name: fuzz lock file is current (--locked)
+        working-directory: crates/loams-agentd-connect
+        run: cargo +nightly-2026-09-24 metadata --locked --format-version 1 --manifest-path fuzz/Cargo.toml > /dev/null
+      # Keep in sync with fuzz/Cargo.toml (tests/ci.rs checks it).
+      - name: fuzz every target for 60 s
+        working-directory: crates/loams-agentd-connect
+        run: |
+          set -euo pipefail
+          host=$(rustc +nightly-2026-09-24 -vV | sed -n 's/^host: //p')  # cargo-fuzz is a musl build; see sqlgate-fuzz
+          for t in connect_decode jwt ndjson_params path_jail; do
+            mkdir -p "fuzz/corpus/$t"
+            cargo +nightly-2026-09-24 fuzz run --target "$host" "$t" "fuzz/corpus/$t" -- -max_total_time=60 -rss_limit_mb=2048 -timeout=20
+          done
+      - name: upload crashing inputs
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: agentd-connect-fuzz-artifacts
+          path: crates/loams-agentd-connect/fuzz/artifacts
+          if-no-files-found: ignore
+
   deny:
     name: "Deps: cargo-deny"
     needs: changes
@@ -2286,6 +2332,7 @@ jobs:
       - graph
       - sqlgate-fuzz
       - agentd-fuzz
+      - agentd-connect-fuzz
       - deny
       - web
       - dapr-edge

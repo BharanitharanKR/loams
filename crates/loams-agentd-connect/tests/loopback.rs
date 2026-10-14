@@ -429,6 +429,11 @@ async fn clone_repo_refuses_options_and_local_urls() {
         "https://example.com/a b.git",
         "http://example.com/a.git",
         "C:/repo",
+        // SD1 Task 30: an ssh host or user read as an option, and a URL
+        // whose folder would be `repos/..`, the data directory.
+        "ssh://-oProxyCommand=touch%20pwned/x",
+        "ssh://git@-oProxyCommand=touch/x",
+        "https://example.com/..",
     ] {
         let error = projects
             .clone_repo(pb::CloneRepoRequest {

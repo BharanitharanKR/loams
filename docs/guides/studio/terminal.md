@@ -11,7 +11,7 @@ Studio's terminals live in the drawer at the bottom of a thread (design [§53](.
 - **When a shell exits** its tab stays, with "[terminal] Process exited with code N", until you close it.
 - **Closing a tab whose shell is still running** asks first.
 
-**Pasting.** Pasting more than one line asks first. The paste then goes through as a bracketed paste when the shell asks for one.
+**Pasting.** Studio removes control characters from a paste first (escape sequences, ^C, ^D; tabs and line breaks stay), so a copied snippet can't end a bracketed paste early and run the rest. Pasting more than one line then asks first. The paste goes through as a bracketed paste when the shell asks for one.
 
 **Links.** Ctrl+click (Cmd+click on macOS) opens a link:
 - an http(s) URL in your browser;

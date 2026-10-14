@@ -238,10 +238,13 @@ impl Approvals {
             }
             match parent_of.and_then(|parent_of| parent_of(&chat)) {
                 Some(parent) if parent != chat => chat = parent,
-                _ => break,
+                _ => return (self.settings().default_mode, false),
             }
         }
-        (self.settings().default_mode, false)
+        // A chain deeper than the walk (side chats of side chats, each made
+        // by a run's MCP shim) may hang under a supervised thread: fail safe
+        // rather than fall back to a full-access default (SD1 Task 30).
+        (ApprovalMode::Supervised, false)
     }
 
     /// A thread's effective mode.
@@ -588,5 +591,34 @@ impl TurnObserver for Approvals {
 
     fn turn_end(&self, chat_id: &str) {
         self.deny_chat(chat_id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// SD1 Task 30: a side chat deeper than the walk, under a supervised
+    /// thread, is supervised, not the full-access default; a chain that ends
+    /// with no mode still takes the default.
+    #[test]
+    fn deep_side_chats_fail_safe_to_supervised() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Arc::new(DocsStore::open(dir.path()).unwrap());
+        let approvals = Approvals::open(store, ApprovalSettings::default()).unwrap();
+        // c0 <- c1 <- … <- c40: each chat's parent is the one before it.
+        approvals.set_parent_of(Arc::new(|chat: &str| {
+            let n: usize = chat.strip_prefix('c')?.parse().ok()?;
+            (n > 0).then(|| format!("c{}", n - 1))
+        }));
+        assert_eq!(approvals.mode("c10"), ApprovalMode::FullAccess);
+        approvals.set_mode("c0", ApprovalMode::Supervised).unwrap();
+        assert_eq!(approvals.mode("c3"), ApprovalMode::Supervised);
+        assert_eq!(
+            approvals.resolved_mode("c40"),
+            (ApprovalMode::Supervised, false),
+            "a chain deeper than the walk must not fall back to full access"
+        );
+        assert_eq!(approvals.mode("other"), ApprovalMode::FullAccess);
     }
 }

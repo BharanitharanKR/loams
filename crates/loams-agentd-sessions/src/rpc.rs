@@ -472,6 +472,16 @@ impl EngineRpc {
                 .map_err(|e| RpcError::Failed(e.to_string()))?;
         }
         self.doc_host.persist_fork(&target).map_err(failed)?;
+        // A fork keeps its source's approval mode whatever parent it hangs
+        // under: a supervised thread's fork is never quietly full access
+        // (SD1 Task 30). Recorded before the row is published, so no run of
+        // the fork sees another mode.
+        if let Some(approvals) = &self.approvals {
+            let (mode, set) = approvals.resolved_mode(source_chat_id);
+            if set {
+                approvals.set_mode(&chat.id, mode).map_err(failed)?;
+            }
+        }
         self.workspace.import_chat_row(&chat).map_err(failed)?;
         Ok(chat)
     }
@@ -2129,26 +2139,29 @@ impl RpcService for EngineRpc {
                         .select(&p.checkout_id, &p.comment_ids)
                         .await
                         .map_err(review_error)?;
-                    // An outdated anchor would land on the wrong line.
-                    if let Ok(snapshot) = crate::diff_sync::capture_diff(&self.repos, &root).await {
-                        let current = crate::review::CurrentDiff {
+                    // An outdated anchor would land on the wrong line; a
+                    // diff that can't be read refuses (SD1 Task 30).
+                    let current = crate::diff_sync::capture_diff(&self.repos, &root)
+                        .await
+                        .map(|snapshot| crate::review::CurrentDiff {
                             checksum: snapshot.checksum,
                             patch: snapshot.patch,
                             truncated: snapshot.truncated,
-                        };
-                        for comment in &mut comments {
-                            comment.outdated = crate::review::is_outdated(comment, &current);
+                        })
+                        .map_err(|error| error.to_string());
+                    match crate::review::refuse_outdated(&mut comments, current) {
+                        Ok(()) => {}
+                        Err(crate::review::NotPostable::DiffUnreadable(error)) => {
+                            return Err(RpcError::Failed(format!(
+                                "the checkout's diff can't be read, so outdated comments \
+                                 can't be ruled out: {error}"
+                            )));
                         }
-                    }
-                    let outdated: Vec<&str> = comments
-                        .iter()
-                        .filter(|comment| comment.outdated)
-                        .map(|comment| comment.id.as_str())
-                        .collect();
-                    if !outdated.is_empty() {
-                        return Err(RpcError::BadParams(format!(
-                            "outdated comments can't be posted: {outdated:?}"
-                        )));
+                        Err(crate::review::NotPostable::Outdated(outdated)) => {
+                            return Err(RpcError::BadParams(format!(
+                                "outdated comments can't be posted: {outdated:?}"
+                            )));
+                        }
                     }
                     let url = crate::review::post_review(
                         &self.change_request_creator,

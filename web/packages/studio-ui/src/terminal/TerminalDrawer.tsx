@@ -257,6 +257,19 @@ export function linkRange(
   return from && to ? { start: from, end: to } : null;
 }
 
+/**
+ * Pasted text without the control characters a shell or the terminal would act on
+ * (SD1 Task 30): ESC and the other C0 controls but tab and line breaks, DEL and the C1
+ * controls. A copied snippet can hide `ESC [201~` (the end of a bracketed paste), after
+ * which the rest of the paste runs as typed commands, or an ETX or EOT that interrupts
+ * or ends the shell. The paste confirmation shows the cleaned text, and that is what is
+ * sent.
+ */
+export function sanitizePaste(text: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what is removed
+  return text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, "");
+}
+
 /** Whether a paste needs confirmation: more than one line once a final newline is set aside. */
 export function isMultiLinePaste(text: string): boolean {
   return /\r\n|\r|\n/.test(text.replace(/(?:\r\n|\r|\n)$/, ""));
@@ -432,14 +445,17 @@ export function TerminalViewport({
     };
     disposables.push(surface.registerLinkProvider(provider));
 
-    // A paste of more than one line waits for a yes; xterm never sees the event.
+    // Every paste is ours: xterm never sees the event. Control characters are removed
+    // (sanitizePaste), and a paste of more than one line waits for a yes.
     const onPaste = (event: ClipboardEvent) => {
-      const text = event.clipboardData?.getData("text/plain") ?? "";
-      if (!isMultiLinePaste(text)) return;
+      const raw = event.clipboardData?.getData("text/plain") ?? "";
       event.preventDefault();
       event.stopImmediatePropagation();
       if (!writableRef.current) return;
-      latest.current.onConfirmPaste(text, () => surface.paste(text));
+      const text = sanitizePaste(raw);
+      if (text === "") return;
+      if (isMultiLinePaste(text)) latest.current.onConfirmPaste(text, () => surface.paste(text));
+      else surface.paste(text);
     };
     mount.addEventListener("paste", onPaste, true);
 

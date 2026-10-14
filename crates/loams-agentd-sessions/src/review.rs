@@ -438,6 +438,44 @@ pub fn is_outdated(comment: &ReviewComment, current: &CurrentDiff) -> bool {
     !(comment.line..=end).all(|line| lines.contains(&line))
 }
 
+/// Why [`refuse_outdated`] refused to post.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NotPostable {
+    /// The checkout's diff could not be read, so stale anchors can't be ruled
+    /// out.
+    DiffUnreadable(String),
+    /// These comments' anchors no longer match the diff.
+    Outdated(Vec<String>),
+}
+
+/// Marks `comments` against `current`, a fresh capture of the checkout's
+/// working-tree diff, and refuses when any is outdated. Fails closed: a diff
+/// that could not be read refuses them all (SD1 Task 30; before, a failed
+/// capture skipped the check and posted whatever anchors there were).
+///
+/// # Errors
+///
+/// [`NotPostable`].
+pub fn refuse_outdated(
+    comments: &mut [ReviewComment],
+    current: Result<CurrentDiff, String>,
+) -> Result<(), NotPostable> {
+    let current = current.map_err(NotPostable::DiffUnreadable)?;
+    for comment in comments.iter_mut() {
+        comment.outdated = is_outdated(comment, &current);
+    }
+    let outdated: Vec<String> = comments
+        .iter()
+        .filter(|comment| comment.outdated)
+        .map(|comment| comment.id.clone())
+        .collect();
+    if outdated.is_empty() {
+        Ok(())
+    } else {
+        Err(NotPostable::Outdated(outdated))
+    }
+}
+
 // ---------------------------------------------------------------------------
 // WatchReviewComments
 // ---------------------------------------------------------------------------

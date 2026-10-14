@@ -7,6 +7,7 @@ import { createRouterTransport, type Transport } from '@connectrpc/connect';
 import { AgentdTransportProvider } from '@loams/console-host/query';
 import {
   ApprovalMode,
+  ApprovalService,
   AttachmentService,
   type CreateRunGroupRequest,
   FileService,
@@ -55,6 +56,8 @@ interface DaemonOptions {
   features?: string[];
   files?: string[];
   queued?: string[];
+  /** Serve ApprovalService (SD1 Task 13); without it the daemon answers unimplemented. */
+  approvals?: boolean;
 }
 
 function composerDaemon(o: DaemonOptions = {}) {
@@ -66,7 +69,16 @@ function composerDaemon(o: DaemonOptions = {}) {
   const commits: string[] = [];
   const groups: CreateRunGroupRequest[] = [];
   const searches: string[] = [];
+  const modes: Array<{ chatId: string; mode: ApprovalMode; sentBefore: number }> = [];
   const transport: Transport = createRouterTransport(({ service }) => {
+    if (o.approvals) {
+      service(ApprovalService, {
+        setThreadApprovalMode: (req) => {
+          modes.push({ chatId: req.chatId, mode: req.mode, sentBefore: sent.length });
+          return {};
+        },
+      });
+    }
     service(StudioService, {
       getHost: () => ({
         host: create(HostSchema, { features: o.features ?? ['studio.v1'] }),
@@ -185,7 +197,18 @@ function composerDaemon(o: DaemonOptions = {}) {
       },
     });
   });
-  return { transport, sent, steered, queued, interrupted, chunks, commits, groups, searches };
+  return {
+    transport,
+    sent,
+    steered,
+    queued,
+    interrupted,
+    chunks,
+    commits,
+    groups,
+    searches,
+    modes,
+  };
 }
 
 function show(daemon: ReturnType<typeof composerDaemon>, props: ThreadComposerProps) {
@@ -312,6 +335,43 @@ describe('send', () => {
     const req = daemon.sent[0];
     expect(req?.request?.worktree).toMatchObject({ repoPath: '/srv/site', base: 'main' });
     expect(onStarted).toHaveBeenCalledWith(req?.chatId);
+  });
+
+  // SD1 Task 30: a thread started from the project page's composer used to skip
+  // SetThreadApprovalMode, so on a desktop daemon it ran at the full-access default.
+  it('a new thread takes Settings › Studio approval mode before its first run', async () => {
+    for (const [setting, expected] of [
+      [undefined, ApprovalMode.SUPERVISED],
+      ['full-access', ApprovalMode.FULL_ACCESS],
+    ] as const) {
+      cleanup();
+      localStorage.clear();
+      resetComposerDraftStoreForTests();
+      if (setting) {
+        localStorage.setItem('loams.studio.settings', JSON.stringify({ approvalMode: setting }));
+      }
+      const daemon = composerDaemon({ approvals: true });
+      setDraft('project:/srv/site', 'Add a footer');
+      show(daemon, { project: { path: '/srv/site', name: 'site', branch: 'main' } });
+      const send = await screen.findByRole('button', { name: 'Send' });
+      await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(send);
+      await waitFor(() => expect(daemon.sent).toHaveLength(1));
+      expect(daemon.modes).toEqual([
+        { chatId: daemon.sent[0]?.chatId, mode: expected, sentBefore: 0 },
+      ]);
+    }
+  });
+
+  it('an existing thread is never switched by a send', async () => {
+    const daemon = composerDaemon({ approvals: true });
+    setDraft('t1', 'More');
+    show(daemon, { threadId: 't1' });
+    const send = await screen.findByRole('button', { name: 'Send' });
+    await waitFor(() => expect((send as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(send);
+    await waitFor(() => expect(daemon.sent).toHaveLength(1));
+    expect(daemon.modes).toEqual([]);
   });
 
   it('terminal selections join the prompt as escaped context, and are taken on send', async () => {

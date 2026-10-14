@@ -52,7 +52,7 @@ A thread's menu (the "…" button, or a right-click) offers:
 ## Starting a thread
 
 There are two ways, and they differ:
-- **The project's page.** Click a project's name: its page has a **New thread** composer. Your first message creates the thread, and the composer asks where its first run works (below). The harness and model are the composer's own pickers, and the thread takes the daemon's default [approval mode](approvals.md#which-mode-a-thread-gets) (full access on a desktop daemon, unless its `config.toml` says otherwise).
+- **The project's page.** Click a project's name: its page has a **New thread** composer. Your first message creates the thread, and the composer asks where its first run works (below). The harness and model are the composer's own pickers, and the thread takes **Settings › Approvals**' [approval mode](approvals.md#which-mode-a-thread-gets), as New thread does.
 - **New thread** (the **+** on the project's row) **or Mod+N** creates an empty thread at once and opens it. It works in the project's **own checkout**, not a new worktree, and starts with the defaults from [Settings](settings.md): the harness, the model, and the approval mode (supervised by default) with its sandbox.
 
 ## Worktrees

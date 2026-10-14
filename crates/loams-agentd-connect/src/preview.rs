@@ -300,13 +300,16 @@ pub async fn serve(guard: &RemoteGuard, request: Request) -> Response {
                 forward(guard, &preview, &rest, &prefix, request).await
             }
             None => {
-                guard.fail_delay().await;
-                tracing::warn!("remote: refused a preview with an unknown or expired ticket");
-                refuse(
-                    ErrorCode::Unauthenticated,
-                    Some("unauthenticated"),
-                    "this preview link has expired; open the preview again",
-                )
+                if guard.fail_delay().await {
+                    tracing::warn!("remote: refused a preview with an unknown or expired ticket");
+                    refuse(
+                        ErrorCode::Unauthenticated,
+                        Some("unauthenticated"),
+                        "this preview link has expired; open the preview again",
+                    )
+                } else {
+                    crate::remote::too_many_failures()
+                }
             }
         },
     };

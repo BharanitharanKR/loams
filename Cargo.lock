@@ -7673,6 +7673,7 @@ dependencies = [
 name = "loams-agentd-connect"
 version = "0.1.0-preview.2"
 dependencies = [
+ "async-trait",
  "axum 0.8.9",
  "base64 0.23.1",
  "buffa",
@@ -7700,6 +7701,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tokio-rustls",
+ "tower 0.5.3",
  "tracing",
  "url",
 ]

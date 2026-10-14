@@ -21,7 +21,7 @@ import {
   encodeTerminalInput,
   terminalOutputText,
 } from '../src/terminal/session';
-import { isMultiLinePaste } from '../src/terminal/TerminalDrawer';
+import { isMultiLinePaste, sanitizePaste } from '../src/terminal/TerminalDrawer';
 import { fakeBackend, fakeSurfaces } from './terminal-fakes';
 
 const LINUX = 'Linux x86_64';
@@ -189,19 +189,20 @@ describe('multiline_paste_confirms', () => {
       return event;
     };
 
-    // One line (even with its newline) is xterm's to paste.
-    expect(paste('echo hi\n').defaultPrevented).toBe(false);
+    // One line (even with its newline) is pasted at once, through xterm's own paste.
+    expect(paste('echo hi\n').defaultPrevented).toBe(true);
     expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(surface.pasted).toEqual(['echo hi\n']);
 
     const event = paste('rm -rf build\nmake\n');
     expect(event.defaultPrevented).toBe(true);
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog.textContent).toContain('Paste 2 lines?');
-    expect(surface.pasted).toEqual([]);
+    expect(surface.pasted).toEqual(['echo hi\n']);
     fireEvent.click(screen.getByRole('button', { name: 'Paste' }));
-    await waitFor(() => expect(surface.pasted).toEqual(['rm -rf build\nmake\n']));
+    await waitFor(() => expect(surface.pasted).toEqual(['echo hi\n', 'rm -rf build\nmake\n']));
     await waitFor(() =>
-      expect(t.daemon.writes.map((w) => w.text)).toEqual(['rm -rf build\nmake\n']),
+      expect(t.daemon.writes.map((w) => w.text)).toEqual(['echo hi\n', 'rm -rf build\nmake\n']),
     );
   });
 
@@ -217,6 +218,22 @@ describe('multiline_paste_confirms', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(surface.pasted).toEqual([]);
     expect(t.daemon.writes).toEqual([]);
+  });
+
+  // SD1 Task 30: a hidden ESC [201~ would end a bracketed paste early and run the rest.
+  it('strips control characters from a paste before it reaches the shell', async () => {
+    const t = setup();
+    const { stream, surface } = await firstTerminal(t);
+    act(() => stream.data(1, '$ '));
+    const host = t.view.container.querySelector('[data-terminal] > div') as HTMLElement;
+    const event = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent;
+    Object.defineProperty(event, 'clipboardData', {
+      value: { getData: () => 'ls\u001b[201~ rm -rf ~\u0003\u0004\u009b' },
+    });
+    host.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    await waitFor(() => expect(surface.pasted).toEqual(['ls[201~ rm -rf ~']));
+    expect(sanitizePaste('a\tb\r\nc\u007f\u0085')).toBe('a\tb\r\nc');
   });
 
   it('counts lines as a shell would run them', () => {
