@@ -34,6 +34,8 @@ use connectrpc::{ConnectError, ErrorCode};
 use http::{HeaderValue, Method, StatusCode, header};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::service::TowerToHyperService;
+use rustls::pki_types::pem::{self, PemObject};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::sync::{Mutex, oneshot};
 use tokio::task::{JoinHandle, JoinSet};
 
@@ -84,7 +86,7 @@ pub fn tls_config(cert: &Path, key: &Path) -> Result<Arc<rustls::ServerConfig>, 
         std::fs::read(path)
             .map_err(|e| RemoteError::Config(format!("--tls-{what} {}: {e}", path.display())))
     };
-    let chain = rustls_pemfile::certs(&mut read(cert, "cert")?.as_slice())
+    let chain = CertificateDer::pem_slice_iter(&read(cert, "cert")?)
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| RemoteError::Config(format!("--tls-cert {}: {e}", cert.display())))?;
     if chain.is_empty() {
@@ -93,14 +95,13 @@ pub fn tls_config(cert: &Path, key: &Path) -> Result<Arc<rustls::ServerConfig>, 
             cert.display()
         )));
     }
-    let private = rustls_pemfile::private_key(&mut read(key, "key")?.as_slice())
-        .map_err(|e| RemoteError::Config(format!("--tls-key {}: {e}", key.display())))?
-        .ok_or_else(|| {
-            RemoteError::Config(format!(
-                "--tls-key {}: no private key in the file",
-                key.display()
-            ))
-        })?;
+    let private = PrivateKeyDer::from_pem_slice(&read(key, "key")?).map_err(|e| match e {
+        pem::Error::NoItemsFound => RemoteError::Config(format!(
+            "--tls-key {}: no private key in the file",
+            key.display()
+        )),
+        e => RemoteError::Config(format!("--tls-key {}: {e}", key.display())),
+    })?;
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let mut config = rustls::ServerConfig::builder_with_provider(provider)
         .with_protocol_versions(&[&rustls::version::TLS13, &rustls::version::TLS12])
