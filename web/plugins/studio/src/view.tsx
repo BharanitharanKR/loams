@@ -21,6 +21,7 @@ import { SettingsPage } from './settings/Settings.js';
 import { FactoryGroup } from './sidebar/Factory.js';
 import { StudioSidebar } from './sidebar/Sidebar.js';
 import { useNewThread } from './sidebar/useThreadActions.js';
+import { ThreadComposer } from './thread/Composer.js';
 import { DraftCard } from './thread/FactoryLinks.js';
 import { FilesTab } from './thread/LazyFilesTab.js';
 import { ThreadTerminalDrawer } from './thread/TerminalDrawer.js';
@@ -91,10 +92,12 @@ function Body({
   agentd,
   route,
   keys,
+  navigate,
 }: {
   agentd: StudioAgentd;
   route: StudioRoute;
   keys: StudioKeys;
+  navigate?: (to: string) => void;
 }) {
   switch (route.kind) {
     case 'home':
@@ -105,14 +108,36 @@ function Body({
         </>
       );
     case 'project':
-      return <ProjectPage agentd={agentd} projectId={route.projectId} />;
+      return (
+        <ProjectPage
+          agentd={agentd}
+          projectId={route.projectId}
+          {...(navigate ? { navigate } : {})}
+        />
+      );
     case 'thread':
       return (
-        <div className="p-6">
+        <div className="flex min-h-full flex-col gap-4 p-6">
           <Empty title="This thread is not available">
             Studio cannot open threads in this version yet. The link <code>{route.threadId}</code>{' '}
             will open here once it can.
           </Empty>
+          {/* The composer (SD1 Task 19); the timeline above it is Task 18's. */}
+          <div className="mt-auto">
+            <ThreadComposer
+              threadId={route.threadId}
+              {...(navigate
+                ? {
+                    openFile: (path: string) =>
+                      navigate(
+                        `${studioHref({ ...route, panel: 'files' })}&${new URLSearchParams({ path })}`,
+                      ),
+                    onGroupStarted: (groupId: string) =>
+                      navigate(studioHref({ kind: 'group', groupId })),
+                  }
+                : {})}
+            />
+          </div>
         </div>
       );
     case 'group':
@@ -214,7 +239,7 @@ function StudioPage({
       }
     >
       {connected ? (
-        <Body agentd={agentd} route={route} keys={keys} />
+        <Body agentd={agentd} route={route} keys={keys} navigate={navigate} />
       ) : (
         <div className="p-6">
           <NotConnected agentd={agentd} reach={reach} />

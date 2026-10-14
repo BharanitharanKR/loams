@@ -2,13 +2,13 @@
 // apps/web/src/composer-editor-mentions.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
 // assistant citations are not collected (T3 Code citations are not in Studio); contracts types from ./shared/contracts. Loams' changes are Apache-2.0.
-import type { AssistantCitation } from "@t3tools/contracts";
-import { collectAssistantCitations } from "@t3tools/shared/assistantCitations";
-import { collectComposerContextReferences } from "@t3tools/shared/composerContextReferences";
+
+import { collectComposerContextReferences } from "./shared/composerContextReferences";
 import {
-  collectComposerInlineTokens,
   type ComposerInlineToken,
-} from "@t3tools/shared/composerInlineTokens";
+  collectComposerInlineTokens,
+} from "./shared/composerInlineTokens";
+import type { AssistantCitation } from "./shared/contracts";
 
 export type ComposerPromptSegment =
   | {
@@ -81,15 +81,13 @@ function forEachMentionMatch(
 
 export function collectComposerPromptInlineTokens(text: string) {
   const tokens = collectComposerInlineTokens(text);
-  const citations = collectAssistantCitations(text);
+  // Studio has no assistant citations (they quote T3 Code's own threads), so only
+  // context references become links here.
   const references = collectComposerContextReferences(text);
-  if (citations.length === 0 && references.length === 0) return tokens;
+  if (references.length === 0) return tokens;
 
   // An unfinished @ mention can otherwise consume the start of a link label.
-  const links = [
-    ...citations.map((match) => ({ ...match, type: "citation" as const })),
-    ...references.map((match) => ({ ...match, type: "context-reference" as const })),
-  ];
+  const links = references.map((match) => ({ ...match, type: "context-reference" as const }));
   return [
     ...tokens.filter(
       (token) => !links.some((link) => token.start < link.end && token.end > link.start),
@@ -115,9 +113,7 @@ function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegmen
       pushTextSegment(segments, text.slice(cursor, match.start));
     }
 
-    if (match.type === "citation") {
-      segments.push({ type: "citation", citation: match.citation, source: match.source });
-    } else if (match.type === "context-reference") {
+    if (match.type === "context-reference") {
       segments.push({
         type: "context-reference",
         kind: match.kind,

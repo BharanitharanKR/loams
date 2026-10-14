@@ -45,6 +45,23 @@
     {
       "includes": ["packages/studio-ui/src/terminal/output.ts"],
       "linter": { "rules": { "style": { "noNonNullAssertion": "off" } } }
+    },
+    {
+      "includes": [
+        "packages/studio-ui/src/composer/doc.ts",
+        "packages/studio-ui/src/composer/richText.ts",
+        "packages/studio-ui/src/composer/listContinuation.ts",
+        "packages/studio-ui/src/composer/codeBlock.ts",
+        "packages/studio-ui/src/composer/undoGrouping.ts",
+        "packages/studio-ui/src/composer/contextReferences.ts",
+        "packages/studio-ui/src/composer/shared/composerTrigger.ts",
+        "packages/studio-ui/src/composer/shared/composerInlineTokens.ts",
+        "packages/studio-ui/src/composer/shared/composerContextReferences.ts",
+        "packages/studio-ui/src/composer/shared/inlineSkills.ts",
+        "packages/studio-ui/src/composer/shared/searchRanking.ts"
+      ],
+      "assist": { "actions": { "source": { "organizeImports": "off" } } },
+      "linter": { "rules": { "style": { "noNonNullAssertion": "off" } } }
     }
   ]
 }

@@ -2,22 +2,10 @@
 // apps/web/src/composer-logic.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
 // the cursor, trigger and paste helpers kept; citation formatting, the send-shortcut setting and keybinding-driven submission intents dropped. Loams' changes are Apache-2.0.
-import type { ClientSettings } from "@t3tools/contracts/settings";
-import type { AssistantCitation, ResolvedKeybindingsConfig } from "@t3tools/contracts";
-import {
-  serializeAssistantCitation,
-  withAssistantCitationComment,
-} from "@t3tools/shared/assistantCitations";
-import {
-  splitPromptIntoComposerSegments,
-  type ComposerPromptSegment,
-} from "./composer-editor-mentions";
-
-import { resolveShortcutCommand, type ShortcutEventLike } from "./keybindings";
+import { type ComposerPromptSegment, splitPromptIntoComposerSegments } from "./mentions";
 
 export type ComposerTriggerKind = "path" | "pull-request" | "slash-command" | "skill";
 export type ComposerSlashCommand = "model" | "plan" | "default";
-export type ComposerSubmissionIntent = "foreground" | "background" | "alternate";
 
 export interface ComposerTrigger {
   kind: ComposerTriggerKind;
@@ -26,52 +14,21 @@ export interface ComposerTrigger {
   rangeEnd: number;
 }
 
-export function formatAssistantCitationForComposer(citation: AssistantCitation, comment = "") {
-  return `${serializeAssistantCitation(withAssistantCitationComment(citation, comment))} `;
-}
-
-function composerRequiresModifier(
-  sendShortcut: ClientSettings["sendShortcut"] | undefined,
-  prompt: string,
-) {
-  return (
-    sendShortcut === "mod-enter" ||
-    (sendShortcut === "mod-enter-multiline" && /[\r\n]/.test(prompt))
-  );
-}
-
-export function composerSubmissionIntentForKey(input: {
-  event: ShortcutEventLike & { isComposing?: boolean; keyCode?: number; repeat?: boolean };
-  keybindings: ResolvedKeybindingsConfig;
-  platform?: string;
-  isMobileViewport: boolean;
-  isDraftThread: boolean;
-  isRunning?: boolean;
-  sendShortcut?: ClientSettings["sendShortcut"];
-  prompt?: string;
-}): ComposerSubmissionIntent | null {
-  const { event } = input;
-  if (input.isMobileViewport || event.isComposing || event.keyCode === 229 || event.repeat)
-    return null;
-  const command = resolveShortcutCommand(event, input.keybindings, {
-    ...(input.platform === undefined ? {} : { platform: input.platform }),
-    context: {
-      composerFocus: true,
-      draftThreadRoute: input.isDraftThread,
-      turnRunning: input.isRunning === true,
-    },
-  });
-  if (command === "composer.sendAlternate" && input.isRunning) return "alternate";
-  if (command === "composer.sendBackground" && input.isDraftThread) return "background";
-  if (command === "composer.sendAndNewThread" && !input.isDraftThread) return "background";
-  if (command !== null || event.key !== "Enter" || event.shiftKey || event.altKey) return null;
-  if (
-    composerRequiresModifier(input.sendShortcut, input.prompt ?? "") &&
-    !event.metaKey &&
-    !event.ctrlKey
-  )
-    return null;
-  return "foreground";
+/**
+ * Whether a key press sends the prompt: a plain Enter (Studio's composer sends on
+ * Enter and breaks lines on Shift+Enter; upstream's send-shortcut setting and its
+ * keybinding-driven "background" and "alternate" sends are not carried over).
+ */
+export function isComposerSendKey(event: {
+  key: string;
+  shiftKey: boolean;
+  altKey: boolean;
+  isComposing?: boolean;
+  keyCode?: number;
+  repeat?: boolean;
+}): boolean {
+  if (event.isComposing || event.keyCode === 229 || event.repeat) return false;
+  return event.key === "Enter" && !event.shiftKey && !event.altKey;
 }
 
 const isInlineTokenSegment = (segment: ComposerPromptSegment): boolean => segment.type !== "text";

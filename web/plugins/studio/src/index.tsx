@@ -67,7 +67,13 @@ export { KeybindingsCard } from './settings/Keybindings.js';
 export { FactoryGroup } from './sidebar/Factory.js';
 export { agentdPaletteSource } from './sidebar/paletteSource.js';
 export { StudioSidebar } from './sidebar/Sidebar.js';
+export {
+  type ComposerProject,
+  ThreadComposer,
+  type ThreadComposerProps,
+} from './thread/Composer.js';
 export { BranchPr, DraftCard } from './thread/FactoryLinks.js';
+export { buildCreateRunGroupRequest, RunInParallelDialog } from './thread/RunInParallel.js';
 export {
   agentdTerminalBackend,
   fileViewerHref,
