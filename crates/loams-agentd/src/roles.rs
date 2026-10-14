@@ -489,7 +489,10 @@ mod tests {
             (methods::WATCH_APPROVALS, json!({"chatId": "main"})),
         ] {
             assert!(!allowed(&run, method, params.clone()).await, "{method}");
-            assert!(allowed(&Identity::owner(), method, params).await, "{method}");
+            assert!(
+                allowed(&Identity::owner(), method, params).await,
+                "{method}"
+            );
             let spec = loams_agentd_proto::rpc::method_spec(method).expect("in the table");
             assert_eq!(spec.role, Role::Owner, "{method} must never be open to mcp");
             assert!(spec.renderer, "{method} is a Studio method");

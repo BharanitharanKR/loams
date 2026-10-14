@@ -5,20 +5,15 @@ import type { AgentdService } from '@loams/console-host';
 import { createMockControl } from '@loams/console-host/testing';
 import { approvals } from '@loams/proto';
 import {
-  ApprovalDecision as AgentDecision,
-  ApprovalRisk,
   ApprovalSchema as AgentApprovalSchema,
   ApprovalService as AgentApprovalService,
+  ApprovalDecision as AgentDecision,
+  ApprovalRisk,
   type ResolveApprovalRequest,
 } from '@loams/proto/agentd';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  AgentInbox,
-  followAgentApprovals,
-  InboxPage,
-  pendingCount,
-} from '../src/index.js';
+import { AgentInbox, followAgentApprovals, InboxPage, pendingCount } from '../src/index.js';
 import { Inbox, reasonOf } from '../src/store.js';
 
 afterEach(cleanup);
@@ -219,8 +214,10 @@ describe('agent approvals', () => {
         agent={{
           inbox: agentInbox,
           resolve: async (approval, decision) => {
-            await createClient(AgentApprovalService, daemon.agentd.transport() as never)
-              .resolveApproval({ callId: approval.id, chatId: approval.chatId, decision });
+            await createClient(
+              AgentApprovalService,
+              daemon.agentd.transport() as never,
+            ).resolveApproval({ callId: approval.id, chatId: approval.chatId, decision });
           },
         }}
       />,

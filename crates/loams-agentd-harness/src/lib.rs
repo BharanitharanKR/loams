@@ -214,8 +214,8 @@ pub trait Harness: Send + Sync {
 }
 
 pub mod acp;
-pub mod approvals;
 pub(crate) mod adapter_install;
+pub mod approvals;
 pub mod archive_install;
 mod catalog;
 mod catalog_failure;

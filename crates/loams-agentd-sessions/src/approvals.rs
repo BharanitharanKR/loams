@@ -171,7 +171,12 @@ impl Approvals {
                 continue;
             };
             let token = me.inner.tokens.fetch_add(1, Ordering::Relaxed);
-            timers.push((row.chat_id.clone(), row.call_id.clone(), token, row.created_at));
+            timers.push((
+                row.chat_id.clone(),
+                row.call_id.clone(),
+                token,
+                row.created_at,
+            ));
             state.pending.push(Entry {
                 approval: Approval {
                     id: row.call_id,
@@ -257,7 +262,11 @@ impl Approvals {
     /// The approval bridge of one supervised run of `chat_id`. Asks go to
     /// the person; the run's `ApprovalRequested` and `ApprovalResolved` go
     /// to `events` (the run's own event pipeline).
-    pub fn bridge(&self, chat_id: &str, events: mpsc::UnboundedSender<AgentEvent>) -> RequestApproval {
+    pub fn bridge(
+        &self,
+        chat_id: &str,
+        events: mpsc::UnboundedSender<AgentEvent>,
+    ) -> RequestApproval {
         let me = self.clone();
         let chat_id = chat_id.to_owned();
         Box::new(move |ask: ApprovalAsk| me.ask(&chat_id, &events, ask))
@@ -272,7 +281,10 @@ impl Approvals {
         let (answer, receiver) = oneshot::channel();
         let args = loams_agentd_harness::redact::redact_json(&ask.args);
         let mut state = lock(&self.inner.state);
-        if state.always.contains(&(chat_id.to_owned(), ask.tool.clone())) {
+        if state
+            .always
+            .contains(&(chat_id.to_owned(), ask.tool.clone()))
+        {
             let _ = answer.send(ApprovalDecision::Always);
             return receiver;
         }
@@ -372,10 +384,9 @@ impl Approvals {
                 return;
             };
             let me = Approvals { inner };
-            let current = lock(&me.inner.state)
-                .pending
-                .iter()
-                .any(|e| e.token == token && e.approval.chat_id == chat_id && e.approval.id == call_id);
+            let current = lock(&me.inner.state).pending.iter().any(|e| {
+                e.token == token && e.approval.chat_id == chat_id && e.approval.id == call_id
+            });
             if current {
                 tracing::info!(chat = %chat_id, call = %call_id, "an approval timed out: denied");
                 let _ = me.settle(Some(&chat_id), &call_id, ApprovalDecision::Deny);
@@ -447,10 +458,9 @@ impl Approvals {
     /// Whether `call_id` of `chat_id` waits on a live run (the engine drops
     /// an `ApprovalRequested` that no ask of its own announced).
     pub fn is_waiting(&self, chat_id: &str, call_id: &str) -> bool {
-        lock(&self.inner.state)
-            .pending
-            .iter()
-            .any(|e| e.waiter.is_some() && e.approval.chat_id == chat_id && e.approval.id == call_id)
+        lock(&self.inner.state).pending.iter().any(|e| {
+            e.waiter.is_some() && e.approval.chat_id == chat_id && e.approval.id == call_id
+        })
     }
 
     /// Deny what `chat_id`'s live run waits for (an interrupt, a turn that

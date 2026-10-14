@@ -131,12 +131,10 @@ impl Harness for Asker {
             });
             let _ = tx.send(Ok(done(DoneStatus::Completed)));
         });
-        Ok(
-            futures::stream::unfold(rx, |mut rx| async move {
-                rx.recv().await.map(|event| (event, rx))
-            })
-            .boxed(),
-        )
+        Ok(futures::stream::unfold(rx, |mut rx| async move {
+            rx.recv().await.map(|event| (event, rx))
+        })
+        .boxed())
     }
 }
 
@@ -272,7 +270,12 @@ impl Daemon {
         .expect("the approvals reached the expected state in time")
     }
 
-    async fn resolve(&self, chat: Option<&str>, call_id: &str, decision: &str) -> Result<Value, String> {
+    async fn resolve(
+        &self,
+        chat: Option<&str>,
+        call_id: &str,
+        decision: &str,
+    ) -> Result<Value, String> {
         let mut params = json!({ "callId": call_id, "decision": decision });
         if let Some(chat) = chat {
             params["chatId"] = json!(chat);
@@ -298,20 +301,36 @@ async fn full_access_unchanged() {
     let daemon = Daemon::start(tmp.path(), ApprovalSettings::default());
     // A thread with no mode: today's behaviour, whatever `autoApprove` says.
     daemon.create_chat("chat-a").await;
-    daemon.send("chat-a", "ask c1 Bash rm -rf build", "m1", false).await;
+    daemon
+        .send("chat-a", "ask c1 Bash rm -rf build", "m1", false)
+        .await;
     // An explicit full-access thread: its runs carry `autoApprove`.
     daemon.create_chat("chat-b").await;
     daemon.set_mode("chat-b", "full-access").await;
-    daemon.send("chat-b", "ask c2 Bash rm -rf build", "m2", false).await;
+    daemon
+        .send("chat-b", "ask c2 Bash rm -rf build", "m2", false)
+        .await;
     let seen = daemon.seen(2).await;
     for run in &seen {
         assert!(!run.supervised, "{run:?}");
         assert_eq!(run.decision, None, "{run:?}");
     }
-    let b = seen.iter().find(|r| r.chat_cwd.ends_with("chat-b")).unwrap();
-    assert!(b.auto_approve, "an explicit full-access thread runs auto-approved");
-    let a = seen.iter().find(|r| r.chat_cwd.ends_with("chat-a")).unwrap();
-    assert!(!a.auto_approve, "a thread with no mode keeps its request's autoApprove");
+    let b = seen
+        .iter()
+        .find(|r| r.chat_cwd.ends_with("chat-b"))
+        .unwrap();
+    assert!(
+        b.auto_approve,
+        "an explicit full-access thread runs auto-approved"
+    );
+    let a = seen
+        .iter()
+        .find(|r| r.chat_cwd.ends_with("chat-a"))
+        .unwrap();
+    assert!(
+        !a.auto_approve,
+        "a thread with no mode keeps its request's autoApprove"
+    );
     // Nothing is pending, and the thread watch says full access.
     let list = daemon
         .approvals_until(json!({ "chatId": "chat-a" }), |_| true)
@@ -332,7 +351,9 @@ async fn supervised_run_waits_for_resolve() {
         .await
         .unwrap();
     // `autoApprove` cannot open a supervised thread.
-    daemon.send("chat-s", "ask call-1 Bash rm -rf build", "m1", true).await;
+    daemon
+        .send("chat-s", "ask call-1 Bash rm -rf build", "m1", true)
+        .await;
     let list = daemon
         .approvals_until(json!({ "chatId": "chat-s" }), |l| !pending(l).is_empty())
         .await;
@@ -347,7 +368,10 @@ async fn supervised_run_waits_for_resolve() {
     assert_eq!(approval["args"]["token"], "[redacted]", "args are redacted");
     assert!(approval["createdAtMs"].as_i64().unwrap() > 0);
     // The thread waits, and the person is told.
-    assert_eq!(daemon.status("chat-s").await, Some(SessionStatus::AwaitingInput));
+    assert_eq!(
+        daemon.status("chat-s").await,
+        Some(SessionStatus::AwaitingInput)
+    );
     let n = tokio::time::timeout(WAIT, async {
         loop {
             let n = notifications.recv().await.unwrap();
@@ -362,15 +386,26 @@ async fn supervised_run_waits_for_resolve() {
     assert!(daemon.seen.lock().unwrap().is_empty(), "nothing ran yet");
 
     // The unfiltered watch lists it too; an unknown id is not pending.
-    let all = daemon.approvals_until(json!({}), |l| !pending(l).is_empty()).await;
+    let all = daemon
+        .approvals_until(json!({}), |l| !pending(l).is_empty())
+        .await;
     assert!(all.get("mode").is_none(), "{all}");
-    let error = daemon.resolve(Some("chat-s"), "nope", "once").await.unwrap_err();
+    let error = daemon
+        .resolve(Some("chat-s"), "nope", "once")
+        .await
+        .unwrap_err();
     assert!(error.contains("approval_not_pending"), "{error}");
 
-    daemon.resolve(Some("chat-s"), "call-1", "once").await.unwrap();
+    daemon
+        .resolve(Some("chat-s"), "call-1", "once")
+        .await
+        .unwrap();
     let seen = daemon.seen(1).await;
     assert!(seen[0].supervised);
-    assert!(!seen[0].auto_approve, "a supervised run is never auto-approved");
+    assert!(
+        !seen[0].auto_approve,
+        "a supervised run is never auto-approved"
+    );
     assert_eq!(seen[0].decision, Some(ApprovalDecision::Once));
     daemon
         .approvals_until(json!({ "chatId": "chat-s" }), |l| pending(l).is_empty())
@@ -388,7 +423,9 @@ async fn always_remembered_per_thread_and_tool() {
         daemon.create_chat(chat).await;
         daemon.set_mode(chat, "supervised").await;
     }
-    daemon.send("chat-1", "ask c1 Bash cargo test", "m1", false).await;
+    daemon
+        .send("chat-1", "ask c1 Bash cargo test", "m1", false)
+        .await;
     daemon
         .approvals_until(json!({}), |l| !pending(l).is_empty())
         .await;
@@ -404,12 +441,16 @@ async fn always_remembered_per_thread_and_tool() {
     daemon.seen(1).await;
 
     // The same tool in the same thread: allowed without asking.
-    daemon.send("chat-1", "ask c2 Bash cargo build", "m2", false).await;
+    daemon
+        .send("chat-1", "ask c2 Bash cargo build", "m2", false)
+        .await;
     let seen = daemon.seen(2).await;
     assert_eq!(seen[1].decision, Some(ApprovalDecision::Always), "{seen:?}");
 
     // Another tool in the same thread asks.
-    daemon.send("chat-1", "ask c3 Edit src/main.rs", "m3", false).await;
+    daemon
+        .send("chat-1", "ask c3 Edit src/main.rs", "m3", false)
+        .await;
     let list = daemon
         .approvals_until(json!({ "chatId": "chat-1" }), |l| !pending(l).is_empty())
         .await;
@@ -419,7 +460,9 @@ async fn always_remembered_per_thread_and_tool() {
     assert_eq!(seen[2].decision, Some(ApprovalDecision::Deny));
 
     // The same tool in another thread asks.
-    daemon.send("chat-2", "ask c4 Bash cargo test", "m4", false).await;
+    daemon
+        .send("chat-2", "ask c4 Bash cargo test", "m4", false)
+        .await;
     let list = daemon
         .approvals_until(json!({ "chatId": "chat-2" }), |l| !pending(l).is_empty())
         .await;
@@ -440,13 +483,18 @@ async fn undecided_approval_times_out_to_deny() {
     );
     daemon.create_chat("chat-t").await;
     daemon.set_mode("chat-t", "supervised").await;
-    daemon.send("chat-t", "ask c1 Bash cargo test", "m1", false).await;
+    daemon
+        .send("chat-t", "ask c1 Bash cargo test", "m1", false)
+        .await;
     let seen = daemon.seen(1).await;
     assert_eq!(seen[0].decision, Some(ApprovalDecision::Deny));
     daemon
         .approvals_until(json!({}), |l| pending(l).is_empty())
         .await;
-    let error = daemon.resolve(Some("chat-t"), "c1", "once").await.unwrap_err();
+    let error = daemon
+        .resolve(Some("chat-t"), "c1", "once")
+        .await
+        .unwrap_err();
     assert!(error.contains("approval_not_pending"), "{error}");
 }
 
@@ -457,7 +505,9 @@ async fn pending_approval_listed_after_restart() {
         let daemon = Daemon::start(tmp.path(), ApprovalSettings::default());
         daemon.create_chat("chat-r").await;
         daemon.set_mode("chat-r", "supervised").await;
-        daemon.send("chat-r", "ask c1 Bash rm -rf build", "m1", false).await;
+        daemon
+            .send("chat-r", "ask c1 Bash rm -rf build", "m1", false)
+            .await;
         daemon
             .approvals_until(json!({}), |l| !pending(l).is_empty())
             .await;
@@ -486,7 +536,9 @@ async fn supervised_thread_refused_on_a_harness_that_cannot_ask() {
     let daemon = Daemon::start_with(tmp.path(), ApprovalSettings::default(), true);
     daemon.create_chat("chat-p").await;
     daemon.set_mode("chat-p", "supervised").await;
-    daemon.send("chat-p", "ask c1 Bash cargo test", "m1", false).await;
+    daemon
+        .send("chat-p", "ask c1 Bash cargo test", "m1", false)
+        .await;
     let handle = daemon.core.doc_host.open("chat-p").unwrap();
     let deadline = tokio::time::Instant::now() + WAIT;
     let resolution = loop {
@@ -504,7 +556,10 @@ async fn supervised_thread_refused_on_a_harness_that_cannot_ask() {
         tokio::time::sleep(Duration::from_millis(20)).await;
     };
     assert!(resolution.contains("full access"), "{resolution}");
-    assert!(daemon.seen.lock().unwrap().is_empty(), "nothing ran unsupervised");
+    assert!(
+        daemon.seen.lock().unwrap().is_empty(),
+        "nothing ran unsupervised"
+    );
 }
 
 #[tokio::test]

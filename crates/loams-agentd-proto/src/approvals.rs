@@ -157,9 +157,18 @@ mod tests {
             serde_json::to_value(ApprovalMode::FullAccess).unwrap(),
             "full-access"
         );
-        assert_eq!(ApprovalMode::parse("supervised"), Some(ApprovalMode::Supervised));
-        assert_eq!(serde_json::to_value(ToolRisk::Destructive).unwrap(), "destructive");
-        assert_eq!(serde_json::to_value(ApprovalDecision::Always).unwrap(), "always");
+        assert_eq!(
+            ApprovalMode::parse("supervised"),
+            Some(ApprovalMode::Supervised)
+        );
+        assert_eq!(
+            serde_json::to_value(ToolRisk::Destructive).unwrap(),
+            "destructive"
+        );
+        assert_eq!(
+            serde_json::to_value(ApprovalDecision::Always).unwrap(),
+            "always"
+        );
         // DD1's `sessionId` names the thread too.
         let params: ResolveApprovalParams = serde_json::from_value(
             serde_json::json!({"callId": "c1", "sessionId": "chat-1", "decision": "once"}),

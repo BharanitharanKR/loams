@@ -8,8 +8,8 @@ import { Code, ConnectError, createRouterTransport } from '@connectrpc/connect';
 import { desktopAgentdEndpoint } from '@loams/platform-electron';
 import { createMockAgentdApi } from '@loams/plugin-desktop-agentd';
 import {
-  type ApprovalSchema,
   ApprovalMode,
+  type ApprovalSchema,
   ApprovalService,
   type ChatSchema,
   GitService,

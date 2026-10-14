@@ -104,9 +104,7 @@ pub fn tool_risk(tool: &str, args: &Value) -> ToolRisk {
     let name = tool.to_ascii_lowercase();
     match name.as_str() {
         "read" | "glob" | "grep" | "ls" | "list" | "search" | "fetch" | "think" | "webfetch"
-        | "websearch" | "notebookread" | "todowrite" | "todoread" | "codesearch" => {
-            ToolRisk::Read
-        }
+        | "websearch" | "notebookread" | "todowrite" | "todoread" | "codesearch" => ToolRisk::Read,
         "delete" => ToolRisk::Destructive,
         "bash" | "execute" | "exec" | "shell" | "commandexecution" | "local_shell" => {
             command_of(args).map_or(ToolRisk::Write, |command| command_risk(&command))
@@ -127,11 +125,20 @@ mod tests {
     fn risks() {
         assert_eq!(command_risk("cargo test"), ToolRisk::Write);
         assert_eq!(command_risk("rm  -rf build"), ToolRisk::Destructive);
-        assert_eq!(command_risk("git push --force origin main"), ToolRisk::Destructive);
+        assert_eq!(
+            command_risk("git push --force origin main"),
+            ToolRisk::Destructive
+        );
         assert_eq!(command_risk("git branch -d merged"), ToolRisk::Destructive);
         assert_eq!(command_risk("git status"), ToolRisk::Write);
-        assert_eq!(tool_risk("Read", &json!({"file_path": "a"})), ToolRisk::Read);
-        assert_eq!(tool_risk("Edit", &json!({"file_path": "a"})), ToolRisk::Write);
+        assert_eq!(
+            tool_risk("Read", &json!({"file_path": "a"})),
+            ToolRisk::Read
+        );
+        assert_eq!(
+            tool_risk("Edit", &json!({"file_path": "a"})),
+            ToolRisk::Write
+        );
         assert_eq!(
             tool_risk("Bash", &json!({"command": "git reset --hard"})),
             ToolRisk::Destructive

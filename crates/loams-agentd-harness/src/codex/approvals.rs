@@ -31,8 +31,9 @@ pub(crate) fn ask(method: &str, id: &Value, params: &Value) -> ApprovalAsk {
             other => other.to_string(),
         });
     let risk = if tool == "commandExecution" {
-        crate::approvals::command_of(params)
-            .map_or(ToolRisk::Write, |command| crate::approvals::command_risk(&command))
+        crate::approvals::command_of(params).map_or(ToolRisk::Write, |command| {
+            crate::approvals::command_risk(&command)
+        })
     } else {
         ToolRisk::Write
     };

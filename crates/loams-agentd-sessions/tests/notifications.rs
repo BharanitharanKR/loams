@@ -438,7 +438,7 @@ async fn notifications_for_each_kind() {
     // A watcher that connects later gets the buffer, oldest first.
     let mut late = daemon.watch().await;
     let mut kinds = Vec::new();
-    for _ in 0..7 {
+    for _ in 0..9 {
         kinds.push(next(&mut late).await["kind"].as_str().unwrap().to_owned());
     }
     assert_eq!(
@@ -447,6 +447,8 @@ async fn notifications_for_each_kind() {
             "turn_done",
             "error",
             "question",
+            "turn_done",
+            "approval",
             "turn_done",
             "approval",
             "group_ready",

@@ -48,6 +48,7 @@ pub mod workspace_host;
 pub mod worktree_list;
 
 pub use agent_accounts::{AgentAccounts, AgentAccountsConfig};
+pub use approvals::{ApprovalSettings, Approvals};
 pub use change_requests::{ChangeRequestCacheKey, CheckoutChangeRequests};
 pub use checkpoints::Checkpoints;
 pub use diff_sync::{
@@ -58,7 +59,6 @@ pub use diff_sync::{
 pub use doc_host::{ChatDocHandle, DocHost, DocHostConfig};
 pub use groups::{RunGroupLimits, RunGroups};
 pub use instance_lock::{InstanceLock, LockError};
-pub use approvals::{ApprovalSettings, Approvals};
 pub use notify::Notifications;
 pub use profile::EngineProfile;
 pub use project_actions::ProjectActionsStore;

@@ -44,10 +44,10 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use loams_agentd_proto::daemon::DaemonMode;
 use loams_agentd_proto::approvals::ApprovalMode;
-use loams_agentd_sessions::approvals::ApprovalSettings;
+use loams_agentd_proto::daemon::DaemonMode;
 use loams_agentd_sessions::RunGroupLimits;
+use loams_agentd_sessions::approvals::ApprovalSettings;
 use loams_agentd_sessions::tool_outputs::{
     TOOL_OUTPUT_ARCHIVED_RETENTION, TOOL_OUTPUT_BUDGET, TOOL_OUTPUT_FILE_CAP, ToolOutputLimits,
 };
@@ -369,23 +369,38 @@ mod tests {
     #[test]
     fn approvals_default_to_full_access_and_supervised_when_remote() {
         let config = Config::default();
-        assert_eq!(config.approvals.settings(false).default_mode, ApprovalMode::FullAccess);
-        assert_eq!(config.approvals.settings(true).default_mode, ApprovalMode::Supervised);
+        assert_eq!(
+            config.approvals.settings(false).default_mode,
+            ApprovalMode::FullAccess
+        );
+        assert_eq!(
+            config.approvals.settings(true).default_mode,
+            ApprovalMode::Supervised
+        );
         assert_eq!(
             config.approvals.settings(false).timeout,
             Duration::from_secs(30 * 60)
         );
-        let config = Config::parse(
-            "[approvals]\ndefault_mode = \"supervised\"\ntimeout_secs = 60\n",
-        )
-        .expect("parse");
-        assert_eq!(config.approvals.settings(false).default_mode, ApprovalMode::Supervised);
-        assert_eq!(config.approvals.settings(false).timeout, Duration::from_secs(60));
+        let config =
+            Config::parse("[approvals]\ndefault_mode = \"supervised\"\ntimeout_secs = 60\n")
+                .expect("parse");
+        assert_eq!(
+            config.approvals.settings(false).default_mode,
+            ApprovalMode::Supervised
+        );
+        assert_eq!(
+            config.approvals.settings(false).timeout,
+            Duration::from_secs(60)
+        );
         assert_eq!(
             invalid("[approvals]\ntimeout_secs = 0\n").0,
             "`approvals.timeout_secs`"
         );
-        assert!(invalid("[approvals]\ndefault_mode = \"yolo\"\n").0.contains("approvals.default_mode"));
+        assert!(
+            invalid("[approvals]\ndefault_mode = \"yolo\"\n")
+                .0
+                .contains("approvals.default_mode")
+        );
     }
 
     #[test]

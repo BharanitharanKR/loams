@@ -70,7 +70,6 @@ impl MockEdits {
     }
 }
 
-
 /// One planned edit, fixed when the stream reaches it: the id, the line and
 /// the file's contents before the edit.
 struct EditStep {

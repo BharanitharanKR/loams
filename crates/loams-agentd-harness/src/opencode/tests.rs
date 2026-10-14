@@ -1804,7 +1804,10 @@ async fn opencode_supervised_forwards_permission() {
             .expect("bridge open");
         assert_eq!(ask.call_id, format!("call-{id}"));
         assert_eq!(ask.tool, "bash");
-        assert_eq!(ask.args["metadata"]["command"], "git push --force origin main");
+        assert_eq!(
+            ask.args["metadata"]["command"],
+            "git push --force origin main"
+        );
         assert_eq!(ask.risk, ToolRisk::Destructive);
         tokio::time::sleep(Duration::from_millis(200)).await;
         assert!(

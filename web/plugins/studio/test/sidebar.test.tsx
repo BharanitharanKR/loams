@@ -305,9 +305,7 @@ describe('the sidebar', () => {
     fireEvent.keyDown(document.body, { key: 'n', code: 'KeyN', ctrlKey: true });
     await waitFor(() => expect(daemon.calls).toContain('CreateThread:~/src/loams'));
     // Settings › Studio's approval mode, supervised by default (Q803; SD1 Task 13).
-    await waitFor(() =>
-      expect(daemon.calls).toContain('SetThreadApprovalMode:true:SUPERVISED'),
-    );
+    await waitFor(() => expect(daemon.calls).toContain('SetThreadApprovalMode:true:SUPERVISED'));
     await waitFor(() =>
       expect(navigate).toHaveBeenLastCalledWith(
         expect.stringMatching(/^\/studio\/t\/[0-9a-f-]{36}$/),

@@ -8,8 +8,8 @@ import { Code, ConnectError, createClient, type Transport } from '@connectrpc/co
 import type { AgentdService } from '@loams/console-host';
 import {
   type Approval as AgentApproval,
-  ApprovalDecision as AgentDecision,
   ApprovalService as AgentApprovalService,
+  ApprovalDecision as AgentDecision,
   type WatchApprovalsResponse,
 } from '@loams/proto/agentd';
 
