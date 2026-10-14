@@ -1,0 +1,1 @@
+{"graphs":{"social":{"id":"gr_01M4Y143G5T5EV2ZJDG3T46DDH","namespace":"up1","name":"social","mode":"owned","languages":["GQL"],"limits":{"timeout_ms":0,"max_rows":0,"max_result_bytes":0,"memory_bytes":0,"max_path_hops":0},"replicas":0,"state":"ready","created_at_ms":1792009178593,"version":1,"idempotency_key":null,"delete_key":null,"recent_writes":[],"stream":3}}}
