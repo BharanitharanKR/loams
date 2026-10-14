@@ -24,7 +24,7 @@
       "upstreamPath": "apps/web/src/components/files/DelimitedTablePreview.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "fe21240f0ee3a32e3dc4db34f498fc2be1731d431c5b2149449e9a78c1a49277",
-      "localSha256": "43d449ebf775db855e5fefef787b64fc09e2600de226f0adb54db2680ffd4769",
+      "localSha256": "8958ef09f6cab06f72b930aa24e568b7cf3ba5e7a1c2f594f9b6078f29e0caea",
       "verdict": "adapt",
       "group": "e"
     },
@@ -33,7 +33,7 @@
       "upstreamPath": "apps/web/src/components/files/FileBreadcrumbs.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "9ab4470c5b83cea8fbb302be05e79e9b6bade96bd8001339b65fbce6bcd6f5d9",
-      "localSha256": "b652b6c9dfda794e8846a8c94f9dc4cf258e15331ef4eacacb2971d165a16129",
+      "localSha256": "027aa87c275a914f84f4e8e834e91996bd8ace1f8707bf33c65e5ce516d3ec79",
       "verdict": "adapt",
       "group": "e"
     },
@@ -42,16 +42,17 @@
       "upstreamPath": "apps/web/src/components/files/FileBrowserPanel.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "3e86202c68926d9d6d8a96a76cf3655c97bef4288752fa1dda945e29b5a631a3",
-      "localSha256": "ad4567a3033a41e76c06db5ece81c19994a6bc26d5a7be35707eea6101c59b7b",
+      "localSha256": "27282070d936d4c20de176ff68e5d33991c8b1d46d892b1610851309b059e226",
       "verdict": "adapt",
-      "group": "e"
+      "group": "e",
+      "note": "on the VirtualTree fallback, not @pierre/trees (SD1 ruling T21-1)"
     },
     {
       "path": "src/files/filePath.ts",
       "upstreamPath": "apps/web/src/components/files/filePath.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "f32a5ec4a3009c37a5f073bf323dc161d19a2b0c67f8f81c316e9de5d7a10aee",
-      "localSha256": "973957cceebbd029126ebbbdd8a471b10510cdd09dc5a8acd900c6dc31dc178a",
+      "localSha256": "cf0c93c88b51a484d0a9495089397f2f9c992b52ac01233513caec113f57131b",
       "verdict": "adapt",
       "group": "e"
     },
@@ -60,7 +61,7 @@
       "upstreamPath": "apps/web/src/components/files/ProjectFilePicker.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "9f3dffbb050911c244007638278068ee952194a6d5c5a11cff81c9dd99d8d360",
-      "localSha256": "eb537408100b984cb1c0bf871c777672b610a7bf285cf508d2afd86acea456df",
+      "localSha256": "93d18603ff3ff64c47acaa88f72516f8f673a152ac568579086de21e65cc82bf",
       "verdict": "adapt",
       "group": "e"
     },
@@ -69,7 +70,7 @@
       "upstreamPath": "apps/web/src/components/files/ProjectFilePicker.logic.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "254caadab6b7e07277973c1619870c8cdecabc38fd435feb5dc5a36ad6fb0885",
-      "localSha256": "3ad3e1a817d947745b7a264a5f0f7ccbb082804844191e695c64b7953fac7901",
+      "localSha256": "00ca9353e1c1206a92495aa0e03a1f26c4b6f9b2056144ccd86e3d9c607fc16e",
       "verdict": "adapt",
       "group": "e"
     },
@@ -78,7 +79,7 @@
       "upstreamPath": "packages/shared/src/filePreview.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "87fec67083929411e602fb7ed6818f14a09a36a6ef82978670e4bfff84481863",
-      "localSha256": "f8d8f81da41f273ec26a6dd060580b4fa53af0875a62b3835bf03707c9c9fcfa",
+      "localSha256": "fc2d44b3da70ff615a5ee907bc1befb1d79e5c6823b2de045232ea005e85b7b7",
       "verdict": "adapt",
       "group": "e"
     },
@@ -87,7 +88,7 @@
       "upstreamPath": "apps/web/src/components/files/filePreviewMode.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "2f0ff6bd5758cb707696fe98d78f1a56b9b174186abc7b6a317bbb95e51eb2fe",
-      "localSha256": "de2275ef3bed9f47e6992f6bebc84c4e0585433c6a08bbfca0fba2be20ea8b7e",
+      "localSha256": "eed787aa1996329a9a7acba1fd2f72fddebad3a3a0c5b8b70be8a7a183722fad",
       "verdict": "adapt",
       "group": "e"
     },
@@ -96,7 +97,7 @@
       "upstreamPath": "apps/web/src/components/files/fileSurfaceChrome.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "a5c43da7c1f1005faf7e439530d7b320c8bbd867bedb18a881f1e3d5db6b13cd",
-      "localSha256": "b2c4a86976ce4a89468d8790500ee9b0187e6e88d478f288219e23c7cde0bc83",
+      "localSha256": "c944affb5501e42fc1ef29d7fd15d42b0faf0590dd9c406a511f28570aa0c567",
       "verdict": "adapt",
       "group": "e"
     },
@@ -105,25 +106,27 @@
       "upstreamPath": "apps/web/src/components/files/FilePreviewPanel.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "d3cb8a22ef0364468bc30c1b88aadb33419c38e86e085fb005c0a5316474c90f",
-      "localSha256": "ac723707c91d2b37a1d2de14a2e055e4350d93b6af1e0f62dc5a5d59ed0d028a",
+      "localSha256": "cb86d289f0ac0da87ca445c8acca81b3260e58563f591184c720f5bdf9941230",
       "verdict": "adapt",
-      "group": "e"
+      "group": "e",
+      "note": "read-only (§53 §2.2); markdown through the caller's renderer until SD1 Task 18 (ruling T21-3)"
     },
     {
       "path": "src/files/search/ContentSearchDialog.tsx",
       "upstreamPath": "apps/web/src/components/search/ProjectContentSearchDialog.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "d939a1e801dee3ea62bcc0cab582c569402aa0d97066ec7b1ef036a0578cad8d",
-      "localSha256": "636cf1b6b0ae6c191e3684254aefd32c3a34cd94104ab68403b2b5b9cd774601",
+      "localSha256": "7ff3785f3ae55348ab7e00d53351627e5d9ec1351a9e4a95585f41c6d38417ee",
       "verdict": "adapt",
-      "group": "e"
+      "group": "e",
+      "note": "over ContentSearchSource; SearchWorkspaceContent is SD1 Task 11 (ruling T21-4)"
     },
     {
       "path": "src/files/search/HighlightedSearchLine.tsx",
       "upstreamPath": "apps/web/src/components/search/HighlightedSearchLine.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "fb5cf2803f77c18c7d6311fed30d3e5a95dca134d8b96e193a4da20e1075889f",
-      "localSha256": "f64052859f464f152e211579bba54952c2f5002491dd6a71a2839b92d7b28e5a",
+      "localSha256": "0b7db93cee26e817d8dd90f7073c6745f38606a6f1f85ed49cbf03f18ab83d44",
       "verdict": "adapt",
       "group": "e"
     },
@@ -132,16 +135,17 @@
       "upstreamPath": "apps/web/src/components/files/ReadOnlySourcePreview.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "58416386fd122f1cc63849750acbaecaa5ad0f0a98fc7f7c7cf2f7401d0fc43f",
-      "localSha256": "7e9f18fa3e85a1925e9a178aebcce7e0798a971738714a152a76046534f22be0",
+      "localSha256": "a8fbb443285063d5d44f7441dbb43139d56a4f85f43414346ad7303049a649e7",
       "verdict": "adapt",
-      "group": "e"
+      "group": "e",
+      "note": "@pierre/diffs 1.5.1, shadow-root path only (SD1 rulings T0-4, T0-5, T21-2)"
     },
     {
       "path": "src/files/useDirectory.ts",
       "upstreamPath": "apps/web/src/components/files/useDirectoryEntries.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "10668f942296bd2259d7571a4d139a94313ea8adc98396b9a73b9adb286815fc",
-      "localSha256": "4d3f834a4c06a96532767ad3467647e07e18fe3d8e98c01f287da2c42fe0ef33",
+      "localSha256": "7d761e55cbe61d79ab0da7e60401de5f6da38da2641544f8e5744454a90b7930",
       "verdict": "rewrite",
       "group": "e"
     },

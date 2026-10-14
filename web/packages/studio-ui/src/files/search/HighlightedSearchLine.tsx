@@ -1,26 +1,14 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/search/HighlightedSearchLine.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// ported to the Loams UI stack. Loams' changes are Apache-2.0.
-import { getFiletypeFromFileName } from "@pierre/diffs";
-import type { ProjectContentMatch } from "@t3tools/contracts";
-import { memo, Suspense, use, useMemo, type CSSProperties } from "react";
+// match ranges found in the line from the query (agentd's match carries only its column); the line is plain text, not syntax highlighted. Loams' changes are Apache-2.0.
+import { memo, useMemo } from "react";
 
-import { resolveDiffThemeName } from "~/lib/diffRendering";
-import { getSyntaxHighlighterPromise } from "~/lib/syntaxHighlighting";
-
-import { RenderErrorBoundary } from "../RenderErrorBoundary";
+import type { ContentSearchQuery } from "../source";
 
 interface Range {
   readonly start: number;
   readonly end: number;
-}
-
-interface CodeToken {
-  readonly content: string;
-  readonly offset: number;
-  readonly color?: string;
-  readonly fontStyle?: number;
 }
 
 interface Segment {
@@ -28,160 +16,82 @@ interface Segment {
   readonly isMatch: boolean;
   readonly start: number;
   readonly end: number;
-  readonly token: CodeToken;
 }
 
-function normalizeRanges(match: ProjectContentMatch): Range[] {
-  const ranges = match.matchRanges
-    .map((range) => ({
-      start: Math.max(0, Math.min(match.lineContent.length, range.start)),
-      end: Math.max(0, Math.min(match.lineContent.length, range.end)),
-    }))
-    .filter((range) => range.end > range.start)
-    .toSorted((left, right) => left.start - right.start);
+const MAX_RANGES = 50;
 
-  const merged: Array<{ start: number; end: number }> = [];
-  for (const range of ranges) {
-    const previous = merged.at(-1);
-    if (previous && range.start <= previous.end) {
-      previous.end = Math.max(previous.end, range.end);
-    } else {
-      merged.push({ ...range });
-    }
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Where the query matches in the line; none when the pattern does not compile here. */
+export function matchRanges(
+  line: string,
+  query: Pick<ContentSearchQuery, "query" | "caseSensitive" | "regex">,
+): Range[] {
+  if (!query.query) return [];
+  let pattern: RegExp;
+  try {
+    pattern = new RegExp(
+      query.regex ? query.query : escapeRegExp(query.query),
+      query.caseSensitive ? "g" : "gi",
+    );
+  } catch {
+    return [];
   }
-  return merged;
+  const ranges: Range[] = [];
+  for (const match of line.matchAll(pattern)) {
+    if (match[0].length === 0) continue;
+    ranges.push({ start: match.index, end: match.index + match[0].length });
+    if (ranges.length >= MAX_RANGES) break;
+  }
+  return ranges;
 }
 
-function splitToken(line: string, token: CodeToken, ranges: ReadonlyArray<Range>): Segment[] {
+function splitLine(line: string, ranges: ReadonlyArray<Range>): Segment[] {
   const segments: Segment[] = [];
-  const tokenEnd = token.offset + token.content.length;
-  let cursor = token.offset;
-
+  let cursor = 0;
   for (const range of ranges) {
-    if (range.end <= cursor) continue;
-    if (range.start >= tokenEnd) break;
-
-    const matchStart = Math.max(cursor, range.start);
-    if (matchStart > cursor) {
+    if (range.start > cursor) {
       segments.push({
-        content: line.slice(cursor, matchStart),
+        content: line.slice(cursor, range.start),
         isMatch: false,
         start: cursor,
-        end: matchStart,
-        token,
+        end: range.start,
       });
     }
-
-    const matchEnd = Math.min(tokenEnd, range.end);
     segments.push({
-      content: line.slice(matchStart, matchEnd),
+      content: line.slice(range.start, range.end),
       isMatch: true,
-      start: matchStart,
-      end: matchEnd,
-      token,
+      start: range.start,
+      end: range.end,
     });
-    cursor = matchEnd;
+    cursor = range.end;
   }
-
-  if (cursor < tokenEnd) {
-    segments.push({
-      content: line.slice(cursor, tokenEnd),
-      isMatch: false,
-      start: cursor,
-      end: tokenEnd,
-      token,
-    });
+  if (cursor < line.length) {
+    segments.push({ content: line.slice(cursor), isMatch: false, start: cursor, end: line.length });
   }
   return segments;
 }
 
-function tokenStyle(token: CodeToken): CSSProperties {
-  const fontStyle = token.fontStyle ?? 0;
-  return {
-    ...(token.color ? { color: token.color } : {}),
-    ...(fontStyle & 1 ? { fontStyle: "italic" } : {}),
-    ...(fontStyle & 2 ? { fontWeight: 700 } : {}),
-    ...(fontStyle & 4 ? { textDecoration: "underline" } : {}),
-  };
-}
-
-function HighlightedTokens(props: {
-  readonly line: string;
-  readonly ranges: ReadonlyArray<Range>;
-  readonly tokens: ReadonlyArray<CodeToken>;
-}) {
-  return props.tokens
-    .flatMap((token) => splitToken(props.line, token, props.ranges))
-    .map((segment) =>
-      segment.isMatch ? (
-        <mark
-          className="rounded-xs bg-primary/25 text-inherit"
-          key={`${segment.start}:${segment.end}:match`}
-          style={tokenStyle(segment.token)}
-        >
-          {segment.content}
-        </mark>
-      ) : (
-        <span key={`${segment.start}:${segment.end}:code`} style={tokenStyle(segment.token)}>
-          {segment.content}
-        </span>
-      ),
-    );
-}
-
-function SyntaxHighlightedTokens(props: {
-  readonly line: string;
-  readonly language: string;
-  readonly ranges: ReadonlyArray<Range>;
-  readonly theme: "light" | "dark";
-}) {
-  const highlighter = use(getSyntaxHighlighterPromise(props.language));
-  const tokens = useMemo(() => {
-    try {
-      return highlighter.codeToTokens(props.line, {
-        lang: props.language,
-        theme: resolveDiffThemeName(props.theme),
-      }).tokens[0];
-    } catch {
-      return undefined;
-    }
-  }, [highlighter, props.language, props.line, props.theme]);
-
-  return tokens ? (
-    <HighlightedTokens line={props.line} ranges={props.ranges} tokens={tokens} />
-  ) : (
-    <HighlightedTokens
-      line={props.line}
-      ranges={props.ranges}
-      tokens={[{ content: props.line, offset: 0 }]}
-    />
-  );
-}
-
 export const HighlightedSearchLine = memo(function HighlightedSearchLine(props: {
-  readonly match: ProjectContentMatch;
-  readonly path: string;
-  readonly theme: "light" | "dark";
+  readonly line: string;
+  readonly query: Pick<ContentSearchQuery, "query" | "caseSensitive" | "regex">;
 }) {
-  const ranges = useMemo(() => normalizeRanges(props.match), [props.match]);
-  const fallback = (
-    <HighlightedTokens
-      line={props.match.lineContent}
-      ranges={ranges}
-      tokens={[{ content: props.match.lineContent, offset: 0 }]}
-    />
+  const segments = useMemo(
+    () => splitLine(props.line, matchRanges(props.line, props.query)),
+    [props.line, props.query],
   );
-
-  return (
-    <RenderErrorBoundary fallback={fallback}>
-      <Suspense fallback={fallback}>
-        <SyntaxHighlightedTokens
-          line={props.match.lineContent}
-          language={getFiletypeFromFileName(props.path)}
-          ranges={ranges}
-          theme={props.theme}
-        />
-      </Suspense>
-    </RenderErrorBoundary>
+  return segments.map((segment) =>
+    segment.isMatch ? (
+      <mark
+        className="rounded-sm bg-accent-soft text-ink"
+        key={`${segment.start}:${segment.end}:match`}
+      >
+        {segment.content}
+      </mark>
+    ) : (
+      <span key={`${segment.start}:${segment.end}:code`}>{segment.content}</span>
+    ),
   );
 });

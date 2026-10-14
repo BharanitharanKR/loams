@@ -30,6 +30,9 @@ catalog:
   '@xyflow/react': 12.12.0
   tailwindcss: 4.3.3
   '@tailwindcss/vite': 4.3.3
+  # Studio's file viewer and diff panel (SD1 Tasks 20, 21; rulings T0-4, T0-5):
+  # Apache-2.0. 1.5.1, because 1.5.2 is under 14 days old until 2026-10-19.
+  '@pierre/diffs': 1.5.1
 
 # Keep Vite+ isolated from the console's ordinary Vite/Vitest toolchain.
 overrides:
@@ -48,6 +51,10 @@ overrides:
   # js-yaml 4 uses argparse (Python-2.0) only for its command-line tool, which nothing
   # here runs; the library (`load`, `dump`) never imports it.
   'js-yaml@4.3.2>argparse': '-'
+  # @pierre/diffs asks for shiki ^3 || ^4: keep a release at least 14 days old
+  # (SD1 T0-5: shiki 4.2.0; 4.5.0 is too new).
+  '@pierre/diffs@1.5.1>shiki': 4.2.0
+  '@pierre/diffs@1.5.1>@shikijs/transformers': 4.2.0
 
 allowBuilds:
   esbuild: true

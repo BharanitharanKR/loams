@@ -1,9 +1,8 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/files/ProjectFilePicker.logic.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// ported to the Loams UI stack. Loams' changes are Apache-2.0.
-import type { ProjectEntry } from "@t3tools/contracts";
-import { normalizeSearchQuery } from "@t3tools/shared/searchRanking";
+// over agentd's scored matches (highest score first, the daemon's order on ties) with normalizeSearchQuery from packages/shared/src/searchRanking.ts folded in. Loams' changes are Apache-2.0.
+import type { FileMatch } from "./source";
 
 export const PROJECT_FILE_PICKER_RESULT_LIMIT = 200;
 
@@ -14,8 +13,10 @@ export interface ProjectFilePickerMatch {
   readonly pathMatchIndices: ReadonlyArray<number>;
 }
 
-function fileName(path: string): string {
-  return path.slice(path.lastIndexOf("/") + 1);
+function normalizeSearchQuery(input: string, trimLeadingPattern: RegExp): string {
+  const trimmed = input.trim();
+  if (!trimmed) return "";
+  return trimmed.replace(trimLeadingPattern, "").toLowerCase();
 }
 
 /**
@@ -41,34 +42,30 @@ function findMatchIndices(value: string, query: string): number[] | null {
 }
 
 /**
- * Maps server search results to picker rows. Server ordering is preserved —
- * ranking already happened there; this pass only filters to files and
- * computes highlight positions with the same query normalization the server
- * applied.
+ * Maps the daemon's search results to picker rows: files only, highest score first
+ * (a stable sort, so ties keep the daemon's order), with highlight positions computed
+ * with the same query normalization upstream applies.
  */
-export function getProjectFilePickerMatches(
-  entries: ReadonlyArray<ProjectEntry>,
+export function rankFileMatches(
+  entries: ReadonlyArray<FileMatch>,
   rawQuery: string,
   limit = PROJECT_FILE_PICKER_RESULT_LIMIT,
 ): ProjectFilePickerMatch[] {
   if (limit <= 0) return [];
 
-  const query = normalizeSearchQuery(rawQuery, {
-    trimLeadingPattern: /^[@./]+/,
-  }).replaceAll(/\s/g, "");
+  const query = normalizeSearchQuery(rawQuery, /^[@./]+/).replaceAll(/\s/g, "");
   const matches: ProjectFilePickerMatch[] = [];
 
-  for (const entry of entries) {
-    if (entry.kind !== "file") continue;
-
-    const name = fileName(entry.path);
-    const nameMatchIndices = findMatchIndices(name, query);
-    const pathMatchIndices = findMatchIndices(entry.path, query);
+  const ranked = entries
+    .filter((entry) => entry.kind !== "directory")
+    .toSorted((left, right) => right.score - left.score);
+  for (const entry of ranked) {
+    const name = entry.path.slice(entry.path.lastIndexOf("/") + 1);
     matches.push({
       name,
-      nameMatchIndices: nameMatchIndices ?? [],
+      nameMatchIndices: findMatchIndices(name, query) ?? [],
       path: entry.path,
-      pathMatchIndices: pathMatchIndices ?? [],
+      pathMatchIndices: findMatchIndices(entry.path, query) ?? [],
     });
     if (matches.length >= limit) break;
   }

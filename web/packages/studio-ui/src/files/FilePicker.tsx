@@ -1,28 +1,21 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/files/ProjectFilePicker.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// ported to the Loams UI stack. Loams' changes are Apache-2.0.
-import { useAtomValue } from "@effect/atom-react";
-import { useMemo, useState, type ReactNode } from "react";
+// on @loams/ui's CommandPalette over FilesSource.searchFiles (agentd's SearchWorkspaceFiles) with TanStack Query; no Effect atoms, right-panel store or Pierre icons. Loams' changes are Apache-2.0.
 
-import { useActiveProjectTarget, type ActiveProjectTarget } from "~/hooks/useActiveProjectTarget";
-import { useTheme } from "~/hooks/useTheme";
-import { useRightPanelStore } from "~/rightPanelStore";
-import { primaryServerKeybindingsAtom } from "~/state/server";
+// Quick open (SD1 Task 21): type part of a path, pick a file, and it opens in the viewer.
+// The daemon ranks (fuzzy, nucleo); `rankFileMatches` keeps its best first, drops folders
+// and marks the letters that matched.
 
-import { PierreEntryIcon } from "../chat/PierreEntryIcon";
-import { CommandPaletteContent } from "../CommandPaletteContent";
-import { type CommandPaletteActionItem } from "../CommandPalette.logic";
-import { CommandPaletteResults } from "../CommandPaletteResults";
-import {
-  getProjectFilePickerMatches,
-  PROJECT_FILE_PICKER_RESULT_LIMIT,
-} from "./ProjectFilePicker.logic";
-import { useProjectFilePickerQuery } from "./projectFilesQueryState";
+import { type CommandItem, CommandPalette } from "@loams/ui";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { FileIcon } from "lucide-react";
+import { type ReactNode, useMemo, useState } from "react";
 
-interface ProjectFilePickerProps {
-  readonly setOpen: (open: boolean) => void;
-}
+import { useDebouncedValue } from "./FileBrowser";
+import { PROJECT_FILE_PICKER_RESULT_LIMIT, rankFileMatches } from "./filePickerLogic";
+import type { FilesSource } from "./source";
+import { filesQueryKey } from "./useDirectory";
 
 function HighlightedFuzzyText(props: {
   readonly active: boolean;
@@ -36,7 +29,7 @@ function HighlightedFuzzyText(props: {
   for (const index of props.indices) {
     if (start < index) parts.push(props.value.slice(start, index));
     parts.push(
-      <strong className="font-semibold text-foreground" key={index}>
+      <strong className="font-semibold text-ink" key={index}>
         {props.value[index]}
       </strong>,
     );
@@ -44,124 +37,76 @@ function HighlightedFuzzyText(props: {
   }
   if (start < props.value.length) parts.push(props.value.slice(start));
 
-  return <span className="text-muted-foreground">{parts}</span>;
+  return <span className="text-muted">{parts}</span>;
 }
 
-function getEmptyStateMessage(query: string, error: string | null, isPending: boolean): string {
+function emptyStateMessage(query: string, error: string | null, isPending: boolean): string {
   if (error) return error;
   const isSearching = query.trim().length > 0;
-  if (isPending) return isSearching ? "Searching workspace files…" : "Indexing workspace files…";
-  return isSearching ? "No matching files." : "No files found.";
+  if (isPending) return "Searching workspace files…";
+  return isSearching ? "No matching files." : "Type part of a file's path.";
 }
 
-function EmptyProjectFilePicker() {
-  return (
-    <CommandPaletteContent
-      aria-label="File picker"
-      escapeLabel="Back"
-      footerActionLabel="Open file"
-      inputProps={{ disabled: true, placeholder: "Search files…" }}
-      mode="none"
-      testId="project-file-picker"
-      value=""
-    >
-      <div className="py-10 text-center text-sm text-muted-foreground">
-        Open a project to search its files.
-      </div>
-    </CommandPaletteContent>
-  );
-}
-
-function OpenProjectFilePicker(props: ProjectFilePickerProps & { target: ActiveProjectTarget }) {
-  const { target } = props;
+export function FilePicker(props: {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly source: FilesSource;
+  readonly projectName: string;
+  readonly onOpenFile: (relativePath: string) => void;
+}) {
+  const { source } = props;
   const [query, setQuery] = useState("");
-  const [highlightedItemValue, setHighlightedItemValue] = useState<string | null>(null);
-  const result = useProjectFilePickerQuery(
-    target.environmentId,
-    target.cwd,
-    query,
-    PROJECT_FILE_PICKER_RESULT_LIMIT,
-  );
-  const { resolvedTheme } = useTheme();
-  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const matchedQuery = useDebouncedValue(query.trim().slice(0, 256), 120);
+  const search = useQuery({
+    queryKey: filesQueryKey(source, "search", matchedQuery),
+    queryFn: ({ signal }) =>
+      source.searchFiles(matchedQuery, PROJECT_FILE_PICKER_RESULT_LIMIT, signal),
+    enabled: props.open && matchedQuery.length > 0,
+    placeholderData: keepPreviousData,
+    staleTime: 10_000,
+  });
   const matches = useMemo(
-    () => getProjectFilePickerMatches(result.entries, result.matchedQuery),
-    [result.entries, result.matchedQuery],
+    () => (matchedQuery ? rankFileMatches(search.data ?? [], matchedQuery) : []),
+    [search.data, matchedQuery],
   );
-  const hasMatchedQuery = /\S/.test(result.matchedQuery);
-  const items = useMemo<CommandPaletteActionItem[]>(
+  const items = useMemo<CommandItem[]>(
     () =>
       matches.map((match) => ({
-        kind: "action",
-        value: `file:${match.path}`,
-        searchTerms: [match.name, match.path],
-        title: (
-          <HighlightedFuzzyText
-            active={hasMatchedQuery}
-            value={match.name}
-            indices={match.nameMatchIndices}
-          />
-        ),
-        description: (
-          <HighlightedFuzzyText
-            active={hasMatchedQuery}
-            value={match.path}
-            indices={match.pathMatchIndices}
-          />
-        ),
-        icon: <PierreEntryIcon pathValue={match.path} kind="file" theme={resolvedTheme} />,
-        run: async () => {
-          useRightPanelStore.getState().openFile(target.threadRef, match.path);
-        },
+        id: match.path,
+        text: match.path,
+        label: <HighlightedFuzzyText active value={match.name} indices={match.nameMatchIndices} />,
+        detail: <HighlightedFuzzyText active value={match.path} indices={match.pathMatchIndices} />,
+        icon: <FileIcon aria-hidden />,
       })),
-    [hasMatchedQuery, matches, resolvedTheme, target.threadRef],
+    [matches],
   );
-
-  const emptyStateMessage = getEmptyStateMessage(query, result.error, result.isPending);
+  const error = search.error instanceof Error ? search.error.message : null;
 
   return (
-    <CommandPaletteContent
-      aria-label="File picker"
-      autoHighlight="always"
-      escapeLabel="Back"
-      footerActionLabel="Open file"
-      inputProps={{ placeholder: "Search files…" }}
-      mode="none"
-      onItemHighlighted={(value) => {
-        setHighlightedItemValue(typeof value === "string" ? value : null);
+    <CommandPalette
+      open={props.open}
+      onOpenChange={(open) => {
+        if (!open) setQuery("");
+        props.onOpenChange(open);
       }}
-      onValueChange={(value) => {
-        setHighlightedItemValue(null);
-        setQuery(value);
+      label={`Go to a file in ${props.projectName}`}
+      placeholder="Search files…"
+      items={items}
+      filter={null}
+      query={query}
+      onQueryChange={setQuery}
+      empty={emptyStateMessage(query, error, search.isFetching)}
+      onSelect={(item) => {
+        setQuery("");
+        props.onOpenChange(false);
+        props.onOpenFile(item.id);
       }}
-      panelSize="tall-list"
-      testId="project-file-picker"
-      value={query}
-    >
-      <CommandPaletteResults
-        groups={
-          items.length > 0 ? [{ value: "project-files", label: target.projectName, items }] : []
-        }
-        highlightedItemValue={highlightedItemValue}
-        isActionsOnly={false}
-        keybindings={keybindings}
-        onExecuteItem={(item) => {
-          if (item.kind !== "action") return;
-          props.setOpen(false);
-          void item.run();
-        }}
-        emptyStateMessage={emptyStateMessage}
-      />
-    </CommandPaletteContent>
+      footer={
+        <>
+          <span>{props.projectName}</span>
+          <span>↵ to open</span>
+        </>
+      }
+    />
   );
-}
-
-export function ProjectFilePicker(props: ProjectFilePickerProps) {
-  const target = useActiveProjectTarget();
-
-  if (!target) {
-    return <EmptyProjectFilePicker />;
-  }
-
-  return <OpenProjectFilePicker setOpen={props.setOpen} target={target} />;
 }

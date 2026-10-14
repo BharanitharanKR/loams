@@ -10,11 +10,22 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./files": {
+      "types": "./src/files/index.ts",
+      "default": "./src/files/index.ts"
     }
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@loams/ui": "workspace:*",
+    "@pierre/diffs": "catalog:",
+    "@tanstack/react-query": "catalog:",
+    "@tanstack/react-virtual": "catalog:",
+    "lucide-react": "catalog:"
   },
   "peerDependencies": {
     "react": ">=19",
