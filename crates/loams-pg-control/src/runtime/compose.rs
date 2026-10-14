@@ -35,7 +35,7 @@
 //! (two computes cannot publish one port, and a replaced read-write compute
 //! must not keep running). [`bind_address`] only checks the binding. An
 //! unbound warm-pool compute has no address, so the compose runtime does
-//! not start one (Task 14 decides the pool on compose).
+//! not start one: compose has no warm pool (R14.2).
 //!
 //! **Fitting the compose stacks.** The computes join
 //! [`ComposeConfig::network`], the network of the storage stack
@@ -629,11 +629,12 @@ impl ComputeRuntime for ComposeRuntime {
         let invalid = |why: String| Err(RuntimeError::InvalidArgument(why));
         let Some(binding) = &c.binding else {
             return invalid(
-                "the compose runtime starts bound computes only (the warm pool is Task 14's)"
+                "the compose runtime starts bound computes only: an unbound compute has no \
+                 port to publish, so compose has no warm pool (R14.2)"
                     .into(),
             );
         };
-        let ns = binding.namespace.as_str();
+        let ns = c.namespace()?;
         check_namespace(ns)?;
         if !is_pinned(&c.image) {
             return invalid(format!("image {:?} is not pinned by digest", c.image));

@@ -288,6 +288,8 @@ async fn it_compose_compute_answers_select_1() {
                 project_id: project.to_string(),
                 endpoint_id: endpoint.to_string(),
             }),
+            pool: None,
+            bound_at_ms: None,
             spec_version: 0,
             status: ComputeStatus::Pending,
             jwt_key_id: Some(keys.kid().to_owned()),
@@ -303,6 +305,7 @@ async fn it_compose_compute_answers_select_1() {
     let image = std::env::var("COMPUTE_IMAGE").unwrap_or_else(|_| pinned_compute_image());
     let launch = ComputeLaunch {
         compute_id: compute,
+        namespace: NS.into(),
         binding: Some(ComputeBinding {
             namespace: NS.into(),
             project_id: project.to_string(),

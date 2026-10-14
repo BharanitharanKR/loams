@@ -20,6 +20,7 @@ use loams_pg_control::model::{
 };
 use loams_pg_control::observer::{ComputeLifecycleEvent, ComputeLifecycleObserver, Lifecycle};
 use loams_pg_control::pgdog::{InstanceId, PgDogAdmin, PgDogError, PoolRow};
+use loams_pg_control::pool::{PoolConfig, WarmPool};
 use loams_pg_control::reconcile::endpoint::{
     Activity, ComputeCtl, Computes, CtlError, CtlReport, CtlStatus,
 };
@@ -39,6 +40,8 @@ use crate::common::{FakeNeon, Harness, user};
 
 pub const NS: &str = "acme";
 pub const IMAGE: &str = "ghcr.io/neondatabase/compute-node-v17@sha256:13ab146d3e7bbabb25a8532f315ac443e7512351d1ede0bab586def5c70e26c3";
+/// The next pinned image of the same major (the warm pool's image change).
+pub const IMAGE_NEXT: &str = "ghcr.io/ostrium-labs/loams-postgres-compute-v17@sha256:00000000000000000000000000000000000000000000000000000000000000aa";
 /// The org the reconciler's lifecycle events name.
 pub const ORG: &str = "org-acme";
 
@@ -47,8 +50,11 @@ pub const ORG: &str = "org-acme";
 #[derive(Debug, Default)]
 pub struct RuntimeInner {
     pub ports: BTreeMap<String, u16>,
-    /// Compute id → (endpoint id, status).
+    /// Compute id → (endpoint id, status); an unbound warm-pool compute's
+    /// endpoint is empty until it is bound.
     pub computes: BTreeMap<String, (String, RuntimeStatus)>,
+    /// Compute id → (namespace, image) it was started with.
+    pub launched: BTreeMap<String, (String, String)>,
     pub starts: Vec<String>,
     pub stops: Vec<String>,
     pub removed_addresses: Vec<String>,
@@ -114,17 +120,24 @@ impl ComputeRuntime for FakeRuntime {
         Ok(())
     }
     async fn start(&self, c: &ComputeLaunch) -> Result<ComputeHandle, RuntimeError> {
-        assert_eq!(c.image, IMAGE, "the pinned image of the project's major");
+        assert!(
+            c.image == IMAGE || c.image == IMAGE_NEXT,
+            "the pinned image of the project's major"
+        );
         assert!(c.upcall_token.expose().len() > 20, "an upcall token");
-        let binding = c.binding.as_ref().expect("a bound compute");
+        let ns = c.namespace()?.to_owned();
+        let endpoint = c
+            .binding
+            .as_ref()
+            .map_or_else(String::new, |b| b.endpoint_id.clone());
         let id = c.compute_id.to_string();
         let mut inner = self.lock();
         if !inner.computes.contains_key(&id) {
             inner.starts.push(id.clone());
-            inner.computes.insert(
-                id.clone(),
-                (binding.endpoint_id.clone(), RuntimeStatus::Running),
-            );
+            inner
+                .computes
+                .insert(id.clone(), (endpoint, RuntimeStatus::Running));
+            inner.launched.insert(id.clone(), (ns, c.image.clone()));
         }
         Ok(ComputeHandle {
             compute_id: c.compute_id,
@@ -138,9 +151,15 @@ impl ComputeRuntime for FakeRuntime {
         ep: &EndpointRec,
         c: &ComputeHandle,
     ) -> Result<(), RuntimeError> {
-        let port = self.lock().ports.get(&ep.id).copied();
+        let mut inner = self.lock();
+        let port = inner.ports.get(&ep.id).copied();
         match (port, &c.address) {
-            (Some(p), Some(a)) if a.port == p => Ok(()),
+            (Some(p), Some(a)) if a.port == p => {
+                if let Some((endpoint, _)) = inner.computes.get_mut(&c.compute_id.to_string()) {
+                    endpoint.clone_from(&ep.id);
+                }
+                Ok(())
+            }
             _ => Err(RuntimeError::InvalidArgument("not the endpoint's".into())),
         }
     }
@@ -227,10 +246,13 @@ impl ComputeCtl for FakeCtl {
     async fn status(&self, c: &ComputeRec) -> Result<CtlReport, CtlError> {
         assert!(c.ctl_url.is_some(), "status of a compute with an address");
         let inner = self.lock();
+        // A warm-pool compute waits for its spec until it is configured.
+        let waits = c.pool.is_some() && !inner.configured.iter().any(|(id, _)| *id == c.id);
         let status = inner
             .status
             .get(&c.id)
             .cloned()
+            .or_else(|| waits.then_some(CtlStatus::Empty))
             .or_else(|| inner.default.clone())
             .ok_or_else(|| CtlError("connection refused".into()))?;
         let last_active = match inner.activity {
@@ -356,6 +378,8 @@ pub struct Env {
     /// The reconciler's idle monitor.
     pub idle: Arc<IdleMonitor>,
     pub keys: Arc<ComputeKeys>,
+    /// The reconciler's warm pool (Task 14), when it has one.
+    pub pool: Option<Arc<WarmPool>>,
     pub r: Reconciler<KvControlStore, FakeNeon>,
 }
 
@@ -371,6 +395,22 @@ pub fn sources() -> SpecSources {
 }
 
 pub fn env_on(h: Harness) -> Env {
+    env_with(h, None)
+}
+
+/// The reconciler's settings: instance `pg-control-a` on the harness's
+/// clock.
+fn reconciler_config(h: &Harness) -> ReconcilerConfig {
+    let at = h.clock.0.clone();
+    ReconcilerConfig {
+        retry_initial: Duration::from_millis(10),
+        clock: Clock::from_fn(move || at.load(Ordering::SeqCst)),
+        ..ReconcilerConfig::new("pg-control-a")
+    }
+}
+
+/// As [`env_on`], with a warm pool of `pool`'s settings (Task 14).
+pub fn env_with(h: Harness, pool: Option<PoolConfig>) -> Env {
     let runtime = FakeRuntime::default();
     let ctl = FakeCtl::default();
     ctl.answer_by_default(CtlStatus::Running);
@@ -378,28 +418,15 @@ pub fn env_on(h: Harness) -> Env {
     let pgdog = FakePgDog::default();
     let events = Recorder::default();
     let keys = Arc::new(ComputeKeys::generate().expect("a key"));
-    let at = h.clock.0.clone();
-    let config = ReconcilerConfig {
-        retry_initial: Duration::from_millis(10),
-        clock: Clock::from_fn(move || at.load(Ordering::SeqCst)),
-        ..ReconcilerConfig::new("pg-control-a")
-    };
-    let mut computes = Computes::new(
-        Arc::new(runtime.clone()),
-        Arc::new(ctl.clone()),
-        keys.clone(),
-        BTreeMap::from([(17, IMAGE.to_string())]),
-        sources(),
-    );
     let idle = Arc::new(IdleMonitor::new(Arc::new(pgdog.clone())));
-    computes.idle = idle.clone();
-    computes.lifecycle = Lifecycle {
-        observer: Arc::new(events.clone()),
-        org: ORG.into(),
-    };
-    let r = Reconciler::new(h.store.clone(), h.neon.clone(), h.secrets.clone(), config)
-        .with_computes(computes);
-    Env {
+    let pool = pool.map(|c| Arc::new(WarmPool::new(c)));
+    let mut env = Env {
+        r: Reconciler::new(
+            h.store.clone(),
+            h.neon.clone(),
+            h.secrets.clone(),
+            reconciler_config(&h),
+        ),
         h,
         runtime,
         ctl,
@@ -407,12 +434,22 @@ pub fn env_on(h: Harness) -> Env {
         events,
         idle,
         keys,
-        r,
-    }
+        pool: pool.clone(),
+    };
+    let computes = env.computes(IMAGE, pool);
+    env.r = Reconciler::new(
+        env.h.store.clone(),
+        env.h.neon.clone(),
+        env.h.secrets.clone(),
+        reconciler_config(&env.h),
+    )
+    .with_computes(computes);
+    env
 }
 
 /// `let e = fakes!();`: the harness with a reconciler on fakes, or return
 /// (skipped).
+#[allow(unused_macros)]
 macro_rules! fakes {
     () => {{
         let h = harness!();
@@ -421,6 +458,43 @@ macro_rules! fakes {
 }
 
 impl Env {
+    /// What a reconciler drives computes with: this environment's fakes,
+    /// `image` for Postgres 17, and `pool`.
+    pub fn computes(&self, image: &str, pool: Option<Arc<WarmPool>>) -> Computes {
+        let mut computes = Computes::new(
+            Arc::new(self.runtime.clone()),
+            Arc::new(self.ctl.clone()),
+            self.keys.clone(),
+            BTreeMap::from([(17, image.to_string())]),
+            sources(),
+        );
+        computes.idle = self.idle.clone();
+        computes.lifecycle = Lifecycle {
+            observer: Arc::new(self.events.clone()),
+            org: ORG.into(),
+        };
+        computes.pool = pool;
+        computes
+    }
+
+    /// The same instance restarted with `image` for Postgres 17 and a new
+    /// warm pool of `pool`'s settings, on the same store and fakes.
+    pub fn restarted(
+        &self,
+        image: &str,
+        pool: PoolConfig,
+    ) -> (Reconciler<KvControlStore, FakeNeon>, Arc<WarmPool>) {
+        let pool = Arc::new(WarmPool::new(pool));
+        let r = Reconciler::new(
+            self.h.store.clone(),
+            self.h.neon.clone(),
+            self.h.secrets.clone(),
+            reconciler_config(&self.h),
+        )
+        .with_computes(self.computes(image, Some(pool.clone())));
+        (r, pool)
+    }
+
     /// One pass over `project`.
     pub async fn pass(&self, project: &str) -> Pass {
         self.r

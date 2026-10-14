@@ -10,7 +10,7 @@
 //!
 //! | Object | Name | What |
 //! |---|---|---|
-//! | Pod | `cmp-<ulid>` (the compute id, lower case) | `compute_ctl` and Postgres, `restartPolicy: Never` (replace, never restart), labels `loams.dev/{org,namespace,project,endpoint,compute}`, Argo CD told to ignore it |
+//! | Pod | `cmp-<ulid>` (the compute id, lower case) | `compute_ctl` and Postgres, `restartPolicy: Never` (replace, never restart), labels `loams.dev/{org,namespace,project,endpoint,compute}` (a warm-pool Pod gets its project and endpoint when it is bound, Task 14), Argo CD told to ignore it |
 //! | Secret | the Pod's name | the upcall token (`token`), and with a CA the compute's certificate (`tls.crt`, `tls.key`, `ca.crt`) |
 //! | Service | `ep-<ulid>` (the endpoint id, lower case) | port 5432 to the compute's [`COMPUTE_PG_PORT`]; its selector names the endpoint's current compute ([`ComputeRuntime::bind_address`]), and nothing before |
 //! | Service | `computes` (headless) | DNS for every compute Pod (`hostname` and `subdomain`), so `compute_ctl` is `http://cmp-<ulid>.computes.loams-pg-<ns>.svc.<domain>:3080` from the moment the Pod exists |
@@ -163,24 +163,21 @@ fn from_json<T: serde::de::DeserializeOwned>(v: serde_json::Value, what: &str) -
         .unwrap_or_else(|e| panic!("the {what} template is a valid {what}: {e}"))
 }
 
-/// The compute's Pod. `launch` must be bound (checked by the runtime).
+/// The compute's Pod. An unbound warm-pool compute's (Task 14) has empty
+/// `loams.dev/project` and `loams.dev/endpoint` labels until
+/// [`bind_address`](ComputeRuntime::bind_address) sets them.
 ///
 /// # Panics
 ///
-/// Never for a bound launch: the template is a valid Pod.
+/// Never: the template is a valid Pod.
 pub fn compute_pod(config: &KubeConfig, k8s_ns: &str, launch: &ComputeLaunch, tls: bool) -> Pod {
     let id = launch.compute_id.to_string();
     let name = pod_name(&launch.compute_id);
-    let (namespace, project, endpoint) = launch.binding.as_ref().map_or_else(
-        || (String::new(), String::new(), String::new()),
-        |b| {
-            (
-                b.namespace.clone(),
-                b.project_id.clone(),
-                b.endpoint_id.clone(),
-            )
-        },
+    let (project, endpoint) = launch.binding.as_ref().map_or_else(
+        || (String::new(), String::new()),
+        |b| (b.project_id.clone(), b.endpoint_id.clone()),
     );
+    let namespace = launch.namespace.clone();
     let mut mounts = vec![
         json!({ "name": "data", "mountPath": "/var/db/postgres" }),
         json!({ "name": "tmp", "mountPath": "/tmp" }),
@@ -394,7 +391,8 @@ pub fn computes_service(k8s_ns: &str) -> Service {
     )
 }
 
-/// The Role `pg-control` needs in `k8s_ns`: Pods (with `resize`),
+/// The Role `pg-control` needs in `k8s_ns`: Pods (with `resize`; `patch`
+/// labels a warm-pool Pod with its endpoint when it is bound, R14.5),
 /// Services and Secrets, nothing else (§46 §7.2).
 ///
 /// # Panics
@@ -414,7 +412,7 @@ pub fn role(k8s_ns: &str) -> Role {
                 {
                     "apiGroups": [""],
                     "resources": ["pods"],
-                    "verbs": ["get", "list", "watch", "create", "delete"],
+                    "verbs": ["get", "list", "watch", "create", "patch", "delete"],
                 },
                 {
                     "apiGroups": [""],
@@ -519,21 +517,34 @@ impl KubeRuntime {
     }
 
     /// The compute's certificate, its key and the CA's, for the endpoint's
-    /// Service names.
+    /// Service names; an unbound warm-pool compute's for its own Pod's
+    /// names, which no other compute has (R14.5).
     fn certificate(
         &self,
         k8s_ns: &str,
         launch: &ComputeLaunch,
     ) -> Result<Option<(String, String, String)>, RuntimeError> {
-        let (Some(ca), Some(binding)) = (&self.ca, &launch.binding) else {
+        let Some(ca) = &self.ca else {
             return Ok(None);
         };
-        let service = service_name(&binding.endpoint_id)?;
-        let names = vec![
-            format!("{service}.{k8s_ns}.svc.{}", self.config.cluster_domain),
-            format!("{service}.{k8s_ns}.svc"),
-            format!("{service}.{k8s_ns}"),
-        ];
+        let domain = &self.config.cluster_domain;
+        let names = match &launch.binding {
+            Some(binding) => {
+                let service = service_name(&binding.endpoint_id)?;
+                vec![
+                    format!("{service}.{k8s_ns}.svc.{domain}"),
+                    format!("{service}.{k8s_ns}.svc"),
+                    format!("{service}.{k8s_ns}"),
+                ]
+            }
+            None => {
+                let pod = pod_name(&launch.compute_id);
+                vec![
+                    format!("{pod}.{COMPUTES_SERVICE}.{k8s_ns}.svc.{domain}"),
+                    format!("{pod}.{COMPUTES_SERVICE}.{k8s_ns}.svc"),
+                ]
+            }
+        };
         let cert = ca
             .issue(&names, std::time::SystemTime::now())
             .map_err(|e| {
@@ -590,12 +601,7 @@ impl ComputeRuntime for KubeRuntime {
     }
 
     async fn start(&self, c: &ComputeLaunch) -> Result<ComputeHandle, RuntimeError> {
-        let Some(binding) = &c.binding else {
-            return Err(RuntimeError::InvalidArgument(
-                "the Kubernetes runtime starts bound computes only (the warm pool is Task 14's)"
-                    .into(),
-            ));
-        };
+        let k8s_ns = namespace_for(c.namespace()?)?;
         if !is_pinned(&c.image) {
             return Err(RuntimeError::InvalidArgument(format!(
                 "image {:?} is not pinned by digest",
@@ -608,14 +614,17 @@ impl ComputeRuntime for KubeRuntime {
             ));
         }
         check_upcall_token(c.upcall_token.expose())?;
-        let k8s_ns = namespace_for(&binding.namespace)?;
-        let service = service_name(&binding.endpoint_id)?;
-        let expected = address(&self.config, &k8s_ns, &service);
-        if c.address.as_ref() != Some(&expected) {
-            return Err(RuntimeError::InvalidArgument(format!(
-                "the launch's address is not endpoint {}'s Service ({expected})",
-                binding.endpoint_id
-            )));
+        // An unbound warm-pool compute (Task 14) has no address yet:
+        // `bind_address` points its endpoint's Service at it.
+        if let Some(binding) = &c.binding {
+            let service = service_name(&binding.endpoint_id)?;
+            let expected = address(&self.config, &k8s_ns, &service);
+            if c.address.as_ref() != Some(&expected) {
+                return Err(RuntimeError::InvalidArgument(format!(
+                    "the launch's address is not endpoint {}'s Service ({expected})",
+                    binding.endpoint_id
+                )));
+            }
         }
         let name = pod_name(&c.compute_id);
         let pods = self.pods(&k8s_ns);
@@ -666,6 +675,22 @@ impl ComputeRuntime for KubeRuntime {
     ) -> Result<(), RuntimeError> {
         let k8s_ns = namespace_for(ns)?;
         let name = service_name(&ep.id)?;
+        // The Pod names its endpoint: a warm-pool Pod (Task 14) was started
+        // without one. A no-op for a Pod started for its endpoint.
+        let labels = json!({
+            "metadata": { "labels": {
+                "loams.dev/project": ep.project_id,
+                "loams.dev/endpoint": ep.id,
+            } },
+        });
+        self.pods(&k8s_ns)
+            .patch(
+                &pod_name(&c.compute_id),
+                &PatchParams::default(),
+                &Patch::Merge(&labels),
+            )
+            .await
+            .map_err(|e| api_error("labelling the compute's Pod with its endpoint", &e))?;
         let patch = json!({
             "spec": { "selector": { "loams.dev/compute": c.compute_id.to_string() } },
         });

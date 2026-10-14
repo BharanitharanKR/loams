@@ -107,6 +107,7 @@ impl ComposeArgs {
             runner: None,
             runtime_class: None,
             cluster_domain: None,
+            warm_pool_size: None,
         }
     }
 }
@@ -148,6 +149,11 @@ pub(crate) struct PgControlArgs {
     /// With --runtime kubernetes: the cluster's DNS domain.
     #[arg(long)]
     kube_cluster_domain: Option<String>,
+    /// Warm computes kept per namespace, Postgres major and image (default
+    /// 2 with --runtime kubernetes; 0 turns the pool off). The compose
+    /// runtime has no warm pool.
+    #[arg(long)]
+    warm_pool_size: Option<u32>,
     /// Holds the local store and the secret file.
     #[arg(long, default_value = ".loams/pg-control")]
     data_dir: PathBuf,
@@ -267,10 +273,18 @@ fn config(args: PgControlArgs) -> Result<PgControlConfig, String> {
             return Err("--compute-runner-token-file goes with --compute-runner".into());
         }
     };
+    if matches!(config.runtime, PgRuntime::Compose) && args.warm_pool_size.is_some_and(|n| n > 0) {
+        return Err(
+            "--warm-pool-size goes with --runtime kubernetes: the compose runtime has no warm \
+             pool (an unbound compute has no port to publish)"
+                .into(),
+        );
+    }
     let mut computes = args.compose.computes(args.compute_image);
     computes.runner = runner;
     computes.runtime_class = args.kube_runtime_class;
     computes.cluster_domain = args.kube_cluster_domain;
+    computes.warm_pool_size = args.warm_pool_size;
     config.computes = Some(computes);
     config.listen = args.listen;
     config.upcall_listen = args.pg_upcall_listen;
@@ -550,6 +564,22 @@ mod tests {
         ])
         .expect_err("refused");
         assert!(e.contains("--runtime compose"), "{e}");
+    }
+
+    /// R14.2: the warm pool's size is Kubernetes'; compose takes only 0.
+    #[test]
+    fn the_warm_pool_is_kubernetes_only() {
+        let parse = |extra: &[&str]| {
+            let mut argv = vec!["pg-control"];
+            argv.extend_from_slice(extra);
+            config(Control::try_parse_from(argv).expect("flags parse").args)
+        };
+        let kube = parse(&["--runtime", "kubernetes", "--warm-pool-size", "3"]).expect("a config");
+        assert_eq!(kube.computes.expect("computes").warm_pool_size, Some(3));
+        let e = parse(&["--warm-pool-size", "2"]).expect_err("refused");
+        assert!(e.contains("no warm pool"), "{e}");
+        let off = parse(&["--warm-pool-size", "0"]).expect("a config");
+        assert_eq!(off.computes.expect("computes").warm_pool_size, Some(0));
     }
 
     /// `loams pg-runner --create-token` makes the token file pg-control

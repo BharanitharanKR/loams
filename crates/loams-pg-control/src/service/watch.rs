@@ -77,7 +77,7 @@ pub enum WatchEvent {
     Snapshot(ProjectSnapshot),
     Project(Versioned<ProjectRec>),
     Branch(BranchView),
-    Endpoint(EndpointView),
+    Endpoint(Box<EndpointView>),
     Compute(Versioned<ComputeRec>),
     /// A branch, endpoint or compute that is gone.
     Removed {
@@ -203,7 +203,7 @@ impl Current {
                 held,
                 (ResourceKind::Endpoint, e.record.id.clone()),
                 e.version,
-                WatchEvent::Endpoint(self.endpoint_view(e)),
+                WatchEvent::Endpoint(Box::new(self.endpoint_view(e))),
             );
         }
         for c in &self.computes {
