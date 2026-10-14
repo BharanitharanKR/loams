@@ -1,4 +1,4 @@
-//! Batch reads against real SQL Server 2022 Developer (compose `sqlserver`,
+//! Batch reads against real SQL Server 2025 Developer (compose `sqlserver`,
 //! `connectors-ci-only`). Gated on `LOAMS_CONNECTORS_CI_ONLY_STACK`.
 
 mod common;

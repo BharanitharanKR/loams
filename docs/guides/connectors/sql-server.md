@@ -15,7 +15,7 @@ The native SQL Server connector reads tables in batches or as a change stream, a
 | `encrypt` | `strict` (the default): TDS 8.0, TLS before the first TDS byte with ALPN `tds/8.0`, so the login is encrypted. `disable`: no TLS at all, only for a server on a private network; refused with Entra ID |
 | `ca_pem`, `trust_server_certificate`, `host_name_in_certificate` | Extra trusted roots; accept any certificate (a self-signed test server only); the name the certificate carries |
 
-TDS 8.0 `strict` needs SQL Server 2022 or Azure SQL. Older servers (2019 and before) negotiate TLS inside the TDS pre-login, which this connector does not do. Connect to them with `encrypt: disable` over a private network, or use the Debezium fallback.
+TDS 8.0 `strict` needs SQL Server 2022 or later on Windows, SQL Server 2025 or later on Linux (2022 on Linux refuses strict logins), or Azure SQL. Older servers negotiate TLS inside the TDS pre-login, which this connector does not do. Connect to them with `encrypt: disable` over a private network, or use the Debezium fallback.
 
 ## Batch reads (`mode: batch`, the default)
 
