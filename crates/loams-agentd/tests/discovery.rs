@@ -289,12 +289,16 @@ fn discovery_has_connect_port() {
         ],
     );
     assert_eq!(status, 403);
+    let features = daemon.hello(AGENTD_PROTOCOL).unwrap().features;
+    assert!(features.contains(&"studio.v1".to_owned()));
+    assert!(features.contains(&"git.write".to_owned()), "SD1 Task 9");
     assert!(
-        daemon
-            .hello(AGENTD_PROTOCOL)
+        body["host"]["features"]
+            .as_array()
             .unwrap()
-            .features
-            .contains(&"studio.v1".to_owned())
+            .iter()
+            .any(|feature| feature == "git.write"),
+        "{body}"
     );
 
     assert_eq!(daemon.stop().code(), Some(0));

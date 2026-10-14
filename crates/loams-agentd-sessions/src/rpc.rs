@@ -66,9 +66,11 @@ use loams_agentd_proto::{
 use loams_agentd_rpc::{RpcError, RpcReply, RpcService, methods, params_of, reply, stream_reply};
 
 use crate::agent_accounts::AgentAccounts;
+use crate::change_request_create::ChangeRequestCreator;
 use crate::change_requests::CheckoutChangeRequests;
 use crate::diff_sync::CheckoutDiffSync;
 use crate::doc_host::DocHost;
+use crate::git_write::GitWriteError;
 use crate::project_actions::ProjectActionsStore;
 use crate::registry::HarnessRegistry;
 use crate::repos::{Repos, session_home_dir};
@@ -157,6 +159,19 @@ pub struct EngineRpc {
     agent_accounts: AgentAccounts,
     harness_updates: Option<crate::harness_updates::HarnessUpdateCoordinator>,
     engine_info: EngineInfo,
+    /// Opens pull requests (G4) with the daemon's forge credentials.
+    change_request_creator: ChangeRequestCreator,
+    /// Serializes the git writes of SD1 Task 9 (G2, G3, G5, G21): one
+    /// checksum check and its write at a time.
+    git_writes: std::sync::Arc<tokio::sync::Mutex<()>>,
+}
+
+/// A git write's failure as the RPC's.
+fn git_write_error(error: GitWriteError) -> RpcError {
+    match error {
+        GitWriteError::BadParams(text) => RpcError::BadParams(text),
+        GitWriteError::Failed(text) => RpcError::Failed(text),
+    }
 }
 
 impl std::fmt::Debug for EngineRpc {
@@ -203,7 +218,15 @@ impl EngineRpc {
             agent_accounts,
             harness_updates: None,
             engine_info,
+            change_request_creator: ChangeRequestCreator::from_keyring(),
+            git_writes: std::sync::Arc::new(tokio::sync::Mutex::new(())),
         }
+    }
+
+    /// Open change requests with `creator` (tests: a fake Forgejo or `gh`).
+    pub fn with_change_request_creator(mut self, creator: ChangeRequestCreator) -> Self {
+        self.change_request_creator = creator;
+        self
     }
 
     pub fn with_previews(mut self, previews: loams_agentd_preview::PreviewService) -> Self {
@@ -329,6 +352,100 @@ impl EngineRpc {
         Err(RpcError::BadParams(
             "cwd is not a known checkout on this device".into(),
         ))
+    }
+
+    /// The identity of a checkout this device knows (a local chat's cwd, a
+    /// local project's or a registered repository's root, or one of their
+    /// worktrees): the jail of the git writes that name a `cwd`.
+    async fn known_checkout(&self, cwd: &str) -> Result<crate::repos::CheckoutIdentity, RpcError> {
+        let mut root = None;
+        for repo in self.repos.list().await {
+            if let Some(checkout) = self
+                .repos
+                .workspace_checkout(std::path::Path::new(&repo.path), std::path::Path::new(cwd))
+                .await
+            {
+                root = Some(checkout);
+                break;
+            }
+        }
+        let root = match root {
+            Some(root) => root,
+            None => self.change_request_root(cwd).await?,
+        };
+        self.repos
+            .checkout_identity(&root)
+            .await
+            .map_err(|e| RpcError::Failed(e.to_string()))
+    }
+
+    /// A repository this device knows: a known checkout (as
+    /// [`Self::known_checkout`]) or a registered repository (`AddRepo`).
+    async fn known_repo(&self, repo_path: &str) -> Result<std::path::PathBuf, RpcError> {
+        let unknown =
+            || RpcError::BadParams("repoPath is not a known repository on this device".into());
+        let canonical = std::fs::canonicalize(repo_path).map_err(|_| unknown())?;
+        for repo in self.repos.list().await {
+            if std::fs::canonicalize(&repo.path).is_ok_and(|path| path == canonical) {
+                return Ok(canonical);
+            }
+        }
+        self.change_request_root(repo_path)
+            .await
+            .map_err(|_| unknown())
+    }
+
+    /// Refuse a write to a checkout while any local chat on it has a live
+    /// run: a git write never interrupts an agent as a side effect.
+    async fn ensure_no_live_run(
+        &self,
+        identity: &crate::repos::CheckoutIdentity,
+    ) -> Result<(), RpcError> {
+        let chats = self.workspace.watch_chats().borrow().clone();
+        for candidate in chats {
+            if candidate.device_id != self.doc_host.device_id() {
+                continue;
+            }
+            let same_checkout = if candidate.checkout_id.as_deref() == Some(identity.id.as_str()) {
+                true
+            } else if let Some(candidate_cwd) = candidate.cwd.as_deref() {
+                self.repos
+                    .checkout_identity(std::path::Path::new(candidate_cwd))
+                    .await
+                    .is_ok_and(|candidate_identity| candidate_identity.id == identity.id)
+            } else {
+                false
+            };
+            if same_checkout
+                && self
+                    .sessions
+                    .session_status(&candidate.id)
+                    .is_some_and(|session| {
+                        matches!(
+                            session.status,
+                            loams_agentd_proto::SessionStatus::Working
+                                | loams_agentd_proto::SessionStatus::AwaitingInput
+                        )
+                    })
+            {
+                return Err(RpcError::Failed(
+                    "an agent is active in this working tree".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// This device's chats.
+    fn local_chats(&self) -> Vec<loams_agentd_proto::Chat> {
+        let device = self.doc_host.device_id();
+        self.workspace
+            .watch_chats()
+            .borrow()
+            .iter()
+            .filter(|chat| chat.device_id == device)
+            .cloned()
+            .collect()
     }
 
     /// Most-recent-first paths the current chat actually touched, followed by
@@ -1386,41 +1503,7 @@ impl RpcService for EngineRpc {
                     // Refuse the mutation when any local chat on this exact
                     // checkout has a live run. We never interrupt an agent as a
                     // side effect of discarding files.
-                    let chats = self.workspace.watch_chats().borrow().clone();
-                    for candidate in chats {
-                        if candidate.device_id != self.doc_host.device_id() {
-                            continue;
-                        }
-                        let same_checkout =
-                            if candidate.checkout_id.as_deref() == Some(identity.id.as_str()) {
-                                true
-                            } else if let Some(candidate_cwd) = candidate.cwd.as_deref() {
-                                self.repos
-                                    .checkout_identity(std::path::Path::new(candidate_cwd))
-                                    .await
-                                    .is_ok_and(|candidate_identity| {
-                                        candidate_identity.id == identity.id
-                                    })
-                            } else {
-                                false
-                            };
-                        if same_checkout
-                            && self
-                                .sessions
-                                .session_status(&candidate.id)
-                                .is_some_and(|session| {
-                                    matches!(
-                                        session.status,
-                                        loams_agentd_proto::SessionStatus::Working
-                                            | loams_agentd_proto::SessionStatus::AwaitingInput
-                                    )
-                                })
-                        {
-                            return Err(RpcError::Failed(
-                                "an agent is active in this working tree".into(),
-                            ));
-                        }
-                    }
+                    self.ensure_no_live_run(&identity).await?;
 
                     let snapshot = self
                         .diff_sync
@@ -1431,6 +1514,124 @@ impl RpcService for EngineRpc {
                         ok: true,
                         checksum: snapshot.checksum,
                     })
+                })
+                .await
+            }
+            // SD1 Task 9 (§53 §6.5 G1–G5, G21). Each git write names a
+            // checkout or repository this device knows, refuses while an
+            // agent runs there, and runs under `git_writes`.
+            methods::DISCARD_PATHS => {
+                Box::pin(async move {
+                    let p = params_of::<calls::DiscardPaths>(params)?;
+                    for path in &p.paths {
+                        crate::git_write::checkout_relative(path).map_err(git_write_error)?;
+                    }
+                    let root = self
+                        .diff_sync
+                        .checkout_root(&p.checkout_id)
+                        .ok_or_else(|| {
+                            RpcError::Failed("checkout is no longer available".into())
+                        })?;
+                    let identity = self
+                        .repos
+                        .checkout_identity(&root)
+                        .await
+                        .map_err(|e| RpcError::Failed(e.to_string()))?;
+                    self.ensure_no_live_run(&identity).await?;
+                    let _write = self.git_writes.lock().await;
+                    self.diff_sync
+                        .discard_paths(&p.checkout_id, p.paths, &p.expected_checksum)
+                        .await
+                        .map_err(|e| RpcError::Failed(e.to_string()))?;
+                    reply::<calls::DiscardPaths, _>(&Empty {})
+                })
+                .await
+            }
+            methods::LIST_WORKTREES => {
+                Box::pin(async move {
+                    let p = params_of::<calls::ListWorktrees>(params)?;
+                    let repo = self.known_repo(&p.repo_path).await?;
+                    let chats = self.local_chats();
+                    let worktrees =
+                        crate::worktree_list::list_worktrees(&self.repos, &repo, &chats)
+                            .await
+                            .map_err(git_write_error)?;
+                    reply::<calls::ListWorktrees, _>(&worktrees)
+                })
+                .await
+            }
+            methods::COMMIT_WORKTREE => {
+                Box::pin(async move {
+                    let p = params_of::<calls::CommitWorktree>(params)?;
+                    let identity = self.known_checkout(&p.cwd).await?;
+                    if identity.id != p.checkout_id {
+                        return Err(RpcError::Failed(format!(
+                            "{}: the checkout changed since the commit was confirmed",
+                            loams_agentd_proto::git_write::STALE_DIFF
+                        )));
+                    }
+                    self.ensure_no_live_run(&identity).await?;
+                    let _write = self.git_writes.lock().await;
+                    let committed = crate::git_write::commit(&self.repos, &identity.root, &p)
+                        .await
+                        .map_err(git_write_error)?;
+                    self.diff_sync.sync_all();
+                    reply::<calls::CommitWorktree, _>(&committed)
+                })
+                .await
+            }
+            methods::PUSH_BRANCH => {
+                Box::pin(async move {
+                    let p = params_of::<calls::PushBranch>(params)?;
+                    let identity = self.known_checkout(&p.cwd).await?;
+                    let _write = self.git_writes.lock().await;
+                    let pushed = crate::git_write::push(&identity.root, &p)
+                        .await
+                        .map_err(git_write_error)?;
+                    // Remote-tracking refs moved; publish fresh snapshots.
+                    self.diff_sync.sync_all();
+                    reply::<calls::PushBranch, _>(&pushed)
+                })
+                .await
+            }
+            methods::CREATE_CHANGE_REQUEST => {
+                Box::pin(async move {
+                    let p = params_of::<calls::CreateChangeRequest>(params)?;
+                    let identity = self.known_checkout(&p.cwd).await?;
+                    let created = self
+                        .change_request_creator
+                        .create(&identity.root, &p)
+                        .await
+                        .map_err(git_write_error)?;
+                    reply::<calls::CreateChangeRequest, _>(&created)
+                })
+                .await
+            }
+            methods::MERGE_BRANCH => {
+                Box::pin(async move {
+                    let p = params_of::<calls::MergeBranch>(params)?;
+                    let repo = self.known_repo(&p.repo_path).await?;
+                    // Neither the target's checkout nor a source worktree
+                    // about to be removed may have an agent running in it.
+                    for stanza in crate::git_write::worktrees(&repo)
+                        .await
+                        .map_err(git_write_error)?
+                    {
+                        let involved = stanza.branch.as_deref() == Some(p.target.as_str())
+                            || (p.remove_worktree
+                                && stanza.branch.as_deref() == Some(p.source.as_str()));
+                        if involved
+                            && let Ok(identity) = self.repos.checkout_identity(&stanza.path).await
+                        {
+                            self.ensure_no_live_run(&identity).await?;
+                        }
+                    }
+                    let _write = self.git_writes.lock().await;
+                    let merged = crate::git_write::merge(&self.repos, &repo, &p)
+                        .await
+                        .map_err(git_write_error)?;
+                    self.diff_sync.sync_all();
+                    reply::<calls::MergeBranch, _>(&merged)
                 })
                 .await
             }

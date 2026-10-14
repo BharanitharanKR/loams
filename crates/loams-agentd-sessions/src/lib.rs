@@ -13,10 +13,12 @@ pub use loams_agentd_proto::{EngineInfo, HarnessId, WorkspaceScope};
 use loams_agentd_store::DocsStore;
 
 pub mod agent_accounts;
+pub mod change_request_create;
 pub mod change_requests;
 mod chat_persistence;
 pub mod diff_sync;
 pub mod doc_host;
+pub mod git_write;
 pub mod harness_updates;
 pub mod instance_lock;
 mod model_catalogs;
@@ -36,6 +38,7 @@ mod transcript_history;
 pub mod uploads;
 pub mod workspace_files;
 pub mod workspace_host;
+pub mod worktree_list;
 
 pub use agent_accounts::{AgentAccounts, AgentAccountsConfig};
 pub use change_requests::{ChangeRequestCacheKey, CheckoutChangeRequests};
