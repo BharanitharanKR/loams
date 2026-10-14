@@ -128,6 +128,7 @@ function Body({
             threadId={route.threadId}
             navigate={navigate}
             {...(openExternal ? { openExternal } : {})}
+            {...(agentd.desktop ? { openInEditor: agentd.desktop.openInEditor } : {})}
           />
         </Suspense>
       );

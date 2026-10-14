@@ -2,11 +2,12 @@
 // platform and the desktop catalog patch. main.tsx calls it when the preload
 // exposed `window.loamsDesktop`.
 
-import { type ConsoleHandle, parsePatch } from '@loams/console-host';
+import { type ConsoleHandle, type ModeService, parsePatch } from '@loams/console-host';
 import {
   createElectronPlatform,
   type LoamsDesktopApi,
   wireDeepLinks,
+  wireShellCommands,
 } from '@loams/platform-electron';
 import agentPkg from '@loams/plugin-agent/package.json';
 import canvasPkg from '@loams/plugin-canvas/package.json';
@@ -95,6 +96,9 @@ export async function startDesktop(
     // Studio is the desktop's default mode and needs no instance flag (D902, Q801).
     modeFlags: {},
   });
+  // The application menu's Studio, Console, Switch mode and New thread (SD1 Task 28).
+  const mode = handle.ctx.get('mode') as ModeService | undefined;
+  if (mode) wireShellCommands(api, mode);
   await wireDeepLinks(api);
   return handle;
 }

@@ -4,6 +4,7 @@
 // of @loams/studio-ui and runs it when a handler is there, and the palette lists the
 // commands that have one. The shell keeps Mod+K, Mod+J and Mod+Shift+M in both modes.
 
+import { SHELL_COMMAND_EVENT } from '@loams/console-host';
 import {
   currentPlatform,
   type KeybindingCommand,
@@ -59,6 +60,23 @@ export class StudioCommands {
     this.#version++;
     for (const listener of [...this.#listeners]) listener();
   }
+}
+
+/**
+ * The edition's shell commands (`SHELL_COMMAND_EVENT`; SD1 Task 28: the desktop menu's
+ * "New thread"): Studio runs `chat.new` when a mounted view handles it, and says so
+ * with `preventDefault()`; otherwise the sender opens Studio's home.
+ */
+export function listenShellCommands(
+  commands: StudioCommands,
+  target: EventTarget = globalThis,
+): () => void {
+  const onCommand = (event: Event) => {
+    const detail = (event as CustomEvent<unknown>).detail;
+    if (detail === 'chat.new' && commands.run('chat.new')) event.preventDefault();
+  };
+  target.addEventListener(SHELL_COMMAND_EVENT, onCommand);
+  return () => target.removeEventListener(SHELL_COMMAND_EVENT, onCommand);
 }
 
 /** What Studio's keyboard layer needs: the bus, the bindings and the device. */

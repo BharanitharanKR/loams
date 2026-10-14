@@ -2,11 +2,14 @@
 import { join } from "node:path";
 import { app, Menu, nativeImage, Tray } from "electron";
 import type { EngineState, ServerEntry } from "../../shared/contracts";
+import type { StudioSnapshot } from "./studio-tray-model";
 import { trayModel } from "./tray-model";
 
 export interface TrayDeps {
 	getEngine: () => EngineState;
 	getServer: () => ServerEntry;
+	/** Loams Studio's threads and approvals (SD1 Task 28). */
+	getStudio?: () => StudioSnapshot;
 	onAction: (id: string) => void;
 }
 
@@ -33,7 +36,7 @@ export function createTray(deps: TrayDeps): TrayHandle | undefined {
 	let badge = 0;
 	const refresh = (): void => {
 		if (tray.isDestroyed()) return;
-		const m = trayModel(deps.getEngine(), badge, deps.getServer());
+		const m = trayModel(deps.getEngine(), badge, deps.getServer(), deps.getStudio?.());
 		tray.setToolTip(m.tooltip);
 		tray.setContextMenu(
 			Menu.buildFromTemplate(

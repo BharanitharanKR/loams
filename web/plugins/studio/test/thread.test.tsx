@@ -172,6 +172,32 @@ describe('ThreadPage', () => {
     expect(daemon.watches).toEqual(['chat-1']);
   });
 
+  it('hands the checkout to the desktop editor (SD1 Task 28, Q810)', async () => {
+    const daemon = fakeDaemon();
+    const openInEditor = vi.fn(async () => ({
+      ok: false as const,
+      code: 'no_editor',
+      message: 'Choose an editor first',
+    }));
+    const { findByRole, findByText } = render(
+      wrap(
+        <AgentdTransportProvider transport={daemon.transport}>
+          <ThreadPage threadId="chat-1" navigate={vi.fn()} openInEditor={openInEditor} />
+        </AgentdTransportProvider>,
+      ),
+    );
+    fireEvent.click(await findByRole('button', { name: 'Open in editor' }));
+    await waitFor(() => expect(openInEditor).toHaveBeenCalledWith('/home/dev/src/loams'));
+    await findByText('Open in editor failed: Choose an editor first');
+  });
+
+  it('offers no editor without the desktop bridge', async () => {
+    const daemon = fakeDaemon();
+    const { findByText, queryByRole } = renderPage(daemon.transport);
+    await findByText('Building now.');
+    expect(queryByRole('button', { name: 'Open in editor' })).toBeNull();
+  });
+
   it('answers a question through AnswerQuestion', async () => {
     const daemon = fakeDaemon();
     const { findByRole } = renderPage(daemon.transport);
