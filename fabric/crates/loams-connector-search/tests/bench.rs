@@ -25,7 +25,12 @@ async fn bench_opensearch() {
     if !bench_enabled("bench_opensearch", &["LOAMS_CONNECTORS_P2_STACK"]) {
         return;
     }
-    bench(SearchHarness::opensearch(), "opensearch", "OpenSearch 3").await;
+    bench(
+        SearchHarness::opensearch().for_bench(),
+        "opensearch",
+        "OpenSearch 3",
+    )
+    .await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -33,7 +38,7 @@ async fn bench_qdrant() {
     if !bench_enabled("bench_qdrant", &["LOAMS_CONNECTORS_P2_STACK"]) {
         return;
     }
-    bench(SearchHarness::qdrant(), "qdrant", "Qdrant").await;
+    bench(SearchHarness::qdrant().for_bench(), "qdrant", "Qdrant").await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -42,7 +47,7 @@ async fn bench_elasticsearch() {
         return;
     }
     bench(
-        SearchHarness::elasticsearch(),
+        SearchHarness::elasticsearch().for_bench(),
         "elasticsearch",
         "Elasticsearch 9",
     )

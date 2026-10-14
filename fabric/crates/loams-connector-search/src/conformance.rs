@@ -135,6 +135,9 @@ pub struct SearchHarness {
     secrets: Vec<(String, String)>,
     run: String,
     config: PipelineConfig,
+    /// The connector's own page and bulk sizes and the SDK's default budgets
+    /// ([`SearchHarness::for_bench`]), not the suites' small ones.
+    bench: bool,
     switch: Arc<FaultSwitch>,
     state: Mutex<State>,
 }
@@ -195,6 +198,7 @@ impl SearchHarness {
                 checkpoint_interval: Duration::ZERO,
                 ..PipelineConfig::default()
             },
+            bench: false,
             switch: FaultSwitch::new(),
             state: Mutex::new(State::new(0)),
         }
@@ -242,6 +246,20 @@ impl SearchHarness {
 
     /// Real Qdrant (`connectors-p2`), with an API key
     /// (`LOAMS_QDRANT_URL`, `LOAMS_QDRANT_API_KEY`).
+    /// The connector's own page and bulk sizes and the SDK's default budgets,
+    /// for the performance bench: the suites' 7-document pages, 50-document
+    /// bulks and 16-row batches exercise paging and resumption, and are not
+    /// what a bench should measure (a round of the 10,000 batch re-reads up to
+    /// 100,000 documents).
+    pub fn for_bench(mut self) -> Self {
+        self.bench = true;
+        self.config = PipelineConfig {
+            checkpoint_interval: Duration::ZERO,
+            ..PipelineConfig::default()
+        };
+        self
+    }
+
     pub fn qdrant() -> Self {
         let key = env_or("LOAMS_QDRANT_API_KEY", QDRANT_KEY);
         Self::new(
@@ -318,11 +336,19 @@ impl SearchHarness {
         .map_err(failed)
     }
 
-    fn source_config(&self, src: &str, page: usize) -> Value {
-        if self.system.is_qdrant() {
-            self.config(json!({"collection": src, "source": {"page_size": page}}))
+    fn source_config(&self, src: &str, page: Option<usize>) -> Value {
+        let mut source = if self.system.is_qdrant() {
+            json!({})
         } else {
-            self.config(json!({"index": src, "source": {"cursor_field": "seq", "page_size": page}}))
+            json!({"cursor_field": "seq"})
+        };
+        if let Some(page) = page {
+            source["page_size"] = json!(page);
+        }
+        if self.system.is_qdrant() {
+            self.config(json!({"collection": src, "source": source}))
+        } else {
+            self.config(json!({"index": src, "source": source}))
         }
     }
 
@@ -331,6 +357,8 @@ impl SearchHarness {
             self.config(json!({
                 "collection": dst, "key": "/payload/id", "vector": "/vector", "payload": "/payload"
             }))
+        } else if self.bench {
+            self.config(json!({"index": dst, "key": "/id"}))
         } else {
             self.config(json!({"index": dst, "key": "/id", "bulk": {"max_docs": 50, "retry_backoff_ms": 50}}))
         }
@@ -510,7 +538,7 @@ impl SearchHarness {
         self.reset().await?;
         let (src, _) = self.names(self.state.lock().await.generation);
         self.put_docs(&src, 0, n).await?;
-        let ctx = self.ctx(self.source_config(&src, page));
+        let ctx = self.ctx(self.source_config(&src, Some(page)));
         let (mut en, sources) = self
             .factory()
             .source(&ctx)
@@ -750,7 +778,7 @@ impl ConnectorHarness for SearchHarness {
             s.store = MemoryCheckpointStore::new();
         }
         let (enumerator, sources) = factory
-            .source(&self.ctx(self.source_config(&src, 7)))
+            .source(&self.ctx(self.source_config(&src, (!self.bench).then_some(7))))
             .map_err(failed)?
             .ok_or_else(|| HarnessError::failed("no source"))?;
         let source = Pipeline::source(inst.clone(), self.config.clone())
