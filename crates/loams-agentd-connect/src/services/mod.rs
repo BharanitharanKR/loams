@@ -26,6 +26,7 @@ mod gaps;
 mod git;
 mod groups;
 mod harness;
+mod notifications;
 mod projects;
 mod queue;
 mod review;

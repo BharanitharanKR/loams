@@ -53,6 +53,7 @@ import type { ForkSideChatParams } from "./ForkSideChatParams";
 import type { GetCheckoutDiffParams } from "./GetCheckoutDiffParams";
 import type { GetCheckoutFileDiffTextRequest } from "./GetCheckoutFileDiffTextRequest";
 import type { GetRunGroupComparisonParams } from "./GetRunGroupComparisonParams";
+import type { GetThreadUsageParams } from "./GetThreadUsageParams";
 import type { GitAvatars } from "./GitAvatars";
 import type { GitHistoryPage } from "./GitHistoryPage";
 import type { HarnessCatalog } from "./HarnessCatalog";
@@ -80,6 +81,7 @@ import type { MoveQueuedMessageParams } from "./MoveQueuedMessageParams";
 import type { MoveWorkspaceEntryRequest } from "./MoveWorkspaceEntryRequest";
 import type { MutateParams } from "./MutateParams";
 import type { MutateReply } from "./MutateReply";
+import type { Notification } from "./Notification";
 import type { OkReply } from "./OkReply";
 import type { OpenTerminalParams } from "./OpenTerminalParams";
 import type { PostReviewToChangeRequestParams } from "./PostReviewToChangeRequestParams";
@@ -140,6 +142,7 @@ import type { TakeProjectActionSetupParams } from "./TakeProjectActionSetupParam
 import type { TerminalEvent } from "./TerminalEvent";
 import type { TerminalIdParams } from "./TerminalIdParams";
 import type { TerminalSession } from "./TerminalSession";
+import type { ThreadUsage } from "./ThreadUsage";
 import type { TitleSettings } from "./TitleSettings";
 import type { ToolOutputChunk } from "./ToolOutputChunk";
 import type { TranscriptUpdate } from "./TranscriptUpdate";
@@ -226,6 +229,8 @@ export const METHODS = [
   { name: "ForkSideChat", kind: "unary", params: "ForkSideChatParams", result: "Chat", role: "owner", renderer: true },
   { name: "ListCheckpoints", kind: "unary", params: "ListCheckpointsParams", result: "CheckpointList", role: "owner", renderer: true },
   { name: "RestoreCheckpoint", kind: "unary", params: "RestoreCheckpointParams", result: "RestoreCheckpointReply", role: "owner", renderer: true },
+  { name: "GetThreadUsage", kind: "unary", params: "GetThreadUsageParams", result: "ThreadUsage", role: "owner", renderer: true },
+  { name: "WatchNotifications", kind: "stream", params: "Empty", result: "Notification", role: "owner", renderer: true },
   { name: "WatchDocMessages", kind: "stream", params: "WatchDocMessagesParams", result: "TranscriptUpdate", role: "mcp", renderer: true },
   { name: "WatchQueue", kind: "stream", params: "ChatIdParams", result: "QueueSnapshot", role: "owner", renderer: true },
   { name: "QueueMessage", kind: "unary", params: "QueueMessageParams", result: "IdReply", role: "mcp", renderer: true },
@@ -340,6 +345,8 @@ export type Methods = {
   ForkSideChat: { params: ForkSideChatParams; result: Chat; kind: "unary"; role: "owner"; renderer: true };
   ListCheckpoints: { params: ListCheckpointsParams; result: CheckpointList; kind: "unary"; role: "owner"; renderer: true };
   RestoreCheckpoint: { params: RestoreCheckpointParams; result: RestoreCheckpointReply; kind: "unary"; role: "owner"; renderer: true };
+  GetThreadUsage: { params: GetThreadUsageParams; result: ThreadUsage; kind: "unary"; role: "owner"; renderer: true };
+  WatchNotifications: { params: Empty; result: Notification; kind: "stream"; role: "owner"; renderer: true };
   WatchDocMessages: { params: WatchDocMessagesParams; result: TranscriptUpdate; kind: "stream"; role: "mcp"; renderer: true };
   WatchQueue: { params: ChatIdParams; result: QueueSnapshot; kind: "stream"; role: "owner"; renderer: true };
   QueueMessage: { params: QueueMessageParams; result: IdReply; kind: "unary"; role: "mcp"; renderer: true };

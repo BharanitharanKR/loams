@@ -158,6 +158,9 @@ pub(crate) struct ResultFrame {
     pub usage: UsageBody,
     #[serde(default)]
     pub session_id: Option<String>,
+    /// The CLI's own cost of the run, when it reports one.
+    #[serde(default)]
+    pub total_cost_usd: Option<f64>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -166,6 +169,10 @@ pub(crate) struct UsageBody {
     pub input_tokens: u64,
     #[serde(default)]
     pub output_tokens: u64,
+    #[serde(default)]
+    pub cache_read_input_tokens: Option<u64>,
+    #[serde(default)]
+    pub cache_creation_input_tokens: Option<u64>,
 }
 
 /// A CLI→client control request (`can_use_tool` is the one we act on).

@@ -9,4 +9,4 @@ mod store;
 
 pub use review_comments::ReviewCommentRow;
 pub use run_groups::StoredRunGroup;
-pub use store::{DocsStore, StoreError};
+pub use store::{DocsStore, StoreError, TurnUsageRow};

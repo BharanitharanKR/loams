@@ -74,6 +74,7 @@ struct Clients {
     terminals: pb::TerminalServiceClient<HttpClient>,
     preview: pb::PreviewServiceClient<HttpClient>,
     attachments: pb::AttachmentServiceClient<HttpClient>,
+    notifications: pb::NotificationServiceClient<HttpClient>,
     review: pb::ReviewServiceClient<HttpClient>,
     groups: pb::RunGroupServiceClient<HttpClient>,
 }
@@ -182,6 +183,7 @@ impl Daemon {
             terminals: pb::TerminalServiceClient::new(http(), config.clone()),
             preview: pb::PreviewServiceClient::new(http(), config.clone()),
             attachments: pb::AttachmentServiceClient::new(http(), config.clone()),
+            notifications: pb::NotificationServiceClient::new(http(), config.clone()),
             review: pb::ReviewServiceClient::new(http(), config.clone()),
             groups: pb::RunGroupServiceClient::new(http(), config),
         };
@@ -987,6 +989,40 @@ async fn scenario() {
         "{a} {b}"
     );
     settled_transcripts(&mut s, "chat-1").await;
+    // Usage and notifications (G19, G20; SD1 Task 14): chat-1's turn, once
+    // each daemon has recorded its end.
+    for daemon in [&s.a, &s.b] {
+        let deadline = tokio::time::Instant::now() + WAIT;
+        loop {
+            let usage = daemon
+                .ndjson
+                .call(calls::GetThreadUsage::NAME, json!({ "chatId": "chat-1" }))
+                .await
+                .unwrap();
+            if usage["turns"].as_array().is_some_and(|t| !t.is_empty()) {
+                break;
+            }
+            assert!(tokio::time::Instant::now() < deadline, "chat-1's usage");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+    unary!(
+        s,
+        "/loams.agentd.v1.ThreadService/GetThreadUsage",
+        GetThreadUsage,
+        |d| json!({ "chatId": "chat-1" }),
+        threads.get_thread_usage(json!({ "chatId": "chat-1" })),
+        |r| Wire::from_pb(r)?
+    );
+    // The oldest notification held: chat-1's turn finished.
+    first!(
+        s,
+        "/loams.agentd.v1.NotificationService/WatchNotifications",
+        WatchNotifications,
+        |d| json!({}),
+        notifications.watch_notifications(json!({})),
+        |r| from_msg(r.notification, "notification")?
+    );
     unary!(
         s,
         "/loams.agentd.v1.ThreadService/Steer",

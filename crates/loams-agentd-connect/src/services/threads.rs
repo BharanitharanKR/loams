@@ -365,8 +365,14 @@ impl pb::ThreadService for Agentd {
     async fn get_thread_usage(
         &self,
         _ctx: RequestContext,
-        _request: ServiceRequest<'_, pb::GetThreadUsageRequest>,
+        request: ServiceRequest<'_, pb::GetThreadUsageRequest>,
     ) -> ServiceResult<pb::GetThreadUsageResponse> {
-        Err(error::not_implemented("GetThreadUsage", "G20, SD1 Task 14"))
+        unary!(
+            self,
+            request,
+            GetThreadUsage,
+            |req| Wire::from_pb(req)?,
+            |usage| usage.to_pb()
+        )
     }
 }

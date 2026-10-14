@@ -100,6 +100,38 @@ const MIGRATIONS: &[&str] = &[
      ) STRICT;",
 ];
 
+/// Tables created with `IF NOT EXISTS` after [`MIGRATIONS`], so they need no
+/// version number of their own: several SD1 tasks add tables at once, and a
+/// numbered step would depend on which merged first. Only new tables go here;
+/// a change to an existing one is a migration.
+const TABLES: &[&str] = &[
+    // SD1 Task 14 (G20): each turn's tokens and duration, as the harness
+    // reported them, for the thread header. Informational, never billing.
+    "CREATE TABLE IF NOT EXISTS turn_usage (
+        chat_id       TEXT NOT NULL,
+        turn_id       TEXT NOT NULL,
+        input_tokens  INTEGER,
+        output_tokens INTEGER,
+        cache_tokens  INTEGER,
+        cost_usd      REAL,
+        duration_ms   INTEGER NOT NULL,
+        ended_at      INTEGER NOT NULL,
+        PRIMARY KEY (chat_id, turn_id)
+     ) STRICT;",
+];
+
+/// One turn's usage row (SD1 Task 14, `turn_usage`). A count the harness did
+/// not report is `None`; `cost_usd` is only ever the harness's own figure.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TurnUsageRow {
+    pub turn_id: String,
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+    pub cache_tokens: Option<u64>,
+    pub cost_usd: Option<f64>,
+    pub duration_ms: i64,
+}
+
 /// SQLite-backed store under a data directory (`{data_dir}/docs.sqlite3`).
 ///
 /// Holds warm-open doc snapshots (the DO room is authoritative; these make
@@ -592,6 +624,76 @@ impl DocsStore {
         Ok(())
     }
 
+    /// Record a turn's usage. A turn recorded again (a resumed turn) adds
+    /// its counts and duration to the row.
+    pub fn record_turn_usage(&self, chat_id: &str, row: &TurnUsageRow) -> Result<(), StoreError> {
+        let count = |n: Option<u64>| n.map(|n| i64::try_from(n).unwrap_or(i64::MAX));
+        store_blocking(|| {
+            self.conn().execute(
+                "INSERT INTO turn_usage
+                    (chat_id, turn_id, input_tokens, output_tokens, cache_tokens, cost_usd,
+                     duration_ms, ended_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                 ON CONFLICT (chat_id, turn_id) DO UPDATE SET
+                    input_tokens = CASE WHEN excluded.input_tokens IS NULL THEN input_tokens
+                        ELSE COALESCE(input_tokens, 0) + excluded.input_tokens END,
+                    output_tokens = CASE WHEN excluded.output_tokens IS NULL THEN output_tokens
+                        ELSE COALESCE(output_tokens, 0) + excluded.output_tokens END,
+                    cache_tokens = CASE WHEN excluded.cache_tokens IS NULL THEN cache_tokens
+                        ELSE COALESCE(cache_tokens, 0) + excluded.cache_tokens END,
+                    cost_usd = CASE WHEN excluded.cost_usd IS NULL THEN cost_usd
+                        ELSE COALESCE(cost_usd, 0) + excluded.cost_usd END,
+                    duration_ms = duration_ms + excluded.duration_ms,
+                    ended_at = excluded.ended_at",
+                params![
+                    chat_id,
+                    row.turn_id,
+                    count(row.input_tokens),
+                    count(row.output_tokens),
+                    count(row.cache_tokens),
+                    row.cost_usd,
+                    row.duration_ms,
+                    now_ms(),
+                ],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// A chat's turns' usage, in the order they ended.
+    pub fn turn_usage(&self, chat_id: &str) -> Result<Vec<TurnUsageRow>, StoreError> {
+        let count = |n: Option<i64>| n.map(|n| u64::try_from(n).unwrap_or(0));
+        store_blocking(|| {
+            let conn = self.conn();
+            let mut statement = conn.prepare(
+                "SELECT turn_id, input_tokens, output_tokens, cache_tokens, cost_usd, duration_ms
+                 FROM turn_usage WHERE chat_id = ?1 ORDER BY ended_at, rowid",
+            )?;
+            let rows = statement.query_map(params![chat_id], |row| {
+                Ok(TurnUsageRow {
+                    turn_id: row.get(0)?,
+                    input_tokens: count(row.get(1)?),
+                    output_tokens: count(row.get(2)?),
+                    cache_tokens: count(row.get(3)?),
+                    cost_usd: row.get(4)?,
+                    duration_ms: row.get(5)?,
+                })
+            })?;
+            Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        })
+    }
+
+    /// Forget a deleted chat's usage.
+    pub fn delete_turn_usage(&self, chat_id: &str) -> Result<(), StoreError> {
+        store_blocking(|| {
+            self.conn().execute(
+                "DELETE FROM turn_usage WHERE chat_id = ?1",
+                params![chat_id],
+            )?;
+            Ok(())
+        })
+    }
+
     pub(crate) fn conn(&self) -> MutexGuard<'_, Connection> {
         // A poisoned lock only means another thread panicked mid-query; the
         // connection itself is still usable.
@@ -623,6 +725,9 @@ fn migrate(conn: &mut Connection) -> Result<(), StoreError> {
             params![version, now_ms()],
         )?;
         tx.commit()?;
+    }
+    for sql in TABLES {
+        conn.execute_batch(sql)?;
     }
     Ok(())
 }

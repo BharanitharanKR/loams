@@ -641,8 +641,10 @@ async fn v2_wire_streams_text_and_settles_on_execution_success() {
                     AgentEvent::Usage {
                         input_tokens,
                         output_tokens,
+                        cache_tokens,
+                        cost_usd,
                     } => {
-                        usage = Some((input_tokens, output_tokens));
+                        usage = Some((input_tokens, output_tokens, cache_tokens, cost_usd));
                     }
                     AgentEvent::ContextUsage { tokens, window } => {
                         context_usage.push((tokens, window));
@@ -658,7 +660,8 @@ async fn v2_wire_streams_text_and_settles_on_execution_success() {
         .unwrap();
     assert_eq!(status, DoneStatus::Completed);
     assert_eq!(text, "PONG");
-    assert_eq!(usage, Some((4, 1)));
+    // OpenCode's own cache counts ride along (SD1 Task 14); this message reports no cost.
+    assert_eq!(usage, Some((4, 1, Some(0), None)));
     assert_eq!(
         context_usage,
         vec![

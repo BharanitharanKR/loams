@@ -2841,6 +2841,17 @@ async fn handle_bus_event(ctx: BusCtx<'_>) -> BusOutcome {
                         *pending_usage = Some(AgentEvent::Usage {
                             input_tokens: input,
                             output_tokens: output,
+                            cache_tokens: tokens.get("cache").and_then(|cache| {
+                                let read = cache.get("read").and_then(Value::as_u64);
+                                let write = cache.get("write").and_then(Value::as_u64);
+                                (read.is_some() || write.is_some())
+                                    .then(|| read.unwrap_or(0).saturating_add(write.unwrap_or(0)))
+                            }),
+                            // OpenCode's own figure, when it reports one.
+                            cost_usd: info
+                                .get("cost")
+                                .and_then(Value::as_f64)
+                                .filter(|cost| cost.is_finite() && *cost >= 0.0),
                         });
                     }
                 }

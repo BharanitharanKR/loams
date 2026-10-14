@@ -694,6 +694,19 @@ impl Normalizer {
                 let usage = AgentEvent::Usage {
                     input_tokens: f.usage.input_tokens,
                     output_tokens: f.usage.output_tokens,
+                    cache_tokens: match (
+                        f.usage.cache_read_input_tokens,
+                        f.usage.cache_creation_input_tokens,
+                    ) {
+                        (None, None) => None,
+                        (read, written) => {
+                            Some(read.unwrap_or(0).saturating_add(written.unwrap_or(0)))
+                        }
+                    },
+                    // The CLI's own figure; the daemon never prices a turn.
+                    cost_usd: f
+                        .total_cost_usd
+                        .filter(|cost| cost.is_finite() && *cost >= 0.0),
                 };
                 let done = if f.subtype == "success" {
                     AgentEvent::Done {

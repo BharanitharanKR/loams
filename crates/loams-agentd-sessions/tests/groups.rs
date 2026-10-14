@@ -19,6 +19,7 @@ use futures::stream::BoxStream;
 use loams_agentd_harness::mock::{MockEdits, MockHarness};
 use loams_agentd_harness::{Harness, HarnessError, RunControls};
 use loams_agentd_proto::groups::{CheckState, RunGroup, RunGroupState, RunMemberStatus};
+use loams_agentd_proto::notify::NotificationKind;
 use loams_agentd_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ProjectActionDraft, ProjectActionIcon,
     ReasoningLevel, RunRequest, SteeringMode,
@@ -666,6 +667,37 @@ async fn group_check_records_exit_codes() {
     let b = member(&group, &chats[1]).check.clone().unwrap();
     assert_eq!((a.state, a.exit_code), (CheckState::Passed, Some(0)));
     assert_eq!((b.state, b.exit_code), (CheckState::Failed, Some(1)));
+    // The group's notifications (SD1 Task 14): ready once, and the failed
+    // check, with the member that failed.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    let notifications = loop {
+        let recent = studio.core().notifications.recent();
+        if recent
+            .iter()
+            .any(|n| n.kind == NotificationKind::CheckFailed)
+        {
+            break recent;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "no check_failed notification: {recent:?}"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    let of = |kind| {
+        notifications
+            .iter()
+            .filter(|n| n.kind == kind && n.group_id.as_deref() == Some(group_id.as_str()))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        of(NotificationKind::GroupReady).len(),
+        1,
+        "{notifications:?}"
+    );
+    let failed = of(NotificationKind::CheckFailed);
+    assert_eq!(failed.len(), 1, "{notifications:?}");
+    assert_eq!(failed[0].chat_id.as_deref(), Some(chats[1].as_str()));
     assert!(
         a.log_tail
             .iter()

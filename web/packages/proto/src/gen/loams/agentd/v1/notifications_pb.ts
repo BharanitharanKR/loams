@@ -4,9 +4,8 @@
 
 // Notifications (design §53 §6.5 G19; plan SD1 Task 4): turn ends, approvals,
 // questions, errors and group events, in the app on the web and as OS
-// notifications on the desktop. Declared here; the RPC answers
-// `unimplemented` until SD1 Task 14. See studio.proto for the package's
-// rules.
+// notifications on the desktop. Served since SD1 Task 14 (ndjson
+// `WatchNotifications`). See studio.proto for the package's rules.
 
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
@@ -142,7 +141,8 @@ export const NotificationKindSchema: GenEnum<NotificationKind> = /*@__PURE__*/
  */
 export const NotificationService: GenService<{
   /**
-   * G19: one notification per message, as it happens.
+   * G19: one notification per message: first the last 200 the daemon holds,
+   * oldest first, then each new one as it happens.
    *
    * @generated from rpc loams.agentd.v1.NotificationService.WatchNotifications
    */

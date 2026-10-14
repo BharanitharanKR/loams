@@ -2,9 +2,8 @@ syntax = "proto3";
 
 // Notifications (design §53 §6.5 G19; plan SD1 Task 4): turn ends, approvals,
 // questions, errors and group events, in the app on the web and as OS
-// notifications on the desktop. Declared here; the RPC answers
-// `unimplemented` until SD1 Task 14. See studio.proto for the package's
-// rules.
+// notifications on the desktop. Served since SD1 Task 14 (ndjson
+// `WatchNotifications`). See studio.proto for the package's rules.
 package loams.agentd.v1;
 
 import "loams/options/v1/options.proto";
@@ -16,7 +15,8 @@ service NotificationService {
     unstable: true
   };
 
-  // G19: one notification per message, as it happens.
+  // G19: one notification per message: first the last 200 the daemon holds,
+  // oldest first, then each new one as it happens.
   rpc WatchNotifications(WatchNotificationsRequest) returns (stream WatchNotificationsResponse);
 }
 

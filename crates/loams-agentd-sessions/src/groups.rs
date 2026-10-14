@@ -15,7 +15,7 @@
 //! `EngineRpc`'s (`rpc/groups_rpc.rs`), so a resolve runs Task 9's git
 //! writes through their own dispatch arms and guards.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -26,6 +26,7 @@ use loams_agentd_proto::groups::{
     ApprovalMode, CHECK_TAIL_LINES, CheckState, MemberCheck, RunGroup, RunGroupMember,
     RunGroupResolution, RunGroupState, RunMemberStatus, RunVariant,
 };
+use loams_agentd_proto::notify::NotificationKind;
 use loams_agentd_proto::{CheckoutDiff, RunRequest, SandboxLevel, SessionStatus, TerminalEvent};
 use loams_agentd_store::{DocsStore, StoredRunGroup};
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,7 @@ use tokio::sync::{Notify, watch};
 use crate::checkpoints::Checkpoints;
 use crate::diff_sync::CheckoutDiffSync;
 use crate::doc_host::DocHost;
+use crate::notify::Notifications;
 use crate::sessions::{SessionsEngine, TurnCheckpoints};
 use crate::terminals::Terminals;
 use crate::{EngineError, now_ms};
@@ -223,6 +225,11 @@ struct Inner {
     /// Dropped at shutdown: it holds the engine, and the engine's turn hook
     /// holds these groups.
     wiring: Mutex<Option<Arc<Wiring>>>,
+    /// Where `group_ready` and `check_failed` go (SD1 Task 14).
+    notifications: Mutex<Option<Notifications>>,
+    /// Each group's state as last published, so a group that becomes ready
+    /// is told once (a group already ready at boot is not).
+    states: Mutex<HashMap<String, RunGroupState>>,
     stop: watch::Sender<bool>,
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
@@ -294,10 +301,38 @@ impl RunGroups {
                 view: watch::channel(Vec::new()).0,
                 kick: Notify::new(),
                 wiring: Mutex::new(None),
+                notifications: Mutex::new(None),
+                states: Mutex::new(HashMap::new()),
                 stop: watch::channel(false).0,
                 task: Mutex::new(None),
             }),
         })
+    }
+
+    /// Post `group_ready` and `check_failed` to `notifications` (SD1 Task 14).
+    pub fn set_notifications(&self, notifications: Notifications) {
+        *lock(&self.inner.notifications) = Some(notifications);
+    }
+
+    fn notify(&self, kind: NotificationKind, group_id: &str, chat_id: Option<&str>, title: String) {
+        if let Some(notifications) = lock(&self.inner.notifications).clone() {
+            notifications.push(
+                kind,
+                chat_id.map(str::to_owned),
+                Some(group_id.to_owned()),
+                title,
+            );
+        }
+    }
+
+    /// The group's prompt's first line, for a notification's title.
+    fn group_title(&self, group_id: &str) -> String {
+        lock(&self.inner.groups)
+            .iter()
+            .find(|group| group.id == group_id)
+            .and_then(|group| group.prompt.lines().find(|line| !line.trim().is_empty()))
+            .map(|line| line.trim().to_owned())
+            .unwrap_or_else(|| "Run group".to_owned())
     }
 
     /// Wire the engine and start the scheduler: queued members are sent as
@@ -462,6 +497,14 @@ impl RunGroups {
             });
             if let Err(error) = finished {
                 tracing::warn!(group = %group_id, %error, "run group check not recorded");
+            } else if exit_code != Some(0) {
+                let title = this.group_title(&group_id);
+                this.notify(
+                    NotificationKind::CheckFailed,
+                    &group_id,
+                    Some(&chat_id),
+                    title,
+                );
             }
         });
         Ok(())
@@ -624,6 +667,26 @@ impl RunGroups {
 
     fn publish(&self) {
         let view = self.view();
+        let ready: Vec<String> = {
+            let mut states = lock(&self.inner.states);
+            let ready = view
+                .iter()
+                .filter(|group| {
+                    group.state == RunGroupState::Ready
+                        && states.get(&group.id) == Some(&RunGroupState::Running)
+                })
+                .map(|group| group.id.clone())
+                .collect();
+            *states = view
+                .iter()
+                .map(|group| (group.id.clone(), group.state))
+                .collect();
+            ready
+        };
+        for group_id in &ready {
+            let title = self.group_title(group_id);
+            self.notify(NotificationKind::GroupReady, group_id, None, title);
+        }
         self.inner.view.send_if_modified(|current| {
             if *current == view {
                 false

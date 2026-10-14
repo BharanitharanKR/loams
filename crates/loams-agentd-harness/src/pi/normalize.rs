@@ -91,6 +91,13 @@ impl Normalizer {
                     events.push(AgentEvent::Usage {
                         input_tokens: input,
                         output_tokens: n("output"),
+                        cache_tokens: (usage.get("cacheRead").is_some()
+                            || usage.get("cacheWrite").is_some())
+                        .then(|| n("cacheRead").saturating_add(n("cacheWrite"))),
+                        // Pi's own figure, when it reports one.
+                        cost_usd: usage["cost"]["total"]
+                            .as_f64()
+                            .filter(|cost| cost.is_finite() && *cost >= 0.0),
                     });
                     events.push(AgentEvent::ContextUsage {
                         tokens: Some(input + n("output")),

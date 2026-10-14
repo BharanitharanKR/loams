@@ -1,7 +1,7 @@
 //! The services that are §53 §6.5 gaps only: `ApprovalService` (G17, G18,
-//! G22, SD1 Task 13) and `NotificationService` (G19, SD1 Task 14). Each
-//! method answers `unimplemented` with reason `not_implemented` until its
-//! task replaces it here.
+//! G22, SD1 Task 13). Each method answers `unimplemented` with reason
+//! `not_implemented` until its task replaces it here (`NotificationService`,
+//! G19, is served since SD1 Task 14: `notifications.rs`).
 
 use connectrpc::{RequestContext, ServiceRequest, ServiceResult, ServiceStream};
 
@@ -33,9 +33,4 @@ gaps!(ApprovalService {
         ResolveApprovalRequest -> pb::ResolveApprovalResponse;
     set_thread_approval_mode("SetThreadApprovalMode", "G22, SD1 Task 13"):
         SetThreadApprovalModeRequest -> pb::SetThreadApprovalModeResponse;
-});
-
-gaps!(NotificationService {
-    watch_notifications("WatchNotifications", "G19, SD1 Task 14"):
-        WatchNotificationsRequest -> ServiceStream<pb::WatchNotificationsResponse>;
 });

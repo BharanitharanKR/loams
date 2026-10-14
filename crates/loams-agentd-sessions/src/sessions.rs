@@ -203,6 +203,20 @@ struct Inner {
     /// Per-turn checkpoints (SD1 Task 10): awaited before a turn reaches the
     /// harness, told when it ends. Absent in bare tests.
     turn_checkpoints: OnceLock<Arc<dyn TurnCheckpoints>>,
+    /// Turn observers (SD1 Task 14: notifications and per-turn usage).
+    turn_observers: Mutex<Vec<Arc<dyn TurnObserver>>>,
+}
+
+/// What happens in a chat's turns, for the notifications and the per-turn
+/// usage (SD1 Task 14). Every method is called inline and must not block.
+pub trait TurnObserver: Send + Sync {
+    /// A user message (`message_id`) starts a turn of `chat_id`, or steers
+    /// the running one (a steer is a turn of its own).
+    fn turn_start(&self, chat_id: &str, message_id: &str);
+    /// An event of the chat's run, as it is published.
+    fn event(&self, chat_id: &str, event: &AgentEvent);
+    /// The chat's turn in progress has ended (it settled Idle or Errored).
+    fn turn_end(&self, chat_id: &str);
 }
 
 /// Turn-start hook: called with `(chat_id, cwd)`.
@@ -264,6 +278,7 @@ impl SessionsEngine {
                 generated_images: OnceLock::new(),
                 turn_listener: OnceLock::new(),
                 turn_checkpoints: OnceLock::new(),
+                turn_observers: Mutex::new(Vec::new()),
             }),
         }
     }
@@ -316,6 +331,11 @@ impl SessionsEngine {
     /// Wire the checkpoint hook (called once at engine assembly).
     pub fn set_turn_checkpoints(&self, checkpoints: Arc<dyn TurnCheckpoints>) {
         let _ = self.inner.turn_checkpoints.set(checkpoints);
+    }
+
+    /// Add a turn observer (called at engine assembly; SD1 Task 14).
+    pub fn add_turn_observer(&self, observer: Arc<dyn TurnObserver>) {
+        lock(&self.inner.turn_observers).push(observer);
     }
 
     fn note_turn_start(&self, chat_id: &str, cwd: &str) {
@@ -1135,7 +1155,15 @@ impl Inner {
             .collect()
     }
 
+    /// The turn observers, copied out so none is called under the lock.
+    fn turn_observers(&self) -> Vec<Arc<dyn TurnObserver>> {
+        lock(&self.turn_observers).clone()
+    }
+
     fn publish(&self, chat_id: &str, event: &AgentEvent) -> u64 {
+        for observer in self.turn_observers() {
+            observer.event(chat_id, event);
+        }
         let seq = match self.journal.append(chat_id, event) {
             Ok(seq) => seq,
             Err(err) => {
@@ -1254,6 +1282,11 @@ impl Inner {
         if turn_ended && let Some(checkpoints) = self.turn_checkpoints.get() {
             checkpoints.turn_end(chat_id);
         }
+        if turn_ended {
+            for observer in self.turn_observers() {
+                observer.turn_end(chat_id);
+            }
+        }
         // Mirror the transition into the workspace doc's session-status row so
         // remote devices' sidebars show this run (staleness-checked client-side).
         if let Some(ws) = self.workspace() {
@@ -1263,6 +1296,9 @@ impl Inner {
 
     /// Await the turn's `pre` checkpoint, when the hook is wired.
     async fn checkpoint_turn_start(&self, chat_id: &str, cwd: &str, message_id: &str) {
+        for observer in self.turn_observers() {
+            observer.turn_start(chat_id, message_id);
+        }
         if let Some(checkpoints) = self.turn_checkpoints.get() {
             checkpoints.turn_start(chat_id, cwd, message_id).await;
         }

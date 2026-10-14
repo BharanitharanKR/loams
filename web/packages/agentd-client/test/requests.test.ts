@@ -63,6 +63,8 @@ const REQUESTS: Request[] = [
     expectedChecksum: 'sum-1',
     scope: 'worktree+transcript',
   }),
+  request('GetThreadUsage', { chatId }),
+  request('WatchNotifications', {}),
   request('WatchDocMessages', { chatId, openingTail: true }),
   request('WatchQueue', { chatId }),
   request('QueueMessage', { chatId, text: 'Then update the docs' }),

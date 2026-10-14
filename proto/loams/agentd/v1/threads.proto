@@ -67,7 +67,9 @@ service ThreadService {
   // G7: restores a turn's checkpoint; `stale_diff` when the checkout moved
   // (SD1 Task 10).
   rpc RestoreCheckpoint(RestoreCheckpointRequest) returns (RestoreCheckpointResponse);
-  // G20: the thread's per-turn usage (SD1 Task 14).
+  // G20: the thread's per-turn usage, oldest turn first (SD1 Task 14).
+  // Informational, never billing: `cost_usd` only when the harness reported
+  // one.
   rpc GetThreadUsage(GetThreadUsageRequest) returns (GetThreadUsageResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }

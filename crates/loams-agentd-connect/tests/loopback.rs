@@ -236,9 +236,10 @@ async fn connect_unary_and_stream_work() {
 #[tokio::test]
 async fn gaps_and_bad_requests_answer_connect_errors() {
     let daemon = Daemon::start().await;
-    let threads = pb::ThreadServiceClient::new(HttpClient::plaintext(), daemon.config());
-    let error = threads
-        .get_thread_usage(pb::GetThreadUsageRequest::default())
+    // A gap until SD1 Task 13.
+    let approvals = pb::ApprovalServiceClient::new(HttpClient::plaintext(), daemon.config());
+    let error = approvals
+        .set_thread_approval_mode(pb::SetThreadApprovalModeRequest::default())
         .await
         .unwrap_err();
     assert_eq!(error.code, ErrorCode::Unimplemented);

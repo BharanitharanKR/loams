@@ -582,6 +582,8 @@ fn agent_events() -> Vec<(&'static str, AgentEvent)> {
             AgentEvent::Usage {
                 input_tokens: 1200,
                 output_tokens: 300,
+                cache_tokens: None,
+                cost_usd: None,
             },
         ),
         (
@@ -1064,6 +1066,44 @@ pub fn all() -> Vec<Fixture> {
             turn_id: s("msg-1"),
             expected_checksum: s("sum-1"),
             scope: loams_agentd_proto::checkpoints::CheckpointScope::WorktreeAndTranscript,
+        },
+    ));
+    add(Fixture::new(
+        "GetThreadUsageParams",
+        loams_agentd_proto::usage::GetThreadUsageParams {
+            chat_id: s("chat-1"),
+        },
+    ));
+    add(Fixture::new(
+        "ThreadUsage",
+        loams_agentd_proto::usage::ThreadUsage::new(vec![
+            loams_agentd_proto::usage::TurnUsage {
+                turn_id: s("msg-1"),
+                input_tokens: Some(1200),
+                output_tokens: Some(340),
+                cache_tokens: Some(800),
+                cost_usd: Some(0.0125),
+                duration_ms: 4200,
+            },
+            loams_agentd_proto::usage::TurnUsage {
+                turn_id: s("msg-2"),
+                input_tokens: None,
+                output_tokens: None,
+                cache_tokens: None,
+                cost_usd: None,
+                duration_ms: 900,
+            },
+        ]),
+    ));
+    add(Fixture::new(
+        "Notification",
+        loams_agentd_proto::notify::Notification {
+            id: s("notification-1"),
+            kind: loams_agentd_proto::notify::NotificationKind::TurnDone,
+            chat_id: some("chat-1"),
+            group_id: None,
+            title: s("Fix the login"),
+            created_at_ms: MS,
         },
     ));
     add(Fixture::new(
