@@ -16,6 +16,7 @@ Build, understand, and contribute to Loams: hybrid retrieval on object storage, 
 | Integrate an API or SDK | [Route map](api/route-map.md), [error reasons](api/reasons.md), and [SDK runtime contract](sdk/runtime-contract.md) |
 | Contribute a change | [Contributing](../CONTRIBUTING.md), [implementation plans](plans/README.md), and [wiki](wiki/Home.md) |
 | Run the preview | [Running the preview](release/preview.md): Docker Compose, a tailnet, the hosted or self-deployed console |
+| Use Loams Studio, the agentic development environment | [Studio guides](guides/studio/index.md), including [a remote agentd](guides/studio/remote-agentd.md) for the browser |
 | Package or release Loams | [Packaging](release/packaging.md), [publishing](release/publishing.md), and [signing](release/signing.md) |
 | Build a plugin | [Plugin documentation](../plugins/docs/README.md) and [marketplace publishing](marketplace/publishing.md) |
 

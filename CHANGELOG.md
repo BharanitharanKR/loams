@@ -5,6 +5,16 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- **Loams Studio, an agentic development environment in the console** (design §53, plan SD1).
+  The console has two modes, Console and Studio. Studio runs coding agents in threads, each
+  with its own git worktree. Around them it has a chat timeline, a composer, diff review with
+  comments, git actions (commit, push, pull requests, merge), per-turn checkpoints, terminals,
+  a file viewer, previews, supervised approvals and parallel run groups compared side by side.
+  It all goes through `loams-agentd`'s new Connect API, `loams.agentd.v1`. Loams Desktop
+  opens in Studio. In the browser, Studio works against a remote daemon
+  (`loams-agentd serve --remote`) and is behind the instance feature `studio`. The UI is
+  vendored from T3 Code (MIT) with provenance and attribution, and an npm licence gate now
+  runs in CI. Guides: `docs/guides/studio`.
 - **Loams Postgres's control plane in the self-hosted stack.** `--profile postgres-control`
   runs `pg-control` (`loams.postgres.v1` on `127.0.0.1:7680`, API keys from
   `secrets/pg-api-keys.json`) beside the Postgres stack, with its computes started on demand
