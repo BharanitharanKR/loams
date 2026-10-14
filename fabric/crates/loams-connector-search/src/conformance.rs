@@ -82,6 +82,18 @@ impl System {
     }
 }
 
+/// Whether a source checkpoint holds only finished passes (`pass_done`, in
+/// both the PIT and the Qdrant scroll positions).
+fn pass_finished(cp: Option<loams_connector_sdk::Checkpoint>) -> bool {
+    cp.is_some_and(|cp| {
+        !cp.splits.is_empty()
+            && cp.splits.values().all(|p| {
+                serde_json::from_slice::<Value>(&p.opaque)
+                    .is_ok_and(|v| v["pass_done"].as_bool() == Some(true))
+            })
+    })
+}
+
 struct State {
     generation: u32,
     fabric: MemoryFabric,
@@ -729,6 +741,14 @@ impl ConnectorHarness for SearchHarness {
         let (src, dst) = self.names(s.generation);
         let factory = self.factory();
         let inst = Self::instance();
+        // A source pass that finished (no `poll_interval`) has nothing left
+        // to resume: starting again is the next run, a whole pass (the sink
+        // upserts by key, so documents read again land on themselves). The
+        // kit's bench restarts each round after seeding more; resuming the
+        // finished pass would read nothing and never settle.
+        if pass_finished(s.store.get(&inst)) {
+            s.store = MemoryCheckpointStore::new();
+        }
         let (enumerator, sources) = factory
             .source(&self.ctx(self.source_config(&src, 7)))
             .map_err(failed)?
