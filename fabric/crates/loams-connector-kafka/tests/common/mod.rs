@@ -78,8 +78,13 @@ fn gate(var: &str, what: &str) -> bool {
     }
 }
 
+/// `var`, or `default` when it is unset or empty (the nightly job sets its
+/// account variables from secrets that may be empty).
 fn env_or(var: &str, default: &str) -> String {
-    std::env::var(var).unwrap_or_else(|_| default.to_owned())
+    std::env::var(var)
+        .ok()
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| default.to_owned())
 }
 
 /// A unique suffix, so suites can share a broker.
@@ -156,7 +161,12 @@ impl Target {
             .parse()
             .expect("LOAMS_EVENTHUBS_PARTITIONS");
         let group = env_or("LOAMS_EVENTHUBS_GROUP", "cg1");
-        if let Ok(ns) = std::env::var("LOAMS_EVENTHUBS_NAMESPACE") {
+        // The nightly job sets the variable from a secret that may be empty:
+        // an empty namespace means no account, not a namespace named "".
+        if let Some(ns) = std::env::var("LOAMS_EVENTHUBS_NAMESPACE")
+            .ok()
+            .filter(|v| !v.is_empty())
+        {
             let cs = std::env::var("LOAMS_EVENTHUBS_CONNECTION_STRING")
                 .expect("LOAMS_EVENTHUBS_CONNECTION_STRING with LOAMS_EVENTHUBS_NAMESPACE");
             return Some(Self {
