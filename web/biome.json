@@ -37,6 +37,10 @@
           "correctness": { "useExhaustiveDependencies": "off" }
         }
       }
+    },
+    {
+      "includes": ["packages/studio-ui/src/terminal/output.ts"],
+      "linter": { "rules": { "style": { "noNonNullAssertion": "off" } } }
     }
   ]
 }

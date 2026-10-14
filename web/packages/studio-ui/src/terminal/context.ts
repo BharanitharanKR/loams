@@ -1,10 +1,10 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/lib/terminalContext.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// ported to the Loams UI stack. Loams' changes are Apache-2.0.
-import type { ThreadId } from "@t3tools/contracts";
-import { formatComposerContextReference } from "@t3tools/shared/composerContextReferences";
-import { toKindScopedComposerContextId } from "./composerContextReferences";
+// the selection, its normalisation and its label kept; the composer draft, reference links and legacy placeholder migration dropped (the composer is Task 19's). Loams' changes are Apache-2.0.
+
+// A terminal selection sent to the composer ("send selection to composer", §53 §5.7):
+// the terminal, its label, the buffer lines it spans and the text, as text.
 
 export interface TerminalContextSelection {
   terminalId: string;
@@ -12,31 +12,6 @@ export interface TerminalContextSelection {
   lineStart: number;
   lineEnd: number;
   text: string;
-}
-
-export interface TerminalContextDraft extends TerminalContextSelection {
-  id: string;
-  threadId: ThreadId;
-  createdAt: string;
-}
-
-/** Legacy ordinal placeholder from drafts saved before context references. Migration only. */
-export const INLINE_TERMINAL_CONTEXT_PLACEHOLDER = "\uFFFC";
-
-export interface TerminalContextReferenceSource {
-  id: string;
-  terminalLabel: string;
-  lineStart: number;
-  lineEnd: number;
-}
-
-/** The canonical inline link that stands for this context in the prompt. */
-export function formatTerminalContextReference(context: TerminalContextReferenceSource): string {
-  return formatComposerContextReference({
-    kind: "terminal",
-    contextId: toKindScopedComposerContextId("terminal", context.id),
-    label: formatTerminalContextLabel(context),
-  });
 }
 
 export function normalizeTerminalContextText(text: string): string {
@@ -47,17 +22,7 @@ export function hasTerminalContextText(context: { text: string }): boolean {
   return normalizeTerminalContextText(context.text).length > 0;
 }
 
-export function isTerminalContextExpired(context: { text: string }): boolean {
-  return !hasTerminalContextText(context);
-}
-
-export function filterTerminalContextsWithText<T extends { text: string }>(
-  contexts: ReadonlyArray<T>,
-): T[] {
-  return contexts.filter((context) => hasTerminalContextText(context));
-}
-
-function normalizeTerminalContextSelection(
+export function normalizeTerminalContextSelection(
   selection: TerminalContextSelection,
 ): TerminalContextSelection | null {
   const text = normalizeTerminalContextText(selection.text);
@@ -89,18 +54,4 @@ export function formatTerminalContextLabel(selection: {
   lineEnd: number;
 }): string {
   return `${selection.terminalLabel} ${formatTerminalContextRange(selection)}`;
-}
-
-/** Binds legacy U+FFFC placeholders to contexts in array order; leftover placeholders vanish. */
-export function migrateLegacyTerminalContextPlaceholders(
-  prompt: string,
-  contexts: ReadonlyArray<TerminalContextReferenceSource>,
-): string {
-  if (!prompt.includes(INLINE_TERMINAL_CONTEXT_PLACEHOLDER)) return prompt;
-  let index = 0;
-  return prompt.replaceAll(INLINE_TERMINAL_CONTEXT_PLACEHOLDER, () => {
-    const context = contexts[index];
-    index += 1;
-    return context ? formatTerminalContextReference(context) : "";
-  });
 }
