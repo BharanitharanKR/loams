@@ -18,6 +18,12 @@ export { Card } from './card';
 export { Collapsible, CollapsiblePanel, CollapsibleTrigger } from './collapsible';
 export { ComingSoon, isNotServed } from './coming-soon';
 export { type CommandItem, CommandPalette, matchCommand, Shortcut } from './command';
+export {
+  normalizeSearchText,
+  type RankableCommand,
+  rankCommandMatch,
+  rankCommands,
+} from './command-rank';
 export { cx } from './cx';
 export { DataTable, type SortableColumn, VirtualList } from './data-table';
 export { Empty } from './empty';

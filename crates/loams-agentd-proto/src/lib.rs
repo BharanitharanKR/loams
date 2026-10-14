@@ -6,6 +6,7 @@
 pub mod agent;
 pub mod brand;
 pub mod chat;
+pub mod checkpoints;
 pub mod daemon;
 pub mod entities;
 pub mod file_mentions;

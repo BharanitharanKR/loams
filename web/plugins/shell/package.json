@@ -35,7 +35,8 @@
         "shell.nav.section",
         "shell.dock.right",
         "shell.header.server",
-        "shell.nav.context"
+        "shell.nav.context",
+        "palette.command"
       ],
       "permissions": [],
       "requires": {

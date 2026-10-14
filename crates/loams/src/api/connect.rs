@@ -272,6 +272,8 @@ struct Instance {
     live_served: bool,
     /// The House proxy, whose health decides `loams.house.v1`'s row.
     house: Option<Arc<super::house_proxy::HouseProxy>>,
+    /// The principal store, which says whether first-run setup is due.
+    principals: crate::auth::Principals,
 }
 
 impl Instance {
@@ -282,6 +284,20 @@ impl Instance {
             live: self.live_served,
             house: self.house.as_ref().is_some_and(|house| house.healthy()),
         }
+    }
+
+    /// Whether the console should open on first-run setup: there is no org
+    /// yet and `AuthService/CompleteSetup` can run (authentication is off, or
+    /// `LOAMS_SETUP_TOKEN` is set). With setup closed it stays false, so the
+    /// console does not open on a page nobody can complete.
+    async fn setup_required(&self) -> bool {
+        !matches!(self.principals.setup, crate::auth::SetupGate::Closed)
+            && self
+                .principals
+                .directory
+                .read()
+                .await
+                .is_ok_and(|doc| doc.org.is_none())
     }
 }
 
@@ -313,11 +329,11 @@ impl InstanceService for Instance {
                 ..Default::default()
             }],
             services: statuses(served),
+            setup_required: self.setup_required().await,
             // Empty until their plans land, not because they are off: `issuer`
             // and `jwks_uri` with the auth plan (MT), `tls_pins` and `push`
             // with the phone plans (§37 §7), `min_app_versions` with release
-            // (CLI2), `setup_required` with first-run setup, `key_rotation`
-            // with signing-key rotation. A client must treat an empty
+            // (CLI2), `key_rotation` with signing-key rotation. A client must treat an empty
             // `features` map as "nothing announced", not "nothing enabled".
             ..Default::default()
         })
@@ -462,6 +478,7 @@ pub(crate) fn routes(state: &AppState, hot_default: bool) -> AxumRouter {
         graph_served,
         live_served,
         house: state.house.clone(),
+        principals: state.principals.clone(),
     })
     .register(rpc);
     rpc = super::live::register(rpc, state);

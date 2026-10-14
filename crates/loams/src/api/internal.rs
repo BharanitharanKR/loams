@@ -38,6 +38,9 @@ pub fn routes() -> Router<AppState> {
     // Graph calls forwarded to their owner (GR1 Task 12).
     #[cfg(feature = "graph")]
     let routes = routes.merge(super::graph::internal_routes());
+    // Commits forwarded to a repository's sequencer owner (GT1 Task 14).
+    #[cfg(feature = "git")]
+    let routes = routes.merge(super::git_internal::routes());
     routes
 }
 

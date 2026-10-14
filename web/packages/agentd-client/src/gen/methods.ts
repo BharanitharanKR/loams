@@ -19,6 +19,7 @@ import type { CheckoutChangeRequestStatus } from "./CheckoutChangeRequestStatus"
 import type { CheckoutDiff } from "./CheckoutDiff";
 import type { CheckoutDiffList } from "./CheckoutDiffList";
 import type { CheckoutFileDiffText } from "./CheckoutFileDiffText";
+import type { CheckpointList } from "./CheckpointList";
 import type { CloneRepoParams } from "./CloneRepoParams";
 import type { CommitWorktreeParams } from "./CommitWorktreeParams";
 import type { CommitWorktreeReply } from "./CommitWorktreeReply";
@@ -61,6 +62,7 @@ import type { Hello } from "./Hello";
 import type { HelloReply } from "./HelloReply";
 import type { IdReply } from "./IdReply";
 import type { ListAgentAccountsParams } from "./ListAgentAccountsParams";
+import type { ListCheckpointsParams } from "./ListCheckpointsParams";
 import type { ListFoldersParams } from "./ListFoldersParams";
 import type { ListGitHistoryParams } from "./ListGitHistoryParams";
 import type { ListModelsParams } from "./ListModelsParams";
@@ -103,6 +105,8 @@ import type { RepoRefList } from "./RepoRefList";
 import type { ResizeTerminalParams } from "./ResizeTerminalParams";
 import type { ResolveGitAvatarsParams } from "./ResolveGitAvatarsParams";
 import type { ResolveReviewCommentParams } from "./ResolveReviewCommentParams";
+import type { RestoreCheckpointParams } from "./RestoreCheckpointParams";
+import type { RestoreCheckpointReply } from "./RestoreCheckpointReply";
 import type { ReviewComment } from "./ReviewComment";
 import type { ReviewCommentsFrame } from "./ReviewCommentsFrame";
 import type { Role } from "./Role";
@@ -177,6 +181,7 @@ export const ERROR_CODES = [
   "nothing_to_commit",
   "push_rejected",
   "provider_not_configured",
+  "checkpoint_missing",
 ] as const;
 
 export type AgentdErrorCode = (typeof ERROR_CODES)[number];
@@ -208,6 +213,8 @@ export const METHODS = [
   { name: "RetryDelivery", kind: "unary", params: "ChatIdParams", result: "Empty", role: "owner", renderer: true },
   { name: "TakeProjectActionSetup", kind: "unary", params: "TakeProjectActionSetupParams", result: "ProjectActionSetup", role: "owner", renderer: true },
   { name: "ForkSideChat", kind: "unary", params: "ForkSideChatParams", result: "Chat", role: "owner", renderer: true },
+  { name: "ListCheckpoints", kind: "unary", params: "ListCheckpointsParams", result: "CheckpointList", role: "owner", renderer: true },
+  { name: "RestoreCheckpoint", kind: "unary", params: "RestoreCheckpointParams", result: "RestoreCheckpointReply", role: "owner", renderer: true },
   { name: "WatchDocMessages", kind: "stream", params: "WatchDocMessagesParams", result: "TranscriptUpdate", role: "mcp", renderer: true },
   { name: "WatchQueue", kind: "stream", params: "ChatIdParams", result: "QueueSnapshot", role: "owner", renderer: true },
   { name: "QueueMessage", kind: "unary", params: "QueueMessageParams", result: "IdReply", role: "mcp", renderer: true },
@@ -315,6 +322,8 @@ export type Methods = {
   RetryDelivery: { params: ChatIdParams; result: Empty; kind: "unary"; role: "owner"; renderer: true };
   TakeProjectActionSetup: { params: TakeProjectActionSetupParams; result: ProjectActionSetup; kind: "unary"; role: "owner"; renderer: true };
   ForkSideChat: { params: ForkSideChatParams; result: Chat; kind: "unary"; role: "owner"; renderer: true };
+  ListCheckpoints: { params: ListCheckpointsParams; result: CheckpointList; kind: "unary"; role: "owner"; renderer: true };
+  RestoreCheckpoint: { params: RestoreCheckpointParams; result: RestoreCheckpointReply; kind: "unary"; role: "owner"; renderer: true };
   WatchDocMessages: { params: WatchDocMessagesParams; result: TranscriptUpdate; kind: "stream"; role: "mcp"; renderer: true };
   WatchQueue: { params: ChatIdParams; result: QueueSnapshot; kind: "stream"; role: "owner"; renderer: true };
   QueueMessage: { params: QueueMessageParams; result: IdReply; kind: "unary"; role: "mcp"; renderer: true };

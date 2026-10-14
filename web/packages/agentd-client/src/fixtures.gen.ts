@@ -20,6 +20,7 @@ import type { CheckoutChangeRequestStatus } from "./gen/CheckoutChangeRequestSta
 import type { CheckoutDiff } from "./gen/CheckoutDiff";
 import type { CheckoutDiffList } from "./gen/CheckoutDiffList";
 import type { CheckoutFileDiffText } from "./gen/CheckoutFileDiffText";
+import type { CheckpointList } from "./gen/CheckpointList";
 import type { CloneRepoParams } from "./gen/CloneRepoParams";
 import type { CommitWorktreeParams } from "./gen/CommitWorktreeParams";
 import type { CommitWorktreeReply } from "./gen/CommitWorktreeReply";
@@ -62,6 +63,7 @@ import type { Hello } from "./gen/Hello";
 import type { HelloReply } from "./gen/HelloReply";
 import type { IdReply } from "./gen/IdReply";
 import type { ListAgentAccountsParams } from "./gen/ListAgentAccountsParams";
+import type { ListCheckpointsParams } from "./gen/ListCheckpointsParams";
 import type { ListFoldersParams } from "./gen/ListFoldersParams";
 import type { ListGitHistoryParams } from "./gen/ListGitHistoryParams";
 import type { ListModelsParams } from "./gen/ListModelsParams";
@@ -105,6 +107,8 @@ import type { RepoRefList } from "./gen/RepoRefList";
 import type { ResizeTerminalParams } from "./gen/ResizeTerminalParams";
 import type { ResolveGitAvatarsParams } from "./gen/ResolveGitAvatarsParams";
 import type { ResolveReviewCommentParams } from "./gen/ResolveReviewCommentParams";
+import type { RestoreCheckpointParams } from "./gen/RestoreCheckpointParams";
+import type { RestoreCheckpointReply } from "./gen/RestoreCheckpointReply";
 import type { ReviewComment } from "./gen/ReviewComment";
 import type { ReviewCommentsFrame } from "./gen/ReviewCommentsFrame";
 import type { RunProjectActionParams } from "./gen/RunProjectActionParams";
@@ -445,6 +449,33 @@ export const fixture_Chat = {
   "spaceId": "space-1",
   "title": "Fix the build"
 } satisfies Chat;
+
+export const fixture_ListCheckpointsParams = {
+  "chatId": "chat-1"
+} satisfies ListCheckpointsParams;
+
+export const fixture_CheckpointList = {
+  "checkpoints": [
+    {
+      "createdAtMs": 1791797400000,
+      "filesChanged": 2,
+      "ref": "refs/loams/checkpoints/chat-1/turn/1/pre",
+      "turnId": "msg-1"
+    }
+  ]
+} satisfies CheckpointList;
+
+export const fixture_RestoreCheckpointParams = {
+  "chatId": "chat-1",
+  "expectedChecksum": "sum-1",
+  "scope": "worktree+transcript",
+  "turnId": "msg-1"
+} satisfies RestoreCheckpointParams;
+
+export const fixture_RestoreCheckpointReply = {
+  "forkedChatId": "chat-2",
+  "restoredTo": "0123456789abcdef0123456789abcdef01234567"
+} satisfies RestoreCheckpointReply;
 
 export const fixture_WatchDocMessagesParams = {
   "chatId": "chat-1",
@@ -2249,6 +2280,10 @@ export const FIXTURES = [
   { name: "ProjectActionSetup", type: "ProjectActionSetup", value: fixture_ProjectActionSetup },
   { name: "ForkSideChatParams", type: "ForkSideChatParams", value: fixture_ForkSideChatParams },
   { name: "Chat", type: "Chat", value: fixture_Chat },
+  { name: "ListCheckpointsParams", type: "ListCheckpointsParams", value: fixture_ListCheckpointsParams },
+  { name: "CheckpointList", type: "CheckpointList", value: fixture_CheckpointList },
+  { name: "RestoreCheckpointParams", type: "RestoreCheckpointParams", value: fixture_RestoreCheckpointParams },
+  { name: "RestoreCheckpointReply", type: "RestoreCheckpointReply", value: fixture_RestoreCheckpointReply },
   { name: "WatchDocMessagesParams", type: "WatchDocMessagesParams", value: fixture_WatchDocMessagesParams },
   { name: "MessagePart.text", type: "MessagePart", value: fixture_MessagePart_text },
   { name: "MessagePart.image", type: "MessagePart", value: fixture_MessagePart_image },

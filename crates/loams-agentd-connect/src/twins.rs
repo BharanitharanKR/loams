@@ -135,8 +135,8 @@ methods! {
         Interrupt => Command("interrupt"),
         AnswerQuestion => Command("respondInput"),
         WatchTranscript => Method("WatchDocMessages"),
-        ListCheckpoints => Gap { gap: "G6", task: "SD1 Task 10" },
-        RestoreCheckpoint => Gap { gap: "G7", task: "SD1 Task 10" },
+        ListCheckpoints => Method("ListCheckpoints"),
+        RestoreCheckpoint => Method("RestoreCheckpoint"),
         GetThreadUsage => Gap { gap: "G20", task: "SD1 Task 14" },
     }
     QueueService {

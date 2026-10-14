@@ -11,7 +11,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use console_support::{
-    Engine, LOOPBACK0, OWNER_EMAIL, OWNER_PASSWORD, SETUP_TOKEN, TestAuthenticator, reason_of,
+    Client, Engine, LOOPBACK0, OWNER_EMAIL, OWNER_PASSWORD, SETUP_TOKEN, TestAuthenticator,
+    reason_of,
 };
 use loams::auth::{AuthConfig, PUBLIC_RPCS};
 use loams::{Server, ServerConfig};
@@ -683,3 +684,118 @@ fn jwt_without_issuer_refused_at_startup() {
 #[ignore = "the OIDC start and callback endpoints are served only with MT1's issuer, which has \
             not merged (API2-Q1, ruling 0.3); without it they are absent, not stubbed"]
 async fn oidc_start_remains_http_redirect() {}
+
+/// The hosted console signs in elsewhere (an OIDC token, an API key, the
+/// tailnet) and reads who it is from `GetSession` (API2 Task 10, rulings
+/// 10.4 and 10.5): a bearer caller gets its person and org role, with no
+/// CSRF token; someone outside the org gets no role. `GetInstance` says
+/// first-run setup is due until it has run.
+#[tokio::test]
+async fn get_session_names_a_bearer_caller() {
+    let engine = Engine::guarded(vec![Arc::new(TestAuthenticator)]).await;
+    let anonymous = engine.client();
+    let instance = |client: Client| async move {
+        client
+            .call("instance.v1.InstanceService", "GetInstance", json!({}))
+            .await
+            .ok()
+            .clone()
+    };
+    assert_eq!(instance(anonymous.clone()).await["setupRequired"], true);
+    let grace = engine
+        .client()
+        .with_bearer(&TestAuthenticator::token("grace"));
+    let before = grace
+        .call("auth.v1.AuthService", "GetSession", json!({}))
+        .await;
+    let session = &before.ok()["session"];
+    assert_eq!(session["user"]["email"], "grace@example.test");
+    assert!(session.get("role").is_none(), "{session}");
+    assert!(session.get("csrfToken").is_none(), "{session}");
+    let mut owner = engine.client();
+    owner.setup(SETUP_TOKEN).await;
+    assert!(
+        instance(anonymous.clone())
+            .await
+            .get("setupRequired")
+            .is_none()
+    );
+    let ada = engine
+        .client()
+        .with_bearer(&TestAuthenticator::token("ada"));
+    let answer = ada
+        .call("auth.v1.AuthService", "GetSession", json!({}))
+        .await;
+    let session = &answer.ok()["session"];
+    assert_eq!(session["user"]["email"], OWNER_EMAIL);
+    assert_eq!(session["user"]["name"], "Ada Admin");
+    assert_eq!(session["role"], "ORG_ROLE_OWNER");
+    assert_eq!(session["org"]["name"], "Acme");
+    assert!(session.get("csrfToken").is_none(), "{session}");
+    // Outside the org: named, but no role.
+    let outside = grace
+        .call("auth.v1.AuthService", "GetSession", json!({}))
+        .await;
+    assert!(outside.ok()["session"].get("role").is_none());
+    // Still no answer without a credential.
+    assert_eq!(
+        anonymous
+            .call("auth.v1.AuthService", "GetSession", json!({}))
+            .await
+            .failure(),
+        ("unauthenticated".into(), "token_missing".into())
+    );
+    engine.stop().await;
+}
+
+/// An operator's key from `LOAMS_API_KEYS_FILE` (the hosted console's
+/// `apikey` mode) is the owner in `GetSession`.
+#[tokio::test]
+async fn get_session_names_a_key_file_key_the_owner() {
+    let (engine, key, _dir) = engine_with_keys().await;
+    engine.client().setup(SETUP_TOKEN).await;
+    let answer = engine
+        .client()
+        .with_bearer(&key)
+        .call("auth.v1.AuthService", "GetSession", json!({}))
+        .await;
+    let session = &answer.ok()["session"];
+    assert_eq!(session["role"], "ORG_ROLE_OWNER");
+    assert_eq!(session["org"]["name"], "Acme");
+    assert!(session.get("csrfToken").is_none(), "{session}");
+    engine.stop().await;
+}
+
+/// With authentication on and no `LOAMS_SETUP_TOKEN` nobody can run setup,
+/// so `GetInstance` does not send the console to it.
+#[tokio::test]
+async fn setup_is_not_required_when_it_cannot_run() {
+    let engine = Engine::start(AuthConfig {
+        extra_authenticators: loams::auth::Authenticators(vec![Arc::new(TestAuthenticator)]),
+        ..AuthConfig::off()
+    })
+    .await;
+    let instance = engine
+        .client()
+        .call("instance.v1.InstanceService", "GetInstance", json!({}))
+        .await;
+    assert!(instance.ok().get("setupRequired").is_none());
+    engine.stop().await;
+}
+
+/// With authentication off the developer on loopback is the owner, and
+/// setup is due until it has run.
+#[tokio::test]
+async fn dev_loopback_session_is_the_owner() {
+    let engine = Engine::dev().await;
+    let anonymous = engine.client();
+    let instance = anonymous
+        .call("instance.v1.InstanceService", "GetInstance", json!({}))
+        .await;
+    assert_eq!(instance.ok()["setupRequired"], true);
+    let answer = anonymous
+        .call("auth.v1.AuthService", "GetSession", json!({}))
+        .await;
+    assert_eq!(answer.ok()["session"]["role"], "ORG_ROLE_OWNER");
+    engine.stop().await;
+}

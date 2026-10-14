@@ -11,6 +11,8 @@
       "!packages/proto/src/gen",
       "!packages/agentd-client/src/gen",
       "!packages/agentd-client/src/fixtures.gen.ts",
+      "!packages/agentd-client/src/methods.gen.ts",
+      "!packages/agentd-client/test/transcript.connect.gen.json",
       "!packages/agentd-client/test/requests.json"
     ]
   },
@@ -35,6 +37,10 @@
           "correctness": { "useExhaustiveDependencies": "off" }
         }
       }
+    },
+    {
+      "includes": ["packages/studio-ui/src/terminal/output.ts"],
+      "linter": { "rules": { "style": { "noNonNullAssertion": "off" } } }
     }
   ]
 }

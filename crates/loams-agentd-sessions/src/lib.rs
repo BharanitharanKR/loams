@@ -16,6 +16,7 @@ pub mod agent_accounts;
 pub mod change_request_create;
 pub mod change_requests;
 mod chat_persistence;
+pub mod checkpoints;
 pub mod content_search;
 pub mod diff_sync;
 pub mod doc_host;
@@ -44,6 +45,7 @@ pub mod worktree_list;
 
 pub use agent_accounts::{AgentAccounts, AgentAccountsConfig};
 pub use change_requests::{ChangeRequestCacheKey, CheckoutChangeRequests};
+pub use checkpoints::Checkpoints;
 pub use diff_sync::{
     CheckoutDiffSync, DiffFileTextPair, DiffSnapshot, TurnSnapshot, capture_commit_diff,
     capture_diff, capture_diff_against, capture_turn_diff, discard_working_tree, merge_base,
@@ -133,6 +135,8 @@ pub struct EngineCore {
     pub previews: loams_agentd_preview::PreviewService,
     pub change_requests: CheckoutChangeRequests,
     pub diff_sync: CheckoutDiffSync,
+    /// Per-turn checkpoints (SD1 Task 10).
+    pub checkpoints: Checkpoints,
     pub spaces_sync: SpacesSync,
     pub uploads: Uploads,
     pub agent_accounts: AgentAccounts,
@@ -271,6 +275,9 @@ impl EngineCore {
         sessions.set_turn_listener(Arc::new(move |chat_id, cwd| {
             turn_diff.note_turn_start(chat_id, cwd);
         }));
+        // Each turn's `pre` and `post` hidden commits (SD1 Task 10).
+        let checkpoints = Checkpoints::new(repos.clone());
+        sessions.set_turn_checkpoints(Arc::new(checkpoints.clone()));
         let spaces_sync = SpacesSync::start(repos.clone(), workspace.clone(), &device_id);
         Ok(Self {
             sessions,
@@ -284,6 +291,7 @@ impl EngineCore {
             previews,
             change_requests,
             diff_sync,
+            checkpoints,
             spaces_sync,
             uploads,
             agent_accounts,
@@ -315,6 +323,7 @@ impl EngineCore {
             self.workspace_scope,
         )
         .with_previews(self.previews.clone())
+        .with_checkpoints(self.checkpoints.clone())
         .with_harness_updates(self.harness_updates.clone());
         Arc::new(rpc)
     }

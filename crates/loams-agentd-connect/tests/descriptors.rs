@@ -5,8 +5,8 @@
 //!   each gap of §6.5, is served by (or declared as) a Connect method.
 //! - `connect_methods_match_descriptors`: the twins table names exactly the
 //!   descriptors' methods, and a stream twin is a server stream.
-//! - `allowlist_gen_is_fresh`: Electron main's generated renderer allowlist
-//!   is the table's. `LOAMS_UPDATE_ALLOWLIST=1` rewrites it.
+//! - `allowlist_gen_is_fresh`: Electron main's generated renderer allowlist,
+//!   and the web client's copy (`@loams/agentd-client`), are the table's. `LOAMS_UPDATE_ALLOWLIST=1` rewrites it.
 #![allow(clippy::unwrap_used)]
 
 use std::collections::BTreeSet;
@@ -263,10 +263,11 @@ fn every_studio_method_has_rpc() {
     }
 }
 
-/// The §53 §6.5 gaps a task has served: G1–G5 and G21 (SD1 Task 9); G8–G11
-/// and G23 (SD1 Task 11).
+/// The §53 §6.5 gaps a task has served: G1–G5 and G21 (SD1 Task 9), G6 and
+/// G7 (SD1 Task 10), G8–G11 and G23 (SD1 Task 11).
 const SERVED_GAPS: &[&str] = &[
     "G1", "G2", "G3", "G4", "G5", "G21", // SD1 Task 9
+    "G6", "G7", // SD1 Task 10
     "G8", "G9", "G10", "G11", "G23", // SD1 Task 11
 ];
 
@@ -312,22 +313,28 @@ fn the_renderer_reaches_no_gap_and_no_lifecycle() {
     assert!(allowlist.contains(&"/loams.agentd.v1.ThreadService/WatchTranscript".to_owned()));
 }
 
-fn allowlist_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../apps/desktop-electron/src/main/agentd/allowlist.gen.ts")
+/// Electron main's copy (the proxy's allowlist) and the web client's (the
+/// `agentd:git-write` check of `rpc.agentd`, SD1 Task 6): the same file.
+fn allowlist_paths() -> [PathBuf; 2] {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    [
+        root.join("apps/desktop-electron/src/main/agentd/allowlist.gen.ts"),
+        root.join("web/packages/agentd-client/src/methods.gen.ts"),
+    ]
 }
 
 #[test]
 fn allowlist_gen_is_fresh() {
     let generated = renderer_allowlist_ts();
-    let path = allowlist_path();
-    if std::env::var_os("LOAMS_UPDATE_ALLOWLIST").is_some() {
-        std::fs::write(&path, &generated).unwrap();
+    for path in allowlist_paths() {
+        if std::env::var_os("LOAMS_UPDATE_ALLOWLIST").is_some() {
+            std::fs::write(&path, &generated).unwrap();
+        }
+        let committed = std::fs::read_to_string(&path).unwrap_or_default();
+        assert!(
+            committed == generated,
+            "{} is stale; run `LOAMS_UPDATE_ALLOWLIST=1 cargo test -p loams-agentd-connect --test descriptors`",
+            path.display()
+        );
     }
-    let committed = std::fs::read_to_string(&path).unwrap_or_default();
-    assert!(
-        committed == generated,
-        "{} is stale; run `LOAMS_UPDATE_ALLOWLIST=1 cargo test -p loams-agentd-connect --test descriptors`",
-        path.display()
-    );
 }

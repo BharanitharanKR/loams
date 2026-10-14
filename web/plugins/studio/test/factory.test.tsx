@@ -2,17 +2,16 @@
 // Factory group, the thread draft a factory app hands over, the thread toolbar's
 // Forgejo PR, and links only on the web until SF1.
 
-import { createMockAgentdApi } from '@loams/plugin-desktop-agentd';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { desktopAgentd, webAgentd } from '../src/agentd.js';
 import { desktopFactory, type StudioFactory } from '../src/factory.js';
 import { routeOf, studioHref } from '../src/routes.js';
 import { FactoryGroup } from '../src/sidebar/Factory.js';
 import { BranchPr } from '../src/thread/FactoryLinks.js';
 import { StudioView } from '../src/view.js';
+import { desktopFake as desktopAgentd, webFake } from './fakes.js';
 
 function wrap(children: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -109,8 +108,7 @@ describe('the Factory group', () => {
   });
 
   it('is in the desktop sidebar', async () => {
-    const mock = createMockAgentdApi({ running: true, background: 'off' });
-    const agentd = desktopAgentd({ agentd: mock.api, shell: { pickFolder: async () => null } });
+    const { agentd } = desktopAgentd({ folder: null });
     render(
       wrap(
         <StudioView
@@ -126,7 +124,9 @@ describe('the Factory group', () => {
 
   it('web_factory_links_only_without_sf1', async () => {
     // Without SF1 the browser has no factory source: no Factory group at all.
-    render(wrap(<StudioView agentd={webAgentd()} route={{ kind: 'home' }} navigate={vi.fn()} />));
+    render(
+      wrap(<StudioView agentd={webFake().agentd} route={{ kind: 'home' }} navigate={vi.fn()} />),
+    );
     await screen.findByText('Connect an agentd host');
     expect(screen.queryByRole('navigation', { name: 'Factory' })).toBeNull();
     cleanup();
@@ -173,8 +173,7 @@ describe('the thread draft', () => {
       },
     });
     expect(routeOf('home', studioQuery(studioHref(route)))).toEqual(route);
-    const mock = createMockAgentdApi({ running: true, background: 'off' });
-    const agentd = desktopAgentd({ agentd: mock.api, shell: { pickFolder: async () => null } });
+    const { agentd } = desktopAgentd({ folder: null });
     render(wrap(<StudioView agentd={agentd} route={route} navigate={vi.fn()} />));
     const card = await screen.findByRole('region', { name: 'New thread from Plane' });
     expect(within(card).getByText('MKT-42: Fix the login redirect')).toBeTruthy();

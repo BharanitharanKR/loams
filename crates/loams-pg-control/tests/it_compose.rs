@@ -277,7 +277,7 @@ async fn it_compose_compute_answers_select_1() {
     )
     .unwrap();
     let _down = Down(bin.clone(), dir.path().to_path_buf());
-    let addr = rt.ensure_address(&ep).await.unwrap();
+    let addr = rt.ensure_address(NS, &ep).await.unwrap();
     ep.backend_addr = Some(addr.to_string());
     api.put(&ep, None).await.unwrap();
     api.put(
@@ -316,7 +316,7 @@ async fn it_compose_compute_answers_select_1() {
             .unwrap(),
     };
     let handle = rt.start(&launch).await.unwrap();
-    rt.bind_address(&ep, &handle).await.unwrap();
+    rt.bind_address(NS, &ep, &handle).await.unwrap();
     assert_eq!(
         rt.start(&launch).await.unwrap(),
         handle,
@@ -393,9 +393,15 @@ async fn it_compose_compute_answers_select_1() {
     assert_eq!(one, 1);
     drop(client);
 
-    assert_eq!(rt.status(&compute).await.unwrap(), RuntimeStatus::Running);
-    rt.stop(&compute).await.unwrap();
-    assert_eq!(rt.status(&compute).await.unwrap(), RuntimeStatus::Missing);
-    rt.remove_address(&ep).await.unwrap();
+    assert_eq!(
+        rt.status(NS, &compute).await.unwrap(),
+        RuntimeStatus::Running
+    );
+    rt.stop(NS, &compute).await.unwrap();
+    assert_eq!(
+        rt.status(NS, &compute).await.unwrap(),
+        RuntimeStatus::Missing
+    );
+    rt.remove_address(NS, &ep).await.unwrap();
     let _ = stop_upcall.send(());
 }

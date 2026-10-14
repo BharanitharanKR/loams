@@ -455,3 +455,58 @@ async fn list_repos_paginates() {
     assert!(empty.get("repos").is_none(), "{empty}");
     running.shutdown().await;
 }
+
+/// GT1 Task 14: a commit forwarded to this node over `POST /internal/v1/git/commit` is committed
+/// by its sequencer, and a retry of it is replayed, never applied twice.
+#[tokio::test]
+async fn forwarded_commit_route_commits_here() {
+    use loams_git::forward::{decode_answer, encode_request};
+    use loams_git::{FORWARD_PATH, Principal, RefTxn, RefUpdate, SeqCommit};
+
+    let running = Running::start().await;
+    let ns = namespace(&running, "acme").await;
+    let created = create(&running, "fwd", "k-fwd").await;
+    let repo_id = created["repo"]["repoId"]
+        .as_str()
+        .unwrap_or_else(|| panic!("a repo id: {created}"))
+        .to_string();
+    let repo = RepoId::parse(&repo_id).expect("repo id");
+    let txn = SeqCommit::Ref(RefTxn {
+        key: IdemKey::parse("forwarded-1").expect("key"),
+        request_digest: [3; 32],
+        updates: vec![RefUpdate {
+            name: RefName::parse("refs/heads/forwarded").expect("ref"),
+            expect: Expect::Absent,
+            new: Some(oid(9)),
+        }],
+        packs: Vec::new(),
+        principal: Principal::parse("node-2").expect("principal"),
+        scope: None,
+        trace: None,
+        push_options: Vec::new(),
+    });
+    let body = encode_request(ns, "local/acme", &repo, &txn);
+    let client = reqwest::Client::new();
+    let mut seqs = Vec::new();
+    for replay in [false, true] {
+        let response = client
+            .post(format!("{}{FORWARD_PATH}", running.base))
+            .body(body.clone())
+            .send()
+            .await
+            .expect("forward");
+        assert_eq!(response.status(), reqwest::StatusCode::OK);
+        let answer = decode_answer(&response.bytes().await.expect("body")).expect("answer");
+        let receipt = answer.expect("committed");
+        assert_eq!(receipt.replayed, replay);
+        seqs.push(receipt.seq);
+    }
+    assert_eq!(seqs[0], seqs[1]);
+    let refs = ok(
+        &running,
+        "ListRefs",
+        json!({"namespace": "acme", "name": "fwd"}),
+    )
+    .await;
+    assert!(refs.to_string().contains("refs/heads/forwarded"), "{refs}");
+}

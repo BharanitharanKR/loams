@@ -68,6 +68,7 @@ use loams_agentd_rpc::{RpcError, RpcReply, RpcService, methods, params_of, reply
 use crate::agent_accounts::AgentAccounts;
 use crate::change_request_create::ChangeRequestCreator;
 use crate::change_requests::CheckoutChangeRequests;
+use crate::checkpoints::Checkpoints;
 use crate::diff_sync::CheckoutDiffSync;
 use crate::doc_host::DocHost;
 use crate::git_write::GitWriteError;
@@ -158,6 +159,7 @@ pub struct EngineRpc {
     uploads: Uploads,
     agent_accounts: AgentAccounts,
     harness_updates: Option<crate::harness_updates::HarnessUpdateCoordinator>,
+    checkpoints: Option<Checkpoints>,
     engine_info: EngineInfo,
     /// Opens pull requests (G4) with the daemon's forge credentials.
     change_request_creator: ChangeRequestCreator,
@@ -183,6 +185,16 @@ fn review_error(error: crate::review::ReviewError) -> RpcError {
         crate::review::ReviewError::BadParams(text) => RpcError::BadParams(text),
         other => RpcError::Failed(other.to_string()),
     }
+}
+
+/// Where a fork of a chat's transcript ends.
+#[derive(Debug, Clone, Copy)]
+enum ForkAt<'a> {
+    /// After the last complete assistant response (`ForkSideChat`).
+    LastResponse,
+    /// Just before the entry of this id: a checkpoint's turn
+    /// (`RestoreCheckpoint` with `worktree+transcript`).
+    BeforeTurn(&'a str),
 }
 
 impl std::fmt::Debug for EngineRpc {
@@ -229,11 +241,266 @@ impl EngineRpc {
             uploads,
             agent_accounts,
             harness_updates: None,
+            checkpoints: None,
             engine_info,
             change_request_creator: ChangeRequestCreator::from_keyring(),
             git_writes: std::sync::Arc::new(tokio::sync::Mutex::new(())),
             review,
         }
+    }
+
+    pub fn with_checkpoints(mut self, checkpoints: Checkpoints) -> Self {
+        self.checkpoints = Some(checkpoints);
+        self
+    }
+
+    fn checkpoints(&self) -> Result<&Checkpoints, RpcError> {
+        self.checkpoints
+            .as_ref()
+            .ok_or_else(|| RpcError::Failed("checkpoints unavailable".into()))
+    }
+
+    /// The git checkout a chat runs in, from the chat's own row (or, for a
+    /// chat with no row yet, its last run), never from the caller. `None`
+    /// when that directory is not a checkout.
+    async fn chat_checkout_root(
+        &self,
+        chat_id: &str,
+    ) -> Result<Option<std::path::PathBuf>, RpcError> {
+        let failed = |e: crate::EngineError| RpcError::Failed(e.to_string());
+        let cwd = match self.workspace.chat(chat_id).map_err(failed)? {
+            Some(chat) => {
+                if chat.device_id != self.doc_host.device_id() {
+                    return Err(RpcError::Failed(
+                        "Checkpoints live on the chat's own device".into(),
+                    ));
+                }
+                chat.cwd
+            }
+            None => self.sessions.last_request(chat_id).map(|r| r.cwd),
+        }
+        .ok_or_else(|| RpcError::Failed(format!("not_found: chat {chat_id}")))?;
+        let cwd = crate::repos::expand_home(&cwd).map_err(|e| RpcError::Failed(e.to_owned()))?;
+        Ok(self
+            .checkpoints()?
+            .checkout_root(std::path::Path::new(&cwd))
+            .await)
+    }
+
+    /// Where a fork of `source_chat_id` at `at` ends (exclusive).
+    fn fork_end(&self, source_chat_id: &str, at: ForkAt<'_>) -> Result<usize, RpcError> {
+        let failed = |e: crate::EngineError| RpcError::Failed(e.to_string());
+        let entries = self
+            .doc_host
+            .open(source_chat_id)
+            .map_err(failed)?
+            .doc()
+            .read_entries()
+            .map_err(|e| RpcError::Failed(e.to_string()))?;
+        match at {
+            ForkAt::LastResponse => entries
+                .iter()
+                .rposition(|entry| {
+                    entry.role == loams_agentd_doc::MessageRole::Assistant
+                        && entry.status == Some(loams_agentd_doc::MessageStatus::Complete)
+                })
+                .map(|boundary| boundary + 1)
+                .ok_or_else(|| {
+                    RpcError::Failed(
+                        "Wait for a completed response before starting a side chat".into(),
+                    )
+                }),
+            ForkAt::BeforeTurn(turn_id) => entries
+                .iter()
+                .position(|entry| entry.id == turn_id)
+                .ok_or_else(|| {
+                    RpcError::Failed(format!(
+                        "{}: turn {turn_id:?} is not in the transcript",
+                        loams_agentd_proto::checkpoints::CHECKPOINT_MISSING
+                    ))
+                }),
+        }
+    }
+
+    /// The source chat of a fork, checked to live on this device.
+    fn fork_source(&self, source_chat_id: &str) -> Result<loams_agentd_proto::Chat, RpcError> {
+        let failed = |e: crate::EngineError| RpcError::Failed(e.to_string());
+        let source = self
+            .workspace
+            .chat(source_chat_id)
+            .map_err(failed)?
+            .ok_or_else(|| RpcError::Failed("Source chat no longer exists".into()))?;
+        if source.device_id != self.doc_host.device_id() {
+            return Err(RpcError::Failed(
+                "Fork must be created on the source device".into(),
+            ));
+        }
+        Ok(source)
+    }
+
+    /// Copy `source_chat_id`'s transcript up to `at` into a new chat
+    /// `chat_id` hung under `parent_chat_id` (default: the source). The
+    /// source is never changed.
+    fn fork_chat(
+        &self,
+        source_chat_id: &str,
+        chat_id: String,
+        parent_chat_id: Option<String>,
+        at: ForkAt<'_>,
+    ) -> Result<loams_agentd_proto::Chat, RpcError> {
+        let parent_chat_id = parent_chat_id
+            .filter(|id| !id.trim().is_empty())
+            .unwrap_or_else(|| source_chat_id.to_owned());
+        let failed = |e: crate::EngineError| RpcError::Failed(e.to_string());
+        let source = self.fork_source(source_chat_id)?;
+        if let Some(existing) = self.workspace.chat(&chat_id).map_err(failed)? {
+            if existing.parent_chat_id.as_deref() == Some(parent_chat_id.as_str()) {
+                return Ok(existing);
+            }
+            return Err(RpcError::Failed("Chat id already exists".into()));
+        }
+        let end = self.fork_end(source_chat_id, at)?;
+        let source_doc = self.doc_host.open(source_chat_id).map_err(failed)?;
+        let entries = source_doc
+            .doc()
+            .read_entries()
+            .map_err(|e| RpcError::Failed(e.to_string()))?;
+        let end = end.min(entries.len());
+        let mut chat = source.clone();
+        chat.id = chat_id;
+        chat.parent_chat_id = Some(parent_chat_id);
+        chat.title = None; // First side-chat turn receives its own generated title.
+        chat.archived = false;
+        chat.created_at = chrono::Utc::now();
+        chat.last_message_at = None;
+        chat.last_message_preview = None;
+        chat.last_seen_at = None;
+        chat.harness_session_id = None;
+        chat.harness_session_cwd = None;
+        chat.room_gen = Some(2);
+        // Missing rows open on chat2. Persist history before publishing
+        // the registry row so a crash cannot leave a discoverable empty fork.
+        let target = self.doc_host.open(&chat.id).map_err(failed)?;
+        let existing = target
+            .doc()
+            .read_entries()
+            .map_err(|e| RpcError::Failed(e.to_string()))?;
+        for entry in entries[..end]
+            .iter()
+            .filter(|entry| !existing.iter().any(|e| e.id == entry.id))
+        {
+            let mut entry = entry.clone();
+            // Historical approvals belong to the source runtime; they
+            // must never block or send answers from the new composer.
+            for part in &mut entry.parts {
+                if let loams_agentd_doc::MessagePart::Input { resolved, .. } = part {
+                    *resolved = true;
+                }
+            }
+            target
+                .doc()
+                .push_message(&entry)
+                .map_err(|e| RpcError::Failed(e.to_string()))?;
+        }
+        // The seam: everything above came from the source. Its own
+        // entry (system role, complete) so the copied history and the
+        // fork's first turn never share a row.
+        let marker_id = format!("fork:{}", chat.id);
+        if !existing.iter().any(|e| e.id == marker_id) {
+            let source_title = source
+                .title
+                .clone()
+                .or_else(|| source.last_message_preview.clone())
+                .unwrap_or_else(|| "New session".into());
+            target
+                .doc()
+                .push_message(&loams_agentd_doc::SessionMessageEntry {
+                    duration_ms: None,
+                    id: marker_id.clone(),
+                    role: loams_agentd_doc::MessageRole::System,
+                    parts: vec![loams_agentd_doc::MessagePart::Fork {
+                        id: marker_id,
+                        source_chat_id: source.id.clone(),
+                        source_title,
+                    }],
+                    created_at: chrono::Utc::now().timestamp_millis(),
+                    device_id: self.doc_host.device_id().to_owned(),
+                    status: Some(loams_agentd_doc::MessageStatus::Complete),
+                    continuation_of: None,
+                })
+                .map_err(|e| RpcError::Failed(e.to_string()))?;
+        }
+        self.doc_host.persist_fork(&target).map_err(failed)?;
+        self.workspace.import_chat_row(&chat).map_err(failed)?;
+        Ok(chat)
+    }
+
+    /// `RestoreCheckpoint` (SD1 Task 10, G7). The restore is confirmed by
+    /// the checkout's diff checksum the caller saw (a stale one is
+    /// `stale_diff`), runs only in the chat's own checkout, never while the
+    /// chat's turn is running, and a transcript restore forks the thread:
+    /// nothing is deleted from its history.
+    async fn restore_checkpoint(
+        &self,
+        p: loams_agentd_proto::checkpoints::RestoreCheckpointParams,
+    ) -> Result<RpcReply, RpcError> {
+        use loams_agentd_proto::SessionStatus;
+        use loams_agentd_proto::checkpoints::{CHECKPOINT_MISSING, CheckpointScope};
+        let checkpoints = self.checkpoints()?;
+        if p.expected_checksum.trim().is_empty() {
+            return Err(RpcError::BadParams(
+                "expectedChecksum is required: a restore discards the checkout's current state"
+                    .into(),
+            ));
+        }
+        if self
+            .sessions
+            .session_status(&p.chat_id)
+            .is_some_and(|session| {
+                matches!(
+                    session.status,
+                    SessionStatus::Working | SessionStatus::AwaitingInput
+                )
+            })
+        {
+            return Err(RpcError::Failed(
+                "The thread is running; interrupt it before restoring a checkpoint".into(),
+            ));
+        }
+        let root = self.chat_checkout_root(&p.chat_id).await?.ok_or_else(|| {
+            RpcError::Failed(format!(
+                "{CHECKPOINT_MISSING}: chat {:?} has no git checkout",
+                p.chat_id
+            ))
+        })?;
+        let fork = p.scope == CheckpointScope::WorktreeAndTranscript;
+        if fork {
+            // Check the fork can be made before the checkout changes.
+            self.fork_source(&p.chat_id)?;
+            self.fork_end(&p.chat_id, ForkAt::BeforeTurn(&p.turn_id))?;
+        }
+        let restored_to = checkpoints
+            .restore_worktree(&p.chat_id, &root, &p.turn_id, &p.expected_checksum)
+            .await
+            .map_err(|e| RpcError::Failed(e.to_string()))?;
+        self.diff_sync.sync_all();
+        let forked_chat_id = if fork {
+            let chat = self.fork_chat(
+                &p.chat_id,
+                crate::new_id(),
+                None,
+                ForkAt::BeforeTurn(&p.turn_id),
+            )?;
+            Some(chat.id)
+        } else {
+            None
+        };
+        reply::<calls::RestoreCheckpoint, _>(
+            &loams_agentd_proto::checkpoints::RestoreCheckpointReply {
+                restored_to,
+                forked_chat_id,
+            },
+        )
     }
 
     /// Open change requests with `creator` (tests: a fake Forgejo or `gh`).
@@ -261,6 +528,51 @@ impl EngineRpc {
         self.harness_updates
             .as_ref()
             .ok_or_else(|| RpcError::Failed("agent updates unavailable".into()))
+    }
+
+    /// The chats (and their cwds) a `deleteChat` or `deleteSpace` removes,
+    /// read before the mutation so their checkpoints can follow them.
+    fn chats_deleted_by(&self, params: &MutateParams) -> Vec<(String, Option<String>)> {
+        if self.checkpoints.is_none() {
+            return Vec::new();
+        }
+        match params {
+            MutateParams::DeleteChat { chat_id } => {
+                let cwd = self
+                    .workspace
+                    .chat(chat_id)
+                    .ok()
+                    .flatten()
+                    .and_then(|c| c.cwd);
+                vec![(chat_id.clone(), cwd)]
+            }
+            MutateParams::DeleteSpace { space_id } => self
+                .workspace
+                .read_chats()
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|chat| chat.space_id.as_deref() == Some(space_id.as_str()))
+                .map(|chat| (chat.id, chat.cwd))
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Delete the checkpoint refs of deleted chats (best-effort: the
+    /// deletion itself already succeeded).
+    async fn delete_checkpoints(&self, chats: Vec<(String, Option<String>)>) {
+        let Some(checkpoints) = &self.checkpoints else {
+            return;
+        };
+        for (chat_id, cwd) in chats {
+            let cwd = cwd.and_then(|cwd| crate::repos::expand_home(&cwd).ok());
+            if let Err(error) = checkpoints
+                .delete_chat(&chat_id, cwd.as_deref().map(std::path::Path::new))
+                .await
+            {
+                tracing::warn!(chat = %chat_id, %error, "checkpoint refs not deleted");
+            }
+        }
     }
 
     fn local_project_action_space(&self, space_id: &str) -> Result<Space, RpcError> {
@@ -1042,111 +1354,29 @@ impl RpcService for EngineRpc {
             }
             methods::FORK_SIDE_CHAT => {
                 let p = params_of::<calls::ForkSideChat>(params)?;
-                let parent_chat_id = p
-                    .parent_chat_id
-                    .clone()
-                    .filter(|id| !id.trim().is_empty())
-                    .unwrap_or_else(|| p.source_chat_id.clone());
-                let failed = |e: crate::EngineError| RpcError::Failed(e.to_string());
-                let source = self
-                    .workspace
-                    .chat(&p.source_chat_id)
-                    .map_err(failed)?
-                    .ok_or_else(|| RpcError::Failed("Source chat no longer exists".into()))?;
-                if source.device_id != self.doc_host.device_id() {
-                    return Err(RpcError::Failed(
-                        "Fork must be created on the source device".into(),
-                    ));
-                }
-                if let Some(existing) = self.workspace.chat(&p.chat_id).map_err(failed)? {
-                    if existing.parent_chat_id.as_deref() == Some(parent_chat_id.as_str()) {
-                        return reply::<calls::ForkSideChat, _>(&existing);
-                    }
-                    return Err(RpcError::Failed("Chat id already exists".into()));
-                }
-                let source_doc = self.doc_host.open(&p.source_chat_id).map_err(failed)?;
-                let entries = source_doc
-                    .doc()
-                    .read_entries()
-                    .map_err(|e| RpcError::Failed(e.to_string()))?;
-                let boundary = entries
-                    .iter()
-                    .rposition(|entry| {
-                        entry.role == loams_agentd_doc::MessageRole::Assistant
-                            && entry.status == Some(loams_agentd_doc::MessageStatus::Complete)
-                    })
-                    .ok_or_else(|| {
-                        RpcError::Failed(
-                            "Wait for a completed response before starting a side chat".into(),
-                        )
-                    })?;
-                let mut chat = source.clone();
-                chat.id = p.chat_id;
-                chat.parent_chat_id = Some(parent_chat_id);
-                chat.title = None; // First side-chat turn receives its own generated title.
-                chat.archived = false;
-                chat.created_at = chrono::Utc::now();
-                chat.last_message_at = None;
-                chat.last_message_preview = None;
-                chat.last_seen_at = None;
-                chat.harness_session_id = None;
-                chat.harness_session_cwd = None;
-                chat.room_gen = Some(2);
-                // Missing rows open on chat2. Persist history before publishing
-                // the registry row so a crash cannot leave a discoverable empty fork.
-                let target = self.doc_host.open(&chat.id).map_err(failed)?;
-                let existing = target
-                    .doc()
-                    .read_entries()
-                    .map_err(|e| RpcError::Failed(e.to_string()))?;
-                for entry in entries[..=boundary]
-                    .iter()
-                    .filter(|entry| !existing.iter().any(|e| e.id == entry.id))
-                {
-                    let mut entry = entry.clone();
-                    // Historical approvals belong to the source runtime; they
-                    // must never block or send answers from the new composer.
-                    for part in &mut entry.parts {
-                        if let loams_agentd_doc::MessagePart::Input { resolved, .. } = part {
-                            *resolved = true;
-                        }
-                    }
-                    target
-                        .doc()
-                        .push_message(&entry)
-                        .map_err(|e| RpcError::Failed(e.to_string()))?;
-                }
-                // The seam: everything above came from the source. Its own
-                // entry (system role, complete) so the copied history and the
-                // fork's first turn never share a row.
-                let marker_id = format!("fork:{}", chat.id);
-                if !existing.iter().any(|e| e.id == marker_id) {
-                    let source_title = source
-                        .title
-                        .clone()
-                        .or_else(|| source.last_message_preview.clone())
-                        .unwrap_or_else(|| "New session".into());
-                    target
-                        .doc()
-                        .push_message(&loams_agentd_doc::SessionMessageEntry {
-                            duration_ms: None,
-                            id: marker_id.clone(),
-                            role: loams_agentd_doc::MessageRole::System,
-                            parts: vec![loams_agentd_doc::MessagePart::Fork {
-                                id: marker_id,
-                                source_chat_id: source.id.clone(),
-                                source_title,
-                            }],
-                            created_at: chrono::Utc::now().timestamp_millis(),
-                            device_id: self.doc_host.device_id().to_owned(),
-                            status: Some(loams_agentd_doc::MessageStatus::Complete),
-                            continuation_of: None,
-                        })
-                        .map_err(|e| RpcError::Failed(e.to_string()))?;
-                }
-                self.doc_host.persist_fork(&target).map_err(failed)?;
-                self.workspace.import_chat_row(&chat).map_err(failed)?;
+                let chat = self.fork_chat(
+                    &p.source_chat_id,
+                    p.chat_id,
+                    p.parent_chat_id,
+                    ForkAt::LastResponse,
+                )?;
                 reply::<calls::ForkSideChat, _>(&chat)
+            }
+            methods::LIST_CHECKPOINTS => {
+                let p = params_of::<calls::ListCheckpoints>(params)?;
+                let list = match self.chat_checkout_root(&p.chat_id).await? {
+                    Some(root) => self
+                        .checkpoints()?
+                        .list(&p.chat_id, &root)
+                        .await
+                        .map_err(|e| RpcError::Failed(e.to_string()))?,
+                    None => Default::default(),
+                };
+                reply::<calls::ListCheckpoints, _>(&list)
+            }
+            methods::RESTORE_CHECKPOINT => {
+                let p = params_of::<calls::RestoreCheckpoint>(params)?;
+                self.restore_checkpoint(p).await
             }
             methods::WATCH_DOC_MESSAGES => {
                 let p = params_of::<calls::WatchDocMessages>(params)?;
@@ -1405,7 +1635,9 @@ impl RpcService for EngineRpc {
             methods::MUTATE => {
                 let p = params_of::<calls::Mutate>(params)?;
                 let sidebar_pins = matches!(&p, MutateParams::ChangeSidebarPin { .. });
+                let deleted_chats = self.chats_deleted_by(&p);
                 self.mutate(p)?;
+                self.delete_checkpoints(deleted_chats).await;
                 if sidebar_pins {
                     return reply::<calls::Mutate, _>(&MutateReply {
                         ok: true,

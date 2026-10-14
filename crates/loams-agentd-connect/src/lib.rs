@@ -11,6 +11,10 @@
 //! - [`listener`] serves them on a loopback port behind the ndjson
 //!   listener's rules (§50 §7): the owner token, `Host: 127.0.0.1:<port>`, and
 //!   a 403 for any `Origin`.
+//! - [`remote`] serves them to one person's browser console over TLS
+//!   (`serve --remote`, plan SD1 Task 7): an OIDC token for the enrolled
+//!   subject ([`oidc`]), the configured console origins ([`cors`]) and the
+//!   `studio` role ([`roles`]).
 
 /// The generated messages, service traits and clients of `loams.agentd.v1`,
 /// with the `loams.errors.v1` and `loams.options.v1` they use.
@@ -24,14 +28,19 @@ pub mod proto {
     connectrpc::include_generated!();
 }
 
+pub mod cors;
 pub mod engine;
 pub mod error;
 pub mod listener;
 pub mod map;
+pub mod oidc;
+pub mod remote;
+pub mod roles;
 pub mod services;
 pub mod twins;
 
 pub use listener::{ConnectListener, LoopbackOptions};
+pub use remote::{RemoteListener, RemoteOptions};
 pub use services::{Agentd, HostInfo};
 
 /// The `FileDescriptorSet` of `loams.agentd.v1` (with its imports), as

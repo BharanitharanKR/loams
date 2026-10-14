@@ -56,6 +56,13 @@ const REQUESTS: Request[] = [
   request('RetryDelivery', { chatId }),
   request('TakeProjectActionSetup', { chatId, commandId: 'cmd-1' }),
   request('ForkSideChat', { chatId: 'chat-2', sourceChatId: chatId }),
+  request('ListCheckpoints', { chatId }),
+  request('RestoreCheckpoint', {
+    chatId,
+    turnId: 'msg-1',
+    expectedChecksum: 'sum-1',
+    scope: 'worktree+transcript',
+  }),
   request('WatchDocMessages', { chatId, openingTail: true }),
   request('WatchQueue', { chatId }),
   request('QueueMessage', { chatId, text: 'Then update the docs' }),

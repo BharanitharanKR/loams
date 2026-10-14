@@ -238,7 +238,7 @@ async fn gaps_and_bad_requests_answer_connect_errors() {
     let daemon = Daemon::start().await;
     let threads = pb::ThreadServiceClient::new(HttpClient::plaintext(), daemon.config());
     let error = threads
-        .list_checkpoints(pb::ListCheckpointsRequest::default())
+        .get_thread_usage(pb::GetThreadUsageRequest::default())
         .await
         .unwrap_err();
     assert_eq!(error.code, ErrorCode::Unimplemented);
@@ -413,6 +413,163 @@ async fn git_writes_over_connect() {
         .await
         .unwrap_err();
     assert_eq!(error.code, ErrorCode::InvalidArgument);
+    daemon.stop().await;
+}
+
+/// SD1 Task 6: the renderer reaches `CloneRepo` directly through the proxy,
+/// so the daemon refuses what git would read as an option, a local path or a
+/// command transport, before git runs.
+#[tokio::test]
+async fn clone_repo_refuses_options_and_local_urls() {
+    let daemon = Daemon::start().await;
+    let projects = pb::ProjectServiceClient::new(HttpClient::plaintext(), daemon.config());
+    for url in [
+        "--upload-pack=touch pwned",
+        "-oProxyCommand=touch pwned",
+        "file:///etc",
+        "/etc",
+        "ext::sh -c touch% pwned",
+        "fd::17",
+        "https://example.com/a b.git",
+        "http://example.com/a.git",
+        "C:/repo",
+    ] {
+        let error = projects
+            .clone_repo(pb::CloneRepoRequest {
+                url: url.into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, ErrorCode::InvalidArgument, "{url}");
+        assert!(
+            error
+                .message
+                .as_deref()
+                .unwrap_or_default()
+                .starts_with("invalid_url"),
+            "{url}: {error:?}"
+        );
+    }
+    daemon.stop().await;
+}
+
+async fn git_async(cwd: &std::path::Path, args: &[&str]) -> String {
+    let output = tokio::process::Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .env("GIT_AUTHOR_NAME", "test")
+        .env("GIT_AUTHOR_EMAIL", "test@test")
+        .env("GIT_COMMITTER_NAME", "test")
+        .env("GIT_COMMITTER_EMAIL", "test@test")
+        .output()
+        .await
+        .unwrap();
+    assert!(output.status.success(), "git {args:?}");
+    String::from_utf8_lossy(&output.stdout).trim().to_owned()
+}
+
+/// SD1 Task 10: `ListCheckpoints` and `RestoreCheckpoint` over Connect
+/// answer what the ndjson wire answers, and a stale checksum or an unknown
+/// turn is the reason's Connect code.
+#[tokio::test]
+async fn checkpoints_over_connect_match_ndjson() {
+    let daemon = Daemon::start().await;
+    let repo = daemon._dir.path().join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    git_async(&repo, &["init", "-b", "main"]).await;
+    std::fs::write(repo.join("notes.txt"), "first\n").unwrap();
+    git_async(&repo, &["add", "."]).await;
+    git_async(&repo, &["commit", "-m", "initial"]).await;
+    let core = daemon.runtime.core();
+    daemon
+        .ndjson
+        .call(
+            methods::MUTATE,
+            serde_json::json!({
+                "op": "createChat",
+                "chatId": "chat-cp",
+                "deviceId": core.device_id,
+                "cwd": repo.to_string_lossy(),
+            }),
+        )
+        .await
+        .unwrap();
+    core.checkpoints
+        .capture_turn_start("chat-cp", &repo, "msg-1")
+        .await
+        .unwrap();
+    std::fs::write(repo.join("notes.txt"), "changed\n").unwrap();
+
+    let threads = pb::ThreadServiceClient::new(HttpClient::plaintext(), daemon.config());
+    let listed = threads
+        .list_checkpoints(pb::ListCheckpointsRequest {
+            chat_id: "chat-cp".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_owned();
+    let ndjson: rs::checkpoints::CheckpointList = daemon
+        .ndjson
+        .call_as(
+            methods::LIST_CHECKPOINTS,
+            serde_json::json!({ "chatId": "chat-cp" }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(listed.checkpoints.len(), 1);
+    assert_eq!(listed.checkpoints[0].turn_id, "msg-1");
+    assert_eq!(listed.checkpoints, ndjson.to_pb().checkpoints);
+
+    let restore = |checksum: &str, turn_id: &str| pb::RestoreCheckpointRequest {
+        chat_id: "chat-cp".into(),
+        turn_id: turn_id.into(),
+        expected_checksum: checksum.into(),
+        scope: pb::CheckpointScope::CHECKPOINT_SCOPE_WORKTREE.into(),
+        ..Default::default()
+    };
+    let error = threads
+        .restore_checkpoint(restore("stale", "msg-1"))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, ErrorCode::FailedPrecondition, "stale_diff");
+    assert!(!error.details.is_empty(), "the ErrorInfo detail");
+    assert_eq!(
+        std::fs::read_to_string(repo.join("notes.txt")).unwrap(),
+        "changed\n"
+    );
+
+    let diff: rs::CheckoutDiff = daemon
+        .ndjson
+        .call_as(
+            methods::GET_CHECKOUT_DIFF,
+            serde_json::json!({ "cwd": repo.to_string_lossy() }),
+        )
+        .await
+        .unwrap();
+    let error = threads
+        .restore_checkpoint(restore(&diff.checksum, "msg-unknown"))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, ErrorCode::NotFound, "checkpoint_missing");
+
+    let restored = threads
+        .restore_checkpoint(restore(&diff.checksum, "msg-1"))
+        .await
+        .unwrap()
+        .into_owned();
+    let pre = git_async(
+        &repo,
+        &["rev-parse", "refs/loams/checkpoints/chat-cp/turn/1/pre"],
+    )
+    .await;
+    assert_eq!(restored.restored_to, pre);
+    assert_eq!(restored.forked_chat_id, None);
+    assert_eq!(
+        std::fs::read_to_string(repo.join("notes.txt")).unwrap(),
+        "first\n"
+    );
     daemon.stop().await;
 }
 

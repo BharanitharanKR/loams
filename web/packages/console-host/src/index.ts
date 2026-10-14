@@ -18,6 +18,18 @@ export {
   type Risk,
 } from './actions.js';
 export {
+  AGENTD_SERVICES,
+  type AgentdHost,
+  type AgentdReach,
+  type AgentdRpcServices,
+  type AgentdService,
+  gateGitWrites,
+  gateTransport,
+  isAgentdService,
+  isGitWrite,
+  noAgentdHost,
+} from './agentd.js';
+export {
   type BootOptions,
   boot,
   type ConsoleHandle,
@@ -45,7 +57,7 @@ export {
   parseCatalog,
   parsePatch,
 } from './catalog.js';
-export { GuardError, guard, injectsAgentd } from './guard.js';
+export { GuardError, type GuardPolicy, guard, injectsAgentd } from './guard.js';
 export {
   type Edition,
   MANIFEST_KEYS,

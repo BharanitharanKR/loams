@@ -1,0 +1,10 @@
+{
+  "checkpoints": [
+    {
+      "createdAtMs": 1791797400000,
+      "filesChanged": 2,
+      "ref": "refs/loams/checkpoints/chat-1/turn/1/pre",
+      "turnId": "msg-1"
+    }
+  ]
+}

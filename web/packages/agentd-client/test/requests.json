@@ -152,6 +152,21 @@
     }
   },
   {
+    "method": "ListCheckpoints",
+    "params": {
+      "chatId": "chat-1"
+    }
+  },
+  {
+    "method": "RestoreCheckpoint",
+    "params": {
+      "chatId": "chat-1",
+      "turnId": "msg-1",
+      "expectedChecksum": "sum-1",
+      "scope": "worktree+transcript"
+    }
+  },
+  {
     "method": "WatchDocMessages",
     "params": {
       "chatId": "chat-1",

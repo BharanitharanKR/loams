@@ -1421,14 +1421,24 @@ struct GitRuntimeHandle {
 
 #[cfg(feature = "git")]
 impl GitRuntimeHandle {
-    fn start(config: &GitConfig, meta: Arc<dyn MetaStore>, store: Store) -> Self {
+    /// `cluster` places each repository's sequencer on one gateway node under its lease and
+    /// forwards commits there (GT1 Task 14); without it (dev, standalone) every sequencer runs
+    /// here.
+    fn start(
+        config: &GitConfig,
+        meta: Arc<dyn MetaStore>,
+        store: Store,
+        cluster: Option<loams_git::Cluster>,
+    ) -> Self {
         let catalog = loams_git::BucketRepoCatalog::new(store.clone());
+        let clock: Arc<dyn loams_git::Clock> = Arc::new(loams_git::SystemClock);
+        let sequencers = match cluster {
+            Some(cluster) => loams_git::RepoSequencers::clustered(store, clock, cluster),
+            None => loams_git::RepoSequencers::new(store, clock),
+        };
         let runtime = Arc::new(crate::api::repos::GitRuntime {
             catalog: catalog.clone(),
-            sequencers: Arc::new(loams_git::RepoSequencers::new(
-                store,
-                Arc::new(loams_git::SystemClock),
-            )),
+            sequencers: Arc::new(sequencers),
             watch_heartbeat: config.watch_heartbeat,
         });
         let stop = CancellationToken::new();
@@ -2552,6 +2562,9 @@ impl Server {
         let node_registry = routing
             .as_ref()
             .map(|(placement, _)| placement.registry().clone());
+        // The placement, for Loams Git's sequencer owners on a cluster node (GT1 Task 14).
+        #[cfg(feature = "git")]
+        let git_placement = routing.as_ref().map(|(placement, _)| placement.clone());
         if let Some((placement, remote)) = routing {
             collections.set_placement(placement, remote);
         }
@@ -2638,11 +2651,28 @@ impl Server {
             false => None,
         };
         // Loams Git on every gateway node (GT1 Task 13), after the last fallible step so its
-        // purge task never outlives a failed start: sequencers are fenced by the bucket, so a
-        // node needs no lease to write (placement is GT1 Task 14).
+        // purge task never outlives a failed start. On a cluster node each repository's
+        // sequencer runs on its rendezvous owner under the `task/git-seq/<ns>/<repo>` lease, and
+        // other nodes forward commits there (GT1 Task 14); fencing by the bucket keeps any
+        // second writer safe.
         #[cfg(feature = "git")]
-        let git = (roles.gateway && config.git.enabled)
-            .then(|| GitRuntimeHandle::start(&config.git, meta_store.clone(), store.clone()));
+        let git = (roles.gateway && config.git.enabled).then(|| {
+            let cluster = git_placement.as_ref().map(|placement| {
+                let me = placement.registry().me();
+                loams_git::Cluster {
+                    placement: Arc::new(api::git_internal::RegistryPlacement::new(
+                        placement.clone(),
+                    )),
+                    leases: Arc::new(api::git_internal::MetaLeases::new(
+                        meta_store.clone(),
+                        format!("v1;{};{};{}", me.node_id, me.incarnation, me.addr),
+                    )),
+                    forwarder: Arc::new(api::git_internal::HttpSeqForwarder::new(internal.clone())),
+                    config: loams_git::OwnerConfig::default(),
+                }
+            });
+            GitRuntimeHandle::start(&config.git, meta_store.clone(), store.clone(), cluster)
+        });
         let state = AppState {
             meta: meta_store.clone(),
             writer: writer.clone(),

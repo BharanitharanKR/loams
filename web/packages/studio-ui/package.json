@@ -16,6 +16,13 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@loams/ui": "workspace:*",
+    "@xterm/addon-fit": "catalog:",
+    "@xterm/xterm": "catalog:",
+    "lucide-react": "catalog:",
+    "zustand": "catalog:"
+  },
   "peerDependencies": {
     "react": ">=19",
     "react-dom": ">=19"
