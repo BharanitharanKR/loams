@@ -1,55 +1,84 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/chat/WorktreeSetupCard.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// ported to the Loams UI stack. Loams' changes are Apache-2.0.
-import {
-  worktreeSetupStageLabel,
-  type WorktreeSetupSnapshot,
-  type WorktreeSetupStage,
-} from "@t3tools/contracts";
-import { formatDuration } from "@t3tools/shared/orchestrationTiming";
-import {
-  CheckIcon,
-  CircleAlertIcon,
-  CircleIcon,
-  LaptopIcon,
-  MinusIcon,
-  TerminalIcon,
-  XIcon,
-} from "lucide-react";
-import { ChevronDown, ChevronRight } from "lucide";
-import { useEffect, useState, type ReactNode } from "react";
+// the contracts snapshot replaced by WorktreeSetupSnapshot (what Studio assembles from loams-agentd's CreateWorktree and its setup action), times in milliseconds; @loams/ui primitives and token classes in place of T3's components, the shimmer and the work-log row; "Work locally" kept, the embedded timeline variant dropped. Loams' changes are Apache-2.0.
 
-import { Button } from "~/components/ui/button";
-import { MorphIcon } from "~/components/MorphIcon";
-import { Spinner } from "~/components/ui/spinner";
-import { MiddleTruncate } from "../ui/middle-truncate";
-import { observeVisibleAnimation } from "~/lib/visibleAnimation";
-import { cn } from "~/lib/utils";
-import { WorkLogRow } from "./WorkLog";
+// A new worktree's progress (§53 §5.7; SD1 Task 23): creating it, then the project's
+// setup action, with the setup output's last lines. Everything shown is text.
+
+import { Button, cx, MiddleTruncate, Spinner } from "@loams/ui";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Circle,
+  CircleAlert,
+  Laptop,
+  Minus,
+  Terminal,
+  X,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { formatGitActionElapsed } from "./actions.logic";
+
+/** Milliseconds as "12s" or "1m 3s". */
+const formatDuration = (ms: number) => formatGitActionElapsed(0, ms) ?? "";
+
+export type WorktreeSetupStageStatus =
+  | "pending"
+  | "running"
+  | "done"
+  | "failed"
+  | "warning"
+  | "skipped";
+
+export type WorktreeSetupStageId = "worktree" | "setup-script";
+
+export interface WorktreeSetupStage {
+  id: WorktreeSetupStageId;
+  status: WorktreeSetupStageStatus;
+  /** Milliseconds since the epoch. */
+  startedAt?: number | null;
+  endedAt?: number | null;
+  detail?: string | null;
+  /** The setup action's last output lines (setup-script only). */
+  tail: readonly string[];
+}
+
+export interface WorktreeSetupSnapshot {
+  phase: "running" | "done" | "failed" | "cancelled";
+  startedAt: number;
+  endedAt?: number | null;
+  branch?: string | null;
+  baseRef?: string | null;
+  worktreePath?: string | null;
+  setupScript?: { name: string; command?: string } | null;
+  error?: string | null;
+  stages: readonly WorktreeSetupStage[];
+}
+
+export const WORKTREE_SETUP_STAGE_LABEL: Record<WorktreeSetupStageId, string> = {
+  worktree: "Create worktree",
+  "setup-script": "Run setup action",
+};
 
 interface WorktreeSetupCardProps {
   snapshot: WorktreeSetupSnapshot;
-  /** Interrupts the server-side bootstrap. Hidden once the setup has settled. */
-  onCancel: (() => void) | null;
-  /** Restarts the same message in the project checkout instead of a worktree. */
-  onWorkLocally: (() => void) | null;
-  /** Reveals the setup script terminal tab. Null when no script ran. */
-  onOpenTerminal: (() => void) | null;
+  /** Stops the setup. Hidden once the setup has settled. */
+  onCancel?: (() => void) | null;
+  /** Goes back to working in the project's own checkout instead. */
+  onWorkLocally?: (() => void) | null;
+  /** Shows the setup action's terminal. Null when no action ran. */
+  onOpenTerminal?: (() => void) | null;
 }
 
 function stageElapsedMs(stage: WorktreeSetupStage, nowMs: number): number | null {
   if (!stage.startedAt) return null;
-  const start = Date.parse(stage.startedAt);
-  const end = stage.endedAt ? Date.parse(stage.endedAt) : nowMs;
-  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-  return Math.max(0, end - start);
+  const end = stage.endedAt ?? nowMs;
+  return Math.max(0, end - stage.startedAt);
 }
 
-/**
- * Ticks once a second while any stage runs so elapsed labels stay live
- * without pushing a React commit through the timeline for every second.
- */
+/** Ticks once a second while any stage runs, so elapsed labels stay live. */
 function useNowWhile(active: boolean): number {
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -60,51 +89,37 @@ function useNowWhile(active: boolean): number {
   return nowMs;
 }
 
-function StageIcon({ status }: { status: WorktreeSetupStage["status"] }) {
-  const className = "size-4 shrink-0 stroke-2";
+function StageIcon({ status }: { status: WorktreeSetupStageStatus }) {
+  const size = 14;
   switch (status) {
     case "done":
-      return <CheckIcon aria-hidden className={className} />;
+      return <Check size={size} aria-hidden="true" className="shrink-0" />;
     case "running":
-      return <Spinner size="md" className="shrink-0" />;
+      return <Spinner size="sm" label="Running" className="shrink-0" />;
     case "failed":
-      return <XIcon aria-hidden className={className} />;
+      return <X size={size} aria-hidden="true" className="shrink-0" />;
     case "warning":
-      return <CircleAlertIcon aria-hidden className={className} />;
+      return <CircleAlert size={size} aria-hidden="true" className="shrink-0" />;
     case "skipped":
-      return <MinusIcon aria-hidden className={className} />;
+      return <Minus size={size} aria-hidden="true" className="shrink-0" />;
     case "pending":
-      return <CircleIcon aria-hidden className={className} />;
+      return <Circle size={size} aria-hidden="true" className="shrink-0" />;
   }
 }
 
-function stageRowClassName(status: WorktreeSetupStage["status"]): string {
+function stageRowClassName(status: WorktreeSetupStageStatus): string {
   switch (status) {
     case "failed":
-      return "text-destructive-foreground";
+      return "text-danger";
     case "warning":
-      return "text-warning-foreground";
+      return "text-accent";
     case "pending":
-      return "text-secondary-label opacity-40";
+      return "text-faint";
     case "running":
     case "skipped":
     case "done":
-      return "text-secondary-label";
+      return "text-muted";
   }
-}
-
-/** Same shimmer treatment as the live tool rows in the timeline. */
-function ShimmerOverlay({ children }: { children: ReactNode }) {
-  return (
-    <span
-      aria-hidden
-      className="live-activity-focus pointer-events-none absolute inset-y-0 select-none"
-    >
-      <span className="live-activity-focus-counter block">
-        <span className="live-activity-focus-aligned block text-foreground">{children}</span>
-      </span>
-    </span>
-  );
 }
 
 function headerLabel(snapshot: WorktreeSetupSnapshot): string {
@@ -113,7 +128,7 @@ function headerLabel(snapshot: WorktreeSetupSnapshot): string {
       return "Setting up worktree…";
     case "done":
       return snapshot.stages.some((stage) => stage.status === "failed")
-        ? "Worktree ready, setup script failed"
+        ? "Worktree ready, setup action failed"
         : "Worktree ready";
     case "failed":
       return "Worktree setup failed";
@@ -122,53 +137,7 @@ function headerLabel(snapshot: WorktreeSetupSnapshot): string {
   }
 }
 
-/**
- * Occupies the same slot, with the same metrics, as the "Working for" header
- * so the handoff to the agent's turn only swaps the text.
- */
-function SetupHeaderRow({
-  snapshot,
-  totalElapsed,
-}: {
-  snapshot: WorktreeSetupSnapshot;
-  totalElapsed: number | null;
-}) {
-  const running = snapshot.phase === "running";
-  const failed = snapshot.phase === "failed";
-  const finishedWithFailedStage =
-    snapshot.phase === "done" && snapshot.stages.some((stage) => stage.status === "failed");
-  const text = headerLabel(snapshot);
-  const tone = failed
-    ? "text-destructive-foreground"
-    : finishedWithFailedStage
-      ? "text-warning-foreground"
-      : "text-muted-foreground";
-  return (
-    <div className="border-b border-border/60 pb-2 pt-1">
-      <div
-        className={cn(
-          "flex h-6 min-w-0 items-baseline gap-2 px-1 text-sm leading-relaxed tabular-nums",
-          tone,
-        )}
-      >
-        <span
-          ref={running ? observeVisibleAnimation : undefined}
-          className="relative min-w-0 shrink overflow-hidden whitespace-nowrap"
-        >
-          <span className="block truncate">{text}</span>
-          {running ? <ShimmerOverlay>{text}</ShimmerOverlay> : null}
-        </span>
-        {totalElapsed !== null ? (
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-            {formatDuration(totalElapsed)}
-          </span>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-/** One stage, rendered like a live work entry row. */
+/** One stage, as a row: icon, label, detail, elapsed time. */
 function StageRow({
   stage,
   nowMs,
@@ -180,78 +149,61 @@ function StageRow({
 }) {
   const elapsed = stageElapsedMs(stage, nowMs);
   const label =
-    stage.id === "setup-script" && scriptName ? scriptName : worktreeSetupStageLabel(stage.id);
-  const running = stage.status === "running";
+    stage.id === "setup-script" && scriptName ? scriptName : WORKTREE_SETUP_STAGE_LABEL[stage.id];
   const trailing =
     stage.status === "pending"
       ? null
       : stage.status === "skipped"
         ? (stage.detail ?? "skipped")
-        : stage.id === "checkout" && running && stage.percent !== null
-          ? `${stage.percent}%`
-          : stage.detail;
+        : stage.detail;
   return (
-    <WorkLogRow
+    <div
+      className={cx(
+        "flex min-w-0 items-center gap-2 py-1 text-[0.84rem]",
+        stageRowClassName(stage.status),
+      )}
       data-worktree-setup-stage={stage.id}
       data-worktree-setup-status={stage.status}
-      icon={
-        <span className={cn("text-icon-muted", stage.status === "pending" && "opacity-40")}>
-          <StageIcon status={stage.status} />
+    >
+      <StageIcon status={stage.status} />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {trailing ? (
+        <span className="min-w-0 truncate text-[0.76rem] text-faint tabular-nums">{trailing}</span>
+      ) : null}
+      {elapsed !== null && stage.status !== "skipped" && stage.status !== "pending" ? (
+        <span className="shrink-0 text-[0.76rem] text-faint tabular-nums">
+          {formatDuration(elapsed)}
         </span>
-      }
-      label={
-        <span
-          ref={running ? observeVisibleAnimation : undefined}
-          className={cn("relative block truncate", stageRowClassName(stage.status))}
-        >
-          {label}
-          {running ? <ShimmerOverlay>{label}</ShimmerOverlay> : null}
-        </span>
-      }
-      trailing={
-        <>
-          {trailing ? (
-            <span className="min-w-0 truncate text-xs text-muted-foreground tabular-nums">
-              {trailing}
-            </span>
-          ) : null}
-          {elapsed !== null && stage.status !== "skipped" && stage.status !== "pending" ? (
-            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-              {formatDuration(elapsed)}
-            </span>
-          ) : null}
-        </>
-      }
-    />
+      ) : null}
+    </div>
   );
 }
 
-/** The server keeps this many trailing lines; the box is sized for exactly that. */
+/** The daemon keeps this many trailing lines; the box is sized for exactly that. */
 const OUTPUT_TAIL_LINES = 4;
 const OUTPUT_TAIL_SLOTS = Array.from({ length: OUTPUT_TAIL_LINES }, (_, slot) => slot);
 
 /**
- * Fixed-height window onto the script's last lines. Rows never wrap and the
- * box never grows or shrinks, so streaming output cannot push the timeline
- * around while the script runs.
+ * A fixed-height window onto the action's last lines. Rows never wrap and the box
+ * never grows or shrinks, so streaming output cannot push the layout around.
  */
-function OutputTail({ lines, failed }: { lines: ReadonlyArray<string>; failed: boolean }) {
+function OutputTail({ lines, failed }: { lines: readonly string[]; failed: boolean }) {
   const rows = OUTPUT_TAIL_SLOTS.map((slot) => ({
     slot,
     line: lines[lines.length - OUTPUT_TAIL_LINES + slot] ?? "",
   }));
   return (
     <pre
-      className={cn(
-        "mb-1 ml-8 overflow-hidden rounded-md border px-2.5 py-1.5 font-mono text-2xs leading-relaxed select-text",
+      className={cx(
+        "m-0 mb-1 ml-6 overflow-hidden border px-2.5 py-1.5 font-mono text-[0.72rem] leading-relaxed",
         failed
-          ? "border-destructive/20 bg-error-surface text-destructive-foreground"
-          : "border-border bg-code text-muted-foreground",
+          ? "border-danger bg-danger-soft text-danger"
+          : "border-rule-soft bg-raised text-muted",
       )}
     >
       {rows.map(({ slot, line }) => (
         <div key={slot} className="truncate whitespace-pre">
-          {line.length === 0 ? "\u00a0" : line}
+          {line.length === 0 ? " " : line}
         </div>
       ))}
     </pre>
@@ -259,178 +211,110 @@ function OutputTail({ lines, failed }: { lines: ReadonlyArray<string>; failed: b
 }
 
 function SetupDetails({ snapshot }: { snapshot: WorktreeSetupSnapshot }) {
+  const rows: [string, string][] = [];
+  if (snapshot.branch) rows.push(["Branch", snapshot.branch]);
+  if (snapshot.baseRef) rows.push(["Base", snapshot.baseRef]);
+  if (snapshot.worktreePath) rows.push(["Path", snapshot.worktreePath]);
+  if (snapshot.setupScript?.command) rows.push(["Setup", snapshot.setupScript.command]);
   return (
-    <dl className="mt-1 mb-1.5 ml-8 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-      {snapshot.branch ? (
-        <>
-          <dt className="text-foreground/80">Branch</dt>
-          <dd className="min-w-0 font-mono">
-            <MiddleTruncate value={snapshot.branch} className="flex" />
+    <dl className="m-0 mt-1 mb-1.5 ml-6 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[0.76rem] text-muted">
+      {rows.map(([term, value]) => (
+        <div key={term} className="contents">
+          <dt className="text-ink">{term}</dt>
+          <dd className="m-0 min-w-0 font-mono">
+            <MiddleTruncate value={value} className="flex" />
           </dd>
-        </>
-      ) : null}
-      {snapshot.baseRef ? (
-        <>
-          <dt className="text-foreground/80">Base</dt>
-          <dd className="min-w-0 font-mono">
-            <MiddleTruncate value={snapshot.baseRef} className="flex" />
-          </dd>
-        </>
-      ) : null}
-      {snapshot.worktreePath ? (
-        <>
-          <dt className="text-foreground/80">Path</dt>
-          <dd className="min-w-0 font-mono">
-            <MiddleTruncate value={snapshot.worktreePath} className="flex" />
-          </dd>
-        </>
-      ) : null}
-      {snapshot.setupScript ? (
-        <>
-          <dt className="text-foreground/80">Setup</dt>
-          <dd className="truncate font-mono">{snapshot.setupScript.command}</dd>
-        </>
-      ) : null}
+        </div>
+      ))}
     </dl>
-  );
-}
-
-/**
- * One-line summary of a settled setup under a live turn. A clean finish is
- * removed from the timeline altogether, so this only renders the outcomes
- * worth keeping: a failed script, a failed setup, or a cancelled one.
- */
-function CollapsedSummaryRow({
-  snapshot,
-  totalElapsed,
-}: {
-  snapshot: WorktreeSetupSnapshot;
-  totalElapsed: number | null;
-}) {
-  const status: WorktreeSetupStage["status"] =
-    snapshot.phase === "failed" || snapshot.phase === "cancelled"
-      ? "failed"
-      : snapshot.stages.some((stage) => stage.id === "setup-script" && stage.status === "failed")
-        ? "failed"
-        : "done";
-  const label = headerLabel(snapshot);
-  return (
-    <WorkLogRow
-      data-worktree-setup-stage="summary"
-      data-worktree-setup-status={status}
-      icon={
-        <span className="text-icon-muted">
-          <StageIcon status={status} />
-        </span>
-      }
-      label={<span className={stageRowClassName(status)}>{label}</span>}
-      trailing={
-        totalElapsed !== null ? (
-          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-            {formatDuration(totalElapsed)}
-          </span>
-        ) : null
-      }
-    />
   );
 }
 
 export function WorktreeSetupCard({
   snapshot,
-  onCancel,
-  onWorkLocally,
-  onOpenTerminal,
-  embedded = false,
-}: WorktreeSetupCardProps & {
-  /**
-   * The agent's turn is live and owns the "Working for" header. The stage
-   * list stays exactly where it was so the handoff never moves anything; a
-   * failed script that outlives the handoff collapses to a single row.
-   */
-  embedded?: boolean;
-}) {
+  onCancel = null,
+  onWorkLocally = null,
+  onOpenTerminal = null,
+}: WorktreeSetupCardProps) {
   const running = snapshot.phase === "running";
   const nowMs = useNowWhile(running);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const totalElapsed = (() => {
-    const start = Date.parse(snapshot.startedAt);
-    const end = snapshot.endedAt ? Date.parse(snapshot.endedAt) : nowMs;
-    return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : null;
-  })();
+  const totalElapsed = Math.max(0, (snapshot.endedAt ?? nowMs) - snapshot.startedAt);
   const setupStage = snapshot.stages.find((stage) => stage.id === "setup-script");
   const showTerminal = onOpenTerminal && setupStage && setupStage.status !== "pending";
-  const collapsed = embedded && !running;
-  // While running, and after a clean finish until the agent's turn is live,
-  // the timeline's working row above the card carries the label (and keeps
-  // that slot when the agent takes over). The card only brings its own
-  // header for a failed or cancelled setup that has no working row above it.
-  const showHeader = !embedded && !running && snapshot.phase !== "done";
-  // The tail box is part of the script row's footprint while the script runs
-  // (and after it failed, so the last lines explain the failure). It mounts
-  // with the first output line at its full fixed height, so the card grows
-  // once instead of with each line. A script that ends before printing
-  // anything never flashes an empty box.
+  const failed = snapshot.phase === "failed";
+  const finishedWithFailedStage =
+    snapshot.phase === "done" && snapshot.stages.some((stage) => stage.status === "failed");
+  // The tail is part of the action's row while it runs, and after it failed, so the
+  // last lines explain the failure. An action that printed nothing shows no box.
   const showTail =
     setupStage !== undefined &&
     (setupStage.status === "failed" ||
       (setupStage.status === "running" && setupStage.tail.length > 0));
 
   return (
-    <section aria-label="Worktree setup" data-worktree-setup-phase={snapshot.phase}>
-      {showHeader ? <SetupHeaderRow snapshot={snapshot} totalElapsed={totalElapsed} /> : null}
-      {collapsed ? (
-        <CollapsedSummaryRow snapshot={snapshot} totalElapsed={totalElapsed} />
-      ) : (
-        <div className={showHeader ? "pt-1.5" : undefined}>
-          {snapshot.stages.map((stage) => (
-            <div key={stage.id}>
-              <StageRow
-                stage={stage}
-                nowMs={nowMs}
-                scriptName={snapshot.setupScript?.name ?? null}
-              />
-              {stage.id === "setup-script" && showTail ? (
-                <OutputTail lines={stage.tail} failed={stage.status === "failed"} />
-              ) : null}
-            </div>
-          ))}
-        </div>
-      )}
+    <section
+      aria-label="Worktree setup"
+      data-worktree-setup-phase={snapshot.phase}
+      className="flex flex-col gap-1"
+    >
+      <div
+        className={cx(
+          "flex min-w-0 items-baseline gap-2 border-b border-rule-soft pb-2 text-[0.88rem] tabular-nums",
+          failed ? "text-danger" : finishedWithFailedStage ? "text-accent" : "text-ink",
+        )}
+        role="status"
+        aria-live="polite"
+      >
+        <span className="min-w-0 flex-1 truncate">{headerLabel(snapshot)}</span>
+        <span className="shrink-0 text-[0.76rem] text-faint">{formatDuration(totalElapsed)}</span>
+      </div>
+      <div>
+        {snapshot.stages.map((stage) => (
+          <div key={stage.id}>
+            <StageRow stage={stage} nowMs={nowMs} scriptName={snapshot.setupScript?.name ?? null} />
+            {stage.id === "setup-script" && showTail ? (
+              <OutputTail lines={stage.tail} failed={stage.status === "failed"} />
+            ) : null}
+          </div>
+        ))}
+      </div>
 
-      {snapshot.phase === "failed" && snapshot.error ? (
-        <p className="mt-1 ml-8 text-xs text-muted-foreground">{snapshot.error}</p>
+      {failed && snapshot.error ? (
+        <p className="m-0 ml-6 text-[0.78rem] text-danger">{snapshot.error}</p>
       ) : null}
 
       {detailsOpen ? <SetupDetails snapshot={snapshot} /> : null}
 
-      {/* Indented so the first label lines up with the stage labels: the icon
-          column, minus the xs button's own horizontal padding. */}
-      <div className="mt-0.5 ml-[calc(--spacing(6)+2px-(--spacing(2)-1px))] flex flex-wrap items-center gap-0.5">
+      <div className="flex flex-wrap items-center gap-1">
         <Button
-          type="button"
-          size="xs"
-          variant="ghost-muted"
+          size="sm"
+          variant="quiet"
           aria-expanded={detailsOpen}
           onClick={() => setDetailsOpen((open) => !open)}
         >
-          <MorphIcon aria-hidden icon={detailsOpen ? ChevronDown : ChevronRight} />
+          {detailsOpen ? (
+            <ChevronDown size={13} aria-hidden="true" />
+          ) : (
+            <ChevronRight size={13} aria-hidden="true" />
+          )}
           Details
         </Button>
         {showTerminal ? (
-          <Button type="button" size="xs" variant="ghost-muted" onClick={onOpenTerminal}>
-            <TerminalIcon aria-hidden />
+          <Button size="sm" variant="quiet" onClick={onOpenTerminal}>
+            <Terminal size={13} aria-hidden="true" />
             Open terminal
           </Button>
         ) : null}
         {onWorkLocally ? (
-          <Button type="button" size="xs" variant="ghost-muted" onClick={onWorkLocally}>
-            <LaptopIcon aria-hidden />
+          <Button size="sm" variant="quiet" onClick={onWorkLocally}>
+            <Laptop size={13} aria-hidden="true" />
             Work locally
           </Button>
         ) : null}
         {onCancel && running ? (
-          <Button type="button" size="xs" variant="ghost-muted" onClick={onCancel}>
-            <XIcon aria-hidden />
+          <Button size="sm" variant="quiet" onClick={onCancel}>
+            <X size={13} aria-hidden="true" />
             Cancel
           </Button>
         ) : null}

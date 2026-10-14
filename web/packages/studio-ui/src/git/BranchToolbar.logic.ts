@@ -1,112 +1,41 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/BranchToolbar.logic.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// ported to the Loams UI stack. Loams' changes are Apache-2.0.
-import type {
-  EnvironmentId,
-  EnvironmentMachineKind,
-  VcsRef,
-  ProjectId,
-  WorktreeSubmodules,
-} from "@t3tools/contracts";
-import * as Schema from "effect/Schema";
-import { sanitizeNewRefName } from "@t3tools/shared/git";
-import { toSortableTimestamp } from "../lib/threadSort";
+// EnvMode as a plain union (no effect/Schema); refs are loams-agentd's RepoRef; the environment (host) and composer-strip helpers dropped (Studio's host is the shell's); timestamps in milliseconds. Loams' changes are Apache-2.0.
+
+// The branch toolbar's decisions (§53 §5.7; SD1 Task 23): where a thread runs (the
+// project's checkout or a new worktree), which branch the picker shows, and what
+// picking a branch does.
+
+import { sanitizeNewRefName } from "./shared";
+
 export {
-  dedupeRemoteBranchesWithLocalMatches,
   deriveLocalBranchNameFromRemoteRef,
   sanitizeNewRefName,
-} from "@t3tools/shared/git";
+} from "./shared";
 
-export interface EnvironmentOption {
-  environmentId: EnvironmentId;
-  /** Null when the machine's "No project" folder is not created yet. */
-  projectId: ProjectId | null;
-  label: string;
-  isPrimary: boolean;
-  machine: EnvironmentMachineKind;
+/** Where work happens: the project's own checkout, or a new worktree of it. */
+export type EnvMode = "local" | "worktree";
+
+export const ENV_MODES: readonly EnvMode[] = ["local", "worktree"];
+
+export function isEnvMode(value: unknown): value is EnvMode {
+  return value === "local" || value === "worktree";
 }
 
-export const EnvMode = Schema.Literals(["local", "worktree"]);
-export type EnvMode = typeof EnvMode.Type;
-
-const GENERIC_LOCAL_ENVIRONMENT_LABELS = new Set(["local", "local environment"]);
-
-function normalizeDisplayLabel(value: string | null | undefined): string | null {
-  const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : null;
-}
-
-export function resolveEnvironmentOptionLabel(input: {
-  isPrimary: boolean;
-  environmentId: EnvironmentId;
-  runtimeLabel?: string | null;
-  savedLabel?: string | null;
-}): string {
-  const runtimeLabel = normalizeDisplayLabel(input.runtimeLabel);
-  const savedLabel = normalizeDisplayLabel(input.savedLabel);
-
-  if (input.isPrimary) {
-    const preferredLocalLabel = [runtimeLabel, savedLabel].find((label) => {
-      if (!label) return false;
-      return !GENERIC_LOCAL_ENVIRONMENT_LABELS.has(label.toLowerCase());
-    });
-    return preferredLocalLabel ?? "This device";
-  }
-
-  return runtimeLabel ?? savedLabel ?? input.environmentId;
-}
-
-// A remote (non-primary) environment is always surfaced, even when it is the
-// only environment available: with a single connected machine there is nothing
-// to pick, but the user still needs to see where the project runs.
-export function shouldShowEnvironmentIndicator(input: {
-  activeEnvironment: Pick<EnvironmentOption, "isPrimary"> | null;
-  canPickEnvironment: boolean;
-}): boolean {
-  if (input.canPickEnvironment) return true;
-  return input.activeEnvironment !== null && !input.activeEnvironment.isPrimary;
-}
-
-export function shouldShowComposerContextStrip(input: {
-  isDraftHeroState: boolean;
-  persistInActiveThreads: boolean;
-  hasActiveProject: boolean;
-  isGitRepo: boolean;
-  showEnvironmentIndicator: boolean;
-  /** A collapsed composer's controls currently fit in their measured strip host. */
-  hostsRestingComposerControls: boolean;
-}): boolean {
-  return (
-    input.hasActiveProject &&
-    (input.isDraftHeroState || input.persistInActiveThreads) &&
-    (input.isGitRepo || input.showEnvironmentIndicator || input.hostsRestingComposerControls)
-  );
-}
-
-// Labels collapse to icons when the strip's content no longer fits. A small
-// hysteresis on the way back out keeps the boundary from flapping.
-const CONTEXT_STRIP_COMPACT_EXPAND_HYSTERESIS_PX = 16;
-
-export function resolveContextStripLabelsCompact(input: {
-  compact: boolean;
-  neededWidth: number;
-  availableWidth: number;
-}): boolean {
-  return input.compact
-    ? input.neededWidth > input.availableWidth - CONTEXT_STRIP_COMPACT_EXPAND_HYSTERESIS_PX
-    : input.neededWidth > input.availableWidth;
+/** A ref as the branch picker lists it (loams-agentd's `RepoRef`). */
+export interface BranchRef {
+  name: string;
+  /** Checked out in the repository's main checkout. */
+  current?: boolean;
+  isDefault?: boolean;
+  /** The worktree it is checked out in, if any. */
+  worktreePath?: string | null;
 }
 
 export function resolveEnvModeLabel(mode: EnvMode): string {
   return mode === "worktree" ? "New worktree" : "Current checkout";
 }
-
-export const WORKTREE_SUBMODULES_LABELS: Record<WorktreeSubmodules, string> = {
-  recursive: "Recursive",
-  "top-level": "Top level only",
-  none: "Skip",
-};
 
 export function resolveCurrentWorkspaceLabel(activeWorktreePath: string | null): string {
   return activeWorktreePath ? "Current worktree" : resolveEnvModeLabel("local");
@@ -127,17 +56,17 @@ export interface PreviousWorktreeSeed {
   worktreePath: string;
 }
 
-// The most recently touched worktree in the project that the composer isn't
+// The most recently touched worktree in the project that the toolbar isn't
 // already pointing at. Backs the "Previous worktree" entry in the workspace
-// selector so a follow-up thread can hop back into the worktree you just
-// worked in without hunting for its branch. Archived threads don't compete —
-// the rest of the UI hides them, so their worktrees shouldn't resurface here.
+// selector so follow-up work can hop back into the worktree you just worked in
+// without hunting for its branch. Archived entries don't compete.
 export function resolvePreviousWorktreeSeed(input: {
   threads: ReadonlyArray<{
     branch: string | null;
     worktreePath: string | null;
-    updatedAt: string;
-    archivedAt?: string | null;
+    /** Milliseconds since the epoch, or an ISO date. */
+    updatedAt: number | string;
+    archivedAt?: string | number | null;
   }>;
   currentWorktreePath: string | null;
 }): PreviousWorktreeSeed | null {
@@ -150,8 +79,9 @@ export function resolvePreviousWorktreeSeed(input: {
     ) {
       continue;
     }
-    const updatedAt = toSortableTimestamp(thread.updatedAt);
-    if (updatedAt === null) {
+    const updatedAt =
+      typeof thread.updatedAt === "number" ? thread.updatedAt : Date.parse(thread.updatedAt);
+    if (!Number.isFinite(updatedAt)) {
       continue;
     }
     if (latest === null || updatedAt > latest.updatedAt) {
@@ -173,10 +103,7 @@ export function resolveEffectiveEnvMode(input: {
   activeWorktreePath: string | null;
   hasServerThread: boolean;
   draftThreadEnvMode: EnvMode | undefined;
-  /**
-   * The server is still creating this thread's worktree. The thread exists
-   * from the start of that setup but gets its worktree path only at the end.
-   */
+  /** The daemon is still creating this thread's worktree. */
   preparingWorktree?: boolean;
 }): EnvMode {
   const { activeWorktreePath, hasServerThread, draftThreadEnvMode, preparingWorktree } = input;
@@ -221,25 +148,13 @@ export function resolveBranchTriggerLabel(input: {
   activeWorktreePath: string | null;
   effectiveEnvMode: EnvMode;
   resolvedActiveBranch: string | null;
-  resolvedActiveBranchIsRemote: boolean | null;
-  startFromOrigin: boolean;
 }): string {
-  const {
-    activeWorktreePath,
-    effectiveEnvMode,
-    resolvedActiveBranch,
-    resolvedActiveBranchIsRemote,
-    startFromOrigin,
-  } = input;
+  const { activeWorktreePath, effectiveEnvMode, resolvedActiveBranch } = input;
   if (!resolvedActiveBranch) {
     return "Select ref";
   }
   if (effectiveEnvMode === "worktree" && !activeWorktreePath) {
-    const baseRef =
-      startFromOrigin && resolvedActiveBranchIsRemote === false
-        ? `origin/${resolvedActiveBranch}`
-        : resolvedActiveBranch;
-    return `From ${baseRef}`;
+    return `From ${resolvedActiveBranch}`;
   }
   return resolvedActiveBranch;
 }
@@ -270,7 +185,7 @@ export function resolveLocalCheckoutBranchMismatch(input: {
 export function resolveBranchSelectionTarget(input: {
   activeProjectCwd: string;
   activeWorktreePath: string | null;
-  refName: Pick<VcsRef, "isDefault" | "worktreePath">;
+  refName: Pick<BranchRef, "isDefault" | "worktreePath">;
 }): {
   checkoutCwd: string;
   nextWorktreePath: string | null;

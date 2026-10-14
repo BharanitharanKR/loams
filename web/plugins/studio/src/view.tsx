@@ -6,6 +6,8 @@ import { Empty, Tabs } from '@loams/ui';
 import { useEffect, useState } from 'react';
 import type { StudioAgentd } from './agentd.js';
 import type { StudioFactory } from './factory.js';
+import type { GitActionBus } from './git/bus.js';
+import { StudioGitTools } from './git/GitToolbar.js';
 import { Home, ProjectPage } from './home/Home.js';
 import { NotConnected } from './home/states.js';
 import { StudioLayout } from './layout/StudioLayout.js';
@@ -161,6 +163,7 @@ function StudioPage({
   hostParam,
   keys: given,
   openExternal,
+  gitBus,
 }: {
   agentd: StudioAgentd;
   /** The software factory (§53 §5.9): the desktop's bridge; none on the web until SF1. */
@@ -173,6 +176,8 @@ function StudioPage({
   keys?: StudioKeys;
   /** Opens an http(s) link outside Studio (the platform's; a terminal's links, SD1 Task 22). */
   openExternal?: (url: string) => Promise<void>;
+  /** The git toolbar's link to the palette (SD1 Task 23, T24-6). */
+  gitBus?: GitActionBus;
 }) {
   useEffect(() => {
     if (hostParam) agentd.hosts?.select(hostParam);
@@ -196,6 +201,17 @@ function StudioPage({
         </ProjectsSidebar>
       }
       commands={keys.commands}
+      tools={
+        connected ? (
+          <StudioGitTools
+            agentd={agentd}
+            route={route}
+            factory={factory}
+            bus={gitBus}
+            openTerminal={() => keys.commands.run('terminal.toggle')}
+          />
+        ) : undefined
+      }
       panel={thread && connected ? <ThreadPanel route={thread} navigate={navigate} /> : undefined}
       drawer={
         thread && connected ? (

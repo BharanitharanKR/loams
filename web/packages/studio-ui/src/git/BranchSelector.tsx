@@ -1,831 +1,137 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/BranchToolbarBranchSelector.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// ported to the Loams UI stack. Loams' changes are Apache-2.0.
-import { ThreadDetailsControl } from "./chat/ThreadDetailsControl";
-import { ComposerContextLabel } from "./ComposerContextLabel";
-import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
-import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
-import { useRightPanelStore } from "../rightPanelStore";
-import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
-import {
-  isAtomCommandInterrupted,
-  squashAtomCommandFailure,
-} from "@t3tools/client-runtime/state/runtime";
-import {
-  AuthOrchestrationOperateScope,
-  AuthSourceControlWriteScope,
-  type ContextMenuItem,
-  type EnvironmentId,
-  type VcsRef,
-  type ThreadId,
-} from "@t3tools/contracts";
-import { ChevronDownIcon, GitBranchIcon } from "lucide-react";
-import {
-  useCallback,
-  useDeferredValue,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useOptimistic,
-  useState,
-  useTransition,
-  type MouseEvent as ReactMouseEvent,
-  type Ref,
-} from "react";
+// a presentational picker over loams-agentd's refs (ListRefs) on @loams/ui's Popover and Input; the selection is reported to the container, which confirms and calls SwitchRef or reuses the ref's worktree; paged refs, pull-request checkout, the draft store, toasts and the panel variant dropped. Loams' changes are Apache-2.0.
 
-import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
-import { writeTextToClipboard } from "../hooks/useCopyToClipboard";
-import { readLocalApi } from "../localApi";
-import { useOpenPrLink } from "../lib/openPullRequestLink";
-import { usePaginatedBranches } from "../state/queries";
-import { useProject, useThreadShell } from "../state/entities";
-import { useEnvironmentQuery } from "../state/query";
-import { readEnvironmentScope, useEnvironmentScope } from "~/state/session";
-import { threadEnvironment } from "../state/threads";
-import { useAtomCommand } from "../state/use-atom-command";
-import { vcsEnvironment } from "../state/vcs";
-import { cn } from "../lib/utils";
-import { THREAD_DETAILS_PANEL_ICON_CLASS } from "./chat/threadDetailsPanelStyles";
-import { ThreadDetailsPrRows } from "./chat/ThreadDetailsPrRows";
-import { parsePullRequestReference } from "../pullRequestReference";
-import { getSourceControlPresentation } from "../sourceControlPresentation";
-import { useComposerMenuProps } from "./chat/composerEventScope";
+// The branch picker (§53 §5.7; SD1 Task 23). In the project's checkout a pick switches
+// the branch (after a confirmation the container shows); in "New worktree" mode it picks
+// the base the worktree starts from; a branch that lives in a worktree selects that
+// worktree.
+
+import { Badge, cx, Input, MiddleTruncate, Popover } from "@loams/ui";
+import { ChevronDown, GitBranch } from "lucide-react";
+import { useId, useState } from "react";
 import {
-  deriveLocalBranchNameFromRemoteRef,
+  type BranchRef,
+  type EnvMode,
   resolveBranchTriggerLabel,
-  resolveBranchToolbarPrBranch,
-  resolveBranchSelectionTarget,
-  resolveBranchToolbarValue,
-  resolveDraftEnvModeAfterBranchChange,
-  resolveEffectiveEnvMode,
-  sanitizeNewRefName,
   shouldIncludeBranchPickerItem,
 } from "./BranchToolbar.logic";
-import {
-  ThreadPullRequestBadgeControl,
-  prStatusIndicator,
-  resolveThreadPullRequestBadge,
-  useLinkedThreadPullRequest,
-} from "./ThreadStatusIndicators";
 
-import { ComboboxItem, ComboboxTrigger } from "./ui/combobox";
-import { ComposerControl } from "./chat/ComposerControl";
-import { MiddleTruncate } from "./ui/middle-truncate";
-import { BranchPicker, BranchPickerRefItem } from "./BranchPicker";
-import { stackedThreadToast, toastManager } from "./ui/toast";
-
-export interface BranchToolbarBranchSelectorHandle {
-  open: () => void;
-}
-
-interface BranchToolbarBranchSelectorProps {
-  forceNewWorktree?: boolean;
-  ref?: Ref<BranchToolbarBranchSelectorHandle>;
+export interface BranchSelectorProps {
+  refs: readonly BranchRef[];
+  /** The branch shown: the checkout's, or the chosen base in "New worktree" mode. */
+  value: string | null;
+  effectiveEnvMode: EnvMode;
+  activeWorktreePath: string | null;
+  /** The thread is running or its branch is fixed: show the branch, offer no picks. */
+  locked?: boolean;
+  loading?: boolean;
+  onSelect: (ref: BranchRef) => void;
   className?: string;
-  displayMode?: "toolbar" | "panel";
-  environmentId: EnvironmentId;
-  threadId: ThreadId;
-  draftId?: DraftId;
-  envLocked: boolean;
-  effectiveEnvModeOverride?: "local" | "worktree";
-  activeThreadBranchOverride?: string | null;
-  onActiveThreadBranchOverrideChange?: (refName: string | null) => void;
-  startFromOrigin: boolean;
-  onStartFromOriginChange: (startFromOrigin: boolean) => void;
-  onCheckoutPullRequestRequest?: (reference: string) => void;
-  onComposerFocusRequest?: () => void;
 }
 
-function toBranchActionErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "An error occurred.";
-}
+const TRIGGER =
+  "inline-flex h-7 min-w-0 max-w-64 items-center gap-1.5 rounded-pill border border-rule-soft px-2.5 text-[0.8rem] text-muted hover:bg-raised hover:text-ink disabled:cursor-default disabled:hover:bg-transparent";
 
-export function BranchToolbarBranchSelector({
-  forceNewWorktree = false,
-  ref,
+export function BranchSelector({
+  refs,
+  value,
+  effectiveEnvMode,
+  activeWorktreePath,
+  locked = false,
+  loading = false,
+  onSelect,
   className,
-  displayMode = "toolbar",
-  environmentId,
-  threadId,
-  draftId,
-  envLocked,
-  effectiveEnvModeOverride,
-  activeThreadBranchOverride,
-  onActiveThreadBranchOverrideChange,
-  startFromOrigin,
-  onStartFromOriginChange,
-  onCheckoutPullRequestRequest,
-  onComposerFocusRequest,
-}: BranchToolbarBranchSelectorProps) {
-  const composerFloatingLayerProps = useComposerMenuProps();
-  const canWriteSourceControl = useEnvironmentScope(environmentId, AuthSourceControlWriteScope);
-  const canOperateThread = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
-  const stopThreadSession = useAtomCommand(threadEnvironment.stopSession, "thread session stop");
-  const updateThreadMetadata = useAtomCommand(
-    threadEnvironment.updateMetadata,
-    "thread metadata update",
-  );
-  // An automatic default loses to any launch that lands first; that rejection is expected.
-  const updateEmptyThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
-    reportFailure: false,
-  });
-  const switchRef = useAtomCommand(vcsEnvironment.switchRef, {
-    reportFailure: false,
-  });
-  const createRefMutation = useAtomCommand(vcsEnvironment.createRef, {
-    reportFailure: false,
-  });
-  // ---------------------------------------------------------------------------
-  // Thread / project state (pushed down from parent to colocate with mutation)
-  // ---------------------------------------------------------------------------
-  const threadRef = useMemo(
-    () => scopeThreadRef(environmentId, threadId),
-    [environmentId, threadId],
-  );
-  const serverThread = useThreadShell(threadRef);
-  const serverSession = serverThread?.runtime ?? null;
-  const draftThread = useComposerDraftStore((store) =>
-    draftId ? store.getDraftSession(draftId) : store.getDraftThreadByRef(threadRef),
-  );
-  const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
-
-  const activeProjectRef = serverThread
-    ? scopeProjectRef(serverThread.environmentId, serverThread.projectId)
-    : draftThread
-      ? scopeProjectRef(draftThread.environmentId, draftThread.projectId)
-      : null;
-  const activeProject = useProject(activeProjectRef);
-
-  const activeThreadId = serverThread?.id ?? (draftThread ? threadId : undefined);
-  const activeThreadBranch =
-    activeThreadBranchOverride !== undefined
-      ? activeThreadBranchOverride
-      : (serverThread?.branch ?? draftThread?.branch ?? null);
-  const activeWorktreePath = forceNewWorktree
-    ? null
-    : (serverThread?.worktreePath ?? draftThread?.worktreePath ?? null);
-  const activeProjectCwd = activeProject?.workspaceRoot ?? null;
-  const branchCwd = activeWorktreePath ?? activeProjectCwd;
-  const hasServerThread = serverThread !== null;
-  const canUpdateThreadBranch = !hasServerThread || canOperateThread;
-  const canChangeThreadBranch = canWriteSourceControl && canUpdateThreadBranch;
-  const effectiveEnvMode =
-    effectiveEnvModeOverride ??
-    resolveEffectiveEnvMode({
-      activeWorktreePath,
-      hasServerThread,
-      draftThreadEnvMode: draftThread?.envMode,
-    });
-
-  // ---------------------------------------------------------------------------
-  // Thread branch mutation (colocated — only this component calls it)
-  // ---------------------------------------------------------------------------
-  const setThreadBranch = useCallback(
-    (branch: string | null, worktreePath: string | null, automatic = false) => {
-      if (
-        !activeThreadId ||
-        !activeProject ||
-        (hasServerThread && !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope))
-      )
-        return;
-      if (serverSession && worktreePath !== activeWorktreePath) {
-        void stopThreadSession({
-          environmentId,
-          input: { threadId: activeThreadId },
-        });
-      }
-      if (hasServerThread) {
-        void (automatic ? updateEmptyThreadMetadata : updateThreadMetadata)({
-          environmentId,
-          input: {
-            threadId: activeThreadId,
-            branch,
-            worktreePath,
-            // A launched thread records its own worktree; a late default must not reset it.
-            ...(automatic ? { expectedEmpty: true } : {}),
-          },
-        });
-      }
-      if (hasServerThread) {
-        onActiveThreadBranchOverrideChange?.(branch);
-        return;
-      }
-      const nextDraftEnvMode = resolveDraftEnvModeAfterBranchChange({
-        nextWorktreePath: worktreePath,
-        currentWorktreePath: activeWorktreePath,
-        effectiveEnvMode,
-      });
-      setDraftThreadContext(draftId ?? threadRef, {
-        branch,
-        worktreePath,
-        envMode: nextDraftEnvMode,
-        environmentSelection: automatic ? (draftThread?.environmentSelection ?? "auto") : "manual",
-        projectRef: scopeProjectRef(environmentId, activeProject.id),
-      });
-    },
-    [
-      activeThreadId,
-      activeProject,
-      serverSession,
-      activeWorktreePath,
-      hasServerThread,
-      onActiveThreadBranchOverrideChange,
-      setDraftThreadContext,
-      draftId,
-      threadRef,
-      environmentId,
-      effectiveEnvMode,
-      draftThread?.environmentSelection,
-      stopThreadSession,
-      updateEmptyThreadMetadata,
-      updateThreadMetadata,
-    ],
-  );
-
-  // ---------------------------------------------------------------------------
-  // Git ref queries
-  // ---------------------------------------------------------------------------
-  const [isBranchMenuOpen, setIsBranchMenuOpen] = useState(false);
-  const [branchQuery, setBranchQuery] = useState("");
-  const deferredBranchQuery = useDeferredValue(branchQuery);
-
-  const branchStatusQuery = useEnvironmentQuery(
-    branchCwd === null
-      ? null
-      : vcsEnvironment.status({
-          environmentId,
-          input: { cwd: branchCwd },
-        }),
-  );
-  const trimmedBranchQuery = branchQuery.trim();
-  const deferredTrimmedBranchQuery = deferredBranchQuery.trim();
-  // The server filters refs by substring, so it has to be given the sanitized
-  // name as well: querying the raw "new branch" drops an existing new-branch
-  // from the response entirely, which would defeat the collision check below.
-  // Ref names cannot contain an ASCII space, so sanitizing loses no matches.
-  const branchRefQuery = sanitizeNewRefName(deferredTrimmedBranchQuery);
-  const branchRefState = usePaginatedBranches({
-    environmentId,
-    cwd: branchCwd,
-    query: branchRefQuery,
-  });
-  const refs = branchRefState.refs;
-  const hasNextPage =
-    branchRefState.data?.nextCursor !== null && branchRefState.data?.nextCursor !== undefined;
-  const isFetchingNextPage = branchRefState.isFetchingNextPage;
-  const isInitialBranchesLoadPending = branchRefState.isPending && branchRefState.data === null;
-  const currentGitBranch =
-    branchStatusQuery.data?.refName ?? refs.find((refName) => refName.current)?.name ?? null;
-  const sourceControlPresentation = useMemo(
-    () => getSourceControlPresentation(branchStatusQuery.data?.sourceControlProvider),
-    [branchStatusQuery.data?.sourceControlProvider],
-  );
-  const SourceControlIcon = sourceControlPresentation.Icon;
-  const canonicalActiveBranch = resolveBranchToolbarValue({
-    envMode: effectiveEnvMode,
-    activeWorktreePath,
-    activeThreadBranch,
-    currentGitBranch,
-  });
-  const branchNames = useMemo(() => refs.map((refName) => refName.name), [refs]);
-  const branchByName = useMemo(
-    () => new Map(refs.map((refName) => [refName.name, refName] as const)),
-    [refs],
-  );
-  const normalizedDeferredBranchQuery = deferredTrimmedBranchQuery.toLowerCase();
-  const prReference = parsePullRequestReference(trimmedBranchQuery);
-  const isSelectingWorktreeBase =
-    effectiveEnvMode === "worktree" && !envLocked && !activeWorktreePath;
-  const checkoutPullRequestItemValue =
-    canChangeThreadBranch && prReference && onCheckoutPullRequestRequest
-      ? `__checkout_pull_request__:${prReference}`
-      : null;
-  const canCreateBranch =
-    canChangeThreadBranch && !isSelectingWorktreeBase && trimmedBranchQuery.length > 0;
-  // The ref is created under its sanitized name, so the collision check has to
-  // use that name too. Matching on the raw query would offer to create a ref
-  // that already exists whenever sanitizing changes the name.
-  const newRefName = sanitizeNewRefName(trimmedBranchQuery);
-  const hasExactBranchMatch = branchByName.has(newRefName);
-  const createBranchItemValue = canCreateBranch
-    ? `__create_new_branch__:${trimmedBranchQuery}`
-    : null;
-  const branchPickerItems = useMemo(() => {
-    const items = [...branchNames];
-    if (createBranchItemValue && !hasExactBranchMatch) {
-      items.push(createBranchItemValue);
-    }
-    if (checkoutPullRequestItemValue) {
-      items.unshift(checkoutPullRequestItemValue);
-    }
-    return items;
-  }, [branchNames, checkoutPullRequestItemValue, createBranchItemValue, hasExactBranchMatch]);
-  const filteredBranchPickerItems = useMemo(
-    () =>
-      normalizedDeferredBranchQuery.length === 0
-        ? branchPickerItems
-        : branchPickerItems.filter((itemValue) =>
-            shouldIncludeBranchPickerItem({
-              itemValue,
-              normalizedQuery: normalizedDeferredBranchQuery,
-              createBranchItemValue,
-              checkoutPullRequestItemValue,
-            }),
-          ),
-    [
-      branchPickerItems,
-      checkoutPullRequestItemValue,
-      createBranchItemValue,
-      normalizedDeferredBranchQuery,
-    ],
-  );
-  const [resolvedActiveBranch, setOptimisticBranch] = useOptimistic(
-    canonicalActiveBranch,
-    (_currentBranch: string | null, optimisticBranch: string | null) => optimisticBranch,
-  );
-  const listedActiveBranch =
-    resolvedActiveBranch === null ? null : (branchByName.get(resolvedActiveBranch) ?? null);
-  const activeBranchRefQuery = useEnvironmentQuery(
-    branchCwd !== null && resolvedActiveBranch !== null
-      ? vcsEnvironment.listRefs({
-          environmentId,
-          input: {
-            cwd: branchCwd,
-            query: resolvedActiveBranch,
-            limit: 10,
-          },
-        })
-      : null,
-  );
-  const queriedActiveBranch = activeBranchRefQuery.data?.refs.find(
-    (refName) => refName.name === resolvedActiveBranch,
-  );
-  const resolvedActiveBranchIsRemote =
-    listedActiveBranch !== null
-      ? listedActiveBranch.isRemote === true
-      : queriedActiveBranch
-        ? queriedActiveBranch.isRemote === true
-        : null;
-  const [isBranchActionPending, startBranchActionTransition] = useTransition();
-  const totalBranchCount = branchRefState.data?.totalCount ?? 0;
-  const branchStatusText = isInitialBranchesLoadPending
-    ? "Loading refs..."
-    : isFetchingNextPage
-      ? "Loading more refs..."
-      : hasNextPage
-        ? `Showing ${refs.length} of ${totalBranchCount} refs`
-        : null;
-
-  // ---------------------------------------------------------------------------
-  // Branch actions
-  // ---------------------------------------------------------------------------
-  const copyBranchName = useCallback((branchName: string) => {
-    void writeTextToClipboard(branchName, "branch name").then(
-      (didCopy) => {
-        if (!didCopy) return;
-        toastManager.add({
-          type: "success",
-          title: "Branch name copied",
-          description: branchName,
-        });
-      },
-      (error: unknown) => {
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Failed to copy branch name",
-            description: toBranchActionErrorMessage(error),
-          }),
-        );
-      },
-    );
-  }, []);
-
-  const handleBranchContextMenu = useCallback(
-    (event: ReactMouseEvent, branchName: string | null) => {
-      if (!branchName) return;
-      const api = readLocalApi();
-      if (!api) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const items: ContextMenuItem<"copy-branch-name">[] = [
-        { id: "copy-branch-name", label: "Copy branch name", icon: "copy" },
-      ];
-      void api.contextMenu.show(items, { x: event.clientX, y: event.clientY }).then((action) => {
-        if (action === "copy-branch-name") copyBranchName(branchName);
-      });
-    },
-    [copyBranchName],
-  );
-
-  const runBranchAction = (action: () => Promise<void>) => {
-    if (
-      !readEnvironmentScope(environmentId, AuthSourceControlWriteScope) ||
-      (hasServerThread && !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope))
-    ) {
-      // The menu already closed when the item was chosen; explain the no-op.
-      toastManager.add(
-        stackedThreadToast({
-          type: "error",
-          title: "Action unavailable",
-          description: "This connection cannot change the thread's branch.",
-        }),
-      );
-      return;
-    }
-    startBranchActionTransition(async () => {
-      await action();
-      branchRefState.refresh();
-      branchStatusQuery.refresh();
-    });
-  };
-
-  const selectBranch = (refName: VcsRef) => {
-    if (!canUpdateThreadBranch || !branchCwd || !activeProjectCwd || isBranchActionPending) return;
-
-    if (isSelectingWorktreeBase) {
-      setThreadBranch(refName.name, null);
-      setIsBranchMenuOpen(false);
-      onComposerFocusRequest?.();
-      return;
-    }
-
-    const selectionTarget = resolveBranchSelectionTarget({
-      activeProjectCwd,
-      activeWorktreePath,
-      refName,
-    });
-
-    if (selectionTarget.reuseExistingWorktree) {
-      setThreadBranch(refName.name, selectionTarget.nextWorktreePath);
-      setIsBranchMenuOpen(false);
-      onComposerFocusRequest?.();
-      return;
-    }
-
-    const selectedBranchName = refName.isRemote
-      ? deriveLocalBranchNameFromRemoteRef(refName.name)
-      : refName.name;
-
-    setIsBranchMenuOpen(false);
-    onComposerFocusRequest?.();
-
-    runBranchAction(async () => {
-      const previousBranch = resolvedActiveBranch;
-      setOptimisticBranch(selectedBranchName);
-      const checkoutResult = await switchRef({
-        environmentId,
-        input: {
-          cwd: selectionTarget.checkoutCwd,
-          refName: refName.name,
-        },
-      });
-      if (checkoutResult._tag === "Success") {
-        const nextBranchName = refName.isRemote
-          ? (checkoutResult.value.refName ?? selectedBranchName)
-          : selectedBranchName;
-        setOptimisticBranch(nextBranchName);
-        setThreadBranch(nextBranchName, selectionTarget.nextWorktreePath);
-        return;
-      }
-      setOptimisticBranch(previousBranch);
-      if (!isAtomCommandInterrupted(checkoutResult)) {
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Failed to switch ref.",
-            description: toBranchActionErrorMessage(squashAtomCommandFailure(checkoutResult)),
-          }),
-        );
-      }
-    });
-  };
-
-  const createRef = (rawName: string) => {
-    if (!canChangeThreadBranch) return;
-    const name = sanitizeNewRefName(rawName);
-    if (!branchCwd || !name || isBranchActionPending) return;
-
-    setIsBranchMenuOpen(false);
-    onComposerFocusRequest?.();
-
-    runBranchAction(async () => {
-      const previousBranch = resolvedActiveBranch;
-      setOptimisticBranch(name);
-      const createBranchResult = await createRefMutation({
-        environmentId,
-        input: {
-          cwd: branchCwd,
-          refName: name,
-          switchRef: true,
-        },
-      });
-      if (createBranchResult._tag === "Success") {
-        setOptimisticBranch(createBranchResult.value.refName);
-        setThreadBranch(createBranchResult.value.refName, activeWorktreePath);
-        return;
-      }
-      setOptimisticBranch(previousBranch);
-      if (!isAtomCommandInterrupted(createBranchResult)) {
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Failed to create and switch ref.",
-            description: toBranchActionErrorMessage(squashAtomCommandFailure(createBranchResult)),
-          }),
-        );
-      }
-    });
-  };
-
-  // Default the worktree base to the repo default branch (origin/HEAD), only
-  // falling back to the checked-out branch when no default is known.
-  const defaultBranchName = useMemo(
-    () => refs.find((refName) => refName.isDefault)?.name ?? null,
-    [refs],
-  );
-  const worktreeBaseBranchCandidate = isInitialBranchesLoadPending
-    ? null
-    : (defaultBranchName ?? currentGitBranch);
-
-  // A started thread's server is creating its worktree and records the branch
-  // itself; defaulting it here would reset the thread to the base checkout and
-  // detach the agent that just started.
-  const threadStarted = serverSession !== null;
-  useEffect(() => {
-    if (
-      threadStarted ||
-      effectiveEnvMode !== "worktree" ||
-      activeWorktreePath ||
-      activeThreadBranch ||
-      !worktreeBaseBranchCandidate
-    ) {
-      return;
-    }
-    setThreadBranch(worktreeBaseBranchCandidate, null, true);
-  }, [
-    activeThreadBranch,
+}: BranchSelectorProps) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const listId = useId();
+  const label = resolveBranchTriggerLabel({
     activeWorktreePath,
     effectiveEnvMode,
-    setThreadBranch,
-    threadStarted,
-    worktreeBaseBranchCandidate,
-  ]);
-
-  // ---------------------------------------------------------------------------
-  // Combobox / list plumbing
-  // ---------------------------------------------------------------------------
-  const handleOpenChange = useCallback((open: boolean) => {
-    setIsBranchMenuOpen(open);
-    if (!open) {
-      setBranchQuery("");
-    }
-  }, []);
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      open: () => {
-        if (isInitialBranchesLoadPending || isBranchActionPending) return;
-        handleOpenChange(true);
-      },
+    resolvedActiveBranch: value,
+  });
+  const normalizedQuery = query.trim().toLowerCase();
+  const shown = refs.filter((ref) =>
+    shouldIncludeBranchPickerItem({
+      itemValue: ref.name,
+      normalizedQuery,
+      createBranchItemValue: null,
+      checkoutPullRequestItemValue: null,
     }),
-    [handleOpenChange, isBranchActionPending, isInitialBranchesLoadPending],
   );
 
-  const triggerLabel = resolveBranchTriggerLabel({
-    activeWorktreePath,
-    effectiveEnvMode,
-    resolvedActiveBranch,
-    resolvedActiveBranchIsRemote,
-    startFromOrigin,
-  });
-
-  // Branch status is the fallback when this thread has no linked pull requests.
-  const branchPrBranch = resolveBranchToolbarPrBranch({
-    activeThreadBranch,
-    resolvedActiveBranch,
-  });
-  const branchPr =
-    branchPrBranch !== null && branchStatusQuery.data?.refName === branchPrBranch
-      ? (branchStatusQuery.data.pr ?? null)
-      : null;
-  const supportsMultiplePullRequests = useSupportsMultiplePullRequests(environmentId);
-  const linkedStatus = useLinkedThreadPullRequest(
-    environmentId,
-    serverThread?.linkedPullRequest,
-    true,
-    serverThread?.pullRequests,
-    serverThread?.branchPullRequest,
+  const trigger = (
+    <button
+      type="button"
+      className={cx(TRIGGER, className)}
+      aria-label={`Branch: ${label}`}
+      disabled={locked}
+    >
+      <GitBranch size={13} aria-hidden="true" className="shrink-0" />
+      <span className="min-w-0 truncate">{label}</span>
+      {!locked && <ChevronDown size={12} aria-hidden="true" className="shrink-0 text-faint" />}
+    </button>
   );
-  const currentLinkedPr = supportsMultiplePullRequests
-    ? resolveThreadCurrentPullRequestLink(serverThread?.pullRequests ?? [])
-    : null;
-  const prBadge = supportsMultiplePullRequests
-    ? resolveThreadPullRequestBadge(serverThread?.pullRequests)
-    : null;
-  const displayedPr = linkedStatus?.pr ?? (currentLinkedPr === null ? branchPr : null);
-  const displayedPrStatus = prStatusIndicator(
-    displayedPr,
-    linkedStatus?.sourceControlProvider ?? branchStatusQuery.data?.sourceControlProvider,
-  );
-  const prNumber = currentLinkedPr?.number ?? displayedPr?.number;
-  const prUrl = currentLinkedPr?.url ?? displayedPr?.url;
-  const openPrLink = useOpenPrLink(threadRef);
-  const panelPrLabel =
-    prNumber === undefined
-      ? ""
-      : `#${prNumber}${displayedPr?.title.trim() ? `: ${displayedPr.title}` : ""}`;
-
-  function selectPickerItem(itemValue: string) {
-    if (itemValue === checkoutPullRequestItemValue && prReference && onCheckoutPullRequestRequest) {
-      handleOpenChange(false);
-      onComposerFocusRequest?.();
-      onCheckoutPullRequestRequest(prReference);
-    } else if (itemValue === createBranchItemValue) {
-      createRef(trimmedBranchQuery);
-    } else {
-      const refName = branchByName.get(itemValue);
-      if (refName) selectBranch(refName);
-    }
-  }
-
-  function renderPickerItem(itemValue: string, index: number) {
-    if (checkoutPullRequestItemValue && itemValue === checkoutPullRequestItemValue) {
-      return (
-        <ComboboxItem
-          hideIndicator
-          key={itemValue}
-          index={index}
-          value={itemValue}
-          onClick={() => selectPickerItem(itemValue)}
-        >
-          <div className="flex min-w-0 items-center gap-2 py-1">
-            <SourceControlIcon className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="flex min-w-0 flex-col items-start">
-              <span className="truncate font-medium">
-                Checkout {sourceControlPresentation.terminology.singular}
-              </span>
-              <span className="truncate text-muted-foreground text-xs">{prReference}</span>
-            </span>
-          </div>
-        </ComboboxItem>
-      );
-    }
-    if (createBranchItemValue && itemValue === createBranchItemValue) {
-      return (
-        <ComboboxItem
-          hideIndicator
-          key={itemValue}
-          index={index}
-          value={itemValue}
-          onClick={() => selectPickerItem(itemValue)}
-        >
-          <span className="truncate">Create new ref &quot;{newRefName}&quot;</span>
-        </ComboboxItem>
-      );
-    }
-
-    const refName = branchByName.get(itemValue);
-    if (!refName) return null;
-
-    return (
-      <BranchPickerRefItem
-        branch={refName}
-        projectCwd={activeProjectCwd}
-        index={index}
-        value={itemValue}
-        disabled={
-          !canUpdateThreadBranch ||
-          (!canWriteSourceControl &&
-            !isSelectingWorktreeBase &&
-            (!activeProjectCwd ||
-              !resolveBranchSelectionTarget({
-                activeProjectCwd,
-                activeWorktreePath,
-                refName,
-              }).reuseExistingWorktree))
-        }
-        onClick={() => selectPickerItem(itemValue)}
-        onContextMenu={(event) => handleBranchContextMenu(event, itemValue)}
-      />
-    );
-  }
+  if (locked) return trigger;
 
   return (
-    <BranchPicker
-      items={branchPickerItems}
-      filteredItems={filteredBranchPickerItems}
-      open={isBranchMenuOpen}
-      onOpenChange={handleOpenChange}
-      onSelectItem={selectPickerItem}
-      value={resolvedActiveBranch}
-      query={branchQuery}
-      resultsQuery={deferredTrimmedBranchQuery}
-      onQueryChange={setBranchQuery}
-      hasNextPage={hasNextPage}
-      isFetchingNextPage={isFetchingNextPage}
-      onLoadNext={branchRefState.loadNext}
-      statusText={branchStatusText}
-      renderItem={renderPickerItem}
-      getItemType={(item) =>
-        item === checkoutPullRequestItemValue
-          ? "checkout-pull-request"
-          : item === createBranchItemValue
-            ? "create-branch"
-            : "branch"
-      }
-      originControl={
-        isSelectingWorktreeBase
-          ? { checked: startFromOrigin, onCheckedChange: onStartFromOriginChange }
-          : undefined
-      }
-      popupProps={{
-        align: displayMode === "panel" ? "start" : "end",
-        side: displayMode === "panel" ? "bottom" : "top",
-        className: cn("flex flex-col", displayMode === "panel" ? "w-(--anchor-width)" : "w-80"),
-        ...(displayMode === "toolbar" ? composerFloatingLayerProps : {}),
+    <Popover
+      trigger={trigger}
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuery("");
       }}
+      align="end"
+      title={
+        effectiveEnvMode === "worktree" && !activeWorktreePath ? "Start from" : "Switch branch"
+      }
     >
-      <div
-        className={cn(
-          "flex min-w-0",
-          displayMode === "panel" ? "w-full flex-col items-stretch" : "items-center gap-1",
-          className,
-        )}
+      <Input
+        aria-label="Filter branches"
+        aria-controls={listId}
+        placeholder="Filter branches"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+      />
+      <ul
+        id={listId}
+        aria-label="Branches"
+        className="m-0 max-h-72 w-72 list-none overflow-y-auto p-0"
       >
-        {displayMode !== "panel" ? (
-          <ThreadPullRequestBadgeControl
-            render={<ComposerControl size="xs" />}
-            badge={prBadge}
-            pullRequests={serverThread?.pullRequests ?? []}
-            number={prNumber}
-            url={prUrl}
-            status={displayedPrStatus}
-            onOpenList={() => useRightPanelStore.getState().open(threadRef, "pull-requests")}
-            onOpenPullRequest={(event, targetUrl = prUrl) => {
-              if (targetUrl) openPrLink(event, targetUrl);
-            }}
-          />
-        ) : null}
-        <span
-          className="flex min-w-0"
-          onMouseDownCapture={(event) => {
-            if (event.button !== 0 || event.ctrlKey) {
-              event.stopPropagation();
-            }
-          }}
-          onContextMenu={(event) => handleBranchContextMenu(event, resolvedActiveBranch)}
-        >
-          <ComboboxTrigger
-            render={
-              displayMode === "panel" ? (
-                <ThreadDetailsControl part="select" />
-              ) : (
-                <ComposerControl size="xs" />
-              )
-            }
-            className="min-w-0 max-w-full active:scale-100"
-            disabled={isInitialBranchesLoadPending || isBranchActionPending}
-          >
-            <GitBranchIcon
-              className={cn(
-                "size-3 shrink-0 opacity-70",
-                displayMode === "panel" && THREAD_DETAILS_PANEL_ICON_CLASS,
-              )}
-            />
-            <ComposerContextLabel displayMode={displayMode}>
-              <MiddleTruncate
-                value={triggerLabel}
-                variant={displayMode === "panel" ? "cap-aligned" : "default"}
-                className="w-full"
-              />
-            </ComposerContextLabel>
-            {displayMode !== "panel" ? (
-              <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
-            ) : null}
-          </ComboboxTrigger>
-        </span>
-        {displayMode === "panel" && prNumber !== undefined && prUrl !== undefined ? (
-          <ThreadDetailsPrRows
-            threadRef={threadRef}
-            links={serverThread?.pullRequests ?? []}
-            currentLink={currentLinkedPr}
-            onOpenLink={openPrLink}
-            environmentId={environmentId}
-            pr={displayedPr}
-            number={prNumber}
-            reference={currentLinkedPr}
-            status={displayedPrStatus}
-            project={activeProject}
-            label={panelPrLabel}
-            openAriaLabel={prUrl ?? "Open pull request"}
-            onOpen={(event) => openPrLink(event, prUrl)}
-            onActed={() => branchStatusQuery.refresh()}
-          />
-        ) : null}
-      </div>
-    </BranchPicker>
+        {loading && refs.length === 0 ? (
+          <li className="px-2 py-2 text-[0.84rem] text-muted">Loading branches…</li>
+        ) : shown.length === 0 ? (
+          <li className="px-2 py-2 text-[0.84rem] text-muted">No branches match.</li>
+        ) : (
+          shown.map((ref) => (
+            <li key={ref.name}>
+              <button
+                type="button"
+                aria-current={ref.name === value ? "true" : undefined}
+                className={cx(
+                  "flex w-full min-w-0 items-center gap-2 px-2 py-1.5 text-left text-[0.84rem] text-ink hover:bg-raised",
+                  ref.name === value && "bg-raised",
+                )}
+                onClick={() => {
+                  setOpen(false);
+                  setQuery("");
+                  onSelect(ref);
+                }}
+              >
+                <MiddleTruncate
+                  value={ref.name}
+                  className="min-w-0 flex-1 font-mono text-[0.8rem]"
+                />
+                {ref.isDefault && <Badge>default</Badge>}
+                {ref.worktreePath && <Badge title={ref.worktreePath}>worktree</Badge>}
+              </button>
+            </li>
+          ))
+        )}
+      </ul>
+    </Popover>
   );
 }
