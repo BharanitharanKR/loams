@@ -9,7 +9,13 @@ vi.mock('../src/markdown/highlight', () => ({
   ]),
 }));
 
-import { Markdown, safeHttpHref, workspacePathHref } from '../src/markdown';
+import {
+  createMarkdownFileRenderer,
+  Markdown,
+  resolveMarkdownFileLink,
+  safeHttpHref,
+  workspacePathHref,
+} from '../src/markdown';
 
 afterEach(cleanup);
 
@@ -144,5 +150,23 @@ describe('code_block_renders_text_not_html', () => {
     fireEvent.click(getByLabelText('Copy code'));
     expect(writeText).toHaveBeenCalledWith('ls -la');
     await waitFor(() => expect(getByLabelText('Copied')).toBeTruthy());
+  });
+});
+
+describe('markdown files in the file viewer (T21-3)', () => {
+  it('renders a document sanitised, with links relative to the file', () => {
+    const onOpenFile = vi.fn();
+    const renderFile = createMarkdownFileRenderer({ onOpenFile });
+    const { container, getByText } = render(
+      <>
+        {renderFile('# Guide\n\n<script>x</script> [api](api.md) [up](../x.md)', 'docs/guide.md')}
+      </>,
+    );
+    expect(container.querySelector('h1')?.textContent).toBe('Guide');
+    expect(container.querySelector('script')).toBeNull();
+    fireEvent.click(getByText('api'));
+    expect(onOpenFile).toHaveBeenCalledWith('docs/api.md');
+    expect(getByText('up').closest('button')).toBeNull();
+    expect(resolveMarkdownFileLink('README.md', 'a/b.md')).toBe('a/b.md');
   });
 });

@@ -21,6 +21,9 @@ catalogs:
     '@dnd-kit/utilities':
       specifier: 3.2.2
       version: 3.2.2
+    '@pierre/diffs':
+      specifier: 1.5.1
+      version: 1.5.1
     '@tailwindcss/vite':
       specifier: 4.3.3
       version: 4.3.3
@@ -98,6 +101,8 @@ overrides:
   nx@23.2.1>brace-expansion: 5.0.12
   builder-util-runtime@9.7.0>sax: 1.4.1
   js-yaml@4.3.2>argparse: '-'
+  '@pierre/diffs@1.5.1>shiki': 4.2.0
+  '@pierre/diffs@1.5.1>@shikijs/transformers': 4.2.0
   '@dnd-kit/core@6.3.1>tslib': '-'
   '@dnd-kit/sortable@10.0.0>tslib': '-'
   '@dnd-kit/utilities@3.2.2>tslib': '-'
@@ -1353,6 +1358,12 @@ importers:
       '@loams/ui':
         specifier: workspace:*
         version: link:../ui
+      '@pierre/diffs':
+        specifier: 'catalog:'
+        version: 1.5.1(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@tanstack/react-query':
+        specifier: 'catalog:'
+        version: 5.104.0(react@19.3.0)
       '@tanstack/react-virtual':
         specifier: 'catalog:'
         version: 3.14.13(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -4836,6 +4847,41 @@ packages:
     resolution: {integrity: sha512-ODOov0sGMJMf3jPonOkgGqPknTsu+DdQ7kD++gz8aI+aFMOMHFbWAA2taqXXVTdP+OTOQR/znGvSpmkeI0WTYQ==}
     engines: {node: '>=14.18.0'}
 
+  '@pierre/diffs@1.5.1':
+    resolution: {integrity: sha512-+EXNfz4ZXI6FHr7P6ToWEORwyYiPVfAmzhA70xF+0y/oNvj7gbNTLJJ6jNzkBjuMbRlu564TAmgYZLc5OyHURA==}
+    peerDependencies:
+      react: ^18.3.1 || ^19.0.0
+      react-dom: ^18.3.1 || ^19.0.0
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-dom:
+        optional: true
+
+  '@pierre/theme@2.0.0':
+    resolution: {integrity: sha512-yNDd9GYLQl1mEUJR8AneJ5e4ohLIHQd/wZLWr4fagt78vS2RwwZNW530vVgHqXFAyFVcFlRmGUD5ramXH46OXw==}
+    engines: {vscode: ^1.0.0}
+
+  '@pierre/theming@1.0.1':
+    resolution: {integrity: sha512-WCI5Qd7iprDpISL9fBYOLe8RV53+b7mFNA3bPzl60/2CKCSrsKN8zEcep6Y3BAzvARlmca50zGjDodqPGiTUKA==}
+    peerDependencies:
+      '@pierre/theme': ^1.1.0 || ^2.0.0
+      '@shikijs/themes': ^3.0.0 || ^4.0.0
+      react: ^18.3.1 || ^19.0.0
+      react-dom: ^18.3.1 || ^19.0.0
+      shiki: ^3.0.0 || ^4.0.0
+    peerDependenciesMeta:
+      '@pierre/theme':
+        optional: true
+      '@shikijs/themes':
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
+      shiki:
+        optional: true
+
   '@playwright/test@1.63.0':
     resolution: {integrity: sha512-oxMK4vllB9RK5NQ2l1pq1IfOf2AvnEuj/vYGDj0H2nMtmtZpKtCwt/l00GEO6xjGfpBNAvjovvYdCm50dRQkpQ==}
     engines: {node: '>=20'}
@@ -5106,6 +5152,10 @@ packages:
 
   '@shikijs/themes@4.2.0':
     resolution: {integrity: sha512-RX8IHYeLv8Cu2W6ruc3RxUqWn0IYCqSrMBzi/uRGAmfyDNOnNO5BF/Px7o97n4XTpmFTo5GbRaazuOWj+2ak2w==}
+    engines: {node: '>=20'}
+
+  '@shikijs/transformers@4.2.0':
+    resolution: {integrity: sha512-pKrYVNUr1oPjJvs76gkPPirDySx3GKG9O88P2Y3AQ+7AjSFws9Y+Ry/Q/6Yg6QpyigzjdQ6H5JAMNAvLXZ63dw==}
     engines: {node: '>=20'}
 
   '@shikijs/types@4.2.0':
@@ -6304,6 +6354,10 @@ packages:
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
 
+  diff@9.0.0:
+    resolution: {integrity: sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw==}
+    engines: {node: '>=0.3.1'}
+
   dir-compare@4.2.0:
     resolution: {integrity: sha512-2xMCmOoMrdQIPHdsTawECdNPwlVFB9zGcz3kuhmBO6U3oU+UQjsue0i8ayLKpgBcm+hcXPMVSGUN9d+pvJ6+VQ==}
 
@@ -7269,6 +7323,9 @@ packages:
   lru.min@1.1.5:
     resolution: {integrity: sha512-5J9ysMYUpYIg9RF2vJpy9SinEmSviFSe0GyPpCQ4L5QSkLAgeLXlTAOu2ZwWUU5m+0SBl6gUU1R1ZQB3aKypfA==}
     engines: {bun: '>=1.0.0', deno: '>=1.30.0', node: '>=8.0.0'}
+
+  lru_map@0.4.1:
+    resolution: {integrity: sha512-I+lBvqMMFfqaV8CJCISjI3wbjmwVu/VyOoU7+qtu9d7ioW5klMgsTTiUOUp+DJvfTTzKXoPbyC6YfgkNcyPSOg==}
 
   lucide-react@1.48.0:
     resolution: {integrity: sha512-R0CIKY/fXiC6y9xRBADgsK+VW2p/pcTJOMhLZf1T+uG+vJUvyUR02nGOgmIIC7MPkiNK4Ox8QDnbqF8rJYWPZQ==}
@@ -10119,6 +10176,31 @@ snapshots:
       tslib: 2.8.1
       webcrypto-core: 1.9.2
 
+  '@pierre/diffs@1.5.1(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      '@pierre/theme': 2.0.0
+      '@pierre/theming': 1.0.1(@pierre/theme@2.0.0)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.2.0)
+      '@shikijs/transformers': 4.2.0
+      diff: 9.0.0
+      hast-util-to-html: 9.0.5
+      lru_map: 0.4.1
+      shiki: 4.2.0
+    optionalDependencies:
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+    transitivePeerDependencies:
+      - '@shikijs/themes'
+
+  '@pierre/theme@2.0.0': {}
+
+  '@pierre/theming@1.0.1(@pierre/theme@2.0.0)(@shikijs/themes@4.2.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(shiki@4.2.0)':
+    optionalDependencies:
+      '@pierre/theme': 2.0.0
+      '@shikijs/themes': 4.2.0
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+      shiki: 4.2.0
+
   '@playwright/test@1.63.0':
     dependencies:
       playwright: 1.63.0
@@ -10280,6 +10362,11 @@ snapshots:
 
   '@shikijs/themes@4.2.0':
     dependencies:
+      '@shikijs/types': 4.2.0
+
+  '@shikijs/transformers@4.2.0':
+    dependencies:
+      '@shikijs/core': 4.2.0
       '@shikijs/types': 4.2.0
 
   '@shikijs/types@4.2.0':
@@ -11511,6 +11598,8 @@ snapshots:
     dependencies:
       dequal: 2.0.3
 
+  diff@9.0.0: {}
+
   dir-compare@4.2.0:
     dependencies:
       minimatch: 3.1.5
@@ -12585,6 +12674,8 @@ snapshots:
       yallist: 4.0.0
 
   lru.min@1.1.5: {}
+
+  lru_map@0.4.1: {}
 
   lucide-react@1.48.0(react@19.3.0):
     dependencies:

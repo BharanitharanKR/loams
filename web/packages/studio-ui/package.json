@@ -11,6 +11,10 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./files": {
+      "types": "./src/files/index.ts",
+      "default": "./src/files/index.ts"
+    },
     "./chat": {
       "types": "./src/chat/index.ts",
       "default": "./src/chat/index.ts"
@@ -31,6 +35,8 @@
   "dependencies": {
     "@loams/agentd-client": "workspace:*",
     "@loams/ui": "workspace:*",
+    "@pierre/diffs": "catalog:",
+    "@tanstack/react-query": "catalog:",
     "@tanstack/react-virtual": "catalog:",
     "@xterm/addon-fit": "catalog:",
     "@xterm/xterm": "catalog:",
