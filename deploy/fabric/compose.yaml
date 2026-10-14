@@ -201,7 +201,10 @@ services:
     image: fsouza/fake-gcs-server:1.56.1@sha256:797ce226d62f947c009dc40246b30cfb456b8473d8241407f9d6f2c04e4d69ef
     profiles: [connectors-p2]
     labels: { io.loams.licence: "BSD-2-Clause", io.loams.ci-service: "false" }
-    command: ["-scheme", "http", "-port", "4443", "-public-host", "localhost:4443"]
+    # The XML API's routes match only when the request's Host is the public
+    # host, and the suites (scripts/connectors/objects_stack.sh) call
+    # 127.0.0.1:4443.
+    command: ["-scheme", "http", "-port", "4443", "-public-host", "127.0.0.1:4443"]
     ports: ["4443:4443"]
 
   # Blob, Queue and Table; no hierarchical namespace (R0.21). Also the Event
@@ -262,6 +265,16 @@ services:
       # client-credentials grant (CN2 Task 20); throwaway CI values.
       KC_BOOTSTRAP_ADMIN_CLIENT_ID: loams-ci
       KC_BOOTSTRAP_ADMIN_CLIENT_SECRET: loams-test
+      # /health/ready on the management port (9000, not published), so
+      # `up --wait` returns once Keycloak serves, not when its container starts
+      # (start-dev spends its first ~30 s building). The image has no curl.
+      KC_HEALTH_ENABLED: "true"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
     ports: ["8180:8080"]
 
   kestra:
@@ -365,8 +378,10 @@ services:
       MSSQL_SA_PASSWORD: Loams-Test-Pass-1
 
   # SQL Server Developer with the Agent on (CDC tables need it; Task 12).
+  # SQL Server 2025: 2022 on Linux refuses TDS 8.0 strict logins
+  # (microsoft/mssql-docker#878; CN2 R12.15).
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04@sha256:4402d880dd4c34bfa7d8705e56a86cd6c88da80a1f6bbbe741f999e76264a090
+    image: mcr.microsoft.com/mssql/server:2025-CU9-GDR1-ubuntu-24.04@sha256:742481d1b1186cccc81220a1eaacef244ca8d0f7d19c8e5c70df8ae541ffbab2
     profiles: [connectors-ci-only]
     labels: { io.loams.licence: "LicenseRef-Microsoft-SQL-Server-EULA", io.loams.ci-service: "true" }
     environment:
@@ -374,6 +389,24 @@ services:
       MSSQL_PID: Developer
       MSSQL_AGENT_ENABLED: "true"
       MSSQL_SA_PASSWORD: Loams-Test-Pass-1
+    # TDS 8.0 strict needs a configured certificate (CN = the host name, EKU
+    # serverAuth). A throwaway self-signed one is made inside the container
+    # at each start; its key never leaves it.
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        d=/var/opt/mssql/tls
+        h=$$(hostname)
+        mkdir -p "$$d"
+        openssl req -x509 -nodes -newkey rsa:2048 -days 30 -subj "/CN=$$h" \
+          -addext "subjectAltName=DNS:$$h,DNS:localhost,IP:127.0.0.1" \
+          -addext "keyUsage=critical,digitalSignature,keyEncipherment" \
+          -addext "extendedKeyUsage=serverAuth" \
+          -keyout "$$d/key.pem" -out "$$d/cert.pem" 2>/dev/null
+        printf '[network]\ntlscert = %s\ntlskey = %s\n' "$$d/cert.pem" "$$d/key.pem" > /var/opt/mssql/mssql.conf
+        exec /opt/mssql/bin/launch_sqlservr.sh /opt/mssql/bin/sqlservr
     ports: ["1433:1433"]
     # Ready once a login answers, so `up --wait` means the suites can connect
     # (the image ships sqlcmd under mssql-tools18; -C trusts its self-signed

@@ -1,4 +1,4 @@
-//! The exactly-once MERGE sink against real SQL Server 2022 Developer
+//! The exactly-once MERGE sink against real SQL Server 2025 Developer
 //! (compose `sqlserver`, `connectors-ci-only`), gated on
 //! `LOAMS_CONNECTORS_CI_ONLY_STACK`; and Azure SQL with an Entra ID token,
 //! nightly, gated on `LOAMS_AZURE_SQL_URL`.
@@ -57,8 +57,9 @@ async fn plain_merge_sink_is_not_exactly_once() {
 }
 
 /// TDS 8.0 `strict` against the container: TLS (rustls, ALPN `tds/8.0`)
-/// before the login. The container's certificate is self-signed, so the
-/// test trusts it explicitly.
+/// before the login. The container makes a self-signed certificate at start
+/// (SQL Server 2022 on Linux refuses strict logins whatever its certificate,
+/// so the estate runs 2025, R12.15), and the test trusts it explicitly.
 #[tokio::test(flavor = "multi_thread")]
 async fn sqlserver_strict_tls_login() {
     if !ci_only() {

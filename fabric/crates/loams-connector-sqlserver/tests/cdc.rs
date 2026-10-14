@@ -1,4 +1,4 @@
-//! Native SQL Server CDC against real SQL Server 2022 Developer (compose
+//! Native SQL Server CDC against real SQL Server 2025 Developer (compose
 //! `sqlserver`, `connectors-ci-only`, a `ci-service`). Gated on
 //! `LOAMS_CONNECTORS_CI_ONLY_STACK`.
 
@@ -135,6 +135,13 @@ async fn sqlserver_cdc_resume_lsn_triple() {
     ))
     .await
     .expect("transaction");
+    // Slow the Fabric down so the 20 updates take several polls of
+    // `eventually` to deliver: otherwise the whole transaction can be
+    // delivered (and the position move on to the keepalive) between two
+    // polls, and no checkpoint inside it is ever observed.
+    h.fabric()
+        .await
+        .set_append_delay(Some(Duration::from_millis(400)));
     h.start().await.expect("restart");
     // Wait for a checkpoint inside the transaction, then kill again.
     let mid = eventually(SETTLE, || async {
@@ -147,6 +154,7 @@ async fn sqlserver_cdc_resume_lsn_triple() {
         .await
         .expect("kill mid-transaction");
     let at_kill = h.cdc_position().await.expect("position");
+    h.fabric().await.set_append_delay(None);
     h.start().await.expect("resume");
     let updated =
         |evs: &[loams_connector_sdk::CloudEvent]| (0..20).all(|i| has_change(evs, "u", i));

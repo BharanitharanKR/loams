@@ -177,6 +177,7 @@ systems = ["SQL Server"]
 family = "sqlserver"
 services = [{ kind = "container", compose = "sqlserver", system = "SQL Server" }]
 harness = "loams_connector_sqlserver::harness::SqlHarness"
+notes = ["The container is SQL Server 2025 Developer: 2022 on Linux refuses TDS 8.0 strict logins (CN2 R12.15)."]
 
 [systems.oracle]
 systems = ["Oracle Database"]

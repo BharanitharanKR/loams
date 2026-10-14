@@ -6,7 +6,8 @@
 # and its checkpoint in one transaction). One `SqlServerFactory` serves this
 # manifest and the target profile `azure-sql`. Debezium Server's SQL Server
 # connector (`debezium-sqlserver`, OR-13) is the CDC fallback. The suites run
-# against SQL Server 2022 Developer, a ci-service image Loams never ships (OR-3);
+# against SQL Server 2025 Developer (2022 on Linux refuses TDS 8.0 strict
+# logins, CN2 R12.15), a ci-service image Loams never ships (OR-3);
 # the row stays `planned` until they are green in CI (OR-23).
 apiVersion: loams.flow/v1
 kind: Connector
@@ -71,4 +72,4 @@ docs: docs/guides/connectors/sql-server.md
 notes:
   - "events: batch reads emit `rows` (Arrow); CDC emits `change` (loamsop c, u or d; the snapshot as Arrow with loamsop = r) and `schema-change`, and an update's before and after images form one event"
   - "cdc: a position older than the cleanup job's retention (three days by default) is PositionLost, and the instance stops with a re-snapshot hint"
-  - "tds: TDS 8.0 `strict` needs SQL Server 2022 or Azure SQL; older servers need `encrypt: disable` on a private network, or the Debezium fallback"
+  - "tds: TDS 8.0 `strict` needs SQL Server 2022 on Windows, SQL Server 2025 on Linux, or Azure SQL; other servers need `encrypt: disable` on a private network, or the Debezium fallback"
