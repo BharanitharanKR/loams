@@ -2,268 +2,97 @@
 // apps/web/src/components/threadActionMenu.logic.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
 // Studio's thread menu: pin, move, rename, fork, copy, archive and delete, with plain menu items in place of the contracts' ContextMenuItem; settle, snooze, auto-settle, title regeneration and draft rows dropped. Loams' changes are Apache-2.0.
-import type { ContextMenuItem } from "@t3tools/contracts";
-import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
 
-/**
- * Ids for the per-thread action menu. Snooze presets are dispatched as
- * `snooze:<presetId>` so the union stays closed while the preset list
- * remains data-driven.
- */
+// The per-thread action menu (SD1 Task 17; §53 §5.3): one model for the row's context
+// menu and its "More" button, so both list the same actions in the same order. Pinned
+// threads also get Move up and Move down, the keyboard's way to reorder the pinned
+// block (dragging is the pointer's).
+
 export type ThreadActionMenuId =
-  | "new-thread-on-branch"
-  | "filter-by-project"
-  | "project-settings"
   | "pin"
   | "unpin"
-  | "settle"
-  | "unsettle"
-  | "auto-settle"
-  | "auto-settle:enabled"
-  | "auto-settle:disabled"
-  | "snooze"
-  | `snooze:${string}`
-  | "unsnooze"
+  | "move-up"
+  | "move-down"
   | "rename"
-  | "regenerate-title"
-  | "mark-unread"
-  | "copy"
+  | "fork"
   | "copy-path"
   | "copy-branch"
   | "copy-thread-id"
   | "archive"
+  | "unarchive"
   | "delete";
 
-export type DraftActionMenuId =
-  | "copy"
-  | "copy-path"
-  | "copy-branch"
-  | "project-settings"
-  | "discard";
-
-/** Right-click menu for an unsent draft row in the sidebar. */
-export function buildDraftActionMenuItems(options: {
-  readonly hasPath: boolean;
-  readonly hasBranch: boolean;
-  readonly hasProject: boolean;
-}): ReadonlyArray<ContextMenuItem<DraftActionMenuId>> {
-  return [
-    {
-      id: "copy",
-      label: "Copy",
-      icon: "copy",
-      disabled: !options.hasPath && !options.hasBranch,
-      children: [
-        ...(options.hasPath ? [{ id: "copy-path" as const, label: "Path", icon: "folder" }] : []),
-        ...(options.hasBranch
-          ? [{ id: "copy-branch" as const, label: "Branch", icon: "git-branch" }]
-          : []),
-      ],
-    },
-    ...(options.hasProject
-      ? [{ id: "project-settings" as const, label: "Project settings", icon: "settings" }]
-      : []),
-    {
-      id: "discard",
-      label: "Discard draft",
-      icon: "trash",
-      destructive: true,
-      separatorBefore: true,
-    },
-  ];
+/** A menu row (upstream's `ContextMenuItem`, without icons or submenus). */
+export interface ThreadActionMenuItem {
+  readonly id: ThreadActionMenuId;
+  readonly label: string;
+  readonly disabled?: boolean;
+  readonly destructive?: boolean;
+  readonly separatorBefore?: boolean;
 }
 
 export interface ThreadActionMenuState {
   readonly canOperate: boolean;
   readonly branch: string | null;
-  /**
-   * Project scoping for the thread list. Null on surfaces with no scoped
-   * list behind the menu (the chat header), where the item must not show.
-   */
-  readonly projectFilter: {
-    readonly label: string;
-    /** True when the list is already scoped to this thread's project. */
-    readonly isActive: boolean;
-  } | null;
+  /** The worktree or checkout path to copy; null when the thread has none. */
+  readonly path: string | null;
   readonly isPinned: boolean;
-  readonly isSettled: boolean;
-  /** False while the user has turned automatic settlement off for this thread. */
-  readonly autoSettleEnabled: boolean;
-  readonly isSnoozed: boolean;
-  readonly canSnoozeNow: boolean;
-  readonly isRegeneratingTitle: boolean;
-  /** Archive rejects a thread with an attached provider, so disable it here rather than let the action fail. */
+  /** For Move up and Move down: whether the thread can move that way in the pinned block. */
+  readonly canMoveUp: boolean;
+  readonly canMoveDown: boolean;
+  readonly isArchived: boolean;
+  /** Archive rejects a running thread, so disable it here rather than let the action fail. */
   readonly isRunning: boolean;
-  readonly supports: {
-    readonly settlement: boolean;
-    /** Server understands thread.auto-settle.set. */
-    readonly autoSettleOptOut: boolean;
-    readonly snooze: boolean;
-    readonly pinning: boolean;
-    readonly titleRegeneration: boolean;
-  };
-  readonly snoozePresets: ReadonlyArray<SnoozePreset>;
 }
 
-/** Local navigation, read markers, and copying remain available to read-only clients. */
+/** Local navigation and copying remain available to read-only clients. */
 export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean {
-  return ![
-    "new-thread-on-branch",
-    "project-settings",
-    "mark-unread",
-    "copy",
-    "copy-path",
-    "copy-branch",
-    "copy-thread-id",
-  ].includes(action);
+  return !["copy-path", "copy-branch", "copy-thread-id"].includes(action);
 }
 
 /**
  * Single source for the per-thread action menu: the sidebar row's right-click
- * menu and the chat header menu share labels, ordering, and capability gating.
- * Each surface supplies state for the actions it supports.
+ * menu and its "More" button share labels, ordering, and capability gating.
  */
 export function buildThreadActionMenuItems(
   state: ThreadActionMenuState,
-): ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> {
-  const items: ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> = [
-    ...(state.branch
+): ReadonlyArray<ThreadActionMenuItem> {
+  const items: ReadonlyArray<ThreadActionMenuItem> = [
+    state.isPinned
+      ? { id: "unpin" as const, label: "Unpin thread" }
+      : { id: "pin" as const, label: "Pin thread" },
+    ...(state.isPinned
       ? [
-          {
-            id: "new-thread-on-branch" as const,
-            label: `New thread on ${state.branch}`,
-            icon: "message-square-plus",
-          },
+          { id: "move-up" as const, label: "Move up", disabled: !state.canMoveUp },
+          { id: "move-down" as const, label: "Move down", disabled: !state.canMoveDown },
         ]
       : []),
-    ...(state.supports.pinning
-      ? [
-          state.isPinned
-            ? { id: "unpin" as const, label: "Unpin thread", icon: "pin-off" }
-            : { id: "pin" as const, label: "Pin thread", icon: "pin" },
-        ]
+    { id: "rename", label: "Rename thread", separatorBefore: true },
+    { id: "fork", label: "Fork thread" },
+    ...(state.path
+      ? [{ id: "copy-path" as const, label: "Copy path", separatorBefore: true }]
       : []),
-    // Both lifecycle actions stay available on pinned threads: settling
-    // clears the pin ("done" beats "keep on top"), and snoozing hides the
-    // card until wake with the pin intact.
-    ...(state.supports.settlement
-      ? [
-          state.isSettled
-            ? { id: "unsettle" as const, label: "Un-settle thread", icon: "circle-check" }
-            : { id: "settle" as const, label: "Settle thread", icon: "circle-check" },
-        ]
-      : []),
-    ...(state.supports.snooze
-      ? [
-          state.isSnoozed
-            ? { id: "unsnooze" as const, label: "Wake thread", icon: "clock" }
-            : {
-                id: "snooze" as const,
-                label: "Snooze",
-                icon: "clock",
-                disabled: !state.canSnoozeNow,
-                children: [
-                  ...state.snoozePresets.map((preset) => ({
-                    id: `snooze:${preset.id}` as const,
-                    label: `${preset.label} (${preset.whenLabel})`,
-                  })),
-                  { id: "snooze:custom" as const, label: "Custom…", separatorBefore: true },
-                ],
-              },
-        ]
-      : []),
-    { id: "rename", label: "Rename thread", icon: "pencil", separatorBefore: true },
-    ...(state.supports.titleRegeneration
-      ? [
-          {
-            id: "regenerate-title" as const,
-            label: state.isRegeneratingTitle ? "Regenerating…" : "Regenerate title",
-            icon: "refresh-cw",
-            disabled: state.isRegeneratingTitle,
-          },
-        ]
-      : []),
-    { id: "mark-unread", label: "Mark unread", icon: "mail-open" },
-    ...(state.projectFilter
-      ? [
-          {
-            id: "filter-by-project" as const,
-            label: state.projectFilter.isActive
-              ? "Show all projects"
-              : `Filter by ${state.projectFilter.label}`,
-            icon: "folder-tree",
-          },
-        ]
-      : []),
-    // A submenu with the current option checked, not a one-shot action:
-    // this is a setting, and it sits with the other per-thread settings
-    // rather than the lifecycle verbs above. Disabled keeps long-running
-    // threads out of the settled shelf no matter how quiet they get.
-    ...(state.supports.autoSettleOptOut
-      ? [
-          {
-            id: "auto-settle" as const,
-            label: "Auto-settle behavior",
-            icon: "timer",
-            children: [
-              {
-                id: "auto-settle:enabled" as const,
-                label: "Enabled",
-                checked: state.autoSettleEnabled,
-              },
-              {
-                id: "auto-settle:disabled" as const,
-                label: "Disabled",
-                checked: !state.autoSettleEnabled,
-              },
-            ],
-          },
-        ]
-      : []),
-    {
-      id: "copy",
-      label: "Copy",
-      icon: "copy",
-      separatorBefore: true,
-      children: [
-        { id: "copy-path", label: "Path", icon: "folder" },
-        ...(state.branch
-          ? [{ id: "copy-branch" as const, label: "Branch", icon: "git-branch" }]
-          : []),
-        { id: "copy-thread-id", label: "Thread ID", icon: "hash" },
-      ],
-    },
-    { id: "project-settings", label: "Project settings", icon: "settings" },
-    // Archive removes the thread from the sidebar while keeping its
-    // conversation under Settings > Archived threads — distinct from Settle
-    // (stays visible in the Settled shelf) and Delete (clears history for
-    // good), so it sits beside Delete without borrowing its destructive
-    // styling.
-    {
-      id: "archive",
-      label: "Archive thread",
-      icon: "archive",
-      disabled: state.isRunning,
-      separatorBefore: true,
-    },
+    ...(state.branch ? [{ id: "copy-branch" as const, label: "Copy branch" }] : []),
+    { id: "copy-thread-id", label: "Copy thread ID", separatorBefore: !state.path },
+    // Archive removes the thread from the sidebar while keeping its conversation;
+    // Delete clears it for good, so it sits beside Archive with destructive styling.
+    state.isArchived
+      ? { id: "unarchive" as const, label: "Unarchive thread", separatorBefore: true }
+      : {
+          id: "archive" as const,
+          label: "Archive thread",
+          disabled: state.isRunning,
+          separatorBefore: true,
+        },
     {
       id: "delete",
       label: "Delete",
       destructive: true,
-      icon: "trash",
     },
   ];
   return state.canOperate
     ? items
     : items.map((item) =>
-        threadActionRequiresOperate(item.id)
-          ? {
-              ...item,
-              disabled: true,
-              ...(item.children
-                ? { children: item.children.map((child) => ({ ...child, disabled: true })) }
-                : {}),
-            }
-          : item,
+        threadActionRequiresOperate(item.id) ? { ...item, disabled: true } : item,
       );
 }

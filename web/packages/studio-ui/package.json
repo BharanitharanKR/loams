@@ -16,6 +16,9 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
+  "dependencies": {
+    "lucide-react": "catalog:"
+  },
   "peerDependencies": {
     "react": ">=19",
     "react-dom": ">=19"

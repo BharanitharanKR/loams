@@ -4,6 +4,7 @@ export { type MediaQueryInput, useIsMobile, useMediaQuery } from "./hooks/useMed
 export { useResizeDrag } from "./hooks/useResizeDrag";
 export * from "./keybindings";
 export { AnimatedHeight } from "./lib/AnimatedHeight";
+export { isEditableFocused } from "./lib/editableFocus";
 export { LRUCache } from "./lib/lruCache";
 export { observeResize } from "./lib/observeResize";
 export {
@@ -18,3 +19,4 @@ export {
   type StudioPaletteItem,
   sortThreads,
 } from "./palette/logic";
+export * from "./thread-list";

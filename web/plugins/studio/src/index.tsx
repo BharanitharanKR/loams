@@ -16,8 +16,8 @@ import { StudioContext } from './header.js';
 import { hostedAgentd } from './hosts/agentd.js';
 import { createStudioKeys } from './palette/commands.js';
 import { StudioPalette } from './palette/StudioPalette.js';
-import { pendingPaletteSource } from './palette/source.js';
 import { routeOf, STUDIO_PAGES } from './routes.js';
+import { agentdPaletteSource } from './sidebar/paletteSource.js';
 import { StudioView } from './view.js';
 
 export {
@@ -65,6 +65,8 @@ export {
 } from './routes.js';
 export { KeybindingsCard } from './settings/Keybindings.js';
 export { FactoryGroup } from './sidebar/Factory.js';
+export { agentdPaletteSource } from './sidebar/paletteSource.js';
+export { StudioSidebar } from './sidebar/Sidebar.js';
 export { BranchPr, DraftCard } from './thread/FactoryLinks.js';
 export { StudioView } from './view.js';
 
@@ -85,9 +87,9 @@ const plugin: PluginModule = {
     const factory = desktop?.factory ? desktopFactory(desktop) : undefined;
     const navigate = (to: string) => router.navigate(to);
     // One keyboard layer and palette source for every Studio page (SD1 Task 24). The
-    // palette's agentd rows wait for Task 6's client (`pendingPaletteSource`).
+    // palette's threads and run groups come from agentd (SD1 Task 17).
     const keys = createStudioKeys({ edition: platform.kind });
-    const paletteSource = pendingPaletteSource();
+    const paletteSource = agentdPaletteSource(agentd);
 
     for (const page of STUDIO_PAGES) {
       ctx.effect(() =>

@@ -37,6 +37,10 @@
           "correctness": { "useExhaustiveDependencies": "off" }
         }
       }
+    },
+    {
+      "includes": ["packages/studio-ui/src/thread-list/threadSort.ts"],
+      "assist": { "actions": { "source": { "organizeImports": "off" } } }
     }
   ]
 }
