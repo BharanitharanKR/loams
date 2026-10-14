@@ -12,6 +12,15 @@ catalogs:
     '@connectrpc/connect-query':
       specifier: 2.3.1
       version: 2.3.1
+    '@dnd-kit/core':
+      specifier: 6.3.1
+      version: 6.3.1
+    '@dnd-kit/sortable':
+      specifier: 10.0.0
+      version: 10.0.0
+    '@dnd-kit/utilities':
+      specifier: 3.2.2
+      version: 3.2.2
     '@pierre/diffs':
       specifier: 1.5.1
       version: 1.5.1
@@ -76,6 +85,10 @@ overrides:
   js-yaml@4.3.2>argparse: '-'
   '@pierre/diffs@1.5.1>shiki': 4.2.0
   '@pierre/diffs@1.5.1>@shikijs/transformers': 4.2.0
+  '@dnd-kit/core@6.3.1>tslib': '-'
+  '@dnd-kit/sortable@10.0.0>tslib': '-'
+  '@dnd-kit/utilities@3.2.2>tslib': '-'
+  '@dnd-kit/accessibility@3.1.1>tslib': '-'
 
 importers:
 
@@ -941,6 +954,9 @@ importers:
         specifier: 8.4.0
         version: 8.4.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
     devDependencies:
+      '@connectrpc/connect':
+        specifier: 2.2.0
+        version: 2.2.0(@bufbuild/protobuf@2.16.0)
       '@tailwindcss/vite':
         specifier: 'catalog:'
         version: 4.3.3(vite@8.3.1(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
@@ -3152,6 +3168,15 @@ importers:
       '@connectrpc/connect-query':
         specifier: 'catalog:'
         version: 2.3.1(@bufbuild/protobuf@2.16.0)(@connectrpc/connect@2.2.0(@bufbuild/protobuf@2.16.0))(@tanstack/query-core@5.104.1)(@tanstack/react-query@5.104.0(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@dnd-kit/core':
+        specifier: 'catalog:'
+        version: 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@dnd-kit/sortable':
+        specifier: 'catalog:'
+        version: 10.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
+      '@dnd-kit/utilities':
+        specifier: 'catalog:'
+        version: 3.2.2(react@19.3.0)
       '@loams/agentd-client':
         specifier: workspace:*
         version: link:../../packages/agentd-client
@@ -3600,6 +3625,28 @@ packages:
   '@csstools/css-tokenizer@4.0.2':
     resolution: {integrity: sha512-OoKoR0f76dCY666JlcbhmVTs2drYj1GUXZTYTcbUgJjh9Nv41aFfZ21bPQTERm5+L5cBDo466NltB2lplS5GBw==}
     engines: {node: '>=20.19.0'}
+
+  '@dnd-kit/accessibility@3.1.1':
+    resolution: {integrity: sha512-2P+YgaXF+gRsIihwwY1gCsQSYnu9Zyj2py8kY5fFvUM1qm2WA2u639R6YNVfU4GWr+ZM5mqEsfHZZLoRONbemw==}
+    peerDependencies:
+      react: '>=16.8.0'
+
+  '@dnd-kit/core@6.3.1':
+    resolution: {integrity: sha512-xkGBRQQab4RLwgXxoqETICr6S5JlogafbhNsidmrkVv2YRs5MLwpjoF2qpiGjQt8S9AoxtIV603s0GIUpY5eYQ==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+
+  '@dnd-kit/sortable@10.0.0':
+    resolution: {integrity: sha512-+xqhmIIzvAYMGfBYYnbKuNicfSsk4RksY2XdmJhT+HAC01nix6fHCztU68jooFiMUB01Ky3F0FyOvhG/BZrWkg==}
+    peerDependencies:
+      '@dnd-kit/core': ^6.3.0
+      react: '>=16.8.0'
+
+  '@dnd-kit/utilities@3.2.2':
+    resolution: {integrity: sha512-+MKAJEOfaBe5SmV6t34p80MMKhjvUz0vRrvVJbPT0WElzaOJ/1xs+D+KDv+tD/NE5ujfrChEcshd4fLn0wpiqg==}
+    peerDependencies:
+      react: '>=16.8.0'
 
   '@electron-internal/extract-zip@1.0.5':
     resolution: {integrity: sha512-+bqFCP98pLI0Tt0XQo1TmlXtwjWchISndDOxCkEcIuUgXWpBnLyRI+2DU+mesvnMMX6L1XDqYNA0lXNDHd/yiA==}
@@ -9047,6 +9094,27 @@ snapshots:
       css-tree: 3.2.1
 
   '@csstools/css-tokenizer@4.0.2': {}
+
+  '@dnd-kit/accessibility@3.1.1(react@19.3.0)':
+    dependencies:
+      react: 19.3.0
+
+  '@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      '@dnd-kit/accessibility': 3.1.1(react@19.3.0)
+      '@dnd-kit/utilities': 3.2.2(react@19.3.0)
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+
+  '@dnd-kit/sortable@10.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@dnd-kit/utilities': 3.2.2(react@19.3.0)
+      react: 19.3.0
+
+  '@dnd-kit/utilities@3.2.2(react@19.3.0)':
+    dependencies:
+      react: 19.3.0
 
   '@electron-internal/extract-zip@1.0.5': {}
 

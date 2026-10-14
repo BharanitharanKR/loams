@@ -39,6 +39,10 @@
       }
     },
     {
+      "includes": ["packages/studio-ui/src/thread-list/threadSort.ts"],
+      "assist": { "actions": { "source": { "organizeImports": "off" } } }
+    },
+    {
       "includes": ["packages/studio-ui/src/terminal/output.ts"],
       "linter": { "rules": { "style": { "noNonNullAssertion": "off" } } }
     }

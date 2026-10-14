@@ -33,6 +33,10 @@ catalog:
   # Studio's file viewer and diff panel (SD1 Tasks 20, 21; rulings T0-4, T0-5):
   # Apache-2.0. 1.5.1, because 1.5.2 is under 14 days old until 2026-10-19.
   '@pierre/diffs': 1.5.1
+  # Studio's sidebar reorder (SD1 Task 17; MIT; published 2024-12-04/05).
+  '@dnd-kit/core': 6.3.1
+  '@dnd-kit/sortable': 10.0.0
+  '@dnd-kit/utilities': 3.2.2
   # Studio's terminals (SD1 Task 22; D920, Q818): DD1's xterm.js pin, MIT, 2025-12-22.
   '@xterm/xterm': 6.0.0
   '@xterm/addon-fit': 0.11.0
@@ -60,6 +64,12 @@ overrides:
   # (SD1 T0-5: shiki 4.2.0; 4.5.0 is too new).
   '@pierre/diffs@1.5.1>shiki': 4.2.0
   '@pierre/diffs@1.5.1>@shikijs/transformers': 4.2.0
+  # @dnd-kit lists tslib (0BSD, T2-5) as a dependency, but none of its published
+  # dist files imports it (checked in the tarballs of these exact versions).
+  '@dnd-kit/core@6.3.1>tslib': '-'
+  '@dnd-kit/sortable@10.0.0>tslib': '-'
+  '@dnd-kit/utilities@3.2.2>tslib': '-'
+  '@dnd-kit/accessibility@3.1.1>tslib': '-'
 
 allowBuilds:
   esbuild: true
