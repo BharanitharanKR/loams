@@ -590,8 +590,13 @@ async fn trimmed_journal_resyncs_every_subscription(store: TestStore) {
         .await
         .expect("the janitor runs");
     assert!(report.deleted >= 2, "{report:?}");
-    subs.wake();
+    // The timestamp to wait for is taken before the wake: the woken tick
+    // reads at a timestamp the manager takes after it, so at or after `at`.
+    // Taken after, it raced the manager's: under load the resync tick could
+    // read first, `until` then waited for a later tick, and with an hour's
+    // polling none came (CI job 116048001090).
     let at = r.store().now().await.expect("now");
+    subs.wake();
     let ticks = until(&mut rx, &at).await;
     assert!(ticks.iter().any(|t| t.resynced), "a resync tick");
     assert_eq!(subs.stats().resyncs, 1);
