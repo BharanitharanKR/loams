@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use buffa::Message;
 use loams_agentd_connect::map::Wire;
 use loams_agentd_proto as rs;
+use loams_agentd_proto::checkpoints as rs_checkpoints;
 use loams_agentd_proto::invocation as rs_invocation;
 use loams_agentd_proto::transcript as rs_transcript;
 use serde::Serialize;
@@ -64,6 +65,7 @@ table! {
     "Chat" => message::<rs::Chat>,
     "ChatList" => list::<rs::Chat>,
     "CheckoutChangeRequestStatus" => message::<rs::CheckoutChangeRequestStatus>,
+    "CheckpointList" => message::<rs_checkpoints::CheckpointList>,
     "CheckoutDiff" => message::<rs::CheckoutDiff>,
     "CheckoutDiffList" => list::<rs::CheckoutDiff>,
     "CheckoutFileDiffText" => message::<rs::CheckoutFileDiffText>,
@@ -93,6 +95,7 @@ table! {
     "HarnessUpdateParams" => message::<rs::HarnessUpdateParams>,
     "HarnessUpdateStatus" => message::<rs::HarnessUpdateStatus>,
     "ListAgentAccountsParams" => message::<rs::ListAgentAccountsParams>,
+    "ListCheckpointsParams" => message::<rs_checkpoints::ListCheckpointsParams>,
     "ListFoldersParams" => message::<rs::ListFoldersParams>,
     "ListModelsParams" => message::<rs::ListModelsParams>,
     "ListWorkspaceDirectoryRequest" => message::<rs::ListWorkspaceDirectoryRequest>,
@@ -120,6 +123,8 @@ table! {
     "Repo" => message::<rs::Repo>,
     "RepoList" => list::<rs::Repo>,
     "RepoRefList" => list::<rs::RepoRef>,
+    "RestoreCheckpointParams" => message::<rs_checkpoints::RestoreCheckpointParams>,
+    "RestoreCheckpointReply" => message::<rs_checkpoints::RestoreCheckpointReply>,
     "SearchFilesParams" => message::<rs::SearchFilesParams>,
     "SearchWorkspaceFilesRequest" => message::<rs::SearchWorkspaceFilesRequest>,
     "SessionList" => list::<rs::Session>,

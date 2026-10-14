@@ -337,20 +337,29 @@ impl pb::ThreadService for Agentd {
     async fn list_checkpoints(
         &self,
         _ctx: RequestContext,
-        _request: ServiceRequest<'_, pb::ListCheckpointsRequest>,
+        request: ServiceRequest<'_, pb::ListCheckpointsRequest>,
     ) -> ServiceResult<pb::ListCheckpointsResponse> {
-        Err(error::not_implemented("ListCheckpoints", "G6, SD1 Task 10"))
+        unary!(
+            self,
+            request,
+            ListCheckpoints,
+            |req| Wire::from_pb(req)?,
+            |list| list.to_pb()
+        )
     }
 
     async fn restore_checkpoint(
         &self,
         _ctx: RequestContext,
-        _request: ServiceRequest<'_, pb::RestoreCheckpointRequest>,
+        request: ServiceRequest<'_, pb::RestoreCheckpointRequest>,
     ) -> ServiceResult<pb::RestoreCheckpointResponse> {
-        Err(error::not_implemented(
-            "RestoreCheckpoint",
-            "G7, SD1 Task 10",
-        ))
+        unary!(
+            self,
+            request,
+            RestoreCheckpoint,
+            |req| Wire::from_pb(req)?,
+            |restored| restored.to_pb()
+        )
     }
 
     async fn get_thread_usage(

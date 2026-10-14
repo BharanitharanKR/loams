@@ -1025,6 +1025,39 @@ pub fn all() -> Vec<Fixture> {
     ));
     add(Fixture::new("Chat", chat()));
     add(Fixture::new(
+        "ListCheckpointsParams",
+        loams_agentd_proto::checkpoints::ListCheckpointsParams {
+            chat_id: s("chat-1"),
+        },
+    ));
+    add(Fixture::new(
+        "CheckpointList",
+        loams_agentd_proto::checkpoints::CheckpointList {
+            checkpoints: vec![loams_agentd_proto::checkpoints::Checkpoint {
+                turn_id: s("msg-1"),
+                git_ref: s("refs/loams/checkpoints/chat-1/turn/1/pre"),
+                created_at_ms: MS,
+                files_changed: 2,
+            }],
+        },
+    ));
+    add(Fixture::new(
+        "RestoreCheckpointParams",
+        loams_agentd_proto::checkpoints::RestoreCheckpointParams {
+            chat_id: s("chat-1"),
+            turn_id: s("msg-1"),
+            expected_checksum: s("sum-1"),
+            scope: loams_agentd_proto::checkpoints::CheckpointScope::WorktreeAndTranscript,
+        },
+    ));
+    add(Fixture::new(
+        "RestoreCheckpointReply",
+        loams_agentd_proto::checkpoints::RestoreCheckpointReply {
+            restored_to: s("0123456789abcdef0123456789abcdef01234567"),
+            forked_chat_id: some("chat-2"),
+        },
+    ));
+    add(Fixture::new(
         "WatchDocMessagesParams",
         WatchDocMessagesParams {
             chat_id: s("chat-1"),

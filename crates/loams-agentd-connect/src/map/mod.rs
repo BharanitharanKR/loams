@@ -350,6 +350,7 @@ macro_rules! wire_struct {
 }
 
 mod attachments;
+mod checkpoints;
 mod diff;
 mod files;
 mod git;

@@ -200,10 +200,30 @@ struct Inner {
     /// dispatch or accepted steer) — the diff sync snapshots the checkout tree
     /// for the Changes pane's "Latest turn" scope. Absent in bare tests.
     turn_listener: OnceLock<TurnListener>,
+    /// Per-turn checkpoints (SD1 Task 10): awaited before a turn reaches the
+    /// harness, told when it ends. Absent in bare tests.
+    turn_checkpoints: OnceLock<Arc<dyn TurnCheckpoints>>,
 }
 
 /// Turn-start hook: called with `(chat_id, cwd)`.
 pub type TurnListener = Arc<dyn Fn(&str, &str) + Send + Sync>;
+
+/// The checkpoint hook (SD1 Task 10, `crate::checkpoints::Checkpoints`).
+///
+/// `turn_start` runs before the turn's prompt reaches the harness and is
+/// awaited, so the `pre` checkpoint holds the checkout as the agent found
+/// it. `turn_end` must not block: it is called from the status transition.
+pub trait TurnCheckpoints: Send + Sync {
+    /// A user message (`message_id`) starts a turn of `chat_id` in `cwd`.
+    fn turn_start<'a>(
+        &'a self,
+        chat_id: &'a str,
+        cwd: &'a str,
+        message_id: &'a str,
+    ) -> futures::future::BoxFuture<'a, ()>;
+    /// The chat's turn in progress has ended (it settled Idle or Errored).
+    fn turn_end(&self, chat_id: &str);
+}
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
@@ -243,6 +263,7 @@ impl SessionsEngine {
                 titles: OnceLock::new(),
                 generated_images: OnceLock::new(),
                 turn_listener: OnceLock::new(),
+                turn_checkpoints: OnceLock::new(),
             }),
         }
     }
@@ -290,6 +311,11 @@ impl SessionsEngine {
     /// Wire the turn-start listener (called once at engine assembly).
     pub fn set_turn_listener(&self, listener: TurnListener) {
         let _ = self.inner.turn_listener.set(listener);
+    }
+
+    /// Wire the checkpoint hook (called once at engine assembly).
+    pub fn set_turn_checkpoints(&self, checkpoints: Arc<dyn TurnCheckpoints>) {
+        let _ = self.inner.turn_checkpoints.set(checkpoints);
     }
 
     fn note_turn_start(&self, chat_id: &str, cwd: &str) {
@@ -475,6 +501,10 @@ impl SessionsEngine {
             let user_id = message_id.clone().unwrap_or_else(new_id);
             let mut bootstrap = None;
             let accepted = if steerable && same_runtime {
+                // The `pre` checkpoint before the mailbox can deliver it.
+                self.inner
+                    .checkpoint_turn_start(chat_id, &request.cwd, &user_id)
+                    .await;
                 bootstrap =
                     self.warm_fork_history(chat_id, harness_id, &request.prompt, &history_sent);
                 let delivered = bootstrap.as_deref().unwrap_or(&request.prompt);
@@ -736,6 +766,12 @@ impl SessionsEngine {
         loams_agentd_proto::invocation::validate_harness_invocations(prompt, harness_id)
             .map_err(EngineError::Other)?;
         let user_id = message_id.unwrap_or_else(new_id);
+        // A routed steer is a turn too: its `pre` checkpoint before delivery.
+        if let Some(request) = self.last_request(chat_id) {
+            self.inner
+                .checkpoint_turn_start(chat_id, &request.cwd, &user_id)
+                .await;
+        }
         let bootstrap = self.warm_fork_history(chat_id, harness_id, prompt, &history_sent);
         let delivered = bootstrap.as_deref().unwrap_or(prompt);
         let message = SteerMessage {
@@ -1168,6 +1204,7 @@ impl Inner {
         completed_turn: Option<String>,
     ) {
         let now = Utc::now();
+        let mut turn_ended = false;
         let session = {
             let mut statuses = lock(&self.statuses);
             let entry = statuses
@@ -1202,6 +1239,7 @@ impl Inner {
                 SessionStatus::Working | SessionStatus::AwaitingInput => {}
                 SessionStatus::Idle | SessionStatus::Errored => {
                     entry.started_at = None;
+                    turn_ended = was_active;
                 }
             }
             let session = entry.clone();
@@ -1212,10 +1250,21 @@ impl Inner {
             self.sessions_tx.send_replace(list);
             session
         };
+        // The turn's `post` checkpoint (SD1 Task 10); the hook never blocks.
+        if turn_ended && let Some(checkpoints) = self.turn_checkpoints.get() {
+            checkpoints.turn_end(chat_id);
+        }
         // Mirror the transition into the workspace doc's session-status row so
         // remote devices' sidebars show this run (staleness-checked client-side).
         if let Some(ws) = self.workspace() {
             ws.record_session(&session);
+        }
+    }
+
+    /// Await the turn's `pre` checkpoint, when the hook is wired.
+    async fn checkpoint_turn_start(&self, chat_id: &str, cwd: &str, message_id: &str) {
+        if let Some(checkpoints) = self.turn_checkpoints.get() {
+            checkpoints.turn_start(chat_id, cwd, message_id).await;
         }
     }
 
@@ -1846,6 +1895,9 @@ async fn drive_run(
     let started = if let Some(lease) = lease {
         _execution_lease = Some(lease.clone());
         controls.execution_lease = Some(lease);
+        inner
+            .checkpoint_turn_start(&chat_id, &request.cwd, &resume_state.user_message_id)
+            .await;
         if let Some(listener) = inner.turn_listener.get() {
             listener(&chat_id, &request.cwd);
         }
