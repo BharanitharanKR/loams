@@ -93,6 +93,24 @@ class LiveWorkerCrashedException extends LoamsException {}
 class LiveDeployConflictException extends LoamsException {}
 class LiveSchemaViolationException extends LoamsException {}
 class LiveIndexNotReadyException extends LoamsException {}
+class RoleRequiredException extends LoamsException {}
+class SetupRequiredException extends LoamsException {}
+class TokenMissingException extends LoamsException {}
+class TokenMalformedException extends LoamsException {}
+class TokenRevokedException extends LoamsException {}
+class TokenNotYetValidException extends LoamsException {}
+class TokenBadSignatureException extends LoamsException {}
+class TokenWrongAudienceException extends LoamsException {}
+class TokenWrongIssuerException extends LoamsException {}
+class TokenUnknownKeyException extends LoamsException {}
+class TokenAlgorithmNotAllowedException extends LoamsException {}
+class ApiKeyInvalidException extends LoamsException {}
+class CredentialNotAcceptedException extends LoamsException {}
+class CredentialInQueryStringException extends LoamsException {}
+class CsrfTokenInvalidException extends LoamsException {}
+class PrincipalNotAllowedException extends LoamsException {}
+class CorsOriginNotAllowedException extends LoamsException {}
+class AuthUnavailableException extends LoamsException {}
 class TokenExpiredException extends LoamsException {}
 class UnauthenticatedException extends LoamsException {}
 class DecisionProofInvalidException extends LoamsException {}
@@ -176,6 +194,24 @@ class ErrorParser
         'live_deploy_conflict' => LiveDeployConflictException::class,
         'live_schema_violation' => LiveSchemaViolationException::class,
         'live_index_not_ready' => LiveIndexNotReadyException::class,
+        'role_required' => RoleRequiredException::class,
+        'setup_required' => SetupRequiredException::class,
+        'token_missing' => TokenMissingException::class,
+        'token_malformed' => TokenMalformedException::class,
+        'token_revoked' => TokenRevokedException::class,
+        'token_not_yet_valid' => TokenNotYetValidException::class,
+        'token_bad_signature' => TokenBadSignatureException::class,
+        'token_wrong_audience' => TokenWrongAudienceException::class,
+        'token_wrong_issuer' => TokenWrongIssuerException::class,
+        'token_unknown_key' => TokenUnknownKeyException::class,
+        'token_algorithm_not_allowed' => TokenAlgorithmNotAllowedException::class,
+        'api_key_invalid' => ApiKeyInvalidException::class,
+        'credential_not_accepted' => CredentialNotAcceptedException::class,
+        'credential_in_query_string' => CredentialInQueryStringException::class,
+        'csrf_token_invalid' => CsrfTokenInvalidException::class,
+        'principal_not_allowed' => PrincipalNotAllowedException::class,
+        'cors_origin_not_allowed' => CorsOriginNotAllowedException::class,
+        'auth_unavailable' => AuthUnavailableException::class,
         'invalid_argument' => InvalidArgumentException::class,
         'not_found' => NotFoundException::class,
         'already_exists' => AlreadyExistsException::class,

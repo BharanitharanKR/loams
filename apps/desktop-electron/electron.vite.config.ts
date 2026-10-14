@@ -20,6 +20,9 @@ export default defineConfig({
 					// The local shim answers the console API over Connect (API2 Task 10).
 					"@bufbuild/protobuf",
 					"@loams/proto",
+					// Main watches the daemon for Studio's tray and notifications (SD1 Task 28).
+					"@connectrpc/connect",
+					"@connectrpc/connect-web",
 					"@loams-core/http",
 					"@loams-core/host",
 					// SQL drivers: bundled so the packaged app needs no node_modules.

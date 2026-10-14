@@ -28,6 +28,11 @@ use crate::git_write::{
     WorktreeList,
 };
 use crate::params::*;
+use crate::review::{
+    ContentSearchMatch, DeleteReviewCommentParams, PostReviewToChangeRequestParams,
+    PostReviewToChangeRequestReply, ResolveReviewCommentParams, ReviewComment, ReviewCommentsFrame,
+    SearchWorkspaceContentParams, SendReviewToThreadParams, WatchReviewCommentsParams,
+};
 use crate::transcript::TranscriptUpdate;
 use crate::{
     AgentAccountsSnapshot, AgentLoginPoll, AgentLoginStart, AttachmentChunk, Chat,
@@ -412,6 +417,22 @@ method_table! {
     /// G5: merge, squash, rebase or fast-forward one branch into another;
     /// stops on conflicts with a clean tree (`merge_conflict`).
     MERGE_BRANCH = MergeBranch: Unary(MergeBranchParams -> MergeBranchReply), Owner, renderer: true;
+    /// G8 (SD1 Task 11): a checkout's review comments, as a reset and then
+    /// upserts and removals; `outdated` follows the checkout's diff.
+    WATCH_REVIEW_COMMENTS = WatchReviewComments: Stream(WatchReviewCommentsParams -> ReviewCommentsFrame), Owner, renderer: true;
+    /// G9: create (empty `id`) or edit one review comment.
+    UPSERT_REVIEW_COMMENT = UpsertReviewComment: Unary(ReviewComment -> IdReply), Owner, renderer: true;
+    /// G9.
+    DELETE_REVIEW_COMMENT = DeleteReviewComment: Unary(DeleteReviewCommentParams -> IdReply), Owner, renderer: true;
+    /// G9.
+    RESOLVE_REVIEW_COMMENT = ResolveReviewComment: Unary(ResolveReviewCommentParams -> IdReply), Owner, renderer: true;
+    /// G10: queue one run on the thread, a fixed template quoting the
+    /// comments as data.
+    SEND_REVIEW_TO_THREAD = SendReviewToThread: Unary(SendReviewToThreadParams -> QueueCommandReply), Owner, renderer: true;
+    /// G11: post the comments as a review on the branch's pull request.
+    POST_REVIEW_TO_CHANGE_REQUEST = PostReviewToChangeRequest: Unary(PostReviewToChangeRequestParams -> PostReviewToChangeRequestReply), Owner, renderer: true;
+    /// G23: search a workspace's file contents, one match per item.
+    SEARCH_WORKSPACE_CONTENT = SearchWorkspaceContent: Stream(SearchWorkspaceContentParams -> ContentSearchMatch), Owner, renderer: true;
     GET_CHECKOUT_FILE_DIFF_TEXT = GetCheckoutFileDiffText: Unary(GetCheckoutFileDiffTextRequest -> CheckoutFileDiffText), Owner, renderer: true;
     LIST_AGENT_ACCOUNTS = ListAgentAccounts: Unary(ListAgentAccountsParams -> AgentAccountsSnapshot), Owner, renderer: true;
     ACTIVATE_AGENT_ACCOUNT = ActivateAgentAccount: Unary(AgentAccountParams -> AgentAccountsSnapshot), Owner, renderer: true;

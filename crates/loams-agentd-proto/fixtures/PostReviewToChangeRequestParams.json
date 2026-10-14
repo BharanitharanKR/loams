@@ -1,0 +1,7 @@
+{
+  "checkoutId": "checkout-1",
+  "commentIds": [
+    "comment-1"
+  ],
+  "event": "request_changes"
+}

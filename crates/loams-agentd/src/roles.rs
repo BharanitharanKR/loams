@@ -423,6 +423,31 @@ mod tests {
         }
     }
 
+    /// SD1 Task 11: an agent can never read, write or post review comments,
+    /// queue a review turn or search contents through the MCP shim.
+    #[tokio::test]
+    async fn review_and_search_not_in_mcp_role() {
+        let run = mcp("main");
+        for method in [
+            methods::WATCH_REVIEW_COMMENTS,
+            methods::UPSERT_REVIEW_COMMENT,
+            methods::DELETE_REVIEW_COMMENT,
+            methods::RESOLVE_REVIEW_COMMENT,
+            methods::SEND_REVIEW_TO_THREAD,
+            methods::POST_REVIEW_TO_CHANGE_REQUEST,
+            methods::SEARCH_WORKSPACE_CONTENT,
+        ] {
+            assert!(
+                !allowed(&run, method, json!({"chatId": "main", "checkoutId": "c"})).await,
+                "{method}"
+            );
+            assert!(
+                allowed(&Identity::owner(), method, json!({})).await,
+                "{method}"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn mcp_may_call_only_the_shims_methods() {
         let run = mcp("main");

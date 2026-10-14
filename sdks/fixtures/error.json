@@ -698,6 +698,114 @@
       "code": "failed_precondition",
       "why": "Needs a deploy still backfilling an index that a function reads; the recorder deploys nothing (LV1 Task 9).",
       "standIn": null
+    },
+    {
+      "reason": "role_required",
+      "code": "permission_denied",
+      "why": "Raised by `loams.admin.v1` (API2 Task 7); the recorder's servers do not serve the admin RPCs it guards, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "setup_required",
+      "code": "failed_precondition",
+      "why": "Raised by `loams.admin.v1` (API2 Task 7); the recorder's servers do not serve the admin RPCs it guards, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_missing",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_malformed",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_revoked",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_not_yet_valid",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_bad_signature",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_wrong_audience",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_wrong_issuer",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_unknown_key",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_algorithm_not_allowed",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "api_key_invalid",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "credential_not_accepted",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "credential_in_query_string",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "csrf_token_invalid",
+      "code": "permission_denied",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "principal_not_allowed",
+      "code": "permission_denied",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "cors_origin_not_allowed",
+      "code": "permission_denied",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "auth_unavailable",
+      "code": "unavailable",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
     }
   ]
 }

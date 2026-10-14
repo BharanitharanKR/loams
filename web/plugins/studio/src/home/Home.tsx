@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import type { StudioAgentd } from '../agentd.js';
 import { useProjects } from '../projects/queries.js';
 import { studioHref } from '../routes.js';
+import { ThreadComposer } from '../thread/Composer.js';
 
 function Padded({ children }: { children: ReactNode }) {
   return <div className="p-6">{children}</div>;
@@ -92,7 +93,16 @@ export function Home({ agentd }: { agentd: StudioAgentd }) {
   );
 }
 
-export function ProjectPage({ agentd, projectId }: { agentd: StudioAgentd; projectId: string }) {
+export function ProjectPage({
+  agentd,
+  projectId,
+  navigate,
+}: {
+  agentd: StudioAgentd;
+  projectId: string;
+  /** Opens the thread or run group a new-thread composer started (SD1 Task 19). */
+  navigate?: (to: string) => void;
+}) {
   const projects = useProjects(agentd);
   if (projects.isPending)
     return (
@@ -128,6 +138,21 @@ export function ProjectPage({ agentd, projectId }: { agentd: StudioAgentd; proje
           {project.branch && <Badge>{project.branch}</Badge>}
         </p>
       </header>
+      <section aria-label="New thread" className="flex flex-col gap-2">
+        <h2 className="m-0 font-mono text-[0.7rem] text-faint uppercase tracking-[0.14em]">
+          New thread
+        </h2>
+        <ThreadComposer
+          project={{ path: project.path, name: project.name, branch: project.branch }}
+          {...(navigate
+            ? {
+                onStarted: (threadId: string) => navigate(studioHref({ kind: 'thread', threadId })),
+                onGroupStarted: (groupId: string) =>
+                  navigate(studioHref({ kind: 'group', groupId })),
+              }
+            : {})}
+        />
+      </section>
       <Empty title="No threads yet">
         A thread is one agent conversation in its own worktree of {project.name}.
       </Empty>

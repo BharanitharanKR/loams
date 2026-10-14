@@ -61,6 +61,16 @@ const api: LoamsDesktopApi = {
 		takePendingNavigation: () => invoke(CH.shellPendingNav),
 		pickFolder: (title) => invoke(CH.shellPickFolder, title),
 		setBadge: (count) => invoke(CH.shellBadge, count),
+		onCommand: (cb) => subscribe(CH.shellCommand, cb),
+	},
+	// SD1 Task 28: Studio's editor hand-off and notification choices; main builds every
+	// editor URL or argv itself.
+	studio: {
+		openInEditor: (path, at) => invoke(CH.studioOpenInEditor, path, at),
+		editor: () => invoke(CH.studioEditorGet),
+		setEditor: (editor) => invoke(CH.studioEditorSet, editor),
+		chooseEditorCommand: () => invoke(CH.studioEditorChooseCommand),
+		setNotifications: (prefs) => invoke(CH.studioNotifySet, prefs),
 	},
 	update: {
 		state: () => invoke(CH.updateState),
@@ -129,11 +139,6 @@ const api: LoamsDesktopApi = {
 		background: {
 			get: () => invoke(CH.agentdBackgroundGet),
 			set: (v) => invoke(CH.agentdBackgroundSet, v),
-		},
-		repos: {
-			list: () => invoke(CH.agentdRepos),
-			add: (path) => invoke(CH.agentdAddRepo, path),
-			clone: (url) => invoke(CH.agentdCloneRepo, url),
 		},
 	},
 	preview: {

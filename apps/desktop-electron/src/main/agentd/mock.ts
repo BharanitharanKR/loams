@@ -7,7 +7,6 @@ import {
 	type DaemonMode,
 	type DaemonStatus,
 	type HelloReply,
-	type Repo,
 	type SessionSummary,
 	type UnaryMethod,
 	type UnaryMethods,
@@ -19,7 +18,6 @@ export interface MockFixture {
 	pid: number;
 	startedAtMs: number;
 	sessions: SessionSummary[];
-	repos?: Repo[];
 }
 
 export function defaultFixture(now: number = Date.now()): MockFixture {
@@ -81,18 +79,6 @@ export function createMockAgentdClient(
 	fixture: MockFixture = defaultFixture(),
 ): MockAgentdClient {
 	let sessions = fixture.sessions.map((s) => ({ ...s }));
-	const repos: Repo[] = (
-		fixture.repos ?? [{ path: "/home/omar/src/loams", name: "loams", defaultBranch: "main" }]
-	).map((r) => ({ ...r }));
-	const baseName = (p: string) =>
-		p.replace(/\/+$/, "").split(/[/:]/).pop()?.replace(/\.git$/, "") || p;
-	const addRepo = (path: string): Repo => {
-		const known = repos.find((r) => r.path === path);
-		if (known) return { ...known };
-		const repo = { path, name: baseName(path), defaultBranch: "main" };
-		repos.push(repo);
-		return { ...repo };
-	};
 	let draining = false;
 	let closed = false;
 	const calls: string[] = [];
@@ -142,9 +128,6 @@ export function createMockAgentdClient(
 			closed = true;
 			return null;
 		},
-		ListRepos: () => repos.map((r) => ({ ...r })),
-		AddRepo: ({ path }) => addRepo(path),
-		CloneRepo: ({ url }) => addRepo(`/home/omar/src/${baseName(url)}`),
 	};
 	return {
 		hello,

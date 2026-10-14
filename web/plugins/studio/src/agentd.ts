@@ -9,6 +9,7 @@
 // `StudioAgentd`: its transport is the selected remote host's.
 
 import type { AgentdReach, AgentdService } from '@loams/console-host';
+import type { LoamsDesktopApi } from '@loams/platform-electron';
 import type { Repo as RepoMessage } from '@loams/proto/agentd';
 import type { StudioHosts } from './hosts/agentd.js';
 import type { StudioPreview } from './preview/access.js';
@@ -33,13 +34,22 @@ export interface StudioAgentd extends AgentdService {
   hosts?: StudioHosts;
   /** Desktop: the OS folder picker; null when cancelled. */
   pickFolder?(): Promise<string | null>;
+  /**
+   * Desktop: the editor hand-off and the OS notification choices (SD1 Task 28), which
+   * Electron main carries out. Absent on the web.
+   */
+  desktop?: StudioDesktop;
   /** How the Preview tab reaches dev servers (SD1 Task 26); absent: port-forward hint. */
   preview?: StudioPreview;
 }
 
+/** The desktop bridge's `studio` group (`window.loamsDesktop.studio`). */
+export type StudioDesktop = LoamsDesktopApi['studio'];
+
 export function studioAgentd(
   agentd: AgentdService,
   shell?: { pickFolder(title?: string): Promise<string | null> },
+  desktop?: StudioDesktop,
   preview?: StudioPreview,
 ): StudioAgentd {
   return {
@@ -54,6 +64,7 @@ export function studioAgentd(
     },
     ...(agentd.start && { start: () => agentd.start?.() ?? Promise.resolve() }),
     ...(shell && { pickFolder: () => shell.pickFolder('Add a project folder') }),
+    ...(desktop && { desktop }),
     ...(preview && { preview }),
   };
 }

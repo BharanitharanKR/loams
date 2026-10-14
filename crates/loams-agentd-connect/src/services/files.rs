@@ -4,7 +4,6 @@ use connectrpc::{RequestContext, ServiceRequest, ServiceResult, ServiceStream};
 use loams_agentd_proto as rs;
 
 use super::{Agentd, stream, unary};
-use crate::error;
 use crate::map::{Wire, msg};
 use crate::proto::loams::agentd::v1 as pb;
 
@@ -195,8 +194,14 @@ impl pb::FileService for Agentd {
     async fn search_content(
         &self,
         _ctx: RequestContext,
-        _request: ServiceRequest<'_, pb::SearchContentRequest>,
+        request: ServiceRequest<'_, pb::SearchContentRequest>,
     ) -> ServiceResult<ServiceStream<pb::SearchContentResponse>> {
-        Err(error::not_implemented("SearchContent", "G23, SD1 Task 11"))
+        stream!(
+            self,
+            request,
+            SearchWorkspaceContent,
+            |req| Wire::from_pb(req)?,
+            |found| found.to_pb()
+        )
     }
 }

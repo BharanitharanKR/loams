@@ -244,6 +244,78 @@ class LiveIndexNotReadyException extends LoamsException {
   LiveIndexNotReadyException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
 }
 
+class RoleRequiredException extends LoamsException {
+  RoleRequiredException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class SetupRequiredException extends LoamsException {
+  SetupRequiredException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class TokenMissingException extends LoamsException {
+  TokenMissingException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class TokenMalformedException extends LoamsException {
+  TokenMalformedException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class TokenRevokedException extends LoamsException {
+  TokenRevokedException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class TokenNotYetValidException extends LoamsException {
+  TokenNotYetValidException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class TokenBadSignatureException extends LoamsException {
+  TokenBadSignatureException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class TokenWrongAudienceException extends LoamsException {
+  TokenWrongAudienceException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class TokenWrongIssuerException extends LoamsException {
+  TokenWrongIssuerException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class TokenUnknownKeyException extends LoamsException {
+  TokenUnknownKeyException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class TokenAlgorithmNotAllowedException extends LoamsException {
+  TokenAlgorithmNotAllowedException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class ApiKeyInvalidException extends LoamsException {
+  ApiKeyInvalidException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class CredentialNotAcceptedException extends LoamsException {
+  CredentialNotAcceptedException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class CredentialInQueryStringException extends LoamsException {
+  CredentialInQueryStringException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class CsrfTokenInvalidException extends LoamsException {
+  CsrfTokenInvalidException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class PrincipalNotAllowedException extends LoamsException {
+  PrincipalNotAllowedException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class CorsOriginNotAllowedException extends LoamsException {
+  CorsOriginNotAllowedException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
+class AuthUnavailableException extends LoamsException {
+  AuthUnavailableException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
+
 class TokenExpiredException extends LoamsException {
   TokenExpiredException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
 }
@@ -449,6 +521,42 @@ class ErrorParser {
         LiveSchemaViolationException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
     'live_index_not_ready': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
         LiveIndexNotReadyException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'role_required': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        RoleRequiredException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'setup_required': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        SetupRequiredException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'token_missing': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        TokenMissingException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'token_malformed': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        TokenMalformedException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'token_revoked': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        TokenRevokedException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'token_not_yet_valid': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        TokenNotYetValidException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'token_bad_signature': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        TokenBadSignatureException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'token_wrong_audience': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        TokenWrongAudienceException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'token_wrong_issuer': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        TokenWrongIssuerException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'token_unknown_key': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        TokenUnknownKeyException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'token_algorithm_not_allowed': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        TokenAlgorithmNotAllowedException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'api_key_invalid': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        ApiKeyInvalidException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'credential_not_accepted': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        CredentialNotAcceptedException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'credential_in_query_string': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        CredentialInQueryStringException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'csrf_token_invalid': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        CsrfTokenInvalidException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'principal_not_allowed': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        PrincipalNotAllowedException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'cors_origin_not_allowed': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        CorsOriginNotAllowedException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'auth_unavailable': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        AuthUnavailableException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
     'invalid_argument': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
         InvalidArgumentException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
     'not_found': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>

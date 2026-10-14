@@ -177,6 +177,8 @@ export interface LoamsDesktopApi {
 		/** The OS folder picker (Studio's Add project, §53 §5.2); null when cancelled. */
 		pickFolder(title?: string): Promise<string | null>;
 		setBadge(count: number): Promise<void>; // pending approvals in tray
+		/** The application menu's renderer commands (SD1 Task 28): mode switches and a new thread. */
+		onCommand(cb: (command: ShellCommand) => void): () => void;
 	};
 	update: {
 		state(): Promise<{
@@ -301,6 +303,7 @@ export const CH = {
 	shellNavigate: "shell:navigate",
 	shellPendingNav: "shell:pending-nav",
 	shellBadge: "shell:badge",
+	shellCommand: "shell:command",
 	updateState: "update:state",
 	updateCheck: "update:check",
 	updateDownload: "update:download",
@@ -346,10 +349,12 @@ export const CH = {
 	agentdStop: "agentd:stop",
 	agentdBackgroundGet: "agentd:background-get",
 	agentdBackgroundSet: "agentd:background-set",
-	agentdRepos: "agentd:repos",
-	agentdAddRepo: "agentd:add-repo",
-	agentdCloneRepo: "agentd:clone-repo",
 	shellPickFolder: "shell:pick-folder",
+	studioOpenInEditor: "studio:open-in-editor",
+	studioEditorGet: "studio:editor-get",
+	studioEditorSet: "studio:editor-set",
+	studioEditorChooseCommand: "studio:editor-choose-command",
+	studioNotifySet: "studio:notify-set",
 } as const;
 
 // ---- D675: the agent panel ----
@@ -571,13 +576,6 @@ export interface AgentdSession {
 	resumable: boolean;
 }
 
-/** A repository on the daemon's host (`ListRepos`, `AddRepo`, `CloneRepo`): a Studio project. */
-export interface AgentdRepo {
-	path: string;
-	name: string;
-	defaultBranch: string | null;
-}
-
 export interface LoamsDesktopApi {
 	agentd: {
 		status(): Promise<AgentdStatus>;
@@ -597,17 +595,56 @@ export interface LoamsDesktopApi {
 			/** The consent dialog's answer, or a later change in Settings. */
 			set(v: "on" | "off"): Promise<IpcResult<void>>;
 		};
+	};
+}
+
+// ---- SD1 Task 28: Loams Studio on the desktop ----
+
+/**
+ * What the application menu asks the renderer to do (`shell.onCommand`): switch to a
+ * mode, toggle between them, or start a thread (Studio's `chat.new`).
+ */
+export type ShellCommand =
+	| "mode.studio"
+	| "mode.console"
+	| "mode.toggle"
+	| "chat.new";
+
+/** "Open in editor" (Q810): an editor's URL scheme, or the program the person picked. */
+export type StudioEditorId = "vscode" | "zed" | "cursor" | "command";
+export interface StudioEditor {
+	editor: StudioEditorId;
+	/** The picked program's file name, for display; set once one was chosen. */
+	commandName?: string;
+}
+/** The OS notifications the person wants (Settings › Studio, `loams.studio.settings`). */
+export interface StudioNotifyPrefs {
+	/** A turn finished or failed, or a run group or a check finished. */
+	turnDone: boolean;
+	/** An approval or a question is waiting. */
+	approval: boolean;
+}
+
+export interface LoamsDesktopApi {
+	studio: {
 		/**
-		 * Loams Studio's projects over the daemon's ndjson methods (SD1 Task 15), until
-		 * the Connect surface `loams.agentd.v1` reaches the renderer (SD1 Tasks 5-6).
+		 * Opens a thread's checkout (an absolute path on this machine), or a file in it,
+		 * in the chosen editor. Main builds the editor's URL or argv itself, never a
+		 * shell string.
 		 */
-		repos: {
-			list(): Promise<IpcResult<AgentdRepo[]>>;
-			/** An absolute folder path, usually from `shell.pickFolder()`. */
-			add(path: string): Promise<IpcResult<AgentdRepo>>;
-			/** An https, ssh or `user@host:path` git URL; anything else is `invalid_url`. */
-			clone(url: string): Promise<IpcResult<AgentdRepo>>;
-		};
+		openInEditor(
+			path: string,
+			at?: { line?: number; column?: number },
+		): Promise<IpcResult<void>>;
+		editor(): Promise<StudioEditor>;
+		/** Picks a URL-scheme editor; `command` is chosen with `chooseEditorCommand`. */
+		setEditor(
+			editor: Exclude<StudioEditorId, "command">,
+		): Promise<IpcResult<void>>;
+		/** The OS file picker for the editor program; `cancelled` when none was picked. */
+		chooseEditorCommand(): Promise<IpcResult<StudioEditor>>;
+		/** Which daemon notifications main shows as OS notifications. */
+		setNotifications(prefs: StudioNotifyPrefs): Promise<IpcResult<void>>;
 	};
 }
 

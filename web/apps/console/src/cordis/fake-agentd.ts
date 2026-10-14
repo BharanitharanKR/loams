@@ -9,12 +9,19 @@
 import { createConnectRouter } from '@connectrpc/connect';
 import { createFetchHandler } from '@connectrpc/connect/protocol';
 import {
+  FileService,
   GitService,
+  HarnessId,
+  HarnessService,
   PreviewService,
   ProjectService,
+  QueueService,
+  ReasoningLevel,
   RunGroupService,
   SessionStatus,
+  StudioService,
   ThreadService,
+  WorkspaceEntryKind,
 } from '@loams/proto/agentd';
 
 const BASE = 'loams-app://console/';
@@ -121,72 +128,144 @@ async function* once<T>(value: T, signal: AbortSignal): AsyncGenerator<T> {
 }
 
 function fakeRouter() {
-  return createConnectRouter()
-    .service(ProjectService, { listRepos: () => ({ repos: REPOS }) })
-    .service(ThreadService, {
-      watchThreads: (_req, ctx) => once({ chats }, ctx.signal),
-      watchSessions: (_req, ctx) => once({ sessions }, ctx.signal),
-      watchSidebarPreferences: (_req, ctx) =>
-        once(
-          {
-            preferences: { revision: 1n, synced: true, initialized: true, pinnedSessionIds: pins },
-          },
-          ctx.signal,
-        ),
-      markThreadSeen: () => ({ ok: true }),
-    })
-    .service(GitService, {
-      listWorktrees: (req) => ({ worktrees: worktrees[req.repoPath] ?? [] }),
-    })
-    .service(PreviewService, {
-      // The Preview tab's dev servers (SD1 Task 26).
-      watchPreviews: (_req, ctx) =>
-        once(
-          {
-            snapshot: {
-              proxyPort: 7331,
-              projectName: 'loams',
-              services: [
+  return (
+    createConnectRouter()
+      .service(ProjectService, { listRepos: () => ({ repos: REPOS }) })
+      .service(ThreadService, {
+        watchThreads: (_req, ctx) => once({ chats }, ctx.signal),
+        watchSessions: (_req, ctx) => once({ sessions }, ctx.signal),
+        watchSidebarPreferences: (_req, ctx) =>
+          once(
+            {
+              preferences: {
+                revision: 1n,
+                synced: true,
+                initialized: true,
+                pinnedSessionIds: pins,
+              },
+            },
+            ctx.signal,
+          ),
+        markThreadSeen: () => ({ ok: true }),
+      })
+      .service(GitService, {
+        listWorktrees: (req) => ({ worktrees: worktrees[req.repoPath] ?? [] }),
+        listBranches: () => ({ branches: ['dev', 'main', 'perf/build'] }),
+      })
+      // The composer's catalogs (SD1 Task 19).
+      .service(StudioService, {
+        getHost: () => ({ host: { version: 'fake', features: ['studio.v1', 'run-groups'] } }),
+      })
+      .service(HarnessService, {
+        listHarnesses: () => ({
+          harnesses: [
+            {
+              id: HarnessId.CLAUDE_CODE,
+              name: 'Claude Code',
+              installed: true,
+              enabled: true,
+              reasoningLevels: [ReasoningLevel.LOW, ReasoningLevel.MEDIUM, ReasoningLevel.HIGH],
+            },
+            { id: HarnessId.CODEX, name: 'Codex', installed: true, enabled: true },
+          ],
+        }),
+        listModels: () => ({
+          models: [
+            { id: 'sonnet', label: 'Sonnet' },
+            { id: 'opus', label: 'Opus' },
+          ],
+        }),
+        listCommands: () => ({
+          commands: [
+            { name: 'review', description: 'Review the working tree' },
+            { name: 'compact', description: 'Compact the conversation' },
+          ],
+        }),
+        listSkills: () => ({
+          skills: [
+            {
+              name: 'release-notes',
+              path: '~/.claude/skills/release-notes/SKILL.md',
+              description: 'Draft release notes',
+              enabled: true,
+            },
+          ],
+        }),
+      })
+      .service(FileService, {
+        search: ({ query }) => ({
+          matches: ['README.md', 'web/plugins/studio/src/view.tsx', 'docs/plans/README.md']
+            .filter((path) => path.toLowerCase().includes(query.toLowerCase()))
+            .map((path) => ({
+              path,
+              name: path.slice(path.lastIndexOf('/') + 1),
+              kind: WorkspaceEntryKind.FILE,
+              score: 10n,
+            })),
+        }),
+      })
+      .service(QueueService, {
+        watchQueue: (req, ctx) =>
+          once(
+            {
+              items:
+                req.chatId === 'demo-login'
+                  ? [{ id: 'q1', text: 'Then add a regression test for the redirect.' }]
+                  : [],
+            },
+            ctx.signal,
+          ),
+      })
+      .service(PreviewService, {
+        // The Preview tab's dev servers (SD1 Task 26).
+        watchPreviews: (_req, ctx) =>
+          once(
+            {
+              snapshot: {
+                proxyPort: 7331,
+                projectName: 'loams',
+                services: [
+                  {
+                    id: 'demo-web',
+                    name: 'web',
+                    hostname: 'laptop.loams.localhost',
+                    port: 5173,
+                    pid: 4242,
+                    projectName: 'loams',
+                    startedAtMs: ago(12),
+                  },
+                  {
+                    id: 'demo-api',
+                    name: 'api',
+                    hostname: 'laptop.loams-api.localhost',
+                    port: 3000,
+                    pid: 4243,
+                    projectName: 'loams',
+                    startedAtMs: ago(12),
+                  },
+                ],
+              },
+            },
+            ctx.signal,
+          ),
+      })
+      .service(RunGroupService, {
+        watchRunGroups: (_req, ctx) =>
+          once(
+            {
+              groups: [
                 {
-                  id: 'demo-web',
-                  name: 'web',
-                  hostname: 'laptop.loams.localhost',
-                  port: 5173,
-                  pid: 4242,
-                  projectName: 'loams',
-                  startedAtMs: ago(12),
-                },
-                {
-                  id: 'demo-api',
-                  name: 'api',
-                  hostname: 'laptop.loams-api.localhost',
-                  port: 3000,
-                  pid: 4243,
-                  projectName: 'loams',
-                  startedAtMs: ago(12),
+                  id: 'demo-group',
+                  prompt: 'Fix the flaky studio e2e test',
+                  createdAtMs: ago(20),
+                  members: [{ chatId: 'demo-r1' }, { chatId: 'demo-r2' }],
                 },
               ],
             },
-          },
-          ctx.signal,
-        ),
-    })
-    .service(RunGroupService, {
-      watchRunGroups: (_req, ctx) =>
-        once(
-          {
-            groups: [
-              {
-                id: 'demo-group',
-                prompt: 'Fix the flaky studio e2e test',
-                createdAtMs: ago(20),
-                members: [{ chatId: 'demo-r1' }, { chatId: 'demo-r2' }],
-              },
-            ],
-          },
-          ctx.signal,
-        ),
-    });
+            ctx.signal,
+          ),
+      })
+  );
 }
 
 /** Answers the desktop agentd route from the fake router; everything else is the page's fetch. */

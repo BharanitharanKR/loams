@@ -2,9 +2,8 @@ syntax = "proto3";
 
 // Review comments (design §53 §5.6, §6.5 G8–G11; plan SD1 Task 4): comments
 // on a checkout's diff, stored by the daemon and keyed by checkout, sent to a
-// thread as one turn or posted to the pull request. Declared here; every RPC
-// answers `unimplemented` until SD1 Task 11. See studio.proto for the
-// package's rules.
+// thread as one turn or posted to the pull request. Served since SD1 Task
+// 11. See studio.proto for the package's rules.
 package loams.agentd.v1;
 
 import "loams/options/v1/options.proto";
@@ -49,6 +48,9 @@ message ReviewComment {
   string diff_checksum = 8;
   int64 created_at_ms = 9;
   bool resolved = 10;
+  // Computed by the daemon from the checkout's current diff (another
+  // checksum, and the anchored lines no longer in it); ignored on upsert.
+  bool outdated = 11;
 }
 
 message WatchReviewCommentsRequest {
