@@ -251,7 +251,7 @@ async fn runner_refuses_unlisted_images() {
         OTHER.to_owned(),
         "ghcr.io/neondatabase/compute-node-v17:latest".to_owned(),
         format!(
-            "ghcr.io/ostrium-labs/neon-archive/compute-node-v17@{}",
+            "ghcr.io/example/neon-archive/compute-node-v17@{}",
             ALLOWED.split_once('@').unwrap().1
         ),
     ] {
@@ -387,7 +387,7 @@ fn policy_takes_only_runnable_images() {
     assert!(RunnerPolicy::new(["ghcr.io/x/compute:latest".to_owned()]).is_err());
     assert!(
         RunnerPolicy::new([format!(
-            "ghcr.io/ostrium-labs/neon-archive/compute-node-v17@{}",
+            "ghcr.io/example/neon-archive/compute-node-v17@{}",
             ALLOWED.split_once('@').unwrap().1
         )])
         .is_err()
