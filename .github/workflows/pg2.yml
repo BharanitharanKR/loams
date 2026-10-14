@@ -233,7 +233,7 @@ jobs:
       - name: clippy (tikv)
         run: cargo clippy -p loams-pg-control --all-targets --features tikv --locked -- -D warnings
       - name: test (the Kubernetes secret store, against a stand-in API)
-        run: cargo test -p loams-pg-control --features kubernetes --test secrets_kube --locked
+        run: cargo test -p loams-pg-control --features kubernetes --test secrets_kube --test runtime_kube --locked
       - name: clippy (kubernetes, keyring)
         run: cargo clippy -p loams-pg-control --all-targets --features kubernetes,keyring --locked -- -D warnings
 

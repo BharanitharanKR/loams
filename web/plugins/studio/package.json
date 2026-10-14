@@ -27,6 +27,7 @@
         "mode",
         "platform",
         "flags",
+        "agentd",
         "desktop"
       ],
       "provides": [],
@@ -56,7 +57,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "2.16.0",
     "@connectrpc/connect": "2.2.0",
+    "@connectrpc/connect-query": "catalog:",
+    "@dnd-kit/core": "catalog:",
+    "@dnd-kit/sortable": "catalog:",
+    "@dnd-kit/utilities": "catalog:",
     "@loams/agentd-client": "workspace:*",
     "@loams/console-host": "workspace:*",
     "@loams/cordis": "workspace:*",

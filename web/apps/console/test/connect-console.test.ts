@@ -10,10 +10,11 @@ import { legacyUrl } from '../src/cordis/legacy.js';
 // The console tsconfig carries no Node types: node:fs by a variable specifier.
 const fsId = 'node:fs';
 const { readFileSync } = (await import(/* @vite-ignore */ fsId)) as {
-  readFileSync(path: string, enc: 'utf8'): string;
+  readFileSync(path: URL, enc: 'utf8'): string;
 };
-const read = (rel: string) =>
-  readFileSync(decodeURIComponent(new URL(rel, import.meta.url).pathname), 'utf8');
+// node:fs takes the file: URL itself. Its `pathname` is not a path on Windows
+// (`/D:/a/...`, which readFileSync resolves to `D:\D:\a\...`).
+const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
 
 const at = (href: string, base = '/ui/') => {
   const url = new URL(href, 'https://loams.example');

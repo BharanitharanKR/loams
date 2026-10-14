@@ -13,6 +13,10 @@ export {
   shortcutKeys,
   shortcutKeysForCommand,
   shortcutLabelForCommand,
+  shouldShowThreadJumpHintsForModifiers,
+  threadJumpCommandForIndex,
+  threadJumpIndexFromCommand,
+  threadTraversalDirectionFromCommand,
 } from "./keybindings";
 export {
   buildKeybindingCommandOptions,
@@ -52,7 +56,15 @@ export {
   type ShortcutEventLike,
   STUDIO_KEYBINDING_COMMANDS,
   shortcutKeyFromEvent,
+  THREAD_JUMP_KEYBINDING_COMMANDS,
+  type ThreadJumpKeybindingCommand,
 } from "./shared";
+export {
+  areShortcutModifierStatesEqual,
+  type ShortcutModifierState,
+  shortcutModifierStateAfterKeyboardEvent,
+  useShortcutModifierState,
+} from "./shortcutModifierState";
 export {
   browserStorage,
   type CommandBinding,

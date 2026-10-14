@@ -66,7 +66,8 @@ function encode<D extends DescMessage>(
  * - `AuthService/GetSession` answers the person at this computer, in the org
  *   "This computer"; `ListProviders` answers that there is no sign-in.
  * - `InstanceService/GetInstance` goes to the engine, and its answer gains the
- *   `local` and `desktop` features and `loams.auth.v1`, which this shim serves.
+ *   `local` and `desktop` features and `loams.auth.v1`, which this shim serves,
+ *   and loses `setup_required` (there is nothing to set up here).
  * - Every other auth or admin RPC is `unimplemented`: add a server for those.
  *
  * Pure: no electron. `kind` is consulted per request so a remote server is
@@ -116,6 +117,9 @@ export function createLocalShim(
 							(await res.json()) as JsonValue,
 						);
 				answer.features = { ...answer.features, local: true, desktop: true };
+				// The person at this computer is the owner of "This computer": no
+				// first-run setup, whatever the engine's own principal store says.
+				answer.setupRequired = false;
 				if (!answer.apiVersions.includes("loams.auth.v1"))
 					answer.apiVersions = [...answer.apiVersions, "loams.auth.v1"];
 				return encode(

@@ -31,7 +31,8 @@ pub(crate) enum StoreArg {
 pub(crate) enum RuntimeArg {
     /// compose; secrets in an age-encrypted file in --data-dir.
     Compose,
-    /// Kubernetes; secrets as Secrets in --kube-namespace.
+    /// Kubernetes: computes as Pods in loams-pg-<namespace>, secrets as
+    /// Secrets in --kube-namespace.
     Kubernetes,
 }
 
@@ -104,6 +105,8 @@ impl ComposeArgs {
             },
             image_overrides: images.into_iter().collect(),
             runner: None,
+            runtime_class: None,
+            cluster_domain: None,
         }
     }
 }
@@ -138,6 +141,13 @@ pub(crate) struct PgControlArgs {
     /// With --runtime kubernetes: the namespace of the Secrets.
     #[arg(long, default_value = "loams-postgres")]
     kube_namespace: String,
+    /// With --runtime kubernetes: the compute Pods' runtimeClassName (a
+    /// sandbox such as gVisor or Kata).
+    #[arg(long)]
+    kube_runtime_class: Option<String>,
+    /// With --runtime kubernetes: the cluster's DNS domain.
+    #[arg(long)]
+    kube_cluster_domain: Option<String>,
     /// Holds the local store and the secret file.
     #[arg(long, default_value = ".loams/pg-control")]
     data_dir: PathBuf,
@@ -259,6 +269,8 @@ fn config(args: PgControlArgs) -> Result<PgControlConfig, String> {
     };
     let mut computes = args.compose.computes(args.compute_image);
     computes.runner = runner;
+    computes.runtime_class = args.kube_runtime_class;
+    computes.cluster_domain = args.kube_cluster_domain;
     config.computes = Some(computes);
     config.listen = args.listen;
     config.upcall_listen = args.pg_upcall_listen;

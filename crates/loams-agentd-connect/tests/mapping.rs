@@ -340,3 +340,60 @@ fn an_unset_target_names_no_checkout() {
     assert_eq!(request.target.space_id, None);
     assert_eq!(request.target.checkout_path, None);
 }
+
+/// The `TranscriptUpdate` fixtures as a Connect client receives them: each
+/// mapped to `loams.agentd.v1.TranscriptUpdate` and encoded, in hex. The
+/// web client's `reducer_accepts_connect_updates` decodes these with
+/// protobuf-es, maps them back with its one mapping function and folds them
+/// (plan SD1 Task 6). A proto map's entries have no fixed order on the wire, so
+/// the committed file is checked by decoding it: each entry must decode to its
+/// fixture, and every fixture must have one. `LOAMS_UPDATE_CONNECT_FIXTURES=1`
+/// rewrites the file.
+#[test]
+fn connect_transcript_fixtures_are_fresh() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../web/packages/agentd-client/test/transcript.connect.gen.json");
+    let wanted: BTreeMap<String, Value> = fixtures()
+        .into_iter()
+        .filter(|(_, ty, _)| ty == "TranscriptUpdate")
+        .map(|(file, _, value)| (file.trim_end_matches(".json").to_owned(), value))
+        .collect();
+    assert!(wanted.len() >= 2, "the transcript fixtures");
+    if std::env::var_os("LOAMS_UPDATE_CONNECT_FIXTURES").is_some() {
+        let mut out = serde_json::Map::new();
+        for (name, value) in &wanted {
+            let update: rs_transcript::TranscriptUpdate =
+                serde_json::from_value(value.clone()).unwrap();
+            let bytes = update.to_pb().encode_to_vec();
+            let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+            out.insert(name.clone(), Value::String(hex));
+        }
+        let text = serde_json::to_string_pretty(&Value::Object(out)).unwrap();
+        std::fs::write(&path, format!("{text}\n")).unwrap();
+    }
+    let stale = format!(
+        "{} is stale; run `LOAMS_UPDATE_CONNECT_FIXTURES=1 cargo test -p loams-agentd-connect --test mapping`",
+        path.display()
+    );
+    let committed: BTreeMap<String, String> =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap_or_default()).expect(&stale);
+    assert_eq!(
+        committed.keys().collect::<Vec<_>>(),
+        wanted.keys().collect::<Vec<_>>(),
+        "{stale}"
+    );
+    for (name, hex) in &committed {
+        let bytes: Vec<u8> = (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).expect(&stale))
+            .collect();
+        let decoded =
+            <rs_transcript::TranscriptUpdate as Wire>::Pb::decode_from_slice(&bytes).expect(&stale);
+        let back = rs_transcript::TranscriptUpdate::from_pb(decoded).expect(&stale);
+        assert_eq!(
+            serde_json::to_value(back).unwrap(),
+            wanted[name],
+            "{name}: {stale}"
+        );
+    }
+}

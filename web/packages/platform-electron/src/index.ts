@@ -3,11 +3,17 @@
 // process proxies `/v1`, `/api` etc. to the active server, so the base URL is
 // this page's origin. The three side effects go over IPC (`window.loamsDesktop`).
 
-import type { Interceptor } from '@connectrpc/connect';
+import type { Interceptor, Transport } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
-import type { PlatformService, PluginModule } from '@loams/console-host';
+import { createAgentdTransport } from '@loams/agentd-client/connect';
+import type {
+  AgentdReach,
+  AgentdService,
+  PlatformService,
+  PluginModule,
+} from '@loams/console-host';
 import type { Context } from '@loams/cordis';
-import type { LoamsDesktopApi } from '@loams/desktop/contracts';
+import type { AgentdStatus, LoamsDesktopApi } from '@loams/desktop/contracts';
 
 export type { LoamsDesktopApi };
 
@@ -108,7 +114,64 @@ export function createElectronPlatform(api: LoamsDesktopApi): PluginModule {
         }),
       );
       ctx.provide('desktop', api);
+      // loams-agentd through Electron main's route (SD1 Tasks 5–6); only
+      // @loams/plugin-rpc reads it, and turns it into `agentd` and `rpc.agentd.*`.
+      ctx.provide('agentd.endpoint', desktopAgentdEndpoint(api));
     },
+  };
+}
+
+function reachOf(s: AgentdStatus): AgentdReach {
+  if (s.state === 'running') return { state: 'ready' };
+  if (s.state === 'stopped') return { state: 'stopped' };
+  return { state: 'unavailable', reason: s.reason };
+}
+
+/**
+ * The desktop's agentd: its reach follows the daemon status Electron main reports,
+ * and its transport is `loams-app://console/`, whose `/loams.agentd.v1.` route
+ * main forwards to the daemon with the token only main holds.
+ */
+export function desktopAgentdEndpoint(
+  api: Pick<LoamsDesktopApi, 'agentd'>,
+  transport: Transport = createAgentdTransport({ kind: 'desktop' }),
+): AgentdService {
+  let reach: AgentdReach = { state: 'checking' };
+  const listeners = new Set<() => void>();
+  const set = (next: AgentdReach) => {
+    if (next.state === reach.state && JSON.stringify(next) === JSON.stringify(reach)) return;
+    reach = next;
+    for (const listener of [...listeners]) listener();
+  };
+  let watching = false;
+  const watch = () => {
+    if (watching) return;
+    watching = true;
+    api.agentd.onStatus((s) => set(reachOf(s)));
+    api.agentd
+      .status()
+      .then((s) => set(reachOf(s)))
+      .catch(() => set({ state: 'unavailable', reason: 'no_bridge' }));
+  };
+  return {
+    kind: 'desktop',
+    reach() {
+      watch();
+      return reach;
+    },
+    subscribe(listener) {
+      watch();
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    transport: () => (reach.state === 'ready' ? transport : undefined),
+    async start() {
+      const result = await api.agentd.start();
+      if (!result.ok) throw new Error(result.message);
+      // The status event follows; read it now so the page does not wait.
+      set(reachOf(await api.agentd.status()));
+    },
+    host: () => undefined,
   };
 }
 

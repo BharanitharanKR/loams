@@ -11,6 +11,9 @@ import { createClient, type Transport } from '@connectrpc/connect';
 import { type PluginModule, service } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
 import { admin, approvals, auth, devices, instance, notifications, operations } from '@loams/proto';
+import { provideAgentd } from './agentd.js';
+
+export { AGENTD_SERVICES, provideAgentd } from './agentd.js';
 
 /** The services this plugin provides, by cordis service name. */
 export const RPC_SERVICES: readonly { name: string; api: string; service: DescService }[] = [
@@ -44,6 +47,8 @@ const plugin: PluginModule = {
       if (entry.name !== 'rpc.instance' && !flags.has(entry.api)) continue;
       ctx.provide(entry.name, createClient(entry.service, transport));
     }
+    // loams-agentd (SD1 Task 6): a second transport, not gated on api_versions.
+    provideAgentd(ctx);
   },
 };
 

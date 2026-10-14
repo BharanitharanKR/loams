@@ -96,9 +96,12 @@ describe('modes in the console', () => {
     fireEvent.click(studio);
     expect(mode.current).toBe('studio');
     expect(localStorage.getItem(MODE_KEY)).toBe('studio');
-    await waitFor(() => expect(navLabels(root)).toEqual(['Home', 'Settings']));
+    // Entering Studio imports its plugin (and its sidebar's dependencies) the first time.
+    await waitFor(() => expect(navLabels(root)).toEqual(['Home', 'Settings']), { timeout: 10_000 });
     expect(window.location.hash).toBe('#/studio');
-    await waitFor(() => expect(root.textContent).toContain('Connect an agentd host'));
+    await waitFor(() => expect(root.textContent).toContain('Connect an agentd host'), {
+      timeout: 10_000,
+    });
     expect(handle.plugins().find((p) => p.id === 'studio')?.status).toBe('active');
     // A Console route switches back; Studio stays loaded.
     go('/approvals');
@@ -120,9 +123,9 @@ describe('catalogs', () => {
     const base = parseCatalog(baseCatalog);
     expect(base.find((r) => r.id === 'studio')).toMatchObject({
       name: '@loams/plugin-studio',
-      inject: ['router', 'slots', 'mode', 'platform', 'flags'],
+      inject: ['router', 'slots', 'mode', 'platform', 'flags', 'agentd'],
     });
     const desktop = parsePatch(desktopYml).find((r) => 'id' in r && r.id === 'studio');
-    expect(desktop).toMatchObject({ inject: expect.arrayContaining(['desktop']) });
+    expect(desktop).toMatchObject({ inject: expect.arrayContaining(['agentd', 'desktop']) });
   });
 });

@@ -1,0 +1,159 @@
+{
+  "apiVersion": "v1",
+  "kind": "Pod",
+  "metadata": {
+    "annotations": {
+      "argocd.argoproj.io/compare-options": "IgnoreExtraneous"
+    },
+    "labels": {
+      "app.kubernetes.io/component": "postgres-compute",
+      "app.kubernetes.io/managed-by": "loams-pg-control",
+      "loams.dev/compute": "cmp-01JZ0000000000000000000003",
+      "loams.dev/endpoint": "ep-01JZ0000000000000000000001",
+      "loams.dev/namespace": "acme",
+      "loams.dev/org": "",
+      "loams.dev/project": "prj-01JZ0000000000000000000000"
+    },
+    "name": "cmp-01jz0000000000000000000003",
+    "namespace": "loams-pg-acme"
+  },
+  "spec": {
+    "automountServiceAccountToken": false,
+    "containers": [
+      {
+        "args": [
+          "--pgdata",
+          "/var/db/postgres/compute",
+          "--pgbin",
+          "/usr/local/bin/postgres",
+          "--connstr",
+          "postgresql://cloud_admin@127.0.0.1:55433/postgres",
+          "--compute-id",
+          "cmp-01JZ0000000000000000000003",
+          "--control-plane-uri",
+          "http://pg-control-upcall.loams-postgres.svc.cluster.local:7690",
+          "--external-http-port",
+          "3080",
+          "--internal-http-port",
+          "3081"
+        ],
+        "command": [
+          "/usr/local/bin/compute_ctl"
+        ],
+        "env": [
+          {
+            "name": "NEON_CONTROL_PLANE_TOKEN",
+            "valueFrom": {
+              "secretKeyRef": {
+                "key": "token",
+                "name": "cmp-01jz0000000000000000000003"
+              }
+            }
+          }
+        ],
+        "image": "ghcr.io/neondatabase/compute-node-v17@sha256:13ab146d3e7bbabb25a8532f315ac443e7512351d1ede0bab586def5c70e26c3",
+        "name": "compute",
+        "ports": [
+          {
+            "containerPort": 55433,
+            "name": "postgres"
+          },
+          {
+            "containerPort": 3080,
+            "name": "http"
+          }
+        ],
+        "resizePolicy": [
+          {
+            "resourceName": "cpu",
+            "restartPolicy": "NotRequired"
+          },
+          {
+            "resourceName": "memory",
+            "restartPolicy": "NotRequired"
+          }
+        ],
+        "resources": {
+          "limits": {
+            "cpu": "500m",
+            "memory": "2Gi"
+          },
+          "requests": {
+            "cpu": "500m",
+            "memory": "2Gi"
+          }
+        },
+        "securityContext": {
+          "allowPrivilegeEscalation": false,
+          "capabilities": {
+            "drop": [
+              "ALL"
+            ]
+          },
+          "readOnlyRootFilesystem": true
+        },
+        "volumeMounts": [
+          {
+            "mountPath": "/var/db/postgres",
+            "name": "data"
+          },
+          {
+            "mountPath": "/tmp",
+            "name": "tmp"
+          },
+          {
+            "mountPath": "/etc/loams-compute/tls",
+            "name": "tls",
+            "readOnly": true
+          }
+        ]
+      }
+    ],
+    "enableServiceLinks": false,
+    "hostname": "cmp-01jz0000000000000000000003",
+    "restartPolicy": "Never",
+    "runtimeClassName": "gvisor",
+    "securityContext": {
+      "fsGroup": 1000,
+      "runAsGroup": 1000,
+      "runAsNonRoot": true,
+      "runAsUser": 1000,
+      "seccompProfile": {
+        "type": "RuntimeDefault"
+      }
+    },
+    "subdomain": "computes",
+    "terminationGracePeriodSeconds": 10,
+    "volumes": [
+      {
+        "emptyDir": {},
+        "name": "data"
+      },
+      {
+        "emptyDir": {},
+        "name": "tmp"
+      },
+      {
+        "name": "tls",
+        "secret": {
+          "defaultMode": 288,
+          "items": [
+            {
+              "key": "tls.crt",
+              "path": "tls.crt"
+            },
+            {
+              "key": "tls.key",
+              "path": "tls.key"
+            },
+            {
+              "key": "ca.crt",
+              "path": "ca.crt"
+            }
+          ],
+          "secretName": "cmp-01jz0000000000000000000003"
+        }
+      }
+    ]
+  }
+}

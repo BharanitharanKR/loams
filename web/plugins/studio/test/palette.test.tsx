@@ -4,19 +4,19 @@
 // view handles; Settings › Studio edits them.
 
 import type { Location } from '@loams/console-host';
-import { createMockAgentdApi } from '@loams/plugin-desktop-agentd';
 import type { PaletteCommand } from '@loams/slots';
 import { KEYBINDINGS_KEY, KeybindingStore } from '@loams/studio-ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { desktopAgentd, type StudioAgentd } from '../src/agentd.js';
+import type { StudioAgentd } from '../src/agentd.js';
 import { createStudioKeys, type StudioKeys } from '../src/palette/commands.js';
 import { StudioPalette } from '../src/palette/StudioPalette.js';
 import { pendingPaletteSource, type StudioPaletteSource } from '../src/palette/source.js';
 import { SETTINGS_KEY } from '../src/settings/Settings.js';
 import { StudioView } from '../src/view.js';
+import { desktopFake } from './fakes.js';
 
 const LINUX = 'Linux x86_64';
 
@@ -35,8 +35,7 @@ function viewport(wide: boolean) {
 }
 
 function agentdReady(): StudioAgentd {
-  const mock = createMockAgentdApi({ running: true, background: 'off' });
-  return desktopAgentd({ agentd: mock.api, shell: { pickFolder: async () => null } });
+  return desktopFake({ folder: null }).agentd;
 }
 
 function fakeRouter(location: Location) {

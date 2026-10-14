@@ -20,7 +20,8 @@
 //! - a compute is bound to an endpoint, its namespace a DNS label, its
 //!   project and endpoint ids canonical, its size 0.25 to 16 CU, and its
 //!   upcall token one line of base64url ([`check_upcall_token`]);
-//! - an endpoint's project, branch and endpoint ids are canonical.
+//! - an endpoint's project, branch and endpoint ids are canonical, and
+//!   every call's namespace is a DNS label.
 //!
 //! Every call but `GET /health` needs `Authorization: Bearer <token>`, the
 //! secret both sides read from one file ([`read_or_create_token`]),
@@ -163,10 +164,11 @@ fn canonical<T: std::str::FromStr>(text: &str, what: &str) -> Result<(), Runtime
 
 // The wire shapes, shared with `remote`.
 
-/// What a runtime reads of an endpoint: its ids, kind and address. The
-/// runner rebuilds the record from these alone.
+/// What a runtime reads of an endpoint: its namespace, ids, kind and
+/// address. The runner rebuilds the record from these alone.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct WireEndpoint {
+    pub namespace: String,
     pub project_id: String,
     pub id: String,
     pub branch_id: String,
@@ -175,8 +177,9 @@ pub(crate) struct WireEndpoint {
 }
 
 impl WireEndpoint {
-    pub(crate) fn of(ep: &EndpointRec) -> Self {
+    pub(crate) fn of(ns: &str, ep: &EndpointRec) -> Self {
         WireEndpoint {
+            namespace: ns.to_owned(),
             project_id: ep.project_id.clone(),
             id: ep.id.clone(),
             branch_id: ep.branch_id.clone(),
@@ -185,10 +188,10 @@ impl WireEndpoint {
         }
     }
 
-    fn record(self) -> EndpointRec {
+    fn record(self) -> (String, EndpointRec) {
         let mut ep = EndpointRec::new(self.project_id, self.id, self.branch_id, self.kind);
         ep.backend_addr = self.backend_addr;
-        ep
+        (self.namespace, ep)
     }
 }
 
@@ -235,11 +238,13 @@ pub(crate) struct WireBind {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct WireCompute {
+    pub namespace: String,
     pub compute_id: ComputeId,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct WireResize {
+    pub namespace: String,
     pub compute_id: ComputeId,
     pub cu: Cu,
 }
@@ -320,29 +325,58 @@ impl Inner {
         })
     }
 
-    fn endpoint(&self, w: WireEndpoint) -> Result<EndpointRec, Refusal> {
-        let ep = w.record();
+    fn endpoint(&self, w: WireEndpoint) -> Result<(String, EndpointRec), Refusal> {
+        let (ns, ep) = w.record();
+        check_namespace(&ns).map_err(Refusal::Invalid)?;
         RunnerPolicy::check_endpoint(&ep).map_err(Refusal::Invalid)?;
-        Ok(ep)
+        Ok((ns, ep))
+    }
+
+    /// A compute call's body, its namespace checked.
+    fn compute<T: DeserializeOwned + Scoped>(
+        &self,
+        headers: &HeaderMap,
+        body: &[u8],
+    ) -> Result<T, Refusal> {
+        let w: T = self.decode(headers, body)?;
+        check_namespace(w.namespace()).map_err(Refusal::Invalid)?;
+        Ok(w)
+    }
+}
+
+/// A body naming a namespace.
+trait Scoped {
+    fn namespace(&self) -> &str;
+}
+
+impl Scoped for WireCompute {
+    fn namespace(&self) -> &str {
+        &self.namespace
+    }
+}
+
+impl Scoped for WireResize {
+    fn namespace(&self) -> &str {
+        &self.namespace
     }
 }
 
 type Shared = State<Arc<Inner>>;
 
 async fn ensure_address(State(s): Shared, headers: HeaderMap, body: Bytes) -> Response {
-    let ep = match s.decode(&headers, &body).and_then(|w| s.endpoint(w)) {
-        Ok(ep) => ep,
+    let (ns, ep) = match s.decode(&headers, &body).and_then(|w| s.endpoint(w)) {
+        Ok(v) => v,
         Err(refused) => return refused.into_response(),
     };
-    answer(s.runtime.ensure_address(&ep).await)
+    answer(s.runtime.ensure_address(&ns, &ep).await)
 }
 
 async fn remove_address(State(s): Shared, headers: HeaderMap, body: Bytes) -> Response {
-    let ep = match s.decode(&headers, &body).and_then(|w| s.endpoint(w)) {
-        Ok(ep) => ep,
+    let (ns, ep) = match s.decode(&headers, &body).and_then(|w| s.endpoint(w)) {
+        Ok(v) => v,
         Err(refused) => return refused.into_response(),
     };
-    answer(s.runtime.remove_address(&ep).await)
+    answer(s.runtime.remove_address(&ns, &ep).await)
 }
 
 async fn start(State(s): Shared, headers: HeaderMap, body: Bytes) -> Response {
@@ -359,35 +393,35 @@ async fn start(State(s): Shared, headers: HeaderMap, body: Bytes) -> Response {
 }
 
 async fn bind_address(State(s): Shared, headers: HeaderMap, body: Bytes) -> Response {
-    let (ep, handle) = match s
+    let ((ns, ep), handle) = match s
         .decode::<WireBind>(&headers, &body)
         .and_then(|w| Ok((s.endpoint(w.endpoint)?, w.handle)))
     {
         Ok(v) => v,
         Err(refused) => return refused.into_response(),
     };
-    answer(s.runtime.bind_address(&ep, &handle).await)
+    answer(s.runtime.bind_address(&ns, &ep, &handle).await)
 }
 
 async fn stop(State(s): Shared, headers: HeaderMap, body: Bytes) -> Response {
-    let w = match s.decode::<WireCompute>(&headers, &body) {
+    let w = match s.compute::<WireCompute>(&headers, &body) {
         Ok(w) => w,
         Err(refused) => return refused.into_response(),
     };
     tracing::info!(compute = %w.compute_id, "compute runner: stop");
-    answer(s.runtime.stop(&w.compute_id).await)
+    answer(s.runtime.stop(&w.namespace, &w.compute_id).await)
 }
 
 async fn status(State(s): Shared, headers: HeaderMap, body: Bytes) -> Response {
-    let w = match s.decode::<WireCompute>(&headers, &body) {
+    let w = match s.compute::<WireCompute>(&headers, &body) {
         Ok(w) => w,
         Err(refused) => return refused.into_response(),
     };
-    answer(s.runtime.status(&w.compute_id).await)
+    answer(s.runtime.status(&w.namespace, &w.compute_id).await)
 }
 
 async fn resize(State(s): Shared, headers: HeaderMap, body: Bytes) -> Response {
-    let w = match s.decode::<WireResize>(&headers, &body) {
+    let w = match s.compute::<WireResize>(&headers, &body) {
         Ok(w) => w,
         Err(refused) => return refused.into_response(),
     };
@@ -397,7 +431,7 @@ async fn resize(State(s): Shared, headers: HeaderMap, body: Bytes) -> Response {
             w.cu.0
         )));
     }
-    answer(s.runtime.resize(&w.compute_id, w.cu).await)
+    answer(s.runtime.resize(&w.namespace, &w.compute_id, w.cu).await)
 }
 
 async fn health() -> &'static str {

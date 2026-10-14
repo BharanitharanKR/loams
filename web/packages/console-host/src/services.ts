@@ -22,6 +22,7 @@ import type {
 import type { EnvironmentRef, SlotRegistry } from '@loams/slots';
 import type { ComponentType } from 'react';
 import type { ActionRegistry } from './actions.js';
+import type { AgentdRpcServices, AgentdService } from './agentd.js';
 import type { ModeService } from './mode.js';
 
 /** What differs between the shells the console runs in (today: the browser). */
@@ -154,7 +155,7 @@ export interface RpcServices {
   'rpc.audit': Client<typeof admin.AuditService>;
 }
 
-export interface Services extends RpcServices {
+export interface Services extends RpcServices, AgentdRpcServices {
   platform: PlatformService;
   transport: Transport;
   flags: FlagsService;
@@ -165,6 +166,14 @@ export interface Services extends RpcServices {
   actions: ActionRegistry;
   /** Console or Studio (§53 §4.2); the host provides it. */
   mode: ModeService;
+  /**
+   * loams-agentd (§53 §6.2, SD1 Task 6; see agentd.ts): `agentd` always, from
+   * `@loams/plugin-rpc`; `agentd.transport` and `rpc.agentd.*` while a daemon is
+   * reachable; `agentd.endpoint` from the platform, for `@loams/plugin-rpc` only.
+   */
+  agentd: AgentdService;
+  'agentd.transport': Transport;
+  'agentd.endpoint': AgentdService;
 }
 
 export type ServiceName = keyof Services;

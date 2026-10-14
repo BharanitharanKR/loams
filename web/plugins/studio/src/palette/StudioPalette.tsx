@@ -14,6 +14,7 @@
 // through `StudioPaletteSource` (Task 6 fills it); projects through `useProjects`.
 
 import type { RouterService } from '@loams/console-host';
+import { AgentdScope } from '@loams/console-host/query';
 import type { PaletteCommand, SlotProps } from '@loams/slots';
 import {
   buildFileItems,
@@ -43,7 +44,7 @@ import type { StudioPaletteSource } from './source.js';
 
 /** The Studio commands the palette offers when something handles them. */
 const PALETTE_COMMANDS: readonly KeybindingCommand[] = STUDIO_KEYBINDING_COMMANDS.filter(
-  (c) => c !== 'navigation.back' && c !== 'navigation.forward',
+  (c) => c !== 'navigation.back' && c !== 'navigation.forward' && !c.startsWith('thread.jump.'),
 );
 
 const COMMAND_TITLES: Partial<Record<KeybindingCommand, string>> = {
@@ -55,6 +56,8 @@ const COMMAND_TITLES: Partial<Record<KeybindingCommand, string>> = {
   'diff.toggle': 'Show the diff',
   'files.toggle': 'Show the files',
   'preview.toggle': 'Show the preview',
+  'thread.previous': 'Previous thread',
+  'thread.next': 'Next thread',
 };
 
 function toCommand(item: StudioPaletteItem, keys: StudioKeys, threadOpen: boolean): PaletteCommand {
@@ -82,7 +85,7 @@ function toCommand(item: StudioPaletteItem, keys: StudioKeys, threadOpen: boolea
   };
 }
 
-export function StudioPalette({
+function Palette({
   query,
   publish,
   agentd,
@@ -264,4 +267,13 @@ export function StudioPalette({
   const commands = items.map((item) => toCommand(item, keys, threadId !== undefined));
   useEffect(() => publish(commands));
   return null;
+}
+
+/** Studio's palette, reading projects over `agentd`'s transport (SD1 Task 6). */
+export function StudioPalette(props: Parameters<typeof Palette>[0]) {
+  return (
+    <AgentdScope agentd={props.agentd}>
+      <Palette {...props} />
+    </AgentdScope>
+  );
 }
