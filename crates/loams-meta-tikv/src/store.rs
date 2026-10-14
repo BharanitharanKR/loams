@@ -117,6 +117,14 @@ impl MetaStore for TikvMeta {
         self.ensure_graph_stream_impl(namespace, graph).await
     }
 
+    async fn ensure_system_stream(
+        &self,
+        namespace: NamespaceId,
+        name: &str,
+    ) -> MetaResult<StreamId> {
+        self.ensure_system_stream_impl(namespace, name).await
+    }
+
     async fn drop_graph_stream(
         &self,
         namespace: NamespaceId,

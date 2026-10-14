@@ -372,6 +372,24 @@ pub fn implicit_name(collection: &str, id: CollectionId) -> String {
 /// The prefix of a Loams Graph graph's implicit stream (GR1 Task 12).
 pub const GRAPH_STREAM_PREFIX: &str = "_graph.";
 
+/// The namespace stream Loams Git mirrors every committed repository transaction into (GT1 Task
+/// 15, design §36 §4.8): reserved, created only by
+/// [`ensure_system_stream`](super::MetaStore::ensure_system_stream), keyed by repository id.
+pub const GIT_STREAM: &str = "_git";
+
+/// The reserved system streams a namespace may hold, with their partition counts: each is
+/// created (class `Standard`, no retention) only by
+/// [`ensure_system_stream`](super::MetaStore::ensure_system_stream).
+pub const SYSTEM_STREAMS: &[(&str, u32)] = &[(GIT_STREAM, 8)];
+
+/// The partitions of system stream `name`, or `None` when `name` is not one.
+pub fn system_stream_partitions(name: &str) -> Option<u32> {
+    SYSTEM_STREAMS
+        .iter()
+        .find(|(reserved, _)| *reserved == name)
+        .map(|(_, partitions)| *partitions)
+}
+
 /// The name of Loams Graph graph `graph`'s implicit stream: `_graph.<gr_id>`
 /// (GR1 Task 12). Reserved: only
 /// [`ensure_graph_stream`](super::MetaStore::ensure_graph_stream) creates it.

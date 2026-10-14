@@ -510,3 +510,101 @@ async fn forwarded_commit_route_commits_here() {
     .await;
     assert!(refs.to_string().contains("refs/heads/forwarded"), "{refs}");
 }
+
+/// Every CloudEvent in namespace `ns`'s `_git` stream, over its partitions.
+async fn git_stream(running: &Running, ns: &str) -> Vec<Value> {
+    let mut events = Vec::new();
+    for partition in 0..8 {
+        let response = reqwest::Client::new()
+            .get(format!(
+                "{}/v1/namespaces/{ns}/streams/_git/partitions/{partition}/events?offset=0",
+                running.base
+            ))
+            .send()
+            .await
+            .expect("fetch");
+        if !response.status().is_success() {
+            return Vec::new();
+        }
+        let text = response.text().await.expect("body");
+        if let Ok(Value::Array(batch)) = serde_json::from_str::<Value>(&text) {
+            events.extend(batch);
+        }
+    }
+    events
+}
+
+/// Polls `_git` until it holds at least `n` events, for at most 10 s.
+async fn git_stream_at_least(running: &Running, ns: &str, n: usize) -> Vec<Value> {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let events = git_stream(running, ns).await;
+        if events.len() >= n || std::time::Instant::now() > deadline {
+            return events;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}
+
+/// GT1 Task 15: each committed transaction appears once in its namespace's `_git` stream, a
+/// retried commit adds nothing, and no outside producer can write there.
+#[tokio::test]
+async fn each_commit_appears_once_in_git_stream() {
+    let running = Running::start().await;
+    namespace(&running, "acme").await;
+    create(&running, "mirrored", "k-mir").await;
+    for (key, branch) in [("cfg-a", "refs/heads/a"), ("cfg-b", "refs/heads/b")] {
+        let body = json!({
+            "namespace": "acme", "name": "mirrored", "defaultBranch": branch,
+            "updateMask": "defaultBranch", "idempotencyKey": key,
+        });
+        ok(&running, "UpdateRepoConfig", body.clone()).await;
+        // A retry is replayed by the sequencer: no second transaction, no second event.
+        ok(&running, "UpdateRepoConfig", body).await;
+    }
+    git_stream_at_least(&running, "acme", 2).await;
+    // Read again a little later: a duplicate would show up by now.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let events = git_stream(&running, "acme").await;
+    let ids: Vec<&str> = events.iter().filter_map(|e| e["id"].as_str()).collect();
+    assert_eq!(ids, vec!["cfg-a", "cfg-b"], "{events:?}");
+    assert!(
+        events
+            .iter()
+            .all(|e| e["type"] == "io.loams.dev.git.config.v1"),
+        "{events:?}"
+    );
+    // Nobody but the server appends to `_git`.
+    let forged = reqwest::Client::new()
+        .post(format!(
+            "{}/v1/namespaces/acme/streams/_git/events",
+            running.base
+        ))
+        .header("content-type", "application/cloudevents+json")
+        .body(
+            json!({"specversion": "1.0", "id": "x", "source": "/forged", "type": "t"}).to_string(),
+        )
+        .send()
+        .await
+        .expect("post");
+    assert_eq!(forged.status(), reqwest::StatusCode::BAD_REQUEST);
+}
+
+/// GT1 Task 15: a transaction committed with no mirror running (a crash between commit and
+/// mirror; here a second writer on the bucket) reaches `_git` at the next repair pass.
+#[tokio::test]
+async fn repair_fills_a_gap_after_crash() {
+    let running = Running::start_with(|config| {
+        config.git.mirror_repair_every = Duration::from_millis(200);
+    })
+    .await;
+    let ns = namespace(&running, "acme").await;
+    let created = create(&running, "gap", "k-gap").await;
+    let repo_id = created["repo"]["repoId"].as_str().expect("id").to_owned();
+    let writer = second_writer(&running, ns, &repo_id).await;
+    push(&writer, "main", 4, "behind-the-mirror").await;
+    writer.shutdown().await;
+    let events = git_stream_at_least(&running, "acme", 1).await;
+    let ids: Vec<&str> = events.iter().filter_map(|e| e["id"].as_str()).collect();
+    assert_eq!(ids, vec!["behind-the-mirror"], "{events:?}");
+}

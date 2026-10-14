@@ -263,6 +263,18 @@ pub trait MetaStore: Send + Sync + fmt::Debug + 'static {
         graph: &str,
     ) -> MetaResult<StreamId>;
 
+    /// Creates reserved system stream `name` ([`SYSTEM_STREAMS`](crate::meta::SYSTEM_STREAMS):
+    /// `_git`, Loams Git's mirror, GT1 Task 15) in `namespace` with its partition count, class
+    /// `Standard` and no retention, and returns it. Idempotent: an existing stream is returned,
+    /// so a retry after a lost acknowledgement answers the first attempt's stream. Rejected
+    /// with [`ApplyError::NamespaceNotFound`], or [`ApplyError::InvalidArgument`] for a name
+    /// that is not a system stream.
+    async fn ensure_system_stream(
+        &self,
+        namespace: NamespaceId,
+        name: &str,
+    ) -> MetaResult<StreamId>;
+
     /// Drops graph `graph`'s implicit stream (under its reserved or its
     /// legacy name) from `namespace`, while the fence, if given, holds: its
     /// partitions and index entries go, and objects no other entry references

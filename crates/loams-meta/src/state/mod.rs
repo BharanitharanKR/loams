@@ -231,6 +231,9 @@ impl MetaState {
                 fence,
                 now_ms,
             } => self.drop_graph_stream(namespace, &graph, fence, now_ms),
+            Command::EnsureSystemStream { namespace, name } => {
+                self.ensure_system_stream(namespace, &name)
+            }
         }
     }
 

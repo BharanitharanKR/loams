@@ -928,6 +928,23 @@ impl MetaClient {
         }
     }
 
+    /// Creates or finds reserved system stream `name` ([`Command::EnsureSystemStream`], GT1
+    /// Task 15); returns it.
+    pub async fn ensure_system_stream(
+        &self,
+        namespace: NamespaceId,
+        name: &str,
+    ) -> Result<StreamId, MetaError> {
+        let command = Command::EnsureSystemStream {
+            namespace,
+            name: name.to_string(),
+        };
+        match self.write(command).await? {
+            Reply::StreamCreated(id) => Ok(id),
+            other => Err(MetaError::UnexpectedReply(format!("{other:?}"))),
+        }
+    }
+
     /// Drops graph `graph`'s implicit stream while `fence` holds
     /// ([`Command::DropGraphStream`], GR1 Task 12), stamped with the client's
     /// clock; returns it, or `None` if there was none.

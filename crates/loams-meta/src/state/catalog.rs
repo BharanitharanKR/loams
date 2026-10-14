@@ -2,7 +2,7 @@
 
 use loams_common::meta::{
     ApplyError, Fence, MAX_PARTITIONS, Namespace, Retention, Stream, WalClass, graph_stream_name,
-    is_graph_id, legacy_graph_stream_name,
+    is_graph_id, legacy_graph_stream_name, system_stream_partitions,
 };
 use loams_common::{NamespaceId, StreamId};
 
@@ -74,6 +74,31 @@ impl MetaState {
             return Ok(Reply::StreamCreated(id));
         }
         let id = self.insert_stream(namespace, name, 1, WalClass::Standard, Retention::default());
+        Ok(Reply::StreamCreated(id))
+    }
+
+    /// Reserved system stream `name` (GT1 Task 15): found, or created with its partitions.
+    pub(super) fn ensure_system_stream(
+        &mut self,
+        namespace: NamespaceId,
+        name: &str,
+    ) -> Result<Reply, ApplyError> {
+        let partitions = system_stream_partitions(name).ok_or_else(|| {
+            ApplyError::InvalidArgument(format!("{name:?} is not a system stream"))
+        })?;
+        if !self.namespaces.contains_key(&namespace) {
+            return Err(ApplyError::NamespaceNotFound(namespace));
+        }
+        if let Some(&id) = self.stream_names.get(&(namespace, name.to_string())) {
+            return Ok(Reply::StreamCreated(id));
+        }
+        let id = self.insert_stream(
+            namespace,
+            name.to_string(),
+            partitions,
+            WalClass::Standard,
+            Retention::default(),
+        );
         Ok(Reply::StreamCreated(id))
     }
 

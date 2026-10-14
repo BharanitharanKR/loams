@@ -16,7 +16,7 @@ use loams_common::meta::{
     MAX_COLLECTION_NAME_LEN, MAX_KEY_LEN, MAX_NAME_LEN, MAX_PARTITIONS, MetaError, MetaResult,
     NameTarget, Namespace, Pointer, Retention, Stream, TargetRef, WalClass, collection_pk_prefix,
     collection_pointer_key, collection_prefix, graph_stream_name, implicit_name, is_graph_id,
-    legacy_graph_stream_name, link_pointer_key,
+    legacy_graph_stream_name, link_pointer_key, system_stream_partitions,
 };
 use loams_common::schema::{CollectionSchema, SchemaError};
 use loams_common::{CollectionId, NamespaceId, StreamId};
@@ -383,6 +383,48 @@ impl TikvMeta {
                         namespace: ns,
                         name,
                         partitions: 1,
+                        class: WalClass::Standard,
+                        retention: Retention::default(),
+                    },
+                )
+                .await?;
+                Ok(Ok(id))
+            })
+        })
+        .await
+    }
+
+    /// Reserved system stream `name` (GT1 Task 15; as `loams-meta/src/state/catalog.rs`):
+    /// found, or created with its partitions.
+    pub(crate) async fn ensure_system_stream_impl(
+        &self,
+        ns: NamespaceId,
+        name: &str,
+    ) -> MetaResult<StreamId> {
+        let Some(partitions) = system_stream_partitions(name) else {
+            return Err(MetaError::Rejected(ApplyError::InvalidArgument(format!(
+                "{name:?} is not a system stream"
+            ))));
+        };
+        let id = StreamId(self.next_id(IdKind::Stream).await?);
+        let name = name.to_string();
+        self.write_plain("meta.ensure_system_stream", move |txn| {
+            let name = name.clone();
+            Box::pin(async move {
+                if !namespace_exists(txn, ns).await? {
+                    return Ok(Err(ApplyError::NamespaceNotFound(ns)));
+                }
+                let name_key = keys::stream_name(ns, &name);
+                if let Some(existing) = load_id(txn, "stream name", &name_key).await? {
+                    return Ok(Ok(StreamId(existing)));
+                }
+                put_stream(
+                    txn,
+                    &Stream {
+                        id,
+                        namespace: ns,
+                        name,
+                        partitions,
                         class: WalClass::Standard,
                         retention: Retention::default(),
                     },

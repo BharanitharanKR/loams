@@ -199,6 +199,14 @@ impl MetaStore for MetaClient {
         MetaClient::ensure_graph_stream(self, namespace, graph).await
     }
 
+    async fn ensure_system_stream(
+        &self,
+        namespace: NamespaceId,
+        name: &str,
+    ) -> MetaResult<StreamId> {
+        MetaClient::ensure_system_stream(self, namespace, name).await
+    }
+
     async fn drop_graph_stream(
         &self,
         namespace: NamespaceId,

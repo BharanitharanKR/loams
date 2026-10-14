@@ -33,6 +33,9 @@ pub mod git_internal;
 // Git tokens, the git listener and main-port grants (GT1 Task 16).
 #[cfg(feature = "git")]
 pub mod git_auth;
+// The `_git` mirror on the server (GT1 Task 15).
+#[cfg(feature = "git")]
+pub mod git_events;
 pub(crate) mod graph;
 pub mod hot;
 pub mod house_proxy;

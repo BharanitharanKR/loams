@@ -314,6 +314,9 @@ pub struct GitConfig {
     /// The git token file (`--git-tokens`): SHA-256 hashes and their grants. Needed with
     /// `listen`.
     pub tokens: Option<PathBuf>,
+    /// How often the `_git` mirror is repaired: whatever a crash left unmirrored is published
+    /// (GT1 Task 15; default 1 h).
+    pub mirror_repair_every: Duration,
 }
 
 #[cfg(feature = "git")]
@@ -326,6 +329,7 @@ impl Default for GitConfig {
             purge_grace: loams_git::limits::GC_GRACE,
             listen: None,
             tokens: None,
+            mirror_repair_every: Duration::from_secs(3600),
         }
     }
 }
@@ -504,9 +508,14 @@ impl ServerConfig {
         #[cfg(feature = "graph")]
         self.validate_graph()?;
         #[cfg(feature = "git")]
-        if self.git.purge_every.is_zero() || self.git.watch_heartbeat.is_zero() {
+        if self.git.purge_every.is_zero()
+            || self.git.watch_heartbeat.is_zero()
+            || self.git.mirror_repair_every.is_zero()
+        {
             return Err(ServerError::Config(
-                "git.purge_every and git.watch_heartbeat must be greater than zero".to_string(),
+                "git.purge_every, git.watch_heartbeat and git.mirror_repair_every must be greater \
+                 than zero"
+                    .to_string(),
             ));
         }
         #[cfg(feature = "git")]
@@ -1451,6 +1460,8 @@ struct GitRuntimeHandle {
     purge: JoinHandle<()>,
     /// The git listener (GT1 Task 16): its address and its serving task.
     listener: Option<(SocketAddr, JoinHandle<()>)>,
+    /// The `_git` repair loop (GT1 Task 15).
+    repair: (CancellationToken, JoinHandle<()>),
 }
 
 #[cfg(feature = "git")]
@@ -1462,6 +1473,7 @@ impl GitRuntimeHandle {
         config: &GitConfig,
         meta: Arc<dyn MetaStore>,
         store: Store,
+        sink: Arc<api::git_events::StreamSink>,
         cluster: Option<loams_git::Cluster>,
         listener: Option<(
             tokio::net::TcpListener,
@@ -1472,8 +1484,28 @@ impl GitRuntimeHandle {
         let meta_for_listener = meta.clone();
         let clock: Arc<dyn loams_git::Clock> = Arc::new(loams_git::SystemClock);
         let sequencers = match cluster {
-            Some(cluster) => loams_git::RepoSequencers::clustered(store, clock, cluster),
-            None => loams_git::RepoSequencers::new(store, clock),
+            Some(cluster) => loams_git::RepoSequencers::clustered(store.clone(), clock, cluster),
+            None => loams_git::RepoSequencers::new(store.clone(), clock),
+        }
+        .with_mirror(sink.clone());
+        // The `_git` repair (GT1 Task 15): every `mirror_repair_every`, what a crash left
+        // unmirrored is published; the stream's dedup ledger drops any repeat.
+        let repair = {
+            let (meta, store, every) = (meta.clone(), store.clone(), config.mirror_repair_every);
+            let stop = CancellationToken::new();
+            let task_stop = stop.clone();
+            let task = tokio::spawn(async move {
+                let mut tick = tokio::time::interval(every);
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                loop {
+                    tokio::select! {
+                        () = task_stop.cancelled() => return,
+                        _ = tick.tick() => {}
+                    }
+                    api::git_events::repair_all(meta.as_ref(), &store, sink.as_ref()).await;
+                }
+            });
+            (stop, task)
         };
         let runtime = Arc::new(crate::api::repos::GitRuntime {
             catalog: catalog.clone(),
@@ -1515,6 +1547,7 @@ impl GitRuntimeHandle {
             stop,
             purge,
             listener,
+            repair,
         }
     }
 
@@ -1528,6 +1561,8 @@ impl GitRuntimeHandle {
     async fn stop(self) {
         const PURGE_STOP_WAIT: Duration = Duration::from_secs(5);
         self.stop.cancel();
+        self.repair.0.cancel();
+        self.repair.1.abort();
         let mut purge = self.purge;
         if tokio::time::timeout(PURGE_STOP_WAIT, &mut purge)
             .await
@@ -2773,10 +2808,17 @@ impl Server {
                     config: loams_git::OwnerConfig::default(),
                 }
             });
+            let sink = Arc::new(api::git_events::StreamSink::new(
+                meta_store.clone(),
+                writer.clone(),
+                config.cloudevents,
+                node_id,
+            ));
             GitRuntimeHandle::start(
                 &config.git,
                 meta_store.clone(),
                 store.clone(),
+                sink,
                 cluster,
                 git_listener,
             )

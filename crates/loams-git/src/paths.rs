@@ -95,6 +95,11 @@ impl RepoPaths {
         format!("{}/head", self.root)
     }
 
+    /// The `_git` mirror's cursor (§36 §4.8, GT1 Task 15): best effort, like the hint.
+    pub fn mirror_cursor(&self) -> String {
+        format!("{}/mirror.json", self.root)
+    }
+
     /// Segment `seq` (§36 §4.3).
     pub fn segment(&self, seq: Seq) -> String {
         format!("{}{seq}.lgw", self.wal_prefix())
