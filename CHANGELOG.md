@@ -70,10 +70,27 @@ stack (`docker compose down -v`) rather than reusing preview.1 volumes. Start wi
   nodes (GR1 Task 12, D744), snapshots in the bucket with a graph manifest (Task 13), and
   crash recovery, rehydration and idle eviction (Task 14). Grafeo is built from Loams' fork,
   `ostrium-labs/grafeo` v0.5.43-loams.1.
-- **Loams Live deploys.** `LiveAdminService` with deploy, rollback, index status and function
-  logs (LV1 Task 10), schema validators enforced on writes and checked on deploy (Task 8), and
-  online index changes with a journal fence and a leased backfill (Task 9). It is served on
-  the Live listener, behind the engine's auth.
+- **One console, on Connect.** The React console is retired: every page is now a cordis plugin
+  that talks to the engine over Connect (`loams.auth.v1`, `loams.admin.v1` and each product's
+  service), in the browser at `console.loams.dev` and in Loams Desktop. The engine serves
+  `loams.auth.v1` and `loams.admin.v1` (orgs, projects, agents, keys, audit) on its main port.
+  The hosted console signs you in from your **tailnet login** (the engine asks Tailscale who
+  you are; no password), with a Loams account at auth.loams.dev, or with an API key; a fresh
+  engine opens on setup.
+- **Studio.** A second mode of the same console (the desktop's default): projects, threads in
+  their own git worktrees, run groups and compare, and the Data Studio, on the desktop daemon
+  (`loams-agentd`).
+- **Loams Live deploys, on the main port.** `LiveAdminService` with deploy, rollback, index
+  status and function logs (LV1 Task 10), validators (Task 8) and online index changes
+  (Task 9), now served with `LiveService` on the engine's main port behind its auth and over
+  the tailnet (Task 12); deployments record who made them. The console's Live deployments view
+  reads your engine. Catalog changes ride the commit journal, so a deploy reaches every node at
+  once (Task 11).
+- **Loams Postgres control plane in the stack.** `--profile postgres-control` adds `pg-control`
+  and `pg-runner` (new image `loams-pg-control`): pg-control provisions computes and endpoints,
+  and only `pg-runner`, on an internal network with no ports, holds the container runtime's
+  socket and starts nothing but the pinned compute images (PG2 rulings R-REL.1–6). A
+  Kubernetes compute runtime is in as well (Task 13).
 - **Desktop and CLI on macOS and Windows.** Loams Desktop ships for macOS (arm64, x64) and
   Windows (x64) beside Linux, and the `loams` CLI as macOS arm64/x86_64 tarballs and a Windows
   zip beside the Linux packages. Preview builds are unsigned: macOS is ad-hoc signed, not
@@ -88,6 +105,8 @@ stack (`docker compose down -v`) rather than reusing preview.1 volumes. Start wi
   publishes once it is enabled for the project; see the preview guide for which are live.
 
 ### Changed
+- The engine accepts browser calls only from `https://console.loams.dev` by default
+  (`LOAMS_CORS_ORIGINS` in `deploy/release/.env`; add your own console's origin there).
 - Workspace and image version `0.1.0-preview.2`; `deploy/release` (compose, `.env.example`,
   `byoc/install.sh`) defaults to it.
 - `loams-fabric`'s image runs its workers sealed (`--sandbox pods`) instead of
@@ -105,13 +124,9 @@ stack (`docker compose down -v`) rather than reusing preview.1 volumes. Start wi
 - **The engine does not reach the House yet.** The engine's link to it needs TLS (HS1 Task
   20), so `loams.house.v1` and the console's House page still answer `house_not_configured`.
   Use the House directly over its tailnet URL with any ClickHouse HTTP client.
-- **Loams Postgres:** the control plane can now run computes and endpoints (PG2 Tasks 10 to
-  12: the compose compute runtime, the endpoint lifecycle and idle suspend), but
-  `pg-control` is not in the engine image: it drives Docker from inside the engine, which the
-  self-hosted stack does not allow. The Postgres stack runs as in preview.1.
-- **Loams Live:** the Live listener (and so `LiveAdminService`) is loopback only and not
-  forwarded over the tailnet; the console's Live deployments view stays off. Cross-node
-  pickup can still take up to 60 s.
+- **Loams Postgres:** the compute images are still Neon's last public build until the fork's
+  own builds (NF1 Task 14); the link between pg-control and pg-runner is plaintext on its
+  internal network until PG2 Task 23.
 - **Not in this release** (built on `dev`, held): Loams Git (the bucket WAL, ref log,
   checkpoints, forks, GC and `loams.repos.v1`'s catalog are built, but there is no push or
   fetch path yet: no `git-remote-loams`, shim or Smart HTTP), first-party connectors (CN2:
