@@ -112,12 +112,14 @@ async fn neo4j_older_than_5_19_is_refused() {
 
 // ------------------------------------------------- real Neo4j (gated) --
 
-fn real() -> Option<ConnectorContext> {
+/// A context on its own label: `test` names the test, since the tests of
+/// this binary run at once and each writes nodes `p1`, `p2`, ….
+fn real(test: &str) -> Option<ConnectorContext> {
     if !p2_stack() {
         return None;
     }
     let url = std::env::var("LOAMS_NEO4J_URL").unwrap_or_else(|_| "http://localhost:7474".into());
-    let label = format!("LoamsT{}", std::process::id());
+    let label = format!("LoamsT{}{test}", std::process::id());
     Some(ctx(
         json!({
             "url": url,
@@ -137,7 +139,7 @@ fn person(i: u64) -> Value {
 
 #[tokio::test]
 async fn neo4j_sink_merge_idempotent() {
-    let Some(ctx) = real() else {
+    let Some(ctx) = real("Merge") else {
         return skip(
             "neo4j_sink_merge_idempotent",
             "LOAMS_CONNECTORS_P2_STACK unset",
@@ -168,7 +170,7 @@ async fn neo4j_sink_merge_idempotent() {
 
 #[tokio::test]
 async fn neo4j_source_http_query_api_cursor() {
-    let Some(ctx) = real() else {
+    let Some(ctx) = real("Cursor") else {
         return skip(
             "neo4j_source_http_query_api_cursor",
             "LOAMS_CONNECTORS_P2_STACK unset",

@@ -151,7 +151,10 @@ async fn lambda_invoke_against_floci() {
     }
     let endpoint =
         std::env::var("LOAMS_FLOCI_URL").unwrap_or_else(|_| "http://localhost:4566".into());
-    let secrets = json!({"id": "test", "secret": "test"});
+    // floci takes any key. Not "test": the reply sink refuses a reply that
+    // contains a credential value, and this context's instance is `test`,
+    // which every reply carries.
+    let secrets = json!({"id": "floci-key-id", "secret": "floci-secret-key"});
     let ctx = ctx(json!({}), &secrets);
     let client = loams_connector_protocols::client::RestClient::connect(
         &endpoint,
