@@ -112,6 +112,90 @@
       "note": "the ranking half lives in @loams/ui src/command-rank.ts, which the shell's palette also uses"
     },
     {
+      "path": "src/terminal/TerminalDrawer.tsx",
+      "upstreamPath": "apps/web/src/components/ThreadTerminalDrawer.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "b875e7f684a02d8d68c60c5fec2e923a49a422699c47cbf27f6612c0a5622f07",
+      "localSha256": "0493219f24343bf7b5dec601e2a5126d7426ea765b11a3a35200adf1b947fc4e",
+      "verdict": "adapt",
+      "group": "f",
+      "note": "the libghostty-vt surface (inventory (f), skipped in SD1) replaced by xterm.js 6 with the fit addon (Q818, D920)"
+    },
+    {
+      "path": "src/terminal/closeConfirm.ts",
+      "upstreamPath": "apps/web/src/lib/terminalCloseConfirm.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "6dafe7042e6678fbcfcf383c8fd7891090a784489e412ef33550fd3b7e2374f3",
+      "localSha256": "5f336bf9ddb4841abec1f6cddeba502ed5f1664707e5838a7fba099be825e458",
+      "verdict": "adapt",
+      "group": "f"
+    },
+    {
+      "path": "src/terminal/context.ts",
+      "upstreamPath": "apps/web/src/lib/terminalContext.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "346f6fc03b0a9f8e140e75db9061850fdd589c7c7d1e5171e6f27c12d0510560",
+      "localSha256": "cb6d27fd2b90b1e8bf57f89fefd39d8d20b52df7a1a9ec683d19b25b8006e58e",
+      "verdict": "adapt",
+      "group": "f"
+    },
+    {
+      "path": "src/terminal/labels.ts",
+      "upstreamPath": "packages/shared/src/terminalLabels.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "773bfa7d6b559416d54e3f0e58066f7859a2d4527f77866188b7f2c78acf189d",
+      "localSha256": "ece9483ba1f0c42c268085cfdc3232589f770a5daa3a591e920b23eedae64fe7",
+      "verdict": "adapt",
+      "group": "f"
+    },
+    {
+      "path": "src/terminal/links.ts",
+      "upstreamPath": "apps/web/src/terminal-links.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "adcac8ce81baaac8abff88e3a4dd4bcaeeb561cbd5eff08ff26ce0969cdf8bfb",
+      "localSha256": "2435bef201906764e7aa3acdfbdfed941a6c2ae03e36e72700ab39bf05b71361",
+      "verdict": "as-is",
+      "group": "f"
+    },
+    {
+      "path": "src/terminal/output.ts",
+      "upstreamPath": "packages/client-runtime/src/state/terminalOutput.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "084bd07d61dca49b7945ce98485bbd8cb81449d30cc3f82ff4630630a915bb18",
+      "localSha256": "6a63fee261964deb18b541f98f84a12f9abcbb6a5abd487d0e7fefce4d2b2f80",
+      "verdict": "as-is",
+      "group": "f"
+    },
+    {
+      "path": "src/terminal/session.ts",
+      "upstreamPath": "packages/client-runtime/src/state/terminalSession.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "2f4670aebe17a592beb3dacf9ed4c367810dfab2419a6130bfb4e5f1443fcf7a",
+      "localSha256": "8d4629c432f33419398b4c80d94b08bb7ef33603ab03e42932a9352f2c54971e",
+      "verdict": "adapt",
+      "group": "f",
+      "note": "also apps/web/src/state/terminalSessions.ts (the attach hook), folded into the TerminalSessions registry"
+    },
+    {
+      "path": "src/terminal/uiStore.ts",
+      "upstreamPath": "apps/web/src/terminalUiStateStore.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "0f414786dafec580bbee3b0f66e9a08a236da0a49f4910484d99fb80c6bc48f9",
+      "localSha256": "6a42b0b4e3fcd34b86aa28c3340b4da18d2c6300a309f1e7843670c30742b93e",
+      "verdict": "adapt",
+      "group": "f",
+      "note": "the inventory's verdict is as-is; adapted because loams-agentd chooses terminal ids and the store is keyed by thread id (SD1 ruling T22-2)"
+    },
+    {
+      "path": "src/thread-list/StatusIndicators.tsx",
+      "upstreamPath": "apps/web/src/components/ThreadStatusIndicators.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "36d891d3bc73187b6c7daffb12ae784e71d7f8b852205e2c191641011d85e3ac",
+      "localSha256": "ca3f2ee99900a43b941d99b3819357eff3d492520c56ff09f008c64d76d09f20",
+      "verdict": "adapt",
+      "group": "thread-list"
+    },
+    {
       "path": "src/thread-list/actionMenu.ts",
       "upstreamPath": "apps/web/src/components/threadActionMenu.logic.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
@@ -135,15 +219,6 @@
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "6e56c7e546ba0e3b4179fc75f2c5d0997129fbef2e5bcee0b61decf72002bd3c",
       "localSha256": "d8e34f0985d8aaa7b1787768819b9be6c0ee0c81787e666d34d6de440c14201d",
-      "verdict": "adapt",
-      "group": "thread-list"
-    },
-    {
-      "path": "src/thread-list/StatusIndicators.tsx",
-      "upstreamPath": "apps/web/src/components/ThreadStatusIndicators.tsx",
-      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
-      "upstreamSha256": "36d891d3bc73187b6c7daffb12ae784e71d7f8b852205e2c191641011d85e3ac",
-      "localSha256": "ca3f2ee99900a43b941d99b3819357eff3d492520c56ff09f008c64d76d09f20",
       "verdict": "adapt",
       "group": "thread-list"
     },

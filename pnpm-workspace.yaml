@@ -34,6 +34,11 @@ catalog:
   '@dnd-kit/core': 6.3.1
   '@dnd-kit/sortable': 10.0.0
   '@dnd-kit/utilities': 3.2.2
+  # Studio's terminals (SD1 Task 22; D920, Q818): DD1's xterm.js pin, MIT, 2025-12-22.
+  '@xterm/xterm': 6.0.0
+  '@xterm/addon-fit': 0.11.0
+  # Client-only UI stores (Q819), MIT, 2026-05-28: the version T3 Code uses.
+  zustand: 5.0.14
 
 # Keep Vite+ isolated from the console's ordinary Vite/Vitest toolchain.
 overrides:

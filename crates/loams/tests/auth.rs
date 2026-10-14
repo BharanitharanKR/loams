@@ -377,6 +377,30 @@ async fn oidc_tokens_are_verified_against_the_issuer() {
     assert_eq!(status, 200, "{body}");
     assert_eq!(body["principal"]["kind"], "PRINCIPAL_KIND_USER", "{body}");
     assert_eq!(body["principal"]["email"], "me@example.com", "{body}");
+    // The hosted console in `oidc` mode reads who it is from GetSession
+    // with the same bearer (API2 ruling S6/7.13).
+    let session: Value = reqwest::Client::new()
+        .post(format!(
+            "{}/loams.auth.v1.AuthService/GetSession",
+            running.base
+        ))
+        .header("content-type", "application/json")
+        .header("connect-protocol-version", "1")
+        .header(
+            "authorization",
+            format!("Bearer {}", issuer.token(|_, _| false)),
+        )
+        .body("{}")
+        .send()
+        .await
+        .expect("call")
+        .json()
+        .await
+        .expect("json");
+    assert_eq!(
+        session["session"]["user"]["email"], "me@example.com",
+        "{session}"
+    );
     // The API key still works beside OIDC.
     assert_eq!(call(key).await.0, 200);
     // The second issuer, for the second audience; its key does not verify
@@ -563,6 +587,55 @@ async fn oidc_without_an_allowlist_refuses_to_start() {
         .expect_err("refused")
         .to_string();
     assert!(err.contains("allowlist"), "{err}");
+}
+
+/// The hosted console's tailnet identity check (API2 ruling 10.4): a
+/// credential-less Connect GET of `AuthService/GetSession` from the console's
+/// origin, on the `tailscale serve` target, names the tailnet user; the main
+/// port, which strips the identity headers, answers 401.
+#[tokio::test]
+async fn tailscale_get_session_names_the_tailnet_user() {
+    let auth = AuthConfig {
+        mode: AuthMode::On {
+            api_keys: false,
+            oidc: false,
+            tailscale: true,
+        },
+        tailscale: Some(TailscaleConfig {
+            listen: LOOPBACK0,
+            allowed_users: ["me@example.com".to_owned()].into(),
+        }),
+        ..AuthConfig::off()
+    };
+    let running = Running::start(auth, |_| {}).await;
+    let target = running.server.tailscale_addr().expect("tailscale target");
+    let get_session = |addr: SocketAddr| async move {
+        reqwest::Client::new()
+            .get(format!(
+                "http://{addr}/loams.auth.v1.AuthService/GetSession\
+                 ?connect=v1&encoding=json&message=%7B%7D"
+            ))
+            .header("accept", "application/json")
+            .header("origin", "https://console.loams.dev")
+            .header("tailscale-user-login", "me@example.com")
+            .header("tailscale-user-name", "Me")
+            .send()
+            .await
+            .expect("call")
+    };
+    let response = get_session(target).await;
+    assert_eq!(response.status().as_u16(), 200);
+    assert_eq!(
+        response.headers()["access-control-allow-origin"],
+        "https://console.loams.dev"
+    );
+    let body: Value = response.json().await.unwrap();
+    assert_eq!(body["session"]["user"]["email"], "me@example.com", "{body}");
+    assert_eq!(body["session"]["user"]["name"], "Me", "{body}");
+    assert!(body["session"].get("csrfToken").is_none(), "{body}");
+    let main = get_session(running.server.local_addr()).await;
+    assert_eq!(main.status().as_u16(), 401);
+    running.server.shutdown().await.unwrap();
 }
 
 /// Tailscale mode (owner ruling 2026-10-12): `Tailscale-User-Login` names

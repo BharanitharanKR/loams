@@ -68,6 +68,20 @@ export { FactoryGroup } from './sidebar/Factory.js';
 export { agentdPaletteSource } from './sidebar/paletteSource.js';
 export { StudioSidebar } from './sidebar/Sidebar.js';
 export { BranchPr, DraftCard } from './thread/FactoryLinks.js';
+export {
+  agentdTerminalBackend,
+  fileViewerHref,
+  isStudioShortcut,
+  ThreadTerminalDrawer,
+  terminalSessionsFor,
+} from './thread/TerminalDrawer.js';
+export {
+  addTerminalContext,
+  removeTerminalContext,
+  takeTerminalContexts,
+  terminalContexts,
+  useTerminalContexts,
+} from './thread/terminalContexts.js';
 export { StudioView } from './view.js';
 
 const plugin: PluginModule = {
@@ -103,6 +117,7 @@ const plugin: PluginModule = {
               navigate={navigate}
               hostParam={params.host}
               keys={keys}
+              openExternal={(url) => platform.openExternal(url)}
             />
           ),
         ),

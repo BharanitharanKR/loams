@@ -4,7 +4,7 @@
 //! it gives each endpoint a stable address, starts and stops computes, and
 //! reports what it sees. Two runtimes implement it: [`compose`] (single-node
 //! mode, the desktop, CI, and the preview release's Docker Compose stack)
-//! and Kubernetes (Task 13). [`certs`] issues the computes' TLS
+//! and Kubernetes (`kubernetes`, feature `kubernetes`, Task 13). [`certs`] issues the computes' TLS
 //! certificates from a local CA; [`images`] names the pinned compute image
 //! of each Postgres major (Task 11).
 //!
@@ -28,6 +28,8 @@
 pub mod certs;
 pub mod compose;
 pub mod images;
+#[cfg(feature = "kubernetes")]
+pub mod kubernetes;
 pub mod remote;
 pub mod runner;
 
@@ -182,33 +184,74 @@ pub enum RuntimeError {
 }
 
 /// Where computes run (PG2's shared contract).
+///
+/// Every call but `start` names the Loams namespace of the endpoint or
+/// compute it is about (`ns`): a Kubernetes runtime keeps each namespace's
+/// computes and Services in `loams-pg-<ns>`, and its Role reaches no other
+/// (R13.1; a launch names it in its binding).
 #[async_trait]
 pub trait ComputeRuntime: Send + Sync + 'static {
     /// The endpoint's stable address, allocated on first call and the same
     /// on every later one. An endpoint whose record already names an
     /// address keeps it. Idempotent.
-    async fn ensure_address(&self, ep: &EndpointRec) -> Result<BackendAddr, RuntimeError>;
+    async fn ensure_address(&self, ns: &str, ep: &EndpointRec)
+    -> Result<BackendAddr, RuntimeError>;
 
     /// Gives up the endpoint's address (the endpoint is being deleted).
     /// Idempotent. *(Task 10: not in the contract's first text; Task 11's
     /// `delete_endpoint_stops_and_removes_address` needs it.)*
-    async fn remove_address(&self, ep: &EndpointRec) -> Result<(), RuntimeError>;
+    async fn remove_address(&self, ns: &str, ep: &EndpointRec) -> Result<(), RuntimeError>;
 
     /// Starts the compute. Idempotent by compute id: a second call for a
     /// compute that exists answers its handle and starts nothing.
     async fn start(&self, c: &ComputeLaunch) -> Result<ComputeHandle, RuntimeError>;
 
     /// Points the endpoint's address at the compute.
-    async fn bind_address(&self, ep: &EndpointRec, c: &ComputeHandle) -> Result<(), RuntimeError>;
+    async fn bind_address(
+        &self,
+        ns: &str,
+        ep: &EndpointRec,
+        c: &ComputeHandle,
+    ) -> Result<(), RuntimeError>;
 
     /// Stops and removes the compute. Idempotent: an unknown compute is
     /// not an error.
-    async fn stop(&self, compute_id: &ComputeId) -> Result<(), RuntimeError>;
+    async fn stop(&self, ns: &str, compute_id: &ComputeId) -> Result<(), RuntimeError>;
 
-    async fn status(&self, compute_id: &ComputeId) -> Result<RuntimeStatus, RuntimeError>;
+    async fn status(&self, ns: &str, compute_id: &ComputeId)
+    -> Result<RuntimeStatus, RuntimeError>;
 
     /// Changes a running compute's CPU and memory (§46 §7.4).
-    async fn resize(&self, compute_id: &ComputeId, cu: Cu) -> Result<ResizeOutcome, RuntimeError>;
+    async fn resize(
+        &self,
+        ns: &str,
+        compute_id: &ComputeId,
+        cu: Cu,
+    ) -> Result<ResizeOutcome, RuntimeError>;
+}
+
+/// `compute_ctl`'s arguments in every runtime (R10.3): the data
+/// directory, the binary, its own connection string, the compute's id, the
+/// upcall listener and its two HTTP ports.
+pub(crate) fn compute_ctl_args(compute_id: &str, control_plane_uri: &str) -> Vec<String> {
+    [
+        "--pgdata",
+        "/var/db/postgres/compute",
+        "--pgbin",
+        "/usr/local/bin/postgres",
+        "--connstr",
+        &format!("postgresql://cloud_admin@127.0.0.1:{COMPUTE_PG_PORT}/postgres"),
+        "--compute-id",
+        compute_id,
+        "--control-plane-uri",
+        control_plane_uri,
+        "--external-http-port",
+        &COMPUTE_CTL_PORT.to_string(),
+        "--internal-http-port",
+        &COMPUTE_CTL_INTERNAL_PORT.to_string(),
+    ]
+    .map(str::to_owned)
+    .to_vec()
 }
 
 /// The longest upcall token a runtime takes ([`check_upcall_token`]).

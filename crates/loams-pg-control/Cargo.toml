@@ -107,5 +107,13 @@ required-features = ["tikv"]
 name = "secrets_kube"
 required-features = ["kubernetes"]
 
+[[test]]
+name = "runtime_kube"
+required-features = ["kubernetes"]
+
+[[test]]
+name = "it_kind"
+required-features = ["kubernetes"]
+
 [lints]
 workspace = true
