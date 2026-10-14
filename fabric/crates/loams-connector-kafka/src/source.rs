@@ -34,7 +34,7 @@ use rdkafka::error::RDKafkaErrorCode;
 use rdkafka::{Message, Offset, TopicPartitionList};
 use serde_json::json;
 
-use crate::config::{CALL_TIMEOUT, Connection};
+use crate::config::{CALL_TIMEOUT, Connection, OffsetReset};
 use crate::error::{class_of_code, join_error, kafka_error};
 use crate::record::event_from_message;
 
@@ -242,6 +242,57 @@ impl KafkaSource {
     }
 }
 
+/// Where a split without a checkpoint starts: the group's committed offset,
+/// read with an explicit `OffsetFetch`, else `auto_offset_reset`.
+///
+/// librdkafka's own path (`Offset::Stored` on an assigned partition) asks the
+/// group coordinator once. On a cluster whose `__consumer_offsets` does not
+/// exist yet (the first consumer group it ever sees, as on a fresh broker)
+/// that request fails while the topic is created, and the assignment then
+/// never starts fetching: the split reads nothing, with no error. Here a
+/// transient failure is retried until [`CALL_TIMEOUT`], then reported.
+async fn group_start(
+    consumer: Arc<StreamConsumer>,
+    topic: &str,
+    partition: i32,
+    reset: OffsetReset,
+) -> Result<Offset, ConnectorError> {
+    let mut tpl = TopicPartitionList::new();
+    tpl.add_partition(topic, partition);
+    let deadline = tokio::time::Instant::now() + CALL_TIMEOUT;
+    loop {
+        let (c, t) = (consumer.clone(), tpl.clone());
+        let got = tokio::task::spawn_blocking(move || c.committed_offsets(t, OFFSET_FETCH_TIMEOUT))
+            .await
+            .map_err(|e| join_error("reading the committed offset", e))?;
+        match got {
+            Ok(list) => {
+                let committed = list
+                    .find_partition(topic, partition)
+                    .map_or(Offset::Invalid, |e| e.offset());
+                return Ok(match (committed, reset) {
+                    (Offset::Offset(n), _) if n >= 0 => Offset::Offset(n),
+                    (_, OffsetReset::Earliest) => Offset::Beginning,
+                    (_, OffsetReset::Latest) => Offset::End,
+                    // Nothing committed and no reset: librdkafka reports
+                    // `_AUTO_OFFSET_RESET`, which `next` maps to PositionLost.
+                    (_, OffsetReset::None) => Offset::Stored,
+                });
+            }
+            Err(e) => {
+                let err = kafka_error("reading the consumer group's committed offset", &e);
+                if !err.class.is_transient() || tokio::time::Instant::now() >= deadline {
+                    return Err(err);
+                }
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+        }
+    }
+}
+
+/// One `OffsetFetch` attempt of [`group_start`].
+const OFFSET_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
+
 #[async_trait]
 impl Source for KafkaSource {
     async fn open(&mut self, split: &Split, pos: Option<Position>) -> Result<(), ConnectorError> {
@@ -262,11 +313,23 @@ impl Source for KafkaSource {
                     self.conn.cfg.auto_offset_reset.as_str()
                 },
             );
-        let consumer: StreamConsumer = cfg
-            .create()
-            .map_err(|e| kafka_error("creating the consumer", &e))?;
+        let consumer: Arc<StreamConsumer> = Arc::new(
+            cfg.create()
+                .map_err(|e| kafka_error("creating the consumer", &e))?,
+        );
+        let start = match resume {
+            Some(o) => Offset::Offset(o),
+            None => {
+                group_start(
+                    consumer.clone(),
+                    &topic,
+                    partition,
+                    self.conn.cfg.auto_offset_reset,
+                )
+                .await?
+            }
+        };
         let mut tpl = TopicPartitionList::new();
-        let start = resume.map_or(Offset::Stored, Offset::Offset);
         tpl.add_partition_offset(&topic, partition, start)
             .map_err(|e| kafka_error("assigning the partition", &e))?;
         consumer
@@ -277,7 +340,7 @@ impl Source for KafkaSource {
         self.next_offset = resume;
         self.pending = None;
         self.deferred = None;
-        self.consumer = Some(Arc::new(consumer));
+        self.consumer = Some(consumer);
         Ok(())
     }
 
