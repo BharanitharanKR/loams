@@ -38,6 +38,11 @@ rustls-pemfile = "2.2"
 thiserror.workspace = true
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
 url.workspace = true
+# Previews through the remote listener (SD1 Task 26): an HTTP/1 client to the
+# daemon's loopback preview proxy, with upgrades for a dev server's HMR
+# WebSocket, and ring's CSPRNG for preview tickets. All are already in the lock.
+hyper = { version = "1", features = ["client", "http1"] }
+ring.workspace = true
 
 [build-dependencies]
 connectrpc-build.workspace = true

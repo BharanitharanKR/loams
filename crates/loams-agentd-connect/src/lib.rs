@@ -14,7 +14,8 @@
 //! - [`remote`] serves them to one person's browser console over TLS
 //!   (`serve --remote`, plan SD1 Task 7): an OIDC token for the enrolled
 //!   subject ([`oidc`]), the configured console origins ([`cors`]) and the
-//!   `studio` role ([`roles`]).
+//!   `studio` role ([`roles`]), and the dev-server previews under
+//!   `/preview/` behind the same checks ([`preview`], SD1 Task 26).
 
 /// The generated messages, service traits and clients of `loams.agentd.v1`,
 /// with the `loams.errors.v1` and `loams.options.v1` they use.
@@ -34,6 +35,7 @@ pub mod error;
 pub mod listener;
 pub mod map;
 pub mod oidc;
+pub mod preview;
 pub mod remote;
 pub mod roles;
 pub mod services;

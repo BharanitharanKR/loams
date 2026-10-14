@@ -14,6 +14,10 @@
     "./files": {
       "types": "./src/files/index.ts",
       "default": "./src/files/index.ts"
+    },
+    "./preview": {
+      "types": "./src/preview/index.ts",
+      "default": "./src/preview/index.ts"
     }
   },
   "scripts": {

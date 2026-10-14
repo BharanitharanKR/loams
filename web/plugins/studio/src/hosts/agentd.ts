@@ -17,6 +17,7 @@ import {
 } from '@loams/agentd-client/hosts';
 import type { TokenGetter } from '@loams/agentd-client/transport-remote';
 import type { Reach, StudioAgentd } from '../agentd.js';
+import { remotePreviewOpener, type StudioPreview } from '../preview/access.js';
 
 /** The host controls Settings › Agentd hosts and `?host=` use. */
 export interface StudioHosts {
@@ -43,6 +44,8 @@ export interface HostedAgentdOptions {
   getToken?: (host: AgentdHost) => TokenGetter;
   /** Tests: the transport to a host (default: the web transport, SD1 Task 7). */
   transportFor?: (host: AgentdHost, getToken: TokenGetter) => Transport;
+  /** Tests: `fetch` for the preview ticket (SD1 Task 26). */
+  fetch?: typeof fetch;
 }
 
 /** Studio's agentd in the browser: the selected remote host. */
@@ -116,9 +119,27 @@ export function hostedAgentd(o: HostedAgentdOptions = {}): StudioAgentd & { host
     },
   };
 
+  // Previews through the selected host's `/preview/` (Q806, SD1 Task 26): a ticket per
+  // preview, asked for with the same token as the API.
+  const preview: StudioPreview = {
+    reach: () => ({
+      kind: 'remote',
+      open: (name) => {
+        const host = selected();
+        if (!host) return Promise.reject(new Error('Select an agentd host first.'));
+        return remotePreviewOpener({
+          baseUrl: host.url,
+          getToken: tokenOf(host),
+          ...(o.fetch ? { fetch: o.fetch } : {}),
+        })(name);
+      },
+    }),
+  };
+
   return {
     kind: 'web',
     hosts,
+    preview,
     reach: () => {
       const host = selected();
       if (!host || !hasToken(host.id)) return NO_HOST;

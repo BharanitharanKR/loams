@@ -10,6 +10,7 @@ import { createConnectRouter } from '@connectrpc/connect';
 import { createFetchHandler } from '@connectrpc/connect/protocol';
 import {
   GitService,
+  PreviewService,
   ProjectService,
   RunGroupService,
   SessionStatus,
@@ -136,6 +137,39 @@ function fakeRouter() {
     })
     .service(GitService, {
       listWorktrees: (req) => ({ worktrees: worktrees[req.repoPath] ?? [] }),
+    })
+    .service(PreviewService, {
+      // The Preview tab's dev servers (SD1 Task 26).
+      watchPreviews: (_req, ctx) =>
+        once(
+          {
+            snapshot: {
+              proxyPort: 7331,
+              projectName: 'loams',
+              services: [
+                {
+                  id: 'demo-web',
+                  name: 'web',
+                  hostname: 'laptop.loams.localhost',
+                  port: 5173,
+                  pid: 4242,
+                  projectName: 'loams',
+                  startedAtMs: ago(12),
+                },
+                {
+                  id: 'demo-api',
+                  name: 'api',
+                  hostname: 'laptop.loams-api.localhost',
+                  port: 3000,
+                  pid: 4243,
+                  projectName: 'loams',
+                  startedAtMs: ago(12),
+                },
+              ],
+            },
+          },
+          ctx.signal,
+        ),
     })
     .service(RunGroupService, {
       watchRunGroups: (_req, ctx) =>

@@ -1,120 +1,68 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/preview/PreviewUnreachable.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// the data layer and styling are ported to agentd's WatchPreviews and @loams/ui tokens (SD1 Task 26). Loams' changes are Apache-2.0.
+// @loams/ui buttons and tokens; the "move to the environment's browser" action became "Open in browser"; PreviewFileNotShown dropped (downloads stay in the view's own policy). Loams' changes are Apache-2.0.
+import { Button } from "@loams/ui";
 import { useState } from "react";
 
-import { Button } from "~/components/ui/button";
-
-import { describePreviewError } from "./errorCodeMessages";
+import { describePreviewError } from "./errorMessages";
 
 interface Props {
   url: string;
-  /** Chromium net error code, e.g. -105. */
+  /** Chromium net error code, e.g. -105, or 0 when unknown. */
   code: number;
-  /** Stringified Chromium error, e.g. "ERR_NAME_NOT_RESOLVED". */
+  /** Stringified error, e.g. "ERR_NAME_NOT_RESOLVED". */
   description: string;
   onReload: () => void;
-  /** Reopens the page in a browser that may reach it, such as the environment's. */
-  move?: { readonly label: string; readonly onMove: () => void };
+  /** Opens the address in the person's own browser. */
+  onOpenInBrowser?: () => void;
 }
 
-/**
- * A server tab's address was a file its browser cannot show (a PDF), so the
- * browser downloaded it. Offers the address in the user's own browser, or the
- * file the server already saved.
- */
-export function PreviewFileNotShown({
-  url,
-  fileName,
-  downloadUrl,
-  onOpen,
-}: {
-  url: string;
-  fileName: string;
-  downloadUrl: string | null;
-  onOpen: () => void;
-}) {
-  const host = safeHost(url) ?? url;
-  return (
-    <div className="scrollbar-gutter-both relative flex h-full min-h-0 w-full overflow-y-auto bg-background">
-      <div className="mx-auto flex w-full max-w-xl flex-1 flex-col px-8 py-12 sm:py-16">
-        <ErrorIcon className="mb-6 size-12 text-muted-foreground/70" />
-        <h1 className="mb-3 text-2xl font-semibold leading-tight text-foreground">
-          This file can&rsquo;t be shown here
-        </h1>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          <span className="font-semibold text-foreground">{fileName}</span> from {host} was
-          downloaded instead.
-        </p>
-        <div className="mt-auto flex items-center gap-2 pt-8">
-          <div className="flex-1" />
-          <Button type="button" variant="outline" size="sm" onClick={onOpen}>
-            Open in browser
-          </Button>
-          {downloadUrl ? (
-            <Button type="button" size="sm" render={<a href={downloadUrl} download={fileName} />}>
-              Download
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Theme-aware tailwind port of Chromium's "This site can't be reached" page. */
-export function PreviewUnreachable({ url, code, description, onReload, move }: Props) {
+/** Theme-aware port of Chromium's "This site can't be reached" page. */
+export function PreviewUnreachable({ url, code, description, onReload, onOpenInBrowser }: Props) {
   const [showDetails, setShowDetails] = useState(false);
   const host = safeHost(url) ?? url;
   const friendly = describePreviewError(description);
   const errorLabel = description.length > 0 ? description : `ERR_${Math.abs(code) || "FAILED"}`;
 
   return (
-    <div className="scrollbar-gutter-both relative flex h-full min-h-0 w-full overflow-y-auto bg-background">
-      <div className="mx-auto flex w-full max-w-xl flex-1 flex-col px-8 py-12 sm:py-16">
-        <ErrorIcon className="mb-6 size-12 text-muted-foreground/70" />
-        <h1 className="mb-3 text-2xl font-semibold leading-tight text-foreground">
+    <div
+      className="relative flex h-full min-h-0 w-full overflow-y-auto bg-bg"
+      data-preview-unreachable
+    >
+      <div className="mx-auto flex w-full max-w-xl flex-1 flex-col px-8 py-12">
+        <ErrorIcon className="mb-6 size-12 text-faint" />
+        <h1 className="m-0 mb-3 text-xl font-semibold leading-tight text-ink">
           This site can&rsquo;t be reached
         </h1>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          <span className="font-semibold text-foreground">{host}</span>: {friendly}.
+        <p className="m-0 text-sm leading-relaxed text-muted">
+          <span className="font-semibold text-ink">{host}</span>: {friendly}.
         </p>
 
         {showDetails ? (
-          <div className="mt-6 rounded-lg border border-border bg-muted/40 p-4 text-sm">
-            <p className="mb-2 font-medium text-foreground">Try:</p>
-            <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-              <li>Checking your connection</li>
+          <div className="mt-6 border border-rule bg-surface p-4 text-sm">
+            <p className="m-0 mb-2 font-medium text-ink">Try:</p>
+            <ul className="m-0 list-disc space-y-1 pl-5 text-muted">
               <li>Confirming the dev server is running</li>
-              {move ? (
-                <li>Opening it in the environment&rsquo;s browser, which reaches its network</li>
-              ) : null}
-              <li>Checking the proxy and the firewall</li>
+              <li>Starting it again from the Preview tab or a terminal</li>
+              <li>Checking the port it listens on</li>
             </ul>
           </div>
         ) : null}
 
-        <div className="mt-8 text-xs uppercase tracking-wide text-muted-foreground/70">
-          {errorLabel}
-        </div>
+        <div className="mt-8 text-xs uppercase tracking-wide text-faint">{errorLabel}</div>
 
         <div className="mt-auto flex items-center gap-2 pt-8">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setShowDetails((value) => !value)}
-          >
+          <Button size="sm" variant="quiet" onClick={() => setShowDetails((value) => !value)}>
             {showDetails ? "Hide details" : "Details"}
           </Button>
           <div className="flex-1" />
-          {move ? (
-            <Button type="button" variant="outline" size="sm" onClick={move.onMove}>
-              {move.label}
+          {onOpenInBrowser ? (
+            <Button size="sm" onClick={onOpenInBrowser}>
+              Open in browser
             </Button>
           ) : null}
-          <Button type="button" size="sm" onClick={onReload}>
+          <Button size="sm" variant="primary" onClick={onReload}>
             Reload
           </Button>
         </div>
@@ -131,6 +79,7 @@ function ErrorIcon({ className }: { className?: string }) {
       stroke="currentColor"
       strokeWidth="2.5"
       className={className}
+      aria-hidden
     >
       <path d="M16 12 L48 12 L48 52 L16 52 Z" />
       <path d="M22 22 L42 22 M22 30 L36 30 M22 38 L40 38" strokeLinecap="round" />

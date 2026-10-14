@@ -7679,6 +7679,7 @@ dependencies = [
  "connectrpc-build",
  "futures",
  "http",
+ "hyper",
  "hyper-util",
  "jsonwebtoken",
  "loams-agentd-proto",

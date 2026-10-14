@@ -255,7 +255,7 @@
       "upstreamPath": "apps/web/src/components/preview/previewConstants.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "c66c3cd443c2b660ad0beca0edb0cad90fc53571955cb4c4b05e8bcfd21569ee",
-      "localSha256": "122ebd63e89a6d9e6893dc089a96df55ed92304e49b37edd737774188031f1a1",
+      "localSha256": "dfc892aac81a1eaf2a2b20ff65117c23e74c140fdc321a8001ebfc3daa40dd9c",
       "verdict": "adapt",
       "group": "preview"
     },
@@ -264,16 +264,17 @@
       "upstreamPath": "apps/web/src/components/preview/useDiscoveredLocalServers.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "918b82339dcc3413ebc847b20242db0f51ee0b0ecd29d2ec7f6c5ad17f0aefcd",
-      "localSha256": "c1879c1b75e8b7d648d13f1b266584e11b939aeb74a5cc8410caa1ebf7f8954b",
+      "localSha256": "35e049d1ce1d0995164e83b708b5697c6e079d4970d71d14f144e7a76215a91d",
       "verdict": "adapt",
-      "group": "preview"
+      "group": "preview",
+      "note": "loams-agentd's WatchPreviews snapshot replaces T3's port scanner; parsePreviewUrl keeps the URL bar to this machine"
     },
     {
       "path": "src/preview/errorMessages.ts",
       "upstreamPath": "apps/web/src/components/preview/errorCodeMessages.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "aa31a5ac03b4983c15069816f8d7695b6f1a50959f5ae5ceaf98aec756fcb74b",
-      "localSha256": "4dbec98a0fb6b9e1b600fb78423f5c68227e76496a5b3c71603a492134f604ac",
+      "localSha256": "c0bc82823ddc2a440d8d2d978d6486d7d0409b1bb51d4ff2559868eab3013482",
       "verdict": "adapt",
       "group": "preview"
     },
@@ -282,25 +283,27 @@
       "upstreamPath": "apps/web/src/components/preview/openDiscoveredPort.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "6d4328c015ecda14d3d75514ab29afb8620a20693f1352236ac6c663e8a6c3f5",
-      "localSha256": "6f0a169dc7e83443b103c5e689c20fdfe2977d4ba04d18875917e067f63223f0",
+      "localSha256": "53a229bdd8f62cca4eb0a263aa42ba0954cb7866b8556a277959c8ff65b7f8e9",
       "verdict": "adapt",
-      "group": "preview"
+      "group": "preview",
+      "note": "upstream opened a T3 preview session; here it resolves a server for the desktop's loopback view, the remote listener's /preview/ ticket (Q806) or the ssh port-forward hint"
     },
     {
       "path": "src/preview/PreviewChromeRow.tsx",
       "upstreamPath": "apps/web/src/components/preview/PreviewChromeRow.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "6b8c68ee1aa90f29dc7a7e147b542b02256bdf3b7747324e87ae0c884d4246fb",
-      "localSha256": "3b7345967146c04040ca91e12ed03bbcac9774820336419f70c866e17e555b56",
+      "localSha256": "add379e4695aee1929e3873fcd03493920ac01c9fd0a6cb084874afd68c1d26f",
       "verdict": "adapt",
-      "group": "preview"
+      "group": "preview",
+      "note": "capture, picture-in-picture and annotation dropped with browser streaming (inventory (n): browser/** skipped)"
     },
     {
       "path": "src/preview/PreviewEmptyState.tsx",
       "upstreamPath": "apps/web/src/components/preview/PreviewEmptyState.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "b235a760be4c1d6300a9e7d0f18bc720ac9415f1192907ba70cd15fd83f4e92b",
-      "localSha256": "cb01db46c3af6e0bf141fb7ad37672e32519e86f924b4e696476b131f5b6bbba",
+      "localSha256": "3e82c928cd1e94bbd71f2a3057021ff2257113bcb56df44c1e77e0048090cf9e",
       "verdict": "adapt",
       "group": "preview"
     },
@@ -309,7 +312,7 @@
       "upstreamPath": "apps/web/src/components/preview/PreviewLocalServerCard.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "b28196746f4624d8db592ff7086fd3d60d1a568b820892669903632dcd3c5343",
-      "localSha256": "5dc9100e4b345cd793e8460e18c47cbd77161adac6150a7cd98c6e0f9d2508db",
+      "localSha256": "db2bf555c8aac252fd4c3a7140dc6e9da54b24c0274538cd9b21d01f4152e585",
       "verdict": "adapt",
       "group": "preview"
     },
@@ -318,7 +321,7 @@
       "upstreamPath": "apps/web/src/components/preview/PreviewUnreachable.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "89ac02f5167bc8ac9e70b2360a9399d9d19ff7c20b5fac1cd1a5ba8ab246725b",
-      "localSha256": "6402ca5738e69b39e15602d6fa0f1d751080dc12ce6a79ff009e5573b1985f5c",
+      "localSha256": "f40d0b944ce2aca157da413b77c19998f9d7493b244037150b30e640a5f26090",
       "verdict": "adapt",
       "group": "preview"
     },

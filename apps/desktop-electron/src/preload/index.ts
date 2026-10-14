@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import {
 	CH,
 	type LoamsDesktopApi,
+	PREVIEW_CH,
 	type StackId,
 	type StackState,
 } from "../shared/contracts";
@@ -134,6 +135,14 @@ const api: LoamsDesktopApi = {
 			add: (path) => invoke(CH.agentdAddRepo, path),
 			clone: (url) => invoke(CH.agentdCloneRepo, url),
 		},
+	},
+	preview: {
+		show: (url, rect) => invoke(PREVIEW_CH.show, url, rect),
+		hide: () => invoke(PREVIEW_CH.hide),
+		reload: () => invoke(PREVIEW_CH.reload),
+		back: () => invoke(PREVIEW_CH.back),
+		forward: () => invoke(PREVIEW_CH.forward),
+		onState: (cb) => subscribe(PREVIEW_CH.state, cb),
 	},
 };
 

@@ -1,109 +1,89 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/preview/useDiscoveredLocalServers.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// the data layer and styling are ported to agentd's WatchPreviews and @loams/ui tokens (SD1 Task 26). Loams' changes are Apache-2.0.
-import type { DiscoveredLocalServer } from "@t3tools/contracts";
-import { isLoopbackHost } from "@t3tools/shared/preview";
-import { useMemo } from "react";
+// the server list is loams-agentd's WatchPreviews snapshot (stable *.localhost URLs through its preview proxy) instead of T3's port-scanner state and configured URLs; the hook became pure functions. Loams' changes are Apache-2.0.
 
-import type { EnvironmentId } from "@t3tools/contracts";
-import { resolveDiscoveredServerUrl } from "~/browser/browserTargetResolver";
-import { useDiscoveredPortsState } from "~/portDiscoveryState";
-
-export interface PreviewableServer extends DiscoveredLocalServer {
-  source: "scanner" | "configured";
-  /**
-   * Pre-resolution loopback url. `url` is the resolved navigation target
-   * (volatile on a remote environment); history must key off this instead.
-   */
-  requestedUrl: string;
+/** One dev server as loams-agentd discovered it (`PreviewServer`). */
+export interface DiscoveredServer {
+  id: string;
+  /** The process's role, such as "web" or "api". */
+  name: string;
+  /** `<device>.<service>.localhost`, served by the daemon's preview proxy. */
+  hostname: string;
+  /** The process's own port. */
+  port: number;
+  pid: number;
+  cwd: string;
+  projectName: string;
+  startedAtMs: number;
 }
 
-interface UseDiscoveredLocalServersInput {
-  environmentId: EnvironmentId;
-  configuredUrls?: ReadonlyArray<string> | undefined;
+export interface PreviewableServer extends DiscoveredServer {
+  /** The stable loopback URL through the preview proxy. */
+  url: string;
+  /** `<device>.<service>`: the remote listener's `/preview/<name>/` segment. */
+  previewName: string;
+}
+
+const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+/** `<a>.<b>` for a preview hostname `<a>.<b>.localhost`, else undefined. */
+export function previewNameOf(hostname: string): string | undefined {
+  const labels = hostname.toLowerCase().split(".");
+  if (labels.length !== 3 || labels[2] !== "localhost") return undefined;
+  const [a, b] = labels;
+  return a && b && LABEL.test(a) && LABEL.test(b) ? `${a}.${b}` : undefined;
 }
 
 /**
- * Enrich the environment-level live server snapshot with matching configured
- * URLs and return a stable sorted list.
+ * The servers a snapshot lists, each with its proxy URL, sorted by name and then by
+ * port. A server whose hostname is not the proxy's shape is left out: it could not be
+ * opened through the proxy anyway.
  */
-export function useDiscoveredLocalServers(
-  input: UseDiscoveredLocalServersInput,
-): ReadonlyArray<PreviewableServer> {
-  const scannerState = useDiscoveredPortsState(input.environmentId, input.configuredUrls);
+export function mergeServers(input: {
+  servers: ReadonlyArray<DiscoveredServer>;
+  proxyPort: number;
+}): ReadonlyArray<PreviewableServer> {
+  const live: PreviewableServer[] = [];
+  const seen = new Set<string>();
+  for (const server of input.servers) {
+    const previewName = previewNameOf(server.hostname);
+    if (!previewName || seen.has(previewName)) continue;
+    seen.add(previewName);
+    live.push({
+      ...server,
+      previewName,
+      url: `http://${server.hostname.toLowerCase()}:${input.proxyPort}/`,
+    });
+  }
+  return live.toSorted((a, b) => a.name.localeCompare(b.name) || a.port - b.port);
+}
 
-  return useMemo(
-    () =>
-      mergeServers({
-        scanner: scannerState.servers.map((server) => ({
-          ...server,
-          url: resolveDiscoveredServerUrl(input.environmentId, server.url),
-          requestedUrl: server.url,
-        })),
-        configuredUrls: input.configuredUrls ?? [],
-        configuredUrlProbing: scannerState.configuredUrlProbing,
-      }),
-    [input.environmentId, scannerState, input.configuredUrls],
+/** Whether `host` (no port) names this machine. */
+export function isLoopbackHost(host: string): boolean {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, "");
+  return (
+    h === "localhost" || h.endsWith(".localhost") || h === "::1" || /^127(?:\.\d{1,3}){3}$/.test(h)
   );
 }
 
-export function mergeServers(input: {
-  scanner: ReadonlyArray<DiscoveredLocalServer & { requestedUrl: string }>;
-  configuredUrls: ReadonlyArray<string>;
-  configuredUrlProbing?: boolean;
-}): ReadonlyArray<PreviewableServer> {
-  const configuredByServer = new Map<string, { host: string; port: number; url: string }>();
-
-  for (const url of input.configuredUrls) {
-    const parsed = parseLocalUrl(url);
-    if (!parsed) continue;
-    const key = canonicalKey(parsed.host, parsed.port);
-    if (!configuredByServer.has(key)) configuredByServer.set(key, parsed);
-  }
-
-  const live: PreviewableServer[] = [];
-  for (const server of input.scanner) {
-    const key = canonicalKey(server.host, server.port);
-    const configured = configuredByServer.get(key);
-    live.push({
-      ...server,
-      requestedUrl:
-        configured && input.configuredUrlProbing === false ? configured.url : server.requestedUrl,
-      source: configured ? "configured" : "scanner",
-    });
-  }
-
-  return live.toSorted((a, b) => {
-    const sourceOrder: Record<PreviewableServer["source"], number> = {
-      configured: 0,
-      scanner: 1,
-    };
-    if (sourceOrder[a.source] !== sourceOrder[b.source]) {
-      return sourceOrder[a.source] - sourceOrder[b.source];
-    }
-    return a.port - b.port;
-  });
-}
-
-function canonicalKey(host: string, port: number): string {
-  const normalizedHost = host.toLowerCase();
-  return `${isLoopbackHost(normalizedHost) ? "loopback" : normalizedHost}:${port}`;
-}
-
-function parseLocalUrl(raw: string): { host: string; port: number; url: string } | null {
+/**
+ * The URL bar's input as a loopback http(s) URL, or undefined. A bare `host:port` or
+ * `:port` gets `http://`. Nothing else is opened in the preview: other sites go to the
+ * person's browser.
+ */
+export function parsePreviewUrl(raw: string): string | undefined {
+  const text = raw.trim();
+  if (!text) return undefined;
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text)
+    ? text
+    : `http://${text.startsWith(":") ? `localhost${text}` : text}`;
   try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
-    if (!isLoopbackHost(parsed.hostname)) return null;
-    const port = parsed.port
-      ? Number.parseInt(parsed.port, 10)
-      : parsed.protocol === "http:"
-        ? 80
-        : 443;
-    if (!Number.isFinite(port) || port <= 0) return null;
-    return { host: parsed.hostname, port, url: parsed.href };
+    const url = new URL(withScheme);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+    if (url.username || url.password) return undefined;
+    return isLoopbackHost(url.hostname) ? url.href : undefined;
   } catch {
-    return null;
+    return undefined;
   }
 }

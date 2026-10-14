@@ -11,6 +11,7 @@
 import type { AgentdReach, AgentdService } from '@loams/console-host';
 import type { Repo as RepoMessage } from '@loams/proto/agentd';
 import type { StudioHosts } from './hosts/agentd.js';
+import type { StudioPreview } from './preview/access.js';
 
 /** Whether Studio can talk to a daemon right now. */
 export type Reach = AgentdReach;
@@ -32,11 +33,14 @@ export interface StudioAgentd extends AgentdService {
   hosts?: StudioHosts;
   /** Desktop: the OS folder picker; null when cancelled. */
   pickFolder?(): Promise<string | null>;
+  /** How the Preview tab reaches dev servers (SD1 Task 26); absent: port-forward hint. */
+  preview?: StudioPreview;
 }
 
 export function studioAgentd(
   agentd: AgentdService,
   shell?: { pickFolder(title?: string): Promise<string | null> },
+  preview?: StudioPreview,
 ): StudioAgentd {
   return {
     kind: agentd.kind,
@@ -50,6 +54,7 @@ export function studioAgentd(
     },
     ...(agentd.start && { start: () => agentd.start?.() ?? Promise.resolve() }),
     ...(shell && { pickFolder: () => shell.pickFolder('Add a project folder') }),
+    ...(preview && { preview }),
   };
 }
 

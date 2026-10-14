@@ -1,99 +1,91 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/preview/PreviewEmptyState.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// the data layer and styling are ported to agentd's WatchPreviews and @loams/ui tokens (SD1 Task 26). Loams' changes are Apache-2.0.
-import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
-import { Globe, History, RadioTower } from "lucide-react";
+// the servers come in as props (loams-agentd's WatchPreviews) rather than from the port-scanner hook; the recent-URL list is dropped; a "start the dev server" action is added; @loams/ui's Empty and tokens. Loams' changes are Apache-2.0.
+import { Button, Empty } from "@loams/ui";
+import { Play, RadioTower } from "lucide-react";
+import type { ReactNode } from "react";
 
-import type { BrowserHistoryEntry } from "~/browserHistoryStore";
-import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "~/components/ui/empty";
-import { DiscoveryList } from "../ui/discovery-list";
-
+import type { PreviewableServer } from "./discoveredServers";
 import { PreviewLocalServerCard } from "./PreviewLocalServerCard";
-import { PreviewRecentUrlCard } from "./PreviewRecentUrlCard";
-import { useDiscoveredLocalServers } from "./useDiscoveredLocalServers";
+
+/** A project action that starts a dev server (agentd's `RunProjectAction`). */
+export interface PreviewStartAction {
+  id: string;
+  name: string;
+}
 
 interface Props {
-  threadRef: ScopedThreadRef;
-  environmentId: EnvironmentId;
-  configuredUrls?: ReadonlyArray<string> | undefined;
-  recentEntries: ReadonlyArray<BrowserHistoryEntry>;
-  onRemoveRecent: (url: string) => void;
-  onOpenUrl: (url: string) => void;
+  servers: ReadonlyArray<PreviewableServer>;
+  onOpenServer: (server: PreviewableServer) => void;
+  /** The project's actions that can start a dev server; absent or empty hides the button. */
+  startActions?: ReadonlyArray<PreviewStartAction>;
+  onStart?: (action: PreviewStartAction) => void;
+  /** An action is starting. */
+  starting?: boolean;
+  /** Shown under the list, such as the web's port-forward hint. */
+  footer?: ReactNode;
 }
 
 export function PreviewEmptyState({
-  threadRef,
-  environmentId,
-  configuredUrls,
-  recentEntries,
-  onRemoveRecent,
-  onOpenUrl,
+  servers,
+  onOpenServer,
+  startActions,
+  onStart,
+  starting,
+  footer,
 }: Props) {
-  const servers = useDiscoveredLocalServers({
-    environmentId,
-    configuredUrls,
-  });
-  const recents = recentEntries.filter((entry) => URL.canParse(entry.url)).slice(0, 8);
+  const actions = onStart ? (startActions ?? []) : [];
+  const start =
+    actions.length > 0 ? (
+      <div className="flex flex-wrap gap-2">
+        {actions.map((action) => (
+          <Button
+            key={action.id}
+            size="sm"
+            variant={servers.length === 0 ? "primary" : "secondary"}
+            disabled={starting}
+            onClick={() => onStart?.(action)}
+          >
+            <Play aria-hidden className="size-3.5" /> {action.name}
+          </Button>
+        ))}
+      </div>
+    ) : undefined;
 
-  if (servers.length === 0 && recents.length === 0) {
+  if (servers.length === 0) {
     return (
-      <Empty>
-        <EmptyMedia variant="icon">
-          <Globe className="size-4.5 text-muted-foreground" />
-        </EmptyMedia>
-        <EmptyTitle>No preview yet</EmptyTitle>
-        <EmptyDescription>
-          Type a URL above, or run a dev script. Browser-ready localhost servers will show up here
-          automatically.
-        </EmptyDescription>
-      </Empty>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto py-4" data-preview-empty>
+        <Empty title="No preview yet" seed={26} actions={start}>
+          Type a localhost URL above, or run the project&rsquo;s dev server. Servers the daemon
+          finds under this project show up here.
+        </Empty>
+        {footer}
+      </div>
     );
   }
 
   return (
-    <div className="scrollbar-gutter-both flex h-full min-h-0 overflow-y-auto px-5 py-8">
-      <div className="mx-auto flex w-full max-w-xl flex-col gap-6">
-        {recents.length > 0 ? (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <History className="size-4 shrink-0" />
-              <h2 className="font-medium">Recently used</h2>
-            </div>
-            <DiscoveryList>
-              {recents.map((entry) => (
-                <PreviewRecentUrlCard
-                  key={entry.url}
-                  threadRef={threadRef}
-                  entry={entry}
-                  onOpen={() => onOpenUrl(entry.url)}
-                  onRemove={() => onRemoveRecent(entry.url)}
-                />
-              ))}
-            </DiscoveryList>
-          </div>
-        ) : null}
-        {servers.length > 0 ? (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <RadioTower className="size-4 shrink-0" />
-              <h2 className="font-medium">Local servers</h2>
-            </div>
-            <DiscoveryList>
-              {servers.map((server) => (
-                <PreviewLocalServerCard
-                  key={`${server.host}:${server.port}`}
-                  threadRef={threadRef}
-                  server={server}
-                  onOpen={() => onOpenUrl(server.requestedUrl)}
-                />
-              ))}
-            </DiscoveryList>
-            <p className="px-1 text-xs text-muted-foreground">
-              Select a live local server to open it in this browser tab.
-            </p>
-          </div>
-        ) : null}
+    <div className="flex min-h-0 flex-1 overflow-y-auto py-4" data-preview-servers>
+      <div className="mx-auto flex w-full max-w-xl flex-col gap-3">
+        <div className="flex items-center gap-2 text-sm text-muted">
+          <RadioTower aria-hidden className="size-4 shrink-0" />
+          <h2 className="m-0 text-sm font-medium">Local servers</h2>
+        </div>
+        <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+          {servers.map((server) => (
+            <PreviewLocalServerCard
+              key={server.id}
+              server={server}
+              onOpen={() => onOpenServer(server)}
+            />
+          ))}
+        </ul>
+        <p className="m-0 px-1 text-xs text-muted">
+          Select a running server to open it in this preview.
+        </p>
+        {start}
+        {footer}
       </div>
     </div>
   );

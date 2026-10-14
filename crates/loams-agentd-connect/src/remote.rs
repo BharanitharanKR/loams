@@ -18,6 +18,10 @@
 //!    is a 403 `forbidden_role`; a path that is not a `loams.agentd.v1`
 //!    method is a 404. The ndjson wire is never served here.
 //!
+//! `/preview/…` (Q806, SD1 Task 26) takes the same origin and token checks in
+//! [`crate::preview`], which also admits the listener's own origin there and
+//! a preview ticket in place of the bearer token.
+//!
 //! Answers to an allowed origin carry its CORS headers, refusals included,
 //! so the console can read them.
 
@@ -58,6 +62,9 @@ pub struct RemoteOptions {
     /// Added after each refused token (the ndjson listener's
     /// `Limits::auth_failure_delay`).
     pub auth_failure_delay: Duration,
+    /// The daemon's loopback preview proxy (`PREVIEW_PROXY_PORT`), served
+    /// under `/preview/` (Q806); `None` turns previews off.
+    pub preview_port: Option<u16>,
 }
 
 /// Why the remote listener cannot start.
@@ -120,6 +127,7 @@ pub struct RemoteGuard {
     delay: Duration,
     /// Serializes refused tokens, so a failure's delay holds back the next.
     gate: Mutex<()>,
+    previews: crate::preview::Previews,
 }
 
 impl RemoteGuard {
@@ -132,13 +140,31 @@ impl RemoteGuard {
         oidc: OidcOptions,
         cors: CorsPolicy,
         delay: Duration,
+        preview_port: Option<u16>,
     ) -> Result<Arc<Self>, RemoteError> {
         Ok(Arc::new(Self {
             verifier: Verifier::new(oidc).map_err(RemoteError::Config)?,
+            previews: crate::preview::Previews::new(preview_port, &cors),
             cors,
             delay,
             gate: Mutex::new(()),
         }))
+    }
+
+    /// The configured console origins.
+    pub fn cors(&self) -> &CorsPolicy {
+        &self.cors
+    }
+
+    /// The preview proxy and its tickets.
+    pub fn previews(&self) -> &crate::preview::Previews {
+        &self.previews
+    }
+
+    /// The refused-credential delay, one failure at a time.
+    pub async fn fail_delay(&self) {
+        let _gate = self.gate.lock().await;
+        tokio::time::sleep(self.delay).await;
     }
 }
 
@@ -158,7 +184,12 @@ impl RemoteListener {
     ///
     /// Invalid OIDC options, or the address cannot be bound.
     pub async fn bind(agentd: Agentd, options: RemoteOptions) -> Result<Self, RemoteError> {
-        let guard = RemoteGuard::new(options.oidc, options.cors, options.auth_failure_delay)?;
+        let guard = RemoteGuard::new(
+            options.oidc,
+            options.cors,
+            options.auth_failure_delay,
+            options.preview_port,
+        )?;
         let listener = tokio::net::TcpListener::bind(options.listen)
             .await
             .map_err(|source| RemoteError::Bind {
@@ -235,7 +266,7 @@ async fn accept_loop(
                         }
                     };
                     let served = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new())
-                        .serve_connection(TokioIo::new(tls), service)
+                        .serve_connection_with_upgrades(TokioIo::new(tls), service)
                         .await;
                     if let Err(error) = served {
                         tracing::debug!(%error, peer_port = peer.port(), "remote: connection ended");
@@ -255,7 +286,7 @@ pub fn app(agentd: Agentd, guard: Arc<RemoteGuard>) -> axum::Router {
 }
 
 /// A Connect error body with the HTTP status of its code.
-fn refuse(code: ErrorCode, reason: Option<&str>, message: &str) -> Response {
+pub(crate) fn refuse(code: ErrorCode, reason: Option<&str>, message: &str) -> Response {
     let error = match reason {
         Some(reason) => crate::error::refuse(code, reason, message),
         None => ConnectError::new(code, message),
@@ -280,6 +311,9 @@ fn bearer(value: &[u8]) -> Option<&str> {
 }
 
 async fn check(State(guard): State<Arc<RemoteGuard>>, request: Request, next: Next) -> Response {
+    if studio_access(request.uri().path()) == Access::Preview {
+        return crate::preview::serve(&guard, request).await;
+    }
     let origin = request.headers().get(header::ORIGIN).cloned();
     if let Some(origin) = &origin
         && !guard.cors.allows(origin)
@@ -308,6 +342,40 @@ async fn check(State(guard): State<Arc<RemoteGuard>>, request: Request, next: Ne
 #[derive(Debug, Clone, Copy)]
 struct Preflight;
 
+/// Step 3: the bearer token, refused after the failure delay; `Ok` is the
+/// token's `exp` (seconds since the epoch).
+pub(crate) async fn authenticate(
+    guard: &RemoteGuard,
+    headers: &http::HeaderMap,
+) -> Result<u64, Response> {
+    let mut authorizations = headers.get_all(header::AUTHORIZATION).iter();
+    let presented = match (authorizations.next(), authorizations.next()) {
+        (Some(value), None) => bearer(value.as_bytes()),
+        _ => None,
+    };
+    let verdict = match presented {
+        Some(token) => guard.verifier.verify_until(token).await,
+        None => Err(Rejection {
+            code: ErrorCode::Unauthenticated,
+            reason: Some("unauthenticated"),
+            message: "a bearer access token is required".to_owned(),
+        }),
+    };
+    match verdict {
+        Ok(exp) => Ok(exp),
+        Err(rejection) => {
+            if rejection.code != ErrorCode::Unavailable {
+                tracing::warn!(
+                    code = rejection.code.as_str(),
+                    "remote: refused a request without a valid token"
+                );
+                guard.fail_delay().await;
+            }
+            Err(refuse(rejection.code, rejection.reason, &rejection.message))
+        }
+    }
+}
+
 async fn guarded(guard: &RemoteGuard, has_origin: bool, request: Request, next: Next) -> Response {
     if request.method() == Method::OPTIONS {
         let asks = request
@@ -327,30 +395,8 @@ async fn guarded(guard: &RemoteGuard, has_origin: bool, request: Request, next: 
         return response;
     }
 
-    let headers = request.headers();
-    let mut authorizations = headers.get_all(header::AUTHORIZATION).iter();
-    let presented = match (authorizations.next(), authorizations.next()) {
-        (Some(value), None) => bearer(value.as_bytes()),
-        _ => None,
-    };
-    let verdict = match presented {
-        Some(token) => guard.verifier.verify(token).await,
-        None => Err(Rejection {
-            code: ErrorCode::Unauthenticated,
-            reason: Some("unauthenticated"),
-            message: "a bearer access token is required".to_owned(),
-        }),
-    };
-    if let Err(rejection) = verdict {
-        if rejection.code != ErrorCode::Unavailable {
-            let _gate = guard.gate.lock().await;
-            tracing::warn!(
-                code = rejection.code.as_str(),
-                "remote: refused a request without a valid token"
-            );
-            tokio::time::sleep(guard.delay).await;
-        }
-        return refuse(rejection.code, rejection.reason, &rejection.message);
+    if let Err(refusal) = authenticate(guard, request.headers()).await {
+        return refusal;
     }
 
     match studio_access(request.uri().path()) {
@@ -360,7 +406,7 @@ async fn guarded(guard: &RemoteGuard, has_origin: bool, request: Request, next: 
             Some("forbidden_role"),
             "the studio role may not call this method",
         ),
-        Access::Unknown => refuse(
+        Access::Unknown | Access::Preview => refuse(
             ErrorCode::Unimplemented,
             Some("unknown_method"),
             "not a loams.agentd.v1 method",

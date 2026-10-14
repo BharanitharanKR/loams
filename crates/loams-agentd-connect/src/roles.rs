@@ -61,11 +61,19 @@ pub enum Access {
     Forbidden,
     /// Not a `loams.agentd.v1` method (404).
     Unknown,
+    /// A dev-server preview under `/preview/` (Q806; SD1 Task 26, ruling
+    /// T7-12): served by [`crate::preview`] behind the same origin and token
+    /// checks, never by the Connect router.
+    Preview,
 }
 
 /// `studio`'s access to the Connect path `path`
 /// (`/loams.agentd.v1.<Service>/<Method>`; a GET's query is not part of it).
 pub fn studio_access(path: &str) -> Access {
+    if path == crate::preview::ROOT.trim_end_matches('/') || path.starts_with(crate::preview::ROOT)
+    {
+        return Access::Preview;
+    }
     let Some((service, method)) = path
         .strip_prefix('/')
         .and_then(|rest| rest.strip_prefix(PACKAGE))
@@ -123,8 +131,17 @@ mod tests {
             "/loams.agentd.v1ThreadService/WatchThreads",
             "loams.agentd.v1.ThreadService/WatchThreads",
             "/loams.agentd.v2.ThreadService/WatchThreads",
+            "/previews/a.b/",
         ] {
             assert_eq!(studio_access(unknown), Access::Unknown, "{unknown}");
+        }
+        for preview in [
+            "/preview",
+            "/preview/",
+            "/preview/a.b/x",
+            "/preview/-/ticket",
+        ] {
+            assert_eq!(studio_access(preview), Access::Preview, "{preview}");
         }
     }
 }

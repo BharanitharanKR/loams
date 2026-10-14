@@ -246,6 +246,9 @@ pub fn options(
         oidc,
         cors: CorsPolicy::new(&settings.allow_origins)?,
         auth_failure_delay,
+        // Previews through `/preview/` (Q806, SD1 Task 26), from the daemon's
+        // own loopback preview proxy.
+        preview_port: Some(loams_agentd_proto::PREVIEW_PROXY_PORT),
     })
 }
 

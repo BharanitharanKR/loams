@@ -16,6 +16,7 @@ import { StudioContext } from './header.js';
 import { hostedAgentd } from './hosts/agentd.js';
 import { createStudioKeys } from './palette/commands.js';
 import { StudioPalette } from './palette/StudioPalette.js';
+import { desktopPreview } from './preview/access.js';
 import { routeOf, STUDIO_PAGES } from './routes.js';
 import { agentdPaletteSource } from './sidebar/paletteSource.js';
 import { StudioView } from './view.js';
@@ -57,6 +58,15 @@ export {
   type StudioPaletteSource,
 } from './palette/source.js';
 export {
+  type DesktopPreviewApi,
+  desktopPreview,
+  PreviewUnsupported,
+  remotePreview,
+  remotePreviewOpener,
+  type StudioPreview,
+} from './preview/access.js';
+export { ForwardHint, PreviewTab } from './preview/PreviewTab.js';
+export {
   routeOf,
   STUDIO_PAGES,
   type StudioRoute,
@@ -94,7 +104,7 @@ const plugin: PluginModule = {
     const platform = service(ctx, 'platform');
     const desktop = platform.kind === 'desktop' ? service(ctx, 'desktop') : undefined;
     const agentd: StudioAgentd = desktop
-      ? studioAgentd(service(ctx, 'agentd'), desktop.shell)
+      ? studioAgentd(service(ctx, 'agentd'), desktop.shell, desktopPreview(desktop.preview))
       : hostedAgentd();
     // The Factory group (SD1 Task 27): the desktop's factory bridge; on the web nothing
     // until SF1 (D922).

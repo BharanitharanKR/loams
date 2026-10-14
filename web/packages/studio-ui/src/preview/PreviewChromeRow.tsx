@@ -1,16 +1,9 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/preview/PreviewChromeRow.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// the data layer and styling are ported to agentd's WatchPreviews and @loams/ui tokens (SD1 Task 26). Loams' changes are Apache-2.0.
-import { RefreshIcon } from "~/components/ui/refresh-icon";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Camera,
-  ExternalLink,
-  MousePointerClick,
-  PictureInPicture2,
-} from "lucide-react";
+// @loams/ui's Button, Tooltip and InputGroup on tokens; the capture, picture-in-picture and annotation controls are dropped (T3's browser streaming and recording are not carried, inventory (n)); "Open in browser" is always shown when given. Loams' changes are Apache-2.0.
+import { Button, InputGroup, InputGroupAddon, InputGroupInput, Tooltip } from "@loams/ui";
+import { ArrowLeft, ArrowRight, ExternalLink, RotateCw, X } from "lucide-react";
 import {
   type FormEvent,
   type KeyboardEvent,
@@ -19,11 +12,6 @@ import {
   useRef,
   useState,
 } from "react";
-
-import { Button } from "~/components/ui/button";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "~/components/ui/input-group";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
-import { cn } from "~/lib/utils";
 
 interface Props {
   url: string;
@@ -40,32 +28,10 @@ interface Props {
   onSubmit: (url: string) => void;
   /** When provided, renders an "Open in browser" affordance to the right. */
   onOpenInBrowser?: (() => void) | undefined;
-  onCapture?: ((record: boolean) => void) | undefined;
-  captureDisabled?: boolean | undefined;
-  recording?: boolean | undefined;
-  onPictureInPicture?: (() => void) | undefined;
-  pictureInPicture?: boolean | undefined;
-  pictureInPictureDisabled?: boolean | undefined;
-  /**
-   * When provided, renders an annotation-mode toggle button to the right of
-   * the URL input. Pressed while annotation mode is active (button shows in `pressed`
-   * state). Disabled in `pickDisabled` mode.
-   */
-  onPickElement?: (() => void) | undefined;
-  pickActive?: boolean | undefined;
-  pickDisabled?: boolean | undefined;
-  /** Optional reason string surfaced in the disabled tooltip. */
-  pickDisabledReason?: string | undefined;
-  /**
-   * Trailing slot rendered after the URL input. Used by the preview view
-   * to mount the three-dot menu (hard reload, devtools, zoom, clear data).
-   */
+  /** When provided, renders a close button that returns to the server list. */
+  onClose?: (() => void) | undefined;
+  /** Trailing slot rendered after the URL input. */
   trailingActions?: ReactNode;
-  /**
-   * Slot between the nav buttons and the URL input. The preview view uses it
-   * to name the tab's browser profile, which is otherwise invisible.
-   */
-  leadingActions?: ReactNode;
 }
 
 const NOOP = () => {};
@@ -83,28 +49,23 @@ export function PreviewChromeRow({
   onRefresh,
   onSubmit,
   onOpenInBrowser,
-  onCapture,
-  captureDisabled,
-  recording,
-  onPictureInPicture,
-  pictureInPicture,
-  pictureInPictureDisabled,
-  onPickElement,
-  pickActive,
-  pickDisabled,
-  pickDisabledReason,
+  onClose,
   trailingActions,
-  leadingActions,
 }: Props) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  // @loams/ui's InputGroupInput takes no ref; the group does, and holds one input.
+  const groupRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = {
+    get current(): HTMLInputElement | null {
+      return groupRef.current?.querySelector("input") ?? null;
+    },
+  };
   const [draft, setDraft] = useState(url);
   const [inputFocused, setInputFocused] = useState(false);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: inputRef reads the group's ref.
   useEffect(() => {
     if (focusUrlNonce == null) return;
-    const node = inputRef.current;
-    if (!node) return;
-    node.focus();
+    inputRef.current?.focus();
   }, [focusUrlNonce]);
 
   const submit = (event?: FormEvent | KeyboardEvent) => {
@@ -119,206 +80,100 @@ export function PreviewChromeRow({
     <div className="relative">
       <form
         onSubmit={submit}
-        className="flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-border/60 bg-background px-2 in-data-[preview-panel-mode=inline]:mb-3 in-data-[preview-panel-mode=inline]:h-7 in-data-[preview-panel-mode=inline]:min-h-7 in-data-[preview-panel-mode=inline]:border-b-transparent"
-        data-surface-subheader
+        className="flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-rule-soft bg-bg px-2"
+        data-preview-chrome
       >
-        <div className="flex items-center gap-0.5" role="group" aria-label="Navigation">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={canGoBack ? onBack : NOOP}
-                  disabled={!canGoBack}
-                  aria-label="Back"
-                  type="button"
-                />
-              }
+        <fieldset className="m-0 flex items-center gap-0.5 border-0 p-0" aria-label="Navigation">
+          <Tooltip content="Back">
+            <Button
+              variant="quiet"
+              size="icon"
+              onClick={canGoBack ? onBack : NOOP}
+              disabled={!canGoBack}
+              aria-label="Back"
             >
-              <ArrowLeft />
-            </TooltipTrigger>
-            <TooltipPopup>Back</TooltipPopup>
+              <ArrowLeft aria-hidden className="size-3.5" />
+            </Button>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={canGoForward ? onForward : NOOP}
-                  disabled={!canGoForward}
-                  aria-label="Forward"
-                  type="button"
-                />
-              }
+          <Tooltip content="Forward">
+            <Button
+              variant="quiet"
+              size="icon"
+              onClick={canGoForward ? onForward : NOOP}
+              disabled={!canGoForward}
+              aria-label="Forward"
             >
-              <ArrowRight />
-            </TooltipTrigger>
-            <TooltipPopup>Forward</TooltipPopup>
+              <ArrowRight aria-hidden className="size-3.5" />
+            </Button>
           </Tooltip>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={refreshDisabled ? NOOP : onRefresh}
-                  disabled={refreshDisabled}
-                  aria-label={loading ? "Stop" : "Refresh"}
-                  type="button"
-                />
-              }
+          <Tooltip content={loading ? "Loading…" : "Reload"}>
+            <Button
+              variant="quiet"
+              size="icon"
+              onClick={refreshDisabled ? NOOP : onRefresh}
+              disabled={refreshDisabled}
+              aria-label="Reload"
             >
-              <RefreshIcon refreshing={loading} />
-            </TooltipTrigger>
-            <TooltipPopup>{loading ? "Loading…" : "Refresh"}</TooltipPopup>
+              <RotateCw aria-hidden className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+            </Button>
           </Tooltip>
-        </div>
+        </fieldset>
 
-        {leadingActions}
-
-        <InputGroup variant="ghost" className="group/address h-7 flex-1">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <InputGroupInput
-                  ref={inputRef}
-                  value={inputFocused ? draft : url}
-                  onChange={(event) => setDraft(event.target.value)}
-                  onFocus={() => {
-                    setDraft(url);
-                    setInputFocused(true);
-                    queueMicrotask(() => inputRef.current?.select());
-                  }}
-                  onBlur={() => {
-                    setInputFocused(false);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") submit(event);
-                    if (event.key === "Escape") {
-                      event.preventDefault();
-                      setDraft(url);
-                      inputRef.current?.blur();
-                    }
-                  }}
-                  placeholder="Search or enter URL"
-                  spellCheck={false}
-                  disabled={inputDisabled}
-                  data-preview-url-input
-                  size="sm"
-                />
+        <InputGroup ref={groupRef} className="h-7 flex-1">
+          <InputGroupInput
+            value={inputFocused ? draft : url}
+            onChange={(event) => setDraft(event.target.value)}
+            onFocus={() => {
+              setDraft(url);
+              setInputFocused(true);
+              queueMicrotask(() => inputRef.current?.select());
+            }}
+            onBlur={() => setInputFocused(false)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") submit(event);
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setDraft(url);
+                inputRef.current?.blur();
               }
-            />
-          </Tooltip>
+            }}
+            placeholder="localhost:5173"
+            spellCheck={false}
+            disabled={inputDisabled}
+            aria-label="Preview address"
+            className="font-mono"
+            data-preview-url-input
+          />
           {onOpenInBrowser && !inputFocused ? (
-            <InputGroupAddon align="inline-end">
-              {/* Revealed on hover so a resting address bar reads as plain text. */}
-              <span className="pointer-events-none flex opacity-0 transition-opacity focus-within:pointer-events-auto focus-within:opacity-100 group-hover/address:pointer-events-auto group-hover/address:opacity-100">
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={onOpenInBrowser}
-                        aria-label="Open in system browser"
-                        type="button"
-                      />
-                    }
-                  >
-                    <ExternalLink />
-                  </TooltipTrigger>
-                  <TooltipPopup>Open in system browser</TooltipPopup>
-                </Tooltip>
-              </span>
+            <InputGroupAddon align="end">
+              <Tooltip content="Open in browser">
+                <Button
+                  variant="quiet"
+                  size="icon"
+                  onClick={onOpenInBrowser}
+                  aria-label="Open in browser"
+                >
+                  <ExternalLink aria-hidden className="size-3.5" />
+                </Button>
+              </Tooltip>
             </InputGroupAddon>
           ) : null}
         </InputGroup>
-
-        {onPickElement ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant={pickActive ? "secondary" : "ghost"}
-                  size="icon-xs"
-                  onClick={onPickElement}
-                  disabled={pickDisabled}
-                  aria-label={pickActive ? "Cancel annotation" : "Annotate preview"}
-                  aria-pressed={pickActive ? "true" : "false"}
-                  type="button"
-                />
-              }
-            >
-              <MousePointerClick className={cn(pickActive && "text-primary")} />
-            </TooltipTrigger>
-            <TooltipPopup>
-              {pickDisabled && pickDisabledReason
-                ? pickDisabledReason
-                : pickActive
-                  ? "Cancel annotation (Esc)"
-                  : "Annotate elements, regions, and drawings"}
-            </TooltipPopup>
-          </Tooltip>
-        ) : null}
-        {onCapture ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant={recording ? "secondary" : "ghost"}
-                  size="icon-xs"
-                  onClick={(event) => onCapture(event.shiftKey)}
-                  aria-label={recording ? "Stop recording" : "Capture screenshot"}
-                  type="button"
-                  className="relative"
-                  disabled={captureDisabled}
-                />
-              }
-            >
-              <Camera className={cn(recording && "text-destructive")} />
-              {recording ? (
-                <span className="absolute right-0.5 top-0.5 size-1.5 animate-status-pulse rounded-full bg-destructive" />
-              ) : null}
-            </TooltipTrigger>
-            <TooltipPopup>
-              {recording ? "Stop recording" : "Screenshot · Shift-click to record"}
-            </TooltipPopup>
-          </Tooltip>
-        ) : null}
-        {onPictureInPicture ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant={pictureInPicture ? "secondary" : "ghost"}
-                  size="icon-xs"
-                  onClick={onPictureInPicture}
-                  aria-label={
-                    pictureInPicture ? "Close floating preview" : "Float preview over chat"
-                  }
-                  aria-pressed={pictureInPicture ? "true" : "false"}
-                  type="button"
-                  disabled={pictureInPictureDisabled}
-                />
-              }
-            >
-              <PictureInPicture2 className={cn(pictureInPicture && "text-primary")} />
-            </TooltipTrigger>
-            <TooltipPopup>
-              {pictureInPicture ? "Close floating preview" : "Float preview over chat"}
-            </TooltipPopup>
-          </Tooltip>
-        ) : null}
         {trailingActions}
+        {onClose ? (
+          <Tooltip content="Close preview">
+            <Button variant="quiet" size="icon" onClick={onClose} aria-label="Close preview">
+              <X aria-hidden className="size-3.5" />
+            </Button>
+          </Tooltip>
+        ) : null}
       </form>
-      <div
-        aria-hidden
-        data-loading={loading}
-        className="preview-loading-progress pointer-events-none absolute bottom-0 left-0 z-10 h-0.5 w-full origin-left rounded-r-full bg-primary"
-        style={{ boxShadow: "0 0 6px 1px var(--color-ring)" }}
-      />
+      {loading ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute bottom-0 left-0 z-10 h-0.5 w-full animate-pulse bg-accent"
+        />
+      ) : null}
     </div>
   );
 }
