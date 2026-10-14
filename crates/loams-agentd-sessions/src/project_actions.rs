@@ -311,6 +311,41 @@ pub fn launch_project_action(
     launch_project_action_with_environment(terminals, action, project_root, cwd, cols, rows, false)
 }
 
+/// Launch an Action as a run group's check (SD1 Task 12): as
+/// [`launch_project_action`] in the member's worktree, except that the shell
+/// exits with the command's status, which the terminal's `Exit` carries.
+pub fn launch_project_check(
+    terminals: &Terminals,
+    action: &ProjectAction,
+    project_root: &Path,
+    worktree: &Path,
+    cols: u16,
+    rows: u16,
+) -> Result<ProjectActionRun, EngineError> {
+    let environment = HashMap::from([
+        (
+            "LOAMS_DESKTOP_PROJECT_ROOT".to_string(),
+            root_string(project_root),
+        ),
+        (
+            "LOAMS_DESKTOP_WORKTREE_PATH".to_string(),
+            root_string(worktree),
+        ),
+    ]);
+    let session = terminals.open_check(
+        &root_string(worktree),
+        cols,
+        rows,
+        &environment,
+        &action.command,
+    )?;
+    Ok(ProjectActionRun {
+        action_id: action.id.clone(),
+        action_name: action.name.clone(),
+        terminal: session,
+    })
+}
+
 /// Launch the setup Action for a newly created worktree. Setup always exposes
 /// both reserved paths, even if a future repository backend returns aliases.
 pub fn launch_project_setup_action(

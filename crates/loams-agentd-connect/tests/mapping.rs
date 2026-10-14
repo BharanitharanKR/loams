@@ -15,6 +15,7 @@ use buffa::Message;
 use loams_agentd_connect::map::Wire;
 use loams_agentd_proto as rs;
 use loams_agentd_proto::checkpoints as rs_checkpoints;
+use loams_agentd_proto::groups as rs_groups;
 use loams_agentd_proto::invocation as rs_invocation;
 use loams_agentd_proto::transcript as rs_transcript;
 use serde::Serialize;
@@ -74,6 +75,16 @@ table! {
     "CompleteAgentLoginParams" => message::<rs::CompleteAgentLoginParams>,
     "CreateChangeRequestParams" => message::<rs::CreateChangeRequestParams>,
     "CreateChangeRequestReply" => message::<rs::CreateChangeRequestReply>,
+    "CreateRunGroupParams" => message::<rs_groups::CreateRunGroupParams>,
+    "CreateRunGroupReply" => message::<rs_groups::CreateRunGroupReply>,
+    "GetRunGroupComparisonParams" => message::<rs_groups::GetRunGroupComparisonParams>,
+    "ResolveRunGroupParams" => message::<rs_groups::ResolveRunGroupParams>,
+    "ResolveRunGroupReply" => message::<rs_groups::ResolveRunGroupReply>,
+    "RunGroupCheckParams" => message::<rs_groups::RunGroupCheckParams>,
+    "RunGroupCheckReply" => message::<rs_groups::RunGroupCheckReply>,
+    "RunGroupComparison" => message::<rs_groups::RunGroupComparison>,
+    "RunGroupList" => message::<rs_groups::RunGroupList>,
+    "WatchRunGroupsParams" => message::<rs_groups::WatchRunGroupsParams>,
     "CreateWorktreeOutcome" => message::<rs::CreateWorktreeOutcome>,
     "CreateWorktreeParams" => message::<rs::CreateWorktreeParams>,
     "DeleteWorkspaceEntryRequest" => message::<rs::DeleteWorkspaceEntryRequest>,

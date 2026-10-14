@@ -86,6 +86,11 @@ export const AGENTD_RENDERER_METHODS: ReadonlySet<string> = new Set([
 	"/loams.agentd.v1.QueueService/SteerQueuedMessageNow",
 	"/loams.agentd.v1.QueueService/UpdateQueuedMessage",
 	"/loams.agentd.v1.QueueService/WatchQueue",
+	"/loams.agentd.v1.RunGroupService/CreateRunGroup",
+	"/loams.agentd.v1.RunGroupService/GetRunGroupComparison",
+	"/loams.agentd.v1.RunGroupService/ResolveRunGroup",
+	"/loams.agentd.v1.RunGroupService/RunGroupCheck",
+	"/loams.agentd.v1.RunGroupService/WatchRunGroups",
 	"/loams.agentd.v1.StudioService/GetHost",
 	"/loams.agentd.v1.StudioService/GetTitleSettings",
 	"/loams.agentd.v1.StudioService/SetTitleSettings",
@@ -126,4 +131,5 @@ export const AGENTD_GIT_WRITE_METHODS: ReadonlySet<string> = new Set([
 	"/loams.agentd.v1.GitService/DeleteWorktree",
 	"/loams.agentd.v1.GitService/MergeBranch",
 	"/loams.agentd.v1.GitService/PushBranch",
+	"/loams.agentd.v1.RunGroupService/ResolveRunGroup",
 ]);

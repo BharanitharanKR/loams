@@ -27,6 +27,11 @@ use crate::git_write::{
     DiscardPathsParams, MergeBranchParams, MergeBranchReply, PushBranchParams, PushBranchReply,
     WorktreeList,
 };
+use crate::groups::{
+    CreateRunGroupParams, CreateRunGroupReply, GetRunGroupComparisonParams, ResolveRunGroupParams,
+    ResolveRunGroupReply, RunGroupCheckParams, RunGroupCheckReply, RunGroupComparison,
+    RunGroupList, WatchRunGroupsParams,
+};
 use crate::params::*;
 use crate::transcript::TranscriptUpdate;
 use crate::{
@@ -87,6 +92,7 @@ pub const ERROR_REASONS: &[&str] = &[
     crate::git_write::PUSH_REJECTED,
     crate::git_write::PROVIDER_NOT_CONFIGURED,
     crate::checkpoints::CHECKPOINT_MISSING,
+    crate::groups::GROUP_NOT_READY,
 ];
 
 /// The MCP shim's environment, set only by the daemon when it injects the
@@ -412,6 +418,18 @@ method_table! {
     /// G5: merge, squash, rebase or fast-forward one branch into another;
     /// stops on conflicts with a clean tree (`merge_conflict`).
     MERGE_BRANCH = MergeBranch: Unary(MergeBranchParams -> MergeBranchReply), Owner, renderer: true;
+    /// G12 (SD1 Task 12): one chat and one worktree per variant from the same
+    /// base, and the same run queued in each within the concurrency limits.
+    CREATE_RUN_GROUP = CreateRunGroup: Unary(CreateRunGroupParams -> CreateRunGroupReply), Owner, renderer: true;
+    /// G13: every run group, again on each change.
+    WATCH_RUN_GROUPS = WatchRunGroups: Stream(WatchRunGroupsParams -> RunGroupList), Owner, renderer: true;
+    /// G14: the diff matrix and a pair's diff, from snapshot trees.
+    GET_RUN_GROUP_COMPARISON = GetRunGroupComparison: Unary(GetRunGroupComparisonParams -> RunGroupComparison), Owner, renderer: true;
+    /// G15: the group's check action in each member's worktree.
+    RUN_GROUP_CHECK = RunGroupCheck: Unary(RunGroupCheckParams -> RunGroupCheckReply), Owner, renderer: true;
+    /// G16: merge, push and open a change request, or keep the winner, through
+    /// Task 9's git writes; `group_not_ready` while members run.
+    RESOLVE_RUN_GROUP = ResolveRunGroup: Unary(ResolveRunGroupParams -> ResolveRunGroupReply), Owner, renderer: true;
     GET_CHECKOUT_FILE_DIFF_TEXT = GetCheckoutFileDiffText: Unary(GetCheckoutFileDiffTextRequest -> CheckoutFileDiffText), Owner, renderer: true;
     LIST_AGENT_ACCOUNTS = ListAgentAccounts: Unary(ListAgentAccountsParams -> AgentAccountsSnapshot), Owner, renderer: true;
     ACTIVATE_AGENT_ACCOUNT = ActivateAgentAccount: Unary(AgentAccountParams -> AgentAccountsSnapshot), Owner, renderer: true;

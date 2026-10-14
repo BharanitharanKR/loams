@@ -256,9 +256,25 @@ impl Terminals {
         environment: &HashMap<String, String>,
         command: &str,
     ) -> Result<TerminalSession, EngineError> {
-        self.open_session(cwd, cols, rows, None, environment, Some(command))
+        self.open_session(cwd, cols, rows, None, environment, Some((command, false)))
     }
 
+    /// [`Self::open_with_command`], after which the shell exits with the
+    /// command's status, so the terminal's `Exit` carries it: a run group's
+    /// check (SD1 Task 12).
+    pub fn open_check(
+        &self,
+        cwd: &str,
+        cols: u16,
+        rows: u16,
+        environment: &HashMap<String, String>,
+        command: &str,
+    ) -> Result<TerminalSession, EngineError> {
+        self.open_session(cwd, cols, rows, None, environment, Some((command, true)))
+    }
+
+    /// `command`: the command to run, and whether the shell then exits with
+    /// its status.
     #[allow(clippy::too_many_arguments)]
     fn open_session(
         &self,
@@ -267,7 +283,7 @@ impl Terminals {
         rows: u16,
         shell: Option<&str>,
         environment: &HashMap<String, String>,
-        command: Option<&str>,
+        command: Option<(&str, bool)>,
     ) -> Result<TerminalSession, EngineError> {
         if lock(&self.inner.sessions).len() >= MAX_TERMINALS {
             return Err(EngineError::Other(format!(
@@ -297,18 +313,34 @@ impl Terminals {
             .unwrap_or_else(|| shell.clone());
 
         #[cfg(windows)]
-        let (initial_script, bootstrap) = (None, command.map(|command| format!("{command}\r")));
+        let (initial_script, bootstrap) = (
+            None,
+            command.map(|(command, exit_after)| {
+                if exit_after {
+                    format!("{command}\rexit\r")
+                } else {
+                    format!("{command}\r")
+                }
+            }),
+        );
         #[cfg(not(windows))]
-        let (initial_script, bootstrap) = if let Some(command) = command {
-            let (suffix, source) = match shell_name.as_str() {
-                "fish" => (".fish", "source \"$LOAMS_DESKTOP_ACTION_SCRIPT\"\r"),
-                _ => (".sh", ". \"$LOAMS_DESKTOP_ACTION_SCRIPT\"\r"),
+        let (initial_script, bootstrap) = if let Some((command, exit_after)) = command {
+            let (suffix, source, exit) = match shell_name.as_str() {
+                "fish" => (
+                    ".fish",
+                    "source \"$LOAMS_DESKTOP_ACTION_SCRIPT\"\r",
+                    "\nexit $status\n",
+                ),
+                _ => (".sh", ". \"$LOAMS_DESKTOP_ACTION_SCRIPT\"\r", "\nexit $?\n"),
             };
             let mut script = tempfile::Builder::new()
                 .prefix("loams-desktop-action-")
                 .suffix(suffix)
                 .tempfile()?;
             script.write_all(command.as_bytes())?;
+            if exit_after {
+                script.write_all(exit.as_bytes())?;
+            }
             script.flush()?;
             (Some(script), Some(source.to_string()))
         } else {
@@ -1188,7 +1220,7 @@ mod initial_command_tests {
                     24,
                     wrapper.to_str(),
                     &environment,
-                    Some(&command),
+                    Some((&command, false)),
                 )
                 .unwrap();
             let script = lock(&terminals.session(&session.id).unwrap())
@@ -1239,7 +1271,7 @@ mod initial_command_tests {
                 24,
                 None,
                 &HashMap::new(),
-                Some("printf '%s|%s' \"$HOME\" \"$ZDOTDIR\" > result"),
+                Some(("printf '%s|%s' \"$HOME\" \"$ZDOTDIR\" > result", false)),
             )
             .unwrap();
         assert_eq!(session.shell, "sh");
@@ -1281,7 +1313,7 @@ mod initial_command_tests {
                 24,
                 Some("/bin/sh"),
                 &HashMap::new(),
-                Some("sleep 0.1; exit 7"),
+                Some(("sleep 0.1; exit 7", false)),
             )
             .unwrap();
         let script = lock(&terminals.session(&session.id).unwrap())
@@ -1310,7 +1342,7 @@ mod initial_command_tests {
                     24,
                     Some("/nonexistent/loams-desktop-test-shell"),
                     &HashMap::new(),
-                    Some("echo test"),
+                    Some(("echo test", false)),
                 )
                 .is_err()
         );

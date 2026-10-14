@@ -1,0 +1,27 @@
+{
+  "approvalMode": "supervised",
+  "attachments": [
+    "/home/dev/.loams-desktop/uploads/u-1/screenshot.png"
+  ],
+  "base": "main",
+  "checkActionId": "test",
+  "prompt": "Fix the build",
+  "repoPath": "/home/dev/project",
+  "spaceId": "space-1",
+  "variants": [
+    {
+      "harness": "claude-code",
+      "model": "claude-sonnet",
+      "modelOptions": {
+        "effort": "high"
+      },
+      "reasoning": "high"
+    },
+    {
+      "harness": "codex",
+      "model": null,
+      "modelOptions": {},
+      "reasoning": null
+    }
+  ]
+}

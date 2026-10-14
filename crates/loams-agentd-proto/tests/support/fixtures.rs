@@ -1611,6 +1611,7 @@ pub fn all() -> Vec<Fixture> {
             expected_checksum: s("sum-1"),
         },
     ));
+    run_group_fixtures(&mut add);
     add(Fixture::new(
         "GetCheckoutFileDiffTextRequest",
         GetCheckoutFileDiffTextRequest {
@@ -2000,4 +2001,186 @@ pub fn all() -> Vec<Fixture> {
         add(Fixture::new(&format!("AgentEvent.{name}"), event));
     }
     out
+}
+
+/// SD1 Task 12's run groups (G12–G16).
+fn run_group_fixtures(add: &mut impl FnMut(Fixture)) {
+    use loams_agentd_proto::groups::*;
+    let mut model_options = serde_json::Map::new();
+    model_options.insert(s("effort"), serde_json::json!("high"));
+    add(Fixture::new(
+        "CreateRunGroupParams",
+        CreateRunGroupParams {
+            space_id: some("space-1"),
+            repo_path: s("/home/dev/project"),
+            base: s("main"),
+            prompt: s("Fix the build"),
+            attachments: vec![s("/home/dev/.loams-desktop/uploads/u-1/screenshot.png")],
+            variants: vec![
+                RunVariant {
+                    harness: HarnessId::ClaudeCode,
+                    model: some("claude-sonnet"),
+                    reasoning: Some(ReasoningLevel::High),
+                    model_options,
+                },
+                RunVariant {
+                    harness: HarnessId::Codex,
+                    model: None,
+                    reasoning: None,
+                    model_options: serde_json::Map::new(),
+                },
+            ],
+            check_action_id: some("test"),
+            approval_mode: ApprovalMode::Supervised,
+        },
+    ));
+    add(Fixture::new(
+        "CreateRunGroupReply",
+        CreateRunGroupReply {
+            group_id: s("group-1"),
+            chat_ids: vec![s("chat-1"), s("chat-2")],
+        },
+    ));
+    add(Fixture::new(
+        "WatchRunGroupsParams",
+        WatchRunGroupsParams {
+            space_id: some("space-1"),
+        },
+    ));
+    add(Fixture::new(
+        "RunGroupList",
+        RunGroupList {
+            groups: vec![RunGroup {
+                id: s("group-1"),
+                space_id: some("space-1"),
+                repo_path: s("/home/dev/project"),
+                prompt: s("Fix the build"),
+                base: s("main"),
+                base_sha: s("4b825dc642cb6eb9a060e54bf8d69288fbee4904"),
+                created_at_ms: MS,
+                state: RunGroupState::Resolved,
+                approval_mode: ApprovalMode::FullAccess,
+                check_action_id: some("test"),
+                members: vec![
+                    RunGroupMember {
+                        chat_id: s("chat-1"),
+                        harness: HarnessId::ClaudeCode,
+                        model: some("claude-sonnet"),
+                        status: RunMemberStatus::Done,
+                        files_changed: 1,
+                        additions: 3,
+                        deletions: 1,
+                        elapsed_ms: 61_000,
+                        started_at_ms: Some(MS),
+                        tokens: Some(12_400),
+                        check: Some(MemberCheck {
+                            state: CheckState::Passed,
+                            exit_code: Some(0),
+                            terminal_id: some("term-1"),
+                            log_tail: vec![s("test result: ok. 12 passed")],
+                        }),
+                        cwd: s("/home/dev/.loams-desktop/worktrees/project/brave-otter"),
+                        branch: s("loams-desktop/brave-otter"),
+                        detached: false,
+                        archived: false,
+                    },
+                    RunGroupMember {
+                        chat_id: s("chat-2"),
+                        harness: HarnessId::Codex,
+                        model: None,
+                        status: RunMemberStatus::Errored,
+                        files_changed: 0,
+                        additions: 0,
+                        deletions: 0,
+                        elapsed_ms: 4_000,
+                        started_at_ms: None,
+                        tokens: None,
+                        check: None,
+                        cwd: s("/home/dev/.loams-desktop/worktrees/project/calm-heron"),
+                        branch: s("loams-desktop/calm-heron"),
+                        detached: false,
+                        archived: true,
+                    },
+                ],
+                resolution: Some(RunGroupResolution {
+                    action: ResolveAction::Merge,
+                    winner_chat_id: s("chat-1"),
+                    result: s("merged loams-desktop/brave-otter into main"),
+                    sha: some("4b825dc642cb6eb9a060e54bf8d69288fbee4904"),
+                    url: None,
+                    resolved_at_ms: MS,
+                }),
+            }],
+        },
+    ));
+    add(Fixture::new(
+        "GetRunGroupComparisonParams",
+        GetRunGroupComparisonParams {
+            group_id: s("group-1"),
+            a: s("chat-1"),
+            b: some("chat-2"),
+            path: some("src/main.rs"),
+        },
+    ));
+    add(Fixture::new(
+        "RunGroupComparison",
+        RunGroupComparison {
+            matrix: vec![ComparisonRow {
+                path: s("src/main.rs"),
+                per_member: vec![MemberDelta {
+                    chat_id: s("chat-1"),
+                    additions: 3,
+                    deletions: 1,
+                }],
+            }],
+            pair_diff: Some(checkout_diff()),
+        },
+    ));
+    add(Fixture::new(
+        "RunGroupCheckParams",
+        RunGroupCheckParams {
+            group_id: s("group-1"),
+            chat_id: some("chat-1"),
+        },
+    ));
+    add(Fixture::new(
+        "RunGroupCheckReply",
+        RunGroupCheckReply {
+            runs: vec![CheckRun {
+                chat_id: s("chat-1"),
+                terminal_id: s("term-1"),
+            }],
+        },
+    ));
+    add(Fixture::new(
+        "ResolveRunGroupParams",
+        ResolveRunGroupParams {
+            group_id: s("group-1"),
+            winner_chat_id: s("chat-1"),
+            action: ResolveAction::Merge,
+            merge: Some(MergeBranchParams {
+                repo_path: s("/home/dev/project"),
+                source: s("loams-desktop/brave-otter"),
+                target: s("main"),
+                strategy: MergeStrategy::Squash,
+                message: some("Fix the build"),
+                delete_source: false,
+                remove_worktree: false,
+                expected_source_head: s("4b825dc642cb6eb9a060e54bf8d69288fbee4904"),
+            }),
+            pr: None,
+            archive_others: true,
+            remove_other_worktrees: false,
+            force: false,
+            expected_checksum: some("sum-1"),
+        },
+    ));
+    add(Fixture::new(
+        "ResolveRunGroupReply",
+        ResolveRunGroupReply {
+            result: s("merged loams-desktop/brave-otter into main"),
+            sha: some("4b825dc642cb6eb9a060e54bf8d69288fbee4904"),
+            url: None,
+        },
+    ));
 }

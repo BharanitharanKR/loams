@@ -534,3 +534,84 @@ async fn checkpoints_over_connect_match_ndjson() {
     );
     daemon.stop().await;
 }
+
+/// SD1 Task 12: `RunGroupService` is served (no longer `unimplemented`), its
+/// stream answers what `WatchRunGroups` answers, and refusals keep their
+/// codes. A group's whole life is `crates/loams-agentd-sessions/tests/groups.rs`:
+/// making members creates worktrees under the daemon's worktree root, which
+/// only an environment variable moves, and this crate forbids `unsafe`.
+#[tokio::test]
+async fn run_groups_over_connect() {
+    let daemon = Daemon::start().await;
+    let groups = pb::RunGroupServiceClient::new(HttpClient::plaintext(), daemon.config());
+
+    let mut stream = groups
+        .watch_run_groups(pb::WatchRunGroupsRequest::default())
+        .await
+        .unwrap();
+    let first = next!(stream);
+    let ndjson: rs::groups::RunGroupList = {
+        let mut items = daemon
+            .ndjson
+            .subscribe(methods::WATCH_RUN_GROUPS, serde_json::json!({}))
+            .await
+            .unwrap();
+        let item = tokio::time::timeout(Duration::from_secs(5), items.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        serde_json::from_value(item).unwrap()
+    };
+    assert!(first.groups.is_empty());
+    assert_eq!(first, ndjson.to_pb());
+
+    let error = groups
+        .create_run_group(pb::CreateRunGroupRequest {
+            repo_path: "/nowhere".into(),
+            base: "main".into(),
+            prompt: "Fix the build".into(),
+            approval_mode: pb::ApprovalMode::APPROVAL_MODE_FULL_ACCESS.into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, ErrorCode::InvalidArgument, "no variants");
+    let error = groups
+        .create_run_group(pb::CreateRunGroupRequest::default())
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.code,
+        ErrorCode::InvalidArgument,
+        "an unset approval mode"
+    );
+
+    let error = groups
+        .get_run_group_comparison(pb::GetRunGroupComparisonRequest {
+            group_id: "nope".into(),
+            a: "chat-1".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, ErrorCode::InvalidArgument, "no such group");
+    let error = groups
+        .run_group_check(pb::RunGroupCheckRequest {
+            group_id: "nope".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, ErrorCode::InvalidArgument);
+    let error = groups
+        .resolve_run_group(pb::ResolveRunGroupRequest {
+            group_id: "nope".into(),
+            winner_chat_id: "chat-1".into(),
+            action: pb::ResolveAction::RESOLVE_ACTION_KEEP.into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, ErrorCode::InvalidArgument);
+    daemon.stop().await;
+}

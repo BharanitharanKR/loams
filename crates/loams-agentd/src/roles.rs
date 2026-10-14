@@ -423,6 +423,29 @@ mod tests {
         }
     }
 
+    /// SD1 Task 12: an agent can never create, check or resolve a run group
+    /// through the MCP shim; a resolve merges or pushes (§53 §8.1).
+    #[tokio::test]
+    async fn run_groups_not_in_mcp_role() {
+        let run = mcp("main");
+        for method in [
+            methods::CREATE_RUN_GROUP,
+            methods::WATCH_RUN_GROUPS,
+            methods::GET_RUN_GROUP_COMPARISON,
+            methods::RUN_GROUP_CHECK,
+            methods::RESOLVE_RUN_GROUP,
+        ] {
+            assert!(
+                !allowed(&run, method, json!({"chatId": "main", "groupId": "g"})).await,
+                "{method}"
+            );
+            assert!(
+                allowed(&Identity::owner(), method, json!({})).await,
+                "{method}"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn mcp_may_call_only_the_shims_methods() {
         let run = mcp("main");

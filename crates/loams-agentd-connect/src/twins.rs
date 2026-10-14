@@ -235,11 +235,11 @@ methods! {
         SetThreadApprovalMode => Gap { gap: "G22", task: "SD1 Task 13" },
     }
     RunGroupService {
-        CreateRunGroup => Gap { gap: "G12", task: "SD1 Task 12" },
-        WatchRunGroups => Gap { gap: "G13", task: "SD1 Task 12" },
-        GetRunGroupComparison => Gap { gap: "G14", task: "SD1 Task 12" },
-        RunGroupCheck => Gap { gap: "G15", task: "SD1 Task 12" },
-        ResolveRunGroup => Gap { gap: "G16", task: "SD1 Task 12" },
+        CreateRunGroup => Method("CreateRunGroup"),
+        WatchRunGroups => Method("WatchRunGroups"),
+        GetRunGroupComparison => Method("GetRunGroupComparison"),
+        RunGroupCheck => Method("RunGroupCheck"),
+        ResolveRunGroup => Method("ResolveRunGroup"),
     }
     NotificationService {
         WatchNotifications => Gap { gap: "G19", task: "SD1 Task 14" },
@@ -257,6 +257,9 @@ pub const GIT_WRITE_METHODS: &[(&str, &str)] = &[
     ("GitService", "DeleteWorktree"),
     ("DiffService", "Discard"),
     ("DiffService", "DiscardPaths"),
+    // SD1 Task 12: a resolve commits, merges or pushes the winner, and may
+    // remove the other members' worktrees.
+    ("RunGroupService", "ResolveRunGroup"),
 ];
 
 /// The Connect paths of [`GIT_WRITE_METHODS`], sorted.

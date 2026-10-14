@@ -28,6 +28,8 @@ import type { CompleteAgentLoginParams } from "./gen/CompleteAgentLoginParams";
 import type { CreateChangeRequestParams } from "./gen/CreateChangeRequestParams";
 import type { CreateChangeRequestReply } from "./gen/CreateChangeRequestReply";
 import type { CreateRepoParams } from "./gen/CreateRepoParams";
+import type { CreateRunGroupParams } from "./gen/CreateRunGroupParams";
+import type { CreateRunGroupReply } from "./gen/CreateRunGroupReply";
 import type { CreateWorktreeOutcome } from "./gen/CreateWorktreeOutcome";
 import type { CreateWorktreeParams } from "./gen/CreateWorktreeParams";
 import type { DeleteProjectActionParams } from "./gen/DeleteProjectActionParams";
@@ -49,6 +51,7 @@ import type { FolderListing } from "./gen/FolderListing";
 import type { ForkSideChatParams } from "./gen/ForkSideChatParams";
 import type { GetCheckoutDiffParams } from "./gen/GetCheckoutDiffParams";
 import type { GetCheckoutFileDiffTextRequest } from "./gen/GetCheckoutFileDiffTextRequest";
+import type { GetRunGroupComparisonParams } from "./gen/GetRunGroupComparisonParams";
 import type { GitAvatars } from "./gen/GitAvatars";
 import type { GitHistoryPage } from "./gen/GitHistoryPage";
 import type { HarnessCatalog } from "./gen/HarnessCatalog";
@@ -102,8 +105,14 @@ import type { RepoPathParams } from "./gen/RepoPathParams";
 import type { RepoRefList } from "./gen/RepoRefList";
 import type { ResizeTerminalParams } from "./gen/ResizeTerminalParams";
 import type { ResolveGitAvatarsParams } from "./gen/ResolveGitAvatarsParams";
+import type { ResolveRunGroupParams } from "./gen/ResolveRunGroupParams";
+import type { ResolveRunGroupReply } from "./gen/ResolveRunGroupReply";
 import type { RestoreCheckpointParams } from "./gen/RestoreCheckpointParams";
 import type { RestoreCheckpointReply } from "./gen/RestoreCheckpointReply";
+import type { RunGroupCheckParams } from "./gen/RunGroupCheckParams";
+import type { RunGroupCheckReply } from "./gen/RunGroupCheckReply";
+import type { RunGroupComparison } from "./gen/RunGroupComparison";
+import type { RunGroupList } from "./gen/RunGroupList";
 import type { RunProjectActionParams } from "./gen/RunProjectActionParams";
 import type { SearchFilesParams } from "./gen/SearchFilesParams";
 import type { SearchGitHistoryParams } from "./gen/SearchGitHistoryParams";
@@ -136,6 +145,7 @@ import type { UpsertProjectActionParams } from "./gen/UpsertProjectActionParams"
 import type { WatchCheckoutChangeRequestParams } from "./gen/WatchCheckoutChangeRequestParams";
 import type { WatchDocMessagesParams } from "./gen/WatchDocMessagesParams";
 import type { WatchPreviewsParams } from "./gen/WatchPreviewsParams";
+import type { WatchRunGroupsParams } from "./gen/WatchRunGroupsParams";
 import type { WatchWorkspaceFilesRequest } from "./gen/WatchWorkspaceFilesRequest";
 import type { WorkspaceDirectoryPage } from "./gen/WorkspaceDirectoryPage";
 import type { WorkspaceFileChanges } from "./gen/WorkspaceFileChanges";
@@ -1529,6 +1539,197 @@ export const fixture_DiscardPathsParams = {
   ]
 } satisfies DiscardPathsParams;
 
+export const fixture_CreateRunGroupParams = {
+  "approvalMode": "supervised",
+  "attachments": [
+    "/home/dev/.loams-desktop/uploads/u-1/screenshot.png"
+  ],
+  "base": "main",
+  "checkActionId": "test",
+  "prompt": "Fix the build",
+  "repoPath": "/home/dev/project",
+  "spaceId": "space-1",
+  "variants": [
+    {
+      "harness": "claude-code",
+      "model": "claude-sonnet",
+      "modelOptions": {
+        "effort": "high"
+      },
+      "reasoning": "high"
+    },
+    {
+      "harness": "codex",
+      "model": null,
+      "modelOptions": {},
+      "reasoning": null
+    }
+  ]
+} satisfies CreateRunGroupParams;
+
+export const fixture_CreateRunGroupReply = {
+  "chatIds": [
+    "chat-1",
+    "chat-2"
+  ],
+  "groupId": "group-1"
+} satisfies CreateRunGroupReply;
+
+export const fixture_WatchRunGroupsParams = {
+  "spaceId": "space-1"
+} satisfies WatchRunGroupsParams;
+
+export const fixture_RunGroupList = {
+  "groups": [
+    {
+      "approvalMode": "full-access",
+      "base": "main",
+      "baseSha": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "checkActionId": "test",
+      "createdAtMs": 1791797400000,
+      "id": "group-1",
+      "members": [
+        {
+          "additions": 3,
+          "archived": false,
+          "branch": "loams-desktop/brave-otter",
+          "chatId": "chat-1",
+          "check": {
+            "exitCode": 0,
+            "logTail": [
+              "test result: ok. 12 passed"
+            ],
+            "state": "passed",
+            "terminalId": "term-1"
+          },
+          "cwd": "/home/dev/.loams-desktop/worktrees/project/brave-otter",
+          "deletions": 1,
+          "detached": false,
+          "elapsedMs": 61000,
+          "filesChanged": 1,
+          "harness": "claude-code",
+          "model": "claude-sonnet",
+          "startedAtMs": 1791797400000,
+          "status": "done",
+          "tokens": 12400
+        },
+        {
+          "additions": 0,
+          "archived": true,
+          "branch": "loams-desktop/calm-heron",
+          "chatId": "chat-2",
+          "check": null,
+          "cwd": "/home/dev/.loams-desktop/worktrees/project/calm-heron",
+          "deletions": 0,
+          "detached": false,
+          "elapsedMs": 4000,
+          "filesChanged": 0,
+          "harness": "codex",
+          "model": null,
+          "startedAtMs": null,
+          "status": "errored",
+          "tokens": null
+        }
+      ],
+      "prompt": "Fix the build",
+      "repoPath": "/home/dev/project",
+      "resolution": {
+        "action": "merge",
+        "resolvedAtMs": 1791797400000,
+        "result": "merged loams-desktop/brave-otter into main",
+        "sha": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "url": null,
+        "winnerChatId": "chat-1"
+      },
+      "spaceId": "space-1",
+      "state": "resolved"
+    }
+  ]
+} satisfies RunGroupList;
+
+export const fixture_GetRunGroupComparisonParams = {
+  "a": "chat-1",
+  "b": "chat-2",
+  "groupId": "group-1",
+  "path": "src/main.rs"
+} satisfies GetRunGroupComparisonParams;
+
+export const fixture_RunGroupComparison = {
+  "matrix": [
+    {
+      "path": "src/main.rs",
+      "perMember": [
+        {
+          "additions": 3,
+          "chatId": "chat-1",
+          "deletions": 1
+        }
+      ]
+    }
+  ],
+  "pairDiff": {
+    "additions": 3,
+    "checkoutId": "checkout-1",
+    "checksum": "sum-1",
+    "cwd": "/home/dev/project",
+    "deletions": 1,
+    "deviceId": "device-1",
+    "files": [
+      {
+        "additions": 3,
+        "binary": false,
+        "deletions": 1,
+        "path": "src/main.rs",
+        "status": "modified"
+      }
+    ],
+    "patch": "--- a/src/main.rs\n+++ b/src/main.rs\n",
+    "truncated": false,
+    "updatedAt": "2026-10-12T09:30:00Z"
+  }
+} satisfies RunGroupComparison;
+
+export const fixture_RunGroupCheckParams = {
+  "chatId": "chat-1",
+  "groupId": "group-1"
+} satisfies RunGroupCheckParams;
+
+export const fixture_RunGroupCheckReply = {
+  "runs": [
+    {
+      "chatId": "chat-1",
+      "terminalId": "term-1"
+    }
+  ]
+} satisfies RunGroupCheckReply;
+
+export const fixture_ResolveRunGroupParams = {
+  "action": "merge",
+  "archiveOthers": true,
+  "expectedChecksum": "sum-1",
+  "force": false,
+  "groupId": "group-1",
+  "merge": {
+    "deleteSource": false,
+    "expectedSourceHead": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+    "message": "Fix the build",
+    "removeWorktree": false,
+    "repoPath": "/home/dev/project",
+    "source": "loams-desktop/brave-otter",
+    "strategy": "squash",
+    "target": "main"
+  },
+  "pr": null,
+  "removeOtherWorktrees": false,
+  "winnerChatId": "chat-1"
+} satisfies ResolveRunGroupParams;
+
+export const fixture_ResolveRunGroupReply = {
+  "result": "merged loams-desktop/brave-otter into main",
+  "sha": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+  "url": null
+} satisfies ResolveRunGroupReply;
+
 export const fixture_GetCheckoutFileDiffTextRequest = {
   "chatId": "chat-1",
   "checkoutId": "checkout-1",
@@ -2259,6 +2460,16 @@ export const FIXTURES = [
   { name: "MergeBranchParams", type: "MergeBranchParams", value: fixture_MergeBranchParams },
   { name: "MergeBranchReply", type: "MergeBranchReply", value: fixture_MergeBranchReply },
   { name: "DiscardPathsParams", type: "DiscardPathsParams", value: fixture_DiscardPathsParams },
+  { name: "CreateRunGroupParams", type: "CreateRunGroupParams", value: fixture_CreateRunGroupParams },
+  { name: "CreateRunGroupReply", type: "CreateRunGroupReply", value: fixture_CreateRunGroupReply },
+  { name: "WatchRunGroupsParams", type: "WatchRunGroupsParams", value: fixture_WatchRunGroupsParams },
+  { name: "RunGroupList", type: "RunGroupList", value: fixture_RunGroupList },
+  { name: "GetRunGroupComparisonParams", type: "GetRunGroupComparisonParams", value: fixture_GetRunGroupComparisonParams },
+  { name: "RunGroupComparison", type: "RunGroupComparison", value: fixture_RunGroupComparison },
+  { name: "RunGroupCheckParams", type: "RunGroupCheckParams", value: fixture_RunGroupCheckParams },
+  { name: "RunGroupCheckReply", type: "RunGroupCheckReply", value: fixture_RunGroupCheckReply },
+  { name: "ResolveRunGroupParams", type: "ResolveRunGroupParams", value: fixture_ResolveRunGroupParams },
+  { name: "ResolveRunGroupReply", type: "ResolveRunGroupReply", value: fixture_ResolveRunGroupReply },
   { name: "GetCheckoutFileDiffTextRequest", type: "GetCheckoutFileDiffTextRequest", value: fixture_GetCheckoutFileDiffTextRequest },
   { name: "CheckoutFileDiffText", type: "CheckoutFileDiffText", value: fixture_CheckoutFileDiffText },
   { name: "ListWorkspaceDirectoryRequest", type: "ListWorkspaceDirectoryRequest", value: fixture_ListWorkspaceDirectoryRequest },

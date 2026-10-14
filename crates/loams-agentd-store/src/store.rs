@@ -74,6 +74,14 @@ const MIGRATIONS: &[&str] = &[
     CREATE TABLE sync_job_clock (id INTEGER PRIMARY KEY CHECK(id=1), value INTEGER NOT NULL) STRICT;
     INSERT INTO sync_job_clock VALUES (1,0);",
     "ALTER TABLE chat_sync_jobs ADD COLUMN cursor TEXT NOT NULL DEFAULT '';",
+    // Run groups (plan SD1 Task 12, Ruling 5): one row per group, its record
+    // as JSON (`crate::run_groups`).
+    "CREATE TABLE run_groups (
+        group_id   TEXT PRIMARY KEY,
+        space_id   TEXT,
+        created_at INTEGER NOT NULL,
+        record     TEXT NOT NULL
+     ) STRICT;",
 ];
 
 /// SQLite-backed store under a data directory (`{data_dir}/docs.sqlite3`).
