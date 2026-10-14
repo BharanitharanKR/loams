@@ -29,6 +29,34 @@
       "group": "hooks"
     },
     {
+      "path": "src/keybindings/keybindings.ts",
+      "upstreamPath": "apps/web/src/keybindings.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "5b54026f2de75a9fd8db849fd6403b1c037644a65b8564f7e6729be540668bf0",
+      "localSha256": "a1ea08046bd83369bea77ce9263694f51c42bf24138c0a7ba03dbbbd456d7e6d",
+      "verdict": "adapt",
+      "group": "h"
+    },
+    {
+      "path": "src/keybindings/settings.ts",
+      "upstreamPath": "apps/web/src/components/settings/KeybindingsSettings.logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "01dd88c7877b85b56adac1a5a91b4dca63738190d18aeb483e5372991845cd93",
+      "localSha256": "a2ed17664902861d0f0936064c11dc81aba8207043a4fe5de8231b88b5ab30b7",
+      "verdict": "adapt",
+      "group": "h"
+    },
+    {
+      "path": "src/keybindings/shared.ts",
+      "upstreamPath": "packages/shared/src/keybindings.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "169ab1539b0dcbfa00be36f767ac4b5f0b0644ea5602164b3afbeba9d408d001",
+      "localSha256": "136ea343ae4ca7d8ef6ae87359fb64bea7d42e4591fd1b1822c85e41dc4120cf",
+      "verdict": "adapt",
+      "group": "h",
+      "note": "types from packages/contracts/src/keybindings.ts (Effect Schema) restated by hand; that file is not vendored"
+    },
+    {
       "path": "src/lib/AnimatedHeight.tsx",
       "upstreamPath": "apps/web/src/components/AnimatedHeight.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
@@ -54,6 +82,16 @@
       "localSha256": "6bce0df42f2fca565697d8b2342ce1d92f01a77a5ec31583037ebd58c52615fc",
       "verdict": "as-is",
       "group": "lib"
+    },
+    {
+      "path": "src/palette/logic.ts",
+      "upstreamPath": "apps/web/src/components/CommandPalette.logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "2741456cbbae272e4538611ad32e8b3bca1c6d9a2a50f67ff1634fb5b9e8bb69",
+      "localSha256": "b2957ee157d28799b3be0a12928895abde1d49a0079d3a6f7e39bf50632ce0fb",
+      "verdict": "adapt",
+      "group": "h",
+      "note": "the ranking half lives in @loams/ui src/command-rank.ts, which the shell's palette also uses"
     }
   ]
 }

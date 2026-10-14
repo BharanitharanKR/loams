@@ -219,3 +219,57 @@ fn no_query_node_means_local() {
     let alone = PlacementImpl::new(NodeRegistry::standalone(node(4)), 1);
     assert_eq!(alone.owner(NamespaceId(1), CollectionId(7)), Owner::Local);
 }
+
+/// GT1 Task 14 (Ruling 26, T0-13): a repository key hashes `ns BE ‖ id BE ‖
+/// node BE ‖ kind 1 ‖ shard 0 BE`, its scores are pinned, and only
+/// `gateway` nodes own a repository's sequencer.
+#[test]
+fn rendezvous_repo_scores_are_stable() {
+    let key = PlacementKey::repo(NamespaceId(1), 0x0123_4567_89ab_cdef);
+    let mut input = Vec::new();
+    input.extend_from_slice(&1u64.to_be_bytes());
+    input.extend_from_slice(&0x0123_4567_89ab_cdefu64.to_be_bytes());
+    input.extend_from_slice(&2u64.to_be_bytes());
+    input.push(1);
+    input.extend_from_slice(&0u32.to_be_bytes());
+    assert_eq!(
+        rendezvous_score(&key, 2),
+        xxhash_rust::xxh3::xxh3_64(&input)
+    );
+    let scores: Vec<String> = (1..=3)
+        .map(|node| format!("{:#018x}", rendezvous_score(&key, node)))
+        .collect();
+    let pinned: Vec<String> = GOLDEN_REPO_SCORES
+        .iter()
+        .map(|score| format!("{score:#018x}"))
+        .collect();
+    assert_eq!(scores, pinned);
+    // A repository and a collection with the same numbers rank differently.
+    let collection = PlacementKey::collection(NamespaceId(1), CollectionId(0x0123_4567_89ab_cdef));
+    assert_ne!(rendezvous_score(&key, 1), rendezvous_score(&collection, 1));
+    // Query-only nodes never own a repository; gateway-only nodes never own
+    // a collection.
+    let mixed = vec![
+        node_in(1, "", "query"),
+        node_in(2, "", "gateway"),
+        node_in(3, "", "query,gateway"),
+    ];
+    for id in 0..200u64 {
+        let repo = PlacementKey::repo(NamespaceId(1), id);
+        let ranked: Vec<u64> = ranking(&repo, &mixed, 1)
+            .iter()
+            .map(|n| n.node_id)
+            .collect();
+        assert!(!ranked.contains(&1), "repo {id}: {ranked:?}");
+        assert_eq!(ranked.len(), 2);
+        let coll = PlacementKey::collection(NamespaceId(1), CollectionId(id));
+        let ranked: Vec<u64> = ranking(&coll, &mixed, 1)
+            .iter()
+            .map(|n| n.node_id)
+            .collect();
+        assert!(!ranked.contains(&2), "collection {id}: {ranked:?}");
+    }
+}
+
+/// The scores of `PlacementKey::repo(1, 0x0123456789abcdef)` on nodes 1–3.
+const GOLDEN_REPO_SCORES: [u64; 3] = [0x3537d026ee9f9c5a, 0xcde5b3d5f21aae68, 0x4c5672f7826dcc26];

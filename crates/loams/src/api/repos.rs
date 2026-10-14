@@ -957,8 +957,18 @@ mod served {
                 protections: protections.unwrap_or_else(|| current.protections.clone()),
                 request_digest: request_digest.to_vec(),
             };
-            let receipt = log
-                .commit_config(key, change)
+            // Committed on the repository's sequencer owner (GT1 Task 14): here, forwarded,
+            // or here without the lease when the owner cannot be reached.
+            let receipt = self
+                .git
+                .sequencers
+                .commit_config(
+                    record.ns,
+                    &format!("{LOCAL_ORG}/{}", req.namespace),
+                    &record.repo_id,
+                    key,
+                    change,
+                )
                 .await
                 .map_err(|err| ref_error(name.as_str(), err))?;
             let snapshot = log

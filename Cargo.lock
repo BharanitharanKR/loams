@@ -7670,6 +7670,7 @@ name = "loams-agentd-connect"
 version = "0.1.0-preview.2"
 dependencies = [
  "axum 0.8.9",
+ "base64 0.23.1",
  "buffa",
  "buffa-descriptor",
  "buffa-types",
@@ -7678,15 +7679,25 @@ dependencies = [
  "connectrpc-build",
  "futures",
  "http",
+ "hyper-util",
+ "jsonwebtoken",
  "loams-agentd-proto",
  "loams-agentd-rpc",
  "loams-agentd-sessions",
+ "rcgen",
+ "reqwest 0.12.28",
  "reqwest 0.13.5",
+ "ring",
+ "rustls",
+ "rustls-pemfile",
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror 2.0.21",
  "tokio",
+ "tokio-rustls",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -8134,6 +8145,7 @@ dependencies = [
  "loams-meta-conformance",
  "loams-store",
  "object_store 0.14.2",
+ "postcard",
  "proptest",
  "prost 0.14.4",
  "prost-build",

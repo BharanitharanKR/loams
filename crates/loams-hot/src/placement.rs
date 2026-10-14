@@ -15,11 +15,14 @@ use crate::registry::{NodeDescriptor, NodeRegistry};
 
 /// What kind of resource a [`PlacementKey`] names (D75). M1 places only
 /// collections; M2 adds stream partitions and consumer groups, M3 graphs,
-/// M4 tables.
+/// M4 tables. Loams Git places repository sequencers (GT1 Task 14, Ruling
+/// 26).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[non_exhaustive]
 pub enum ResourceKind {
     Collection,
+    /// A Loams Git repository's sequencer, run by a `gateway` node.
+    Repo,
 }
 
 impl ResourceKind {
@@ -28,6 +31,17 @@ impl ResourceKind {
     fn tag(self) -> u8 {
         match self {
             ResourceKind::Collection => 0,
+            ResourceKind::Repo => 1,
+        }
+    }
+
+    /// Whether a node with `roles` can own a resource of this kind:
+    /// collections go to `query` nodes, repository sequencers to `gateway`
+    /// nodes (which serve `RepoService` and the git routes).
+    pub fn served_by(self, roles: &crate::registry::Roles) -> bool {
+        match self {
+            ResourceKind::Collection => roles.query,
+            ResourceKind::Repo => roles.gateway,
         }
     }
 }
@@ -51,6 +65,18 @@ impl PlacementKey {
             shard: None,
         }
     }
+
+    /// The key of repository `repo_hash` in `ns` (Ruling 26, T0-13): the
+    /// caller hashes the repository id (`loams-git` takes the first 8 bytes,
+    /// big-endian, of `sha256(repo_id)`).
+    pub fn repo(ns: NamespaceId, repo_hash: u64) -> Self {
+        Self {
+            ns,
+            kind: ResourceKind::Repo,
+            id: repo_hash,
+            shard: None,
+        }
+    }
 }
 
 /// `xxh3_64(ns BE ‖ id BE ‖ node BE)` for an unsharded collection (Ruling
@@ -68,8 +94,9 @@ pub fn rendezvous_score(key: &PlacementKey, node_id: u64) -> u64 {
     xxh3_64(&input)
 }
 
-/// The whole rendezvous ranking of `key` over the `query` nodes of `nodes`
-/// (E62): by `(score desc, node_id asc)`, except that the first
+/// The whole rendezvous ranking of `key` over the nodes of `nodes` that
+/// serve its kind (`query` for a collection, `gateway` for a repository;
+/// [`ResourceKind::served_by`]) (E62): by `(score desc, node_id asc)`, except that the first
 /// `replication` places take the best-ranked node of a zone not yet chosen
 /// until every zone is used; the rest follow in score order.
 pub fn ranking<'a>(
@@ -79,7 +106,7 @@ pub fn ranking<'a>(
 ) -> Vec<&'a NodeDescriptor> {
     let mut rest: Vec<(u64, &NodeDescriptor)> = nodes
         .iter()
-        .filter(|node| node.roles.query)
+        .filter(|node| key.kind.served_by(&node.roles))
         .map(|node| (rendezvous_score(key, node.node_id), node))
         .collect();
     rest.sort_by(|(a, na), (b, nb)| b.cmp(a).then(na.node_id.cmp(&nb.node_id)));

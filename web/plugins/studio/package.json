@@ -33,7 +33,8 @@
       "slots": [
         "console.page",
         "shell.nav.section",
-        "shell.header.server"
+        "shell.header.server",
+        "palette.command"
       ],
       "permissions": [
         "agentd:use",
@@ -55,8 +56,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@connectrpc/connect": "2.2.0",
+    "@loams/agentd-client": "workspace:*",
     "@loams/console-host": "workspace:*",
     "@loams/cordis": "workspace:*",
+    "@loams/proto": "workspace:*",
     "@loams/slots": "workspace:*",
     "@loams/studio-ui": "workspace:*",
     "@loams/ui": "workspace:*",

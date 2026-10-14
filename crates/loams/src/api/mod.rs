@@ -27,6 +27,9 @@ mod connect_query_filters;
 mod connect_query_ir;
 mod errors;
 pub mod events;
+// Loams Git's forwarded commits and cluster seams (GT1 Task 14).
+#[cfg(feature = "git")]
+pub mod git_internal;
 pub(crate) mod graph;
 pub mod hot;
 pub mod house_proxy;

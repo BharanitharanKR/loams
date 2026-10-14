@@ -7,7 +7,9 @@
 import { Card, Checkbox, Field, Input, Select } from '@loams/ui';
 import { useState } from 'react';
 import type { StudioAgentd } from '../agentd.js';
+import type { StudioKeys } from '../palette/commands.js';
 import { Hosts } from './Hosts.js';
+import { KeybindingsCard } from './Keybindings.js';
 
 export const SETTINGS_KEY = 'loams.studio.settings';
 
@@ -68,16 +70,27 @@ export function readSettings(): StudioSettings {
   }
 }
 
+function store(next: StudioSettings): void {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+  } catch {
+    // Storage blocked: the choice lasts for this page.
+  }
+}
+
+/** Changes this device's defaults (the palette's harness and model switches, SD1 Task 24). */
+export function writeSettings(patch: Partial<StudioSettings>): StudioSettings {
+  const next = { ...readSettings(), ...patch };
+  store(next);
+  return next;
+}
+
 function useSettings() {
   const [settings, setSettings] = useState(readSettings);
   const update = (patch: Partial<StudioSettings>) =>
     setSettings((prev) => {
       const next = { ...prev, ...patch };
-      try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
-      } catch {
-        // Storage blocked: the choice lasts for this page.
-      }
+      store(next);
       return next;
     });
   return [settings, update] as const;
@@ -88,7 +101,7 @@ const APPROVAL_LABEL: Record<ApprovalMode, string> = {
   'full-access': 'Full access: never ask',
 };
 
-export function SettingsPage({ agentd }: { agentd: StudioAgentd }) {
+export function SettingsPage({ agentd, keys }: { agentd: StudioAgentd; keys?: StudioKeys }) {
   const [s, update] = useSettings();
   return (
     <div className="mx-auto flex max-w-[760px] flex-col gap-5 px-6 py-8">
@@ -171,6 +184,7 @@ export function SettingsPage({ agentd }: { agentd: StudioAgentd }) {
           />
         </div>
       </Card>
+      {keys && <KeybindingsCard store={keys.keybindings} platform={keys.platform} />}
     </div>
   );
 }
