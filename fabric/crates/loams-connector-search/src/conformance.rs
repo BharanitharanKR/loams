@@ -507,19 +507,46 @@ impl SearchHarness {
                     None,
                 )
                 .await;
-            let a = admin
+            // A scroll, so every document is counted: one `_search` returns
+            // at most `index.max_result_window` (10,000) hits, which the
+            // bench's 10,000 batch passes from its second round.
+            let mut a = admin
                 .json(
                     Method::POST,
-                    &format!("/{name}/_search"),
-                    Some(&json!({"size": 10000, "_source": ["id"], "query": {"match_all": {}}})),
+                    &format!("/{name}/_search?scroll=1m"),
+                    Some(&json!({"size": 1000, "_source": ["id"], "query": {"match_all": {}}})),
                 )
                 .await
                 .map_err(failed)?;
-            for h in a["hits"]["hits"].as_array().cloned().unwrap_or_default() {
-                // One document per `_id`; a duplicate write would be a
-                // second document with the same `id` field.
-                let id = h["_source"]["id"].as_str().unwrap_or("?").to_owned();
-                *out.entry(id).or_default() += 1;
+            loop {
+                let hits = a["hits"]["hits"].as_array().cloned().unwrap_or_default();
+                for h in &hits {
+                    // One document per `_id`; a duplicate write would be a
+                    // second document with the same `id` field.
+                    let id = h["_source"]["id"].as_str().unwrap_or("?").to_owned();
+                    *out.entry(id).or_default() += 1;
+                }
+                let Some(scroll) = a["_scroll_id"].as_str().map(str::to_owned) else {
+                    break;
+                };
+                if hits.is_empty() {
+                    let _ = admin
+                        .json(
+                            Method::DELETE,
+                            "/_search/scroll",
+                            Some(&json!({"scroll_id": scroll})),
+                        )
+                        .await;
+                    break;
+                }
+                a = admin
+                    .json(
+                        Method::POST,
+                        "/_search/scroll",
+                        Some(&json!({"scroll": "1m", "scroll_id": scroll})),
+                    )
+                    .await
+                    .map_err(failed)?;
             }
         }
         Ok(out
