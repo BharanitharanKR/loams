@@ -20,7 +20,8 @@ use object_store::memory::InMemory;
 use object_store::path::Path;
 use object_store::{ObjectStore, ObjectStoreExt};
 
-async fn gcs_stores() -> Vec<(Arc<dyn ObjectStore>, String, &'static str)> {
+/// Each store, the way its test objects go in, its bucket and its name.
+async fn gcs_stores() -> Vec<(Arc<dyn ObjectStore>, Seed, String, &'static str)> {
     let mut out = Vec::new();
     if real(
         "LOAMS_CONNECTORS_P2_STACK",
@@ -28,13 +29,18 @@ async fn gcs_stores() -> Vec<(Arc<dyn ObjectStore>, String, &'static str)> {
         "fake-gcs-server",
     ) {
         let bucket = env("LOAMS_FAKE_GCS_BUCKET");
+        let endpoint = env("LOAMS_FAKE_GCS_ENDPOINT");
         let s = real_store(
             Backend::Gcs,
-            serde_json::json!({"bucket": bucket, "endpoint": env("LOAMS_FAKE_GCS_ENDPOINT"), "allow_http": true}),
+            serde_json::json!({"bucket": bucket, "endpoint": endpoint, "allow_http": true}),
             StaticSecrets::new(),
         )
         .await;
-        out.push((s, bucket, "fake-gcs-server"));
+        let seed = Seed::GcsJsonUpload {
+            endpoint,
+            bucket: bucket.clone(),
+        };
+        out.push((s, seed, bucket, "fake-gcs-server"));
     }
     if real(
         "LOAMS_CONNECTORS_NIGHTLY",
@@ -48,12 +54,12 @@ async fn gcs_stores() -> Vec<(Arc<dyn ObjectStore>, String, &'static str)> {
             StaticSecrets::new().with("sa", env("LOAMS_GCS_SERVICE_ACCOUNT_KEY")),
         )
         .await;
-        out.push((s, bucket, "GCS"));
+        out.push((s, Seed::Store, bucket, "GCS"));
     }
     out
 }
 
-async fn azure_stores() -> Vec<(Arc<dyn ObjectStore>, String, &'static str)> {
+async fn azure_stores() -> Vec<(Arc<dyn ObjectStore>, Seed, String, &'static str)> {
     let mut out = Vec::new();
     for (stack, prefix, what) in [
         ("LOAMS_CONNECTORS_P2_STACK", "LOAMS_AZURITE", "Azurite"),
@@ -83,19 +89,19 @@ async fn azure_stores() -> Vec<(Arc<dyn ObjectStore>, String, &'static str)> {
             StaticSecrets::new().with("key", env(&vars[2])),
         )
         .await;
-        out.push((s, container, what));
+        out.push((s, Seed::Store, container, what));
     }
     out
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn gcs_and_blob_high_water_resume() {
-    listing_high_water_resume(Arc::new(InMemory::new()), "mem", "in").await;
+    listing_high_water_resume(Arc::new(InMemory::new()), &Seed::Store, "mem", "in").await;
     let mut stores = gcs_stores().await;
     stores.extend(azure_stores().await);
-    for (store, bucket, what) in stores {
+    for (store, seed, bucket, what) in stores {
         eprintln!("high-water resume on {what}");
-        listing_high_water_resume(store, &bucket, &run_prefix("hw")).await;
+        listing_high_water_resume(store, &seed, &bucket, &run_prefix("hw")).await;
     }
 }
 

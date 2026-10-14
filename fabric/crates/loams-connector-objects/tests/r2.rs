@@ -54,7 +54,7 @@ async fn r2_fixture_replay_and_nightly() {
     )
     .await;
     let p = run_prefix("r2");
-    listing_high_water_resume(store.clone(), &bucket, &format!("{p}/list")).await;
+    listing_high_water_resume(store.clone(), &Seed::Store, &bucket, &format!("{p}/list")).await;
     conditional_put_check(store.clone(), &format!("{p}/cond")).await;
     sink_crash_resume(store, &format!("{p}/crash")).await;
 }

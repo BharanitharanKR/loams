@@ -267,14 +267,53 @@ pub async fn start_source(
 
 /// Put `n` small objects `<prefix>/obj-<i>.json`, starting at `from`.
 pub async fn put_objects(store: &dyn ObjectStore, prefix: &str, from: u32, n: u32) {
+    seed_objects(&Seed::Store, store, prefix, from, n).await;
+}
+
+/// How a suite puts its test objects into the system under test.
+#[derive(Debug, Clone)]
+pub enum Seed {
+    /// Through the store itself (`ObjectStore::put`).
+    Store,
+    /// Through GCS's JSON upload API (`uploadType=media`). fake-gcs-server
+    /// serves the XML API's listing and GET, which is all the listing source
+    /// uses, but not its plain object PUT (only signed-URL uploads), which is
+    /// what `object_store`'s GCS `put` sends; so on the emulator the test
+    /// objects go in through the JSON API instead.
+    GcsJsonUpload { endpoint: String, bucket: String },
+}
+
+/// Put `n` small objects `<prefix>/obj-<i>.json`, starting at `from`, the
+/// way `seed` says.
+pub async fn seed_objects(seed: &Seed, store: &dyn ObjectStore, prefix: &str, from: u32, n: u32) {
+    let http = reqwest::Client::new();
     for i in from..from + n {
-        store
-            .put(
-                &Path::from(format!("{prefix}/obj-{i:05}.json")),
-                format!("{{\"i\":{i}}}").into_bytes().into(),
-            )
-            .await
-            .expect("put");
+        let key = format!("{prefix}/obj-{i:05}.json");
+        let body = format!("{{\"i\":{i}}}").into_bytes();
+        match seed {
+            Seed::Store => {
+                store.put(&Path::from(key), body.into()).await.expect("put");
+            }
+            Seed::GcsJsonUpload { endpoint, bucket } => {
+                let url = format!(
+                    "{}/upload/storage/v1/b/{bucket}/o",
+                    endpoint.trim_end_matches('/')
+                );
+                let resp = http
+                    .post(url)
+                    .query(&[("uploadType", "media"), ("name", key.as_str())])
+                    .header("content-type", "application/json")
+                    .body(body)
+                    .send()
+                    .await
+                    .expect("upload");
+                assert!(
+                    resp.status().is_success(),
+                    "upload {key}: {}",
+                    resp.status()
+                );
+            }
+        }
     }
 }
 
@@ -396,9 +435,14 @@ pub async fn conditional_put_check(store: Arc<dyn ObjectStore>, prefix: &str) {
 
 /// The listing source reads every object once; after a stop, new objects
 /// above the high-water key are read and nothing is read twice.
-pub async fn listing_high_water_resume(store: Arc<dyn ObjectStore>, bucket: &str, prefix: &str) {
+pub async fn listing_high_water_resume(
+    store: Arc<dyn ObjectStore>,
+    seed: &Seed,
+    bucket: &str,
+    prefix: &str,
+) {
     use loams_connector_sdk::testing::memory::MemoryCheckpointStore;
-    put_objects(&*store, prefix, 0, 25).await;
+    seed_objects(seed, &*store, prefix, 0, 25).await;
     let fabric = MemoryFabric::new();
     let ckpt = MemoryCheckpointStore::new();
     let src = serde_json::json!({});
@@ -413,7 +457,7 @@ pub async fn listing_high_water_resume(store: Arc<dyn ObjectStore>, bucket: &str
     .await;
     eventually("25 objects", || fabric.len() == 25).await;
     h.stop().await;
-    put_objects(&*store, prefix, 25, 10).await;
+    seed_objects(seed, &*store, prefix, 25, 10).await;
     let h = start_source(
         &fabric,
         &ckpt,
