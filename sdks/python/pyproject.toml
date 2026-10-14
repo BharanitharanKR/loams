@@ -87,7 +87,9 @@ mypy_path = "src"
 # `--strict` honest about the code this SDK owns rather than silencing it.
 [[tool.mypy.overrides]]
 module = [
+  "loams.admin.*",
   "loams.approvals.*",
+  "loams.auth.*",
   "loams.devices.*",
   "loams.errors.*",
   "loams.instance.*",

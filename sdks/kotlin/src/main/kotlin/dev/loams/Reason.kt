@@ -233,6 +233,60 @@ enum class Reason {
     /** `live_index_not_ready` (docs/api/reasons.md). */
     LIVE_INDEX_NOT_READY,
 
+    /** The caller's org role is below the one the admin RPC needs, or the caller is not in the org. */
+    ROLE_REQUIRED,
+
+    /** First-run setup has not created the org yet. */
+    SETUP_REQUIRED,
+
+    /** The call carried no credential. */
+    TOKEN_MISSING,
+
+    /** The credential is not an API key, a session token or a JWT, or more than one Authorization header was sent. */
+    TOKEN_MALFORMED,
+
+    /** The API key was revoked, or the console session was signed out or its person left the org. */
+    TOKEN_REVOKED,
+
+    /** The OIDC token's nbf is in the future. */
+    TOKEN_NOT_YET_VALID,
+
+    /** The OIDC token's signature does not verify. */
+    TOKEN_BAD_SIGNATURE,
+
+    /** The OIDC token is for another audience. */
+    TOKEN_WRONG_AUDIENCE,
+
+    /** The OIDC token is from an issuer this engine does not trust. */
+    TOKEN_WRONG_ISSUER,
+
+    /** The OIDC token is signed with a key its issuer's JWKS does not have. */
+    TOKEN_UNKNOWN_KEY,
+
+    /** The OIDC token is signed with an algorithm other than RS256 or EdDSA. */
+    TOKEN_ALGORITHM_NOT_ALLOWED,
+
+    /** No key file or metastore record admits the API key. */
+    API_KEY_INVALID,
+
+    /** This engine's auth mode does not take this kind of credential. */
+    CREDENTIAL_NOT_ACCEPTED,
+
+    /** A credential was sent in the query string. */
+    CREDENTIAL_IN_QUERY_STRING,
+
+    /** A cookie-authenticated call that is not a GET lacked the session's CSRF token. */
+    CSRF_TOKEN_INVALID,
+
+    /** A valid OIDC or tailnet identity that is not on the engine's allowlist. */
+    PRINCIPAL_NOT_ALLOWED,
+
+    /** A browser call from an origin the engine's CORS allowlist does not have. */
+    CORS_ORIGIN_NOT_ALLOWED,
+
+    /** The credential cannot be checked now: the issuer's JWKS or the principal store is unreachable. */
+    AUTH_UNAVAILABLE,
+
     /** A malformed field or an unparseable value. */
     INVALID_ARGUMENT,
 
@@ -356,6 +410,24 @@ object ReasonRegistry {
         Reason.LIVE_DEPLOY_CONFLICT,
         Reason.LIVE_SCHEMA_VIOLATION,
         Reason.LIVE_INDEX_NOT_READY,
+        Reason.ROLE_REQUIRED,
+        Reason.SETUP_REQUIRED,
+        Reason.TOKEN_MISSING,
+        Reason.TOKEN_MALFORMED,
+        Reason.TOKEN_REVOKED,
+        Reason.TOKEN_NOT_YET_VALID,
+        Reason.TOKEN_BAD_SIGNATURE,
+        Reason.TOKEN_WRONG_AUDIENCE,
+        Reason.TOKEN_WRONG_ISSUER,
+        Reason.TOKEN_UNKNOWN_KEY,
+        Reason.TOKEN_ALGORITHM_NOT_ALLOWED,
+        Reason.API_KEY_INVALID,
+        Reason.CREDENTIAL_NOT_ACCEPTED,
+        Reason.CREDENTIAL_IN_QUERY_STRING,
+        Reason.CSRF_TOKEN_INVALID,
+        Reason.PRINCIPAL_NOT_ALLOWED,
+        Reason.CORS_ORIGIN_NOT_ALLOWED,
+        Reason.AUTH_UNAVAILABLE,
         Reason.INVALID_ARGUMENT,
         Reason.NOT_FOUND,
         Reason.ALREADY_EXISTS,
@@ -432,6 +504,24 @@ object ReasonRegistry {
         Reason.LIVE_DEPLOY_CONFLICT to "live_deploy_conflict",
         Reason.LIVE_SCHEMA_VIOLATION to "live_schema_violation",
         Reason.LIVE_INDEX_NOT_READY to "live_index_not_ready",
+        Reason.ROLE_REQUIRED to "role_required",
+        Reason.SETUP_REQUIRED to "setup_required",
+        Reason.TOKEN_MISSING to "token_missing",
+        Reason.TOKEN_MALFORMED to "token_malformed",
+        Reason.TOKEN_REVOKED to "token_revoked",
+        Reason.TOKEN_NOT_YET_VALID to "token_not_yet_valid",
+        Reason.TOKEN_BAD_SIGNATURE to "token_bad_signature",
+        Reason.TOKEN_WRONG_AUDIENCE to "token_wrong_audience",
+        Reason.TOKEN_WRONG_ISSUER to "token_wrong_issuer",
+        Reason.TOKEN_UNKNOWN_KEY to "token_unknown_key",
+        Reason.TOKEN_ALGORITHM_NOT_ALLOWED to "token_algorithm_not_allowed",
+        Reason.API_KEY_INVALID to "api_key_invalid",
+        Reason.CREDENTIAL_NOT_ACCEPTED to "credential_not_accepted",
+        Reason.CREDENTIAL_IN_QUERY_STRING to "credential_in_query_string",
+        Reason.CSRF_TOKEN_INVALID to "csrf_token_invalid",
+        Reason.PRINCIPAL_NOT_ALLOWED to "principal_not_allowed",
+        Reason.CORS_ORIGIN_NOT_ALLOWED to "cors_origin_not_allowed",
+        Reason.AUTH_UNAVAILABLE to "auth_unavailable",
         Reason.INVALID_ARGUMENT to "invalid_argument",
         Reason.NOT_FOUND to "not_found",
         Reason.ALREADY_EXISTS to "already_exists",
@@ -515,6 +605,24 @@ object ReasonRegistry {
         Reason.LIVE_DEPLOY_CONFLICT to Code.FAILED_PRECONDITION,
         Reason.LIVE_SCHEMA_VIOLATION to Code.INVALID_ARGUMENT,
         Reason.LIVE_INDEX_NOT_READY to Code.FAILED_PRECONDITION,
+        Reason.ROLE_REQUIRED to Code.PERMISSION_DENIED,
+        Reason.SETUP_REQUIRED to Code.FAILED_PRECONDITION,
+        Reason.TOKEN_MISSING to Code.UNAUTHENTICATED,
+        Reason.TOKEN_MALFORMED to Code.UNAUTHENTICATED,
+        Reason.TOKEN_REVOKED to Code.UNAUTHENTICATED,
+        Reason.TOKEN_NOT_YET_VALID to Code.UNAUTHENTICATED,
+        Reason.TOKEN_BAD_SIGNATURE to Code.UNAUTHENTICATED,
+        Reason.TOKEN_WRONG_AUDIENCE to Code.UNAUTHENTICATED,
+        Reason.TOKEN_WRONG_ISSUER to Code.UNAUTHENTICATED,
+        Reason.TOKEN_UNKNOWN_KEY to Code.UNAUTHENTICATED,
+        Reason.TOKEN_ALGORITHM_NOT_ALLOWED to Code.UNAUTHENTICATED,
+        Reason.API_KEY_INVALID to Code.UNAUTHENTICATED,
+        Reason.CREDENTIAL_NOT_ACCEPTED to Code.UNAUTHENTICATED,
+        Reason.CREDENTIAL_IN_QUERY_STRING to Code.UNAUTHENTICATED,
+        Reason.CSRF_TOKEN_INVALID to Code.PERMISSION_DENIED,
+        Reason.PRINCIPAL_NOT_ALLOWED to Code.PERMISSION_DENIED,
+        Reason.CORS_ORIGIN_NOT_ALLOWED to Code.PERMISSION_DENIED,
+        Reason.AUTH_UNAVAILABLE to Code.UNAVAILABLE,
         Reason.INVALID_ARGUMENT to Code.INVALID_ARGUMENT,
         Reason.NOT_FOUND to Code.NOT_FOUND,
         Reason.ALREADY_EXISTS to Code.ALREADY_EXISTS,
