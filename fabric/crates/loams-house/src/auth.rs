@@ -24,6 +24,9 @@ pub enum Source {
     Headers,
     /// `Authorization: Basic …`.
     Basic,
+    /// `Authorization: Bearer <key>` (HS1 Task 20): a key alone, which names
+    /// its user. The engine's link to the House uses it (`--house-key-file`).
+    Bearer,
     /// `user` / `password` parameters.
     Params,
     /// None given: `default` with no password.
@@ -101,11 +104,21 @@ pub fn credentials(
             source: Source::Headers,
         });
     }
+    if let Some(token) = basic.and_then(|auth| {
+        auth.strip_prefix("Bearer ")
+            .or_else(|| auth.strip_prefix("bearer "))
+    }) {
+        return Ok(Credentials {
+            user: String::new(),
+            password: token.trim().to_string(),
+            source: Source::Bearer,
+        });
+    }
     if let Some(auth) = basic {
         let encoded = auth
             .strip_prefix("Basic ")
             .or_else(|| auth.strip_prefix("basic "))
-            .ok_or_else(|| failed("", "the Authorization header is not Basic"))?;
+            .ok_or_else(|| failed("", "the Authorization header is neither Basic nor Bearer"))?;
         let decoded = base64::engine::general_purpose::STANDARD
             .decode(encoded.trim())
             .ok()
@@ -140,6 +153,19 @@ pub fn authenticate<'a>(
     users: &'a [UserMap],
     credentials: &Credentials,
 ) -> Result<&'a UserMap, HouseError> {
+    if credentials.source == Source::Bearer {
+        // A key names its user: every user is compared, so the work does not
+        // say which one matched, or whether one did. An empty key matches none.
+        let mut matched = None;
+        for user in users {
+            if user.verifies(credentials.password()) && matched.is_none() {
+                matched = Some(user);
+            }
+        }
+        return matched
+            .filter(|_| !credentials.password().is_empty())
+            .ok_or_else(|| failed("", "the key is not one of this House's"));
+    }
     let found = users.iter().find(|u| u.user == credentials.user);
     // An unknown user is compared against a dummy, so it costs what a known one does.
     let dummy = UserMap::dev("", "\u{0}loams-no-such-user", 0, true);
@@ -253,5 +279,55 @@ mod tests {
         let ok = credentials(&[], &pairs(&[("user", "alice"), ("password", "secret")]))
             .expect("credentials");
         assert_eq!(authenticate(&users, &ok).expect("alice").namespace, 1);
+    }
+
+    #[test]
+    fn bearer_basic_header_and_param_forms() {
+        let users = vec![
+            UserMap::dev("default", "house-key", 1, false),
+            UserMap::dev("reader", "read-key", 1, true),
+        ];
+        let forms = [
+            (pairs(&[("Authorization", "Bearer house-key")]), Vec::new()),
+            (
+                pairs(&[("Authorization", "Basic ZGVmYXVsdDpob3VzZS1rZXk=")]),
+                Vec::new(),
+            ),
+            (
+                pairs(&[
+                    ("X-ClickHouse-User", "default"),
+                    ("X-ClickHouse-Key", "house-key"),
+                ]),
+                Vec::new(),
+            ),
+            (
+                Vec::new(),
+                pairs(&[("user", "default"), ("password", "house-key")]),
+            ),
+        ];
+        for (headers, params) in forms {
+            let c = credentials(&headers, &params).expect("credentials");
+            assert_eq!(authenticate(&users, &c).expect("signs in").user, "default");
+        }
+        // A key names its user; a wrong or empty key is the one answer.
+        let c = credentials(&pairs(&[("Authorization", "Bearer read-key")]), &[]).expect("bearer");
+        assert_eq!(c.source, Source::Bearer);
+        assert!(authenticate(&users, &c).expect("reader").readonly);
+        for bad in ["Bearer nope", "Bearer ", "Token house-key"] {
+            match credentials(&pairs(&[("Authorization", bad)]), &[]) {
+                Ok(c) => assert_eq!(authenticate(&users, &c).expect_err(bad).code(), 516),
+                Err(err) => assert_eq!(err.code(), 516),
+            }
+        }
+        // A Bearer key with parameters is two sources: refused.
+        let err = credentials(
+            &pairs(&[("Authorization", "Bearer house-key")]),
+            &pairs(&[("user", "default")]),
+        )
+        .expect_err("mixed");
+        assert_eq!(err.code(), 516);
+        // The key never prints.
+        let c = credentials(&pairs(&[("Authorization", "Bearer house-key")]), &[]).expect("bearer");
+        assert!(!format!("{c:?}").contains("house-key"));
     }
 }

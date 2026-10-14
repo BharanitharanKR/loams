@@ -39,5 +39,10 @@ tokio = { workspace = true, features = ["rt-multi-thread", "signal", "macros"] }
 # `DEP_CHDB_LIB_DIR` this package's `build.rs` turns into an rpath.
 loams-chdb-sys = { path = "../loams-chdb-sys", optional = true }
 
+[dev-dependencies]
+# `tls_listener_serves_with_its_certificate` (HS1 Task 20): a TLS client that
+# trusts only the House's own certificate.
+rustls.workspace = true
+
 [lints]
 workspace = true

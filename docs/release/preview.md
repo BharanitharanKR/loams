@@ -156,7 +156,7 @@ flowchart LR
 | Durable store on TiKV | Durable execution state on TiKV for clusters | In progress |
 | Loams Live | A reactive document database: transactions, indexes, live queries and a TypeScript SDK, on an embedded store or on TiKV (`live-tikv`) | Preview. Deploys, rollback, validators and online index changes through `LiveAdminService` on the main port, over the tailnet; a deploy reaches every node at once |
 | Loams Graph | `loams.graph.v1` on the main port, GQL on Grafeo (cargo feature `graph`) | Preview. Writes reach the Loams log before they are acknowledged, with a fenced single owner per graph, snapshots in the bucket and crash recovery (GR1 Tasks 11 to 14), on Loams' Grafeo fork |
-| Loams House | ClickHouse-compatible analytics on chDB in `loams-fabric`, with `loams.house.v1` proxied by the engine | Preview. `--profile house` serves its ClickHouse HTTP interface on your tailnet through its own sidecar, with chDB access control, statement checks and sealed workers. Not wired to the engine yet (the engine answers `house_not_configured`); on `dev`, lake tables take `INSERT` (every declared format, `VALUES`, `SELECT`), `CREATE TABLE … AS SELECT` and `TRUNCATE` (HS1 Task 12; not in preview.2) |
+| Loams House | ClickHouse-compatible analytics on chDB in `loams-fabric`, with `loams.house.v1` proxied by the engine | Preview. `--profile house` serves its ClickHouse HTTP interface on your tailnet through its own sidecar, with chDB access control, statement checks and sealed workers. Not wired to the engine in preview.2 (the engine answers `house_not_configured`); on `dev`, the engine reaches it over TLS on a private network (HS1 Task 20, `LOAMS_HOUSE_ENDPOINT`), and lake tables take `INSERT` (every declared format, `VALUES`, `SELECT`), `CREATE TABLE … AS SELECT` and `TRUNCATE` (HS1 Task 12; not in preview.2) |
 | Loams SQL | MySQL-compatible SQL on a patched TiDB (`v8.5.8-loams.1`) over TiKV | Preview |
 | Loams Postgres | A fork of Neon whose storage lives on the bucket; the compose stack runs its storage and computes | Preview. The compose stack runs its storage and computes; `--profile postgres-control` adds `pg-control` and `pg-runner`, which provision computes and endpoints |
 | Postgres and MySQL wire | SQL over the Postgres and MySQL wire protocols, over collections | Preview |
@@ -301,6 +301,7 @@ the tailnet:
 
 ```sh
 docker compose exec house cat /var/lib/loams-house/house.key    # the password, made on first start
+# (images after preview.2 keep it in /var/lib/loams-house-link/house.key)
 curl -u "default:$PASSWORD" https://loams-house.<tailnet>.ts.net/ --data-binary 'SELECT version()'
 ```
 
