@@ -317,6 +317,11 @@ impl WarmPool {
             };
             let id = c.record.id.clone();
             match m.check(c, &wanted).await {
+                // One compute the runtime failed on does not hold up the
+                // others: the next tick checks it again.
+                Err(ReconcileError::Runtime(e)) => {
+                    tracing::warn!(compute = %id, error = %e, "a warm compute's check failed; retrying");
+                }
                 Err(e) => {
                     self.remember(warm);
                     return Err(e);
@@ -342,12 +347,18 @@ impl WarmPool {
                     out.pending += 1;
                     break 'keys;
                 }
-                if m.start(key).await? {
-                    out.started += 1;
-                    out.pending += 1;
-                } else {
+                match m.start(key).await {
+                    Ok(true) => {
+                        out.started += 1;
+                        out.pending += 1;
+                    }
                     // The runtime refused this key: the next tick tries again.
-                    continue 'keys;
+                    Ok(false) => continue 'keys,
+                    Err(ReconcileError::Runtime(e)) => {
+                        tracing::warn!(namespace = %key.namespace, error = %e, "a warm compute did not start; retrying");
+                        continue 'keys;
+                    }
+                    Err(e) => return Err(e),
                 }
             }
         }
@@ -519,11 +530,19 @@ impl<S: PgControlStore> Maintainer<'_, S> {
         }
         let id = parse_id(&c.record)?;
         self.renew().await?;
-        self.computes
-            .runtime
-            .stop(Self::ns(&c.record), &id)
-            .await
-            .map_err(|e| ReconcileError::Runtime(format!("stopping a warm compute: {e}")))?;
+        match self.computes.runtime.stop(Self::ns(&c.record), &id).await {
+            Ok(()) => {}
+            // The runtime cannot name such a compute (a namespace it
+            // refuses): there is nothing to stop, and the record goes.
+            Err(RuntimeError::InvalidArgument(why)) => {
+                tracing::warn!(compute = %c.record.id, why, "the runtime has no such warm compute; removing its record");
+            }
+            Err(e) => {
+                return Err(ReconcileError::Runtime(format!(
+                    "stopping a warm compute: {e}"
+                )));
+            }
+        }
         match self
             .store
             .delete::<ComputeRec>(&c.record.key(), c.version, &self.fence)

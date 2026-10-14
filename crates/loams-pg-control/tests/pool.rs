@@ -450,3 +450,29 @@ async fn unwanted_pool_drains_once_settled() {
     assert_eq!((t.drained, t.started), (2, 0), "{t:?}");
     assert!(e.unbound().await.is_empty());
 }
+
+/// A warm compute the runtime fails on does not hold up the others: the
+/// tick drains the rest, and the failed one is retried at the next tick.
+#[tokio::test]
+async fn one_failing_compute_does_not_stop_the_tick() {
+    let e = pooled!(2);
+    e.wanted().await;
+    let warm = e.warm(2).await;
+    let (stuck, other) = (&warm[0].id, &warm[1].id);
+    e.runtime.crash(stuck);
+    e.runtime.crash(other);
+    e.runtime.lock().fail_stop.insert(stuck.clone());
+    let t = e.tick().await;
+    assert_eq!(t.drained, 1, "{t:?}");
+    assert!(e.compute(other).await.is_none());
+    assert_eq!(
+        e.compute(stuck).await.map(|c| c.status),
+        Some(ComputeStatus::Stopping)
+    );
+
+    e.runtime.lock().fail_stop.clear();
+    let t = e.tick().await;
+    assert_eq!(t.drained, 1, "{t:?}");
+    assert!(e.compute(stuck).await.is_none());
+    e.warm(2).await;
+}

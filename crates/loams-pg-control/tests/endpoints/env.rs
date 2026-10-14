@@ -55,6 +55,8 @@ pub struct RuntimeInner {
     pub computes: BTreeMap<String, (String, RuntimeStatus)>,
     /// Compute id → (namespace, image) it was started with.
     pub launched: BTreeMap<String, (String, String)>,
+    /// Computes whose stop fails (`Unavailable`).
+    pub fail_stop: std::collections::BTreeSet<String>,
     pub starts: Vec<String>,
     pub stops: Vec<String>,
     pub removed_addresses: Vec<String>,
@@ -166,6 +168,9 @@ impl ComputeRuntime for FakeRuntime {
     async fn stop(&self, _ns: &str, compute_id: &ComputeId) -> Result<(), RuntimeError> {
         let id = compute_id.to_string();
         let mut inner = self.lock();
+        if inner.fail_stop.contains(&id) {
+            return Err(RuntimeError::Unavailable("the API server timed out".into()));
+        }
         if inner.computes.remove(&id).is_some() {
             inner.stops.push(id);
         }
