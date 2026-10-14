@@ -1,30 +1,49 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/diffPanelStore.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// ported to the Loams UI stack. Loams' changes are Apache-2.0.
-import { scopedThreadKey } from "@t3tools/client-runtime/environment";
-import type { RunId, ScopedThreadRef } from "@t3tools/contracts";
+// keyed by thread id; agentd's four sources (working tree, branch, commit, latest turn) in place of T3's scopes and turn ids; view preferences and viewed marks added; kept in memory, with no storage key (T21-9). Loams' changes are Apache-2.0.
+
+// The diff panel's UI state (SD1 Task 20): which diff each thread shows, the view's
+// preferences, and the files the reader marked viewed. Server state is not here: diffs and
+// comments come from the daemon. Nothing is persisted (Shared contracts' storage keys).
+
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
 
-import { resolveStorage } from "./lib/storage";
+import type { DiffSelection } from "./source";
 
-export type DiffPanelSelection =
-  | { kind: "branch"; baseRef: string | null }
-  | { kind: "unstaged" }
-  | { kind: "turn"; turnId: RunId; filePath: string | null; revealRequestId: number };
+export type DiffLayout = "unified" | "split";
 
-// "branch" is the Changes view: everything this checkout changed since its base.
-const DEFAULT_SELECTION: DiffPanelSelection = { kind: "branch", baseRef: null };
+export interface DiffViewPreferences {
+  readonly layout: DiffLayout;
+  readonly wrap: boolean;
+  readonly ignoreWhitespace: boolean;
+  readonly wordDiff: boolean;
+  readonly treeOpen: boolean;
+}
+
+// The working tree is the default: it is what the agent just changed, and what discard and
+// comments act on.
+const DEFAULT_SELECTION: DiffSelection = { kind: "working" };
+
+export const DEFAULT_VIEW: DiffViewPreferences = {
+  layout: "unified",
+  wrap: false,
+  ignoreWhitespace: false,
+  wordDiff: true,
+  treeOpen: false,
+};
 
 interface DiffPanelStoreState {
-  byThreadKey: Record<string, DiffPanelSelection>;
-  branchBaseRefByThreadKey: Record<string, string | null>;
-  selectGitScope: (ref: ScopedThreadRef, scope: "branch" | "unstaged") => void;
-  selectBranchBaseRef: (ref: ScopedThreadRef, baseRef: string | null) => void;
-  selectTurn: (ref: ScopedThreadRef, turnId: RunId, filePath?: string) => void;
-  reconcileTurnSelection: (ref: ScopedThreadRef, availableTurnIds: ReadonlyArray<RunId>) => void;
-  removeThread: (ref: ScopedThreadRef) => void;
+  byThread: Record<string, DiffSelection>;
+  branchBaseRefByThread: Record<string, string | null>;
+  /** Per thread, the viewed files as `path` → the content version they were viewed at. */
+  viewedByThread: Record<string, Record<string, number>>;
+  view: DiffViewPreferences;
+  select: (threadId: string, selection: DiffSelection) => void;
+  selectBranchBaseRef: (threadId: string, baseRef: string | null) => void;
+  setViewed: (threadId: string, path: string, version: number | null) => void;
+  setView: (patch: Partial<DiffViewPreferences>) => void;
+  removeThread: (threadId: string) => void;
 }
 
 function normalizeBaseRef(baseRef: string | null): string | null {
@@ -32,113 +51,63 @@ function normalizeBaseRef(baseRef: string | null): string | null {
   return normalized ? normalized : null;
 }
 
-export const useDiffPanelStore = create<DiffPanelStoreState>()(
-  persist(
-    (set) => ({
-      byThreadKey: {},
-      branchBaseRefByThreadKey: {},
-      selectGitScope: (ref, scope) =>
-        set((state) => {
-          const threadKey = scopedThreadKey(ref);
-          const previous = state.byThreadKey[threadKey];
-          const previousBaseRef =
-            previous?.kind === "branch"
-              ? previous.baseRef
-              : (state.branchBaseRefByThreadKey[threadKey] ?? null);
-          return {
-            byThreadKey: {
-              ...state.byThreadKey,
-              [threadKey]:
-                scope === "branch"
-                  ? { kind: "branch", baseRef: previousBaseRef }
-                  : { kind: "unstaged" },
-            },
-            branchBaseRefByThreadKey:
-              previous?.kind === "branch"
-                ? { ...state.branchBaseRefByThreadKey, [threadKey]: previous.baseRef }
-                : state.branchBaseRefByThreadKey,
-          };
-        }),
-      selectBranchBaseRef: (ref, baseRef) =>
-        set((state) => {
-          const threadKey = scopedThreadKey(ref);
-          const normalizedBaseRef = normalizeBaseRef(baseRef);
-          return {
-            byThreadKey: {
-              ...state.byThreadKey,
-              [threadKey]: { kind: "branch", baseRef: normalizedBaseRef },
-            },
-            branchBaseRefByThreadKey: {
-              ...state.branchBaseRefByThreadKey,
-              [threadKey]: normalizedBaseRef,
-            },
-          };
-        }),
-      selectTurn: (ref, turnId, filePath) =>
-        set((state) => {
-          const threadKey = scopedThreadKey(ref);
-          const previous = state.byThreadKey[threadKey];
-          return {
-            byThreadKey: {
-              ...state.byThreadKey,
-              [threadKey]: {
-                kind: "turn",
-                turnId,
-                filePath: filePath?.trim() || null,
-                revealRequestId: previous?.kind === "turn" ? previous.revealRequestId + 1 : 1,
-              },
-            },
-          };
-        }),
-      reconcileTurnSelection: (ref, availableTurnIds) =>
-        set((state) => {
-          const threadKey = scopedThreadKey(ref);
-          const previous = state.byThreadKey[threadKey];
-          const latestTurnId = availableTurnIds[0];
-          if (
-            previous?.kind !== "turn" ||
-            latestTurnId === undefined ||
-            availableTurnIds.includes(previous.turnId)
-          ) {
-            return state;
-          }
-          return {
-            byThreadKey: {
-              ...state.byThreadKey,
-              [threadKey]: { ...previous, turnId: latestTurnId },
-            },
-          };
-        }),
-      removeThread: (ref) =>
-        set((state) => {
-          const threadKey = scopedThreadKey(ref);
-          if (!(threadKey in state.byThreadKey) && !(threadKey in state.branchBaseRefByThreadKey)) {
-            return state;
-          }
-          const { [threadKey]: _removed, ...byThreadKey } = state.byThreadKey;
-          const { [threadKey]: _removedBaseRef, ...branchBaseRefByThreadKey } =
-            state.branchBaseRefByThreadKey;
-          return { byThreadKey, branchBaseRefByThreadKey };
-        }),
+export const useDiffPanelStore = create<DiffPanelStoreState>()((set) => ({
+  byThread: {},
+  branchBaseRefByThread: {},
+  viewedByThread: {},
+  view: DEFAULT_VIEW,
+  select: (threadId, selection) =>
+    set((state) => {
+      const previous = state.byThread[threadId];
+      // Coming back to "branch" keeps the base the reader picked last time.
+      const next: DiffSelection =
+        selection.kind === "branch" && selection.baseRef === null
+          ? { kind: "branch", baseRef: state.branchBaseRefByThread[threadId] ?? null }
+          : selection;
+      return {
+        byThread: { ...state.byThread, [threadId]: next },
+        branchBaseRefByThread:
+          previous?.kind === "branch"
+            ? { ...state.branchBaseRefByThread, [threadId]: previous.baseRef }
+            : state.branchBaseRefByThread,
+      };
     }),
-    {
-      name: "t3code:diff-panel-state:v1",
-      version: 2,
-      storage: createJSONStorage(() =>
-        resolveStorage(typeof window !== "undefined" ? window.localStorage : undefined),
-      ),
-      partialize: (state) => ({
-        byThreadKey: state.byThreadKey,
-        branchBaseRefByThreadKey: state.branchBaseRefByThreadKey,
-      }),
-    },
-  ),
-);
+  selectBranchBaseRef: (threadId, baseRef) =>
+    set((state) => {
+      const normalizedBaseRef = normalizeBaseRef(baseRef);
+      return {
+        byThread: { ...state.byThread, [threadId]: { kind: "branch", baseRef: normalizedBaseRef } },
+        branchBaseRefByThread: { ...state.branchBaseRefByThread, [threadId]: normalizedBaseRef },
+      };
+    }),
+  setViewed: (threadId, path, version) =>
+    set((state) => {
+      const current = { ...(state.viewedByThread[threadId] ?? {}) };
+      if (version === null) delete current[path];
+      else current[path] = version;
+      return { viewedByThread: { ...state.viewedByThread, [threadId]: current } };
+    }),
+  setView: (patch) => set((state) => ({ view: { ...state.view, ...patch } })),
+  removeThread: (threadId) =>
+    set((state) => {
+      if (
+        !(threadId in state.byThread) &&
+        !(threadId in state.branchBaseRefByThread) &&
+        !(threadId in state.viewedByThread)
+      ) {
+        return state;
+      }
+      const { [threadId]: _removed, ...byThread } = state.byThread;
+      const { [threadId]: _removedBaseRef, ...branchBaseRefByThread } = state.branchBaseRefByThread;
+      const { [threadId]: _removedViewed, ...viewedByThread } = state.viewedByThread;
+      return { byThread, branchBaseRefByThread, viewedByThread };
+    }),
+}));
 
-export function selectThreadDiffPanelSelection(
-  byThreadKey: Record<string, DiffPanelSelection>,
-  ref: ScopedThreadRef | null | undefined,
-): DiffPanelSelection {
-  if (!ref) return DEFAULT_SELECTION;
-  return byThreadKey[scopedThreadKey(ref)] ?? DEFAULT_SELECTION;
+export function selectThreadDiffSelection(
+  byThread: Record<string, DiffSelection>,
+  threadId: string | null | undefined,
+): DiffSelection {
+  if (!threadId) return DEFAULT_SELECTION;
+  return byThread[threadId] ?? DEFAULT_SELECTION;
 }

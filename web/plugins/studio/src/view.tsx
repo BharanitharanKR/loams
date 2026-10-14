@@ -22,6 +22,7 @@ import { FactoryGroup } from './sidebar/Factory.js';
 import { StudioSidebar } from './sidebar/Sidebar.js';
 import { useNewThread } from './sidebar/useThreadActions.js';
 import { DraftCard } from './thread/FactoryLinks.js';
+import { DiffTab } from './thread/LazyDiffTab.js';
 import { FilesTab } from './thread/LazyFilesTab.js';
 import { ThreadTerminalDrawer } from './thread/TerminalDrawer.js';
 
@@ -50,7 +51,12 @@ function ThreadPanel({
         onValueChange={(p) => navigate(studioHref({ ...route, panel: p }))}
         tabs={PANELS.map((p) => ({ value: p, label: PANEL_LABEL[p] }))}
       />
-      {panel === 'files' ? (
+      {panel === 'diff' ? (
+        <DiffTab
+          threadId={route.threadId}
+          onOpenFile={(path) => navigate(studioHref({ ...route, panel: 'files', file: { path } }))}
+        />
+      ) : panel === 'files' ? (
         <FilesTab threadId={route.threadId} {...(route.file ? { link: route.file } : {})} />
       ) : (
         <div className="min-h-0 flex-1 overflow-auto py-4">

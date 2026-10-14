@@ -45,6 +45,13 @@
     {
       "includes": ["packages/studio-ui/src/terminal/output.ts"],
       "linter": { "rules": { "style": { "noNonNullAssertion": "off" } } }
+    },
+    {
+      "includes": [
+        "packages/studio-ui/src/diff/diffRendering.ts",
+        "packages/studio-ui/src/diff/tree/diffFileTree.logic.ts"
+      ],
+      "assist": { "actions": { "source": { "organizeImports": "off" } } }
     }
   ]
 }

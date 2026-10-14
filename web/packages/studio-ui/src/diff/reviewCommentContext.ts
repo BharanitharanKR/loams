@@ -1,33 +1,17 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/reviewCommentContext.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// ported to the Loams UI stack. Loams' changes are Apache-2.0.
+// effect/Schema, the pull-request metadata and the file-comment builder dropped; anchors mapped to and from agentd's ReviewComment (side, line, endLine). Loams' changes are Apache-2.0.
 import type { FileDiffMetadata, SelectedLineRange, SelectionSide } from "@pierre/diffs";
-import { PullRequestContextMetadata, type PullRequestReviewPosition } from "@t3tools/contracts";
-import * as Schema from "effect/Schema";
 
-const ReviewCommentSelectionSchema = Schema.Struct({
-  start: Schema.Number,
-  side: Schema.Literals(["additions", "deletions"]),
-  end: Schema.Number,
-  endSide: Schema.Literals(["additions", "deletions"]),
-});
-type ReviewCommentSelection = typeof ReviewCommentSelectionSchema.Type;
+import type { ReviewSide } from "./source";
 
-export const ReviewCommentContextSchema = Schema.Struct({
-  id: Schema.String,
-  sectionId: Schema.String,
-  sectionTitle: Schema.String,
-  filePath: Schema.String,
-  startIndex: Schema.Number,
-  endIndex: Schema.Number,
-  rangeLabel: Schema.String,
-  text: Schema.String,
-  diff: Schema.String,
-  fenceLanguage: Schema.optional(Schema.String),
-  selection: Schema.optional(ReviewCommentSelectionSchema),
-  pullRequest: Schema.optional(PullRequestContextMetadata),
-});
+interface ReviewCommentSelection {
+  readonly start: number;
+  readonly side: SelectionSide;
+  readonly end: number;
+  readonly endSide: SelectionSide;
+}
 
 export interface ReviewCommentContext {
   readonly id: string;
@@ -41,7 +25,6 @@ export interface ReviewCommentContext {
   readonly diff: string;
   readonly fenceLanguage?: string | undefined;
   readonly selection?: ReviewCommentSelection | undefined;
-  readonly pullRequest?: PullRequestContextMetadata | undefined;
 }
 
 interface DiffReviewLine {
@@ -49,53 +32,6 @@ interface DiffReviewLine {
   readonly oldLineNumber: number | null;
   readonly newLineNumber: number | null;
   readonly content: string;
-}
-
-export function formatReviewCommentFence(language: string, contents: string): string {
-  const longestBacktickRun = Math.max(
-    0,
-    ...Array.from(contents.matchAll(/`+/g), (match) => match[0].length),
-  );
-  const fence = "`".repeat(Math.max(3, longestBacktickRun + 1));
-  return [`${fence}${language}`, contents.trimEnd(), fence].join("\n");
-}
-
-export function buildFileReviewComment(input: {
-  id: string;
-  filePath: string;
-  startLine: number;
-  endLine: number;
-  text: string;
-  contents: string;
-}): ReviewCommentContext {
-  const startLine = Math.max(1, Math.min(input.startLine, input.endLine));
-  const endLine = Math.max(startLine, Math.max(input.startLine, input.endLine));
-  const selectedLines = input.contents.split("\n").slice(startLine - 1, endLine);
-  return {
-    id: input.id,
-    sectionId: `file:${input.filePath}`,
-    sectionTitle: "File comment",
-    filePath: input.filePath,
-    startIndex: startLine - 1,
-    endIndex: endLine - 1,
-    rangeLabel: startLine === endLine ? `L${startLine}` : `L${startLine} to L${endLine}`,
-    text: input.text.trim(),
-    diff: selectedLines.join("\n"),
-    fenceLanguage: inferReviewCommentFenceLanguage(input.filePath),
-  };
-}
-
-export function inferReviewCommentFenceLanguage(filePath: string): string {
-  const normalizedPath = filePath.replaceAll("\\", "/");
-  const fileName = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1).toLowerCase();
-  const extensionIndex = fileName.lastIndexOf(".");
-  if (extensionIndex > 0 && extensionIndex < fileName.length - 1) {
-    return fileName.slice(extensionIndex + 1);
-  }
-  if (fileName.startsWith(".") && fileName.length > 1) {
-    return fileName.slice(1);
-  }
-  return "text";
 }
 
 function stripTrailingNewline(value: string): string {
@@ -335,37 +271,6 @@ function findDiffReviewLineIndex(
     : findOnSide(selectedSide === "left" ? "right" : "left");
 }
 
-/** Resolve the host-facing coordinates of a line selected in the diff viewer. */
-export function resolveDiffReviewPosition(
-  fileDiff: FileDiffMetadata,
-  lineNumber: number,
-  side: SelectionSide | undefined,
-): PullRequestReviewPosition | null {
-  const lineIndex = findDiffReviewLineIndex(fileDiff, lineNumber, side);
-  if (lineIndex < 0) return null;
-  const line = buildDiffReviewLines(fileDiff, !fileDiff.isPartial, {
-    startIndex: lineIndex,
-    endIndex: lineIndex,
-  })[0];
-  if (line === undefined) return null;
-
-  switch (line.change) {
-    case "add":
-      return line.newLineNumber === null ? null : { kind: "added", newLine: line.newLineNumber };
-    case "delete":
-      return line.oldLineNumber === null ? null : { kind: "deleted", oldLine: line.oldLineNumber };
-    case "context":
-      return line.oldLineNumber === null || line.newLineNumber === null
-        ? null
-        : {
-            kind: "context",
-            oldLine: line.oldLineNumber,
-            newLine: line.newLineNumber,
-            side: side === "deletions" ? "left" : "right",
-          };
-  }
-}
-
 function getDiffRange(
   lines: ReadonlyArray<DiffReviewLine>,
   key: "oldLineNumber" | "newLineNumber",
@@ -459,23 +364,39 @@ export function buildDiffReviewComment(input: {
   };
 }
 
-export function buildReviewCommentRenderablePatch(comment: ReviewCommentContext): string {
-  if ((comment.fenceLanguage ?? "diff") !== "diff") {
-    return "";
-  }
-  const diff = comment.diff.trim();
-  if (diff.length === 0) {
-    return "";
-  }
-  if (diff.startsWith("diff --git ")) {
-    return diff;
-  }
+/** A selection's anchor in agentd's terms: one side, a first line and, for a range, a last. */
+export interface ReviewAnchor {
+  readonly side: ReviewSide;
+  readonly line: number;
+  readonly endLine?: number;
+}
 
-  const normalizedPath = comment.filePath.replaceAll("\\", "/");
-  return [
-    `diff --git a/${normalizedPath} b/${normalizedPath}`,
-    `--- a/${normalizedPath}`,
-    `+++ b/${normalizedPath}`,
-    diff,
-  ].join("\n");
+/**
+ * The anchor of a selected range. A comment sits on one side: the side of the range's end
+ * (where the viewer shows it). A range that crosses sides keeps only its last line, since
+ * the other end has no line number on that side.
+ */
+export function selectionToAnchor(range: SelectedLineRange): ReviewAnchor {
+  const endSide = range.endSide ?? range.side ?? "additions";
+  const startSide = range.side ?? endSide;
+  const side: ReviewSide = endSide === "deletions" ? "old" : "new";
+  if (startSide !== endSide) return { side, line: range.end };
+  const line = Math.min(range.start, range.end);
+  const last = Math.max(range.start, range.end);
+  return last > line ? { side, line, endLine: last } : { side, line };
+}
+
+/** The viewer's selection for a stored anchor. */
+export function anchorToSelection(anchor: ReviewAnchor): SelectedLineRange {
+  const side: SelectionSide = anchor.side === "old" ? "deletions" : "additions";
+  return { start: anchor.line, side, end: anchor.endLine ?? anchor.line, endSide: side };
+}
+
+/** `12`, `12 to 14`, with ` (old)` for a removed-side anchor, as the daemon's prompt marks it. */
+export function formatAnchorLabel(anchor: ReviewAnchor): string {
+  const range =
+    anchor.endLine !== undefined && anchor.endLine !== anchor.line
+      ? `${anchor.line} to ${anchor.endLine}`
+      : `${anchor.line}`;
+  return anchor.side === "old" ? `${range} (old)` : range;
 }

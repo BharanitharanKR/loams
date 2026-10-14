@@ -1,21 +1,16 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/diffs/DiffCommentAnnotation.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// ported to the Loams UI stack. Loams' changes are Apache-2.0.
-import { MessageCircle, Trash2 } from "lucide-react";
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+// @loams/ui's Button, Textarea and Badge on tokens; a stored comment gains edit, resolve and an "outdated" badge (agentd's ReviewComment); the secondary action dropped. Loams' changes are Apache-2.0.
 
-import { Button } from "~/components/ui/button";
-import { Textarea } from "~/components/ui/textarea";
+// One inline review comment, or the draft of one, under the lines it is about (SD1 Task 20).
+// The body is a person's text and is rendered as text, never as markup.
+
+import { Badge, Button, cx, Textarea } from "@loams/ui";
+import { CheckIcon, MessageCircleIcon, PencilIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { isCommentSubmitShortcut } from "./commentSubmitShortcut";
-
-interface DiffCommentSecondaryAction {
-  readonly label: string;
-  readonly icon?: ReactNode;
-  readonly allowEmpty?: boolean;
-  readonly onAction: (text: string) => void;
-}
 
 interface DiffCommentAnnotationProps {
   kind: "draft" | "comment";
@@ -25,14 +20,20 @@ interface DiffCommentAnnotationProps {
   onCancel: () => void;
   onComment: (text: string) => void;
   onDelete?: () => void;
+  /** Resolve or reopen a stored comment. */
+  onResolve?: (resolved: boolean) => void;
+  /** Turns a stored comment back into a draft holding its text. */
+  onEdit?: () => void;
+  resolved?: boolean;
+  /** The daemon says the anchored lines are no longer in the current diff. */
+  outdated?: boolean;
   placeholder?: string;
   submitLabel?: string;
   pending?: boolean;
-  secondaryAction?: DiffCommentSecondaryAction;
   focusOnMount?: boolean;
 }
 
-/** The shared inline comment treatment for file previews, thread diffs, and pull-request diffs. */
+/** The shared inline comment treatment for thread diffs. */
 export function DiffCommentAnnotation({
   kind,
   rangeLabel,
@@ -41,21 +42,24 @@ export function DiffCommentAnnotation({
   onCancel,
   onComment,
   onDelete,
+  onResolve,
+  onEdit,
+  resolved = false,
+  outdated = false,
   placeholder = "Add a comment…",
   submitLabel = "Comment",
   pending = false,
-  secondaryAction,
   focusOnMount = true,
 }: DiffCommentAnnotationProps) {
   const [localDraftText, setLocalDraftText] = useState("");
   const displayedText = kind === "draft" && !onTextChange ? localDraftText : text;
   const trimmedText = displayedText.trim();
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const draftRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
     if (kind !== "draft" || !focusOnMount) return;
     const frame = window.requestAnimationFrame(() => {
-      textareaRef.current?.focus({ preventScroll: true });
+      draftRef.current?.querySelector("textarea")?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [focusOnMount, kind]);
@@ -64,42 +68,68 @@ export function DiffCommentAnnotation({
     return (
       <div
         data-diff-comment-annotation
-        className="group/comment flex min-w-0 items-start gap-2.5 border-s-2 border-primary/55 bg-primary/[0.045] px-3 py-2.5 font-sans text-foreground"
-        contentEditable={false}
+        data-resolved={resolved || undefined}
+        data-outdated={outdated || undefined}
+        className={cx(
+          "group/comment flex min-w-0 items-start gap-2.5 border-l-2 bg-surface px-3 py-2.5 font-sans text-ink",
+          resolved ? "border-rule text-muted" : "border-accent",
+        )}
         onPointerDown={(event) => event.stopPropagation()}
       >
-        <MessageCircle className="mt-0.5 size-3.5 shrink-0 text-primary/70" aria-hidden="true" />
-        <p className="min-w-0 flex-1 whitespace-pre-wrap text-sm leading-5">{displayedText}</p>
-        {onDelete ? (
-          <span className="-my-1 -mr-1 flex shrink-0 opacity-0 transition-opacity group-hover/comment:opacity-100 focus-within:opacity-100 max-sm:opacity-100">
-            <Button
-              variant="ghost-muted"
-              size="icon-xs"
-              aria-label="Delete comment"
-              onClick={onDelete}
-            >
-              <Trash2 className="size-3" />
+        <MessageCircleIcon className="mt-0.5 size-3.5 shrink-0 text-accent" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <div className="mb-0.5 flex flex-wrap items-center gap-1.5 text-[0.72rem] text-faint">
+            <span>Line {rangeLabel}</span>
+            {outdated ? <Badge title="The lines changed since this comment">outdated</Badge> : null}
+            {resolved ? <Badge>resolved</Badge> : null}
+          </div>
+          <p className="m-0 min-w-0 whitespace-pre-wrap break-words text-[0.86rem] leading-5">
+            {displayedText}
+          </p>
+        </div>
+        <span className="-my-1 -mr-1 flex shrink-0 items-center gap-0.5">
+          {onEdit && !resolved ? (
+            <Button variant="quiet" size="icon" aria-label="Edit comment" onClick={onEdit}>
+              <PencilIcon aria-hidden className="size-3" />
             </Button>
-          </span>
-        ) : null}
+          ) : null}
+          {onResolve ? (
+            <Button
+              variant="quiet"
+              size="icon"
+              aria-label={resolved ? "Reopen comment" : "Resolve comment"}
+              onClick={() => onResolve(!resolved)}
+            >
+              {resolved ? (
+                <RotateCcwIcon aria-hidden className="size-3" />
+              ) : (
+                <CheckIcon aria-hidden className="size-3" />
+              )}
+            </Button>
+          ) : null}
+          {onDelete ? (
+            <Button variant="quiet" size="icon" aria-label="Delete comment" onClick={onDelete}>
+              <Trash2Icon aria-hidden className="size-3" />
+            </Button>
+          ) : null}
+        </span>
       </div>
     );
   }
 
   return (
     <div
+      ref={draftRef}
       data-diff-comment-annotation
-      className="px-3 py-2 font-sans text-foreground"
-      contentEditable={false}
+      className="bg-surface px-3 py-2 font-sans text-ink"
       onPointerDown={(event) => event.stopPropagation()}
     >
       <Textarea
-        ref={textareaRef}
-        autoFocus={focusOnMount}
-        size="sm"
+        rows={3}
+        className="w-full"
         value={displayedText}
         placeholder={placeholder}
-        aria-label={`Comment on lines ${rangeLabel}`}
+        aria-label={`Comment on line ${rangeLabel}`}
         onChange={(event) => (onTextChange ?? setLocalDraftText)(event.target.value)}
         onFocus={(event) => {
           const end = event.currentTarget.value.length;
@@ -117,22 +147,16 @@ export function DiffCommentAnnotation({
         }}
       />
       <div className="mt-1.5 flex items-center gap-1">
-        <span className="mr-auto text-3xs text-muted-foreground/70">⌘/Ctrl Enter to send</span>
-        <Button variant="ghost-muted" size="xs" onClick={onCancel}>
+        <span className="mr-auto text-[0.72rem] text-faint">⌘/Ctrl Enter to save</span>
+        <Button variant="quiet" size="sm" onClick={onCancel}>
           Cancel
         </Button>
-        {secondaryAction ? (
-          <Button
-            size="xs"
-            variant="outline"
-            disabled={!secondaryAction.allowEmpty && !trimmedText}
-            onClick={() => secondaryAction.onAction(trimmedText)}
-          >
-            {secondaryAction.icon}
-            {secondaryAction.label}
-          </Button>
-        ) : null}
-        <Button size="xs" disabled={pending || !trimmedText} onClick={() => onComment(trimmedText)}>
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={pending || !trimmedText}
+          onClick={() => onComment(trimmedText)}
+        >
           {submitLabel}
         </Button>
       </div>
