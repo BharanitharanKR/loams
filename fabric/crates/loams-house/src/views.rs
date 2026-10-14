@@ -163,38 +163,79 @@ pub fn view_ddl(pin: &ReadPin, source: &str, mode: Mode<'_>) -> Result<String, H
 /// string literals (`Enum` names) it holds only names, numbers, `(`, `)`, `,`,
 /// `=`, `-` (never `--`), `+`, `.` and spaces; inside them, no quote, backslash or line
 /// break. Anything else is `36`, and the table is not read.
-fn column_type<'a>(pin: &ReadPin, column: &'a ddl::ChColumn) -> Result<&'a str, HouseError> {
-    let text = column.ch_type.as_str();
-    let refused = || {
-        HouseError::from(ChError::bad_arguments(format!(
-            "Table {}.{} cannot be read: the type of column {} is not one the House \
-             can name in a view",
-            pin.table.database, pin.table.name, column.name
-        )))
-    };
-    ChType::parse(text).map_err(|_| refused())?;
+fn column_type(pin: &ReadPin, column: &ddl::ChColumn) -> Result<String, HouseError> {
+    if let Some(text) = printable_type(&column.ch_type) {
+        return Ok(text);
+    }
+    Err(HouseError::from(ChError::bad_arguments(format!(
+        "Table {}.{} cannot be read: the type of column {} is not one the House \
+         can name in a view",
+        pin.table.database, pin.table.name, column.name
+    ))))
+}
+
+/// `text` with its whitespace outside string literals made single spaces (the
+/// canonical type of a named `Tuple` spans lines), if it is then a
+/// [`safe_type`].
+pub fn printable_type(text: &str) -> Option<String> {
+    let mut out = String::with_capacity(text.len());
     let mut in_literal = false;
-    let mut previous = ' ';
     for ch in text.chars() {
-        let fine = if in_literal {
-            !matches!(ch, '\\' | '\n' | '\r')
-        } else {
-            // `--` would start a comment.
-            (ch.is_ascii_alphanumeric() || " _(),=-+.'".contains(ch))
-                && !(ch == '-' && previous == '-')
-        };
-        previous = ch;
-        if !fine {
-            return Err(refused());
+        if !in_literal && ch.is_whitespace() {
+            if !out.ends_with(' ') && !out.ends_with('(') {
+                out.push(' ');
+            }
+            continue;
+        }
+        if !in_literal && ch == ')' && out.ends_with(' ') {
+            out.pop();
         }
         if ch == '\'' {
             in_literal = !in_literal;
         }
+        out.push(ch);
     }
-    if in_literal {
-        return Err(refused());
+    let out = out.trim().to_string();
+    safe_type(&out).then_some(out)
+}
+
+/// Whether `text` is one ClickHouse type the House may print into a statement
+/// it generates (R-ACL.1): it parses as a type, and outside its string
+/// literals (`Enum` names) it holds only names, numbers, `(`, `)`, `,`, `=`,
+/// `-` (never `--`), `+`, `.` and spaces; inside them, no quote, backslash or
+/// line break; a back-quoted name holds letters, digits and `_` only. The read views' column lists and the write path's staging
+/// table and casts (HS1 Task 12) hold catalog types to it.
+pub fn safe_type(text: &str) -> bool {
+    if ChType::parse(text).is_err() {
+        return false;
     }
-    Ok(text)
+    // Inside `'…'` (an `Enum`'s names) or `` `…` `` (a `Tuple`'s element
+    // names, which may be digits), outside them.
+    let mut quote: Option<char> = None;
+    let mut previous = ' ';
+    for ch in text.chars() {
+        let fine = match quote {
+            Some('\'') => !matches!(ch, '\\' | '\n' | '\r'),
+            Some(_) => ch.is_ascii_alphanumeric() || ch == '_' || ch == '`',
+            // `--` would start a comment.
+            None => {
+                (ch.is_ascii_alphanumeric() || " _(),=-+.'`".contains(ch))
+                    && !(ch == '-' && previous == '-')
+            }
+        };
+        previous = ch;
+        if !fine {
+            return false;
+        }
+        if ch == '\'' || ch == '`' {
+            quote = match quote {
+                None => Some(ch),
+                Some(open) if open == ch => None,
+                other => other,
+            };
+        }
+    }
+    quote.is_none()
 }
 
 /// Whether a view of `pin` in `mode` carries expression text from the
@@ -642,6 +683,10 @@ mod tests {
             "Enum8('a' = 1, 'b c' = -2)",
             "DateTime64(3, 'Asia/Tokyo')",
             "LowCardinality(Nullable(String))",
+            // A named tuple's canonical type spans lines; an unnamed tuple's
+            // Iceberg struct has digit names, back-quoted (HS1 Task 12).
+            "Tuple(\n    a Int32,\n    b String)",
+            "Tuple(`1` Int32, `2` String)",
         ] {
             let p = pin("MergeTree", "k", vec![column("k", good)]);
             assert!(view_ddl(&p, "SRC", Mode::Plain).is_ok(), "{good}");
@@ -653,11 +698,18 @@ mod tests {
             "Enum8('a\n' = 1)",
             "UInt64; DROP DATABASE d",
             "Enum8('a = 1)",
+            "Tuple(`a b` Int32)",
+            "Tuple(`a` Int32) --`",
+            "Tuple(`a\\` Int32)",
         ] {
             let p = pin("MergeTree", "k", vec![column("k", bad)]);
             // `62` when it is no type at all, `36` when it is one but not plain.
             let err = view_ddl(&p, "SRC", Mode::Plain).expect_err(bad);
             assert!([36, 62].contains(&err.code()), "{bad}: {}", err.code());
         }
+        assert_eq!(
+            printable_type("Tuple(\n    a Int32,\n    b Enum8('x  y' = 1))").as_deref(),
+            Some("Tuple(a Int32, b Enum8('x  y' = 1))")
+        );
     }
 }

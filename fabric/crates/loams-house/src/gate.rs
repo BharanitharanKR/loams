@@ -75,13 +75,23 @@ fn later(stmt: &Stmt) -> Option<String> {
         );
     }
     let (what, task) = match stmt {
-        Stmt::CreateTableAs { .. } => ("CREATE TABLE … AS SELECT", "HS1 Task 12"),
+        Stmt::CreateTableAs { .. } => {
+            return Some(
+                "CREATE TABLE … AS SELECT makes a lake table, and this House has no catalog \
+                 (start it with --catalog or --single-node)"
+                    .to_string(),
+            );
+        }
         Stmt::CreatePipe { .. } => (
             "A pipe (LoamsStream, IggyTopic, S3Queue)",
             "HS1 Tasks 16 and 18",
         ),
         Stmt::CreateMaterializedView { .. } => ("CREATE MATERIALIZED VIEW", "HS1 Task 17"),
-        Stmt::Truncate { .. } => ("TRUNCATE", "HS1 Task 12"),
+        Stmt::Truncate { .. } => {
+            return Some(
+                "TRUNCATE serves the catalog's lake tables only (not temporary tables)".to_string(),
+            );
+        }
         Stmt::Optimize { .. } => ("OPTIMIZE TABLE", "HS1 Task 13"),
         Stmt::KillQuery(_) => ("KILL QUERY", "HS1 Task 21"),
         Stmt::Unsupported { kind } => {
@@ -190,12 +200,17 @@ impl Kind {
 }
 
 /// What the catalog made of a statement.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CatalogOutcome {
     /// Done: an empty success.
     Done,
     /// Answer with this query's rows (a `SELECT` over constants).
     Rows(String),
+    /// An `INSERT` into a lake table, for [`crate::insert::run`] (HS1 Task 12).
+    Insert(Box<crate::insert::Target>),
+    /// `CREATE TABLE … AS SELECT` of a lake table, for
+    /// [`crate::insert::create_as`] (HS1 Task 12).
+    CreateAs(Box<crate::insert::CreateAs>),
     /// Not the catalog's: on to [`front_answer`] and chDB.
     NotOurs,
 }
@@ -224,12 +239,47 @@ pub async fn catalog_answer(
         }
         return Ok(CatalogOutcome::Done);
     }
+    if let Stmt::CreateTableAs { .. } = stmt {
+        return Ok(CatalogOutcome::CreateAs(Box::new(
+            crate::insert::CreateAs::parse(text, current)?,
+        )));
+    }
+    if let Stmt::Truncate { .. } = stmt
+        && let Some(((db, name), if_exists)) = crate::ddl::parse_truncate(text)
+    {
+        let database = db.unwrap_or_else(|| current.to_string());
+        let table = if lake.database_exists(namespace, &database).await? {
+            lake.load(namespace, &database, &name).await?
+        } else {
+            None
+        };
+        return match table {
+            None if if_exists => Ok(CatalogOutcome::Done),
+            // A temporary table, or no table: as before (chDB, or `48`).
+            None => Ok(CatalogOutcome::NotOurs),
+            Some(table) => {
+                if crate::ddl::class_of(&table.metadata) == crate::ddl::TableClass::External {
+                    return Err(HouseError::from(ChError::access_denied(format!(
+                        "TRUNCATE {database}.{name}: the table belongs to another writer (an \
+                         external table), so the House reads it and never changes it"
+                    ))));
+                }
+                let committer = lake.committer();
+                crate::commit::truncate(committer.io(), &table.ident).await?;
+                Ok(CatalogOutcome::Done)
+            }
+        };
+    }
+    if let Stmt::Insert(insert) = stmt {
+        return Ok(
+            match crate::insert::target(lake, namespace, current, insert).await? {
+                Some(target) => CatalogOutcome::Insert(Box::new(target)),
+                None => CatalogOutcome::NotOurs,
+            },
+        );
+    }
     let Some(kind) = catalog_kind(stmt) else {
         return Ok(CatalogOutcome::NotOurs);
-    };
-    let text = match stmt {
-        Stmt::Insert(insert) => insert.text.as_str(),
-        _ => text,
     };
     let mut oracle = WorkerOracle::new(pool, namespace, query_id);
     let answer = ddl::execute(lake, namespace, current, kind, text, &mut oracle).await;

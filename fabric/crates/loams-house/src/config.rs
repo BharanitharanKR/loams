@@ -50,6 +50,9 @@ pub struct HouseConfig {
     pub wait_end_of_query_max_bytes: u64,
     /// The most all spools together may hold at once (review I2): 8 GiB.
     pub spool_budget_bytes: u64,
+    /// The most one `INSERT` into a lake table writes, as its worker's Arrow
+    /// bytes: 1 GiB (HS1 Task 12, R12.2).
+    pub lake_insert_max_bytes: u64,
     /// How much output is held before the response head goes out, unless
     /// `buffer_size` says otherwise (clamped to [`BUFFER_SIZE_RANGE`]): ClickHouse's
     /// 1 MiB. A statement that fails inside it still gets a proper error status.
@@ -101,6 +104,7 @@ impl Default for HouseConfig {
             tmp_dir: PathBuf::from("loams-house-data").join("spool"),
             wait_end_of_query_max_bytes: 1024 * 1024 * 1024,
             spool_budget_bytes: 8 * 1024 * 1024 * 1024,
+            lake_insert_max_bytes: crate::insert::DEFAULT_MAX_INSERT_BYTES,
             default_buffer_size: 1024 * 1024,
             max_query_size: 256 * 1024,
             receive_timeout: Duration::from_secs(30),
@@ -382,6 +386,8 @@ pub struct LimitsSection {
     pub wait_end_of_query_max_bytes: Option<u64>,
     /// [`HouseConfig::spool_budget_bytes`].
     pub spool_budget_bytes: Option<u64>,
+    /// [`HouseConfig::lake_insert_max_bytes`].
+    pub lake_insert_max_bytes: Option<u64>,
     /// [`HouseConfig::max_live_sessions`].
     pub max_live_sessions: Option<usize>,
     /// The `max_memory_usage` cap (§49 §12).
@@ -406,6 +412,10 @@ impl LimitsSection {
             self.wait_end_of_query_max_bytes,
         );
         set(&mut config.spool_budget_bytes, self.spool_budget_bytes);
+        set(
+            &mut config.lake_insert_max_bytes,
+            self.lake_insert_max_bytes,
+        );
         set(&mut config.max_live_sessions, self.max_live_sessions);
         let caps = &mut config.session_limits;
         set(&mut caps.max_memory_usage, self.max_memory_usage);

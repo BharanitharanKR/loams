@@ -23,6 +23,13 @@ pub enum LakeError {
     /// The creation or an update is not valid Iceberg.
     #[error("invalid table metadata: {0}")]
     Invalid(String),
+    /// Rows cannot be written as the table's data: a value its column cannot
+    /// hold, or an Arrow stream that is not whole (HS1 Task 12).
+    #[error("{0}")]
+    Data(String),
+    /// A write's input is larger than its cap, in bytes (HS1 Task 12).
+    #[error("the rows are more than the {0} bytes one statement may write")]
+    TooLarge(u64),
     /// A metadata file could not be read.
     #[error("unreadable metadata file {location}: {message}")]
     Unreadable {

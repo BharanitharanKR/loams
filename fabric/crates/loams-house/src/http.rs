@@ -75,6 +75,7 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::{TokioIo, TokioTimer};
 use loams_house_ipc::{Execute, Limits, Output, Progress};
+use sha2::{Digest, Sha256};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{Semaphore, mpsc};
@@ -648,6 +649,8 @@ struct Meta {
     affinity: Option<String>,
     /// `X-Loams-Worker`, once a worker ran the statement (Shared contracts).
     worker: Option<String>,
+    /// `X-Loams-Snapshot-Id` after a lake write (`table=id`, HS1 Task 12).
+    snapshot: Option<String>,
 }
 
 impl Meta {
@@ -680,6 +683,9 @@ impl Meta {
         }
         if let Some(worker) = &self.worker {
             builder = builder.header("X-Loams-Worker", header_value(worker));
+        }
+        if let Some(snapshot) = &self.snapshot {
+            builder = builder.header("X-Loams-Snapshot-Id", header_value(snapshot));
         }
         if close {
             builder = builder.header("Connection", "close");
@@ -788,6 +794,7 @@ async fn handle(shared: Arc<Shared>, request: Request<Incoming>) -> Response<Hou
                 send_progress: false,
                 affinity: None,
                 worker: None,
+                snapshot: None,
             };
             return meta.error(&err, &Progress::default(), true);
         }
@@ -857,6 +864,7 @@ async fn run(
         send_progress: get("send_progress_in_http_headers") == Some("1"),
         affinity: None,
         worker: None,
+        snapshot: None,
     };
     let mut body = RequestBody::new(body, config.receive_timeout);
 
@@ -1001,6 +1009,36 @@ async fn run(
                 query,
             ),
             Ok(gate::CatalogOutcome::NotOurs) => (classified, sql),
+            Ok(outcome @ (gate::CatalogOutcome::Insert(_) | gate::CatalogOutcome::CreateAs(_))) => {
+                let mut all: Vec<(String, String)> = session
+                    .as_ref()
+                    .map(|guard| guard.state().settings.pairs().to_vec())
+                    .unwrap_or_default();
+                all.extend(settings.iter().cloned());
+                let job = match outcome {
+                    gate::CatalogOutcome::Insert(target) => LakeJob::Insert(target),
+                    gate::CatalogOutcome::CreateAs(plan) => LakeJob::CreateAs(plan),
+                    _ => unreachable!("matched above"),
+                };
+                let write = LakeWrite {
+                    job,
+                    database: current_database,
+                    params: query_params,
+                    settings: all,
+                };
+                let response = lake_insert(
+                    shared,
+                    &mut meta,
+                    &user,
+                    write,
+                    &mut body,
+                    &mut decoder,
+                    first_data,
+                )
+                .await;
+                drop(session);
+                return response;
+            }
             Err(err) => {
                 let close = !body.drain().await;
                 return meta.error(&err, &Progress::default(), close);
@@ -1105,7 +1143,7 @@ async fn run(
         params
             .iter()
             .filter(|(k, _)| !k.starts_with("param_") && !NON_SETTINGS.contains(&k.as_str()))
-            .filter(|(k, _)| !crate::settings::is_loams(k))
+            .filter(|(k, _)| !crate::settings::is_front_only(k))
             .cloned(),
     );
     // What it reads (HS1 Task 11): its lake tables pinned and viewed, its
@@ -1171,7 +1209,7 @@ async fn run(
         return meta.error(&err, &Progress::default(), close);
     }
     if has_input
-        && let Err(err) = stream_input(&mut lease, &mut body, &mut decoder, first_data).await
+        && let Err(err) = stream_input(&mut lease, &mut body, &mut decoder, first_data, None).await
     {
         // The worker is mid-`INSERT`: ending its input would commit a body that did
         // not arrive whole (review I5), so it is killed instead.
@@ -1365,13 +1403,20 @@ async fn stream_input(
     body: &mut RequestBody,
     decoder: &mut Decoder,
     first: Vec<u8>,
+    mut hash: Option<&mut Sha256>,
 ) -> Result<(), HouseError> {
+    let mut send = async |lease: &mut WorkerLease, piece: Vec<u8>| {
+        if let Some(hash) = hash.as_deref_mut() {
+            hash.update(&piece);
+        }
+        lease.send_input(Bytes::from(piece)).await
+    };
     if !first.is_empty() {
-        lease.send_input(Bytes::from(first)).await?;
+        send(lease, first).await?;
     }
     loop {
         while let Some(piece) = decoder.next_piece().map_err(undecodable)? {
-            lease.send_input(Bytes::from(piece)).await?;
+            send(lease, piece).await?;
         }
         match body.next().await? {
             Some(piece) => decoder.push(&piece),
@@ -1380,9 +1425,120 @@ async fn stream_input(
     }
     decoder.end();
     while let Some(piece) = decoder.next_piece().map_err(undecodable)? {
-        lease.send_input(Bytes::from(piece)).await?;
+        send(lease, piece).await?;
     }
     lease.end_input().await
+}
+
+/// A write to a lake table (HS1 Task 12).
+enum LakeJob {
+    Insert(Box<crate::insert::Target>),
+    CreateAs(Box<crate::insert::CreateAs>),
+}
+
+/// A write to a lake table and what it runs with (HS1 Task 12).
+struct LakeWrite {
+    job: LakeJob,
+    database: String,
+    params: Vec<(String, String)>,
+    settings: Vec<(String, String)>,
+}
+
+/// The request body as an `INSERT`'s data.
+struct BodyFeed<'a> {
+    body: &'a mut RequestBody,
+    decoder: &'a mut Decoder,
+    first: Vec<u8>,
+}
+
+#[async_trait::async_trait]
+impl crate::insert::Feed for BodyFeed<'_> {
+    async fn feed(&mut self, lease: &mut WorkerLease, hash: &mut Sha256) -> Result<(), HouseError> {
+        let first = std::mem::take(&mut self.first);
+        stream_input(lease, self.body, self.decoder, first, Some(hash)).await
+    }
+}
+
+/// Runs an `INSERT` into a lake table (HS1 Task 12) and answers it: an empty
+/// `200` after the commit, `X-ClickHouse-Summary` with what was written and
+/// `X-Loams-Snapshot-Id`.
+async fn lake_insert(
+    shared: &Arc<Shared>,
+    meta: &mut Meta,
+    user: &UserMap,
+    write: LakeWrite,
+    body: &mut RequestBody,
+    decoder: &mut Decoder,
+    first_data: Vec<u8>,
+) -> Response<HouseBody> {
+    let Some(lake) = shared.lake.as_deref() else {
+        let close = !body.drain().await;
+        let err = HouseError::from(ChError::not_implemented("this House has no catalog"));
+        return meta.error(&err, &Progress::default(), close);
+    };
+    let streams = matches!(
+        &write.job,
+        LakeJob::Insert(target) if matches!(target.source, crate::insert::Source::Stream { .. })
+    );
+    // As for any INSERT: a worker only once its data has started (review I1).
+    if streams && first_data.is_empty() {
+        match body.next().await {
+            Ok(Some(piece)) => decoder.push(&piece),
+            Ok(None) => decoder.end(),
+            Err(err) => return meta.error(&err, &Progress::default(), true),
+        }
+    }
+    let lease = match shared.pool.acquire(&user.namespace.to_string()).await {
+        Ok(lease) => lease,
+        Err(err) => {
+            let close = !body.drain().await;
+            return meta.error(&err, &Progress::default(), close);
+        }
+    };
+    meta.worker = Some(lease.worker_id().to_string());
+    let known = shared.pool.known_settings();
+    let ctx = crate::insert::InsertContext {
+        lake,
+        pool: &shared.pool,
+        namespace: user.namespace,
+        database: &write.database,
+        user: &user.user,
+        query_id: &meta.query_id,
+        params: &write.params,
+        settings: &write.settings,
+        limits: &shared.config.session_limits,
+        known: &known,
+        max_insert_bytes: shared.config.lake_insert_max_bytes,
+    };
+    let mut feed = BodyFeed {
+        body,
+        decoder,
+        first: first_data,
+    };
+    let feed: Option<&mut dyn crate::insert::Feed> = if streams { Some(&mut feed) } else { None };
+    let inserted = match write.job {
+        LakeJob::Insert(target) => crate::insert::run(&ctx, lease, *target, feed).await,
+        LakeJob::CreateAs(plan) => crate::insert::create_as(&ctx, lease, *plan).await,
+    };
+    match inserted {
+        Ok(inserted) => {
+            meta.snapshot = inserted.snapshot_header();
+            meta.head(
+                StatusCode::OK,
+                content_type(&meta.format),
+                None,
+                &inserted.progress(),
+                false,
+            )
+            .body(HouseBody::full(Vec::new()))
+            .unwrap_or_else(|_| fallback())
+        }
+        Err(err) => {
+            // A body not read to its end leaves the connection out of step.
+            let close = streams;
+            meta.error(&err, &Progress::default(), close)
+        }
+    }
 }
 
 /// Runs the statement's events into a response: held until `buffer_size` or the

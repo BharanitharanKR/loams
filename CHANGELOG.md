@@ -14,6 +14,12 @@ All notable changes to this project are documented here. The format follows [Kee
   for every call, and starts nothing but the compute images pinned in
   `deploy/pins/loams-postgres-images.toml`. Prefer a rootless Podman socket (PG2 ruling
   R-REL.1).
+- **Loams House writes lake tables** (HS1 Task 12): `INSERT` in every declared input format,
+  `VALUES` and `INSERT … SELECT`, `CREATE TABLE … AS SELECT` and `TRUNCATE`. Rows become
+  Parquet data files with Iceberg statistics and are committed as Iceberg snapshots before
+  the client is answered (group commit per table, deduplication by
+  `insert_deduplication_token` or by the data's hash, rebase and retry on conflicts). One
+  statement writes at most 1 GiB.
 
 ### Changed
 - **Loams Live on the main port.** `LiveService` and `LiveAdminService` are served on the

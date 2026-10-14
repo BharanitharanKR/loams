@@ -74,9 +74,10 @@ fn inproc_worker_feature_is_where_libchdb_comes_in() {
 }
 
 /// iceberg 0.10 brings arrow 58 while the workspace is on arrow 59 (HS1 R0.3): no
-/// crate of this workspace may depend on an arrow 58 crate itself. Only iceberg
-/// (inside `loams-house-lake`) and its own dependencies do, so arrow 58 types
-/// never meet arrow 59 ones in a Loams signature.
+/// crate of this workspace may depend on an arrow 58 crate itself, except
+/// `loams-house-lake`, which writes data files with iceberg's writers (HS1 Task
+/// 12, R12.1) and names no Arrow type in its signatures. So arrow 58 types never
+/// meet arrow 59 ones in a Loams signature.
 #[test]
 fn arrow_58_stays_in_the_lake() {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
@@ -119,6 +120,9 @@ fn arrow_58_stays_in_the_lake() {
             .iter()
             .take_while(|(d, _, _)| d > depth)
             .filter(|(d, _, _)| *d == depth + 1);
+        if name == "loams-house-lake" {
+            continue;
+        }
         for (_, child, version) in children {
             assert!(
                 !(child.starts_with("arrow") || child == "parquet") || !version.starts_with("v58"),

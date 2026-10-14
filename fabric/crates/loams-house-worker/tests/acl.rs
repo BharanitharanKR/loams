@@ -293,9 +293,12 @@ async fn the_profile_follows_the_lists_and_chdb() {
                     .map(|(n, _)| n.as_str()),
             )
             .collect();
-        let allowed = names
-            .iter()
-            .any(|n| loams_house::settings::is_allowed(n) || HOUSE_SETTINGS.contains(n));
+        // The front's own settings (`insert_deduplication_token`, HS1 Task 12)
+        // never reach chDB, so the engine keeps them pinned.
+        let allowed = names.iter().any(|n| {
+            (loams_house::settings::is_allowed(n) && !loams_house::settings::is_front_only(n))
+                || HOUSE_SETTINGS.contains(n)
+        });
         // `readonly` and `allow_ddl` are set on the user connection itself and
         // show as unchangeable there: neither can be set back (R5.6).
         if name == "readonly" || name == "allow_ddl" {
