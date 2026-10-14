@@ -34,6 +34,11 @@ const ThreadPage = lazy(() =>
   import('./thread/ThreadPage.js').then((m) => ({ default: m.ThreadPage })),
 );
 
+// The run group's view carries the pair diff's viewer: loaded on first use (SD1 Task 25).
+const GroupPage = lazy(() =>
+  import('./groups/GroupPage.js').then((m) => ({ default: m.GroupPage })),
+);
+
 const PANEL_LABEL: Record<Panel, string> = {
   diff: 'Diff',
   files: 'Files',
@@ -153,11 +158,15 @@ function Body({
       );
     case 'group':
       return (
-        <div className="p-6">
-          <Empty title="This run group is not available">
-            Studio cannot compare parallel runs in this version yet.
-          </Empty>
-        </div>
+        <Suspense
+          fallback={
+            <div className="p-6">
+              <Spinner label="Loading the run group" />
+            </div>
+          }
+        >
+          <GroupPage groupId={route.groupId} navigate={navigate} />
+        </Suspense>
       );
     case 'settings':
       return <SettingsPage agentd={agentd} keys={keys} />;

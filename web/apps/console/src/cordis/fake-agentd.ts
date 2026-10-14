@@ -9,6 +9,10 @@
 import { createConnectRouter } from '@connectrpc/connect';
 import { createFetchHandler } from '@connectrpc/connect/protocol';
 import {
+  ApprovalRisk,
+  ApprovalService,
+  CheckState,
+  DiffService,
   FileService,
   GitService,
   HarnessId,
@@ -18,6 +22,8 @@ import {
   QueueService,
   ReasoningLevel,
   RunGroupService,
+  RunGroupState,
+  RunMemberStatus,
   SessionStatus,
   StudioService,
   ThreadService,
@@ -66,6 +72,8 @@ const chats = [
     createdAtMs: ago(20),
     lastMessageAtMs: ago(3),
     lastSeenAtMs: ago(3),
+    lastMessagePreview:
+      'The test waited on a fixed timeout. It now waits for the composer to be ready, and passes 50 runs in a row.',
   },
   {
     id: 'demo-r2',
@@ -74,6 +82,16 @@ const chats = [
     createdAtMs: ago(20),
     lastMessageAtMs: ago(4),
     lastSeenAtMs: ago(4),
+    lastMessagePreview: 'I want to run the e2e suite to check the retry. May I?',
+  },
+  {
+    id: 'demo-r3',
+    title: 'Retry: flaky e2e (OpenCode)',
+    cwd: '/wt/loams-r3',
+    createdAtMs: ago(20),
+    lastMessageAtMs: ago(1),
+    lastSeenAtMs: ago(1),
+    lastMessagePreview: 'Reading playwright.config.ts and the studio spec…',
   },
   {
     id: 'demo-hero',
@@ -98,18 +116,20 @@ const sessions = [
   { chatId: 'demo-login', status: SessionStatus.WORKING, startedAtMs: ago(3), updatedAtMs: ago(0) },
   { chatId: 'demo-r1', status: SessionStatus.WORKING, startedAtMs: ago(6), updatedAtMs: ago(0) },
   { chatId: 'demo-r2', status: SessionStatus.AWAITING_INPUT, updatedAtMs: ago(1) },
+  { chatId: 'demo-r3', status: SessionStatus.WORKING, startedAtMs: ago(9), updatedAtMs: ago(0) },
   { chatId: 'demo-forms', status: SessionStatus.ERRORED, updatedAtMs: ago(1500) },
 ];
 
 const worktrees: Record<
   string,
-  { path: string; branch: string; chatIds: string[]; dirty?: boolean }[]
+  { path: string; branch: string; chatIds: string[]; dirty?: boolean; head?: string }[]
 > = {
   '~/src/loams': [
     { path: '~/src/loams', branch: 'dev', chatIds: ['demo-login', 'demo-readme'] },
     { path: '/wt/loams-build', branch: 'perf/build', chatIds: ['demo-build'] },
-    { path: '/wt/loams-r1', branch: 'studio/r1', chatIds: ['demo-r1'] },
-    { path: '/wt/loams-r2', branch: 'studio/r2', chatIds: ['demo-r2'] },
+    { path: '/wt/loams-r1', branch: 'studio/r1', chatIds: ['demo-r1'], head: '9f3c2a71e0' },
+    { path: '/wt/loams-r2', branch: 'studio/r2', chatIds: ['demo-r2'], head: '41d07be2c9' },
+    { path: '/wt/loams-r3', branch: 'studio/r3', chatIds: ['demo-r3'], head: 'c2b8e14a77' },
     { path: '/wt/loams-old', branch: 'old-spike', chatIds: [] },
   ],
   '~/src/acme-site': [
@@ -118,6 +138,104 @@ const worktrees: Record<
 };
 
 const pins = ['demo-readme'];
+
+// The run group's three variants (SD1 Task 25): one done with its check passed, one waiting
+// for an approval, one still running; two ask for the same tool call.
+const GROUP_MEMBERS = [
+  {
+    chatId: 'demo-r1',
+    harness: HarnessId.CLAUDE_CODE,
+    model: 'sonnet',
+    status: RunMemberStatus.DONE,
+    filesChanged: 2,
+    additions: 18,
+    deletions: 6,
+    elapsedMs: 412_000n,
+    tokens: 48_210n,
+    cwd: '/wt/loams-r1',
+    branch: 'studio/r1',
+    check: {
+      state: CheckState.PASSED,
+      exitCode: 0,
+      logTail: [
+        '> playwright test studio.spec.ts --repeat-each=50',
+        'Running 50 tests using 4 workers',
+        '  50 passed (2.1m)',
+      ],
+    },
+  },
+  {
+    chatId: 'demo-r2',
+    harness: HarnessId.CODEX,
+    status: RunMemberStatus.AWAITING_INPUT,
+    filesChanged: 3,
+    additions: 41,
+    deletions: 12,
+    elapsedMs: 380_000n,
+    startedAtMs: ago(7),
+    cwd: '/wt/loams-r2',
+    branch: 'studio/r2',
+    check: {},
+  },
+  {
+    chatId: 'demo-r3',
+    harness: HarnessId.OPENCODE,
+    status: RunMemberStatus.RUNNING,
+    filesChanged: 1,
+    additions: 4,
+    deletions: 1,
+    elapsedMs: 0n,
+    startedAtMs: ago(9),
+    cwd: '/wt/loams-r3',
+    branch: 'studio/r3',
+    check: {},
+  },
+];
+
+const GROUP_MATRIX = [
+  {
+    path: 'web/apps/console/test/e2e/studio.spec.ts',
+    perMember: [
+      { chatId: 'demo-r1', additions: 14, deletions: 5 },
+      { chatId: 'demo-r2', additions: 22, deletions: 9 },
+      { chatId: 'demo-r3', additions: 4, deletions: 1 },
+    ],
+  },
+  {
+    path: 'web/apps/console/playwright.config.ts',
+    perMember: [{ chatId: 'demo-r2', additions: 3, deletions: 3 }],
+  },
+  {
+    path: 'web/plugins/studio/src/thread/Composer.tsx',
+    perMember: [
+      { chatId: 'demo-r1', additions: 4, deletions: 1 },
+      { chatId: 'demo-r2', additions: 16, deletions: 0 },
+    ],
+  },
+];
+
+/** A small patch for the pair diff: what `b` (or `a`, from the base) changed. */
+function pairPatch(path: string | undefined): string {
+  const file = path ?? 'web/apps/console/test/e2e/studio.spec.ts';
+  return `diff --git a/${file} b/${file}
+index 1111111..2222222 100644
+--- a/${file}
++++ b/${file}
+@@ -10,9 +10,10 @@ test.describe('studio', () => {
+   test('sends a prompt', async ({ page }) => {
+     await page.goto('/#/studio');
+-    await page.waitForTimeout(2000);
+-    await page.getByRole('textbox').fill('hello');
++    const composer = page.getByRole('textbox', { name: 'Message' });
++    await expect(composer).toBeEditable();
++    await composer.fill('hello');
+     await page.keyboard.press('Enter');
+-    await expect(page.getByText('hello')).toBeVisible();
++    await expect(page.getByText('hello')).toBeVisible({ timeout: 15_000 });
+   });
+ });
+`;
+}
 
 /** A watch that sends its state once and stays open, as the daemon's do. */
 async function* once<T>(value: T, signal: AbortSignal): AsyncGenerator<T> {
@@ -256,14 +374,77 @@ function fakeRouter() {
               groups: [
                 {
                   id: 'demo-group',
-                  prompt: 'Fix the flaky studio e2e test',
+                  prompt:
+                    'Fix the flaky studio e2e test\n\nIt fails about one run in ten on CI, waiting for the composer.',
+                  base: 'dev',
+                  baseSha: '5e1f00aa',
+                  repoPath: '~/src/loams',
+                  state: RunGroupState.RUNNING,
+                  checkActionId: 'demo-e2e',
                   createdAtMs: ago(20),
-                  members: [{ chatId: 'demo-r1' }, { chatId: 'demo-r2' }],
+                  members: GROUP_MEMBERS,
                 },
               ],
             },
             ctx.signal,
           ),
+        getRunGroupComparison: (req) => ({
+          matrix: GROUP_MATRIX,
+          pairDiff: { cwd: '', patch: pairPatch(req.path), checksum: 'demo-pair' },
+        }),
+        runGroupCheck: () => ({ runs: [] }),
+      })
+      // "Approve for all variants" (SD1 Task 25): one tool call waiting in two members.
+      .service(ApprovalService, {
+        watchApprovals: (_req, ctx) =>
+          once(
+            {
+              pending: ['demo-r2', 'demo-r3'].map((chatId, i) => ({
+                id: `demo-ap-${i}`,
+                chatId,
+                turnId: 't1',
+                tool: 'Bash',
+                args: {
+                  kind: {
+                    case: 'structValue' as const,
+                    value: {
+                      fields: {
+                        command: {
+                          kind: {
+                            case: 'stringValue' as const,
+                            value:
+                              'pnpm --filter @loams/console exec playwright test studio.spec.ts',
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+                risk: ApprovalRisk.WRITE,
+                createdAtMs: ago(1),
+              })),
+            },
+            ctx.signal,
+          ),
+      })
+      .service(DiffService, {
+        getCheckoutDiff: (req) => ({
+          diff: {
+            cwd: req.cwd,
+            checkoutId: `demo:${req.cwd}`,
+            checksum: `demo-sum:${req.cwd}`,
+            files: [
+              {
+                path: 'web/apps/console/test/e2e/studio.spec.ts',
+                status: 'modified',
+                additions: 3,
+                deletions: 1,
+              },
+            ],
+            additions: 3,
+            deletions: 1,
+          },
+        }),
       })
   );
 }
