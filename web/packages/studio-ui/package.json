@@ -10,6 +10,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./files": {
+      "types": "./src/files/index.ts",
+      "default": "./src/files/index.ts"
     }
   },
   "scripts": {
@@ -18,6 +22,9 @@
   },
   "dependencies": {
     "@loams/ui": "workspace:*",
+    "@pierre/diffs": "catalog:",
+    "@tanstack/react-query": "catalog:",
+    "@tanstack/react-virtual": "catalog:",
     "@xterm/addon-fit": "catalog:",
     "@xterm/xterm": "catalog:",
     "lucide-react": "catalog:",

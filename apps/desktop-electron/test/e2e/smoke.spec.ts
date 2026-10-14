@@ -326,7 +326,7 @@ test("electron smoke", async () => {
 					page.getByRole("heading", { name: /^movies/ }),
 				).toBeVisible();
 				await page.getByLabel("Statement").fill("MATCH (n) RETURN count(n)");
-				await page.getByRole("button", { name: "Run" }).click();
+				await page.getByRole("button", { name: "Run", exact: true }).click();
 				const table = page.getByRole("table");
 				await expect(table).toBeVisible();
 				// A header row and one data row.

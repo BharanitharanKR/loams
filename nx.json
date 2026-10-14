@@ -15,7 +15,6 @@
     "lint": {"cache": true, "inputs": ["default", "^default"], "outputs": []},
     "dev": {"cache": false},
     "serve": {"cache": false},
-    "generate": {"cache": false},
-    "gen:api": {"cache": false}
+    "generate": {"cache": false}
   }
 }

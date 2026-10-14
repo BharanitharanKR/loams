@@ -1,7 +1,7 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/keybindings.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// the when-clause evaluation, resolution and shortcut labels kept; the terminal, thread-jump, model-picker and project-script helpers dropped. Loams' changes are Apache-2.0.
+// the when-clause evaluation, resolution, shortcut labels and thread-jump helpers kept; the terminal, model-picker and project-script helpers dropped. Loams' changes are Apache-2.0.
 
 // Resolving a key press to a Studio command (SD1 Task 24): the last binding whose
 // `when` clause holds and whose chord matches wins, as upstream. The context flags
@@ -14,8 +14,12 @@ import {
   type KeybindingShortcut,
   type KeybindingWhenNode,
   matchesKeybindingShortcut,
+  matchesKeybindingShortcutModifiers,
   type ResolvedKeybindingsConfig,
   type ShortcutEventLike,
+  type ShortcutModifierStateLike,
+  THREAD_JUMP_KEYBINDING_COMMANDS,
+  type ThreadJumpKeybindingCommand,
 } from "./shared";
 
 export interface ShortcutMatchContext {
@@ -218,4 +222,45 @@ export function shortcutKeysForCommand(
 ): string[] | null {
   const shortcut = findEffectiveShortcutForCommand(keybindings, command, options);
   return shortcut ? shortcutKeys(shortcut, resolvePlatform(options)) : null;
+}
+
+export function threadJumpCommandForIndex(index: number): ThreadJumpKeybindingCommand | null {
+  return THREAD_JUMP_KEYBINDING_COMMANDS[index] ?? null;
+}
+
+export function threadJumpIndexFromCommand(command: string): number | null {
+  const index = THREAD_JUMP_KEYBINDING_COMMANDS.indexOf(command as ThreadJumpKeybindingCommand);
+  return index === -1 ? null : index;
+}
+
+export function threadTraversalDirectionFromCommand(
+  command: string | null,
+): "previous" | "next" | null {
+  if (command === "thread.previous") return "previous";
+  if (command === "thread.next") return "next";
+  return null;
+}
+
+export function shouldShowThreadJumpHintsForModifiers(
+  modifiers: ShortcutModifierStateLike,
+  keybindings: ResolvedKeybindingsConfig,
+  options?: ShortcutMatchOptions,
+): boolean {
+  // The terminal owns keystrokes while it has focus, so advertising jump hints
+  // there would promise a shortcut that instead types into the terminal.
+  if (resolveContext(options).terminalFocus) {
+    return false;
+  }
+
+  const platform = resolvePlatform(options);
+
+  for (const command of THREAD_JUMP_KEYBINDING_COMMANDS) {
+    const shortcut = findEffectiveShortcutForCommand(keybindings, command, options);
+    if (!shortcut) continue;
+    if (matchesKeybindingShortcutModifiers(modifiers, shortcut, platform)) {
+      return true;
+    }
+  }
+
+  return false;
 }

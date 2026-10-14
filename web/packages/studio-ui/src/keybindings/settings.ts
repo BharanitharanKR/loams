@@ -333,6 +333,11 @@ const COMMAND_LABELS: Partial<Record<KeybindingCommand, string>> = {
   "terminal.toggle": "Terminal: Show or Hide",
   "rightPanel.toggle": "Panel: Show or Hide",
   "sidebar.toggle": "Sidebar: Show or Hide",
+  "thread.previous": "Thread: Previous",
+  "thread.next": "Thread: Next",
+  ...Object.fromEntries(
+    Array.from({ length: 9 }, (_, i) => [`thread.jump.${i + 1}`, `Thread: Open ${i + 1}`]),
+  ),
 };
 
 export function commandLabel(command: KeybindingCommand): string {
