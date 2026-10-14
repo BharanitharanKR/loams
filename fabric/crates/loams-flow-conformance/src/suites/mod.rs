@@ -9,7 +9,7 @@ use loams_flow::ConnectorSpec;
 
 use crate::services::{ComposeEstate, Estate, EstateError, ServiceKind, SystemsCatalog};
 use crate::{
-    ConnectorHarness, HarnessError, Observed, Seeded, Suite, SuiteOutcome, SuiteReport,
+    ConnectorHarness, Direction, HarnessError, Observed, Seeded, Suite, SuiteOutcome, SuiteReport,
     SuiteResult, check_services,
 };
 
@@ -206,15 +206,17 @@ pub(crate) struct Ctx<'a> {
 }
 
 impl Ctx<'_> {
-    /// The delivery slug of the direction under test: the sink's when the
-    /// connector has one, else the source's.
+    /// The delivery slug of the direction under test: the harness's
+    /// [`ConnectorHarness::direction`] when it names one, else the sink's
+    /// when the connector has one, else the source's.
     pub fn delivery(&self) -> String {
         let doc = self.spec.to_json().unwrap_or_default();
         let caps = &doc["capabilities"];
-        let dir = if caps.get("sink").is_some_and(|s| s.is_object()) {
-            "sink"
-        } else {
-            "source"
+        let dir = match self.h.direction() {
+            Some(Direction::Source) => "source",
+            Some(Direction::Sink) => "sink",
+            None if caps.get("sink").is_some_and(|s| s.is_object()) => "sink",
+            None => "source",
         };
         caps["delivery"][dir]
             .as_str()

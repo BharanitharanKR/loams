@@ -32,8 +32,8 @@ use loams_connector_sdk::{
     SinkFactory, StaticSecrets,
 };
 use loams_flow_conformance::{
-    CdcReport, ConnectorHarness, CrashingReader, CrashingSinkFactory, CrashingWriter, FaultPoint,
-    FaultSwitch, HarnessError, KillTarget, MemoryReport, Observed, Seeded, ServiceKind,
+    CdcReport, ConnectorHarness, CrashingReader, CrashingSinkFactory, CrashingWriter, Direction,
+    FaultPoint, FaultSwitch, HarnessError, KillTarget, MemoryReport, Observed, Seeded, ServiceKind,
 };
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
@@ -671,6 +671,15 @@ pub fn has_change(evs: &[CloudEvent], op: &str, id: i64) -> bool {
 impl ConnectorHarness for SqlHarness {
     fn services(&self) -> &[ServiceKind] {
         self.services
+    }
+
+    /// The source roles are held to the manifest's source delivery
+    /// (`at_least_once`, R12.9), the sink to the sink's.
+    fn direction(&self) -> Option<Direction> {
+        Some(match self.role {
+            Role::Cdc | Role::Batch => Direction::Source,
+            Role::Sink { .. } => Direction::Sink,
+        })
     }
 
     async fn seed(&self, n: usize) -> Result<Seeded, HarnessError> {

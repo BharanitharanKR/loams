@@ -88,3 +88,61 @@ impl ConnectorHarness for StubHarness {
         Ok(false)
     }
 }
+
+/// A harness whose connector replays every record once after a crash (two
+/// copies of each), testing `direction`: the bound `dup-check` applies comes
+/// from the manifest's delivery for that direction.
+#[derive(Debug)]
+pub struct ReplayingHarness {
+    pub services: &'static [ServiceKind],
+    pub direction: Option<loams_flow::Direction>,
+    pub seeded: std::sync::Mutex<usize>,
+}
+
+#[async_trait]
+impl ConnectorHarness for ReplayingHarness {
+    fn services(&self) -> &[ServiceKind] {
+        self.services
+    }
+    fn direction(&self) -> Option<loams_flow::Direction> {
+        self.direction
+    }
+    async fn seed(&self, n: usize) -> Result<Seeded, HarnessError> {
+        let mut s = self.seeded.lock().unwrap();
+        *s += n;
+        Ok(Seeded {
+            ids: (0..*s).map(|i| i.to_string()).collect(),
+        })
+    }
+    async fn read_back(&self) -> Result<Vec<Observed>, HarnessError> {
+        let n = *self.seeded.lock().unwrap();
+        Ok((0..n)
+            .map(|i| Observed {
+                id: i.to_string(),
+                copies: 2,
+            })
+            .collect())
+    }
+    async fn kill(&self, _what: KillTarget) -> Result<(), HarnessError> {
+        Ok(())
+    }
+    async fn inject(&self, _at: FaultPoint) -> Result<(), HarnessError> {
+        Err(HarnessError::Unsupported("replaying".into()))
+    }
+    async fn reset(&self) -> Result<(), HarnessError> {
+        *self.seeded.lock().unwrap() = 0;
+        Ok(())
+    }
+    async fn start(&self) -> Result<(), HarnessError> {
+        Ok(())
+    }
+    async fn stop(&self) -> Result<(), HarnessError> {
+        Ok(())
+    }
+    async fn settle(&self, _timeout: Duration) -> Result<(), HarnessError> {
+        Ok(())
+    }
+    async fn tripped(&self, _timeout: Duration) -> Result<bool, HarnessError> {
+        Ok(false)
+    }
+}
