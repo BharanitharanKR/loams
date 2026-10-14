@@ -47,6 +47,30 @@
   --op-chart-7: #6250d6;
   --op-chart-8: #e34948;
 
+  /* Terminals (Studio, SD1 Task 22): the surface, cursor and selection, and the 16
+     ANSI colours from the brand hues. Each keeps 4.5:1 on --op-term-bg, except dark
+     mode's black, which stays a shade just off the background as terminals expect. */
+  --op-term-bg: var(--op-surface);
+  --op-term-fg: var(--op-ink);
+  --op-term-cursor: var(--op-accent);
+  --op-term-selection: #8a520a40;
+  --op-term-black: #1a1511;
+  --op-term-red: #a63a20;
+  --op-term-green: #3f7426;
+  --op-term-yellow: #7f4c09;
+  --op-term-blue: #2b5c96;
+  --op-term-magenta: #85397f;
+  --op-term-cyan: #2c6670;
+  --op-term-white: #5b5044;
+  --op-term-bright-black: #74695b;
+  --op-term-bright-red: #b8452a;
+  --op-term-bright-green: #4a7f2e;
+  --op-term-bright-yellow: #8a520a;
+  --op-term-bright-blue: #3667a8;
+  --op-term-bright-magenta: #94468e;
+  --op-term-bright-cyan: #33737e;
+  --op-term-bright-white: #74695b;
+
   /* Spacing steps of 4px; panels keep hard corners, anything you press is a pill. */
   --op-space: 4px;
   --op-radius: 0;
@@ -92,5 +116,22 @@
   --op-chart-6: #008300;
   --op-chart-7: #9085e9;
   --op-chart-8: #e66767;
+  --op-term-selection: #e4a24a40;
+  --op-term-black: #4a4038;
+  --op-term-red: #e0664a;
+  --op-term-green: #9cc25e;
+  --op-term-yellow: #e4a24a;
+  --op-term-blue: #7fa9df;
+  --op-term-magenta: #cc93cf;
+  --op-term-cyan: #72bfc6;
+  --op-term-white: #d9d4c8;
+  --op-term-bright-black: #938775;
+  --op-term-bright-red: #f08a70;
+  --op-term-bright-green: #b5d980;
+  --op-term-bright-yellow: #f0c070;
+  --op-term-bright-blue: #a2c3ef;
+  --op-term-bright-magenta: #dfb0e1;
+  --op-term-bright-cyan: #98d8de;
+  --op-term-bright-white: #f4f5ee;
   color-scheme: dark;
 }

@@ -32,13 +32,16 @@
     "@loams/agentd-client": "workspace:*",
     "@loams/ui": "workspace:*",
     "@tanstack/react-virtual": "catalog:",
+    "@xterm/addon-fit": "catalog:",
+    "@xterm/xterm": "catalog:",
     "lucide-react": "catalog:",
     "react-markdown": "catalog:",
     "rehype-sanitize": "catalog:",
     "remark-breaks": "catalog:",
     "remark-gfm": "catalog:",
     "shiki": "catalog:",
-    "unified": "catalog:"
+    "unified": "catalog:",
+    "zustand": "catalog:"
   },
   "peerDependencies": {
     "react": ">=19",

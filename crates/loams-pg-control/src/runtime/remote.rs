@@ -114,42 +114,65 @@ impl RemoteRuntime {
 
 #[async_trait]
 impl ComputeRuntime for RemoteRuntime {
-    async fn ensure_address(&self, ep: &EndpointRec) -> Result<BackendAddr, RuntimeError> {
-        self.call("v1/ensure-address", &WireEndpoint::of(ep)).await
+    async fn ensure_address(
+        &self,
+        ns: &str,
+        ep: &EndpointRec,
+    ) -> Result<BackendAddr, RuntimeError> {
+        self.call("v1/ensure-address", &WireEndpoint::of(ns, ep))
+            .await
     }
 
-    async fn remove_address(&self, ep: &EndpointRec) -> Result<(), RuntimeError> {
-        self.call("v1/remove-address", &WireEndpoint::of(ep)).await
+    async fn remove_address(&self, ns: &str, ep: &EndpointRec) -> Result<(), RuntimeError> {
+        self.call("v1/remove-address", &WireEndpoint::of(ns, ep))
+            .await
     }
 
     async fn start(&self, c: &ComputeLaunch) -> Result<ComputeHandle, RuntimeError> {
         self.call("v1/start", &WireLaunch::of(c)).await
     }
 
-    async fn bind_address(&self, ep: &EndpointRec, c: &ComputeHandle) -> Result<(), RuntimeError> {
+    async fn bind_address(
+        &self,
+        ns: &str,
+        ep: &EndpointRec,
+        c: &ComputeHandle,
+    ) -> Result<(), RuntimeError> {
         let body = WireBind {
-            endpoint: WireEndpoint::of(ep),
+            endpoint: WireEndpoint::of(ns, ep),
             handle: c.clone(),
         };
         self.call("v1/bind-address", &body).await
     }
 
-    async fn stop(&self, compute_id: &ComputeId) -> Result<(), RuntimeError> {
+    async fn stop(&self, ns: &str, compute_id: &ComputeId) -> Result<(), RuntimeError> {
         let body = WireCompute {
+            namespace: ns.to_owned(),
             compute_id: *compute_id,
         };
         self.call("v1/stop", &body).await
     }
 
-    async fn status(&self, compute_id: &ComputeId) -> Result<RuntimeStatus, RuntimeError> {
+    async fn status(
+        &self,
+        ns: &str,
+        compute_id: &ComputeId,
+    ) -> Result<RuntimeStatus, RuntimeError> {
         let body = WireCompute {
+            namespace: ns.to_owned(),
             compute_id: *compute_id,
         };
         self.call("v1/status", &body).await
     }
 
-    async fn resize(&self, compute_id: &ComputeId, cu: Cu) -> Result<ResizeOutcome, RuntimeError> {
+    async fn resize(
+        &self,
+        ns: &str,
+        compute_id: &ComputeId,
+        cu: Cu,
+    ) -> Result<ResizeOutcome, RuntimeError> {
         let body = WireResize {
+            namespace: ns.to_owned(),
             compute_id: *compute_id,
             cu,
         };

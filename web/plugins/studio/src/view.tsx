@@ -15,12 +15,14 @@ import {
   useStudioCommand,
   useStudioKeybindings,
 } from './palette/commands.js';
-import { ProjectsSidebar } from './projects/ProjectsSidebar.js';
 import { useProjects, useReach } from './projects/queries.js';
 import { PANELS, type Panel, type StudioRoute, studioHref } from './routes.js';
 import { SettingsPage } from './settings/Settings.js';
 import { FactoryGroup } from './sidebar/Factory.js';
+import { StudioSidebar } from './sidebar/Sidebar.js';
+import { useNewThread } from './sidebar/useThreadActions.js';
 import { DraftCard } from './thread/FactoryLinks.js';
+import { ThreadTerminalDrawer } from './thread/TerminalDrawer.js';
 
 // The thread page carries the markdown and highlighting stack: loaded on first use (SD1 Task 18).
 const ThreadPage = lazy(() =>
@@ -143,13 +145,15 @@ function Body({
  * toggles do.
  */
 function useStudioRouteCommands(
+  agentd: StudioAgentd,
   keys: StudioKeys,
   route: StudioRoute,
   navigate: (to: string) => void,
   connected: boolean,
 ): void {
   const { commands } = keys;
-  useStudioCommand(commands, 'chat.new', () => navigate('/studio'));
+  // A thread in the project in view, else the home page to pick one (SD1 Task 17).
+  useStudioCommand(commands, 'chat.new', useNewThread(agentd, route, navigate));
   useStudioCommand(commands, 'settings.open', () => navigate('/studio/settings'));
   useStudioCommand(commands, 'navigation.back', () => window.history.back());
   useStudioCommand(commands, 'navigation.forward', () => window.history.forward());
@@ -186,8 +190,8 @@ function StudioPage({
   hostParam?: string;
   /** Studio's commands and keybindings (SD1 Task 24); the plugin shares one with its palette. */
   keys?: StudioKeys;
-  /** Opens an http(s) link outside the console: the platform's opener (SD1 Task 18). */
-  openExternal?: (url: string) => void;
+  /** Opens an http(s) link outside Studio (the platform's; a terminal's links, SD1 Task 22). */
+  openExternal?: (url: string) => Promise<void>;
 }) {
   useEffect(() => {
     if (hostParam) agentd.hosts?.select(hostParam);
@@ -197,28 +201,26 @@ function StudioPage({
   const thread = route.kind === 'thread' ? route : undefined;
   const [own] = useState(() => createStudioKeys({ edition: agentd.kind }));
   const keys = given ?? own;
-  useStudioRouteCommands(keys, route, navigate, connected);
+  useStudioRouteCommands(agentd, keys, route, navigate, connected);
   useStudioKeybindings(keys, { threadOpen: thread !== undefined && connected });
   return (
     <StudioLayout
       title={<Title agentd={agentd} route={route} />}
       sidebar={
-        <ProjectsSidebar
-          agentd={agentd}
-          activeProject={route.kind === 'project' ? route.projectId : undefined}
-        >
+        <StudioSidebar agentd={agentd} route={route} navigate={navigate} keys={keys}>
           {factory && <FactoryGroup factory={factory} />}
-        </ProjectsSidebar>
+        </StudioSidebar>
       }
       commands={keys.commands}
       panel={thread && connected ? <ThreadPanel route={thread} navigate={navigate} /> : undefined}
       drawer={
         thread && connected ? (
-          <div className="p-3">
-            <Empty title="No terminals" seed={5}>
-              Terminals for this thread's worktree open here.
-            </Empty>
-          </div>
+          <ThreadTerminalDrawer
+            threadId={thread.threadId}
+            keys={keys}
+            navigate={navigate}
+            {...(openExternal ? { openExternal } : {})}
+          />
         ) : undefined
       }
     >

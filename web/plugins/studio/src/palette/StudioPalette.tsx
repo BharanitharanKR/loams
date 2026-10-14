@@ -44,7 +44,7 @@ import type { StudioPaletteSource } from './source.js';
 
 /** The Studio commands the palette offers when something handles them. */
 const PALETTE_COMMANDS: readonly KeybindingCommand[] = STUDIO_KEYBINDING_COMMANDS.filter(
-  (c) => c !== 'navigation.back' && c !== 'navigation.forward',
+  (c) => c !== 'navigation.back' && c !== 'navigation.forward' && !c.startsWith('thread.jump.'),
 );
 
 const COMMAND_TITLES: Partial<Record<KeybindingCommand, string>> = {
@@ -56,6 +56,8 @@ const COMMAND_TITLES: Partial<Record<KeybindingCommand, string>> = {
   'diff.toggle': 'Show the diff',
   'files.toggle': 'Show the files',
   'preview.toggle': 'Show the preview',
+  'thread.previous': 'Previous thread',
+  'thread.next': 'Next thread',
 };
 
 function toCommand(item: StudioPaletteItem, keys: StudioKeys, threadOpen: boolean): PaletteCommand {

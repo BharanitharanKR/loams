@@ -154,14 +154,14 @@ flowchart LR
 | TiKV metastore | The catalog, leases and timestamp oracle on TiKV (`--meta tikv://…`, cargo feature `tikv`) | Preview |
 | Loams Durable | An embedded Resonate server: durable promises and tasks on SQLite (cargo feature `durable`) | Preview |
 | Durable store on TiKV | Durable execution state on TiKV for clusters | In progress |
-| Loams Live | A reactive document database: transactions, indexes, live queries and a TypeScript SDK, on an embedded store or on TiKV (`live-tikv`) | Preview. Deploys, rollback, validators and online index changes through `LiveAdminService` on the Live listener (loopback only in the compose stack). Cross-node pickup can take up to 60 s |
+| Loams Live | A reactive document database: transactions, indexes, live queries and a TypeScript SDK, on an embedded store or on TiKV (`live-tikv`) | Preview. Deploys, rollback, validators and online index changes through `LiveAdminService` on the main port, over the tailnet; a deploy reaches every node at once |
 | Loams Graph | `loams.graph.v1` on the main port, GQL on Grafeo (cargo feature `graph`) | Preview. Writes reach the Loams log before they are acknowledged, with a fenced single owner per graph, snapshots in the bucket and crash recovery (GR1 Tasks 11 to 14), on Loams' Grafeo fork |
 | Loams House | ClickHouse-compatible analytics on chDB in `loams-fabric`, with `loams.house.v1` proxied by the engine | Preview. `--profile house` serves its ClickHouse HTTP interface on your tailnet through its own sidecar, with chDB access control, statement checks and sealed workers. Not wired to the engine yet (the engine answers `house_not_configured`); `INSERT` into House tables arrives with HS1 Task 12 |
 | Loams SQL | MySQL-compatible SQL on a patched TiDB (`v8.5.8-loams.1`) over TiKV | Preview |
-| Loams Postgres | A fork of Neon whose storage lives on the bucket; the compose stack runs its storage and computes | Preview. The compose stack runs its storage and computes. The control plane provisions computes and endpoints (PG2 Tasks 1 to 12), but `pg-control` is not in the release images yet |
+| Loams Postgres | A fork of Neon whose storage lives on the bucket; the compose stack runs its storage and computes | Preview. The compose stack runs its storage and computes; `--profile postgres-control` adds `pg-control` and `pg-runner`, which provision computes and endpoints |
 | Postgres and MySQL wire | SQL over the Postgres and MySQL wire protocols, over collections | Preview |
 | Streaming gRPC API | Idempotent produce and streaming subscribe over gRPC | Preview |
-| Web console | The React console, hosted at `console.loams.dev`. Your own Vercel or Cloudflare deployment is coming soon | Preview. Several pages still use mocked clients; House and Analytics are not wired to the engine |
+| Web console | One console of cordis plugins on Connect, hosted at `console.loams.dev` and in Loams Desktop, with a Studio mode; sign-in from your tailnet login, a Loams account or an API key. Your own Vercel or Cloudflare deployment is coming soon | Preview. Some pages still show demonstration data; House and Analytics are not wired to the engine |
 | Engine auth | Tailscale identity (default), OIDC (JWTs checked against the issuer's JWKS), hashed API keys, or loopback-only (`LOAMS_AUTH_MODE`) | Preview |
 | Loams Git | Git on the bucket: a WAL, ref log, checkpoints, O(1) forks and GC, and `loams.repos.v1`'s repository catalog (cargo feature `git`) | In progress. No push or fetch path yet; not in the release images |
 | First-party connectors | Native source and sink connectors (Kafka family, Postgres CDC, object storage, key-value, search, brokers, cloud queues, HTTP APIs) on `loams-connector-sdk` | In progress. Not in the release images |
@@ -377,30 +377,21 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
   build against protobuf 36.1 exactly, so there are no vcpkg or Conan ports yet. Building
   `loams-proto` from crates.io needs `protoc` installed.
 
-- **Loams Postgres:** the control plane can now provision computes and endpoints (PG2 Tasks
-  10 to 12: the compose compute runtime, the endpoint lifecycle and idle suspend), but
-  `pg-control` is not in the engine image: its compute runtime drives Docker, and the
-  self-hosted stack does not hand the engine a container runtime. In this preview the Postgres
-  stack runs Neon's storage and computes from `deploy/loams-postgres-dev`, and tenants,
-  timelines and computes are created by hand as its README shows. Its images are pinned to Neon's last public build until the
-  fork's own builds (NF1 Task 14). From the release after 0.1.0-preview.2, `--profile
-  postgres-control` runs `pg-control` beside the stack, with the container runtime's socket
-  given only to a separate compute runner that starts nothing but the pinned compute images
-  (see [`deploy/release/README.md`](../../deploy/release/README.md#postgres-control-plane)).
+- **Loams Postgres:** `--profile postgres-control` runs `pg-control` beside the stack, with the
+  container runtime's socket given only to a separate compute runner that starts nothing but
+  the pinned compute images (see [`deploy/release/README.md`](../../deploy/release/README.md#postgres-control-plane)).
+  Its images are pinned to Neon's last public build until the fork's own builds (NF1 Task 14),
+  and the pg-control to runner link is plaintext on its internal network until PG2 Task 23.
 - **Loams Graph:** writes reach the Loams log before they are acknowledged and graphs recover
   from snapshots and the log after a crash (GR1 Tasks 11 to 14). It is still a preview: keep a
   copy of graph data you cannot recreate.
-- **Loams Live:** a change made on one node can take up to 60 seconds to reach live queries
-  on another node (cross-node pickup). `LiveAdminService` (deploy, rollback, index status,
-  logs) is served on the Live listener, which is loopback only in the compose stack and not
-  forwarded over the tailnet. Documents, transactions, indexes and live queries work.
 - **Loams House:** the engine does not reach it yet (its link needs TLS, HS1 Task 20), so
   `loams.house.v1` and the console's House page answer `house_not_configured`; use the House's
   own tailnet URL. It does not take `INSERT` into its tables yet (HS1 Task 12). Its user is a
   single generated local key until Task 20 brings Loams identities. `pods` mode needs Landlock with TCP rules (Linux 6.7 or later; Docker Desktop
   runs its own Linux kernel): on an older kernel the workers refuse to boot.
-- **Console:** several pages (Jobs, Connectors, SQL, Git, Postgres control plane, Live
-  deployments) still run against mocked clients and show demonstration data, not your stack.
+- **Console:** some pages (Jobs, Connectors, SQL, Git) still show demonstration data, not your
+  stack.
   House and Analytics are not wired to the engine in this preview.
 - **Durable on TiKV** is in progress: Loams Durable keeps its state in SQLite on the `loams`
   service's data.

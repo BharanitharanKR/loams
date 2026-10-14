@@ -1,0 +1,65 @@
+[
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+      "annotations": {
+        "argocd.argoproj.io/compare-options": "IgnoreExtraneous"
+      },
+      "labels": {
+        "app.kubernetes.io/component": "postgres-endpoint",
+        "app.kubernetes.io/managed-by": "loams-pg-control",
+        "loams.dev/endpoint": "ep-01JZ0000000000000000000001",
+        "loams.dev/namespace": "acme",
+        "loams.dev/org": "",
+        "loams.dev/project": "prj-01JZ0000000000000000000000"
+      },
+      "name": "ep-01jz0000000000000000000001",
+      "namespace": "loams-pg-acme"
+    },
+    "spec": {
+      "ports": [
+        {
+          "name": "postgres",
+          "port": 5432,
+          "protocol": "TCP",
+          "targetPort": 55433
+        }
+      ],
+      "selector": {
+        "app.kubernetes.io/component": "postgres-compute",
+        "loams.dev/compute": "none"
+      },
+      "type": "ClusterIP"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+      "annotations": {
+        "argocd.argoproj.io/compare-options": "IgnoreExtraneous"
+      },
+      "labels": {
+        "app.kubernetes.io/component": "postgres-compute",
+        "app.kubernetes.io/managed-by": "loams-pg-control"
+      },
+      "name": "computes",
+      "namespace": "loams-pg-acme"
+    },
+    "spec": {
+      "clusterIP": "None",
+      "ports": [
+        {
+          "name": "http",
+          "port": 3080,
+          "protocol": "TCP"
+        }
+      ],
+      "publishNotReadyAddresses": true,
+      "selector": {
+        "app.kubernetes.io/component": "postgres-compute"
+      }
+    }
+  }
+]
