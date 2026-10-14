@@ -4,7 +4,9 @@
 //! flush immediately. The edge room clients that synced these docs are gone (D781).
 
 mod review_comments;
+mod run_groups;
 mod store;
 
 pub use review_comments::ReviewCommentRow;
+pub use run_groups::StoredRunGroup;
 pub use store::{DocsStore, StoreError};

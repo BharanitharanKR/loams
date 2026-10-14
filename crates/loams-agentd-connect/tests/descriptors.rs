@@ -264,11 +264,12 @@ fn every_studio_method_has_rpc() {
 }
 
 /// The §53 §6.5 gaps a task has served: G1–G5 and G21 (SD1 Task 9), G6 and
-/// G7 (SD1 Task 10), G8–G11 and G23 (SD1 Task 11).
+/// G7 (SD1 Task 10), G8–G11 and G23 (SD1 Task 11), G12–G16 (SD1 Task 12).
 const SERVED_GAPS: &[&str] = &[
     "G1", "G2", "G3", "G4", "G5", "G21", // SD1 Task 9
     "G6", "G7", // SD1 Task 10
     "G8", "G9", "G10", "G11", "G23", // SD1 Task 11
+    "G12", "G13", "G14", "G15", "G16", // SD1 Task 12
 ];
 
 #[test]

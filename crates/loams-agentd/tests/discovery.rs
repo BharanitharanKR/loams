@@ -297,6 +297,7 @@ fn discovery_has_connect_port() {
         features.contains(&"content-search".to_owned()),
         "SD1 Task 11"
     );
+    assert!(features.contains(&"run-groups".to_owned()), "SD1 Task 12");
     assert!(
         body["host"]["features"]
             .as_array()

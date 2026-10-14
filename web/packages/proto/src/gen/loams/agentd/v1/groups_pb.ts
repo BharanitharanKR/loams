@@ -2,11 +2,11 @@
 // @generated from file loams/agentd/v1/groups.proto (package loams.agentd.v1, syntax proto3)
 /* eslint-disable */
 
-// Run groups (design §53 §5.5, §6.5 G12–G16, Ruling 5; plan SD1 Task 4): one
-// prompt run by several harnesses in parallel worktrees, compared side by
-// side, and the chosen result merged. A group is a daemon record. Declared
-// here; every RPC answers `unimplemented` until SD1 Task 12. See studio.proto
-// for the package's rules.
+// Run groups (design §53 §5.5, §6.5 G12–G16, Ruling 5; plan SD1 Tasks 4 and
+// 12): one prompt run by several harnesses in parallel worktrees, compared
+// side by side, and the chosen result merged. A group is a daemon record (the
+// SQLite table `run_groups`), so it survives the window closing and a daemon
+// restart. See studio.proto for the package's rules.
 
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
@@ -20,8 +20,6 @@ import type { CreateChangeRequestRequest, MergeBranchRequest } from "./git_pb.js
 import { file_loams_agentd_v1_git } from "./git_pb.js";
 import type { HarnessId, ReasoningLevel } from "./studio_pb.js";
 import { file_loams_agentd_v1_studio } from "./studio_pb.js";
-import type { SessionStatus } from "./threads_pb.js";
-import { file_loams_agentd_v1_threads } from "./threads_pb.js";
 import { file_loams_options_v1_options } from "../../options/v1/options_pb.js";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -29,7 +27,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file loams/agentd/v1/groups.proto.
  */
 export const file_loams_agentd_v1_groups: GenFile = /*@__PURE__*/
-  fileDesc("Chxsb2Ftcy9hZ2VudGQvdjEvZ3JvdXBzLnByb3RvEg9sb2Ftcy5hZ2VudGQudjEisQIKClJ1blZhcmlhbnQSKwoHaGFybmVzcxgBIAEoDjIaLmxvYW1zLmFnZW50ZC52MS5IYXJuZXNzSWQSEgoFbW9kZWwYAiABKAlIAIgBARI3CglyZWFzb25pbmcYAyABKA4yHy5sb2Ftcy5hZ2VudGQudjEuUmVhc29uaW5nTGV2ZWxIAYgBARJECg1tb2RlbF9vcHRpb25zGAQgAygLMi0ubG9hbXMuYWdlbnRkLnYxLlJ1blZhcmlhbnQuTW9kZWxPcHRpb25zRW50cnkaSwoRTW9kZWxPcHRpb25zRW50cnkSCwoDa2V5GAEgASgJEiUKBXZhbHVlGAIgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlOgI4AUIICgZfbW9kZWxCDAoKX3JlYXNvbmluZyJfCgtNZW1iZXJDaGVjaxIqCgVzdGF0ZRgBIAEoDjIbLmxvYW1zLmFnZW50ZC52MS5DaGVja1N0YXRlEhYKCWV4aXRfY29kZRgCIAEoBUgAiAEBQgwKCl9leGl0X2NvZGUiugIKDlJ1bkdyb3VwTWVtYmVyEg8KB2NoYXRfaWQYASABKAkSKwoHaGFybmVzcxgCIAEoDjIaLmxvYW1zLmFnZW50ZC52MS5IYXJuZXNzSWQSEgoFbW9kZWwYAyABKAlIAIgBARIuCgZzdGF0dXMYBCABKA4yHi5sb2Ftcy5hZ2VudGQudjEuU2Vzc2lvblN0YXR1cxIVCg1maWxlc19jaGFuZ2VkGAUgASgNEhEKCWFkZGl0aW9ucxgGIAEoDRIRCglkZWxldGlvbnMYByABKA0SEgoKZWxhcHNlZF9tcxgIIAEoAxITCgZ0b2tlbnMYCSABKARIAYgBARIrCgVjaGVjaxgKIAEoCzIcLmxvYW1zLmFnZW50ZC52MS5NZW1iZXJDaGVja0IICgZfbW9kZWxCCQoHX3Rva2VucyLUAQoIUnVuR3JvdXASCgoCaWQYASABKAkSDgoGcHJvbXB0GAIgASgJEgwKBGJhc2UYAyABKAkSFQoNY3JlYXRlZF9hdF9tcxgEIAEoAxItCgVzdGF0ZRgFIAEoDjIeLmxvYW1zLmFnZW50ZC52MS5SdW5Hcm91cFN0YXRlEjAKB21lbWJlcnMYBiADKAsyHy5sb2Ftcy5hZ2VudGQudjEuUnVuR3JvdXBNZW1iZXISFwoKcmVzb2x1dGlvbhgHIAEoCUgAiAEBQg0KC19yZXNvbHV0aW9uIoYCChVDcmVhdGVSdW5Hcm91cFJlcXVlc3QSEAoIc3BhY2VfaWQYASABKAkSEQoJcmVwb19wYXRoGAIgASgJEgwKBGJhc2UYAyABKAkSDgoGcHJvbXB0GAQgASgJEhMKC2F0dGFjaG1lbnRzGAUgAygJEi0KCHZhcmlhbnRzGAYgAygLMhsubG9hbXMuYWdlbnRkLnYxLlJ1blZhcmlhbnQSHAoPY2hlY2tfYWN0aW9uX2lkGAcgASgJSACIAQESNAoNYXBwcm92YWxfbW9kZRgIIAEoDjIdLmxvYW1zLmFnZW50ZC52MS5BcHByb3ZhbE1vZGVCEgoQX2NoZWNrX2FjdGlvbl9pZCI8ChZDcmVhdGVSdW5Hcm91cFJlc3BvbnNlEhAKCGdyb3VwX2lkGAEgASgJEhAKCGNoYXRfaWRzGAIgAygJIjsKFVdhdGNoUnVuR3JvdXBzUmVxdWVzdBIVCghzcGFjZV9pZBgBIAEoCUgAiAEBQgsKCV9zcGFjZV9pZCJDChZXYXRjaFJ1bkdyb3Vwc1Jlc3BvbnNlEikKBmdyb3VwcxgBIAMoCzIZLmxvYW1zLmFnZW50ZC52MS5SdW5Hcm91cCJECgtNZW1iZXJEZWx0YRIPCgdjaGF0X2lkGAEgASgJEhEKCWFkZGl0aW9ucxgCIAEoDRIRCglkZWxldGlvbnMYAyABKA0iTwoNQ29tcGFyaXNvblJvdxIMCgRwYXRoGAEgASgJEjAKCnBlcl9tZW1iZXIYAiADKAsyHC5sb2Ftcy5hZ2VudGQudjEuTWVtYmVyRGVsdGEibQocR2V0UnVuR3JvdXBDb21wYXJpc29uUmVxdWVzdBIQCghncm91cF9pZBgBIAEoCRIJCgFhGAIgASgJEg4KAWIYAyABKAlIAIgBARIRCgRwYXRoGAQgASgJSAGIAQFCBAoCX2JCBwoFX3BhdGgigQEKHUdldFJ1bkdyb3VwQ29tcGFyaXNvblJlc3BvbnNlEi4KBm1hdHJpeBgBIAMoCzIeLmxvYW1zLmFnZW50ZC52MS5Db21wYXJpc29uUm93EjAKCXBhaXJfZGlmZhgCIAEoCzIdLmxvYW1zLmFnZW50ZC52MS5DaGVja291dERpZmYiMAoIQ2hlY2tSdW4SDwoHY2hhdF9pZBgBIAEoCRITCgt0ZXJtaW5hbF9pZBgCIAEoCSJKChRSdW5Hcm91cENoZWNrUmVxdWVzdBIQCghncm91cF9pZBgBIAEoCRIUCgdjaGF0X2lkGAIgASgJSACIAQFCCgoIX2NoYXRfaWQiQAoVUnVuR3JvdXBDaGVja1Jlc3BvbnNlEicKBHJ1bnMYASADKAsyGS5sb2Ftcy5hZ2VudGQudjEuQ2hlY2tSdW4isgIKFlJlc29sdmVSdW5Hcm91cFJlcXVlc3QSEAoIZ3JvdXBfaWQYASABKAkSFgoOd2lubmVyX2NoYXRfaWQYAiABKAkSLgoGYWN0aW9uGAMgASgOMh4ubG9hbXMuYWdlbnRkLnYxLlJlc29sdmVBY3Rpb24SMgoFbWVyZ2UYBCABKAsyIy5sb2Ftcy5hZ2VudGQudjEuTWVyZ2VCcmFuY2hSZXF1ZXN0EkMKDmNoYW5nZV9yZXF1ZXN0GAUgASgLMisubG9hbXMuYWdlbnRkLnYxLkNyZWF0ZUNoYW5nZVJlcXVlc3RSZXF1ZXN0EhYKDmFyY2hpdmVfb3RoZXJzGAYgASgIEh4KFnJlbW92ZV9vdGhlcl93b3JrdHJlZXMYByABKAgSDQoFZm9yY2UYCCABKAgiKQoXUmVzb2x2ZVJ1bkdyb3VwUmVzcG9uc2USDgoGcmVzdWx0GAEgASgJKoYBCg1SdW5Hcm91cFN0YXRlEh8KG1JVTl9HUk9VUF9TVEFURV9VTlNQRUNJRklFRBAAEhsKF1JVTl9HUk9VUF9TVEFURV9SVU5OSU5HEAESGQoVUlVOX0dST1VQX1NUQVRFX1JFQURZEAISHAoYUlVOX0dST1VQX1NUQVRFX1JFU09MVkVEEAMqiwEKCkNoZWNrU3RhdGUSGwoXQ0hFQ0tfU1RBVEVfVU5TUEVDSUZJRUQQABIXChNDSEVDS19TVEFURV9QRU5ESU5HEAESFwoTQ0hFQ0tfU1RBVEVfUlVOTklORxACEhYKEkNIRUNLX1NUQVRFX1BBU1NFRBADEhYKEkNIRUNLX1NUQVRFX0ZBSUxFRBAEKoUBCg1SZXNvbHZlQWN0aW9uEh4KGlJFU09MVkVfQUNUSU9OX1VOU1BFQ0lGSUVEEAASGAoUUkVTT0xWRV9BQ1RJT05fTUVSR0UQARIhCh1SRVNPTFZFX0FDVElPTl9DSEFOR0VfUkVRVUVTVBACEhcKE1JFU09MVkVfQUNUSU9OX0tFRVAQAzLzBAoPUnVuR3JvdXBTZXJ2aWNlEmEKDkNyZWF0ZVJ1bkdyb3VwEiYubG9hbXMuYWdlbnRkLnYxLkNyZWF0ZVJ1bkdyb3VwUmVxdWVzdBonLmxvYW1zLmFnZW50ZC52MS5DcmVhdGVSdW5Hcm91cFJlc3BvbnNlEmMKDldhdGNoUnVuR3JvdXBzEiYubG9hbXMuYWdlbnRkLnYxLldhdGNoUnVuR3JvdXBzUmVxdWVzdBonLmxvYW1zLmFnZW50ZC52MS5XYXRjaFJ1bkdyb3Vwc1Jlc3BvbnNlMAESewoVR2V0UnVuR3JvdXBDb21wYXJpc29uEi0ubG9hbXMuYWdlbnRkLnYxLkdldFJ1bkdyb3VwQ29tcGFyaXNvblJlcXVlc3QaLi5sb2Ftcy5hZ2VudGQudjEuR2V0UnVuR3JvdXBDb21wYXJpc29uUmVzcG9uc2UiA5ACARJeCg1SdW5Hcm91cENoZWNrEiUubG9hbXMuYWdlbnRkLnYxLlJ1bkdyb3VwQ2hlY2tSZXF1ZXN0GiYubG9hbXMuYWdlbnRkLnYxLlJ1bkdyb3VwQ2hlY2tSZXNwb25zZRJkCg9SZXNvbHZlUnVuR3JvdXASJy5sb2Ftcy5hZ2VudGQudjEuUmVzb2x2ZVJ1bkdyb3VwUmVxdWVzdBooLmxvYW1zLmFnZW50ZC52MS5SZXNvbHZlUnVuR3JvdXBSZXNwb25zZRpVirUYUQoNYWdlbnRkLmdyb3VwcxI+TG9hbXMgU3R1ZGlvJ3MgcnVuIGdyb3VwczogcGFyYWxsZWwgcnVucywgY29tcGFyZWQgYW5kIG1lcmdlZC4YAWIGcHJvdG8z", [file_google_protobuf_struct, file_loams_agentd_v1_approvals, file_loams_agentd_v1_diff, file_loams_agentd_v1_git, file_loams_agentd_v1_studio, file_loams_agentd_v1_threads, file_loams_options_v1_options]);
+  fileDesc("Chxsb2Ftcy9hZ2VudGQvdjEvZ3JvdXBzLnByb3RvEg9sb2Ftcy5hZ2VudGQudjEisQIKClJ1blZhcmlhbnQSKwoHaGFybmVzcxgBIAEoDjIaLmxvYW1zLmFnZW50ZC52MS5IYXJuZXNzSWQSEgoFbW9kZWwYAiABKAlIAIgBARI3CglyZWFzb25pbmcYAyABKA4yHy5sb2Ftcy5hZ2VudGQudjEuUmVhc29uaW5nTGV2ZWxIAYgBARJECg1tb2RlbF9vcHRpb25zGAQgAygLMi0ubG9hbXMuYWdlbnRkLnYxLlJ1blZhcmlhbnQuTW9kZWxPcHRpb25zRW50cnkaSwoRTW9kZWxPcHRpb25zRW50cnkSCwoDa2V5GAEgASgJEiUKBXZhbHVlGAIgASgLMhYuZ29vZ2xlLnByb3RvYnVmLlZhbHVlOgI4AUIICgZfbW9kZWxCDAoKX3JlYXNvbmluZyKbAQoLTWVtYmVyQ2hlY2sSKgoFc3RhdGUYASABKA4yGy5sb2Ftcy5hZ2VudGQudjEuQ2hlY2tTdGF0ZRIWCglleGl0X2NvZGUYAiABKAVIAIgBARIYCgt0ZXJtaW5hbF9pZBgDIAEoCUgBiAEBEhAKCGxvZ190YWlsGAQgAygJQgwKCl9leGl0X2NvZGVCDgoMX3Rlcm1pbmFsX2lkIqsDCg5SdW5Hcm91cE1lbWJlchIPCgdjaGF0X2lkGAEgASgJEisKB2hhcm5lc3MYAiABKA4yGi5sb2Ftcy5hZ2VudGQudjEuSGFybmVzc0lkEhIKBW1vZGVsGAMgASgJSACIAQESMAoGc3RhdHVzGAQgASgOMiAubG9hbXMuYWdlbnRkLnYxLlJ1bk1lbWJlclN0YXR1cxIVCg1maWxlc19jaGFuZ2VkGAUgASgNEhEKCWFkZGl0aW9ucxgGIAEoDRIRCglkZWxldGlvbnMYByABKA0SEgoKZWxhcHNlZF9tcxgIIAEoAxITCgZ0b2tlbnMYCSABKARIAYgBARIrCgVjaGVjaxgKIAEoCzIcLmxvYW1zLmFnZW50ZC52MS5NZW1iZXJDaGVjaxILCgNjd2QYCyABKAkSDgoGYnJhbmNoGAwgASgJEhoKDXN0YXJ0ZWRfYXRfbXMYDSABKANIAogBARIQCghkZXRhY2hlZBgOIAEoCBIQCghhcmNoaXZlZBgPIAEoCEIICgZfbW9kZWxCCQoHX3Rva2Vuc0IQCg5fc3RhcnRlZF9hdF9tcyK4AQoSUnVuR3JvdXBSZXNvbHV0aW9uEi4KBmFjdGlvbhgBIAEoDjIeLmxvYW1zLmFnZW50ZC52MS5SZXNvbHZlQWN0aW9uEhYKDndpbm5lcl9jaGF0X2lkGAIgASgJEg4KBnJlc3VsdBgDIAEoCRIQCgNzaGEYBCABKAlIAIgBARIQCgN1cmwYBSABKAlIAYgBARIWCg5yZXNvbHZlZF9hdF9tcxgGIAEoA0IGCgRfc2hhQgYKBF91cmwilgMKCFJ1bkdyb3VwEgoKAmlkGAEgASgJEg4KBnByb21wdBgCIAEoCRIMCgRiYXNlGAMgASgJEhUKDWNyZWF0ZWRfYXRfbXMYBCABKAMSLQoFc3RhdGUYBSABKA4yHi5sb2Ftcy5hZ2VudGQudjEuUnVuR3JvdXBTdGF0ZRIwCgdtZW1iZXJzGAYgAygLMh8ubG9hbXMuYWdlbnRkLnYxLlJ1bkdyb3VwTWVtYmVyEjcKCnJlc29sdXRpb24YByABKAsyIy5sb2Ftcy5hZ2VudGQudjEuUnVuR3JvdXBSZXNvbHV0aW9uEhUKCHNwYWNlX2lkGAggASgJSACIAQESEQoJcmVwb19wYXRoGAkgASgJEhAKCGJhc2Vfc2hhGAogASgJEhwKD2NoZWNrX2FjdGlvbl9pZBgLIAEoCUgBiAEBEjQKDWFwcHJvdmFsX21vZGUYDCABKA4yHS5sb2Ftcy5hZ2VudGQudjEuQXBwcm92YWxNb2RlQgsKCV9zcGFjZV9pZEISChBfY2hlY2tfYWN0aW9uX2lkIpgCChVDcmVhdGVSdW5Hcm91cFJlcXVlc3QSFQoIc3BhY2VfaWQYASABKAlIAIgBARIRCglyZXBvX3BhdGgYAiABKAkSDAoEYmFzZRgDIAEoCRIOCgZwcm9tcHQYBCABKAkSEwoLYXR0YWNobWVudHMYBSADKAkSLQoIdmFyaWFudHMYBiADKAsyGy5sb2Ftcy5hZ2VudGQudjEuUnVuVmFyaWFudBIcCg9jaGVja19hY3Rpb25faWQYByABKAlIAYgBARI0Cg1hcHByb3ZhbF9tb2RlGAggASgOMh0ubG9hbXMuYWdlbnRkLnYxLkFwcHJvdmFsTW9kZUILCglfc3BhY2VfaWRCEgoQX2NoZWNrX2FjdGlvbl9pZCI8ChZDcmVhdGVSdW5Hcm91cFJlc3BvbnNlEhAKCGdyb3VwX2lkGAEgASgJEhAKCGNoYXRfaWRzGAIgAygJIjsKFVdhdGNoUnVuR3JvdXBzUmVxdWVzdBIVCghzcGFjZV9pZBgBIAEoCUgAiAEBQgsKCV9zcGFjZV9pZCJDChZXYXRjaFJ1bkdyb3Vwc1Jlc3BvbnNlEikKBmdyb3VwcxgBIAMoCzIZLmxvYW1zLmFnZW50ZC52MS5SdW5Hcm91cCJECgtNZW1iZXJEZWx0YRIPCgdjaGF0X2lkGAEgASgJEhEKCWFkZGl0aW9ucxgCIAEoDRIRCglkZWxldGlvbnMYAyABKA0iTwoNQ29tcGFyaXNvblJvdxIMCgRwYXRoGAEgASgJEjAKCnBlcl9tZW1iZXIYAiADKAsyHC5sb2Ftcy5hZ2VudGQudjEuTWVtYmVyRGVsdGEibQocR2V0UnVuR3JvdXBDb21wYXJpc29uUmVxdWVzdBIQCghncm91cF9pZBgBIAEoCRIJCgFhGAIgASgJEg4KAWIYAyABKAlIAIgBARIRCgRwYXRoGAQgASgJSAGIAQFCBAoCX2JCBwoFX3BhdGgigQEKHUdldFJ1bkdyb3VwQ29tcGFyaXNvblJlc3BvbnNlEi4KBm1hdHJpeBgBIAMoCzIeLmxvYW1zLmFnZW50ZC52MS5Db21wYXJpc29uUm93EjAKCXBhaXJfZGlmZhgCIAEoCzIdLmxvYW1zLmFnZW50ZC52MS5DaGVja291dERpZmYiMAoIQ2hlY2tSdW4SDwoHY2hhdF9pZBgBIAEoCRITCgt0ZXJtaW5hbF9pZBgCIAEoCSJKChRSdW5Hcm91cENoZWNrUmVxdWVzdBIQCghncm91cF9pZBgBIAEoCRIUCgdjaGF0X2lkGAIgASgJSACIAQFCCgoIX2NoYXRfaWQiQAoVUnVuR3JvdXBDaGVja1Jlc3BvbnNlEicKBHJ1bnMYASADKAsyGS5sb2Ftcy5hZ2VudGQudjEuQ2hlY2tSdW4i6AIKFlJlc29sdmVSdW5Hcm91cFJlcXVlc3QSEAoIZ3JvdXBfaWQYASABKAkSFgoOd2lubmVyX2NoYXRfaWQYAiABKAkSLgoGYWN0aW9uGAMgASgOMh4ubG9hbXMuYWdlbnRkLnYxLlJlc29sdmVBY3Rpb24SMgoFbWVyZ2UYBCABKAsyIy5sb2Ftcy5hZ2VudGQudjEuTWVyZ2VCcmFuY2hSZXF1ZXN0EkMKDmNoYW5nZV9yZXF1ZXN0GAUgASgLMisubG9hbXMuYWdlbnRkLnYxLkNyZWF0ZUNoYW5nZVJlcXVlc3RSZXF1ZXN0EhYKDmFyY2hpdmVfb3RoZXJzGAYgASgIEh4KFnJlbW92ZV9vdGhlcl93b3JrdHJlZXMYByABKAgSDQoFZm9yY2UYCCABKAgSHgoRZXhwZWN0ZWRfY2hlY2tzdW0YCSABKAlIAIgBAUIUChJfZXhwZWN0ZWRfY2hlY2tzdW0iXQoXUmVzb2x2ZVJ1bkdyb3VwUmVzcG9uc2USDgoGcmVzdWx0GAEgASgJEhAKA3NoYRgCIAEoCUgAiAEBEhAKA3VybBgDIAEoCUgBiAEBQgYKBF9zaGFCBgoEX3VybCqGAQoNUnVuR3JvdXBTdGF0ZRIfChtSVU5fR1JPVVBfU1RBVEVfVU5TUEVDSUZJRUQQABIbChdSVU5fR1JPVVBfU1RBVEVfUlVOTklORxABEhkKFVJVTl9HUk9VUF9TVEFURV9SRUFEWRACEhwKGFJVTl9HUk9VUF9TVEFURV9SRVNPTFZFRBADKvMBCg9SdW5NZW1iZXJTdGF0dXMSIQodUlVOX01FTUJFUl9TVEFUVVNfVU5TUEVDSUZJRUQQABIcChhSVU5fTUVNQkVSX1NUQVRVU19RVUVVRUQQARIdChlSVU5fTUVNQkVSX1NUQVRVU19SVU5OSU5HEAISJAogUlVOX01FTUJFUl9TVEFUVVNfQVdBSVRJTkdfSU5QVVQQAxIaChZSVU5fTUVNQkVSX1NUQVRVU19ET05FEAQSHQoZUlVOX01FTUJFUl9TVEFUVVNfRVJST1JFRBAFEh8KG1JVTl9NRU1CRVJfU1RBVFVTX0NBTkNFTExFRBAGKosBCgpDaGVja1N0YXRlEhsKF0NIRUNLX1NUQVRFX1VOU1BFQ0lGSUVEEAASFwoTQ0hFQ0tfU1RBVEVfUEVORElORxABEhcKE0NIRUNLX1NUQVRFX1JVTk5JTkcQAhIWChJDSEVDS19TVEFURV9QQVNTRUQQAxIWChJDSEVDS19TVEFURV9GQUlMRUQQBCqFAQoNUmVzb2x2ZUFjdGlvbhIeChpSRVNPTFZFX0FDVElPTl9VTlNQRUNJRklFRBAAEhgKFFJFU09MVkVfQUNUSU9OX01FUkdFEAESIQodUkVTT0xWRV9BQ1RJT05fQ0hBTkdFX1JFUVVFU1QQAhIXChNSRVNPTFZFX0FDVElPTl9LRUVQEAMy8wQKD1J1bkdyb3VwU2VydmljZRJhCg5DcmVhdGVSdW5Hcm91cBImLmxvYW1zLmFnZW50ZC52MS5DcmVhdGVSdW5Hcm91cFJlcXVlc3QaJy5sb2Ftcy5hZ2VudGQudjEuQ3JlYXRlUnVuR3JvdXBSZXNwb25zZRJjCg5XYXRjaFJ1bkdyb3VwcxImLmxvYW1zLmFnZW50ZC52MS5XYXRjaFJ1bkdyb3Vwc1JlcXVlc3QaJy5sb2Ftcy5hZ2VudGQudjEuV2F0Y2hSdW5Hcm91cHNSZXNwb25zZTABEnsKFUdldFJ1bkdyb3VwQ29tcGFyaXNvbhItLmxvYW1zLmFnZW50ZC52MS5HZXRSdW5Hcm91cENvbXBhcmlzb25SZXF1ZXN0Gi4ubG9hbXMuYWdlbnRkLnYxLkdldFJ1bkdyb3VwQ29tcGFyaXNvblJlc3BvbnNlIgOQAgESXgoNUnVuR3JvdXBDaGVjaxIlLmxvYW1zLmFnZW50ZC52MS5SdW5Hcm91cENoZWNrUmVxdWVzdBomLmxvYW1zLmFnZW50ZC52MS5SdW5Hcm91cENoZWNrUmVzcG9uc2USZAoPUmVzb2x2ZVJ1bkdyb3VwEicubG9hbXMuYWdlbnRkLnYxLlJlc29sdmVSdW5Hcm91cFJlcXVlc3QaKC5sb2Ftcy5hZ2VudGQudjEuUmVzb2x2ZVJ1bkdyb3VwUmVzcG9uc2UaVYq1GFEKDWFnZW50ZC5ncm91cHMSPkxvYW1zIFN0dWRpbydzIHJ1biBncm91cHM6IHBhcmFsbGVsIHJ1bnMsIGNvbXBhcmVkIGFuZCBtZXJnZWQuGAFiBnByb3RvMw", [file_google_protobuf_struct, file_loams_agentd_v1_approvals, file_loams_agentd_v1_diff, file_loams_agentd_v1_git, file_loams_agentd_v1_studio, file_loams_options_v1_options]);
 
 /**
  * @generated from message loams.agentd.v1.RunVariant
@@ -76,6 +74,20 @@ export type MemberCheck = Message<"loams.agentd.v1.MemberCheck"> & {
    * @generated from field: optional int32 exit_code = 2;
    */
   exitCode?: number | undefined;
+
+  /**
+   * The check's terminal (`TerminalService.SubscribeTerminal`).
+   *
+   * @generated from field: optional string terminal_id = 3;
+   */
+  terminalId?: string | undefined;
+
+  /**
+   * The output's last 200 lines, as text.
+   *
+   * @generated from field: repeated string log_tail = 4;
+   */
+  logTail: string[];
 };
 
 /**
@@ -105,9 +117,9 @@ export type RunGroupMember = Message<"loams.agentd.v1.RunGroupMember"> & {
   model?: string | undefined;
 
   /**
-   * @generated from field: loams.agentd.v1.SessionStatus status = 4;
+   * @generated from field: loams.agentd.v1.RunMemberStatus status = 4;
    */
-  status: SessionStatus;
+  status: RunMemberStatus;
 
   /**
    * @generated from field: uint32 files_changed = 5;
@@ -125,19 +137,56 @@ export type RunGroupMember = Message<"loams.agentd.v1.RunGroupMember"> & {
   deletions: number;
 
   /**
+   * The running time so far, or of the whole run once it ended.
+   *
    * @generated from field: int64 elapsed_ms = 8;
    */
   elapsedMs: bigint;
 
   /**
+   * Unset until the harness reports usage.
+   *
    * @generated from field: optional uint64 tokens = 9;
    */
   tokens?: bigint | undefined;
 
   /**
+   * Unset until a check runs.
+   *
    * @generated from field: loams.agentd.v1.MemberCheck check = 10;
    */
   check?: MemberCheck | undefined;
+
+  /**
+   * The member's own worktree and its branch.
+   *
+   * @generated from field: string cwd = 11;
+   */
+  cwd: string;
+
+  /**
+   * @generated from field: string branch = 12;
+   */
+  branch: string;
+
+  /**
+   * When the run started, for a live elapsed time.
+   *
+   * @generated from field: optional int64 started_at_ms = 13;
+   */
+  startedAtMs?: bigint | undefined;
+
+  /**
+   * Resolved with `keep`: an ordinary thread now.
+   *
+   * @generated from field: bool detached = 14;
+   */
+  detached: boolean;
+
+  /**
+   * @generated from field: bool archived = 15;
+   */
+  archived: boolean;
 };
 
 /**
@@ -146,6 +195,54 @@ export type RunGroupMember = Message<"loams.agentd.v1.RunGroupMember"> & {
  */
 export const RunGroupMemberSchema: GenMessage<RunGroupMember> = /*@__PURE__*/
   messageDesc(file_loams_agentd_v1_groups, 2);
+
+/**
+ * @generated from message loams.agentd.v1.RunGroupResolution
+ */
+export type RunGroupResolution = Message<"loams.agentd.v1.RunGroupResolution"> & {
+  /**
+   * @generated from field: loams.agentd.v1.ResolveAction action = 1;
+   */
+  action: ResolveAction;
+
+  /**
+   * @generated from field: string winner_chat_id = 2;
+   */
+  winnerChatId: string;
+
+  /**
+   * What happened, in a sentence.
+   *
+   * @generated from field: string result = 3;
+   */
+  result: string;
+
+  /**
+   * The target's new head (merge).
+   *
+   * @generated from field: optional string sha = 4;
+   */
+  sha?: string | undefined;
+
+  /**
+   * The change request (pull request).
+   *
+   * @generated from field: optional string url = 5;
+   */
+  url?: string | undefined;
+
+  /**
+   * @generated from field: int64 resolved_at_ms = 6;
+   */
+  resolvedAtMs: bigint;
+};
+
+/**
+ * Describes the message loams.agentd.v1.RunGroupResolution.
+ * Use `create(RunGroupResolutionSchema)` to create a new message.
+ */
+export const RunGroupResolutionSchema: GenMessage<RunGroupResolution> = /*@__PURE__*/
+  messageDesc(file_loams_agentd_v1_groups, 3);
 
 /**
  * @generated from message loams.agentd.v1.RunGroup
@@ -162,6 +259,8 @@ export type RunGroup = Message<"loams.agentd.v1.RunGroup"> & {
   prompt: string;
 
   /**
+   * The ref the members' worktrees were made from.
+   *
    * @generated from field: string base = 3;
    */
   base: string;
@@ -182,9 +281,36 @@ export type RunGroup = Message<"loams.agentd.v1.RunGroup"> & {
   members: RunGroupMember[];
 
   /**
-   * @generated from field: optional string resolution = 7;
+   * @generated from field: loams.agentd.v1.RunGroupResolution resolution = 7;
    */
-  resolution?: string | undefined;
+  resolution?: RunGroupResolution | undefined;
+
+  /**
+   * @generated from field: optional string space_id = 8;
+   */
+  spaceId?: string | undefined;
+
+  /**
+   * @generated from field: string repo_path = 9;
+   */
+  repoPath: string;
+
+  /**
+   * `base`'s commit when the group was created; the comparison's base.
+   *
+   * @generated from field: string base_sha = 10;
+   */
+  baseSha: string;
+
+  /**
+   * @generated from field: optional string check_action_id = 11;
+   */
+  checkActionId?: string | undefined;
+
+  /**
+   * @generated from field: loams.agentd.v1.ApprovalMode approval_mode = 12;
+   */
+  approvalMode: ApprovalMode;
 };
 
 /**
@@ -192,16 +318,19 @@ export type RunGroup = Message<"loams.agentd.v1.RunGroup"> & {
  * Use `create(RunGroupSchema)` to create a new message.
  */
 export const RunGroupSchema: GenMessage<RunGroup> = /*@__PURE__*/
-  messageDesc(file_loams_agentd_v1_groups, 3);
+  messageDesc(file_loams_agentd_v1_groups, 4);
 
 /**
  * @generated from message loams.agentd.v1.CreateRunGroupRequest
  */
 export type CreateRunGroupRequest = Message<"loams.agentd.v1.CreateRunGroupRequest"> & {
   /**
-   * @generated from field: string space_id = 1;
+   * The project. Required with a check action (actions are a project's);
+   * unset for a repository that is not a project.
+   *
+   * @generated from field: optional string space_id = 1;
    */
-  spaceId: string;
+  spaceId?: string | undefined;
 
   /**
    * @generated from field: string repo_path = 2;
@@ -244,7 +373,7 @@ export type CreateRunGroupRequest = Message<"loams.agentd.v1.CreateRunGroupReque
  * Use `create(CreateRunGroupRequestSchema)` to create a new message.
  */
 export const CreateRunGroupRequestSchema: GenMessage<CreateRunGroupRequest> = /*@__PURE__*/
-  messageDesc(file_loams_agentd_v1_groups, 4);
+  messageDesc(file_loams_agentd_v1_groups, 5);
 
 /**
  * @generated from message loams.agentd.v1.CreateRunGroupResponse
@@ -266,7 +395,7 @@ export type CreateRunGroupResponse = Message<"loams.agentd.v1.CreateRunGroupResp
  * Use `create(CreateRunGroupResponseSchema)` to create a new message.
  */
 export const CreateRunGroupResponseSchema: GenMessage<CreateRunGroupResponse> = /*@__PURE__*/
-  messageDesc(file_loams_agentd_v1_groups, 5);
+  messageDesc(file_loams_agentd_v1_groups, 6);
 
 /**
  * @generated from message loams.agentd.v1.WatchRunGroupsRequest
@@ -283,7 +412,7 @@ export type WatchRunGroupsRequest = Message<"loams.agentd.v1.WatchRunGroupsReque
  * Use `create(WatchRunGroupsRequestSchema)` to create a new message.
  */
 export const WatchRunGroupsRequestSchema: GenMessage<WatchRunGroupsRequest> = /*@__PURE__*/
-  messageDesc(file_loams_agentd_v1_groups, 6);
+  messageDesc(file_loams_agentd_v1_groups, 7);
 
 /**
  * @generated from message loams.agentd.v1.WatchRunGroupsResponse
@@ -300,7 +429,7 @@ export type WatchRunGroupsResponse = Message<"loams.agentd.v1.WatchRunGroupsResp
  * Use `create(WatchRunGroupsResponseSchema)` to create a new message.
  */
 export const WatchRunGroupsResponseSchema: GenMessage<WatchRunGroupsResponse> = /*@__PURE__*/
-  messageDesc(file_loams_agentd_v1_groups, 7);
+  messageDesc(file_loams_agentd_v1_groups, 8);
 
 /**
  * @generated from message loams.agentd.v1.MemberDelta
@@ -327,9 +456,11 @@ export type MemberDelta = Message<"loams.agentd.v1.MemberDelta"> & {
  * Use `create(MemberDeltaSchema)` to create a new message.
  */
 export const MemberDeltaSchema: GenMessage<MemberDelta> = /*@__PURE__*/
-  messageDesc(file_loams_agentd_v1_groups, 8);
+  messageDesc(file_loams_agentd_v1_groups, 9);
 
 /**
+ * One path, and the members that changed it against the group's base.
+ *
  * @generated from message loams.agentd.v1.ComparisonRow
  */
 export type ComparisonRow = Message<"loams.agentd.v1.ComparisonRow"> & {
@@ -349,7 +480,7 @@ export type ComparisonRow = Message<"loams.agentd.v1.ComparisonRow"> & {
  * Use `create(ComparisonRowSchema)` to create a new message.
  */
 export const ComparisonRowSchema: GenMessage<ComparisonRow> = /*@__PURE__*/
-  messageDesc(file_loams_agentd_v1_groups, 9);
+  messageDesc(file_loams_agentd_v1_groups, 10);
 
 /**
  * @generated from message loams.agentd.v1.GetRunGroupComparisonRequest
@@ -366,6 +497,8 @@ export type GetRunGroupComparisonRequest = Message<"loams.agentd.v1.GetRunGroupC
   a: string;
 
   /**
+   * Unset compares `a` with the group's base.
+   *
    * @generated from field: optional string b = 3;
    */
   b?: string | undefined;
@@ -381,7 +514,7 @@ export type GetRunGroupComparisonRequest = Message<"loams.agentd.v1.GetRunGroupC
  * Use `create(GetRunGroupComparisonRequestSchema)` to create a new message.
  */
 export const GetRunGroupComparisonRequestSchema: GenMessage<GetRunGroupComparisonRequest> = /*@__PURE__*/
-  messageDesc(file_loams_agentd_v1_groups, 10);
+  messageDesc(file_loams_agentd_v1_groups, 11);
 
 /**
  * @generated from message loams.agentd.v1.GetRunGroupComparisonResponse
@@ -393,6 +526,9 @@ export type GetRunGroupComparisonResponse = Message<"loams.agentd.v1.GetRunGroup
   matrix: ComparisonRow[];
 
   /**
+   * From `a`'s result to `b`'s (or from the base to `a`'s); nothing is
+   * committed to compute it.
+   *
    * @generated from field: loams.agentd.v1.CheckoutDiff pair_diff = 2;
    */
   pairDiff?: CheckoutDiff | undefined;
@@ -403,7 +539,7 @@ export type GetRunGroupComparisonResponse = Message<"loams.agentd.v1.GetRunGroup
  * Use `create(GetRunGroupComparisonResponseSchema)` to create a new message.
  */
 export const GetRunGroupComparisonResponseSchema: GenMessage<GetRunGroupComparisonResponse> = /*@__PURE__*/
-  messageDesc(file_loams_agentd_v1_groups, 11);
+  messageDesc(file_loams_agentd_v1_groups, 12);
 
 /**
  * @generated from message loams.agentd.v1.CheckRun
@@ -425,7 +561,7 @@ export type CheckRun = Message<"loams.agentd.v1.CheckRun"> & {
  * Use `create(CheckRunSchema)` to create a new message.
  */
 export const CheckRunSchema: GenMessage<CheckRun> = /*@__PURE__*/
-  messageDesc(file_loams_agentd_v1_groups, 12);
+  messageDesc(file_loams_agentd_v1_groups, 13);
 
 /**
  * @generated from message loams.agentd.v1.RunGroupCheckRequest
@@ -447,7 +583,7 @@ export type RunGroupCheckRequest = Message<"loams.agentd.v1.RunGroupCheckRequest
  * Use `create(RunGroupCheckRequestSchema)` to create a new message.
  */
 export const RunGroupCheckRequestSchema: GenMessage<RunGroupCheckRequest> = /*@__PURE__*/
-  messageDesc(file_loams_agentd_v1_groups, 13);
+  messageDesc(file_loams_agentd_v1_groups, 14);
 
 /**
  * @generated from message loams.agentd.v1.RunGroupCheckResponse
@@ -464,7 +600,7 @@ export type RunGroupCheckResponse = Message<"loams.agentd.v1.RunGroupCheckRespon
  * Use `create(RunGroupCheckResponseSchema)` to create a new message.
  */
 export const RunGroupCheckResponseSchema: GenMessage<RunGroupCheckResponse> = /*@__PURE__*/
-  messageDesc(file_loams_agentd_v1_groups, 14);
+  messageDesc(file_loams_agentd_v1_groups, 15);
 
 /**
  * @generated from message loams.agentd.v1.ResolveRunGroupRequest
@@ -486,14 +622,16 @@ export type ResolveRunGroupRequest = Message<"loams.agentd.v1.ResolveRunGroupReq
   action: ResolveAction;
 
   /**
-   * With RESOLVE_ACTION_MERGE.
+   * With RESOLVE_ACTION_MERGE: Task 9's `MergeBranch`, whose source must be
+   * the winner's branch.
    *
    * @generated from field: loams.agentd.v1.MergeBranchRequest merge = 4;
    */
   merge?: MergeBranchRequest | undefined;
 
   /**
-   * With RESOLVE_ACTION_CHANGE_REQUEST.
+   * With RESOLVE_ACTION_CHANGE_REQUEST: Task 9's `CreateChangeRequest`, after
+   * the winner's branch is pushed.
    *
    * @generated from field: loams.agentd.v1.CreateChangeRequestRequest change_request = 5;
    */
@@ -515,6 +653,15 @@ export type ResolveRunGroupRequest = Message<"loams.agentd.v1.ResolveRunGroupReq
    * @generated from field: bool force = 8;
    */
   force: boolean;
+
+  /**
+   * The winner's checkout diff checksum the person confirmed. Required when
+   * the winner's worktree has uncommitted changes, which are committed first
+   * through Task 9's `CommitWorktree`.
+   *
+   * @generated from field: optional string expected_checksum = 9;
+   */
+  expectedChecksum?: string | undefined;
 };
 
 /**
@@ -522,7 +669,7 @@ export type ResolveRunGroupRequest = Message<"loams.agentd.v1.ResolveRunGroupReq
  * Use `create(ResolveRunGroupRequestSchema)` to create a new message.
  */
 export const ResolveRunGroupRequestSchema: GenMessage<ResolveRunGroupRequest> = /*@__PURE__*/
-  messageDesc(file_loams_agentd_v1_groups, 15);
+  messageDesc(file_loams_agentd_v1_groups, 16);
 
 /**
  * @generated from message loams.agentd.v1.ResolveRunGroupResponse
@@ -532,6 +679,16 @@ export type ResolveRunGroupResponse = Message<"loams.agentd.v1.ResolveRunGroupRe
    * @generated from field: string result = 1;
    */
   result: string;
+
+  /**
+   * @generated from field: optional string sha = 2;
+   */
+  sha?: string | undefined;
+
+  /**
+   * @generated from field: optional string url = 3;
+   */
+  url?: string | undefined;
 };
 
 /**
@@ -539,7 +696,7 @@ export type ResolveRunGroupResponse = Message<"loams.agentd.v1.ResolveRunGroupRe
  * Use `create(ResolveRunGroupResponseSchema)` to create a new message.
  */
 export const ResolveRunGroupResponseSchema: GenMessage<ResolveRunGroupResponse> = /*@__PURE__*/
-  messageDesc(file_loams_agentd_v1_groups, 16);
+  messageDesc(file_loams_agentd_v1_groups, 17);
 
 /**
  * @generated from enum loams.agentd.v1.RunGroupState
@@ -551,11 +708,15 @@ export enum RunGroupState {
   UNSPECIFIED = 0,
 
   /**
+   * A member is queued, running or waiting for input.
+   *
    * @generated from enum value: RUN_GROUP_STATE_RUNNING = 1;
    */
   RUNNING = 1,
 
   /**
+   * Every member has finished; the group can be resolved.
+   *
    * @generated from enum value: RUN_GROUP_STATE_READY = 2;
    */
   READY = 2,
@@ -571,6 +732,58 @@ export enum RunGroupState {
  */
 export const RunGroupStateSchema: GenEnum<RunGroupState> = /*@__PURE__*/
   enumDesc(file_loams_agentd_v1_groups, 0);
+
+/**
+ * One member's run, as the group sees it.
+ *
+ * @generated from enum loams.agentd.v1.RunMemberStatus
+ */
+export enum RunMemberStatus {
+  /**
+   * @generated from enum value: RUN_MEMBER_STATUS_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Over the concurrency limits: its run waits to be sent.
+   *
+   * @generated from enum value: RUN_MEMBER_STATUS_QUEUED = 1;
+   */
+  QUEUED = 1,
+
+  /**
+   * @generated from enum value: RUN_MEMBER_STATUS_RUNNING = 2;
+   */
+  RUNNING = 2,
+
+  /**
+   * @generated from enum value: RUN_MEMBER_STATUS_AWAITING_INPUT = 3;
+   */
+  AWAITING_INPUT = 3,
+
+  /**
+   * @generated from enum value: RUN_MEMBER_STATUS_DONE = 4;
+   */
+  DONE = 4,
+
+  /**
+   * @generated from enum value: RUN_MEMBER_STATUS_ERRORED = 5;
+   */
+  ERRORED = 5,
+
+  /**
+   * Never sent: the group was resolved with `force` first.
+   *
+   * @generated from enum value: RUN_MEMBER_STATUS_CANCELLED = 6;
+   */
+  CANCELLED = 6,
+}
+
+/**
+ * Describes the enum loams.agentd.v1.RunMemberStatus.
+ */
+export const RunMemberStatusSchema: GenEnum<RunMemberStatus> = /*@__PURE__*/
+  enumDesc(file_loams_agentd_v1_groups, 1);
 
 /**
  * @generated from enum loams.agentd.v1.CheckState
@@ -606,7 +819,7 @@ export enum CheckState {
  * Describes the enum loams.agentd.v1.CheckState.
  */
 export const CheckStateSchema: GenEnum<CheckState> = /*@__PURE__*/
-  enumDesc(file_loams_agentd_v1_groups, 1);
+  enumDesc(file_loams_agentd_v1_groups, 2);
 
 /**
  * @generated from enum loams.agentd.v1.ResolveAction
@@ -637,14 +850,15 @@ export enum ResolveAction {
  * Describes the enum loams.agentd.v1.ResolveAction.
  */
 export const ResolveActionSchema: GenEnum<ResolveAction> = /*@__PURE__*/
-  enumDesc(file_loams_agentd_v1_groups, 2);
+  enumDesc(file_loams_agentd_v1_groups, 3);
 
 /**
  * @generated from service loams.agentd.v1.RunGroupService
  */
 export const RunGroupService: GenService<{
   /**
-   * G12.
+   * G12: one chat and one worktree per variant, and the same run queued in
+   * each, within the daemon's concurrency limits.
    *
    * @generated from rpc loams.agentd.v1.RunGroupService.CreateRunGroup
    */

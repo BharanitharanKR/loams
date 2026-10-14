@@ -151,7 +151,9 @@ export function foldThreads(input: {
   const approvals = new Map<string, number>();
   for (const a of input.approvals) approvals.set(a.chatId, (approvals.get(a.chatId) ?? 0) + 1);
   const groupOf = new Map<string, string>();
-  for (const g of input.groups) for (const m of g.members) groupOf.set(m.chatId, g.id);
+  // A member resolved with `keep` is an ordinary thread again (SD1 T12-2).
+  for (const g of input.groups)
+    for (const m of g.members) if (!m.detached) groupOf.set(m.chatId, g.id);
   const projects = input.projects.map((p) => ({
     id: p.id,
     name: p.name,
@@ -198,7 +200,7 @@ export function foldThreads(input: {
       id: g.id,
       title: g.prompt.split('\n')[0]?.trim().slice(0, 120) || 'Run group',
       projectId: g.members.map((m) => placed.get(m.chatId)).find((p) => p != null) ?? null,
-      memberIds: g.members.map((m) => m.chatId),
+      memberIds: g.members.filter((m) => !m.detached).map((m) => m.chatId),
       createdAt: ms(g.createdAtMs) ?? 0,
       state:
         g.state === RunGroupState.RUNNING

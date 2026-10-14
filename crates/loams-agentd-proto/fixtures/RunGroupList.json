@@ -1,0 +1,67 @@
+{
+  "groups": [
+    {
+      "approvalMode": "full-access",
+      "base": "main",
+      "baseSha": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "checkActionId": "test",
+      "createdAtMs": 1791797400000,
+      "id": "group-1",
+      "members": [
+        {
+          "additions": 3,
+          "archived": false,
+          "branch": "loams-desktop/brave-otter",
+          "chatId": "chat-1",
+          "check": {
+            "exitCode": 0,
+            "logTail": [
+              "test result: ok. 12 passed"
+            ],
+            "state": "passed",
+            "terminalId": "term-1"
+          },
+          "cwd": "/home/dev/.loams-desktop/worktrees/project/brave-otter",
+          "deletions": 1,
+          "detached": false,
+          "elapsedMs": 61000,
+          "filesChanged": 1,
+          "harness": "claude-code",
+          "model": "claude-sonnet",
+          "startedAtMs": 1791797400000,
+          "status": "done",
+          "tokens": 12400
+        },
+        {
+          "additions": 0,
+          "archived": true,
+          "branch": "loams-desktop/calm-heron",
+          "chatId": "chat-2",
+          "check": null,
+          "cwd": "/home/dev/.loams-desktop/worktrees/project/calm-heron",
+          "deletions": 0,
+          "detached": false,
+          "elapsedMs": 4000,
+          "filesChanged": 0,
+          "harness": "codex",
+          "model": null,
+          "startedAtMs": null,
+          "status": "errored",
+          "tokens": null
+        }
+      ],
+      "prompt": "Fix the build",
+      "repoPath": "/home/dev/project",
+      "resolution": {
+        "action": "merge",
+        "resolvedAtMs": 1791797400000,
+        "result": "merged loams-desktop/brave-otter into main",
+        "sha": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        "url": null,
+        "winnerChatId": "chat-1"
+      },
+      "spaceId": "space-1",
+      "state": "resolved"
+    }
+  ]
+}

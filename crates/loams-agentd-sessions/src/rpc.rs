@@ -80,6 +80,8 @@ use crate::terminals::Terminals;
 use crate::uploads::Uploads;
 use crate::workspace_host::WorkspaceHost;
 
+mod groups_rpc;
+
 const FILE_SEARCH_RPC_TIMEOUT: Duration = Duration::from_secs(6);
 const FILE_SEARCH_FEATURED_PATHS: usize = 32;
 
@@ -160,6 +162,8 @@ pub struct EngineRpc {
     agent_accounts: AgentAccounts,
     harness_updates: Option<crate::harness_updates::HarnessUpdateCoordinator>,
     checkpoints: Option<Checkpoints>,
+    /// Parallel run groups (SD1 Task 12; `rpc/groups_rpc.rs`).
+    run_groups: Option<crate::groups::RunGroups>,
     engine_info: EngineInfo,
     /// Opens pull requests (G4) with the daemon's forge credentials.
     change_request_creator: ChangeRequestCreator,
@@ -242,6 +246,7 @@ impl EngineRpc {
             agent_accounts,
             harness_updates: None,
             checkpoints: None,
+            run_groups: None,
             engine_info,
             change_request_creator: ChangeRequestCreator::from_keyring(),
             git_writes: std::sync::Arc::new(tokio::sync::Mutex::new(())),
@@ -251,6 +256,11 @@ impl EngineRpc {
 
     pub fn with_checkpoints(mut self, checkpoints: Checkpoints) -> Self {
         self.checkpoints = Some(checkpoints);
+        self
+    }
+
+    pub fn with_run_groups(mut self, run_groups: crate::groups::RunGroups) -> Self {
+        self.run_groups = Some(run_groups);
         self
     }
 
@@ -2084,6 +2094,45 @@ impl RpcService for EngineRpc {
                     Ok(stream_reply::<calls::SearchWorkspaceContent, _, _>(
                         crate::content_search::search(workspace.root, query),
                     ))
+                })
+                .await
+            }
+            // SD1 Task 12 (§53 §6.5 G12–G16): run groups, in `rpc/groups_rpc.rs`.
+            methods::CREATE_RUN_GROUP => {
+                Box::pin(async move {
+                    let p = params_of::<calls::CreateRunGroup>(params)?;
+                    let created = self.create_run_group(p).await?;
+                    reply::<calls::CreateRunGroup, _>(&created)
+                })
+                .await
+            }
+            methods::WATCH_RUN_GROUPS => {
+                let p = params_of::<calls::WatchRunGroups>(params)?;
+                Ok(stream_reply::<calls::WatchRunGroups, _, _>(
+                    self.watch_run_groups(p)?,
+                ))
+            }
+            methods::GET_RUN_GROUP_COMPARISON => {
+                Box::pin(async move {
+                    let p = params_of::<calls::GetRunGroupComparison>(params)?;
+                    let comparison = self.run_group_comparison(p).await?;
+                    reply::<calls::GetRunGroupComparison, _>(&comparison)
+                })
+                .await
+            }
+            methods::RUN_GROUP_CHECK => {
+                Box::pin(async move {
+                    let p = params_of::<calls::RunGroupCheck>(params)?;
+                    let runs = self.run_group_check(p).await?;
+                    reply::<calls::RunGroupCheck, _>(&runs)
+                })
+                .await
+            }
+            methods::RESOLVE_RUN_GROUP => {
+                Box::pin(async move {
+                    let p = params_of::<calls::ResolveRunGroup>(params)?;
+                    let resolved = self.resolve_run_group(p).await?;
+                    reply::<calls::ResolveRunGroup, _>(&resolved)
                 })
                 .await
             }

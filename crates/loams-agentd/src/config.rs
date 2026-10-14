@@ -17,6 +17,9 @@
 //! file_cap_bytes = 4194304
 //! budget_bytes = 1073741824
 //! archived_retention_days = 30
+//! [groups]                  # plan SD1 Task 12: run groups' concurrency
+//! max_running_per_group = 4
+//! max_running = 8
 //! [remote]                  # plan SD1 Task 7: `serve --remote` (D909)
 //! enabled = false
 //! listen = "0.0.0.0:8443"
@@ -39,6 +42,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use loams_agentd_proto::daemon::DaemonMode;
+use loams_agentd_sessions::RunGroupLimits;
 use loams_agentd_sessions::tool_outputs::{
     TOOL_OUTPUT_ARCHIVED_RETENTION, TOOL_OUTPUT_BUDGET, TOOL_OUTPUT_FILE_CAP, ToolOutputLimits,
 };
@@ -52,7 +56,38 @@ pub struct Config {
     pub engine: EngineConfig,
     pub daemon: DaemonConfig,
     pub tool_outputs: ToolOutputsConfig,
+    pub groups: GroupsConfig,
     pub remote: RemoteConfig,
+}
+
+/// `[groups]`: how many run-group members run at once (design §53 §5.5;
+/// plan SD1 Task 12). A member over a limit waits `queued`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct GroupsConfig {
+    /// In one group.
+    pub max_running_per_group: u32,
+    /// Across every group of the daemon.
+    pub max_running: u32,
+}
+
+impl Default for GroupsConfig {
+    fn default() -> Self {
+        let limits = RunGroupLimits::default();
+        Self {
+            max_running_per_group: u32::try_from(limits.max_running_per_group).unwrap_or(4),
+            max_running: u32::try_from(limits.max_running).unwrap_or(8),
+        }
+    }
+}
+
+impl GroupsConfig {
+    pub fn limits(&self) -> RunGroupLimits {
+        RunGroupLimits {
+            max_running_per_group: self.max_running_per_group as usize,
+            max_running: self.max_running as usize,
+        }
+    }
 }
 
 /// `[remote]`: the remote Connect listener for the browser console (design
@@ -211,6 +246,11 @@ impl Config {
                 "tool_outputs.archived_retention_days",
                 self.tool_outputs.archived_retention_days,
             ),
+            (
+                "groups.max_running_per_group",
+                u64::from(self.groups.max_running_per_group),
+            ),
+            ("groups.max_running", u64::from(self.groups.max_running)),
         ];
         for (key, value) in positive {
             if value == 0 {
@@ -316,6 +356,31 @@ mod tests {
         assert_eq!(
             invalid(&full.replace("subject = \"s1\"", "subject = \"\"")).0,
             "`remote.subject`"
+        );
+    }
+
+    #[test]
+    fn groups_limits_default_and_parse() {
+        assert_eq!(Config::default().groups.limits(), RunGroupLimits::default());
+        assert_eq!(
+            RunGroupLimits::default(),
+            RunGroupLimits {
+                max_running_per_group: 4,
+                max_running: 8,
+            }
+        );
+        let config =
+            Config::parse("[groups]\nmax_running_per_group = 2\nmax_running = 3\n").expect("parse");
+        assert_eq!(
+            config.groups.limits(),
+            RunGroupLimits {
+                max_running_per_group: 2,
+                max_running: 3,
+            }
+        );
+        assert_eq!(
+            invalid("[groups]\nmax_running = 0\n").0,
+            "`groups.max_running`"
         );
     }
 

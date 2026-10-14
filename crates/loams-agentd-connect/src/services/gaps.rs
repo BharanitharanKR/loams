@@ -1,8 +1,7 @@
 //! The services that are §53 §6.5 gaps only: `ApprovalService` (G17, G18,
-//! G22, SD1 Task 13), `RunGroupService` (G12–G16, SD1 Task 12) and
-//! `NotificationService` (G19, SD1 Task 14). Each method answers
-//! `unimplemented` with reason `not_implemented` until its task replaces it
-//! here.
+//! G22, SD1 Task 13) and `NotificationService` (G19, SD1 Task 14). Each
+//! method answers `unimplemented` with reason `not_implemented` until its
+//! task replaces it here.
 
 use connectrpc::{RequestContext, ServiceRequest, ServiceResult, ServiceStream};
 
@@ -34,19 +33,6 @@ gaps!(ApprovalService {
         ResolveApprovalRequest -> pb::ResolveApprovalResponse;
     set_thread_approval_mode("SetThreadApprovalMode", "G22, SD1 Task 13"):
         SetThreadApprovalModeRequest -> pb::SetThreadApprovalModeResponse;
-});
-
-gaps!(RunGroupService {
-    create_run_group("CreateRunGroup", "G12, SD1 Task 12"):
-        CreateRunGroupRequest -> pb::CreateRunGroupResponse;
-    watch_run_groups("WatchRunGroups", "G13, SD1 Task 12"):
-        WatchRunGroupsRequest -> ServiceStream<pb::WatchRunGroupsResponse>;
-    get_run_group_comparison("GetRunGroupComparison", "G14, SD1 Task 12"):
-        GetRunGroupComparisonRequest -> pb::GetRunGroupComparisonResponse;
-    run_group_check("RunGroupCheck", "G15, SD1 Task 12"):
-        RunGroupCheckRequest -> pb::RunGroupCheckResponse;
-    resolve_run_group("ResolveRunGroup", "G16, SD1 Task 12"):
-        ResolveRunGroupRequest -> pb::ResolveRunGroupResponse;
 });
 
 gaps!(NotificationService {
