@@ -25,6 +25,7 @@ mod files;
 mod gaps;
 mod git;
 mod harness;
+mod notifications;
 mod projects;
 mod queue;
 mod studio;

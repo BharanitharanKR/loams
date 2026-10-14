@@ -167,6 +167,16 @@
     }
   },
   {
+    "method": "GetThreadUsage",
+    "params": {
+      "chatId": "chat-1"
+    }
+  },
+  {
+    "method": "WatchNotifications",
+    "params": {}
+  },
+  {
     "method": "WatchDocMessages",
     "params": {
       "chatId": "chat-1",

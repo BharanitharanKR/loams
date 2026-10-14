@@ -1,8 +1,8 @@
 //! The services that are §53 §6.5 gaps only: `ReviewService` (G8–G11, SD1
 //! Task 11), `ApprovalService` (G17, G18, G22, SD1 Task 13), `RunGroupService`
-//! (G12–G16, SD1 Task 12) and `NotificationService` (G19, SD1 Task 14). Each
-//! method answers `unimplemented` with reason `not_implemented` until its
-//! task replaces it here.
+//! (G12–G16, SD1 Task 12). Each method answers `unimplemented` with reason
+//! `not_implemented` until its task replaces it here (`NotificationService`,
+//! G19, is served since SD1 Task 14: `notifications.rs`).
 
 use connectrpc::{RequestContext, ServiceRequest, ServiceResult, ServiceStream};
 
@@ -62,9 +62,4 @@ gaps!(RunGroupService {
         RunGroupCheckRequest -> pb::RunGroupCheckResponse;
     resolve_run_group("ResolveRunGroup", "G16, SD1 Task 12"):
         ResolveRunGroupRequest -> pb::ResolveRunGroupResponse;
-});
-
-gaps!(NotificationService {
-    watch_notifications("WatchNotifications", "G19, SD1 Task 14"):
-        WatchNotificationsRequest -> ServiceStream<pb::WatchNotificationsResponse>;
 });

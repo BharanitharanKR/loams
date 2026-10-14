@@ -178,7 +178,7 @@ const plugin: PluginModule = {
     ctx.effect(() =>
       slots.register(
         { name: 'shell.header.server', plugin: 'studio', meta: { mode: 'studio' } },
-        () => <StudioContext agentd={agentd} router={router} />,
+        () => <StudioContext agentd={agentd} router={router} notify={(n) => platform.notify(n)} />,
       ),
     );
   },

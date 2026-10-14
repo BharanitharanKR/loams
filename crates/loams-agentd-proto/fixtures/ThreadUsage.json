@@ -1,0 +1,23 @@
+{
+  "totals": {
+    "cacheTokens": 800,
+    "costUsd": 0.0125,
+    "durationMs": 5100,
+    "inputTokens": 1200,
+    "outputTokens": 340
+  },
+  "turns": [
+    {
+      "cacheTokens": 800,
+      "costUsd": 0.0125,
+      "durationMs": 4200,
+      "inputTokens": 1200,
+      "outputTokens": 340,
+      "turnId": "msg-1"
+    },
+    {
+      "durationMs": 900,
+      "turnId": "msg-2"
+    }
+  ]
+}

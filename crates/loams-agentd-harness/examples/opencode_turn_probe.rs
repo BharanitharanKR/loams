@@ -127,6 +127,8 @@ async fn main() {
             Ok(AgentEvent::Usage {
                 input_tokens,
                 output_tokens,
+                cache_tokens: None,
+                cost_usd: None,
             }) => {
                 eprintln!("USAGE {input_tokens}/{output_tokens}");
             }

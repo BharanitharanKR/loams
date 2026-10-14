@@ -24,6 +24,7 @@ import { useNewThread } from './sidebar/useThreadActions.js';
 import { DraftCard } from './thread/FactoryLinks.js';
 import { FilesTab } from './thread/LazyFilesTab.js';
 import { ThreadTerminalDrawer } from './thread/TerminalDrawer.js';
+import { ThreadUsage } from './thread/ThreadUsage.js';
 
 const PANEL_LABEL: Record<Panel, string> = {
   diff: 'Diff',
@@ -195,6 +196,7 @@ function StudioPage({
   return (
     <StudioLayout
       title={<Title agentd={agentd} route={route} />}
+      tools={thread && connected ? <ThreadUsage threadId={thread.threadId} /> : undefined}
       sidebar={
         <StudioSidebar agentd={agentd} route={route} navigate={navigate} keys={keys}>
           {factory && <FactoryGroup factory={factory} />}

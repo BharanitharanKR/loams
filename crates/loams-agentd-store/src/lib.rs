@@ -5,4 +5,4 @@
 
 mod store;
 
-pub use store::{DocsStore, StoreError};
+pub use store::{DocsStore, StoreError, TurnUsageRow};

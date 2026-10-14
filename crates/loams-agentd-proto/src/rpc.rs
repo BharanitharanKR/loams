@@ -27,8 +27,10 @@ use crate::git_write::{
     DiscardPathsParams, MergeBranchParams, MergeBranchReply, PushBranchParams, PushBranchReply,
     WorktreeList,
 };
+use crate::notify::Notification;
 use crate::params::*;
 use crate::transcript::TranscriptUpdate;
+use crate::usage::{GetThreadUsageParams, ThreadUsage};
 use crate::{
     AgentAccountsSnapshot, AgentLoginPoll, AgentLoginStart, AttachmentChunk, Chat,
     CheckoutChangeRequestStatus, CheckoutDiff, CheckoutFileDiffText, CreateWorktreeOutcome,
@@ -314,6 +316,13 @@ method_table! {
     /// stale checksum; `worktree+transcript` also forks the thread at that
     /// turn (SD1 Task 10, G7). Never in the `mcp` role.
     RESTORE_CHECKPOINT = RestoreCheckpoint: Unary(RestoreCheckpointParams -> RestoreCheckpointReply), Owner, renderer: true;
+    /// A thread's per-turn tokens and durations, oldest first, with their
+    /// totals; informational, never billing (SD1 Task 14, G20).
+    GET_THREAD_USAGE = GetThreadUsage: Unary(GetThreadUsageParams -> ThreadUsage), Owner, renderer: true;
+    /// The last 200 notifications, then each new one: turns ended, approvals
+    /// and questions waiting, errors, run groups ready, checks failed (SD1
+    /// Task 14, G19).
+    WATCH_NOTIFICATIONS = WatchNotifications: Stream(Empty -> Notification), Owner, renderer: true;
     /// The transcript: a `reset` frame, then deltas.
     WATCH_DOC_MESSAGES = WatchDocMessages: Stream(WatchDocMessagesParams -> TranscriptUpdate), Mcp, renderer: true;
     /// Messages typed while the agent was busy, held on the chat doc.

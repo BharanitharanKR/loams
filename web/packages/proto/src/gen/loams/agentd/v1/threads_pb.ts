@@ -3156,7 +3156,9 @@ export const ThreadService: GenService<{
     output: typeof RestoreCheckpointResponseSchema;
   },
   /**
-   * G20: the thread's per-turn usage (SD1 Task 14).
+   * G20: the thread's per-turn usage, oldest turn first (SD1 Task 14).
+   * Informational, never billing: `cost_usd` only when the harness reported
+   * one.
    *
    * @generated from rpc loams.agentd.v1.ThreadService.GetThreadUsage
    */

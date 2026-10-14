@@ -599,11 +599,20 @@ pub enum AgentEvent {
         tokens: Option<u64>,
         window: Option<u64>,
     },
-    /// Kept as a harness passthrough (rate-limit probes); never persisted to docs.
+    /// The turn's tokens as the harness reports them. Never persisted to
+    /// docs; the engine keeps them per turn for the thread header (SD1
+    /// Task 14), informational only, never billing.
     #[serde(rename_all = "camelCase")]
     Usage {
         input_tokens: u64,
         output_tokens: u64,
+        /// Prompt-cache tokens (read and written), when the harness reports them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cache_tokens: Option<u64>,
+        /// The turn's cost, only when the harness itself reports one; the
+        /// daemon never computes it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cost_usd: Option<f64>,
     },
     /// The agent advertised (or changed) its slash-command set — ACP
     /// `available_commands_update`. The engine caches the latest list per

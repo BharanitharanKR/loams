@@ -23,6 +23,7 @@ pub mod git_write;
 pub mod harness_updates;
 pub mod instance_lock;
 mod model_catalogs;
+pub mod notify;
 pub mod profile;
 pub mod project_actions;
 pub mod registry;
@@ -37,6 +38,7 @@ pub mod titles;
 pub mod tool_outputs;
 mod transcript_history;
 pub mod uploads;
+pub mod usage;
 pub mod workspace_files;
 pub mod workspace_host;
 pub mod worktree_list;
@@ -51,13 +53,14 @@ pub use diff_sync::{
 };
 pub use doc_host::{ChatDocHandle, DocHost, DocHostConfig};
 pub use instance_lock::{InstanceLock, LockError};
+pub use notify::Notifications;
 pub use profile::EngineProfile;
 pub use project_actions::ProjectActionsStore;
 pub use registry::{HarnessDescriptor, HarnessRegistry, default_registry};
 pub use repos::{CheckoutIdentity, Repos, worktree_branch_from_title};
 pub use rpc::EngineRpc;
 pub use run_journal::{JournalError, RunJournal};
-pub use sessions::{JournaledEvent, SessionsEngine, SteerOutcome};
+pub use sessions::{JournaledEvent, SessionsEngine, SteerOutcome, TurnObserver};
 pub use source_control::{
     BranchHeadContext, ChangeRequestError, ChangeRequestProvider, ChangeRequestResolution,
     ChangeRequestResolver, CheckoutChangeRequestLookup, CheckoutSourceContext, GitHubCli,
@@ -67,6 +70,7 @@ pub use spaces::SpacesSync;
 pub use terminals::{TerminalShell, Terminals};
 pub use titles::TitleGenerator;
 pub use uploads::{AttachmentChunk, Uploads};
+pub use usage::ThreadUsageLog;
 pub use workspace_files::WorkspaceFiles;
 pub use workspace_host::{WORKSPACE_DOC_ID, WorkspaceHost, WorkspaceHostConfig};
 
@@ -135,6 +139,11 @@ pub struct EngineCore {
     pub diff_sync: CheckoutDiffSync,
     /// Per-turn checkpoints (SD1 Task 10).
     pub checkpoints: Checkpoints,
+    /// Studio's notifications (SD1 Task 14, G19): run groups and approvals
+    /// post theirs here too.
+    pub notifications: Notifications,
+    /// Each thread's per-turn usage (SD1 Task 14, G20).
+    pub usage: ThreadUsageLog,
     pub spaces_sync: SpacesSync,
     pub uploads: Uploads,
     pub agent_accounts: AgentAccounts,
@@ -215,6 +224,7 @@ impl EngineCore {
                 tool_outputs: profile.store_root().join("tool-outputs"),
             },
         );
+        let usage = ThreadUsageLog::new(store.clone());
         let workspace = WorkspaceHost::open(
             store,
             WorkspaceHostConfig {
@@ -276,6 +286,20 @@ impl EngineCore {
         // Each turn's `pre` and `post` hidden commits (SD1 Task 10).
         let checkpoints = Checkpoints::new(repos.clone());
         sessions.set_turn_checkpoints(Arc::new(checkpoints.clone()));
+        // Notifications and per-turn usage follow every turn (SD1 Task 14).
+        let notifications = Notifications::new();
+        let titles = workspace.clone();
+        sessions.add_turn_observer(Arc::new(notify::TurnNotifier::new(
+            notifications.clone(),
+            Arc::new(move |chat_id: &str| {
+                titles
+                    .chat(chat_id)
+                    .ok()
+                    .flatten()
+                    .and_then(|chat| chat.title.or(chat.last_message_preview))
+            }),
+        )));
+        sessions.add_turn_observer(Arc::new(usage.clone()));
         let spaces_sync = SpacesSync::start(repos.clone(), workspace.clone(), &device_id);
         Ok(Self {
             sessions,
@@ -290,6 +314,8 @@ impl EngineCore {
             change_requests,
             diff_sync,
             checkpoints,
+            notifications,
+            usage,
             spaces_sync,
             uploads,
             agent_accounts,
@@ -322,6 +348,8 @@ impl EngineCore {
         )
         .with_previews(self.previews.clone())
         .with_checkpoints(self.checkpoints.clone())
+        .with_notifications(self.notifications.clone())
+        .with_usage(self.usage.clone())
         .with_harness_updates(self.harness_updates.clone());
         Arc::new(rpc)
     }

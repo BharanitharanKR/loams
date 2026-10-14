@@ -49,6 +49,7 @@ import type { FolderListing } from "./gen/FolderListing";
 import type { ForkSideChatParams } from "./gen/ForkSideChatParams";
 import type { GetCheckoutDiffParams } from "./gen/GetCheckoutDiffParams";
 import type { GetCheckoutFileDiffTextRequest } from "./gen/GetCheckoutFileDiffTextRequest";
+import type { GetThreadUsageParams } from "./gen/GetThreadUsageParams";
 import type { GitAvatars } from "./gen/GitAvatars";
 import type { GitHistoryPage } from "./gen/GitHistoryPage";
 import type { HarnessCatalog } from "./gen/HarnessCatalog";
@@ -77,6 +78,7 @@ import type { MoveQueuedMessageParams } from "./gen/MoveQueuedMessageParams";
 import type { MoveWorkspaceEntryRequest } from "./gen/MoveWorkspaceEntryRequest";
 import type { MutateParams } from "./gen/MutateParams";
 import type { MutateReply } from "./gen/MutateReply";
+import type { Notification } from "./gen/Notification";
 import type { OkReply } from "./gen/OkReply";
 import type { OpenTerminalParams } from "./gen/OpenTerminalParams";
 import type { PreviewSnapshot } from "./gen/PreviewSnapshot";
@@ -124,6 +126,7 @@ import type { TakeProjectActionSetupParams } from "./gen/TakeProjectActionSetupP
 import type { TerminalEvent } from "./gen/TerminalEvent";
 import type { TerminalIdParams } from "./gen/TerminalIdParams";
 import type { TerminalSession } from "./gen/TerminalSession";
+import type { ThreadUsage } from "./gen/ThreadUsage";
 import type { TitleSettings } from "./gen/TitleSettings";
 import type { ToolCall } from "./gen/ToolCall";
 import type { ToolOutputChunk } from "./gen/ToolOutputChunk";
@@ -461,6 +464,42 @@ export const fixture_RestoreCheckpointParams = {
   "scope": "worktree+transcript",
   "turnId": "msg-1"
 } satisfies RestoreCheckpointParams;
+
+export const fixture_GetThreadUsageParams = {
+  "chatId": "chat-1"
+} satisfies GetThreadUsageParams;
+
+export const fixture_ThreadUsage = {
+  "totals": {
+    "cacheTokens": 800,
+    "costUsd": 0.0125,
+    "durationMs": 5100,
+    "inputTokens": 1200,
+    "outputTokens": 340
+  },
+  "turns": [
+    {
+      "cacheTokens": 800,
+      "costUsd": 0.0125,
+      "durationMs": 4200,
+      "inputTokens": 1200,
+      "outputTokens": 340,
+      "turnId": "msg-1"
+    },
+    {
+      "durationMs": 900,
+      "turnId": "msg-2"
+    }
+  ]
+} satisfies ThreadUsage;
+
+export const fixture_Notification = {
+  "chatId": "chat-1",
+  "createdAtMs": 1791797400000,
+  "id": "notification-1",
+  "kind": "turn_done",
+  "title": "Turn finished: Fix the login"
+} satisfies Notification;
 
 export const fixture_RestoreCheckpointReply = {
   "forkedChatId": "chat-2",
@@ -2167,6 +2206,9 @@ export const FIXTURES = [
   { name: "ListCheckpointsParams", type: "ListCheckpointsParams", value: fixture_ListCheckpointsParams },
   { name: "CheckpointList", type: "CheckpointList", value: fixture_CheckpointList },
   { name: "RestoreCheckpointParams", type: "RestoreCheckpointParams", value: fixture_RestoreCheckpointParams },
+  { name: "GetThreadUsageParams", type: "GetThreadUsageParams", value: fixture_GetThreadUsageParams },
+  { name: "ThreadUsage", type: "ThreadUsage", value: fixture_ThreadUsage },
+  { name: "Notification", type: "Notification", value: fixture_Notification },
   { name: "RestoreCheckpointReply", type: "RestoreCheckpointReply", value: fixture_RestoreCheckpointReply },
   { name: "WatchDocMessagesParams", type: "WatchDocMessagesParams", value: fixture_WatchDocMessagesParams },
   { name: "MessagePart.text", type: "MessagePart", value: fixture_MessagePart_text },

@@ -137,7 +137,7 @@ methods! {
         WatchTranscript => Method("WatchDocMessages"),
         ListCheckpoints => Method("ListCheckpoints"),
         RestoreCheckpoint => Method("RestoreCheckpoint"),
-        GetThreadUsage => Gap { gap: "G20", task: "SD1 Task 14" },
+        GetThreadUsage => Method("GetThreadUsage"),
     }
     QueueService {
         WatchQueue => Method("WatchQueue"),
@@ -242,7 +242,7 @@ methods! {
         ResolveRunGroup => Gap { gap: "G16", task: "SD1 Task 12" },
     }
     NotificationService {
-        WatchNotifications => Gap { gap: "G19", task: "SD1 Task 14" },
+        WatchNotifications => Method("WatchNotifications"),
     }
 }
 

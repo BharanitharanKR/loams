@@ -25,4 +25,13 @@ output?: string | null,
 /**
  * Inline file diff for edit-shaped tools (ACP `Diff` content).
  */
-diff?: ToolDiff | null, } | { "type": "contextUsage", tokens: number | null, window: number | null, } | { "type": "usage", inputTokens: number, outputTokens: number, } | { "type": "availableCommands", commands: Array<SlashCommand>, } | { "type": "error", message: string, } | { "type": "inputRequested", requestId: string, questions: Array<UserInputQuestion>, } | { "type": "inputResolved", requestId: string, } | { "type": "steered", assistantMessageId: string | null, nextAssistantMessageId: string | null, } | { "type": "done", status: DoneStatus, result: string | null, error: string | null, sessionId: string | null, } | { "type": "userMessage", text: string, } | { "type": "subagent", parentToolUseId: string, event: AgentEvent, };
+diff?: ToolDiff | null, } | { "type": "contextUsage", tokens: number | null, window: number | null, } | { "type": "usage", inputTokens: number, outputTokens: number, 
+/**
+ * Prompt-cache tokens (read and written), when the harness reports them.
+ */
+cacheTokens?: number | null, 
+/**
+ * The turn's cost, only when the harness itself reports one; the
+ * daemon never computes it.
+ */
+costUsd?: number | null, } | { "type": "availableCommands", commands: Array<SlashCommand>, } | { "type": "error", message: string, } | { "type": "inputRequested", requestId: string, questions: Array<UserInputQuestion>, } | { "type": "inputResolved", requestId: string, } | { "type": "steered", assistantMessageId: string | null, nextAssistantMessageId: string | null, } | { "type": "done", status: DoneStatus, result: string | null, error: string | null, sessionId: string | null, } | { "type": "userMessage", text: string, } | { "type": "subagent", parentToolUseId: string, event: AgentEvent, };

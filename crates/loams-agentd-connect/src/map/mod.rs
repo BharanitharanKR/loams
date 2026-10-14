@@ -355,6 +355,7 @@ mod diff;
 mod files;
 mod git;
 mod harness;
+mod notify;
 mod projects;
 mod queue;
 mod studio;

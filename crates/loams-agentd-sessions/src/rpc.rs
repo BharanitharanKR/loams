@@ -160,6 +160,10 @@ pub struct EngineRpc {
     agent_accounts: AgentAccounts,
     harness_updates: Option<crate::harness_updates::HarnessUpdateCoordinator>,
     checkpoints: Option<Checkpoints>,
+    /// Studio's notifications (SD1 Task 14, G19).
+    notifications: Option<crate::notify::Notifications>,
+    /// Per-turn usage (SD1 Task 14, G20).
+    usage: Option<crate::usage::ThreadUsageLog>,
     engine_info: EngineInfo,
     /// Opens pull requests (G4) with the daemon's forge credentials.
     change_request_creator: ChangeRequestCreator,
@@ -230,10 +234,22 @@ impl EngineRpc {
             agent_accounts,
             harness_updates: None,
             checkpoints: None,
+            notifications: None,
+            usage: None,
             engine_info,
             change_request_creator: ChangeRequestCreator::from_keyring(),
             git_writes: std::sync::Arc::new(tokio::sync::Mutex::new(())),
         }
+    }
+
+    pub fn with_notifications(mut self, notifications: crate::notify::Notifications) -> Self {
+        self.notifications = Some(notifications);
+        self
+    }
+
+    pub fn with_usage(mut self, usage: crate::usage::ThreadUsageLog) -> Self {
+        self.usage = Some(usage);
+        self
     }
 
     pub fn with_checkpoints(mut self, checkpoints: Checkpoints) -> Self {
@@ -930,6 +946,9 @@ impl EngineRpc {
             MutateParams::DeleteChat { chat_id } => {
                 self.workspace.delete_chat(&chat_id).map_err(failed)?;
                 self.doc_host.purge_chat(&chat_id);
+                if let Some(usage) = &self.usage {
+                    usage.forget(&chat_id);
+                }
                 Ok(())
             }
             MutateParams::MarkChatSeen { chat_id, at } => {
@@ -1319,6 +1338,26 @@ impl RpcService for EngineRpc {
             methods::RESTORE_CHECKPOINT => {
                 let p = params_of::<calls::RestoreCheckpoint>(params)?;
                 self.restore_checkpoint(p).await
+            }
+            methods::GET_THREAD_USAGE => {
+                let p = params_of::<calls::GetThreadUsage>(params)?;
+                let usage = match &self.usage {
+                    Some(usage) => usage
+                        .thread(&p.chat_id)
+                        .map_err(|e| RpcError::Failed(e.to_string()))?,
+                    None => Default::default(),
+                };
+                reply::<calls::GetThreadUsage, _>(&usage)
+            }
+            methods::WATCH_NOTIFICATIONS => {
+                params_of::<calls::WatchNotifications>(params)?;
+                let notifications = self
+                    .notifications
+                    .as_ref()
+                    .ok_or_else(|| RpcError::Failed("notifications unavailable".into()))?;
+                Ok(stream_reply::<calls::WatchNotifications, _, _>(
+                    notifications.watch(),
+                ))
             }
             methods::WATCH_DOC_MESSAGES => {
                 let p = params_of::<calls::WatchDocMessages>(params)?;

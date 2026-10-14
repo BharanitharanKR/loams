@@ -16,7 +16,9 @@ use loams_agentd_connect::map::Wire;
 use loams_agentd_proto as rs;
 use loams_agentd_proto::checkpoints as rs_checkpoints;
 use loams_agentd_proto::invocation as rs_invocation;
+use loams_agentd_proto::notify as rs_notify;
 use loams_agentd_proto::transcript as rs_transcript;
+use loams_agentd_proto::usage as rs_usage;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -89,6 +91,7 @@ table! {
     "FinishQueuedMessageEditParams" => message::<rs::FinishQueuedMessageEditParams>,
     "FolderListing" => message::<rs::FolderListing>,
     "ForkSideChatParams" => message::<rs::ForkSideChatParams>,
+    "GetThreadUsageParams" => message::<rs_usage::GetThreadUsageParams>,
     "GitHistoryPage" => message::<rs::GitHistoryPage>,
     "HarnessCatalog" => list::<rs::HarnessDescriptor>,
     "HarnessUpdateList" => list::<rs::HarnessUpdateStatus>,
@@ -105,6 +108,7 @@ table! {
     "ModelList" => list::<rs::Model>,
     "MoveQueuedMessageParams" => message::<rs::MoveQueuedMessageParams>,
     "MoveWorkspaceEntryRequest" => message::<rs::MoveWorkspaceEntryRequest>,
+    "Notification" => message::<rs_notify::Notification>,
     "PreviewSnapshot" => message::<rs::PreviewSnapshot>,
     "ProjectActionRun" => message::<rs::ProjectActionRun>,
     "ProjectActionSetup" => message::<rs::ProjectActionSetup>,
@@ -140,6 +144,7 @@ table! {
     "SwitchRefParams" => message::<rs::SwitchRefParams>,
     "TerminalEvent" => message::<rs::TerminalEvent>,
     "TerminalSession" => message::<rs::TerminalSession>,
+    "ThreadUsage" => message::<rs_usage::ThreadUsage>,
     "TitleSettings" => message::<rs::TitleSettings>,
     "ToolCall" => message::<rs::ToolCall>,
     "ToolOutputChunk" => message::<rs::ToolOutputChunk>,
