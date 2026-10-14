@@ -748,6 +748,24 @@ async fn get_session_names_a_bearer_caller() {
     engine.stop().await;
 }
 
+/// An operator's key from `LOAMS_API_KEYS_FILE` (the hosted console's
+/// `apikey` mode) is the owner in `GetSession`.
+#[tokio::test]
+async fn get_session_names_a_key_file_key_the_owner() {
+    let (engine, key, _dir) = engine_with_keys().await;
+    engine.client().setup(SETUP_TOKEN).await;
+    let answer = engine
+        .client()
+        .with_bearer(&key)
+        .call("auth.v1.AuthService", "GetSession", json!({}))
+        .await;
+    let session = &answer.ok()["session"];
+    assert_eq!(session["role"], "ORG_ROLE_OWNER");
+    assert_eq!(session["org"]["name"], "Acme");
+    assert!(session.get("csrfToken").is_none(), "{session}");
+    engine.stop().await;
+}
+
 /// With authentication on and no `LOAMS_SETUP_TOKEN` nobody can run setup,
 /// so `GetInstance` does not send the console to it.
 #[tokio::test]
