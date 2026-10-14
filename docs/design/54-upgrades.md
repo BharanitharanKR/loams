@@ -99,7 +99,7 @@ Each row is a store that survives `docker compose down` (without `-v`). The *ver
 | S6 | **Loams SQL** on TiDB | in S4 (TiDB is stateless) | PingCAP (patched) | TiDB's bootstrap version per keyspace (§47 §5) | with S4 | with S4 |
 | S7 | **Postgres storage**: the pageserver and its remote storage | `pageserver-data`, `rustfs-data` (project `loams-neon`) | Loams Postgres (the fork) | the pageserver's `index_part` and layer formats (the fork's own) | A branch of every timeline at its last LSN, through `pg-control` (`CreateBranch`) or, without it, the pageserver API | `RestoreBranch` (pg-control), or without it the computes pointed back at the branch (verify the pageserver API in UP1 Task 0) |
 | S8 | **Postgres safekeepers** | the container filesystem of `safekeeper1` in preview.2 (no volume); a volume from preview.3 | Loams Postgres | the fork's own | None needed once drained (D945) | — |
-| S9 | **`pg-control`'s records** (`--store=local`) | `pg-control-data` (profile `postgres-control`, new in preview.3) | Loams | its record encoding (§17) | File copy | File copy back |
+| S9 | **`pg-control`'s records** (`--store=local`), and `pg-runner`'s compose state files | `pg-control-data` and `pg-runner-data` (profile `postgres-control`, already in preview.2; UP1 ruling T0-9) | Loams | its record encoding (§17) | File copy | File copy back |
 | S10 | **House**: the data directory (`spool/`, `catalog.sqlite`, `bucket/`, `workers/` with chDB's paths), `house.key` | `house-data` | ClickHouse (chDB) plus Loams' catalog | none today; UP1 adds a `FORMAT` file and `catalog.sqlite`'s `user_version` (§17) | Copy of `/var/lib/loams-house` with the House stopped | Copy back |
 | S11 | **Durable** (Resonate) on SQLite | `loams-data` (`/var/lib/loams/…`) | Resonate's schema (`sqlx` migrations) | `_sqlx_migrations` (§17). Today SQLite migrates implicitly when the engine opens it; UP1 moves that into `migrate` (§6.1) | SQLite online backup API into the snapshot | File copy back |
 | S12 | **Graph local data**: Grafeo's working files | `loams-data` (`/var/lib/loams/graph`) | Grafeo | Grafeo's file format | Not copied: a cache rebuilt from the bucket (§48 §14.4) | Deleted; rebuilt on open |
@@ -248,7 +248,7 @@ The snapshot is taken with every writer stopped: the engine, the House, `pg-cont
 | S1 | Record the snapshot as a GC root in the metastore (`_system/upgrade/snapshots/<id>`), listing the pointer copies; GC (§03 §7) treats every object reachable from a root as live until `snapshots prune` removes it | GC reads roots before deleting |
 | S3–S6 (TiKV) | BR backup of the cluster to `<snapshot>/tikv/` (the snapshot volume is mounted into `tikv`, as BR's `local://` storage needs; verify BR v8.5.8 with API V2 keyspaces), or a cold copy of `pd-data` and `tikv-data` with PD and TiKV stopped (Q821) | BR's backup TS; or both stopped |
 | S7 | For every timeline: create a branch named `upgrade-<snapshot id>` at its last record LSN, through `pg-control` when it runs (`CreateBranch`, TTL = the snapshot's life), else the pageserver's timeline-create API with an ancestor. When the release changes the Loams Postgres pins, also a cold copy of `pageserver-data` and `rustfs-data` with the Postgres stack stopped (Q829) | Computes stopped; the branch LSN is the last record LSN |
-| S8 | Not copied. **Drain first (D945):** with computes stopped, wait until each timeline's `remote_consistent_lsn` reaches the safekeeper's `flush_lsn` (pageserver and safekeeper status APIs), with a timeout (5 min, target). Refuse to recreate `safekeeper1` until then | Drained |
+| S8 | Not copied. **Drain first (D945):** with computes stopped, lower each tenant's `checkpoint_timeout` (the pageserver's checkpoint API is testing-only in the pinned image, UP1 ruling T0-9), wait until each timeline's `remote_consistent_lsn` reaches the safekeeper's `flush_lsn` (pageserver and safekeeper status APIs), with a timeout (5 min, target), then restore the setting. Refuse to recreate `safekeeper1` until then | Drained |
 | S9 | Copy the record file | `pg-control` stopped |
 | S10 | Copy `/var/lib/loams-house` | House stopped |
 | S11 | SQLite online backup API (`rusqlite::backup`) into the snapshot | Engine stopped |
@@ -447,7 +447,7 @@ Not built in UP1. When the Helm chart and §41's rings exist: `migrate` is a Job
 | §45 §4.3 (Live) | App data migrations are user mutations; no server-side migration framework in LV1 | Unchanged for app data. `migrate` covers only Live's own storage formats (system keys, index layouts), which are Loams' |
 | §46 §12 (Postgres) | Compute images apply on next start; pageservers and `loams-wal` roll one at a time; majors through `UpgradeProject` | Unchanged for the managed product. The compose stack is single-node, so its components restart in §10.3's order after a drain (D945). Majors never through `loams upgrade` (D933) |
 | §51 §9 | Data is never upgraded to a new Postgres major without an explicit user action | Kept: `loams upgrade` refuses a major change (§9.3) |
-| §47 §5 (SQL) | TiDB bootstrap runs once per keyspace in `CreateDatabase`, with upgrade DDL | A TiDB version bump is a third-party bump (§9); whether TiDB upgrades each keyspace's system tables on start is checked in UP1 Task 0 (verify) |
+| §47 §5 (SQL) | TiDB bootstrap runs once per keyspace in `CreateDatabase`, with upgrade DDL | A TiDB version bump is a third-party bump (§9); TiDB bootstraps, and upgrades, each keyspace's system tables when its `tidb-server` starts (UP1 ruling T0-8) |
 | §48 §14.4 (Graph) | Rolling; change-set and manifest formats versioned, new readers read every older version; Grafeo format changes rebuild from the portable snapshot | Kept. Grafeo's local files are a cache (S12), deleted on restore. "Reads every older version" is stronger than N−1 and stays Graph's own rule |
 | §49 §19 (House) | Engine upgrades migrate no data, because storage is Iceberg | True in production. The preview's single-node House keeps a local data directory (S10), which the snapshot copies |
 | §41 §8 | Rings; expand-then-contract; `noDowngrade`; rollback is a channel revert | Kept for clusters (D943). The migration class supplies `noDowngrade` |
@@ -468,7 +468,7 @@ Not built in UP1. When the Helm chart and §41's rings exist: `migrate` is a Job
 
 ## 17. Where things are today (checked on `dev` at `7957cfb0`, 2026-10-13)
 
-Read on `dev` at `7957cfb0`. Paths are from the repository root.
+Read on `dev` at `7957cfb0`. Paths are from the repository root. UP1 Task 0 (the plan's rulings T0-1 to T0-12, on `dev` at `3ac1e866`) adds formats this table misses (`text.checksums`, `hnsw.flat`, `graph.recovery_stamp`, `pg-control`'s secrets file and CA, the split trailer's third reader) and records the third-party facts marked (verify) here.
 
 **Format versions.** Most Loams formats already carry a magic and a version, but **almost every reader accepts only the exact current version**, so Rule 1's "N and N−1" is not yet true in code. UP1 Task 1 replaces the exact checks with the registry's range.
 

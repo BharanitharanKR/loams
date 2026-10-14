@@ -692,4 +692,224 @@ These are §54 §19's questions. Every one has a default the tasks follow until 
 
 ## Rulings made during execution
 
-(Task 0 starts this section.)
+### Task 0 (2026-10-15, on `dev` at `3ac1e866`)
+
+The owner answered Q820–Q834 with their defaults on 2026-10-14 (decision log). D923–D945 and Q820–Q834 are each
+declared exactly once in the decision log (`scripts/docs/check-decision-ids.sh` passes); nothing is renumbered.
+
+**T0-1. Formats and their readers** (Task 1's registry list). Every reader below checks the **exact** version today
+unless marked; Task 1 moves each to `formats::check`.
+
+| Registry id (proposed) | Constant, file | Reader today |
+|---|---|---|
+| `log.wal`, `log.segment` | `VERSION = 1`, `crates/loams-log/src/{wal,segment}.rs` | exact |
+| `collection.manifest` (`OPCM`) | `MANIFEST_FORMAT_VERSION = 1`, `crates/loams-collection/src/manifest.rs` | exact |
+| `collection.pk_delta` (`OPPD`), `collection.dead_letters` (`OPDL`) | `PK_DELTA_VERSION = 1` (`pkindex.rs`), `DEAD_LETTERS_VERSION = 1` (`deadletter.rs`); both read through `pkindex::open_envelope(magic, version, ..)` | exact, in the one helper |
+| `collection.record` | `CODEC_VERSION = 0x01`, `codec.rs` | exact |
+| `collection.pk_value` | `VALUE_VERSION = 0x01`, `pkindex.rs` | exact |
+| `text.split_trailer` (Quickwit's `QWFT` footer trailer) | `SPLIT_FOOTER_TRAILER_VERSION = 1`, written by `crates/loams-quickwit/src/storage/bundle_storage.rs`; read there and by `crates/loams-text/src/split.rs` and `crates/loams-hot/src/splits.rs` (`TRAILER_VERSION = 1` each) | exact, three readers of one format (**not in §54 §17** as one format) |
+| `text.delete_bitmap` (`OPDB`) | `DELETE_BITMAP_VERSION = 1`, `crates/loams-text/src/bitmap.rs` | exact |
+| `text.checksums` | `VERSION = 1`, `crates/loams-query/src/text/checksums.rs` | exact (**not in §54 §17**) |
+| `hot.artifact` (`OPHD`/`OPHC`) | `ARTIFACT_FORMAT_VERSION = 1`, `crates/loams-hot/src/artifact.rs` | exact |
+| `hot.owner` | `"v1"`, `crates/loams-hot/src/registry.rs` | exact string |
+| `hnsw.flat` | `FLAT_VERSION = 1`, `crates/loams-hnsw/src/flat.rs` | exact (**not in §17**) |
+| `link.counter` | `FORMAT_VERSION = 1`, `crates/loams-link/src/counter.rs` | exact |
+| `git.segment`, `git.checkpoint` | `SEGMENT_VERSION`/`SEGMENT_MIN_VERSION`, `CHECKPOINT_VERSION`/`CHECKPOINT_MIN_VERSION`, `crates/loams-git/src/format/` | **range** already |
+| `git.catalog_doc` | `DOC_VERSION = 1`, `crates/loams-git/src/catalog.rs` | exact |
+| `git.pack` (`.lpk`), `git.head_hint` | none (a reserved zero word; unversioned JSON) | none: "absent means 1" |
+| `meta.raft_snapshot` (`OPNMETA`) | `SNAPSHOT_FORMAT_VERSION = 8`, `crates/loams-meta/src/codec.rs` | **range 5–8** already |
+| `meta.raft_log`, `meta.redb` | bare postcard (`Command` variant order) | none: "absent means 1" |
+| `meta.tikv_record` | `FORMAT: u8 = 1`, `crates/loams-meta-tikv/src/keys.rs` | exact |
+| `meta.pointer` | none (object path + CAS version) | none: "absent means 1" |
+| `graph.manifest`, `graph.changeset`, `graph.portable` | `MANIFEST_FORMAT = 1` (`snapshot/manifest.rs`), `RECORD_VERSION = 1` (`changeset/codec.rs`), `PORTABLE_VERSION = 1` (`snapshot/portable.rs`) | exact |
+| `graph.recovery_stamp` | `STAMP_FORMAT = 1`, `crates/loams-graph/src/recovery.rs` | exact (**not in §17**) |
+| `graph.catalog_doc` | none (`struct Document { graphs }`, `catalog.rs`) | none: "absent means 1" |
+| `live.record` | protobuf `format = 1` checked as `!= 1` in `crates/loams-live/src/{docs,catalog,deploy,backfill,txn}.rs` | exact (literal `1`, no constant: Task 1 adds one) |
+| `live.journal` | `JournalEntry`, no format field | none: "absent means 1" |
+| `durable.sqlite` | Resonate's `_sqlx_migrations` (`0001_initial`) | see T0-6 |
+| `house.dir`, `house.catalog` | no stamp; `catalog.sqlite` tables `namespaces`, `tables` (`fabric/crates/loams-house/src/catalog/local.rs`) | none: "absent means 1" |
+| `pg_control.record` | `FORMAT: u8 = 1`, `crates/loams-pg-control/src/model.rs` | exact |
+| `pg_control.secrets_file`, `pg_control.ca` | `FILE_FORMAT = 1` (`secrets/file.rs`), `CA_FORMAT = 1` (`runtime/certs.rs`) | exact (**not in §17**) |
+| `pg_control.compose_state` | `STATE_FORMAT = 1` (`runtime/compose.rs`, pg-runner's state files) | written, **never checked** (**not in §17**) |
+
+Out of the registry, with the reason: wire-only versions that are never persisted (`loams-live` `CURSOR_VERSION`,
+`loams-query` `TICKET_VERSION`, `loams-git` `WIRE_VERSION`, `loams-house-ipc` `PROTOCOL_VERSION`,
+`loams-safekeeper` `PROTO_VERSION`); stores that keep their own ledger (agentd's `schema_migrations`,
+`WORKSPACE_SCHEMA_VERSION = 2`; the desktop sidebar browser's ledger and profile versions); and crates no compose
+stack runs (`loams-safekeeper`'s TiKV/journal formats, keyspace `loams_pgwal`; `loams-sqlrouter`'s `RECORD_FORMAT`).
+Each joins the registry when a stack starts persisting it.
+
+**T0-2. The `_system` key space.** The `MetaStore` trait (`crates/loams-common/src/meta/store.rs`) has **no generic
+key-value call and no multi-key transaction**. What it has: namespaces; per-namespace **pointers** (`cas_pointer`:
+string key → string value with a CAS version, optionally fenced by a lease epoch; key and value each at most
+`MAX_KEY_LEN` = 1024 bytes); and global **leases** (`acquire_lease`/`renew_lease`/`release_lease`, fenced epochs).
+Each call applies atomically on both backends (one TiKV transaction through `loams-tikv`'s runner; one Raft
+`Command`). No namespace is reserved: `validate_name` accepts `_system` for a namespace (only streams, links and
+collections refuse a leading `_`), and the API layer checks nothing, so a preview.2 user **may already have a
+namespace named `_system`**. Ruling for Task 2:
+- The ledger uses the existing primitives, so neither backend's record or snapshot format changes, and preview.2's
+  binaries still read the metastore after adoption (this is what makes `0000-adopt-preview-2` `Reversible` on the
+  Raft backend too; a new `Command` variant or snapshot v9 would not be):
+  - the namespace `_system` (created by `migrate`; the metastore keeps accepting it);
+  - pointers `upgrade/stack`, `upgrade/ledger/<seq:08>-<id>` and `upgrade/snapshots/<ulid>` in it;
+  - the lease `_system/upgrade/lease` (every ledger CAS carries its fence).
+- There is no call that lists pointers. Task 2 adds one read-only trait method, `pointers_with_prefix(consistency,
+  namespace, prefix)`, the pointer twin of `leases_with_prefix`. On Raft it is a state read and on TiKV a prefix
+  scan, so neither backend's stored format changes. The other implementations (`loams-safekeeper`'s and the
+  `loams-common` test double) get it too.
+- Values are a one-byte value version plus postcard, base64url-encoded, kept under 1024 bytes:
+  - error messages are truncated to 256 bytes;
+  - cursors are capped at 256 bytes;
+  - the stack record's format map is keyed by registry id (Task 1 asserts the encoded record fits).
+- **Deviation:** without a multi-key transaction, "stack record and last entry commit together" becomes "the stack
+  record is the commit point". The runner marks the last entry `Done`, then CASes `upgrade/stack`. A crash between
+  the two leaves every entry `Done` and the stack at the old release. Startup refuses that state with
+  `migration_incomplete`, and a rerun of `migrate run` only writes the stack record. Task 2's test
+  `stack_record_and_last_entry_commit_together` checks this ordering.
+- Reserving `_system`: `CreateNamespace` in the API layer (`crates/loams/src/api`) refuses it with
+  `namespace_reserved`, and list calls omit it. Task 5's fingerprint refuses adoption when a `_system` namespace
+  exists with anything but `upgrade/*` pointers (`stack_unrecognised`, naming the namespace).
+
+**T0-3. The upgrade client crate.** CL1 Task 1 has not merged: there is no `crates/loams-cli`. Tasks 12–14 create
+`crates/loams-upgrade` (a library with CL1's no-server-dependency guard), flattened into the `loams` binary as
+`loams upgrade`.
+
+**T0-4. GC root sources** (where Task 8's snapshot roots must be honoured). Bucket objects are deleted in:
+- `crates/loams-log/src/gc.rs`: retired WAL objects and segments (`retired_expired`), and orphans;
+- `crates/loams-collection/src/gc.rs`: reachability from `collection_roots`, and orphans;
+- `crates/loams-link/src/gc.rs`;
+- `crates/loams-git/src/gc.rs`;
+- `crates/loams-graph/src/catalog.rs` (a deleted graph's purge);
+- `crates/loams-graph/src/snapshot/manifest.rs` (old graph snapshots).
+
+Two more stores in the bucket keep **mutable manifests of their own**, outside the metastore:
+- each collection's Lance dataset (`ns/<ns>/collections/<c>/lance/_versions/*.manifest`). An `OPCM` names a Lance
+  version, so a restored metastore needs that version's files to still exist;
+- each PK index, which is a SlateDB database (`ns/<ns>/pk/<collection>/db/manifest/*`, `compacted/*.sst`; crate
+  `loams-pk`). Its `PkWatermark` is checked against the manifest, so an index that is ahead of a restored manifest
+  is rebuilt (Task 8 verifies this).
+
+So Task 8 must also hold back Lance's version cleanup and SlateDB's own GC while a root exists, or treat them as
+caches. A TiKV/BR snapshot is opaque, so a root cannot list the objects it reaches by reading the snapshot.
+
+Recommended for Task 8: the root records the snapshot's creation time T. While the root exists, every deletion
+site keeps every object created at or before T. The bucket is immutable, so the snapshot's state reaches only
+objects created by T. The cost is the space that compaction frees during one release period. This is simpler and
+safer than a per-object root list. Task 8 confirms or replaces it.
+
+**T0-5. Durable.** `standalone` defaults to SQLite at `<data-dir>/durable/default.db`, in the compose stack at
+`/var/lib/loams/durable/default.db` (`crates/loams/src/main.rs`, `apply_durable`). It opens with
+`servers.server_sqlite.migrate = true` (`crates/loams-durable/src/config.rs`), so serving migrates implicitly. The
+schema level is the rows of Resonate's `_sqlx_migrations` (`success = 1`). `loams durable migrate` prints only
+`loams durable: <store> is migrated`. `mysql::check_schema` only checks that at least one migration is applied.
+Task 6 adds the per-id comparison against Resonate's compiled migrator.
+
+**T0-6. A preview.2-only data marker: none unconditional.** preview.1 (`v0.1.0-preview.1`) and preview.2 use the
+same stack layout (TiKV `loams_meta` and `loams_live_dev`, the same release features). Every format is at the same
+version in both. What preview.2 adds over preview.1 appears only when a product is used:
+- Graph's implicit streams `_graph.<gr>` (GR1 Task 12; preview.1's were `graph.<gr>`);
+- Live catalog kind `0x07`, table jobs (LV1 Task 8).
+
+Ruling for Task 5:
+- Adoption takes the declared release (`--declared-release 0.1.0-preview.2`, from the stack's `LOAMS_VERSION` or
+  the desktop's `.loams-stack-version`) as the required positive marker.
+- The conditional markers strengthen it.
+- A legacy `graph.<gr>` stream, which only preview.1 wrote, is a negative marker: it refuses with
+  `stack_unrecognised` even when the declared release says preview.2.
+
+**T0-7. BR on TiKV v8.5.8 with API V2 keyspaces (rules Q821: BR).** Checked with `pingcap/br:v8.5.8`
+(`sha256:cddec1ce88dfe1f81afdd23f0024233fecde87ee2a6997d705c8b77eb9aa76eb`, built 2026-08-27) on a scratch
+PD+TiKV v8.5.8 with the release `tikv.toml`/`pd.toml` (API V2; keyspaces `loams_meta`, `loams_live_dev`, `sql_dev`,
+`loams_pgwal`):
+- `br backup full` covers only TiDB's tables. `br backup txn` (experimental) without `--start`/`--end` backs up the
+  whole transactional key range `[, )`, every keyspace's `x`-prefixed keys included, at one `BackupTS`. Observed:
+  12 ranges, 74 regions, 1703 keys, all succeeded.
+- `local://` storage works when the same host directory is mounted into `tikv` and BR at the same path (TiKV writes
+  the SSTs, BR the `backupmeta`).
+- Restore is `br restore txn` into a fresh PD+TiKV. Keyspace ids come from PD's `pre-alloc` order, so the same
+  `pd.toml` gives the same ids. PD's TSO in the new cluster is ahead of `BackupTS` because the wall clock moved on.
+  Restore round trip on the T0-11 fixture stack:
+  - `br restore txn` into a fresh PD+TiKV restored all 1890 keys.
+  - `loams_meta` and `loams_live_dev`, dumped again, were **byte-identical** to the dumps taken before the backup.
+  - TiDB started on the restored `sql_dev` without bootstrapping again, and read its table.
+  - The preview.2 engine on the restored cluster read the collection (count 2), the stream (both records), the
+    graph (both nodes) and the Durable promise.
+- No Loams store uses raw KV in the compose stack. Only `loams-safekeeper` (`tikv_raw.rs`) does, and it does not
+  run there. So `txn` covers everything.
+
+Because `txn` is marked experimental, the cold copy (`--tikv cold`) stays as the fallback, and Task 9 implements
+both.
+
+**T0-8. TiDB on a version bump.** TiDB bootstraps its keyspace when the process starts:
+- the log shows `bootstrap.go … "bootstrap successful" [keyspaceName=sql_dev]`;
+- `mysql.tidb.tidb_server_version` is `232` on `v8.5.8-loams.1`;
+- `loams-sqldb` renders one `tidb-server` pool per branch keyspace (`crates/loams-sqldb/src/render/tidb.rs`).
+
+So a TiDB pin bump runs TiDB's upgrade DDL for each keyspace when its `tidb-server` first starts on the new
+version, not in `CreateDatabase`. That follows upstream's `BootstrapSession` → `upgrade` when the stored version is
+older; it is checked by the gate on the first TiDB pin bump (D933). §54 §15's (verify) for §47 §5 resolves to
+"on start, per keyspace".
+
+**T0-9. The pageserver and safekeeper APIs.** The compose stack runs **upstream** Neon images pinned by digest
+(`deploy/pins/loams-postgres-images.toml`, `ghcr.io/neondatabase/neon@sha256:7a4f1249…`), not a fork build yet.
+Checked on a scratch `deploy/loams-postgres-dev` stack (project `up1-t0-pg`):
+- **Branch:** `POST /v1/tenant/{t}/timeline` with `{new_timeline_id, ancestor_timeline_id, ancestor_start_lsn}` at
+  the parent's `last_record_lsn` creates the branch (`ancestor_lsn` equals it). `loams-postgres`'s
+  `NeonClient::create_timeline` with `TimelineCreate::branch` already sends this.
+- **Pageserver LSNs:** `GET /v1/tenant/{t}/timeline/{tl}` gives `last_record_lsn`, `disk_consistent_lsn` and
+  `remote_consistent_lsn` (`loams_postgres::pageserver::TimelineInfo`).
+- **Safekeeper LSNs:** `GET http://safekeeper1:7676/v1/tenant/{t}/timeline/{tl}` gives `flush_lsn`, `commit_lsn`,
+  `remote_consistent_lsn` and `backup_lsn` (`loams_postgres::wal::WalClient`).
+- **The drain has to force an upload.** With the compute stopped, `remote_consistent_lsn` stays behind the
+  safekeeper's `flush_lsn` until the pageserver's `checkpoint_timeout` (10 min by default). The checkpoint API
+  (`PUT …/checkpoint`) answers 400 "compiled without testing APIs" on this image. What works:
+  `PATCH /v1/tenant/config {"tenant_id", "checkpoint_timeout": "5s"}` brought `remote_consistent_lsn` up to
+  `flush_lsn` within about 20 s. Then `{"checkpoint_timeout": null}` restores the default (the effective config
+  shows `10m` again).
+- Task 9's `drain_safekeepers`:
+  1. lower `checkpoint_timeout` per tenant;
+  2. poll until every timeline's pageserver `remote_consistent_lsn` ≥ the safekeeper's `flush_lsn` (timeout 5 min);
+  3. restore the tenant's previous override.
+- The safekeeper's own `backup_lsn` lags too. That is the WAL D945 protects: recreating `safekeeper1` before the
+  drain would lose it.
+- Without `pg-control` there is no timeline swap or rename. Restoring a branch means pointing the compute at the
+  `upgrade-<id>` branch's timeline id. `pg-control`'s `RestoreBranch` (`proto/loams/postgres/v1/postgres.proto`)
+  resets a branch in place. Task 9 keeps both paths.
+- The `postgres-control` profile (`pg-control`, `pg-runner`, volumes `pg-control-data`, `pg-runner-data`,
+  `pg-runner-token`) is **already in preview.2**. §54 §3 S9's "new in preview.3" is corrected, and `pg-runner-data`
+  (pg-runner's compose records, `STATE_FORMAT`) is added beside S9.
+
+**T0-10. Compose `depends_on: condition: service_completed_successfully`.** Checked with `podman compose` (Podman
+6.1.1, which runs Docker Compose v5.2.0):
+- a one-shot service that exits 0 starts its dependant;
+- one that exits 65 stops `up` with `service "migrate" didn't complete successfully: exit 65`, and the dependant
+  does not start.
+
+The condition is in the Compose specification since Compose 1.29, so the bundle's minimum (v2.20.3) has it. No
+`podman-compose` (Python) is involved, because `podman compose` delegates to Docker Compose here.
+
+**T0-11. The preview.2 fixture.** `crates/loams-migrate/tests/fixtures/preview2/` (its `README.md` gives the
+commands) holds:
+- the `loams_meta` and `loams_live_dev` keyspaces as JSON lines;
+- the Durable SQLite file;
+- the bucket objects the pointers name.
+
+It was written by the engine built from `dev` at `3ac1e866`, the state preview.2 is tagged from. The release
+workflow had not published the preview.2 images yet, so it is not the published image. The fixture holds a
+collection, a stream, a graph (with its `_graph.<gr>` stream, T0-6's conditional marker) and two Durable promises.
+
+The new example `crates/loams-tikv/examples/dump_keyspace.rs` dumps a keyspace from one snapshot. It is read-only,
+and it is how the gate (Task 20) and Task 5's TiKV-backed test re-capture a stack.
+
+Hermetic tests cannot run TiKV (`loams-tikv` has no in-memory backend; its tests need `LOAMS_TEST_PD`). So Task 5
+reads the metastore dump through `loams-meta-tikv`'s record decoders over an in-memory key-value view. Writing the
+dump into a real keyspace is an `#[ignore]`d test.
+
+**T0-12. Crates that own formats and their dependency on `loams-common`.** `loams-live`, `loams-durable`,
+`loams-pg-control`, `loams-quickwit` and fabric's `loams-house` do not depend on `loams-common` today. Task 1 adds
+the dependency; it is light (serde, thiserror, async-trait, tracing). The fabric workspace already depends on
+engine crates by path (`loams-store`, `loams-cache`), so `loams-house` takes `loams-common` the same way.
+
+**Release features for local checks:** the release image builds `loams` with
+`live,live-tikv,durable,graph,tikv,pgwire,mysql-wire,stream-grpc` beside the defaults
+(`deploy/release/Containerfile.loams`). Task 4's `cargo test -p loams` uses that set.

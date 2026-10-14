@@ -8488,6 +8488,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "loams-migrate"
+version = "0.1.0-preview.2"
+
+[[package]]
 name = "loams-pg-control"
 version = "0.1.0-preview.2"
 dependencies = [
