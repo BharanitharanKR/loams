@@ -145,8 +145,10 @@ async fn binlog_resume_by_gtid() {
 
 /// Without `binlog_row_metadata=FULL` the binlog has no column names: the
 /// schema history, stored with the position, maps each event's columns as
-/// they were when it was written, across an `ADD COLUMN … AFTER` and a
-/// `DROP COLUMN` made while the instance was stopped.
+/// they were when it was written, across an `ADD COLUMN … AFTER` made while
+/// the instance was stopped. The `DROP COLUMN` after it is a change the SDK's
+/// policy refuses (`column v was dropped`, under every evolution): the
+/// instance pauses on it, after delivering what came before it.
 #[tokio::test(flavor = "multi_thread")]
 async fn ddl_history_maps_columns_at_position() {
     if !p2() {
@@ -177,9 +179,24 @@ async fn ddl_history_maps_columns_at_position() {
         .await
         .expect("changes while stopped");
         h.start().await.expect("restart");
-        let ok = eventually(SETTLE, || async { h.changes().await.len() == 4 }).await;
+        let paused = eventually(SETTLE, || async {
+            h.status()
+                .await
+                .is_some_and(|st| st.state == PipelineState::Paused)
+        })
+        .await;
+        let status = h.status().await;
         h.stop().await.expect("stop");
-        assert!(ok, "the changes made while stopped never arrived");
+        assert!(paused, "the drop did not pause the instance: {status:?}");
+        let error = status
+            .and_then(|st| st.last_error)
+            .expect("the pause's error");
+        assert_eq!(error.class, ErrorClass::SchemaIncompatible);
+        assert!(
+            error.message.contains("column v was dropped"),
+            "{}",
+            error.message
+        );
     };
     run.await;
     h.exec("SET GLOBAL binlog_row_metadata = 'FULL'")
@@ -197,7 +214,6 @@ async fn ddl_history_maps_columns_at_position() {
             json!({"id": 1, "v": "a"}),
             json!({"id": 2, "v": "b"}),
             json!({"id": 3, "note": "n3", "v": "c"}),
-            json!({"id": 4, "note": "n4"}),
         ]
     );
     let has_note = h.delivered().await.iter().any(|b| match b {
