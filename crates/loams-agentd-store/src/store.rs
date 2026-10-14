@@ -118,7 +118,43 @@ const TABLES: &[&str] = &[
         ended_at      INTEGER NOT NULL,
         PRIMARY KEY (chat_id, turn_id)
      ) STRICT;",
+    // SD1 Task 13 (G22): a thread's approval mode, when one was set.
+    "CREATE TABLE IF NOT EXISTS approval_modes (
+        chat_id TEXT PRIMARY KEY NOT NULL,
+        mode    TEXT NOT NULL
+     ) STRICT;",
+    // SD1 Task 13 (G18): "always" decisions, per thread and tool.
+    "CREATE TABLE IF NOT EXISTS approval_always (
+        chat_id TEXT NOT NULL,
+        tool    TEXT NOT NULL,
+        PRIMARY KEY (chat_id, tool)
+     ) STRICT;",
+    // SD1 Task 13 (G17): approvals waiting for a person, so they survive a
+    // restart. `args` are stored redacted, as JSON.
+    "CREATE TABLE IF NOT EXISTS pending_approvals (
+        chat_id    TEXT NOT NULL,
+        call_id    TEXT NOT NULL,
+        turn_id    TEXT,
+        tool       TEXT NOT NULL,
+        args       TEXT NOT NULL,
+        risk       TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (chat_id, call_id)
+     ) STRICT;",
 ];
+
+/// One pending approval's row (SD1 Task 13, `pending_approvals`). `args` is
+/// the redacted arguments' JSON and `risk` its wire name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingApprovalRow {
+    pub chat_id: String,
+    pub call_id: String,
+    pub turn_id: Option<String>,
+    pub tool: String,
+    pub args: String,
+    pub risk: String,
+    pub created_at: i64,
+}
 
 /// One turn's usage row (SD1 Task 14, `turn_usage`). A count the harness did
 /// not report is `None`; `cost_usd` is only ever the harness's own figure.
@@ -690,6 +726,120 @@ impl DocsStore {
                 "DELETE FROM turn_usage WHERE chat_id = ?1",
                 params![chat_id],
             )?;
+            Ok(())
+        })
+    }
+
+    /// Set a thread's approval mode (SD1 Task 13).
+    pub fn set_approval_mode(&self, chat_id: &str, mode: &str) -> Result<(), StoreError> {
+        store_blocking(|| {
+            self.conn().execute(
+                "INSERT INTO approval_modes (chat_id, mode) VALUES (?1, ?2)
+                 ON CONFLICT (chat_id) DO UPDATE SET mode = excluded.mode",
+                params![chat_id, mode],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// Every thread's approval mode that was set, as `(chat_id, mode)`.
+    pub fn approval_modes(&self) -> Result<Vec<(String, String)>, StoreError> {
+        store_blocking(|| {
+            let conn = self.conn();
+            let mut statement = conn.prepare("SELECT chat_id, mode FROM approval_modes")?;
+            let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+            Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        })
+    }
+
+    /// Remember an "always" decision for a thread's tool.
+    pub fn add_approval_always(&self, chat_id: &str, tool: &str) -> Result<(), StoreError> {
+        store_blocking(|| {
+            self.conn().execute(
+                "INSERT OR IGNORE INTO approval_always (chat_id, tool) VALUES (?1, ?2)",
+                params![chat_id, tool],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// Every remembered "always", as `(chat_id, tool)`.
+    pub fn approval_always(&self) -> Result<Vec<(String, String)>, StoreError> {
+        store_blocking(|| {
+            let conn = self.conn();
+            let mut statement = conn.prepare("SELECT chat_id, tool FROM approval_always")?;
+            let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+            Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        })
+    }
+
+    /// Record an approval waiting for a person (replacing one with its ids).
+    pub fn put_pending_approval(&self, row: &PendingApprovalRow) -> Result<(), StoreError> {
+        store_blocking(|| {
+            self.conn().execute(
+                "INSERT OR REPLACE INTO pending_approvals
+                    (chat_id, call_id, turn_id, tool, args, risk, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    row.chat_id,
+                    row.call_id,
+                    row.turn_id,
+                    row.tool,
+                    row.args,
+                    row.risk,
+                    row.created_at,
+                ],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// Forget an approval once it is answered, denied or gone with its turn.
+    pub fn delete_pending_approval(&self, chat_id: &str, call_id: &str) -> Result<(), StoreError> {
+        store_blocking(|| {
+            self.conn().execute(
+                "DELETE FROM pending_approvals WHERE chat_id = ?1 AND call_id = ?2",
+                params![chat_id, call_id],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// Every pending approval, oldest first.
+    pub fn pending_approvals(&self) -> Result<Vec<PendingApprovalRow>, StoreError> {
+        store_blocking(|| {
+            let conn = self.conn();
+            let mut statement = conn.prepare(
+                "SELECT chat_id, call_id, turn_id, tool, args, risk, created_at
+                 FROM pending_approvals ORDER BY created_at, rowid",
+            )?;
+            let rows = statement.query_map([], |row| {
+                Ok(PendingApprovalRow {
+                    chat_id: row.get(0)?,
+                    call_id: row.get(1)?,
+                    turn_id: row.get(2)?,
+                    tool: row.get(3)?,
+                    args: row.get(4)?,
+                    risk: row.get(5)?,
+                    created_at: row.get(6)?,
+                })
+            })?;
+            Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        })
+    }
+
+    /// Forget a deleted thread's mode, "always" decisions and approvals.
+    pub fn delete_chat_approvals(&self, chat_id: &str) -> Result<(), StoreError> {
+        store_blocking(|| {
+            let mut conn = self.conn();
+            let tx = conn.transaction()?;
+            for table in ["approval_modes", "approval_always", "pending_approvals"] {
+                tx.execute(
+                    &format!("DELETE FROM {table} WHERE chat_id = ?1"),
+                    params![chat_id],
+                )?;
+            }
+            tx.commit()?;
             Ok(())
         })
     }

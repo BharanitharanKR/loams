@@ -4,7 +4,8 @@
 //! Each handler maps its request to the ndjson twin's params ([`crate::map`]),
 //! calls the engine ([`crate::engine`]) and maps the twin's result to its
 //! response. The twin of every method is in [`crate::twins`]. A §53 §6.5 gap
-//! answers `unimplemented` with reason `not_implemented`.
+//! would answer `unimplemented` with reason `not_implemented`; since SD1
+//! Task 13 every gap is served.
 //!
 //! The handlers return the concrete response type where the generated traits
 //! promise `impl Encodable<…>`, as `loams-apps-mock` does.
@@ -19,10 +20,10 @@ use loams_agentd_proto::rpc::calls;
 
 use crate::engine::{self, Engine};
 
+mod approvals;
 mod attachments;
 mod diff;
 mod files;
-mod gaps;
 mod git;
 mod groups;
 mod harness;

@@ -9,7 +9,7 @@ use futures::stream::BoxStream;
 
 use loams_agentd_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SteeringMode, ToolCall,
-    ToolDiff, UserInputAnswer, UserInputQuestion,
+    ToolDiff, UserInputQuestion,
 };
 
 use crate::{Harness, HarnessError, RunControls};
@@ -29,12 +29,16 @@ pub struct MockHarness {
 ///   `mock edit 2`). Each edit is an `editFile` tool call and its result,
 ///   with the whole-file diff. Absolute paths, `..`, and paths that resolve
 ///   outside the cwd through a symlink are refused with an error result.
-/// - `LOAMS_DESKTOP_MOCK_APPROVE=1`: before each edit, ask for approval
-///   (options `Allow` / `Deny`) and wait. A denial, or a dropped question,
-///   leaves the file untouched and makes the result an error.
+/// - `LOAMS_DESKTOP_MOCK_APPROVE=1`: before each edit, ask for approval and
+///   wait. A denial, or a dropped bridge, leaves the file untouched and makes
+///   the result an error.
 ///
-/// The approval rides [`RunControls::request_input`], the only blocking
-/// host bridge a harness has today (plan SD1 ruling T8-2). Title runs never edit.
+/// The approval rides the approval contract (SD1 Task 13; ruling T8-2 had it
+/// on `request_input` until then): in a supervised thread each edit is an
+/// [`crate::ApprovalAsk`] for the tool `editFile`, in the order call, ask,
+/// write, result. A full-access thread has no approval bridge, and the edits
+/// are written without asking, as every driver answers its own permissions
+/// there. Title runs never edit.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MockEdits {
     pub paths: Vec<String>,
@@ -66,19 +70,12 @@ impl MockEdits {
     }
 }
 
-type RequestInput = Box<
-    dyn Fn(Vec<UserInputQuestion>) -> tokio::sync::oneshot::Receiver<Vec<UserInputAnswer>>
-        + Send
-        + Sync,
->;
 
 /// One planned edit, fixed when the stream reaches it: the id, the line and
 /// the file's contents before the edit.
 struct EditStep {
-    index: usize,
     id: String,
     path: String,
-    turn: usize,
     line: String,
     /// The file to write, or why the path is refused.
     target: Result<PathBuf, String>,
@@ -96,10 +93,8 @@ fn plan_edit(cwd: &Path, index: usize, path: &str) -> EditStep {
             .components()
             .any(|c| matches!(c, Component::Normal(_)));
     let refused = |reason: String| EditStep {
-        index,
         id: format!("mock-edit-refused-{index}"),
         path: path.to_owned(),
-        turn: 0,
         line: String::new(),
         target: Err(reason),
         old: None,
@@ -121,10 +116,8 @@ fn plan_edit(cwd: &Path, index: usize, path: &str) -> EditStep {
             .count()
     }) + 1;
     EditStep {
-        index,
         id: format!("mock-edit-t{turn}-{index}"),
         path: path.to_owned(),
-        turn,
         line: format!("{MOCK_EDIT_PREFIX}{turn}\n"),
         target: Ok(target),
         old,
@@ -156,27 +149,21 @@ impl EditStep {
         self,
         cwd: PathBuf,
         approve: bool,
-        request_input: Arc<RequestInput>,
+        request_approval: Option<Arc<crate::RequestApproval>>,
     ) -> AgentEvent {
         let target = match &self.target {
             Ok(target) => target.clone(),
             Err(reason) => return self.failed(reason.clone()),
         };
-        if approve {
-            let question = UserInputQuestion {
-                id: format!("mock-approve-t{}-{}", self.turn, self.index),
-                header: "Approval".into(),
-                question: format!("Allow the Mock harness to edit {}?", self.path),
-                options: vec!["Allow".into(), "Deny".into()],
-                prefill: None,
-                multiline: false,
-                multi_select: false,
-            };
-            let answers = request_input(vec![question]).await.unwrap_or_default();
-            let allowed = answers
-                .iter()
-                .any(|a| a.labels.iter().any(|l| l == "Allow"));
-            if !allowed {
+        if approve && let Some(request_approval) = request_approval {
+            let args = serde_json::json!({ "path": self.path, "content": self.line });
+            let answer = request_approval(crate::ApprovalAsk {
+                call_id: self.id.clone(),
+                tool: "editFile".into(),
+                risk: crate::approvals::tool_risk("editFile", &args),
+                args,
+            });
+            if !crate::approval_allows(answer).await {
                 return self.failed(format!("edit of {} denied by the user", self.path));
             }
         }
@@ -224,7 +211,7 @@ fn with_edits(
     mut events: Vec<Result<AgentEvent, HarnessError>>,
     cwd: &str,
     edits: MockEdits,
-    request_input: RequestInput,
+    request_approval: Option<crate::RequestApproval>,
 ) -> BoxStream<'static, Result<AgentEvent, HarnessError>> {
     if edits.paths.is_empty() {
         return futures::stream::iter(events).boxed();
@@ -235,13 +222,13 @@ fn with_edits(
         .unwrap_or(events.len());
     let tail = events.split_off(at);
     let cwd = PathBuf::from(cwd);
-    let request_input = Arc::new(request_input);
+    let request_approval = request_approval.map(Arc::new);
     let approve = edits.approve;
     let edit_events = futures::stream::iter(edits.paths.into_iter().enumerate()).flat_map(
         move |(index, path)| {
             let step = plan_edit(&cwd, index, &path);
             let call = step.call();
-            let finish = step.finish(cwd.clone(), approve, Arc::clone(&request_input));
+            let finish = step.finish(cwd.clone(), approve, request_approval.clone());
             futures::stream::iter([Ok(call)])
                 .chain(futures::stream::once(async move { Ok(finish.await) }))
         },
@@ -287,6 +274,10 @@ fn question_script() -> Vec<UserInputQuestion> {
 
 #[async_trait]
 impl Harness for MockHarness {
+    fn supports_approvals(&self) -> bool {
+        true
+    }
+
     fn id(&self) -> HarnessId {
         HarnessId::Mock
     }
@@ -823,7 +814,7 @@ impl MockHarness {
         let sub_delay_ms = std::env::var("LOAMS_DESKTOP_MOCK_SUBAGENT_DELAY_MS")
             .ok()
             .and_then(|v| v.parse::<u64>().ok());
-        let events = with_edits(events, &request.cwd, edits, controls.request_input);
+        let events = with_edits(events, &request.cwd, edits, controls.request_approval);
         if delay_ms == 0 && sub_delay_ms.is_none() {
             return Ok(events);
         }
@@ -848,9 +839,9 @@ mod edit_tests {
     use std::sync::{Arc, Mutex};
 
     use futures::StreamExt;
+    use loams_agentd_proto::approvals::{ApprovalDecision, ToolRisk};
     use loams_agentd_proto::{
-        AgentEvent, DoneStatus, RunRequest, SandboxLevel, ToolCall, ToolDiff, UserInputAnswer,
-        UserInputQuestion,
+        AgentEvent, DoneStatus, RunRequest, SandboxLevel, ToolCall, ToolDiff, UserInputQuestion,
     };
     use tokio::sync::{mpsc, oneshot};
 
@@ -874,26 +865,41 @@ mod edit_tests {
         }
     }
 
-    type Asked = Arc<Mutex<Vec<(Vec<UserInputQuestion>, bool)>>>;
+    type Asked = Arc<Mutex<Vec<(crate::ApprovalAsk, bool)>>>;
 
-    /// Controls whose question bridge records each question set, whether
-    /// `probe` existed when it was asked, and answers with `label`.
+    /// Supervised controls (SD1 Task 13) whose approval bridge records each
+    /// ask and whether `probe` existed when it was asked, and answers `Allow`
+    /// (once) or anything else (deny). Questions are never expected.
     fn controls(probe: std::path::PathBuf, label: &'static str, asked: Asked) -> RunControls {
         let (_steer_tx, steering) = mpsc::channel(1);
         RunControls {
-            execution_lease: None,
-            request_input: Box::new(move |questions: Vec<UserInputQuestion>| {
+            request_approval: Some(Box::new(move |ask: crate::ApprovalAsk| {
                 let (tx, rx) = oneshot::channel();
-                let answers = questions
-                    .iter()
-                    .map(|q| UserInputAnswer {
-                        question_id: q.id.clone(),
-                        labels: vec![label.into()],
-                    })
-                    .collect();
-                asked.lock().unwrap().push((questions, probe.exists()));
-                let _ = tx.send(answers);
+                asked.lock().unwrap().push((ask, probe.exists()));
+                let _ = tx.send(if label == "Allow" {
+                    ApprovalDecision::Once
+                } else {
+                    ApprovalDecision::Deny
+                });
                 rx
+            })),
+            execution_lease: None,
+            request_input: Box::new(move |_questions: Vec<UserInputQuestion>| {
+                panic!("the Mock's edits never ask questions");
+            }),
+            steering,
+            interrupt: CancellationToken::new(),
+        }
+    }
+
+    /// Full-access controls: no approval bridge.
+    fn full_access() -> RunControls {
+        let (_steer_tx, steering) = mpsc::channel(1);
+        RunControls {
+            request_approval: None,
+            execution_lease: None,
+            request_input: Box::new(move |_questions: Vec<UserInputQuestion>| {
+                panic!("the Mock's edits never ask questions");
             }),
             steering,
             interrupt: CancellationToken::new(),
@@ -1113,7 +1119,7 @@ mod edit_tests {
         };
         let mock = harness();
 
-        // Allowed: one question per edit, asked while the file is still absent.
+        // Allowed: one approval per edit, asked while the file is still absent.
         let asked = Asked::default();
         let events = run(
             &mock,
@@ -1125,16 +1131,15 @@ mod edit_tests {
         {
             let asked = asked.lock().unwrap();
             assert_eq!(asked.len(), 1);
-            let (questions, existed) = &asked[0];
+            let (ask, existed) = &asked[0];
             assert!(!existed, "approval requested before the write");
-            assert_eq!(questions.len(), 1);
-            assert_eq!(questions[0].id, "mock-approve-t1-0");
-            assert_eq!(questions[0].header, "Approval");
-            assert_eq!(questions[0].options, vec!["Allow", "Deny"]);
-            assert!(questions[0].question.contains("notes.txt"));
+            assert_eq!(ask.call_id, "mock-edit-t1-0");
+            assert_eq!(ask.tool, "editFile");
+            assert_eq!(ask.args["path"], "notes.txt");
+            assert_eq!(ask.risk, ToolRisk::Write);
         }
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "mock edit 1\n");
-        // The tool call is visible before the approval, the result after it.
+        // The order stays: the call, the ask, the write, the result.
         assert_eq!(
             events[1],
             edit_call("mock-edit-t1-0", "notes.txt", "mock edit 1\n")
@@ -1161,5 +1166,25 @@ mod edit_tests {
                 if o.contains("denied")
         ));
         assert!(matches!(events.last(), Some(AgentEvent::Done { .. })));
+    }
+
+    /// A full-access thread has no approval bridge: the knob's edits are not
+    /// asked about, as every driver answers its own permissions there.
+    #[tokio::test]
+    async fn mock_approve_in_full_access_writes_without_asking() {
+        let dir = tempfile::tempdir().unwrap();
+        let edits = MockEdits {
+            paths: vec!["notes.txt".into()],
+            approve: true,
+        };
+        let events = run(&harness(), dir.path(), &edits, full_access()).await;
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("notes.txt")).unwrap(),
+            "mock edit 1\n"
+        );
+        assert_eq!(
+            events[2],
+            edit_result("mock-edit-t1-0", "notes.txt", None, "mock edit 1\n")
+        );
     }
 }

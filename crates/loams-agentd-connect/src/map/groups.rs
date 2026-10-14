@@ -4,11 +4,6 @@ use loams_agentd_proto::groups as rs_groups;
 
 use crate::proto::loams::agentd::v1 as pb;
 
-wire_enum!(rs_groups::ApprovalMode => pb::ApprovalMode {
-    FullAccess => APPROVAL_MODE_FULL_ACCESS,
-    Supervised => APPROVAL_MODE_SUPERVISED,
-});
-
 wire_enum!(rs_groups::RunGroupState => pb::RunGroupState {
     Running => RUN_GROUP_STATE_RUNNING,
     Ready => RUN_GROUP_STATE_READY,

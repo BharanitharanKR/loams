@@ -616,6 +616,22 @@ fn agent_events() -> Vec<(&'static str, AgentEvent)> {
             },
         ),
         (
+            "approvalRequested",
+            AgentEvent::ApprovalRequested {
+                call_id: s("call-1"),
+                tool: s("Bash"),
+                args: serde_json::json!({ "command": "cargo test" }),
+                risk: loams_agentd_proto::approvals::ToolRisk::Write,
+            },
+        ),
+        (
+            "approvalResolved",
+            AgentEvent::ApprovalResolved {
+                call_id: s("call-1"),
+                decision: loams_agentd_proto::approvals::ApprovalDecision::Once,
+            },
+        ),
+        (
             "steered",
             AgentEvent::Steered {
                 assistant_message_id: some("msg-1"),
@@ -1094,6 +1110,42 @@ pub fn all() -> Vec<Fixture> {
                 duration_ms: 900,
             },
         ]),
+    ));
+    add(Fixture::new(
+        "WatchApprovalsParams",
+        loams_agentd_proto::approvals::WatchApprovalsParams {
+            chat_id: some("chat-1"),
+        },
+    ));
+    add(Fixture::new(
+        "ApprovalList",
+        loams_agentd_proto::approvals::ApprovalList {
+            pending: vec![loams_agentd_proto::approvals::Approval {
+                id: s("call-1"),
+                chat_id: s("chat-1"),
+                turn_id: some("msg-1"),
+                tool: s("Bash"),
+                args: serde_json::json!({ "command": "rm -rf build" }),
+                risk: loams_agentd_proto::approvals::ToolRisk::Destructive,
+                created_at_ms: MS,
+            }],
+            mode: Some(loams_agentd_proto::approvals::ApprovalMode::Supervised),
+        },
+    ));
+    add(Fixture::new(
+        "ResolveApprovalParams",
+        loams_agentd_proto::approvals::ResolveApprovalParams {
+            call_id: s("call-1"),
+            chat_id: some("chat-1"),
+            decision: loams_agentd_proto::approvals::ApprovalDecision::Always,
+        },
+    ));
+    add(Fixture::new(
+        "SetThreadApprovalModeParams",
+        loams_agentd_proto::approvals::SetThreadApprovalModeParams {
+            chat_id: s("chat-1"),
+            mode: loams_agentd_proto::approvals::ApprovalMode::Supervised,
+        },
     ));
     add(Fixture::new(
         "Notification",

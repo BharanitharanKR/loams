@@ -33,15 +33,8 @@ pub const GROUP_NOT_READY: &str = "group_not_ready";
 pub const CHECK_TAIL_LINES: usize = 200;
 
 /// How every member of a group answers its agent's tool calls (§53 §8.1):
-/// one mode for the whole group.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
-pub enum ApprovalMode {
-    #[default]
-    #[serde(rename = "full-access")]
-    FullAccess,
-    #[serde(rename = "supervised")]
-    Supervised,
-}
+/// one mode for the whole group, set on each member's thread (SD1 Task 13).
+pub use crate::approvals::ApprovalMode;
 
 /// One member's harness and model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]

@@ -168,6 +168,8 @@ pub struct EngineRpc {
     notifications: Option<crate::notify::Notifications>,
     /// Per-turn usage (SD1 Task 14, G20).
     usage: Option<crate::usage::ThreadUsageLog>,
+    /// Supervised approvals (SD1 Task 13, G17, G18, G22).
+    approvals: Option<crate::approvals::Approvals>,
     engine_info: EngineInfo,
     /// Opens pull requests (G4) with the daemon's forge credentials.
     change_request_creator: ChangeRequestCreator,
@@ -253,6 +255,7 @@ impl EngineRpc {
             run_groups: None,
             notifications: None,
             usage: None,
+            approvals: None,
             engine_info,
             change_request_creator: ChangeRequestCreator::from_keyring(),
             git_writes: std::sync::Arc::new(tokio::sync::Mutex::new(())),
@@ -263,6 +266,18 @@ impl EngineRpc {
     pub fn with_notifications(mut self, notifications: crate::notify::Notifications) -> Self {
         self.notifications = Some(notifications);
         self
+    }
+
+    pub fn with_approvals(mut self, approvals: crate::approvals::Approvals) -> Self {
+        self.approvals = Some(approvals);
+        self
+    }
+
+    /// The approvals, or a failure when the engine has none.
+    pub(crate) fn approvals(&self) -> Result<&crate::approvals::Approvals, RpcError> {
+        self.approvals
+            .as_ref()
+            .ok_or_else(|| RpcError::Failed("approvals unavailable".into()))
     }
 
     pub fn with_usage(mut self, usage: crate::usage::ThreadUsageLog) -> Self {
@@ -1017,6 +1032,9 @@ impl EngineRpc {
                 if let Some(usage) = &self.usage {
                     usage.forget(&chat_id);
                 }
+                if let Some(approvals) = &self.approvals {
+                    approvals.forget_chat(&chat_id);
+                }
                 Ok(())
             }
             MutateParams::MarkChatSeen { chat_id, at } => {
@@ -1426,6 +1444,37 @@ impl RpcService for EngineRpc {
                 Ok(stream_reply::<calls::WatchNotifications, _, _>(
                     notifications.watch(),
                 ))
+            }
+            methods::WATCH_APPROVALS => {
+                let p = params_of::<calls::WatchApprovals>(params)?;
+                Ok(stream_reply::<calls::WatchApprovals, _, _>(
+                    self.approvals()?.watch(p.chat_id),
+                ))
+            }
+            methods::RESOLVE_APPROVAL => {
+                let p = params_of::<calls::ResolveApproval>(params)?;
+                if p.call_id.is_empty() {
+                    return Err(RpcError::BadParams("callId is required".into()));
+                }
+                self.approvals()?
+                    .resolve(p.chat_id.as_deref(), &p.call_id, p.decision)
+                    .map_err(|error| match error {
+                        crate::approvals::ResolveError::Ambiguous(_) => {
+                            RpcError::BadParams(error.to_string())
+                        }
+                        other => RpcError::Failed(other.to_string()),
+                    })?;
+                reply::<calls::ResolveApproval, _>(&OkReply::OK)
+            }
+            methods::SET_THREAD_APPROVAL_MODE => {
+                let p = params_of::<calls::SetThreadApprovalMode>(params)?;
+                if p.chat_id.is_empty() {
+                    return Err(RpcError::BadParams("chatId is required".into()));
+                }
+                self.approvals()?
+                    .set_mode(&p.chat_id, p.mode)
+                    .map_err(|e| RpcError::Failed(e.to_string()))?;
+                reply::<calls::SetThreadApprovalMode, _>(&OkReply::OK)
             }
             methods::WATCH_DOC_MESSAGES => {
                 let p = params_of::<calls::WatchDocMessages>(params)?;

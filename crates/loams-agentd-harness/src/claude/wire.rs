@@ -192,6 +192,9 @@ pub(crate) struct ControlRequestBody {
     pub tool_name: String,
     #[serde(default)]
     pub input: Value,
+    /// The tool use the permission is for (CLI 2.1.x sends it).
+    #[serde(default)]
+    pub tool_use_id: Option<String>,
 }
 
 /// Parse one stdout JSONL line. `Err` = not JSON; unknown types = `Other`.

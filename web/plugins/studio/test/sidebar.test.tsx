@@ -304,6 +304,10 @@ describe('the sidebar', () => {
     // Mod+N starts a thread in the project in view.
     fireEvent.keyDown(document.body, { key: 'n', code: 'KeyN', ctrlKey: true });
     await waitFor(() => expect(daemon.calls).toContain('CreateThread:~/src/loams'));
+    // Settings › Studio's approval mode, supervised by default (Q803; SD1 Task 13).
+    await waitFor(() =>
+      expect(daemon.calls).toContain('SetThreadApprovalMode:true:SUPERVISED'),
+    );
     await waitFor(() =>
       expect(navigate).toHaveBeenLastCalledWith(
         expect.stringMatching(/^\/studio\/t\/[0-9a-f-]{36}$/),

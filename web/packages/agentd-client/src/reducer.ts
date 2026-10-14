@@ -209,6 +209,10 @@ function foldParts(parts: MessagePart[], event: AgentEvent): MessagePart[] {
     case 'contextUsage':
     case 'availableCommands':
     case 'userMessage':
+    // Approvals (SD1 Task 13) are listed by `WatchApprovals`, never folded:
+    // the daemon's doc does not hold them either.
+    case 'approvalRequested':
+    case 'approvalResolved':
       return parts;
     default:
       return assertNever(event);
@@ -260,6 +264,8 @@ export function reduceSession(state: SessionState, event: AgentEvent): SessionSt
     case 'inputResolved':
     case 'userMessage':
     case 'subagent':
+    case 'approvalRequested':
+    case 'approvalResolved':
       return next;
     default:
       return assertNever(event);

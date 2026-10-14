@@ -141,6 +141,7 @@ impl Remote {
             terminal_shell: None,
             tool_outputs: Default::default(),
             mcp_endpoint: None,
+            approvals: Default::default(),
         };
         std::fs::create_dir_all(&config.data_dir).unwrap();
         let runtime =

@@ -633,6 +633,23 @@ pub enum AgentEvent {
     InputResolved {
         request_id: String,
     },
+    /// A supervised thread's tool call waits for a person (DD1 Task 24's
+    /// contract; SD1 Task 13). Emitted by the engine's approval bridge, which
+    /// owns the lifecycle, never by a harness; `args` are redacted. Never
+    /// persisted to docs: `WatchApprovals` is the pending list.
+    #[serde(rename_all = "camelCase")]
+    ApprovalRequested {
+        call_id: String,
+        tool: String,
+        args: serde_json::Value,
+        risk: crate::approvals::ToolRisk,
+    },
+    /// The approval was answered (or timed out, or its turn ended: `deny`).
+    #[serde(rename_all = "camelCase")]
+    ApprovalResolved {
+        call_id: String,
+        decision: crate::approvals::ApprovalDecision,
+    },
     /// A confirmed new assignment. When tagged as Subagent, this reopens the
     /// same child transcript even if the provider does not echo the user text.
     #[serde(rename_all = "camelCase")]

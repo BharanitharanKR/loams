@@ -6,6 +6,7 @@ import type { AgentAccountsSnapshot } from "./AgentAccountsSnapshot";
 import type { AgentLoginPoll } from "./AgentLoginPoll";
 import type { AgentLoginStart } from "./AgentLoginStart";
 import type { ApplyHarnessUpdateReply } from "./ApplyHarnessUpdateReply";
+import type { ApprovalList } from "./ApprovalList";
 import type { AttachmentChunk } from "./AttachmentChunk";
 import type { BeginQueueEditOutcome } from "./BeginQueueEditOutcome";
 import type { BeginQueuedMessageEditParams } from "./BeginQueuedMessageEditParams";
@@ -108,6 +109,7 @@ import type { RepoList } from "./RepoList";
 import type { RepoPathParams } from "./RepoPathParams";
 import type { RepoRefList } from "./RepoRefList";
 import type { ResizeTerminalParams } from "./ResizeTerminalParams";
+import type { ResolveApprovalParams } from "./ResolveApprovalParams";
 import type { ResolveGitAvatarsParams } from "./ResolveGitAvatarsParams";
 import type { ResolveReviewCommentParams } from "./ResolveReviewCommentParams";
 import type { ResolveRunGroupParams } from "./ResolveRunGroupParams";
@@ -130,6 +132,7 @@ import type { SendReviewToThreadParams } from "./SendReviewToThreadParams";
 import type { SentReply } from "./SentReply";
 import type { SessionList } from "./SessionList";
 import type { SetHarnessEnabledParams } from "./SetHarnessEnabledParams";
+import type { SetThreadApprovalModeParams } from "./SetThreadApprovalModeParams";
 import type { SidebarPreferencesState } from "./SidebarPreferencesState";
 import type { SkillList } from "./SkillList";
 import type { SlashCommandList } from "./SlashCommandList";
@@ -151,6 +154,7 @@ import type { UploadChunkParams } from "./UploadChunkParams";
 import type { UploadCommitParams } from "./UploadCommitParams";
 import type { UploadCommitReply } from "./UploadCommitReply";
 import type { UpsertProjectActionParams } from "./UpsertProjectActionParams";
+import type { WatchApprovalsParams } from "./WatchApprovalsParams";
 import type { WatchCheckoutChangeRequestParams } from "./WatchCheckoutChangeRequestParams";
 import type { WatchDocMessagesParams } from "./WatchDocMessagesParams";
 import type { WatchPreviewsParams } from "./WatchPreviewsParams";
@@ -196,6 +200,7 @@ export const ERROR_CODES = [
   "provider_not_configured",
   "checkpoint_missing",
   "group_not_ready",
+  "approval_not_pending",
 ] as const;
 
 export type AgentdErrorCode = (typeof ERROR_CODES)[number];
@@ -306,6 +311,9 @@ export const METHODS = [
   { name: "GetRunGroupComparison", kind: "unary", params: "GetRunGroupComparisonParams", result: "RunGroupComparison", role: "owner", renderer: true },
   { name: "RunGroupCheck", kind: "unary", params: "RunGroupCheckParams", result: "RunGroupCheckReply", role: "owner", renderer: true },
   { name: "ResolveRunGroup", kind: "unary", params: "ResolveRunGroupParams", result: "ResolveRunGroupReply", role: "owner", renderer: true },
+  { name: "WatchApprovals", kind: "stream", params: "WatchApprovalsParams", result: "ApprovalList", role: "owner", renderer: true },
+  { name: "ResolveApproval", kind: "unary", params: "ResolveApprovalParams", result: "OkReply", role: "owner", renderer: true },
+  { name: "SetThreadApprovalMode", kind: "unary", params: "SetThreadApprovalModeParams", result: "OkReply", role: "owner", renderer: true },
   { name: "GetCheckoutFileDiffText", kind: "unary", params: "GetCheckoutFileDiffTextRequest", result: "CheckoutFileDiffText", role: "owner", renderer: true },
   { name: "ListAgentAccounts", kind: "unary", params: "ListAgentAccountsParams", result: "AgentAccountsSnapshot", role: "owner", renderer: true },
   { name: "ActivateAgentAccount", kind: "unary", params: "AgentAccountParams", result: "AgentAccountsSnapshot", role: "owner", renderer: true },
@@ -422,6 +430,9 @@ export type Methods = {
   GetRunGroupComparison: { params: GetRunGroupComparisonParams; result: RunGroupComparison; kind: "unary"; role: "owner"; renderer: true };
   RunGroupCheck: { params: RunGroupCheckParams; result: RunGroupCheckReply; kind: "unary"; role: "owner"; renderer: true };
   ResolveRunGroup: { params: ResolveRunGroupParams; result: ResolveRunGroupReply; kind: "unary"; role: "owner"; renderer: true };
+  WatchApprovals: { params: WatchApprovalsParams; result: ApprovalList; kind: "stream"; role: "owner"; renderer: true };
+  ResolveApproval: { params: ResolveApprovalParams; result: OkReply; kind: "unary"; role: "owner"; renderer: true };
+  SetThreadApprovalMode: { params: SetThreadApprovalModeParams; result: OkReply; kind: "unary"; role: "owner"; renderer: true };
   GetCheckoutFileDiffText: { params: GetCheckoutFileDiffTextRequest; result: CheckoutFileDiffText; kind: "unary"; role: "owner"; renderer: true };
   ListAgentAccounts: { params: ListAgentAccountsParams; result: AgentAccountsSnapshot; kind: "unary"; role: "owner"; renderer: true };
   ActivateAgentAccount: { params: AgentAccountParams; result: AgentAccountsSnapshot; kind: "unary"; role: "owner"; renderer: true };

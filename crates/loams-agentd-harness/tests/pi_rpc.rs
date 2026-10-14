@@ -32,6 +32,7 @@ fn controls() -> (RunControls, mpsc::Sender<SteerMessage>, CancellationToken) {
     let token = CancellationToken::new();
     (
         RunControls {
+            request_approval: None,
             execution_lease: None,
             steering: rx,
             interrupt: token.clone(),

@@ -14,6 +14,7 @@ fn config(data_dir: &Path) -> EngineConfig {
         terminal_shell: None,
         tool_outputs: Default::default(),
         mcp_endpoint: None,
+        approvals: Default::default(),
     }
 }
 

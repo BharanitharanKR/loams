@@ -252,6 +252,21 @@ case "$promptline" in
   emit "{\"id\":$pid,\"result\":{\"stopReason\":\"end_turn\"}}"
   ;;
 
+*scenario:supervised*)
+  # SD1 Task 13: a supervised thread's permission request waits for the
+  # person; the answer names one of the options offered here.
+  emit "{\"id\":79,\"method\":\"session/request_permission\",\"params\":{\"sessionId\":\"$SID\",\"toolCall\":{\"toolCallId\":\"t9\",\"title\":\"Delete build\",\"kind\":\"delete\",\"rawInput\":{\"path\":\"build\"}},\"options\":[{\"optionId\":\"once\",\"name\":\"Allow once\",\"kind\":\"allow_once\"},{\"optionId\":\"always\",\"name\":\"Always allow\",\"kind\":\"allow_always\"},{\"optionId\":\"no\",\"name\":\"Reject\",\"kind\":\"reject_once\"}]}}"
+  read -r ans || exit 1
+  if has "$ans" '"id":79' && has "$ans" '"optionId":"once"'; then
+    update '{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"allowed once"}}'
+  elif has "$ans" '"id":79' && has "$ans" '"optionId":"no"'; then
+    update '{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"rejected"}}'
+  else
+    update '{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"unexpected answer"}}'
+  fi
+  emit "{\"id\":$pid,\"result\":{\"stopReason\":\"end_turn\"}}"
+  ;;
+
 *scenario:steer-ext*)
   update '{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"first"}}'
   read -r steerline || exit 1

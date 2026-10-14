@@ -47,6 +47,8 @@
 //! [`default_stall_bound`] (`LOAMS_DESKTOP_OPENCODE_STALL_MS`, 0 disables) errors
 //! out instead of spinning "Working" forever.
 
+mod approvals;
+
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -347,6 +349,10 @@ impl OpencodeHarness {
 
 #[async_trait]
 impl Harness for OpencodeHarness {
+    fn supports_approvals(&self) -> bool {
+        true
+    }
+
     fn id(&self) -> HarnessId {
         HarnessId::Opencode
     }
@@ -1493,10 +1499,12 @@ async fn run_session(session: Session) {
     let RunControls {
         execution_lease: _execution_lease,
         request_input,
+        request_approval,
         mut steering,
         interrupt,
     } = controls;
     let request_input = Arc::new(request_input);
+    let request_approval = request_approval.map(Arc::new);
     let directory = (!request.cwd.is_empty()).then(|| request.cwd.clone());
     let dir = directory.as_deref();
 
@@ -2167,6 +2175,7 @@ async fn run_session(session: Session) {
                             dir,
                             event_tx: &event_tx,
                             request_input: &request_input,
+                            request_approval: request_approval.as_ref(),
                             main_feed: &mut main_feed,
                             children: &mut children,
                             pending_spawns: &mut pending_spawns,
@@ -2597,6 +2606,8 @@ struct BusCtx<'a> {
     dir: Option<&'a str>,
     event_tx: &'a mpsc::Sender<Result<AgentEvent, HarnessError>>,
     request_input: &'a Arc<RequestInput>,
+    /// A supervised thread's approval bridge (SD1 Task 13).
+    request_approval: Option<&'a Arc<crate::RequestApproval>>,
     main_feed: &'a mut SessionFeed,
     children: &'a mut HashMap<String, ChildRun>,
     pending_spawns: &'a mut VecDeque<PendingSpawn>,
@@ -2648,6 +2659,7 @@ async fn handle_bus_event(ctx: BusCtx<'_>) -> BusOutcome {
         dir,
         event_tx,
         request_input,
+        request_approval,
         main_feed,
         children,
         pending_spawns,
@@ -3000,6 +3012,9 @@ async fn handle_bus_event(ctx: BusCtx<'_>) -> BusOutcome {
             let auth = server.auth.clone();
             let dir_owned = dir.map(str::to_owned);
             let protocol_cell = server.protocol.clone();
+            // Supervised (SD1 Task 13): the person decides before opencode
+            // hears anything.
+            let answer = request_approval.map(|request| request(approvals::ask(id, props)));
             let reply_key = if protocol == Protocol::V2
                 && server
                     .version
@@ -3021,11 +3036,16 @@ async fn handle_bus_event(ctx: BusCtx<'_>) -> BusOutcome {
                     protocol: protocol_cell,
                     version: tokio::sync::OnceCell::new(),
                 };
-                // Like Claude and Codex, normal Loams Desktop sessions run unattended,
-                // regardless of RunRequest.auto_approve. Approve each owned
-                // request without writing durable permission rules via "always".
-                // Genuine agent questions use the separate question.asked path.
-                let reply = "once";
+                // A full-access thread runs unattended, like Claude and Codex,
+                // regardless of RunRequest.auto_approve: approve each owned
+                // request without writing durable permission rules via
+                // "always". A supervised one answers with the person's
+                // decision. Genuine agent questions use the separate
+                // question.asked path.
+                let reply = match answer {
+                    Some(answer) => approvals::reply(crate::approval_allows(answer).await),
+                    None => "once",
+                };
                 if server
                     .post_json(
                         &reply_path,

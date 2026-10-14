@@ -852,6 +852,27 @@
     }
   },
   {
+    "method": "WatchApprovals",
+    "params": {
+      "chatId": "chat-1"
+    }
+  },
+  {
+    "method": "ResolveApproval",
+    "params": {
+      "callId": "call-1",
+      "chatId": "chat-1",
+      "decision": "always"
+    }
+  },
+  {
+    "method": "SetThreadApprovalMode",
+    "params": {
+      "chatId": "chat-1",
+      "mode": "supervised"
+    }
+  },
+  {
     "method": "GetCheckoutFileDiffText",
     "params": {
       "checkoutId": "checkout-1",

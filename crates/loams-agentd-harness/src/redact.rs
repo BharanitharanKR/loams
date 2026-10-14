@@ -604,8 +604,96 @@ pub fn strip_ansi(text: &str) -> String {
     out
 }
 
+/// Object keys whose values are hidden whatever they hold (compared in
+/// lowercase, as substrings).
+const ARG_SECRET_KEYS: &[&str] = &[
+    "token",
+    "secret",
+    "password",
+    "passwd",
+    "api_key",
+    "apikey",
+    "api-key",
+    "authorization",
+    "cookie",
+    "credential",
+    "private_key",
+    "access_key",
+];
+
+/// How much of one string a redacted value keeps, in characters.
+const KEEP_CHARS: usize = 4096;
+
+/// A tool call's arguments made safe to store and show (plan SD1 Task 13:
+/// an approval's `args`): a value under a key naming a secret is
+/// `[redacted]`; every string goes through [`redact_output`] and is cut to
+/// 4 096 characters; nesting deeper than 16 levels is dropped.
+pub fn redact_json(value: &serde_json::Value) -> serde_json::Value {
+    redact_value(value, 0)
+}
+
+fn redact_value(value: &serde_json::Value, depth: usize) -> serde_json::Value {
+    use serde_json::Value;
+    if depth > 16 {
+        return Value::String("[nested]".into());
+    }
+    match value {
+        Value::String(text) => {
+            let mut clean = redact_output(text);
+            if clean.chars().count() > KEEP_CHARS {
+                clean = clean.chars().take(KEEP_CHARS).collect();
+                clean.push('…');
+            }
+            Value::String(clean)
+        }
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| redact_value(item, depth + 1))
+                .collect(),
+        ),
+        Value::Object(fields) => Value::Object(
+            fields
+                .iter()
+                .map(|(key, field)| {
+                    let lower = key.to_ascii_lowercase();
+                    let secret = ARG_SECRET_KEYS.iter().any(|name| lower.contains(name));
+                    let field = if secret && !field.is_null() {
+                        Value::String("[redacted]".into())
+                    } else {
+                        redact_value(field, depth + 1)
+                    };
+                    (key.clone(), field)
+                })
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn tool_arguments_are_redacted() {
+        let args = serde_json::json!({
+            "command": "curl -H 'Authorization: Bearer abc123def' https://x.test",
+            "api_key": "sk-live-secret",
+            "env": {"GITHUB_TOKEN": "ghp_abcdefghijklmnop"},
+            "path": "src/main.rs",
+            "lines": [1, 2],
+        });
+        let clean = super::redact_json(&args);
+        assert_eq!(clean["api_key"], "[redacted]");
+        assert_eq!(clean["env"]["GITHUB_TOKEN"], "[redacted]");
+        assert_eq!(clean["path"], "src/main.rs");
+        assert_eq!(clean["lines"], serde_json::json!([1, 2]));
+        let command = clean["command"].as_str().unwrap();
+        assert!(!command.contains("abc123def"), "{command}");
+        assert!(command.starts_with("curl"));
+        let long = super::redact_json(&serde_json::json!("x ".repeat(5000)));
+        assert!(long.as_str().unwrap().chars().count() <= 4097);
+    }
 
     #[test]
     fn spaced_and_pretty_printed_labels_hide_their_values() {

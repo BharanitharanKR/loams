@@ -77,6 +77,7 @@ struct Clients {
     notifications: pb::NotificationServiceClient<HttpClient>,
     review: pb::ReviewServiceClient<HttpClient>,
     groups: pb::RunGroupServiceClient<HttpClient>,
+    approvals: pb::ApprovalServiceClient<HttpClient>,
 }
 
 struct Daemon {
@@ -138,6 +139,7 @@ impl Daemon {
             terminal_shell: Some(TerminalShell::isolated("/bin/sh", &home)),
             tool_outputs: Default::default(),
             mcp_endpoint: None,
+            approvals: Default::default(),
         };
         let runtime = Engine::assemble_runtime(&config, EngineProfile::local(&data).unwrap())
             .await
@@ -185,7 +187,8 @@ impl Daemon {
             attachments: pb::AttachmentServiceClient::new(http(), config.clone()),
             notifications: pb::NotificationServiceClient::new(http(), config.clone()),
             review: pb::ReviewServiceClient::new(http(), config.clone()),
-            groups: pb::RunGroupServiceClient::new(http(), config),
+            groups: pb::RunGroupServiceClient::new(http(), config.clone()),
+            approvals: pb::ApprovalServiceClient::new(http(), config),
         };
         let ndjson = memory_client(engine);
         let info: rs::EngineInfo = ndjson
@@ -1724,6 +1727,39 @@ async fn scenario() {
                     "winnerChatId": d.get("member-1"), "action": "RESOLVE_ACTION_KEEP",
                     "force": true })),
         |r| Wire::from_pb(r)?
+    );
+
+    // ---- ApprovalService (G17, G18, G22; SD1 Task 13) ----
+    // chat-2 becomes supervised (it runs nothing more); its watch says so,
+    // with nothing pending, and answering an approval that does not wait is
+    // refused alike (`approval_not_pending`).
+    s.also = &[];
+    unary!(
+        s,
+        "/loams.agentd.v1.ApprovalService/SetThreadApprovalMode",
+        SetThreadApprovalMode,
+        |d| json!({ "chatId": "chat-2", "mode": "supervised" }),
+        approvals.set_thread_approval_mode(
+            json!({ "chatId": "chat-2", "mode": "APPROVAL_MODE_SUPERVISED" })
+        ),
+        |r| rs::OkReply::OK
+    );
+    first!(
+        s,
+        "/loams.agentd.v1.ApprovalService/WatchApprovals",
+        WatchApprovals,
+        |d| json!({ "chatId": "chat-2" }),
+        approvals.watch_approvals(json!({ "chatId": "chat-2" })),
+        |r| Wire::from_pb(r)?
+    );
+    unary!(
+        s,
+        "/loams.agentd.v1.ApprovalService/ResolveApproval",
+        ResolveApproval,
+        |d| json!({ "callId": "call-none", "chatId": "chat-2", "decision": "once" }),
+        approvals.resolve_approval(json!({ "callId": "call-none", "chatId": "chat-2",
+                    "decision": "APPROVAL_DECISION_ONCE" })),
+        |r| rs::OkReply::OK
     );
 
     // ---- Tear down what the scenario made ----

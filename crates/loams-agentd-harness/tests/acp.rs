@@ -4,6 +4,8 @@
 #![cfg(unix)]
 #![allow(clippy::unwrap_used)]
 
+mod approvals_support;
+
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -57,6 +59,7 @@ fn controls() -> (RunControls, mpsc::Sender<SteerMessage>, CancellationToken) {
     let (steer_tx, steer_rx) = mpsc::channel(8);
     let token = CancellationToken::new();
     let controls = RunControls {
+        request_approval: None,
         execution_lease: None,
         request_input: Box::new(move |questions| {
             let (tx, rx) = oneshot::channel();
@@ -263,6 +266,63 @@ async fn permission_requests_auto_accept_the_preferred_allow_option() {
         text: "approved".into()
     }));
     assert_eq!(dones(&events), vec![(DoneStatus::Completed, None)]);
+}
+
+/// SD1 Task 13: in a supervised thread `session/request_permission` becomes
+/// an approval, and the decision maps to one of the agent's offered options:
+/// `once` and `always` to its allow-once option (the daemon, not the agent,
+/// remembers "always"), `deny` to its reject option.
+#[tokio::test]
+async fn acp_supervised_forwards_request_permission() {
+    use loams_agentd_proto::approvals::{ApprovalDecision, ToolRisk};
+
+    for (decision, text) in [
+        (ApprovalDecision::Once, "allowed once"),
+        (ApprovalDecision::Always, "allowed once"),
+        (ApprovalDecision::Deny, "rejected"),
+    ] {
+        let (mut controls, _steer, _token) = controls();
+        let (bridge, mut asks) = approvals_support::bridge();
+        controls.request_approval = Some(bridge);
+        let mut stream = harness()
+            .run(request("scenario:supervised"), controls)
+            .await
+            .expect("run starts");
+        let (ask, answer) = approvals_support::next_ask(&mut asks).await;
+        assert_eq!(ask.call_id, "t9");
+        assert_eq!(ask.tool, "delete");
+        assert_eq!(ask.args["rawInput"]["path"], "build");
+        assert_eq!(ask.risk, ToolRisk::Destructive);
+        let early = tokio::time::timeout(Duration::from_millis(400), async {
+            while let Some(event) = stream.next().await {
+                if matches!(event, Ok(AgentEvent::Done { .. })) {
+                    return true;
+                }
+            }
+            false
+        })
+        .await;
+        assert!(early.is_err(), "the turn must wait for the decision");
+        answer.send(decision).unwrap();
+        let events = tokio::time::timeout(Duration::from_secs(10), async {
+            let mut events = Vec::new();
+            while let Some(event) = stream.next().await {
+                let event = event.unwrap();
+                let done = matches!(event, AgentEvent::Done { .. });
+                events.push(event);
+                if done {
+                    break;
+                }
+            }
+            events
+        })
+        .await
+        .unwrap();
+        assert!(
+            events.contains(&AgentEvent::TextDelta { text: text.into() }),
+            "{decision:?}: {events:?}"
+        );
+    }
 }
 
 #[tokio::test]

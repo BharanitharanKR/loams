@@ -1,0 +1,16 @@
+{
+  "mode": "supervised",
+  "pending": [
+    {
+      "args": {
+        "command": "rm -rf build"
+      },
+      "chatId": "chat-1",
+      "createdAtMs": 1791797400000,
+      "id": "call-1",
+      "risk": "destructive",
+      "tool": "Bash",
+      "turnId": "msg-1"
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import type { AgentEvent } from "./gen/AgentEvent";
 import type { AgentLoginPoll } from "./gen/AgentLoginPoll";
 import type { AgentLoginStart } from "./gen/AgentLoginStart";
 import type { ApplyHarnessUpdateReply } from "./gen/ApplyHarnessUpdateReply";
+import type { ApprovalList } from "./gen/ApprovalList";
 import type { AttachmentChunk } from "./gen/AttachmentChunk";
 import type { BeginQueueEditOutcome } from "./gen/BeginQueueEditOutcome";
 import type { BeginQueuedMessageEditParams } from "./gen/BeginQueuedMessageEditParams";
@@ -110,6 +111,7 @@ import type { RepoList } from "./gen/RepoList";
 import type { RepoPathParams } from "./gen/RepoPathParams";
 import type { RepoRefList } from "./gen/RepoRefList";
 import type { ResizeTerminalParams } from "./gen/ResizeTerminalParams";
+import type { ResolveApprovalParams } from "./gen/ResolveApprovalParams";
 import type { ResolveGitAvatarsParams } from "./gen/ResolveGitAvatarsParams";
 import type { ResolveReviewCommentParams } from "./gen/ResolveReviewCommentParams";
 import type { ResolveRunGroupParams } from "./gen/ResolveRunGroupParams";
@@ -132,6 +134,7 @@ import type { SentReply } from "./gen/SentReply";
 import type { SessionCommandPayload } from "./gen/SessionCommandPayload";
 import type { SessionList } from "./gen/SessionList";
 import type { SetHarnessEnabledParams } from "./gen/SetHarnessEnabledParams";
+import type { SetThreadApprovalModeParams } from "./gen/SetThreadApprovalModeParams";
 import type { SidebarPreferencesState } from "./gen/SidebarPreferencesState";
 import type { SkillList } from "./gen/SkillList";
 import type { SlashCommandList } from "./gen/SlashCommandList";
@@ -154,6 +157,7 @@ import type { UploadChunkParams } from "./gen/UploadChunkParams";
 import type { UploadCommitParams } from "./gen/UploadCommitParams";
 import type { UploadCommitReply } from "./gen/UploadCommitReply";
 import type { UpsertProjectActionParams } from "./gen/UpsertProjectActionParams";
+import type { WatchApprovalsParams } from "./gen/WatchApprovalsParams";
 import type { WatchCheckoutChangeRequestParams } from "./gen/WatchCheckoutChangeRequestParams";
 import type { WatchDocMessagesParams } from "./gen/WatchDocMessagesParams";
 import type { WatchPreviewsParams } from "./gen/WatchPreviewsParams";
@@ -512,6 +516,38 @@ export const fixture_ThreadUsage = {
     }
   ]
 } satisfies ThreadUsage;
+
+export const fixture_WatchApprovalsParams = {
+  "chatId": "chat-1"
+} satisfies WatchApprovalsParams;
+
+export const fixture_ApprovalList = {
+  "mode": "supervised",
+  "pending": [
+    {
+      "args": {
+        "command": "rm -rf build"
+      },
+      "chatId": "chat-1",
+      "createdAtMs": 1791797400000,
+      "id": "call-1",
+      "risk": "destructive",
+      "tool": "Bash",
+      "turnId": "msg-1"
+    }
+  ]
+} satisfies ApprovalList;
+
+export const fixture_ResolveApprovalParams = {
+  "callId": "call-1",
+  "chatId": "chat-1",
+  "decision": "always"
+} satisfies ResolveApprovalParams;
+
+export const fixture_SetThreadApprovalModeParams = {
+  "chatId": "chat-1",
+  "mode": "supervised"
+} satisfies SetThreadApprovalModeParams;
 
 export const fixture_Notification = {
   "chatId": "chat-1",
@@ -2460,6 +2496,22 @@ export const fixture_AgentEvent_inputResolved = {
   "type": "inputResolved"
 } satisfies AgentEvent;
 
+export const fixture_AgentEvent_approvalRequested = {
+  "args": {
+    "command": "cargo test"
+  },
+  "callId": "call-1",
+  "risk": "write",
+  "tool": "Bash",
+  "type": "approvalRequested"
+} satisfies AgentEvent;
+
+export const fixture_AgentEvent_approvalResolved = {
+  "callId": "call-1",
+  "decision": "once",
+  "type": "approvalResolved"
+} satisfies AgentEvent;
+
 export const fixture_AgentEvent_steered = {
   "assistantMessageId": "msg-1",
   "nextAssistantMessageId": "msg-2",
@@ -2525,6 +2577,10 @@ export const FIXTURES = [
   { name: "RestoreCheckpointParams", type: "RestoreCheckpointParams", value: fixture_RestoreCheckpointParams },
   { name: "GetThreadUsageParams", type: "GetThreadUsageParams", value: fixture_GetThreadUsageParams },
   { name: "ThreadUsage", type: "ThreadUsage", value: fixture_ThreadUsage },
+  { name: "WatchApprovalsParams", type: "WatchApprovalsParams", value: fixture_WatchApprovalsParams },
+  { name: "ApprovalList", type: "ApprovalList", value: fixture_ApprovalList },
+  { name: "ResolveApprovalParams", type: "ResolveApprovalParams", value: fixture_ResolveApprovalParams },
+  { name: "SetThreadApprovalModeParams", type: "SetThreadApprovalModeParams", value: fixture_SetThreadApprovalModeParams },
   { name: "Notification", type: "Notification", value: fixture_Notification },
   { name: "RestoreCheckpointReply", type: "RestoreCheckpointReply", value: fixture_RestoreCheckpointReply },
   { name: "WatchDocMessagesParams", type: "WatchDocMessagesParams", value: fixture_WatchDocMessagesParams },
@@ -2710,6 +2766,8 @@ export const FIXTURES = [
   { name: "AgentEvent.error", type: "AgentEvent", value: fixture_AgentEvent_error },
   { name: "AgentEvent.inputRequested", type: "AgentEvent", value: fixture_AgentEvent_inputRequested },
   { name: "AgentEvent.inputResolved", type: "AgentEvent", value: fixture_AgentEvent_inputResolved },
+  { name: "AgentEvent.approvalRequested", type: "AgentEvent", value: fixture_AgentEvent_approvalRequested },
+  { name: "AgentEvent.approvalResolved", type: "AgentEvent", value: fixture_AgentEvent_approvalResolved },
   { name: "AgentEvent.steered", type: "AgentEvent", value: fixture_AgentEvent_steered },
   { name: "AgentEvent.done", type: "AgentEvent", value: fixture_AgentEvent_done },
   { name: "AgentEvent.userMessage", type: "AgentEvent", value: fixture_AgentEvent_userMessage },

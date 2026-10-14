@@ -3,6 +3,8 @@
 
 #![cfg(unix)]
 
+mod approvals_support;
+
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -116,6 +118,7 @@ fn controls(
     let (steer_tx, steer_rx) = mpsc::channel(8);
     let token = CancellationToken::new();
     let controls = RunControls {
+        request_approval: None,
         execution_lease: None,
         request_input: Box::new(move |questions| {
             let (tx, rx) = oneshot::channel();
@@ -469,6 +472,7 @@ async fn approvals_round_trip_as_input_requests() {
     let token = CancellationToken::new();
     let seen = asked.clone();
     let controls = RunControls {
+        request_approval: None,
         execution_lease: None,
         request_input: Box::new(move |questions| {
             seen.lock().unwrap().extend(questions.iter().cloned());
@@ -1580,4 +1584,57 @@ async fn ordinary_followup_cannot_overtake_a_queued_native_command() {
             "done"
         ]
     );
+}
+
+// ---------------------------------------------------------------------------
+// Supervised approvals (plan SD1 Task 13)
+// ---------------------------------------------------------------------------
+
+/// A supervised thread runs Codex with `approvalPolicy: "on-request"` in the
+/// thread's own sandbox (the forced danger-full-access is lifted), and each
+/// approval request waits for the person's decision.
+#[tokio::test]
+async fn codex_supervised_on_request() {
+    use loams_agentd_proto::approvals::{ApprovalDecision, ToolRisk};
+
+    for (decision, status) in [
+        (ApprovalDecision::Once, DoneStatus::Completed),
+        (ApprovalDecision::Deny, DoneStatus::Errored),
+    ] {
+        let (mut controls, _steer, _token) = controls("Yes");
+        let (bridge, mut asks) = approvals_support::bridge();
+        controls.request_approval = Some(bridge);
+        let mut stream = harness()
+            .run(request("scenario:supervised"), controls)
+            .await
+            .expect("run starts");
+        let (ask, answer) = approvals_support::next_ask(&mut asks).await;
+        assert_eq!(ask.call_id, "c1");
+        assert_eq!(ask.tool, "commandExecution");
+        assert_eq!(ask.args["command"], "git reset --hard HEAD~3");
+        assert_eq!(ask.risk, ToolRisk::Destructive);
+        let early = tokio::time::timeout(Duration::from_millis(400), async {
+            while let Some(event) = stream.next().await {
+                if matches!(event, Ok(AgentEvent::Done { .. })) {
+                    return true;
+                }
+            }
+            false
+        })
+        .await;
+        assert!(early.is_err(), "the turn must wait for the decision");
+        answer.send(decision).expect("the driver waits");
+        let done = tokio::time::timeout(Duration::from_secs(10), async {
+            while let Some(event) = stream.next().await {
+                if let Ok(AgentEvent::Done { status, error, .. }) = event {
+                    return Some((status, error));
+                }
+            }
+            None
+        })
+        .await
+        .expect("the turn ends")
+        .expect("a Done");
+        assert_eq!(done.0, status, "{decision:?}: {:?}", done.1);
+    }
 }

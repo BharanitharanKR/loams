@@ -94,6 +94,9 @@ pub async fn serve(options: ServeOptions) -> anyhow::Result<()> {
             port,
             tokens: scoped.clone(),
         }),
+        // `[approvals]` (SD1 Task 13): supervised by default with the remote
+        // listener, before any stale run is resumed.
+        approvals: config.approvals.settings(remote.is_some() || config.remote.enabled),
     };
     let runtime = Engine::assemble_runtime(&engine_config, EngineProfile::local(&store)?).await?;
     // `[groups]` (SD1 Task 12): how many run-group members run at once.

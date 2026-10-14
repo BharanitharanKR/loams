@@ -1,0 +1,9 @@
+{
+  "args": {
+    "command": "cargo test"
+  },
+  "callId": "call-1",
+  "risk": "write",
+  "tool": "Bash",
+  "type": "approvalRequested"
+}

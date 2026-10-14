@@ -120,7 +120,16 @@ impl EngineRpc {
                 }
             }
         }
-        let chat_ids = members.iter().map(|m| m.chat_id.clone()).collect();
+        let chat_ids: Vec<String> = members.iter().map(|m| m.chat_id.clone()).collect();
+        // One approval mode for the group (§53 §8.1), kept on each member's
+        // thread before any is sent (SD1 Task 13; ruling T12-10).
+        if let Some(approvals) = &self.approvals {
+            for chat_id in &chat_ids {
+                approvals
+                    .set_mode(chat_id, p.approval_mode)
+                    .map_err(failed)?;
+            }
+        }
         groups
             .create(GroupRecord {
                 id: group_id.clone(),

@@ -6,6 +6,9 @@
 // proxy (SD1 Task 5): those whose ndjson twin is `renderer: true`. A §53 §6.5
 // gap joins the list when its task serves it.
 export const AGENTD_RENDERER_METHODS: ReadonlySet<string> = new Set([
+	"/loams.agentd.v1.ApprovalService/ResolveApproval",
+	"/loams.agentd.v1.ApprovalService/SetThreadApprovalMode",
+	"/loams.agentd.v1.ApprovalService/WatchApprovals",
 	"/loams.agentd.v1.AttachmentService/FetchToolBlob",
 	"/loams.agentd.v1.AttachmentService/ReadAttachmentChunk",
 	"/loams.agentd.v1.AttachmentService/UploadChunk",

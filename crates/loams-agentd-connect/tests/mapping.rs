@@ -17,6 +17,7 @@ use loams_agentd_proto as rs;
 use loams_agentd_proto::checkpoints as rs_checkpoints;
 use loams_agentd_proto::groups as rs_groups;
 use loams_agentd_proto::invocation as rs_invocation;
+use loams_agentd_proto::approvals as rs_approvals;
 use loams_agentd_proto::notify as rs_notify;
 use loams_agentd_proto::transcript as rs_transcript;
 use loams_agentd_proto::usage as rs_usage;
@@ -59,9 +60,13 @@ macro_rules! table {
 
 table! {
     "AddRepoParams" => |v| v.clone(),
+    "ResolveApprovalParams" => message::<rs_approvals::ResolveApprovalParams>,
+    "SetThreadApprovalModeParams" => message::<rs_approvals::SetThreadApprovalModeParams>,
+    "WatchApprovalsParams" => message::<rs_approvals::WatchApprovalsParams>,
     "AgentAccountsSnapshot" => message::<rs::AgentAccountsSnapshot>,
     "AgentLoginPoll" => message::<rs::AgentLoginPoll>,
     "AgentLoginStart" => message::<rs::AgentLoginStart>,
+    "ApprovalList" => message::<rs_approvals::ApprovalList>,
     "AttachmentChunk" => message::<rs::AttachmentChunk>,
     "BeginQueueEditOutcome" => message::<rs::BeginQueueEditOutcome>,
     "BeginQueuedMessageEditParams" => message::<rs::BeginQueuedMessageEditParams>,
