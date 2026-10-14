@@ -47,7 +47,8 @@ pub struct Notification {
     /// The run group it is about, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_id: Option<String>,
-    /// One line for the person, for example "Turn finished: Fix the login".
+    /// One line for the person: the thread's title for a thread (the kind says
+    /// what happened), else what the notification is about.
     pub title: String,
     pub created_at_ms: i64,
 }

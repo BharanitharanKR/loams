@@ -74,6 +74,22 @@ const MIGRATIONS: &[&str] = &[
     CREATE TABLE sync_job_clock (id INTEGER PRIMARY KEY CHECK(id=1), value INTEGER NOT NULL) STRICT;
     INSERT INTO sync_job_clock VALUES (1,0);",
     "ALTER TABLE chat_sync_jobs ADD COLUMN cursor TEXT NOT NULL DEFAULT '';",
+    // Loams Studio's review comments (SD1 Task 11, §53 §5.6), keyed by
+    // checkout. `outdated` is computed from the diff, never stored.
+    "CREATE TABLE review_comments (
+        id            TEXT PRIMARY KEY,
+        checkout_id   TEXT NOT NULL,
+        path          TEXT NOT NULL,
+        side          TEXT NOT NULL CHECK (side IN ('old', 'new')),
+        line          INTEGER NOT NULL,
+        end_line      INTEGER,
+        body          TEXT NOT NULL,
+        diff_checksum TEXT NOT NULL,
+        created_at    INTEGER NOT NULL,
+        updated_at    INTEGER NOT NULL,
+        resolved      INTEGER NOT NULL DEFAULT 0
+     ) STRICT;
+     CREATE INDEX review_comments_checkout ON review_comments(checkout_id, created_at, id);",
 ];
 
 /// Tables created with `IF NOT EXISTS` after [`MIGRATIONS`], so they need no
@@ -708,7 +724,7 @@ fn migrate(conn: &mut Connection) -> Result<(), StoreError> {
     Ok(())
 }
 
-fn now_ms() -> i64 {
+pub(crate) fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)

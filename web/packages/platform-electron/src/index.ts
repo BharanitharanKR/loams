@@ -6,16 +6,19 @@
 import type { Interceptor, Transport } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
 import { createAgentdTransport } from '@loams/agentd-client/connect';
-import type {
-  AgentdReach,
-  AgentdService,
-  PlatformService,
-  PluginModule,
+import {
+  type AgentdReach,
+  type AgentdService,
+  MODE_HOME,
+  type ModeService,
+  type PlatformService,
+  type PluginModule,
+  SHELL_COMMAND_EVENT,
 } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
-import type { AgentdStatus, LoamsDesktopApi } from '@loams/desktop/contracts';
+import type { AgentdStatus, LoamsDesktopApi, ShellCommand } from '@loams/desktop/contracts';
 
-export type { LoamsDesktopApi };
+export type { LoamsDesktopApi, ShellCommand };
 
 declare module '@loams/console-host' {
   interface Services {
@@ -191,4 +194,41 @@ export async function wireDeepLinks(
   const pending = await api.shell.takePendingNavigation();
   if (pending) navigate(pending);
   return off;
+}
+
+/**
+ * The application menu's commands (SD1 Task 28, §53 §4.2). Studio, Console and Switch
+ * mode go to the `mode` service. "New thread" is offered to the mounted mode as a
+ * `SHELL_COMMAND_EVENT` (Studio runs its `chat.new`); when nothing takes it (Console
+ * mode, or Studio still loading), Studio's home opens, where a project is chosen.
+ */
+export function wireShellCommands(
+  api: LoamsDesktopApi,
+  mode: ModeService,
+  target: EventTarget = globalThis,
+): () => void {
+  return api.shell.onCommand((command: ShellCommand) => {
+    switch (command) {
+      case 'mode.studio':
+        mode.set('studio');
+        return;
+      case 'mode.console':
+        mode.set('console');
+        return;
+      case 'mode.toggle': {
+        const next = mode.available.find((m) => m !== mode.current);
+        if (next) mode.set(next);
+        return;
+      }
+      case 'chat.new': {
+        const event = new CustomEvent(SHELL_COMMAND_EVENT, {
+          detail: command,
+          cancelable: true,
+        });
+        target.dispatchEvent(event);
+        if (!event.defaultPrevented) mode.set('studio', { navigate: MODE_HOME.studio });
+        return;
+      }
+    }
+  });
 }

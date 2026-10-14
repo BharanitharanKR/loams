@@ -80,6 +80,7 @@ export {
   type ModeStorage,
   modeOfPath,
   readStoredMode,
+  SHELL_COMMAND_EVENT,
 } from './mode.js';
 export {
   decideCall,

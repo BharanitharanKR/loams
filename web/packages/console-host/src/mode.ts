@@ -14,6 +14,13 @@ export const MODES: readonly Mode[] = ['console', 'studio'];
 /** Each mode's home route. */
 export const MODE_HOME: Record<Mode, string> = { console: '/', studio: '/studio' };
 
+/**
+ * The window event an edition's shell commands arrive on (SD1 Task 28: the desktop's
+ * "New thread" menu item). `detail` is the command, e.g. `chat.new`; a mode that
+ * handles it calls `preventDefault()`, so the sender knows it was taken.
+ */
+export const SHELL_COMMAND_EVENT = 'loams:shell-command';
+
 /** The per-device storage key of the last-used mode. */
 export const MODE_KEY = 'loams.shell.mode';
 

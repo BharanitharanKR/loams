@@ -5,14 +5,14 @@
 // surface, as the sidebar's watches do (T17-5).
 //
 // Unread means "arrived since this page opened Studio": the daemon keeps no read state, and
-// the buffer is replayed on every connect. Only those are offered as OS notifications.
+// the buffer is replayed on every connect. OS notifications are not posted from here: on
+// the desktop Electron main follows the same stream for them (SD1 Task 28).
 
 import { Code, ConnectError, createClient } from '@connectrpc/connect';
 import { useAgentdTransport } from '@loams/console-host/query';
 import { type Notification, NotificationKind, NotificationService } from '@loams/proto/agentd';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { studioHref } from '../routes.js';
-import { readSettings } from '../settings/Settings.js';
 
 /** As many as the daemon keeps. */
 export const MAX_NOTIFICATIONS = 200;
@@ -57,25 +57,6 @@ export const KIND_LABEL: Record<NotificationKind, string> = {
   [NotificationKind.CHECK_FAILED]: 'Check failed',
 };
 
-/** Whether Settings › Studio › Notifications asks for an OS notification of this kind. */
-export function wantsOsNotification(
-  kind: NotificationKind,
-  settings: { notifyTurnFinished: boolean; notifyApprovalWaiting: boolean },
-): boolean {
-  switch (kind) {
-    case NotificationKind.APPROVAL:
-    case NotificationKind.QUESTION:
-      return settings.notifyApprovalWaiting;
-    case NotificationKind.TURN_DONE:
-    case NotificationKind.ERROR:
-    case NotificationKind.GROUP_READY:
-    case NotificationKind.CHECK_FAILED:
-      return settings.notifyTurnFinished;
-    default:
-      return false;
-  }
-}
-
 /** Newest first (the later arrival first on a tie), one per id, at most `MAX_NOTIFICATIONS`. */
 export function addNotification(
   list: readonly StudioNotification[],
@@ -95,27 +76,12 @@ export interface NotificationsState {
   markAllRead(): void;
 }
 
-/** Whether the person is looking at this window. */
-function looking(): boolean {
-  if (typeof document === 'undefined') return true;
-  return document.visibilityState === 'visible' && document.hasFocus();
-}
-
-/**
- * Follows the daemon's notifications. `notify`, when given, posts an OS notification for
- * each new one the settings ask for while the window is not in front.
- */
-export function useNotifications(
-  notify?: (n: { title: string; body: string; route?: string }) => Promise<void>,
-): NotificationsState {
+/** Follows the daemon's notifications. */
+export function useNotifications(): NotificationsState {
   const transport = useAgentdTransport();
   const [items, setItems] = useState<StudioNotification[]>([]);
   const [unsupported, setUnsupported] = useState(false);
   const [readUntil, setReadUntil] = useState(() => Date.now());
-  const opened = useRef(Date.now());
-  const seen = useRef(new Set<string>());
-  const notifyRef = useRef(notify);
-  notifyRef.current = notify;
 
   useEffect(() => {
     if (!transport) return;
@@ -131,16 +97,6 @@ export function useNotifications(
           const n = toStudioNotification(frame.notification);
           setUnsupported(false);
           setItems((list) => addNotification(list, n));
-          const fresh = !seen.current.has(n.id) && n.createdAtMs >= opened.current;
-          seen.current.add(n.id);
-          const send = notifyRef.current;
-          if (fresh && send && !looking() && wantsOsNotification(n.kind, readSettings())) {
-            void send({
-              title: n.title,
-              body: KIND_LABEL[n.kind],
-              ...(n.href ? { route: n.href } : {}),
-            }).catch(() => {});
-          }
         }
       } catch (e) {
         if (abort.signal.aborted) return;

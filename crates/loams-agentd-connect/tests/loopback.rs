@@ -573,3 +573,142 @@ async fn checkpoints_over_connect_match_ndjson() {
     );
     daemon.stop().await;
 }
+
+/// SD1 Task 11: review comments and content search are served over Connect
+/// and answer what the ndjson wire answers.
+#[tokio::test]
+async fn review_and_search_over_connect() {
+    let daemon = Daemon::start().await;
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "user.name", "Loams Test"]);
+    git(&repo, &["config", "user.email", "test@loams.invalid"]);
+    git(&repo, &["config", "commit.gpgsign", "false"]);
+    std::fs::write(repo.join("notes.txt"), "first\n").unwrap();
+    git(&repo, &["add", "."]);
+    git(&repo, &["commit", "-q", "-m", "initial"]);
+    std::fs::write(repo.join("notes.txt"), "first\nsecond needle\n").unwrap();
+    let repo_path = repo.canonicalize().unwrap().to_string_lossy().into_owned();
+    daemon
+        .ndjson
+        .call(methods::ADD_REPO, serde_json::json!({ "path": repo_path }))
+        .await
+        .unwrap();
+    let diff = pb::DiffServiceClient::new(HttpClient::plaintext(), daemon.config())
+        .get_checkout_diff(pb::GetCheckoutDiffRequest {
+            cwd: repo_path.clone(),
+            mode: "working".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_owned();
+    let diff = diff.diff.as_option().unwrap().clone();
+
+    let review = pb::ReviewServiceClient::new(HttpClient::plaintext(), daemon.config());
+    let comment = |side: pb::DiffSide| pb::UpsertReviewCommentRequest {
+        comment: buffa::MessageField::some(pb::ReviewComment {
+            checkout_id: diff.checkout_id.clone(),
+            path: "notes.txt".into(),
+            side: side.into(),
+            line: 2,
+            body: "Why?".into(),
+            diff_checksum: diff.checksum.clone(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    // An unset side is bad_params.
+    let error = review
+        .upsert_review_comment(comment(pb::DiffSide::DIFF_SIDE_UNSPECIFIED))
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, ErrorCode::InvalidArgument);
+    let created = review
+        .upsert_review_comment(comment(pb::DiffSide::DIFF_SIDE_NEW))
+        .await
+        .unwrap()
+        .into_owned();
+    assert!(!created.id.is_empty());
+
+    let mut stream = review
+        .watch_review_comments(pb::WatchReviewCommentsRequest {
+            checkout_id: diff.checkout_id.clone(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let first = next!(stream);
+    let mut ndjson = daemon
+        .ndjson
+        .subscribe(
+            methods::WATCH_REVIEW_COMMENTS,
+            serde_json::json!({ "checkoutId": diff.checkout_id }),
+        )
+        .await
+        .unwrap();
+    let item = tokio::time::timeout(Duration::from_secs(5), ndjson.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let frame: rs::ReviewCommentsFrame = serde_json::from_value(item).unwrap();
+    assert_eq!(first, frame.to_pb());
+    let rs::ReviewCommentsFrame::Reset { reset } = frame else {
+        panic!("a reset first");
+    };
+    assert_eq!(reset.len(), 1);
+    assert_eq!(reset[0].id, created.id);
+
+    // A missing comment is not_found.
+    let error = review
+        .resolve_review_comment(pb::ResolveReviewCommentRequest {
+            checkout_id: diff.checkout_id.clone(),
+            id: "no-such-comment".into(),
+            resolved: true,
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, ErrorCode::NotFound);
+
+    // Content search over a project.
+    let host = pb::StudioServiceClient::new(HttpClient::plaintext(), daemon.config())
+        .get_host(pb::GetHostRequest::default())
+        .await
+        .unwrap()
+        .into_owned();
+    let device_id = host.host.as_option().unwrap().device_id.clone();
+    daemon
+        .ndjson
+        .call(
+            methods::MUTATE,
+            serde_json::json!({
+                "op": "createSpace", "spaceId": "space-connect", "deviceId": device_id,
+                "path": repo_path, "gitDetected": true,
+            }),
+        )
+        .await
+        .unwrap();
+    let files = pb::FileServiceClient::new(HttpClient::plaintext(), daemon.config());
+    let mut found = files
+        .search_content(pb::SearchContentRequest {
+            space_id: Some("space-connect".into()),
+            query: "needle".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let hit = next!(found);
+    assert_eq!(
+        (
+            hit.path.as_str(),
+            hit.line,
+            hit.column,
+            hit.preview.as_str()
+        ),
+        ("notes.txt", 2, 8, "second needle")
+    );
+    daemon.stop().await;
+}

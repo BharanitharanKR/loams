@@ -1,0 +1,11 @@
+{
+  "caseSensitive": true,
+  "chatId": null,
+  "globs": [
+    "*.rs"
+  ],
+  "maxResults": 200,
+  "query": "fn main",
+  "regex": false,
+  "spaceId": "space-1"
+}

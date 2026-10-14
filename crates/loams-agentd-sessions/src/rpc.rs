@@ -170,6 +170,8 @@ pub struct EngineRpc {
     /// Serializes the git writes of SD1 Task 9 (G2, G3, G5, G21): one
     /// checksum check and its write at a time.
     git_writes: std::sync::Arc<tokio::sync::Mutex<()>>,
+    /// Studio's review comments (SD1 Task 11, G8-G11), in the engine's store.
+    review: crate::review::ReviewComments,
 }
 
 /// A git write's failure as the RPC's.
@@ -177,6 +179,15 @@ fn git_write_error(error: GitWriteError) -> RpcError {
     match error {
         GitWriteError::BadParams(text) => RpcError::BadParams(text),
         GitWriteError::Failed(text) => RpcError::Failed(text),
+    }
+}
+
+/// A review-comment call's failure as the RPC's (`not_found: …` for a
+/// comment the checkout doesn't have).
+fn review_error(error: crate::review::ReviewError) -> RpcError {
+    match error {
+        crate::review::ReviewError::BadParams(text) => RpcError::BadParams(text),
+        other => RpcError::Failed(other.to_string()),
     }
 }
 
@@ -213,6 +224,7 @@ impl EngineRpc {
         agent_accounts: AgentAccounts,
         workspace_scope: WorkspaceScope,
     ) -> Self {
+        let review = crate::review::ReviewComments::new(doc_host.store());
         let engine_info = EngineInfo {
             device_id: doc_host.device_id().to_string(),
             workspace_scope,
@@ -239,6 +251,7 @@ impl EngineRpc {
             engine_info,
             change_request_creator: ChangeRequestCreator::from_keyring(),
             git_writes: std::sync::Arc::new(tokio::sync::Mutex::new(())),
+            review,
         }
     }
 
@@ -762,6 +775,51 @@ impl EngineRpc {
             }
         }
         Ok(())
+    }
+
+    /// The root of the checkout `checkout_id` names, if it is one this
+    /// device knows: a checkout the diff sync tracks (one with a chat), or a
+    /// worktree of a registered repository or a local project. The jail of
+    /// the review comments (SD1 Task 11).
+    async fn review_checkout_root(
+        &self,
+        checkout_id: &str,
+    ) -> Result<std::path::PathBuf, RpcError> {
+        if let Some(root) = self.diff_sync.checkout_root(checkout_id) {
+            return Ok(root);
+        }
+        let mut repos: Vec<std::path::PathBuf> = self
+            .repos
+            .list()
+            .await
+            .into_iter()
+            .map(|repo| std::path::PathBuf::from(repo.path))
+            .collect();
+        let device = self.doc_host.device_id().to_owned();
+        let spaces: Vec<std::path::PathBuf> = self
+            .workspace
+            .watch_spaces()
+            .borrow()
+            .iter()
+            .filter(|space| space.device_id == device)
+            .map(|space| std::path::PathBuf::from(&space.path))
+            .collect();
+        repos.extend(spaces);
+        for repo in repos {
+            let Ok(stanzas) = crate::git_write::worktrees(&repo).await else {
+                continue;
+            };
+            for stanza in stanzas {
+                if let Ok(identity) = self.repos.checkout_identity(&stanza.path).await
+                    && identity.id == checkout_id
+                {
+                    return Ok(identity.root);
+                }
+            }
+        }
+        Err(RpcError::BadParams(
+            "checkoutId is not a known checkout on this device".into(),
+        ))
     }
 
     /// This device's chats.
@@ -1903,6 +1961,168 @@ impl RpcService for EngineRpc {
                         .map_err(git_write_error)?;
                     self.diff_sync.sync_all();
                     reply::<calls::MergeBranch, _>(&merged)
+                })
+                .await
+            }
+            // SD1 Task 11 (§53 §6.5 G8–G11): review comments, keyed by a
+            // checkout this device knows.
+            methods::WATCH_REVIEW_COMMENTS => {
+                Box::pin(async move {
+                    let p = params_of::<calls::WatchReviewComments>(params)?;
+                    let root = self.review_checkout_root(&p.checkout_id).await?;
+                    let source = crate::review::DiffSource {
+                        diffs: self.diff_sync.watch_diffs(),
+                        repos: self.repos.clone(),
+                        root,
+                    };
+                    Ok(stream_reply::<calls::WatchReviewComments, _, _>(
+                        crate::review::watch(self.review.clone(), p.checkout_id, source),
+                    ))
+                })
+                .await
+            }
+            methods::UPSERT_REVIEW_COMMENT => {
+                Box::pin(async move {
+                    let comment = params_of::<calls::UpsertReviewComment>(params)?;
+                    self.review_checkout_root(&comment.checkout_id).await?;
+                    let id = self.review.upsert(comment).await.map_err(review_error)?;
+                    reply::<calls::UpsertReviewComment, _>(&IdReply { id })
+                })
+                .await
+            }
+            methods::DELETE_REVIEW_COMMENT => {
+                Box::pin(async move {
+                    let p = params_of::<calls::DeleteReviewComment>(params)?;
+                    self.review
+                        .delete(&p.checkout_id, &p.id)
+                        .await
+                        .map_err(review_error)?;
+                    reply::<calls::DeleteReviewComment, _>(&IdReply { id: p.id })
+                })
+                .await
+            }
+            methods::RESOLVE_REVIEW_COMMENT => {
+                Box::pin(async move {
+                    let p = params_of::<calls::ResolveReviewComment>(params)?;
+                    self.review
+                        .resolve(&p.checkout_id, &p.id, p.resolved)
+                        .await
+                        .map_err(review_error)?;
+                    reply::<calls::ResolveReviewComment, _>(&IdReply { id: p.id })
+                })
+                .await
+            }
+            methods::SEND_REVIEW_TO_THREAD => {
+                Box::pin(async move {
+                    let p = params_of::<calls::SendReviewToThread>(params)?;
+                    let not_found = || RpcError::Failed(format!("not_found: chat {}", p.chat_id));
+                    let chat = self
+                        .workspace
+                        .chat(&p.chat_id)
+                        .map_err(|e| RpcError::Failed(e.to_string()))?
+                        .ok_or_else(not_found)?;
+                    if chat.device_id != self.doc_host.device_id() {
+                        return Err(RpcError::BadParams("chat belongs to another device".into()));
+                    }
+                    // The comments must be on the thread's own checkout.
+                    let from_cwd = match chat.cwd.as_deref() {
+                        Some(cwd) => self
+                            .repos
+                            .checkout_identity(std::path::Path::new(cwd))
+                            .await
+                            .ok()
+                            .map(|identity| identity.id),
+                        None => None,
+                    };
+                    let checkout_id = from_cwd
+                        .or(chat.checkout_id.clone())
+                        .ok_or_else(|| RpcError::BadParams("the thread has no checkout".into()))?;
+                    let comments = self
+                        .review
+                        .select(&checkout_id, &p.comment_ids)
+                        .await
+                        .map_err(review_error)?;
+                    let prompt = crate::review::prompt(&comments);
+                    let request = self
+                        .doc_host
+                        .request_from_chat_row(&p.chat_id, &prompt)
+                        .ok_or_else(not_found)?;
+                    let command_id = self
+                        .doc_host
+                        .queue_command(
+                            &p.chat_id,
+                            loams_agentd_proto::SessionCommandPayload::Run {
+                                request,
+                                message_id: crate::new_id(),
+                            },
+                        )
+                        .map_err(|e| RpcError::Failed(e.to_string()))?;
+                    reply::<calls::SendReviewToThread, _>(&QueueCommandReply { command_id })
+                })
+                .await
+            }
+            methods::POST_REVIEW_TO_CHANGE_REQUEST => {
+                Box::pin(async move {
+                    let p = params_of::<calls::PostReviewToChangeRequest>(params)?;
+                    let root = self.review_checkout_root(&p.checkout_id).await?;
+                    let mut comments = self
+                        .review
+                        .select(&p.checkout_id, &p.comment_ids)
+                        .await
+                        .map_err(review_error)?;
+                    // An outdated anchor would land on the wrong line.
+                    if let Ok(snapshot) = crate::diff_sync::capture_diff(&self.repos, &root).await {
+                        let current = crate::review::CurrentDiff {
+                            checksum: snapshot.checksum,
+                            patch: snapshot.patch,
+                            truncated: snapshot.truncated,
+                        };
+                        for comment in &mut comments {
+                            comment.outdated = crate::review::is_outdated(comment, &current);
+                        }
+                    }
+                    let outdated: Vec<&str> = comments
+                        .iter()
+                        .filter(|comment| comment.outdated)
+                        .map(|comment| comment.id.as_str())
+                        .collect();
+                    if !outdated.is_empty() {
+                        return Err(RpcError::BadParams(format!(
+                            "outdated comments can't be posted: {outdated:?}"
+                        )));
+                    }
+                    let url = crate::review::post_review(
+                        &self.change_request_creator,
+                        &root,
+                        &comments,
+                        p.event,
+                    )
+                    .await
+                    .map_err(git_write_error)?;
+                    reply::<calls::PostReviewToChangeRequest, _>(
+                        &loams_agentd_proto::PostReviewToChangeRequestReply { url },
+                    )
+                })
+                .await
+            }
+            // G23: content search in a workspace target's root.
+            methods::SEARCH_WORKSPACE_CONTENT => {
+                Box::pin(async move {
+                    let p = params_of::<calls::SearchWorkspaceContent>(params)?;
+                    let query = crate::content_search::ContentQuery::new(&p)
+                        .map_err(|e| RpcError::BadParams(e.to_string()))?;
+                    let workspace = self
+                        .workspace_files
+                        .resolve_target(&loams_agentd_proto::WorkspaceTarget {
+                            chat_id: p.chat_id,
+                            space_id: p.space_id,
+                            checkout_path: None,
+                        })
+                        .await
+                        .map_err(RpcError::from)?;
+                    Ok(stream_reply::<calls::SearchWorkspaceContent, _, _>(
+                        crate::content_search::search(workspace.root, query),
+                    ))
                 })
                 .await
             }

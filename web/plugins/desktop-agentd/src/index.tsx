@@ -15,7 +15,6 @@ export {
   createMockAgentdApi,
   type MockAgentd,
   type MockAgentdOptions,
-  sampleRepos,
   sampleSessions,
 } from './mock.js';
 

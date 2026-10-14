@@ -1,8 +1,7 @@
 // The notification surface (SD1 Task 14; §53 §6.5 G19): a bell in Studio's header with
 // the unread count, and a list of the daemon's notifications, newest first, each leading
-// to its thread or run group. Hidden while the daemon does not serve notifications. On
-// the desktop, new ones also become OS notifications while the window is in the
-// background (data.ts; Settings › Studio › Notifications).
+// to its thread or run group. Hidden while the daemon does not serve notifications. The
+// desktop's OS notifications are Electron main's, from the same stream (SD1 Task 28).
 
 import { NotificationKind } from '@loams/proto/agentd';
 import { cx, formatRelative, Popover } from '@loams/ui';
@@ -77,15 +76,8 @@ function Row({ n, onOpen }: { n: StudioNotification; onOpen: (href: string) => v
 }
 
 /** The bell and its list. `navigate` opens a notification's thread or run group. */
-export function NotificationsBell({
-  navigate,
-  notify,
-}: {
-  navigate: (to: string) => void;
-  /** The platform's OS notifications (desktop); none leaves the surface in-app only. */
-  notify?: (n: { title: string; body: string; route?: string }) => Promise<void>;
-}) {
-  const { items, unread, unsupported, markAllRead } = useNotifications(notify);
+export function NotificationsBell({ navigate }: { navigate: (to: string) => void }) {
+  const { items, unread, unsupported, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false);
   if (unsupported) return null;
   const label = unread > 0 ? `Notifications, ${unread} unread` : 'Notifications';

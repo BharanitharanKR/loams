@@ -28,6 +28,7 @@ mod harness;
 mod notifications;
 mod projects;
 mod queue;
+mod review;
 mod studio;
 mod terminals;
 mod threads;

@@ -33,4 +33,6 @@ it('production_cordis_console_uses_runtime_server_configuration', async () => {
   expect(createWebPlatform).toHaveBeenCalledWith(
     expect.objectContaining({ baseUrl: 'https://runtime.example', devBearer: undefined }),
   );
-});
+  // Imports the whole production entry: slow on the Windows runner (timed out at the
+  // 5 s default there), quick elsewhere.
+}, 30_000);

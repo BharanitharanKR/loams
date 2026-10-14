@@ -18,6 +18,7 @@ chatId?: string | null,
  */
 groupId?: string | null, 
 /**
- * One line for the person, for example "Turn finished: Fix the login".
+ * One line for the person: the thread's title for a thread (the kind says
+ * what happened), else what the notification is about.
  */
 title: string, createdAtMs: number, };

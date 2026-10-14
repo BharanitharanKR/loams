@@ -479,6 +479,24 @@ export function createFakeDesktop(): LoamsDesktopApi {
       // No OS dialog in a browser preview: a prompt stands in for the folder picker.
       pickFolder: async (title) => globalThis.prompt(title ?? 'Folder path', '~/src/new-project'),
       setBadge: async () => undefined,
+      // No application menu in a browser preview.
+      onCommand: () => () => undefined,
+    },
+    // Studio's editor hand-off (SD1 Task 28): a browser preview cannot start an editor.
+    studio: {
+      openInEditor: async () => ({
+        ok: false,
+        code: 'preview',
+        message: 'Editors open from the desktop app, not from the preview.',
+      }),
+      editor: async () => ({ editor: 'vscode' }),
+      setEditor: async () => ok,
+      chooseEditorCommand: async () => ({
+        ok: false,
+        code: 'preview',
+        message: 'The preview cannot pick a program.',
+      }),
+      setNotifications: async () => ok,
     },
     connectors: {
       catalog: async () => (await previewCatalog()).connectors,

@@ -14,16 +14,7 @@ const CHIP =
   'inline-flex h-7 max-w-[180px] items-center gap-1.5 rounded-pill border border-rule bg-bg px-2.5 ' +
   'text-[0.8rem] text-muted';
 
-function Context({
-  agentd,
-  router,
-  notify,
-}: {
-  agentd: StudioAgentd;
-  router: RouterService;
-  /** The platform's OS notifications (SD1 Task 14). */
-  notify?: (n: { title: string; body: string; route?: string }) => Promise<void>;
-}) {
+function Context({ agentd, router }: { agentd: StudioAgentd; router: RouterService }) {
   const location = useSyncExternalStore(router.subscribe, () => router.current());
   const projects = useProjects(agentd);
   const reach = useReach(agentd);
@@ -52,9 +43,7 @@ function Context({
           </span>
         )}
       </div>
-      {reach.state === 'ready' && (
-        <NotificationsBell navigate={(to) => router.navigate(to)} {...(notify ? { notify } : {})} />
-      )}
+      {reach.state === 'ready' && <NotificationsBell navigate={(to) => router.navigate(to)} />}
     </div>
   );
 }

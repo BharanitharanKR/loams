@@ -210,7 +210,7 @@ methods! {
         MoveEntry => Method("MoveWorkspaceEntry"),
         DeleteEntry => Method("DeleteWorkspaceEntry"),
         WatchFiles => Method("WatchWorkspaceFiles"),
-        SearchContent => Gap { gap: "G23", task: "SD1 Task 11" },
+        SearchContent => Method("SearchWorkspaceContent"),
     }
     PreviewService {
         WatchPreviews => Method("WatchPreviews"),
@@ -222,12 +222,12 @@ methods! {
         FetchToolBlob => Method("FetchToolBlob"),
     }
     ReviewService {
-        WatchReviewComments => Gap { gap: "G8", task: "SD1 Task 11" },
-        UpsertReviewComment => Gap { gap: "G9", task: "SD1 Task 11" },
-        DeleteReviewComment => Gap { gap: "G9", task: "SD1 Task 11" },
-        ResolveReviewComment => Gap { gap: "G9", task: "SD1 Task 11" },
-        SendReviewToThread => Gap { gap: "G10", task: "SD1 Task 11" },
-        PostReviewToChangeRequest => Gap { gap: "G11", task: "SD1 Task 11" },
+        WatchReviewComments => Method("WatchReviewComments"),
+        UpsertReviewComment => Method("UpsertReviewComment"),
+        DeleteReviewComment => Method("DeleteReviewComment"),
+        ResolveReviewComment => Method("ResolveReviewComment"),
+        SendReviewToThread => Method("SendReviewToThread"),
+        PostReviewToChangeRequest => Method("PostReviewToChangeRequest"),
     }
     ApprovalService {
         WatchApprovals => Gap { gap: "G17", task: "SD1 Task 13" },
@@ -257,6 +257,9 @@ pub const GIT_WRITE_METHODS: &[(&str, &str)] = &[
     ("GitService", "DeleteWorktree"),
     ("DiffService", "Discard"),
     ("DiffService", "DiscardPaths"),
+    // A review posted to the pull request writes to the forge, as
+    // CreateChangeRequest does (SD1 Task 11).
+    ("ReviewService", "PostReviewToChangeRequest"),
 ];
 
 /// The Connect paths of [`GIT_WRITE_METHODS`], sorted.

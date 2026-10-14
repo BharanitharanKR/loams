@@ -156,17 +156,15 @@ impl TurnNotifier {
         }
     }
 
-    fn post(&self, kind: NotificationKind, chat_id: &str, what: &str) {
+    /// The title is the thread's: the kind already says what happened (the
+    /// desktop's OS notification puts the kind in its headline, SD1 Task 28).
+    fn post(&self, kind: NotificationKind, chat_id: &str) {
         let thread = (self.titles)(chat_id)
             .map(|t| t.trim().to_owned())
             .filter(|t| !t.is_empty())
             .unwrap_or_else(|| "New thread".to_owned());
-        self.notifications.push(
-            kind,
-            Some(chat_id.to_owned()),
-            None,
-            format!("{what}: {thread}"),
-        );
+        self.notifications
+            .push(kind, Some(chat_id.to_owned()), None, thread);
     }
 }
 
@@ -180,13 +178,13 @@ impl TurnObserver for TurnNotifier {
             AgentEvent::Done {
                 status: DoneStatus::Completed,
                 ..
-            } => self.post(NotificationKind::TurnDone, chat_id, "Turn finished"),
+            } => self.post(NotificationKind::TurnDone, chat_id),
             AgentEvent::Done {
                 status: DoneStatus::Errored,
                 ..
-            } => self.post(NotificationKind::Error, chat_id, "Turn failed"),
+            } => self.post(NotificationKind::Error, chat_id),
             AgentEvent::InputRequested { .. } => {
-                self.post(NotificationKind::Question, chat_id, "Question waiting");
+                self.post(NotificationKind::Question, chat_id);
             }
             _ => {}
         }

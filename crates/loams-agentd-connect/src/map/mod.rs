@@ -358,6 +358,7 @@ mod harness;
 mod notify;
 mod projects;
 mod queue;
+mod review;
 mod studio;
 mod terminals;
 mod threads;

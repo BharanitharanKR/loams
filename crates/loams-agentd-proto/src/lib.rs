@@ -17,6 +17,7 @@ pub mod motion;
 pub mod notify;
 pub mod params;
 pub mod preview;
+pub mod review;
 pub mod rpc;
 pub mod sidebar_pins;
 pub mod transcript;
@@ -30,6 +31,7 @@ pub use entities::*;
 pub use git_write::*;
 pub use params::*;
 pub use preview::*;
+pub use review::*;
 pub use sidebar_pins::*;
 pub use workspace::*;
 

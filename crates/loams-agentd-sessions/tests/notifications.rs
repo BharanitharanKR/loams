@@ -298,7 +298,7 @@ async fn notifications_for_each_kind() {
     let n = next(&mut feed).await;
     assert_eq!(n["kind"], "turn_done", "{n}");
     assert_eq!(n["chatId"], CHAT);
-    assert_eq!(n["title"], "Turn finished: Fix the login");
+    assert_eq!(n["title"], "Fix the login");
     assert!(n.get("groupId").is_none(), "{n}");
     assert!(n["id"].as_str().is_some_and(|id| !id.is_empty()));
     assert!(n["createdAtMs"].as_i64().unwrap() > 0);
@@ -308,7 +308,7 @@ async fn notifications_for_each_kind() {
     daemon.send("fail", "msg-2").await;
     let n = next(&mut feed).await;
     assert_eq!(n["kind"], "error", "{n}");
-    assert_eq!(n["title"], "Turn failed: Fix the login");
+    assert_eq!(n["title"], "Fix the login");
     daemon.settled().await;
 
     // A question (the Mock's approval before its edit). Answered, the run
@@ -317,7 +317,7 @@ async fn notifications_for_each_kind() {
     let n = next(&mut feed).await;
     assert_eq!(n["kind"], "question", "{n}");
     assert_eq!(n["chatId"], CHAT);
-    assert_eq!(n["title"], "Question waiting: Fix the login");
+    assert_eq!(n["title"], "Fix the login");
     let (request_id, question_id) = daemon.pending_question().await;
     daemon
         .client
@@ -346,7 +346,7 @@ async fn notifications_for_each_kind() {
     );
     assert!(quiet.recent().is_empty());
     notifier.event(CHAT, &done(DoneStatus::Completed));
-    assert_eq!(quiet.recent()[0].title, "Turn finished: New thread");
+    assert_eq!(quiet.recent()[0].title, "New thread");
 
     // Approvals (SD1 Task 13) and run groups (SD1 Task 12) post through the
     // engine's hub.
@@ -355,7 +355,7 @@ async fn notifications_for_each_kind() {
         NotificationKind::Approval,
         Some(CHAT.into()),
         None,
-        "Approval waiting: Fix the login",
+        "Fix the login",
     );
     notifications.push(
         NotificationKind::GroupReady,
