@@ -45,6 +45,15 @@
     {
       "includes": ["packages/studio-ui/src/terminal/output.ts"],
       "linter": { "rules": { "style": { "noNonNullAssertion": "off" } } }
+    },
+    {
+      "includes": ["packages/studio-ui/src/chat/tools/commandLabel.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": { "noControlCharactersInRegex": "off" },
+          "style": { "noNonNullAssertion": "off" }
+        }
+      }
     }
   ]
 }

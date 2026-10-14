@@ -11,80 +11,154 @@
   ],
   "files": [
     {
-      "path": "src/git/actions.logic.ts",
-      "upstreamPath": "apps/web/src/components/GitActionsControl.logic.ts",
+      "path": "src/approvals/ApprovalActions.tsx",
+      "upstreamPath": "apps/web/src/components/chat/ComposerPendingApprovalActions.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
-      "upstreamSha256": "a2a3ee66a6b8ed769e1960d8b793ab174a317d63d0d9084b75fd2c2e1be60f4f",
-      "localSha256": "75016377090e9db87db7322f51a0ea59a2047b123cab581294ed0a3518589bfc",
+      "upstreamSha256": "4cb6325118f7ac9213a3167f48780a8b4a8cc6f68003076a9dd27057d210b477",
+      "localSha256": "199f880399670bee55a5e4ea81c74462a02cc9f0f89be0910182ce04356b22eb",
       "verdict": "adapt",
-      "group": "g"
+      "group": "i"
     },
     {
-      "path": "src/git/BranchSelector.tsx",
-      "upstreamPath": "apps/web/src/components/BranchToolbarBranchSelector.tsx",
+      "path": "src/approvals/PendingApproval.tsx",
+      "upstreamPath": "apps/web/src/components/chat/ComposerPendingApprovalPanel.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
-      "upstreamSha256": "1181bda01d948a7257379a372c0e7de46c16af49a8b6e7deecd64c2549fb9787",
-      "localSha256": "2b9f94de2a3f62cb20179de0f9c0dcd93695fc54a68a17043477783c46eff9e3",
+      "upstreamSha256": "88dacf42e67951e35d0b8175233dedb62ccf9cc182a60f7c3c319c9c5be8f236",
+      "localSha256": "5f2e7dd3853d634a8bcc78b0f09feff28203182f32a97a5daf6e1e6ca6714e5f",
       "verdict": "adapt",
-      "group": "g"
+      "group": "i",
+      "note": "inline timeline card (G17), Q802"
     },
     {
-      "path": "src/git/BranchToolbar.logic.ts",
-      "upstreamPath": "apps/web/src/components/BranchToolbar.logic.ts",
+      "path": "src/approvals/Question.tsx",
+      "upstreamPath": "apps/web/src/components/chat/ComposerPendingUserInputPanel.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
-      "upstreamSha256": "2e0e7e84acfd52d6724a04699604932108bcc964c30f23f044f46a443de9b646",
-      "localSha256": "200e4501054b03d9c4875f547f3354ebf6fb317379d8699cdfa8b40b770f3bc9",
+      "upstreamSha256": "ee21cb7d34f46ec3d3bd03b600d7c91970356b1fd8ee983910f68fed0487a095",
+      "localSha256": "c9ce9bf098e02320254e6dcec836cd7b43c38384e15700b708bb1c86112c71c4",
       "verdict": "adapt",
-      "group": "g"
+      "group": "i",
+      "note": "inline timeline card for agentd input parts, Q802"
     },
     {
-      "path": "src/git/BranchToolbar.tsx",
-      "upstreamPath": "apps/web/src/components/BranchToolbar.tsx",
+      "path": "src/approvals/pendingUserInput.ts",
+      "upstreamPath": "apps/web/src/pendingUserInput.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
-      "upstreamSha256": "c5b51e7818aa86cb2214f3748c6349ae34747ff198b4d808d4d03c3dfae71142",
-      "localSha256": "f73ec450270236b914cbdf9d6075ba365b8a8320f5eec127396ae5e90ae198bf",
+      "upstreamSha256": "95d6bc5c61d76ba4857b13276376b52d36ae3a0dc950cf90a8a02536d09d342b",
+      "localSha256": "0c6c911492691ba0566a3dec5cc7cbf87342183f81d1c34ae91be471317411d8",
       "verdict": "adapt",
-      "group": "g"
+      "group": "i"
     },
     {
-      "path": "src/git/EnvModeSelector.tsx",
-      "upstreamPath": "apps/web/src/components/BranchToolbarEnvModeSelector.tsx",
+      "path": "src/chat/DiffStatLabel.tsx",
+      "upstreamPath": "apps/web/src/components/chat/DiffStatLabel.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
-      "upstreamSha256": "b6eb78d5d71aaf5657ec3e4d4f2eef82d307673ad080d0464586369960e4db07",
-      "localSha256": "c869097298c23df87077d718fba1098e460554cf6d2524fadab7eb033a25f8dd",
+      "upstreamSha256": "d5772a09ec47360202ec6935bde59c7212d32bf4828a55c951e04e73b3cb0c8b",
+      "localSha256": "1966a714fcb63b674f61a7b315f94e7471f23c09458025c9d93ebc5df19d483a",
       "verdict": "adapt",
-      "group": "g",
-      "note": "also apps/web/src/components/PreviousWorktreeItemContent.tsx (19 lines), folded in"
+      "group": "b"
     },
     {
-      "path": "src/git/GitActions.tsx",
-      "upstreamPath": "apps/web/src/components/GitActionsControl.tsx",
+      "path": "src/chat/MessageCopyButton.tsx",
+      "upstreamPath": "apps/web/src/components/chat/MessageCopyButton.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
-      "upstreamSha256": "6307222beeda72d6e5b083b80d887e9532f5f76df86dac8821439f202a59eab1",
-      "localSha256": "2baa8130c0af0aafa7917ecacc4bfae6c22abb923c87e2f60c58da74a8a25621",
+      "upstreamSha256": "cf00068695fc8b6b378b2aa91ce576d0a58e1f943ca44960faf396ecfd005636",
+      "localSha256": "04937d86eb5d50a1a041abb66c2933af5bdf4adee181a9ccfe0a85008e5f0ea9",
       "verdict": "adapt",
-      "group": "g",
-      "note": "one confirmation dialog per stacked action, over loams-agentd writes (SD1 rulings T23-1..T23-4)"
+      "group": "b"
     },
     {
-      "path": "src/git/shared.ts",
-      "upstreamPath": "packages/shared/src/git.ts",
+      "path": "src/chat/ThreadHeader.tsx",
+      "upstreamPath": "apps/web/src/components/chat/ChatHeader.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
-      "upstreamSha256": "08e7d48d4465a4c967af6c2bd90706568dff7dffe2d15b4a6b81619adb18c0b7",
-      "localSha256": "6c4ed01904633ae5a528cfc82a08937ce5b6ba08fea4be97c956cb60fa5780d0",
+      "upstreamSha256": "9cbf611c6d61193ccd5c7a7cda5d9f3f5bb8b65faf5532a2c06b436e468a34d7",
+      "localSha256": "447ed7469dc876b24d0a2bc7ebac0ae55a2d1d7281288c9e721e16c3f87024b7",
       "verdict": "adapt",
-      "group": "g",
-      "note": "only the ref-name helpers the toolbar and actions use; the inventory's target is sui/git/shared/"
+      "group": "b"
     },
     {
-      "path": "src/files/delimitedPreview.ts",
-      "upstreamPath": "packages/shared/src/delimitedPreview.ts",
+      "path": "src/chat/Timeline.tsx",
+      "upstreamPath": "apps/web/src/components/chat/MessagesTimeline.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
-      "upstreamSha256": "3871bc65931237038e63a94df7c72341b9d81f95a79108ac45c771533352c0fe",
-      "localSha256": "647daee08cf8e8f1d99ac68ba41508ba5701a5feb26ea70ec94fd93df9e0e12a",
+      "upstreamSha256": "fc46c8fbd1f7e5c5ae83bd59823b4a3c3238b14a814b2835ae14849431c8762e",
+      "localSha256": "df1f54aa70a8b0b28b613d56ca8f0e116457c37b0e25710cafdd2aa7d18f2dac",
+      "verdict": "adapt",
+      "group": "b",
+      "note": "the timeline container; its rows are src/chat/rows/rows.tsx (Loams)"
+    },
+    {
+      "path": "src/chat/find/ThreadFindBar.tsx",
+      "upstreamPath": "apps/web/src/components/chat/ThreadFindBar.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "66847cae0793e2f2b7d1905e955fe82333b6a1811bf780a6b1045d2600e8dfbd",
+      "localSha256": "1f369dbdeca3ccde6a92ce37e5aaf4e5915569ac706addd11b9dc42e04625b60",
+      "verdict": "adapt",
+      "group": "b"
+    },
+    {
+      "path": "src/chat/plan/TasksBadge.tsx",
+      "upstreamPath": "apps/web/src/components/chat/ComposerTasksBadge.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "ce837336d12765bd33a7dccd0dc0a009acb7bf1c788df279c38d6e4d6ccb8818",
+      "localSha256": "71ffdbc17698c5cc6daa652215911471dfd648363765a6ed791591adc7517cad",
+      "verdict": "adapt",
+      "group": "j"
+    },
+    {
+      "path": "src/chat/rows/WorkLog.tsx",
+      "upstreamPath": "apps/web/src/components/chat/WorkLog.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "6319136394fe4dedd07499692dde0a226d9cc1a511f9978d37f2106c711cf046",
+      "localSha256": "4cbcf36abde28d9bb019a5fd42f6ab26ac0014db5f91e6d81b77fd3904f6e64b",
+      "verdict": "adapt",
+      "group": "b"
+    },
+    {
+      "path": "src/chat/scroll/timelineScrollAnchoring.ts",
+      "upstreamPath": "apps/web/src/components/chat/timelineScrollAnchoring.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "977ff0fa887176551d74f566f019aac7b9e8dfdcf3587daba7a76359e0754145",
+      "localSha256": "b4f12b729b22d00b03175819cef3e209829360fdb8f18f8714a01166cea7ba2a",
+      "verdict": "adapt",
+      "group": "b"
+    },
+    {
+      "path": "src/chat/session.logic.ts",
+      "upstreamPath": "apps/web/src/session-logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "398f19a7ba26acfbd01d76f6b3bc055762e68554bdd2f235d5c963703c0c8d1f",
+      "localSha256": "09a8c9f937e5e379c5b2ebe3f256619263181c0691106a6cd62c253c1c54cae8",
+      "verdict": "adapt",
+      "group": "b",
+      "note": "turns, pending inputs and the plan from agentd entries"
+    },
+    {
+      "path": "src/chat/timeline.logic.ts",
+      "upstreamPath": "apps/web/src/components/chat/MessagesTimeline.logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "123de3e17ecf954fc243e975c9a9d07765c9cc16d8091b5da2a72e3149600853",
+      "localSha256": "91577cafa644bd2600142f7bab8d5faf119a5df7c3056a070f2ab2f820cb4072",
+      "verdict": "adapt",
+      "group": "b",
+      "note": "rows from agentd transcript entries; stable-row reuse kept"
+    },
+    {
+      "path": "src/chat/tools/commandLabel.ts",
+      "upstreamPath": "packages/client-runtime/src/work-log/commandLabel.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "e439d44bb9e3007c1aeb99c8b6c77a3688e9374fe3a83560af63ce6d00337bec",
+      "localSha256": "741d98c456ea65e5f24a5218dcec90acf2d9b3fa3744a30832486674c222af78",
       "verdict": "as-is",
-      "group": "e",
-      "note": "the inventory's verdict is as-is (types adapted); adapted because T3's work-log row, shimmer and contracts snapshot are not in Studio"
+      "group": "b"
+    },
+    {
+      "path": "src/chat/tools/presentation.ts",
+      "upstreamPath": "packages/client-runtime/src/work-log/presentation.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "fc8ce4fef03e48a837f283063195a822d48978a7ed4fadee993250cf7cd28d17",
+      "localSha256": "e3df95c2b1bf89fd15fbfdaa14f402293d3bd898e5193ba18429afde2f4e95be",
+      "verdict": "adapt",
+      "group": "b",
+      "note": "presentation rules over agentd's ToolCall kinds"
     },
     {
       "path": "src/files/DelimitedTablePreview.tsx",
@@ -115,20 +189,49 @@
       "note": "on the VirtualTree fallback, not @pierre/trees (SD1 ruling T21-1)"
     },
     {
-      "path": "src/files/filePath.ts",
-      "upstreamPath": "apps/web/src/components/files/filePath.ts",
-      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
-      "upstreamSha256": "f32a5ec4a3009c37a5f073bf323dc161d19a2b0c67f8f81c316e9de5d7a10aee",
-      "localSha256": "cf0c93c88b51a484d0a9495089397f2f9c992b52ac01233513caec113f57131b",
-      "verdict": "adapt",
-      "group": "e"
-    },
-    {
       "path": "src/files/FilePicker.tsx",
       "upstreamPath": "apps/web/src/components/files/ProjectFilePicker.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "9f3dffbb050911c244007638278068ee952194a6d5c5a11cff81c9dd99d8d360",
       "localSha256": "93d18603ff3ff64c47acaa88f72516f8f673a152ac568579086de21e65cc82bf",
+      "verdict": "adapt",
+      "group": "e"
+    },
+    {
+      "path": "src/files/FileViewer.tsx",
+      "upstreamPath": "apps/web/src/components/files/FilePreviewPanel.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "d3cb8a22ef0364468bc30c1b88aadb33419c38e86e085fb005c0a5316474c90f",
+      "localSha256": "cb86d289f0ac0da87ca445c8acca81b3260e58563f591184c720f5bdf9941230",
+      "verdict": "adapt",
+      "group": "e",
+      "note": "read-only (§53 §2.2); markdown through the caller's renderer until SD1 Task 18 (ruling T21-3)"
+    },
+    {
+      "path": "src/files/SourceView.tsx",
+      "upstreamPath": "apps/web/src/components/files/ReadOnlySourcePreview.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "58416386fd122f1cc63849750acbaecaa5ad0f0a98fc7f7c7cf2f7401d0fc43f",
+      "localSha256": "a8fbb443285063d5d44f7441dbb43139d56a4f85f43414346ad7303049a649e7",
+      "verdict": "adapt",
+      "group": "e",
+      "note": "@pierre/diffs 1.5.1, shadow-root path only (SD1 rulings T0-4, T0-5, T21-2)"
+    },
+    {
+      "path": "src/files/delimitedPreview.ts",
+      "upstreamPath": "packages/shared/src/delimitedPreview.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "3871bc65931237038e63a94df7c72341b9d81f95a79108ac45c771533352c0fe",
+      "localSha256": "647daee08cf8e8f1d99ac68ba41508ba5701a5feb26ea70ec94fd93df9e0e12a",
+      "verdict": "as-is",
+      "group": "e"
+    },
+    {
+      "path": "src/files/filePath.ts",
+      "upstreamPath": "apps/web/src/components/files/filePath.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "f32a5ec4a3009c37a5f073bf323dc161d19a2b0c67f8f81c316e9de5d7a10aee",
+      "localSha256": "cf0c93c88b51a484d0a9495089397f2f9c992b52ac01233513caec113f57131b",
       "verdict": "adapt",
       "group": "e"
     },
@@ -169,16 +272,6 @@
       "group": "e"
     },
     {
-      "path": "src/files/FileViewer.tsx",
-      "upstreamPath": "apps/web/src/components/files/FilePreviewPanel.tsx",
-      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
-      "upstreamSha256": "d3cb8a22ef0364468bc30c1b88aadb33419c38e86e085fb005c0a5316474c90f",
-      "localSha256": "cb86d289f0ac0da87ca445c8acca81b3260e58563f591184c720f5bdf9941230",
-      "verdict": "adapt",
-      "group": "e",
-      "note": "read-only (§53 §2.2); markdown through the caller's renderer until SD1 Task 18 (ruling T21-3)"
-    },
-    {
       "path": "src/files/search/ContentSearchDialog.tsx",
       "upstreamPath": "apps/web/src/components/search/ProjectContentSearchDialog.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
@@ -196,16 +289,6 @@
       "localSha256": "0b7db93cee26e817d8dd90f7073c6745f38606a6f1f85ed49cbf03f18ab83d44",
       "verdict": "adapt",
       "group": "e"
-    },
-    {
-      "path": "src/files/SourceView.tsx",
-      "upstreamPath": "apps/web/src/components/files/ReadOnlySourcePreview.tsx",
-      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
-      "upstreamSha256": "58416386fd122f1cc63849750acbaecaa5ad0f0a98fc7f7c7cf2f7401d0fc43f",
-      "localSha256": "a8fbb443285063d5d44f7441dbb43139d56a4f85f43414346ad7303049a649e7",
-      "verdict": "adapt",
-      "group": "e",
-      "note": "@pierre/diffs 1.5.1, shadow-root path only (SD1 rulings T0-4, T0-5, T21-2)"
     },
     {
       "path": "src/files/useDirectory.ts",
@@ -306,6 +389,45 @@
       "localSha256": "6bce0df42f2fca565697d8b2342ce1d92f01a77a5ec31583037ebd58c52615fc",
       "verdict": "as-is",
       "group": "lib"
+    },
+    {
+      "path": "src/markdown/HighlightedTokens.tsx",
+      "upstreamPath": "apps/web/src/components/chat/HighlightedTokens.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "ef6b1fa772ee1372c9d3659454b7de4214fd5458ab501e96b1db61e8b3de865b",
+      "localSha256": "e21d76d99c7619bbe9916e5de65a38d317594fabd0ac3422e9331b7e62600594",
+      "verdict": "adapt",
+      "group": "b"
+    },
+    {
+      "path": "src/markdown/Markdown.tsx",
+      "upstreamPath": "apps/web/src/components/ChatMarkdown.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "3c656de3693eff017c80e7693284b4dcec403a074c7a20e0dafbb22576fced5e",
+      "localSha256": "025aaa9d01b67fcc013b2d29e92f216ab3255e2d8727c7f29ab7cd782f7b4bfb",
+      "verdict": "adapt",
+      "group": "b",
+      "note": "D919: no raw HTML, http(s) links, blob: images, token spans"
+    },
+    {
+      "path": "src/markdown/highlight.ts",
+      "upstreamPath": "apps/web/src/lib/syntaxHighlighting.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "71eb1d0acefe8b9f7d1b958fc0af26a0adf108ad44ee777e9358cfbdd24757f7",
+      "localSha256": "4b3d989f0ca60fe921f608c620ee8534d730ac4980cc63cacdaa7948c80b6e16",
+      "verdict": "adapt",
+      "group": "b",
+      "note": "Shiki core and Oniguruma with a token-mapped CSS-variables theme"
+    },
+    {
+      "path": "src/markdown/pipeline.ts",
+      "upstreamPath": "packages/shared/src/markdownPipeline.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "d1106cb604f3fdaa771340d1e17f2b2ccddeb55c198d2e5c1dd1c5da3feb1b92",
+      "localSha256": "ba03a35b96fb01edbf47aefbbdba381e2fed2918aefdc54ea7f68e907c976e5c",
+      "verdict": "adapt",
+      "group": "b",
+      "note": "no rehype-raw; raw HTML becomes text before rehype-sanitize"
     },
     {
       "path": "src/palette/logic.ts",
@@ -445,6 +567,72 @@
       "localSha256": "810fb13961d99ee088901c0a84fdc2dfd611387358558add87585362904e00dd",
       "verdict": "as-is",
       "group": "thread-list"
+    },
+    {
+      "path": "src/git/actions.logic.ts",
+      "upstreamPath": "apps/web/src/components/GitActionsControl.logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "a2a3ee66a6b8ed769e1960d8b793ab174a317d63d0d9084b75fd2c2e1be60f4f",
+      "localSha256": "75016377090e9db87db7322f51a0ea59a2047b123cab581294ed0a3518589bfc",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
+      "path": "src/git/BranchSelector.tsx",
+      "upstreamPath": "apps/web/src/components/BranchToolbarBranchSelector.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "1181bda01d948a7257379a372c0e7de46c16af49a8b6e7deecd64c2549fb9787",
+      "localSha256": "2b9f94de2a3f62cb20179de0f9c0dcd93695fc54a68a17043477783c46eff9e3",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
+      "path": "src/git/BranchToolbar.logic.ts",
+      "upstreamPath": "apps/web/src/components/BranchToolbar.logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "2e0e7e84acfd52d6724a04699604932108bcc964c30f23f044f46a443de9b646",
+      "localSha256": "200e4501054b03d9c4875f547f3354ebf6fb317379d8699cdfa8b40b770f3bc9",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
+      "path": "src/git/BranchToolbar.tsx",
+      "upstreamPath": "apps/web/src/components/BranchToolbar.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "c5b51e7818aa86cb2214f3748c6349ae34747ff198b4d808d4d03c3dfae71142",
+      "localSha256": "f73ec450270236b914cbdf9d6075ba365b8a8320f5eec127396ae5e90ae198bf",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
+      "path": "src/git/EnvModeSelector.tsx",
+      "upstreamPath": "apps/web/src/components/BranchToolbarEnvModeSelector.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "b6eb78d5d71aaf5657ec3e4d4f2eef82d307673ad080d0464586369960e4db07",
+      "localSha256": "c869097298c23df87077d718fba1098e460554cf6d2524fadab7eb033a25f8dd",
+      "verdict": "adapt",
+      "group": "g",
+      "note": "also apps/web/src/components/PreviousWorktreeItemContent.tsx (19 lines), folded in"
+    },
+    {
+      "path": "src/git/GitActions.tsx",
+      "upstreamPath": "apps/web/src/components/GitActionsControl.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "6307222beeda72d6e5b083b80d887e9532f5f76df86dac8821439f202a59eab1",
+      "localSha256": "2baa8130c0af0aafa7917ecacc4bfae6c22abb923c87e2f60c58da74a8a25621",
+      "verdict": "adapt",
+      "group": "g",
+      "note": "one confirmation dialog per stacked action, over loams-agentd writes (SD1 rulings T23-1..T23-4)"
+    },
+    {
+      "path": "src/git/shared.ts",
+      "upstreamPath": "packages/shared/src/git.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "08e7d48d4465a4c967af6c2bd90706568dff7dffe2d15b4a6b81619adb18c0b7",
+      "localSha256": "6c4ed01904633ae5a528cfc82a08937ce5b6ba08fea4be97c956cb60fa5780d0",
+      "verdict": "adapt",
+      "group": "g",
+      "note": "only the ref-name helpers the toolbar and actions use; the inventory's target is sui/git/shared/"
     },
     {
       "path": "src/git/WorktreeSetupCard.tsx",

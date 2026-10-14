@@ -2,8 +2,8 @@
 // daemon every route but Settings shows how to get one (`NotConnected`).
 
 import { AgentdScope } from '@loams/console-host/query';
-import { Empty, Tabs } from '@loams/ui';
-import { useEffect, useState } from 'react';
+import { Empty, Spinner, Tabs } from '@loams/ui';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { StudioAgentd } from './agentd.js';
 import type { StudioFactory } from './factory.js';
 import type { GitActionBus } from './git/bus.js';
@@ -26,6 +26,11 @@ import { useNewThread } from './sidebar/useThreadActions.js';
 import { DraftCard } from './thread/FactoryLinks.js';
 import { FilesTab } from './thread/LazyFilesTab.js';
 import { ThreadTerminalDrawer } from './thread/TerminalDrawer.js';
+
+// The thread page carries the markdown and highlighting stack: loaded on first use (SD1 Task 18).
+const ThreadPage = lazy(() =>
+  import('./thread/ThreadPage.js').then((m) => ({ default: m.ThreadPage })),
+);
 
 const PANEL_LABEL: Record<Panel, string> = {
   diff: 'Diff',
@@ -93,10 +98,14 @@ function Body({
   agentd,
   route,
   keys,
+  navigate,
+  openExternal,
 }: {
   agentd: StudioAgentd;
   route: StudioRoute;
   keys: StudioKeys;
+  navigate: (to: string) => void;
+  openExternal?: ((url: string) => void) | undefined;
 }) {
   switch (route.kind) {
     case 'home':
@@ -110,12 +119,19 @@ function Body({
       return <ProjectPage agentd={agentd} projectId={route.projectId} />;
     case 'thread':
       return (
-        <div className="p-6">
-          <Empty title="This thread is not available">
-            Studio cannot open threads in this version yet. The link <code>{route.threadId}</code>{' '}
-            will open here once it can.
-          </Empty>
-        </div>
+        <Suspense
+          fallback={
+            <div className="p-6">
+              <Spinner label="Loading the thread" />
+            </div>
+          }
+        >
+          <ThreadPage
+            threadId={route.threadId}
+            navigate={navigate}
+            {...(openExternal ? { openExternal } : {})}
+          />
+        </Suspense>
       );
     case 'group':
       return (
@@ -230,7 +246,13 @@ function StudioPage({
       }
     >
       {connected ? (
-        <Body agentd={agentd} route={route} keys={keys} />
+        <Body
+          agentd={agentd}
+          route={route}
+          keys={keys}
+          navigate={navigate}
+          openExternal={openExternal}
+        />
       ) : (
         <div className="p-6">
           <NotConnected agentd={agentd} reach={reach} />

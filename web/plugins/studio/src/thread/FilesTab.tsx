@@ -14,6 +14,7 @@ import {
   type FileViewerProps,
   pendingContentSearch,
 } from '@loams/studio-ui/files';
+import { createMarkdownFileRenderer } from '@loams/studio-ui/markdown';
 import { Button, Empty, Tooltip } from '@loams/ui';
 import { FileSearch, TextSearch } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -39,7 +40,7 @@ export function FilesTab({
   mentions?: ComposerMentions;
   /** SD1 Task 11's `SearchWorkspaceContent`; says it is unavailable until then. */
   contentSearch?: ContentSearchSource;
-  /** SD1 Task 18's markdown renderer; markdown shows as source without it. */
+  /** The markdown renderer; defaults to SD1 Task 18's sanitised one (T21-3). */
   renderMarkdown?: FileViewerProps['renderMarkdown'];
 }) {
   const transport = useAgentdTransport();
@@ -69,6 +70,13 @@ export function FilesTab({
   }
 
   const openFile = (path: string) => setOpen({ path, line: null });
+  // SD1 Task 18's renderer (T21-3): a document's relative links open here.
+  const markdown = useMemo(
+    () =>
+      renderMarkdown ??
+      createMarkdownFileRenderer({ onOpenFile: (path) => setOpen({ path, line: null }) }),
+    [renderMarkdown],
+  );
   const openMatch = (match: ContentMatch) => setOpen({ path: match.path, line: match.line });
 
   return (
@@ -81,7 +89,7 @@ export function FilesTab({
         revealLine={open?.line ?? null}
         onOpenFile={openFile}
         onMention={mentions.mention}
-        {...(renderMarkdown ? { renderMarkdown } : {})}
+        renderMarkdown={markdown}
         actions={
           <>
             <Tooltip content="Go to file">
