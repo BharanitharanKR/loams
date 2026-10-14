@@ -74,6 +74,7 @@ struct Clients {
     terminals: pb::TerminalServiceClient<HttpClient>,
     preview: pb::PreviewServiceClient<HttpClient>,
     attachments: pb::AttachmentServiceClient<HttpClient>,
+    groups: pb::RunGroupServiceClient<HttpClient>,
 }
 
 struct Daemon {
@@ -179,7 +180,8 @@ impl Daemon {
             files: pb::FileServiceClient::new(http(), config.clone()),
             terminals: pb::TerminalServiceClient::new(http(), config.clone()),
             preview: pb::PreviewServiceClient::new(http(), config.clone()),
-            attachments: pb::AttachmentServiceClient::new(http(), config),
+            attachments: pb::AttachmentServiceClient::new(http(), config.clone()),
+            groups: pb::RunGroupServiceClient::new(http(), config),
         };
         let ndjson = memory_client(engine);
         let info: rs::EngineInfo = ndjson
@@ -1528,6 +1530,78 @@ async fn scenario() {
         |d| json!({ "terminalId": d.get("terminal") }),
         terminals.close_terminal(json!({ "terminalId": d.get("terminal") })),
         |r| ok(r.ok)
+    );
+
+    // ---- RunGroupService (G12–G16; SD1 Task 12) ----
+    // Two Mock members in their own worktrees (under the scratch worktree
+    // root); the Mock edits nothing here, so the comparison is empty. The
+    // worktree names, the members' progress and their stats move on each
+    // daemon's own clock.
+    let (a, b) = unary!(
+        s,
+        "/loams.agentd.v1.RunGroupService/CreateRunGroup",
+        CreateRunGroup,
+        |d| json!({ "spaceId": "space-1", "repoPath": d.repo, "base": "main",
+                    "prompt": "Parity", "variants": [{ "harness": "mock" }, { "harness": "mock" }],
+                    "approvalMode": "full-access" }),
+        groups.create_run_group(json!({ "spaceId": "space-1", "repoPath": d.repo, "base": "main",
+                    "prompt": "Parity",
+                    "variants": [{ "harness": "HARNESS_ID_MOCK" }, { "harness": "HARNESS_ID_MOCK" }],
+                    "approvalMode": "APPROVAL_MODE_FULL_ACCESS" })),
+        |r| Wire::from_pb(r)?
+    );
+    s.learn("group", &a["groupId"], &b["groupId"]);
+    s.learn("member-1", &a["chatIds"][0], &b["chatIds"][0]);
+    s.learn("member-2", &a["chatIds"][1], &b["chatIds"][1]);
+    s.also = &[
+        "cwd",
+        "branch",
+        "status",
+        "state",
+        "filesChanged",
+        "additions",
+        "deletions",
+        "startedAtMs",
+    ];
+    first!(
+        s,
+        "/loams.agentd.v1.RunGroupService/WatchRunGroups",
+        WatchRunGroups,
+        |d| json!({ "spaceId": "space-1" }),
+        groups.watch_run_groups(json!({ "spaceId": "space-1" })),
+        |r| Wire::from_pb(r)?
+    );
+    s.also = &["cwd"];
+    unary!(
+        s,
+        "/loams.agentd.v1.RunGroupService/GetRunGroupComparison",
+        GetRunGroupComparison,
+        |d| json!({ "groupId": d.get("group"), "a": d.get("member-1"), "b": d.get("member-2") }),
+        groups.get_run_group_comparison(
+            json!({ "groupId": d.get("group"), "a": d.get("member-1"), "b": d.get("member-2") })
+        ),
+        |r| Wire::from_pb(r)?
+    );
+    // No check action: refused alike.
+    unary!(
+        s,
+        "/loams.agentd.v1.RunGroupService/RunGroupCheck",
+        RunGroupCheck,
+        |d| json!({ "groupId": d.get("group") }),
+        groups.run_group_check(json!({ "groupId": d.get("group") })),
+        |r| Wire::from_pb(r)?
+    );
+    // `keep` with `force`: no git write, whatever the members' progress.
+    unary!(
+        s,
+        "/loams.agentd.v1.RunGroupService/ResolveRunGroup",
+        ResolveRunGroup,
+        |d| json!({ "groupId": d.get("group"), "winnerChatId": d.get("member-1"),
+                    "action": "keep", "force": true }),
+        groups.resolve_run_group(json!({ "groupId": d.get("group"),
+                    "winnerChatId": d.get("member-1"), "action": "RESOLVE_ACTION_KEEP",
+                    "force": true })),
+        |r| Wire::from_pb(r)?
     );
 
     // ---- Tear down what the scenario made ----

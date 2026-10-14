@@ -17,7 +17,7 @@
 
 use std::collections::HashSet;
 use std::path::Path;
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -220,7 +220,9 @@ struct Inner {
     resumed: Mutex<HashSet<String>>,
     view: watch::Sender<Vec<RunGroup>>,
     kick: Notify,
-    wiring: OnceLock<Wiring>,
+    /// Dropped at shutdown: it holds the engine, and the engine's turn hook
+    /// holds these groups.
+    wiring: Mutex<Option<Arc<Wiring>>>,
     stop: watch::Sender<bool>,
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
@@ -291,7 +293,7 @@ impl RunGroups {
                 resumed: Mutex::new(resumed),
                 view: watch::channel(Vec::new()).0,
                 kick: Notify::new(),
-                wiring: OnceLock::new(),
+                wiring: Mutex::new(None),
                 stop: watch::channel(false).0,
                 task: Mutex::new(None),
             }),
@@ -307,18 +309,17 @@ impl RunGroups {
         diff_sync: CheckoutDiffSync,
         terminals: Terminals,
     ) {
-        if self
-            .inner
-            .wiring
-            .set(Wiring {
+        {
+            let mut wiring = lock(&self.inner.wiring);
+            if wiring.is_some() {
+                return;
+            }
+            *wiring = Some(Arc::new(Wiring {
                 doc_host,
                 sessions,
                 diff_sync,
                 terminals,
-            })
-            .is_err()
-        {
-            return;
+            }));
         }
         let Ok(runtime) = tokio::runtime::Handle::try_current() else {
             tracing::warn!("run groups: no runtime; the scheduler is off");
@@ -332,10 +333,17 @@ impl RunGroups {
     /// Stop the scheduler (engine shutdown). Records stay stored.
     pub async fn shutdown(&self) {
         self.inner.stop.send_replace(true);
+        self.inner.kick.notify_one();
         let task = lock(&self.inner.task).take();
         if let Some(task) = task {
             let _ = task.await;
         }
+        // Break the engine -> turn hook -> groups -> engine cycle.
+        lock(&self.inner.wiring).take();
+    }
+
+    fn wiring(&self) -> Option<Arc<Wiring>> {
+        lock(&self.inner.wiring).clone()
     }
 
     pub fn limits(&self) -> RunGroupLimits {
@@ -408,9 +416,7 @@ impl RunGroups {
         terminal_id: &str,
     ) -> Result<(), EngineError> {
         let receiver = self
-            .inner
-            .wiring
-            .get()
+            .wiring()
             .ok_or_else(|| EngineError::Other("run groups are not started".into()))?
             .terminals
             .subscribe(terminal_id, None)?;
@@ -484,14 +490,19 @@ impl RunGroups {
     }
 
     async fn schedule(&self) {
-        let Some(wiring) = self.inner.wiring.get() else {
+        let Some(wiring) = self.wiring() else {
             return;
         };
         let mut sessions = wiring.sessions.watch_sessions();
         let mut diffs = wiring.diff_sync.watch_diffs();
         let mut stop = self.inner.stop.subscribe();
         loop {
-            self.reconcile(wiring);
+            // A stop sent before this task first ran is not a change to
+            // `stop`'s receiver, so it is read here as well.
+            if *stop.borrow_and_update() {
+                break;
+            }
+            self.reconcile(&wiring);
             self.publish();
             tokio::select! {
                 _ = self.inner.kick.notified() => {}
@@ -625,7 +636,8 @@ impl RunGroups {
 
     /// Every group as the wire sends it, newest first.
     fn view(&self) -> Vec<RunGroup> {
-        let wiring = self.inner.wiring.get();
+        let wiring = self.wiring();
+        let wiring = wiring.as_deref();
         let diffs: Vec<CheckoutDiff> = wiring
             .map(|w| w.diff_sync.watch_diffs().borrow().clone())
             .unwrap_or_default();
@@ -802,7 +814,7 @@ pub(crate) async fn numstat(
     from: &str,
     to: &str,
     path: Option<&str>,
-) -> Result<Vec<(String, u32, u32)>, EngineError> {
+) -> Result<Vec<PathStat>, EngineError> {
     let mut command = tokio::process::Command::new("git");
     command
         .arg("-C")
@@ -843,9 +855,12 @@ pub(crate) async fn numstat(
     Ok(rows)
 }
 
+/// One path's `(path, additions, deletions)`.
+pub(crate) type PathStat = (String, u32, u32);
+
 /// The per-path, per-member matrix from each member's numstat.
 pub(crate) fn matrix(
-    per_member: Vec<(String, Vec<(String, u32, u32)>)>,
+    per_member: Vec<(String, Vec<PathStat>)>,
 ) -> Vec<loams_agentd_proto::groups::ComparisonRow> {
     use loams_agentd_proto::groups::{ComparisonRow, MemberDelta};
     let mut rows: std::collections::BTreeMap<String, Vec<MemberDelta>> = Default::default();
