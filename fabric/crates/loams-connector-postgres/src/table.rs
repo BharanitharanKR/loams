@@ -337,7 +337,15 @@ impl Pager {
                 lits.join(", ")
             ));
         }
-        sql.push_str(&format!(" ORDER BY {} LIMIT {limit}", keys.join(", ")));
+        // Qualified, so the order is the key's own column: a bare name also
+        // matches the key text appended above (`"id"::text` is named `id`
+        // too), which PostgreSQL (42702) and CockroachDB (42P09) refuse as
+        // ambiguous.
+        let order: Vec<String> = keys
+            .iter()
+            .map(|k| format!("{}.{k}", table.name.quoted()))
+            .collect();
+        sql.push_str(&format!(" ORDER BY {} LIMIT {limit}", order.join(", ")));
         if self.cockroach_as_of.is_none() {
             sql = format!("COPY ({sql}) TO STDOUT (FORMAT binary)");
         }
@@ -440,7 +448,8 @@ mod tests {
         assert_eq!(
             pg.page_sql(&t, None, 100),
             "COPY (SELECT \"id\", \"region\", \"total\", \"region\"::text, \"id\"::text FROM \"public\".\"orders\" \
-             ORDER BY \"region\", \"id\" LIMIT 100) TO STDOUT (FORMAT binary)"
+             ORDER BY \"public\".\"orders\".\"region\", \"public\".\"orders\".\"id\" LIMIT 100) \
+             TO STDOUT (FORMAT binary)"
         );
         let crdb = Pager {
             cockroach_as_of: Some("1700000000000000000.0000000000".into()),
