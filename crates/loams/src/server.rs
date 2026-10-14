@@ -2645,9 +2645,8 @@ impl Server {
             false => None,
         };
         let house = match roles.gateway {
-            true => crate::api::house_proxy::HouseProxy::start(&config.house).map_err(|err| {
-                ServerError::Config(format!("the House proxy's HTTP client: {err}"))
-            })?,
+            true => crate::api::house_proxy::HouseProxy::start(&config.house)
+                .map_err(|err| ServerError::Config(format!("the House proxy: {err}")))?,
             false => None,
         };
         // Loams Git on every gateway node (GT1 Task 13), after the last fallible step so its

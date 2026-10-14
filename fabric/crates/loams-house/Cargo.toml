@@ -81,6 +81,9 @@ loams-store = { path = "../../../crates/loams-store" }
 rusqlite.workspace = true
 reqwest.workspace = true
 async-trait.workspace = true
+rustls.workspace = true
+tokio-rustls.workspace = true
+rcgen.workspace = true
 
 # Only with `inproc-worker`: the worker's serve loop, and the `links = "chdb"`
 # package whose `DEP_CHDB_LIB_DIR` this package's `build.rs` turns into an rpath.

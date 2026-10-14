@@ -171,6 +171,15 @@ tracing = "0.1"
 # workspace's 59, so only `loams-house-lake` depends on it (R0.3); no default
 # features (no storage backend: R1.6). Apache-2.0.
 iceberg = { version = "0.10.1", default-features = false }
+# The House's TLS listener (HS1 Task 20, §49 §14): rustls 0.23 with the ring
+# provider, through tokio-rustls 0.26, both already in this lockfile (through
+# reqwest and the connectors) and in the engine workspace's. Apache-2.0/ISC/MIT.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
+# A `--single-node` House's self-signed certificate when none is configured (HS1
+# Task 20): the engine workspace's pin and features (loams-pg-control).
+# MIT OR Apache-2.0.
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem", "ring"] }
 # The local catalog of `--single-node` (HS1 Task 10, §49 §17): one SQLite file
 # whose metadata pointer is swapped with compare-and-set. 0.40.2 (2026-08-08) is
 # HS1 R0.7's pin; `bundled` builds SQLite itself, so no system library is

@@ -57,8 +57,12 @@ fn run_house(args: &HouseArgs) -> Result<(), HouseError> {
         }
         // The one line on stdout, which supervisors (the desktop, tests) read for
         // the address when the port was 0.
+        let tls = running
+            .tls_addr()
+            .map(|addr| format!(" and https://{addr}"))
+            .unwrap_or_default();
         println!(
-            "loams-fabric house: ClickHouse HTTP on http://{} (workers={}, sandbox={})",
+            "loams-fabric house: ClickHouse HTTP on http://{}{tls} (workers={}, sandbox={})",
             running.local_addr(),
             workers.as_str(),
             mode

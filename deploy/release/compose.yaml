@@ -115,11 +115,19 @@ services:
       - --graph-data-dir=/var/lib/loams/graph
       - --meta=tikv://pd:2379/loams_meta
       - --live-store=tikv://pd:2379/loams_live_dev
-      # No --house-endpoint yet: the House serves loopback plaintext only until
-      # TLS (D111, HS1 Task 20), and it may not share this namespace; it has
-      # its own tailnet node instead (`--profile house`).
+      # The House link (HS1 Task 20) comes from LOAMS_HOUSE_* below: set
+      # LOAMS_HOUSE_ENDPOINT=https://house:8443 when you run `--profile house`.
     environment:
       RUST_LOG: ${RUST_LOG:-info}
+      # The House front over TLS on the `house-link` network (HS1 Task 20).
+      # Empty: loams.house.v1 answers house_not_configured. The House makes its
+      # certificate and its key in the house-link volume on first start; this
+      # engine trusts that certificate alone for the link and signs in with that
+      # key, after its own auth has let the caller in (the caller's credentials
+      # are not passed on).
+      LOAMS_HOUSE_ENDPOINT: ${LOAMS_HOUSE_ENDPOINT:-}
+      LOAMS_HOUSE_CA: /var/lib/loams-house-link/house.crt
+      LOAMS_HOUSE_KEY_FILE: /var/lib/loams-house-link/house.key
       # Engine auth (preview): tailscale | oidc | apikey | off (loopback only).
       # tailscale trusts the Tailscale-User-Login headers that the sidecar's
       # `tailscale serve` proxy adds, on LOAMS_TAILSCALE_LISTEN only: a loopback
@@ -142,9 +150,11 @@ services:
     env_file:
       - path: ./secrets/engine.env
         required: false
+    networks: [default, house-link]
     volumes:
       - loams-data:/var/lib/loams
       - ./secrets:/etc/loams/secrets:ro
+      - house-link:/var/lib/loams-house-link:ro
     depends_on:
       pd:
         condition: service_healthy
@@ -158,17 +168,24 @@ services:
       retries: 3
 
   # Loams House (the ClickHouse HTTP interface, loams-fabric with its chDB
-  # workers), `--profile house`. It serves loopback plaintext only until TLS
-  # (D111, HS1 Task 20), so it gets a door of its own, the same shape as the
-  # engine's: the `house-tailscale` sidecar shares its network namespace and
-  # serves https://loams-house.<tailnet>/ from 127.0.0.1:8123 (TLS from the
-  # tailnet's certificates, reachable only by tailnet members the policy lets
-  # in). Clients sign in as ClickHouse user `default` with the password in
-  # /var/lib/loams-house/house.key (created on first start). It is on its own
-  # network: nothing else in the stack can reach it, and its workers reach
-  # nothing of the stack. The engine is not wired to it yet (no
-  # --house-endpoint: the engine's link needs Task 20's TLS), so the console's
-  # House page still says not configured.
+  # workers), `--profile house`. Two doors:
+  #
+  # - Its plaintext listener stays on loopback (D111). The `house-tailscale`
+  #   sidecar shares its network namespace and serves
+  #   https://loams-house.<tailnet>/ from 127.0.0.1:8123 (TLS from the tailnet's
+  #   certificates, reachable only by tailnet members the policy lets in).
+  # - Its TLS listener, 0.0.0.0:8443 (HS1 Task 20), is the engine's link. It is
+  #   reached on `house-link`, a network only the engine and the House join,
+  #   with a self-signed certificate the House makes on first start. The engine
+  #   trusts that certificate alone and signs in with the House's key; both are
+  #   in the house-link volume, which the engine mounts read-only. Set
+  #   LOAMS_HOUSE_ENDPOINT=https://house:8443 to wire the engine to it (the
+  #   console's House page then works).
+  #
+  # Clients sign in as ClickHouse user `default` with the password in
+  # /var/lib/loams-house-link/house.key (created on first start). Nothing else
+  # in the stack can reach the House, and its workers reach nothing of the
+  # stack.
   #
   # Workers run sealed (L3): HOUSE_SANDBOX=pods (the default) is Landlock (TCP
   # rules, Linux 6.7 or later) and seccomp, inside this container and its own
@@ -186,11 +203,16 @@ services:
       - --single-node
       - --data-dir=/var/lib/loams-house
       - --sandbox=${HOUSE_SANDBOX:-pods}
+      - --house-tls-listen=0.0.0.0:8443
+      - --house-tls-cert=/var/lib/loams-house-link/house.crt
+      - --house-tls-key=/var/lib/loams-house/tls/house.key
+      - --local-key-file=/var/lib/loams-house-link/house.key
     environment:
       RUST_LOG: ${RUST_LOG:-info}
-    networks: [house]
+    networks: [house, house-link]
     volumes:
       - house-data:/var/lib/loams-house
+      - house-link:/var/lib/loams-house-link
 
   # The House's tailnet node, in the House's network namespace (its only
   # neighbour there). A second node on the tailnet: give it its own auth key
@@ -389,6 +411,10 @@ services:
 networks:
   # The House's own network (see `house`): no other service joins it.
   house: {}
+  # The engine's link to the House's TLS listener (see `house`): the two of
+  # them only, with no route out.
+  house-link:
+    internal: true
   # `pg-control` and `pg-runner` only, with no route out (see `pg-runner`).
   pg-runner:
     internal: true
@@ -398,6 +424,8 @@ volumes:
   tikv-data:
   loams-data:
   house-data:
+  # The House's certificate and key, which the engine reads (see `house`).
+  house-link:
   house-tailscale-state:
   tailscale-state:
   headscale-data:

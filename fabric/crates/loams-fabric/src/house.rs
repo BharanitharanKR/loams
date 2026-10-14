@@ -9,18 +9,21 @@
 //!
 //! # What is refused at start, and what is only named
 //!
-//! * A plaintext listener off loopback is refused with FL2's message (D111): the
-//!   House serves loopback only until TLS and the verifier (HS1 Task 20). That
+//! * A plaintext listener off loopback is refused with FL2's message (D111). That
 //!   holds for the native and admin listeners too, though they are not served yet.
-//! * A TLS listener is refused: there is no TLS until HS1 Task 20, and serving
-//!   plaintext where TLS was asked for would be worse than not serving.
+//! * The TLS listener (`--house-tls-listen`, HS1 Task 20) may face other hosts.
+//!   It needs a certificate and key (`--house-tls-cert`, `--house-tls-key` or
+//!   `[house.tls]`); with `--single-node` and neither, a self-signed pair is
+//!   made under `<data-dir>/tls/` on first start. Off loopback, no user may have
+//!   an empty password. The native TLS listener waits for the native protocol
+//!   (HS1 Task 31) and is refused.
 //! * `--sandbox=none` needs `--unsafe-no-sandbox` (HS1 R1.10, R6.8), except on a
 //!   system with no L3 (macOS) in `--single-node` mode, and is logged either way.
 //! * `--workers=inproc` needs `--single-node` and a build with `inproc-worker`.
 //! * The native listener (Task 31) and admin (Task 23) are resolved and
 //!   validated now, and [`start`] says on stderr that they are not served yet.
 //!   The store is read through `house-cache` by process workers (Task 9) and
-//!   written from Task 12.
+//!   written by the front (Task 12).
 //! * `--catalog` (HS1 Task 10) needs `--store`: the catalog of lake tables writes
 //!   their metadata there (local) or places them there (REST, whose URL names the
 //!   warehouse: `rest:<url>?warehouse=<name>`).
@@ -98,6 +101,21 @@ pub struct HouseSettings {
     /// With `--single-node` and no configured user: the file holding the local
     /// user's password, created on first start.
     pub local_key: Option<PathBuf>,
+    /// The TLS listener (HS1 Task 20).
+    pub tls: Option<TlsSettings>,
+}
+
+/// The TLS listener's settings (HS1 Task 20).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TlsSettings {
+    /// Where it listens.
+    pub listen: SocketAddr,
+    /// The certificate chain (PEM).
+    pub cert: PathBuf,
+    /// The private key (PEM).
+    pub key: PathBuf,
+    /// Make a self-signed pair there when neither file exists (`--single-node`).
+    pub make: bool,
 }
 
 /// Turns the flags and the file into settings, refusing what must not start.
@@ -110,15 +128,9 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
         .or(house.listen)
         .unwrap_or_else(|| addr(DEFAULT_LISTEN));
     config::check_listen(listen)?;
-    if let Some(tls) = args
-        .house_tls_listen
-        .or(house.tls_listen)
-        .or(args.native_tls_listen)
-        .or(house.native_tls_listen)
-    {
+    if let Some(tls) = args.native_tls_listen.or(house.native_tls_listen) {
         return Err(bad(format!(
-            "TLS listener {tls}: TLS arrives with HS1 Task 20; until then the House serves \
-             loopback plaintext only (D111)"
+            "native TLS listener {tls}: the native protocol is served from HS1 Task 31"
         )));
     }
     let native_listen = args
@@ -213,7 +225,38 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
         Some(path) => path,
         None => beside_this_binary(WORKER_BINARY)?,
     };
-    let local_key = (single_node && http.users.is_empty()).then(|| data_dir.join(LOCAL_KEY_FILE));
+    let local_key = (single_node && http.users.is_empty()).then(|| {
+        args.local_key_file
+            .clone()
+            .unwrap_or_else(|| data_dir.join(LOCAL_KEY_FILE))
+    });
+    let tls = match args.house_tls_listen.or(house.tls_listen) {
+        None => None,
+        Some(listen) => {
+            let cert = args.house_tls_cert.clone().or(house.tls.cert);
+            let key = args.house_tls_key.clone().or(house.tls.key);
+            match (cert, key) {
+                (Some(cert), Some(key)) => Some(TlsSettings {
+                    listen,
+                    cert,
+                    key,
+                    make: single_node,
+                }),
+                (None, None) if single_node => Some(TlsSettings {
+                    listen,
+                    cert: data_dir.join("tls").join("house.crt"),
+                    key: data_dir.join("tls").join("house.key"),
+                    make: true,
+                }),
+                _ => {
+                    return Err(bad(format!(
+                        "TLS listener {listen}: needs --house-tls-cert and --house-tls-key \
+                         (or [house.tls] cert and key)"
+                    )));
+                }
+            }
+        }
+    };
 
     Ok(HouseSettings {
         http,
@@ -230,6 +273,7 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
         worker_memory_limit: house.pool.worker_memory_limit,
         cgroup_root: args.cgroup_root.clone().or(house.pool.cgroup_root),
         local_key,
+        tls,
     })
 }
 
@@ -244,6 +288,11 @@ impl Running {
     /// Where the HTTP interface listens.
     pub fn local_addr(&self) -> SocketAddr {
         self.handle.local_addr()
+    }
+
+    /// Where the TLS listener listens, when there is one (HS1 Task 20).
+    pub fn tls_addr(&self) -> Option<SocketAddr> {
+        self.handle.tls_addr()
     }
 
     /// The worker pool.
@@ -272,6 +321,19 @@ pub async fn start(mut settings: HouseSettings) -> Result<Running, HouseError> {
             .users
             .push(UserMap::dev(LOCAL_USER, &password, LOCAL_NAMESPACE, false));
     }
+    if let Some(tls) = &settings.tls {
+        if tls.make {
+            let names: Vec<String> = loams_house::tls::DEFAULT_NAMES
+                .iter()
+                .map(|n| n.to_string())
+                .collect();
+            loams_house::tls::ensure_self_signed(&tls.cert, &tls.key, &names)?;
+        }
+        settings.http.tls = Some(loams_house::TlsListener {
+            listen: tls.listen,
+            config: loams_house::tls::server_config(&tls.cert, &tls.key)?,
+        });
+    }
     let cache = house_cache(&settings).await?;
     let lake = lake(&settings, cache.as_ref()).await?;
     let launcher = launcher(&settings, cache)?;
@@ -298,11 +360,11 @@ pub fn not_served_yet(settings: &HouseSettings) -> Vec<String> {
     if let Some(store) = &settings.store {
         out.push(match settings.workers {
             WorkersMode::Process => {
-                format!("store {store}: read through house-cache; written from HS1 Task 12")
+                format!("store {store}: read through house-cache, written by the front")
             }
             WorkersMode::Inproc => format!(
                 "store {store}: not read by in-process workers (they have no forwarder); \
-                 written from HS1 Task 12"
+                 written by the front"
             ),
         });
     }

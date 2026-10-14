@@ -92,7 +92,10 @@ loams-sqlgate = { path = "../loams-sqlgate", optional = true }
 loams-stream-grpc = { workspace = true, optional = true }
 loams-tikv = { workspace = true, optional = true }
 loams-worker.workspace = true
-reqwest.workspace = true
+# `rustls-no-provider`: the House link's TLS (HS1 Task 20) with the ring
+# provider this crate builds its own client configuration with.
+reqwest = { workspace = true, features = ["rustls-no-provider"] }
+rustls = { workspace = true, features = ["ring", "std", "tls12", "logging"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -221,6 +224,10 @@ tempfile.workspace = true
 time.workspace = true
 # The stand-in House front's streamed answer in `connect_api.rs` (HS1 Task 7).
 tokio-stream.workspace = true
+# `connect_api.rs`'s stand-in House front over TLS (HS1 Task 20).
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem", "ring"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
+hyper-util = { version = "0.1", features = ["server-auto", "tokio", "service"] }
 # The client of the PostgreSQL wire listener's tests (`pg::tests`).
 tokio-postgres = "0.7"
 tonic = { workspace = true, features = ["gzip"] }

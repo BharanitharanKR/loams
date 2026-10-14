@@ -61,15 +61,23 @@ down`; add `--volumes` to delete the data.
 ### House
 
 ```sh
-docker compose --profile house up -d house house-tailscale
-docker compose exec house cat /var/lib/loams-house/house.key   # user `default`'s password
+echo 'LOAMS_HOUSE_ENDPOINT=https://house:8443' >> .env          # wire the engine to it
+docker compose --profile house up -d house house-tailscale loams
+docker compose exec house cat /var/lib/loams-house-link/house.key   # user `default`'s password
 curl -u "default:$PASSWORD" https://loams-house.<tailnet>.ts.net/ --data-binary 'SELECT 1'
 ```
 
-The House listens on its loopback only; `house-tailscale`, in its network
-namespace, serves it on the tailnet as `HOUSE_TS_HOSTNAME` (`loams-house`), with
-`HOUSE_TS_AUTHKEY` (or a reusable `TS_AUTHKEY`). It is on the `house` network,
-which nothing else joins. Workers run sealed: `HOUSE_SANDBOX=pods` (default;
+The House's plaintext listener is on its loopback only; `house-tailscale`, in its
+network namespace, serves it on the tailnet as `HOUSE_TS_HOSTNAME`
+(`loams-house`), with `HOUSE_TS_AUTHKEY` (or a reusable `TS_AUTHKEY`). Its TLS
+listener (8443, HS1 Task 20) is the engine's link: on `house-link`, a network
+only the engine and the House join, with a certificate the House makes on first
+start. The engine trusts that certificate alone and signs in with the House's
+key, both in the `house-link` volume, after its own auth has let the caller in;
+with `LOAMS_HOUSE_ENDPOINT` set, `loams.house.v1` and the console's House page
+reach the House. The link needs `loams` and `loams-fabric` images built after
+0.1.0-preview.2. The House is also on the `house` network, which nothing else
+joins. Workers run sealed: `HOUSE_SANDBOX=pods` (default;
 Landlock with TCP rules on Linux 6.7 or later, and seccomp) or `netns` (adds a
 user and network namespace per worker; needs unprivileged user namespaces in the
 container, as Podman allows). chDB's access control (R-ACL.1) and the statement
@@ -174,14 +182,14 @@ needs SSH and outbound internet only.
 
 ## Known gaps in the preview
 
-- The engine does not reach the House yet. The House serves loopback plaintext
-  only until TLS (D111, HS1 Task 20) and may not share the engine's network
-  namespace, so `loams.house.v1` answers `house_not_configured`; use the House's
-  own tailnet URL (`--profile house`).
+- With 0.1.0-preview.2 images the engine does not reach the House: its TLS link
+  (HS1 Task 20) needs later images, so `loams.house.v1` answers
+  `house_not_configured`; use the House's own tailnet URL (`--profile house`).
 - `HOUSE_SANDBOX=netns` fails under Docker's default seccomp profile (no
   unprivileged user namespaces) and the House does not start; keep `pods` there.
-- The House takes no `INSERT` into its tables until HS1 Task 12. On a kernel without Landlock
-  TCP rules (before 6.7) the workers refuse to boot.
+- With 0.1.0-preview.2 images the House takes no `INSERT` into its tables (HS1 Task 12 is
+  in later images). On a kernel without Landlock TCP rules (before 6.7) the workers refuse
+  to boot.
 - Live's own listener (7710), durable (8001), and the MySQL and Postgres wire
   listeners of the engine are loopback only and are not forwarded over the
   tailnet. Live itself (`loams.live.v1`, with `LiveAdminService`) is served on
