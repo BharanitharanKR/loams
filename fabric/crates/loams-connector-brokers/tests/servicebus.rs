@@ -7,7 +7,7 @@
 //! The emulator's entities are fixed by `deploy/fabric/emulators/servicebus.config.json`:
 //! the queue `loams-conformance` is the input, and the topic
 //! `loams-conformance-topic` with its subscription `flow-conformance` is the
-//! output. Each run empties both first.
+//! output. Each run empties both first, and the tests take turns on them.
 
 // `unwrap_used` is a warning and CI runs `-D warnings`; tests unwrap freely.
 #![allow(clippy::unwrap_used)]
@@ -30,6 +30,10 @@ const SERVICES: &[ServiceKind] = &[ServiceKind::Emulator {
 const QUEUE: &str = "loams-conformance";
 const TOPIC: &str = "loams-conformance-topic";
 const SUBSCRIPTION: &str = "loams-conformance-topic/Subscriptions/flow-conformance";
+
+/// The tests share the emulator's one queue (its entities are fixed), so
+/// they take turns: run together, each drains the other's messages.
+static QUEUE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 fn base() -> Value {
     json!({"connection_string": "sb-cs"})
@@ -90,6 +94,7 @@ fn plan() -> Plan {
 
 #[tokio::test]
 async fn servicebus_suites_against_the_emulator() {
+    let _turn = QUEUE_LOCK.lock().await;
     let h = BrokerHarness::new("servicebus", plan());
     let report = h
         .run(
@@ -112,6 +117,7 @@ async fn servicebus_peek_lock_redelivery() {
     if !stack_up(CI_ONLY, "servicebus_peek_lock_redelivery") {
         return;
     }
+    let _turn = QUEUE_LOCK.lock().await;
     empty(QUEUE).await.unwrap();
     let f = amqp10::service_bus_factory();
     let mut seed = open_sink(

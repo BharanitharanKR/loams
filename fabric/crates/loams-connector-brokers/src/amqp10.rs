@@ -31,7 +31,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use async_trait::async_trait;
 use base64::Engine as _;
 use bytes::Bytes;
-use fe2o3_amqp::connection::ConnectionHandle;
+use fe2o3_amqp::connection::{ConnectionHandle, OpenError};
 use fe2o3_amqp::link::CreditMode;
 use fe2o3_amqp::link::delivery::DeliveryInfo;
 use fe2o3_amqp::sasl_profile::SaslProfile;
@@ -40,6 +40,7 @@ use fe2o3_amqp::types::messaging::{
     ApplicationProperties, Body, Data, Message, MessageId, Outcome, Properties,
 };
 use fe2o3_amqp::types::primitives::{SimpleValue, Symbol, Timestamp, Value};
+use fe2o3_amqp::types::sasl::SaslCode;
 use fe2o3_amqp::{Connection, Receiver, Sender, Session};
 use fe2o3_amqp_cbs::client::CbsClient;
 use fe2o3_amqp_cbs::token::CbsToken;
@@ -477,6 +478,24 @@ fn amqp_err(context: &str, e: impl std::fmt::Display) -> ConnectorError {
     }
 }
 
+/// An error opening the connection. A refused SASL outcome is an auth
+/// error (a temporary system error is not); a dropped socket or a peer that
+/// closed mid-handshake is retryable, even when it happens during the SASL
+/// header exchange (a broker still starting resets connections).
+fn open_err(context: &str, e: OpenError) -> ConnectorError {
+    match &e {
+        OpenError::Io(_) | OpenError::TransportError(_) | OpenError::RemoteClosed => {
+            ConnectorError::retryable(format!("{context}: {e}"))
+        }
+        OpenError::SaslError {
+            code: SaslCode::SysTemp,
+            ..
+        } => ConnectorError::retryable(format!("{context}: {e}")),
+        OpenError::SaslError { .. } => ConnectorError::auth(format!("{context}: {e}")),
+        _ => amqp_err(context, e),
+    }
+}
+
 /// The host, port, TLS flag and SASL profile of a config.
 async fn endpoint(
     cfg: &Amqp10Config,
@@ -539,13 +558,13 @@ async fn open(cfg: &Amqp10Config, env: &Env, container: &str) -> Result<Conn, Co
         builder
             .open_with_stream(stream)
             .await
-            .map_err(|e| amqp_err("opening the AMQP connection", e))?
+            .map_err(|e| open_err("opening the AMQP connection", e))?
     } else {
         let stream = loams_connector_sdk::net::connect(&host, port, env.egress.as_ref()).await?;
         builder
             .open_with_stream(stream)
             .await
-            .map_err(|e| amqp_err("opening the AMQP connection", e))?
+            .map_err(|e| open_err("opening the AMQP connection", e))?
     };
     let session = Session::begin(&mut conn)
         .await
@@ -1369,6 +1388,31 @@ mod tests {
             .unwrap_err();
         assert_eq!(e.class, ErrorClass::Auth, "{e}");
         assert!(!e.message.contains("hunter2"));
+    }
+
+    #[test]
+    fn a_reset_during_the_sasl_exchange_is_retryable() {
+        // ActiveMQ Classic, still starting, closes the socket mid-handshake:
+        // the error text names SASL but nothing refused the credentials.
+        let eof = OpenError::Io(std::io::Error::new(
+            std::io::ErrorKind::UnexpectedEof,
+            "Waiting for SASL header exchange",
+        ));
+        let e = open_err("opening the AMQP connection", eof);
+        assert!(e.class.is_transient(), "{e}");
+        let reset = OpenError::Io(std::io::ErrorKind::ConnectionReset.into());
+        assert!(open_err("x", reset).class.is_transient());
+        assert!(open_err("x", OpenError::RemoteClosed).class.is_transient());
+        let refused = OpenError::SaslError {
+            code: SaslCode::Auth,
+            additional_data: None,
+        };
+        assert_eq!(open_err("x", refused).class, ErrorClass::Auth);
+        let busy = OpenError::SaslError {
+            code: SaslCode::SysTemp,
+            additional_data: None,
+        };
+        assert!(open_err("x", busy).class.is_transient());
     }
 
     #[test]
