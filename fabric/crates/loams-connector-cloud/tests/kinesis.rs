@@ -38,6 +38,9 @@ struct KState {
     expire_once: bool,
     put_calls: Vec<Value>,
     put_fail_first: bool,
+    /// As floci 2.1.0: a closed shard read to its end still answers with a
+    /// `NextShardIterator` (AWS gives none, and `ChildShards`).
+    endless_closed: bool,
 }
 
 #[derive(Clone)]
@@ -146,7 +149,7 @@ fn kinesis(state: &Arc<Mutex<KState>>, seen: &Seen) -> Reply {
                     "PartitionKey": "pk", "ApproximateArrivalTimestamp": 1760313600.5})
                 })
                 .collect();
-            let next = if sh.closed && end == sh.records.len() {
+            let next = if sh.closed && end == sh.records.len() && !s.endless_closed {
                 Value::Null
             } else {
                 s.next_token += 1;
@@ -271,6 +274,43 @@ async fn kinesis_resharding_followed() {
     for (label, base, secrets) in aws_targets("kinesis_resharding_followed") {
         real_reshard(label, base, secrets).await;
     }
+}
+
+/// A shard listed as closed (`EndingSequenceNumber`) whose iterator never
+/// ends, as on floci 2.1.0, still finishes at an empty, caught-up
+/// `GetRecords`, so its children are read after it; a restart neither
+/// re-reads it nor holds them back.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn kinesis_closed_shard_finishes_without_an_end_iterator() {
+    let fake = FakeKinesis::start(vec![shard(0, None, true, 3), shard(1, Some(0), false, 2)]).await;
+    fake.with(|s| s.endless_closed = true);
+    let fabric = MemoryFabric::new();
+    let store = MemoryCheckpointStore::new();
+    let ctx = ctx(config(&fake), StaticSecrets::new());
+    let p = source_with_store(&ctx, &fabric, &store).await;
+    eventually("parent, then child", || fabric.len() == 5).await;
+    p.stop().await;
+    let order: Vec<String> = fabric.events().iter().map(shard_of).collect();
+    assert_eq!(
+        order,
+        [
+            "shardId-000000000000",
+            "shardId-000000000000",
+            "shardId-000000000000",
+            "shardId-000000000001",
+            "shardId-000000000001"
+        ]
+    );
+
+    fake.with(|s| {
+        let sh = s.shards.iter_mut().find(|x| x.id.ends_with('1')).unwrap();
+        sh.records.push((seq(1, 2), b"{\"late\":true}".to_vec()));
+    });
+    let p = source_with_store(&ctx, &fabric, &store).await;
+    eventually("the late record", || fabric.len() == 6).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    p.stop().await;
+    assert_eq!(fabric.duplicates(), 0, "the finished parent is not re-read");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

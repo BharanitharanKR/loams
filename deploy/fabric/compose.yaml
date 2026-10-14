@@ -201,7 +201,10 @@ services:
     image: fsouza/fake-gcs-server:1.56.1@sha256:797ce226d62f947c009dc40246b30cfb456b8473d8241407f9d6f2c04e4d69ef
     profiles: [connectors-p2]
     labels: { io.loams.licence: "BSD-2-Clause", io.loams.ci-service: "false" }
-    command: ["-scheme", "http", "-port", "4443", "-public-host", "localhost:4443"]
+    # The XML API's routes match only when the request's Host is the public
+    # host, and the suites (scripts/connectors/objects_stack.sh) call
+    # 127.0.0.1:4443.
+    command: ["-scheme", "http", "-port", "4443", "-public-host", "127.0.0.1:4443"]
     ports: ["4443:4443"]
 
   # Blob, Queue and Table; no hierarchical namespace (R0.21). Also the Event
@@ -262,6 +265,16 @@ services:
       # client-credentials grant (CN2 Task 20); throwaway CI values.
       KC_BOOTSTRAP_ADMIN_CLIENT_ID: loams-ci
       KC_BOOTSTRAP_ADMIN_CLIENT_SECRET: loams-test
+      # /health/ready on the management port (9000, not published), so
+      # `up --wait` returns once Keycloak serves, not when its container starts
+      # (start-dev spends its first ~30 s building). The image has no curl.
+      KC_HEALTH_ENABLED: "true"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
     ports: ["8180:8080"]
 
   kestra:

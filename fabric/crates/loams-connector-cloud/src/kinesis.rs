@@ -5,7 +5,13 @@
 //! (`ParentShardId`, `AdjacentParentShardId`) is finished or has expired, so
 //! after a split or merge the parent's records all come before the
 //! children's. The position is the last sequence number read and whether
-//! the shard is finished; a restart resumes with `AFTER_SEQUENCE_NUMBER`. An
+//! the shard is finished; a restart resumes with `AFTER_SEQUENCE_NUMBER`.
+//! The end of a closed shard is a `GetRecords` with no `NextShardIterator`;
+//! a shard already closed when its split is discovered (`ListShards` gives
+//! it an `EndingSequenceNumber`) also ends at an empty `GetRecords` that is
+//! caught up (`MillisBehindLatest` 0), since nothing is ever added to a
+//! closed shard. Emulators such as floci 2.1.0 never end a closed shard's
+//! iterator, so without this a reshard there would hold the children. An
 //! expired iterator is renewed from the position. A shard that disappears
 //! before it was finished is `PositionLost` (its records past the position
 //! were trimmed). Event ids are `<stream>/<shard>/<sequence number>`, stable
@@ -110,6 +116,8 @@ impl ShardPosition {
 struct ShardInfo {
     id: String,
     parents: Vec<String>,
+    /// `EndingSequenceNumber`: the shard is closed.
+    end: Option<String>,
 }
 
 async fn list_shards(
@@ -135,6 +143,9 @@ async fn list_shards(
             out.push(ShardInfo {
                 id: id.to_owned(),
                 parents,
+                end: s["SequenceNumberRange"]["EndingSequenceNumber"]
+                    .as_str()
+                    .map(str::to_owned),
             });
         }
         match resp["NextToken"].as_str() {
@@ -147,7 +158,7 @@ async fn list_shards(
 
 /// The shards that may be read now: those whose parents are finished or no
 /// longer listed.
-fn ready_shards(listed: &[ShardInfo], known: &[SplitState]) -> Vec<String> {
+fn ready_shards<'a>(listed: &'a [ShardInfo], known: &[SplitState]) -> Vec<&'a ShardInfo> {
     let finished: BTreeSet<&str> = known
         .iter()
         .filter(|k| {
@@ -166,7 +177,6 @@ fn ready_shards(listed: &[ShardInfo], known: &[SplitState]) -> Vec<String> {
                 .iter()
                 .all(|p| !ids.contains(p.as_str()) || finished.contains(p.as_str()))
         })
-        .map(|s| s.id.clone())
         .collect()
 }
 
@@ -183,7 +193,13 @@ impl SplitEnumerator for ShardEnumerator {
         let listed = list_shards(&self.client, &self.stream).await?;
         Ok(ready_shards(&listed, known)
             .into_iter()
-            .map(|id| Split::new(id.clone(), json!({"shard": id})))
+            .map(|s| {
+                let mut spec = json!({"shard": s.id});
+                if let Some(end) = &s.end {
+                    spec["end"] = json!(end);
+                }
+                Split::new(s.id.clone(), spec)
+            })
             .collect())
     }
 }
@@ -203,6 +219,7 @@ impl SourceFactory for ShardSourceFactory {
         Ok(Box::new(ShardSource {
             f: self.clone(),
             shard: split.id.as_str().to_owned(),
+            closed: split.spec.get("end").is_some_and(|e| !e.is_null()),
             pos: ShardPosition::default(),
             iterator: None,
             end_of_shard: false,
@@ -217,6 +234,8 @@ impl SourceFactory for ShardSourceFactory {
 pub struct ShardSource {
     f: ShardSourceFactory,
     shard: String,
+    /// Closed when its split was discovered (an `EndingSequenceNumber`).
+    closed: bool,
     pos: ShardPosition,
     iterator: Option<String>,
     end_of_shard: bool,
@@ -272,9 +291,16 @@ impl ShardSource {
                 .await
             {
                 Ok(resp) => {
-                    self.buffer
-                        .extend(resp["Records"].as_array().cloned().unwrap_or_default());
+                    let records = resp["Records"].as_array().cloned().unwrap_or_default();
+                    let caught_up =
+                        records.is_empty() && resp["MillisBehindLatest"].as_u64() == Some(0);
+                    self.buffer.extend(records);
                     match resp["NextShardIterator"].as_str() {
+                        // A closed shard read to its end (see the module docs).
+                        Some(_) if self.closed && caught_up => {
+                            self.iterator = None;
+                            self.end_of_shard = true;
+                        }
                         Some(next) => self.iterator = Some(next.to_owned()),
                         None => {
                             self.iterator = None;
@@ -554,7 +580,15 @@ mod tests {
         ShardInfo {
             id: id.into(),
             parents: parents.iter().map(|p| (*p).to_owned()).collect(),
+            end: None,
         }
+    }
+
+    fn ready<'a>(listed: &'a [ShardInfo], known: &[SplitState]) -> Vec<&'a str> {
+        ready_shards(listed, known)
+            .into_iter()
+            .map(|s| s.id.as_str())
+            .collect()
     }
 
     fn state(id: &str, finished: bool) -> SplitState {
@@ -578,28 +612,25 @@ mod tests {
             shard("c", &["a"]),
             shard("d", &["b", "c"]),
         ];
-        assert_eq!(ready_shards(&listed, &[]), vec!["a"]);
-        assert_eq!(ready_shards(&listed, &[state("a", false)]), vec!["a"]);
+        assert_eq!(ready(&listed, &[]), vec!["a"]);
+        assert_eq!(ready(&listed, &[state("a", false)]), vec!["a"]);
+        assert_eq!(ready(&listed, &[state("a", true)]), vec!["a", "b", "c"]);
         assert_eq!(
-            ready_shards(&listed, &[state("a", true)]),
-            vec!["a", "b", "c"]
-        );
-        assert_eq!(
-            ready_shards(
+            ready(
                 &listed,
                 &[state("a", true), state("b", true), state("c", false)]
             ),
             vec!["a", "b", "c"]
         );
         assert_eq!(
-            ready_shards(
+            ready(
                 &listed,
                 &[state("a", true), state("b", true), state("c", true)]
             ),
             vec!["a", "b", "c", "d"]
         );
         // An expired parent no longer listed does not block its children.
-        assert_eq!(ready_shards(&listed[1..2], &[]), vec!["b"]);
+        assert_eq!(ready(&listed[1..2], &[]), vec!["b"]);
         assert!(finished_shards(&[state("a", true)])["a"]);
     }
 

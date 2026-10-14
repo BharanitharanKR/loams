@@ -351,6 +351,12 @@ fn stack_up() -> bool {
     std::env::var_os("LOAMS_CONNECTORS_P2_STACK").is_some()
 }
 
+/// A `connectors-p2` service's base URL: `var` when set (a stack on other
+/// ports), else the port deploy/fabric/compose.yaml publishes.
+fn stack_url(var: &str, default: &str) -> String {
+    std::env::var(var).unwrap_or_else(|_| default.to_owned())
+}
+
 fn read_yaml(path: &Path) -> Value {
     serde_norway::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
 }
@@ -565,7 +571,7 @@ async fn stripe_mock_roundtrip() {
     let ctx = |resource: &str| {
         ConnectorContext::new(
             InstanceKey::new(7, "stripe-mock"),
-            json!({"resource": resource, "base_url": "http://localhost:12111",
+            json!({"resource": resource, "base_url": stack_url("LOAMS_STRIPE_MOCK_URL", "http://localhost:12111"),
                    "auth": {"token": "stripe-key"}}),
             Arc::new(StaticSecrets::new().with("stripe-key", "sk_test_123")),
             scrubber.clone(),
@@ -915,7 +921,7 @@ async fn openbao_kv_roundtrip() {
     let ctx = |resource: &str| {
         ConnectorContext::new(
             InstanceKey::new(7, "openbao"),
-            json!({"resource": resource, "address": "http://localhost:8200",
+            json!({"resource": resource, "address": stack_url("LOAMS_OPENBAO_URL", "http://localhost:8200"),
                    "auth": {"api_key": "bao-token"}}),
             Arc::new(StaticSecrets::new().with("bao-token", "loams-dev-root")),
             scrubber.clone(),
@@ -1010,7 +1016,8 @@ async fn keycloak_admin_events_source() {
 /// the sink, and the source reads the admin event it caused.
 async fn keycloak_live() {
     use bytes::Bytes;
-    let base = "http://localhost:8180";
+    let base = stack_url("LOAMS_KEYCLOAK_URL", "http://localhost:8180");
+    let base = base.as_str();
     let client = loams_connector_sdk::http::client(Arc::new(AllowAll));
     let token_req = ::http::Request::post(format!(
         "{base}/realms/master/protocol/openid-connect/token"

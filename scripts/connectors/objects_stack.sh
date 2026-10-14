@@ -49,5 +49,6 @@ az storage container create --name "$LOAMS_AZURITE_CONTAINER" \
     name="LOAMS_$v"
     echo "$name=${!name}"
   done
-  echo "LOAMS_SFTP_HOST_KEY=$(ssh-keyscan -p "$LOAMS_SFTP_PORT" -t ed25519 "$LOAMS_SFTP_HOST" 2>/dev/null | head -n1)"
+  # Newer OpenSSH prints its `# host:port SSH-2.0-...` banner comment on stdout.
+  echo "LOAMS_SFTP_HOST_KEY=$(ssh-keyscan -p "$LOAMS_SFTP_PORT" -t ed25519 "$LOAMS_SFTP_HOST" 2>/dev/null | grep -v '^#' | head -n1)"
 } >> "$out"

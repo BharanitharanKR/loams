@@ -85,7 +85,7 @@ async fn rustfs_and_minio_suites() {
         };
         let p = run_prefix(&name.to_ascii_lowercase());
         let bucket = env(&format!("LOAMS_{name}_BUCKET"));
-        listing_high_water_resume(s.clone(), &bucket, &format!("{p}/list")).await;
+        listing_high_water_resume(s.clone(), &Seed::Store, &bucket, &format!("{p}/list")).await;
         sink_crash_resume(s.clone(), &format!("{p}/crash")).await;
         conditional_put_check(s, &format!("{p}/cond")).await;
     }
