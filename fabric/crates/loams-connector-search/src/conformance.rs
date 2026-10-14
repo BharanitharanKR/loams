@@ -82,6 +82,18 @@ impl System {
     }
 }
 
+/// Whether a source checkpoint holds only finished passes (`pass_done`, in
+/// both the PIT and the Qdrant scroll positions).
+fn pass_finished(cp: Option<loams_connector_sdk::Checkpoint>) -> bool {
+    cp.is_some_and(|cp| {
+        !cp.splits.is_empty()
+            && cp.splits.values().all(|p| {
+                serde_json::from_slice::<Value>(&p.opaque)
+                    .is_ok_and(|v| v["pass_done"].as_bool() == Some(true))
+            })
+    })
+}
+
 struct State {
     generation: u32,
     fabric: MemoryFabric,
@@ -123,6 +135,9 @@ pub struct SearchHarness {
     secrets: Vec<(String, String)>,
     run: String,
     config: PipelineConfig,
+    /// The connector's own page and bulk sizes and the SDK's default budgets
+    /// ([`SearchHarness::for_bench`]), not the suites' small ones.
+    bench: bool,
     switch: Arc<FaultSwitch>,
     state: Mutex<State>,
 }
@@ -183,6 +198,7 @@ impl SearchHarness {
                 checkpoint_interval: Duration::ZERO,
                 ..PipelineConfig::default()
             },
+            bench: false,
             switch: FaultSwitch::new(),
             state: Mutex::new(State::new(0)),
         }
@@ -230,6 +246,20 @@ impl SearchHarness {
 
     /// Real Qdrant (`connectors-p2`), with an API key
     /// (`LOAMS_QDRANT_URL`, `LOAMS_QDRANT_API_KEY`).
+    /// The connector's own page and bulk sizes and the SDK's default budgets,
+    /// for the performance bench: the suites' 7-document pages, 50-document
+    /// bulks and 16-row batches exercise paging and resumption, and are not
+    /// what a bench should measure (a round of the 10,000 batch re-reads up to
+    /// 100,000 documents).
+    pub fn for_bench(mut self) -> Self {
+        self.bench = true;
+        self.config = PipelineConfig {
+            checkpoint_interval: Duration::ZERO,
+            ..PipelineConfig::default()
+        };
+        self
+    }
+
     pub fn qdrant() -> Self {
         let key = env_or("LOAMS_QDRANT_API_KEY", QDRANT_KEY);
         Self::new(
@@ -306,11 +336,19 @@ impl SearchHarness {
         .map_err(failed)
     }
 
-    fn source_config(&self, src: &str, page: usize) -> Value {
-        if self.system.is_qdrant() {
-            self.config(json!({"collection": src, "source": {"page_size": page}}))
+    fn source_config(&self, src: &str, page: Option<usize>) -> Value {
+        let mut source = if self.system.is_qdrant() {
+            json!({})
         } else {
-            self.config(json!({"index": src, "source": {"cursor_field": "seq", "page_size": page}}))
+            json!({"cursor_field": "seq"})
+        };
+        if let Some(page) = page {
+            source["page_size"] = json!(page);
+        }
+        if self.system.is_qdrant() {
+            self.config(json!({"collection": src, "source": source}))
+        } else {
+            self.config(json!({"index": src, "source": source}))
         }
     }
 
@@ -319,6 +357,8 @@ impl SearchHarness {
             self.config(json!({
                 "collection": dst, "key": "/payload/id", "vector": "/vector", "payload": "/payload"
             }))
+        } else if self.bench {
+            self.config(json!({"index": dst, "key": "/id"}))
         } else {
             self.config(json!({"index": dst, "key": "/id", "bulk": {"max_docs": 50, "retry_backoff_ms": 50}}))
         }
@@ -467,19 +507,46 @@ impl SearchHarness {
                     None,
                 )
                 .await;
-            let a = admin
+            // A scroll, so every document is counted: one `_search` returns
+            // at most `index.max_result_window` (10,000) hits, which the
+            // bench's 10,000 batch passes from its second round.
+            let mut a = admin
                 .json(
                     Method::POST,
-                    &format!("/{name}/_search"),
-                    Some(&json!({"size": 10000, "_source": ["id"], "query": {"match_all": {}}})),
+                    &format!("/{name}/_search?scroll=1m"),
+                    Some(&json!({"size": 1000, "_source": ["id"], "query": {"match_all": {}}})),
                 )
                 .await
                 .map_err(failed)?;
-            for h in a["hits"]["hits"].as_array().cloned().unwrap_or_default() {
-                // One document per `_id`; a duplicate write would be a
-                // second document with the same `id` field.
-                let id = h["_source"]["id"].as_str().unwrap_or("?").to_owned();
-                *out.entry(id).or_default() += 1;
+            loop {
+                let hits = a["hits"]["hits"].as_array().cloned().unwrap_or_default();
+                for h in &hits {
+                    // One document per `_id`; a duplicate write would be a
+                    // second document with the same `id` field.
+                    let id = h["_source"]["id"].as_str().unwrap_or("?").to_owned();
+                    *out.entry(id).or_default() += 1;
+                }
+                let Some(scroll) = a["_scroll_id"].as_str().map(str::to_owned) else {
+                    break;
+                };
+                if hits.is_empty() {
+                    let _ = admin
+                        .json(
+                            Method::DELETE,
+                            "/_search/scroll",
+                            Some(&json!({"scroll_id": scroll})),
+                        )
+                        .await;
+                    break;
+                }
+                a = admin
+                    .json(
+                        Method::POST,
+                        "/_search/scroll",
+                        Some(&json!({"scroll": "1m", "scroll_id": scroll})),
+                    )
+                    .await
+                    .map_err(failed)?;
             }
         }
         Ok(out
@@ -498,7 +565,7 @@ impl SearchHarness {
         self.reset().await?;
         let (src, _) = self.names(self.state.lock().await.generation);
         self.put_docs(&src, 0, n).await?;
-        let ctx = self.ctx(self.source_config(&src, page));
+        let ctx = self.ctx(self.source_config(&src, Some(page)));
         let (mut en, sources) = self
             .factory()
             .source(&ctx)
@@ -729,8 +796,16 @@ impl ConnectorHarness for SearchHarness {
         let (src, dst) = self.names(s.generation);
         let factory = self.factory();
         let inst = Self::instance();
+        // A source pass that finished (no `poll_interval`) has nothing left
+        // to resume: starting again is the next run, a whole pass (the sink
+        // upserts by key, so documents read again land on themselves). The
+        // kit's bench restarts each round after seeding more; resuming the
+        // finished pass would read nothing and never settle.
+        if pass_finished(s.store.get(&inst)) {
+            s.store = MemoryCheckpointStore::new();
+        }
         let (enumerator, sources) = factory
-            .source(&self.ctx(self.source_config(&src, 7)))
+            .source(&self.ctx(self.source_config(&src, (!self.bench).then_some(7))))
             .map_err(failed)?
             .ok_or_else(|| HarnessError::failed("no source"))?;
         let source = Pipeline::source(inst.clone(), self.config.clone())
