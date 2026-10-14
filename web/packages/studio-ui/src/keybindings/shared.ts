@@ -1,7 +1,7 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // packages/shared/src/keybindings.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// the contracts' keybinding types restated as plain TypeScript; the defaults rebound to Studio's commands and kept clear of the shell's Mod+K, Mod+J and Mod+Shift+M. Loams' changes are Apache-2.0.
+// the contracts' keybinding types restated as plain TypeScript; the defaults rebound to Studio's commands (with the thread jumps and next/previous) and kept clear of the shell's Mod+K, Mod+J and Mod+Shift+M. Loams' changes are Apache-2.0.
 
 // Studio's keybinding model (SD1 Task 24; §53 §5.10): a binding is a key chord, a
 // command and an optional `when` clause over context flags (`terminalFocus`,
@@ -13,6 +13,21 @@ export const MAX_KEYBINDING_VALUE_LENGTH = 64;
 export const MAX_KEYBINDING_WHEN_LENGTH = 256;
 export const MAX_WHEN_EXPRESSION_DEPTH = 64;
 export const MAX_KEYBINDINGS_COUNT = 256;
+
+/** Mod+1…9 open the sidebar's first nine threads (SD1 Task 17; upstream's thread jumps). */
+export const THREAD_JUMP_KEYBINDING_COMMANDS = [
+  "thread.jump.1",
+  "thread.jump.2",
+  "thread.jump.3",
+  "thread.jump.4",
+  "thread.jump.5",
+  "thread.jump.6",
+  "thread.jump.7",
+  "thread.jump.8",
+  "thread.jump.9",
+] as const;
+
+export type ThreadJumpKeybindingCommand = (typeof THREAD_JUMP_KEYBINDING_COMMANDS)[number];
 
 /**
  * The commands a Studio keybinding can run. Upstream's names where the command is
@@ -31,6 +46,9 @@ export const STUDIO_KEYBINDING_COMMANDS = [
   "preview.toggle",
   "chat.new",
   "settings.open",
+  "thread.previous",
+  "thread.next",
+  ...THREAD_JUMP_KEYBINDING_COMMANDS,
 ] as const;
 
 export type KeybindingCommand = (typeof STUDIO_KEYBINDING_COMMANDS)[number];
@@ -197,6 +215,14 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
   { key: "mod+shift+o", command: "chat.new", when: "!terminalFocus" },
   { key: "mod+n", command: "chat.new", when: "!terminalFocus" },
   { key: "mod+,", command: "settings.open" },
+  { key: "mod+shift+[", command: "thread.previous" },
+  { key: "mod+shift+]", command: "thread.next" },
+  // Desktop only, as upstream: in a browser Mod+1…9 switch tabs.
+  ...THREAD_JUMP_KEYBINDING_COMMANDS.map((command, index) => ({
+    key: `mod+${index + 1}`,
+    command,
+    when: "isDesktop",
+  })),
 ];
 
 function normalizeKeyToken(token: string): string {

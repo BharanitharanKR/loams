@@ -30,6 +30,10 @@ catalog:
   '@xyflow/react': 12.12.0
   tailwindcss: 4.3.3
   '@tailwindcss/vite': 4.3.3
+  # Studio's sidebar reorder (SD1 Task 17; MIT; published 2024-12-04/05).
+  '@dnd-kit/core': 6.3.1
+  '@dnd-kit/sortable': 10.0.0
+  '@dnd-kit/utilities': 3.2.2
   # Studio's terminals (SD1 Task 22; D920, Q818): DD1's xterm.js pin, MIT, 2025-12-22.
   '@xterm/xterm': 6.0.0
   '@xterm/addon-fit': 0.11.0
@@ -53,6 +57,12 @@ overrides:
   # js-yaml 4 uses argparse (Python-2.0) only for its command-line tool, which nothing
   # here runs; the library (`load`, `dump`) never imports it.
   'js-yaml@4.3.2>argparse': '-'
+  # @dnd-kit lists tslib (0BSD, T2-5) as a dependency, but none of its published
+  # dist files imports it (checked in the tarballs of these exact versions).
+  '@dnd-kit/core@6.3.1>tslib': '-'
+  '@dnd-kit/sortable@10.0.0>tslib': '-'
+  '@dnd-kit/utilities@3.2.2>tslib': '-'
+  '@dnd-kit/accessibility@3.1.1>tslib': '-'
 
 allowBuilds:
   esbuild: true
