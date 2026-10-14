@@ -471,6 +471,34 @@ mod tests {
         }
     }
 
+    /// SD1 Task 13 (DD1 Ruling 8): an agent can never answer an approval,
+    /// switch its thread to full access, or watch what waits for the person,
+    /// not even for its own session; only the owner can.
+    #[tokio::test]
+    async fn mcp_role_cannot_resolve() {
+        let run = mcp("main");
+        for (method, params) in [
+            (
+                methods::RESOLVE_APPROVAL,
+                json!({"callId": "call-1", "chatId": "main", "decision": "always"}),
+            ),
+            (
+                methods::SET_THREAD_APPROVAL_MODE,
+                json!({"chatId": "main", "mode": "full-access"}),
+            ),
+            (methods::WATCH_APPROVALS, json!({"chatId": "main"})),
+        ] {
+            assert!(!allowed(&run, method, params.clone()).await, "{method}");
+            assert!(
+                allowed(&Identity::owner(), method, params).await,
+                "{method}"
+            );
+            let spec = loams_agentd_proto::rpc::method_spec(method).expect("in the table");
+            assert_eq!(spec.role, Role::Owner, "{method} must never be open to mcp");
+            assert!(spec.renderer, "{method} is a Studio method");
+        }
+    }
+
     #[tokio::test]
     async fn mcp_may_call_only_the_shims_methods() {
         let run = mcp("main");

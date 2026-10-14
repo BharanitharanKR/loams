@@ -20,6 +20,9 @@
 //! [groups]                  # plan SD1 Task 12: run groups' concurrency
 //! max_running_per_group = 4
 //! max_running = 8
+//! [approvals]               # plan SD1 Task 13: supervised approvals (D911)
+//! default_mode = "full-access"   # unset: full-access, or supervised with [remote]
+//! timeout_secs = 1800
 //! [remote]                  # plan SD1 Task 7: `serve --remote` (D909)
 //! enabled = false
 //! listen = "0.0.0.0:8443"
@@ -41,8 +44,10 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use loams_agentd_proto::approvals::ApprovalMode;
 use loams_agentd_proto::daemon::DaemonMode;
 use loams_agentd_sessions::RunGroupLimits;
+use loams_agentd_sessions::approvals::ApprovalSettings;
 use loams_agentd_sessions::tool_outputs::{
     TOOL_OUTPUT_ARCHIVED_RETENTION, TOOL_OUTPUT_BUDGET, TOOL_OUTPUT_FILE_CAP, ToolOutputLimits,
 };
@@ -57,7 +62,45 @@ pub struct Config {
     pub daemon: DaemonConfig,
     pub tool_outputs: ToolOutputsConfig,
     pub groups: GroupsConfig,
+    pub approvals: ApprovalsConfig,
     pub remote: RemoteConfig,
+}
+
+/// `[approvals]`: supervised approvals (design §53 §8.1, D911; plan SD1
+/// Task 13).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct ApprovalsConfig {
+    /// The mode of a thread that has none of its own and no parent's. Unset,
+    /// it is `full-access` (the behaviour before Task 13), and `supervised`
+    /// when the remote listener is on: a remote daemon is reachable over the
+    /// network.
+    pub default_mode: Option<ApprovalMode>,
+    /// How long an approval waits for a person before it is denied.
+    pub timeout_secs: u64,
+}
+
+impl Default for ApprovalsConfig {
+    fn default() -> Self {
+        Self {
+            default_mode: None,
+            timeout_secs: loams_agentd_sessions::approvals::DEFAULT_TIMEOUT.as_secs(),
+        }
+    }
+}
+
+impl ApprovalsConfig {
+    /// The engine's settings, `remote` when the remote listener is on.
+    pub fn settings(&self, remote: bool) -> ApprovalSettings {
+        ApprovalSettings {
+            default_mode: self.default_mode.unwrap_or(if remote {
+                ApprovalMode::Supervised
+            } else {
+                ApprovalMode::FullAccess
+            }),
+            timeout: Duration::from_secs(self.timeout_secs),
+        }
+    }
 }
 
 /// `[groups]`: how many run-group members run at once (design §53 §5.5;
@@ -251,6 +294,7 @@ impl Config {
                 u64::from(self.groups.max_running_per_group),
             ),
             ("groups.max_running", u64::from(self.groups.max_running)),
+            ("approvals.timeout_secs", self.approvals.timeout_secs),
         ];
         for (key, value) in positive {
             if value == 0 {
@@ -319,6 +363,43 @@ mod tests {
                 budget: 4096,
                 archived_retention: Duration::from_secs(7 * 24 * 60 * 60),
             }
+        );
+    }
+
+    #[test]
+    fn approvals_default_to_full_access_and_supervised_when_remote() {
+        let config = Config::default();
+        assert_eq!(
+            config.approvals.settings(false).default_mode,
+            ApprovalMode::FullAccess
+        );
+        assert_eq!(
+            config.approvals.settings(true).default_mode,
+            ApprovalMode::Supervised
+        );
+        assert_eq!(
+            config.approvals.settings(false).timeout,
+            Duration::from_secs(30 * 60)
+        );
+        let config =
+            Config::parse("[approvals]\ndefault_mode = \"supervised\"\ntimeout_secs = 60\n")
+                .expect("parse");
+        assert_eq!(
+            config.approvals.settings(false).default_mode,
+            ApprovalMode::Supervised
+        );
+        assert_eq!(
+            config.approvals.settings(false).timeout,
+            Duration::from_secs(60)
+        );
+        assert_eq!(
+            invalid("[approvals]\ntimeout_secs = 0\n").0,
+            "`approvals.timeout_secs`"
+        );
+        assert!(
+            invalid("[approvals]\ndefault_mode = \"yolo\"\n")
+                .0
+                .contains("approvals.default_mode")
         );
     }
 

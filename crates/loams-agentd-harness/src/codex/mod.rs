@@ -15,12 +15,15 @@
 //! - Notifications map to [`AgentEvent`]s: agentMessage/reasoning deltas (both
 //!   `delta`/`textDelta` spellings), item lifecycles → typed ToolCall/ToolResult,
 //!   `thread/tokenUsage/updated` → Usage, turn/completed|failed|aborted → Done.
-//! - Approvals + sandbox: yolo mode. The wire policy is always `"never"` and
-//!   the sandbox is forced to `danger-full-access` — parity with the Claude
-//!   adapter's auto-approve-everything (unattended runs). Stray
-//!   `item/commandExecution/requestApproval` +
+//! - Approvals + sandbox. Full access (the default) is yolo mode: the wire
+//!   policy is `"never"` and the sandbox is forced to `danger-full-access` —
+//!   parity with the Claude adapter's auto-approve-everything (unattended
+//!   runs); stray `item/commandExecution/requestApproval` +
 //!   `item/fileChange/requestApproval` still round-trip through
-//!   [`RunControls::request_input`] as a synthesized yes/no question.
+//!   [`RunControls::request_input`] as a synthesized yes/no question. A
+//!   supervised thread (SD1 Task 13, `RunControls::request_approval`) runs
+//!   with `"on-request"` in the thread's own sandbox, and each approval
+//!   request waits for the person's decision.
 //! - Subagents are full child app-server threads. Parent spawn items establish
 //!   their stable ownership; content arriving before the spawn is buffered.
 //!   A registered child's notifications route through an EXPLICIT table
@@ -36,6 +39,7 @@
 //!   escalating to SIGTERM → SIGKILL if the child is unresponsive; the stream
 //!   always ends with `Done { status: Interrupted }`.
 
+mod approvals;
 pub(crate) mod catalog;
 mod normalize;
 mod subagents;
@@ -568,6 +572,10 @@ fn parse_skills(result: &Value) -> Vec<loams_agentd_proto::invocation::Skill> {
 
 #[async_trait]
 impl Harness for CodexHarness {
+    fn supports_approvals(&self) -> bool {
+        true
+    }
+
     fn id(&self) -> HarnessId {
         HarnessId::Codex
     }
@@ -708,8 +716,13 @@ impl CodexHarness {
         // sidesteps codex ≤0.144.x's workspace-write bug where a linked
         // worktree on a slash-named branch derives a malformed mount that
         // kills every command.
+        // A supervised thread keeps its own sandbox (SD1 Task 13): Codex asks
+        // on request instead, and the forced full access is lifted.
         request.sandbox = if title_only {
             loams_agentd_proto::SandboxLevel::ReadOnly
+        } else if controls.request_approval.is_some() {
+            request.auto_approve = false;
+            request.sandbox
         } else {
             loams_agentd_proto::SandboxLevel::DangerFullAccess
         };
@@ -967,10 +980,12 @@ async fn run_session(session: Session) {
     let RunControls {
         execution_lease: _execution_lease,
         request_input,
+        request_approval,
         mut steering,
         interrupt,
     } = controls;
     let request_input = Arc::new(request_input);
+    let request_approval = request_approval.map(Arc::new);
 
     // ---- wire params ------------------------------------------------------
     // Parity with the Claude adapter, which auto-approves every `can_use_tool`
@@ -980,7 +995,8 @@ async fn run_session(session: Session) {
     // every command into a yes/no question (user report: "asking me for
     // approval at every step"). The approval-as-input plumbing below stays for
     // stray requests and a future explicit permission-mode setting.
-    let approval_policy = "never";
+    // A supervised thread asks on request instead (SD1 Task 13).
+    let approval_policy = approvals::approval_policy(request_approval.is_some());
     let effort = to_effort(request.reasoning);
     // Service tier rides thread-start and every turn (mirrors the Codex IDE
     // client). "default" means Standard — omit it entirely.
@@ -1490,6 +1506,7 @@ async fn run_session(session: Session) {
                         &params,
                         request.auto_approve,
                         &request_input,
+                        request_approval.as_ref(),
                     );
                 }
 
@@ -1708,6 +1725,7 @@ fn handle_server_request(
     params: &Value,
     auto_approve: bool,
     request_input: &Arc<RequestInputFn>,
+    request_approval: Option<&Arc<crate::RequestApproval>>,
 ) {
     // A tool's user-input request (EXPERIMENTAL, codex 0.146.x) is a CONTENT
     // question, never auto-approvable — route it to the input bridge and
@@ -1746,6 +1764,17 @@ fn handle_server_request(
             "unhandled server request: {method}"
         );
         client.respond_error(&id, -32601, &format!("unsupported method: {method}"));
+        return;
+    }
+    // Supervised (SD1 Task 13): the person decides, whatever `autoApprove`
+    // says; a dropped bridge declines.
+    if let Some(request_approval) = request_approval {
+        let answer = request_approval(approvals::ask(method, &id, params));
+        let client = client.clone();
+        tokio::spawn(async move {
+            let allowed = crate::approval_allows(answer).await;
+            client.respond(&id, approvals::decision(allowed));
+        });
         return;
     }
     if auto_approve {

@@ -6,9 +6,11 @@
 // answers with the new order, which shows at once (`applyPins`).
 
 import { create, type MessageInitShape } from '@bufbuild/protobuf';
-import { createClient } from '@connectrpc/connect';
+import { Code, ConnectError, createClient } from '@connectrpc/connect';
 import { useAgentdTransport } from '@loams/console-host/query';
 import {
+  ApprovalMode,
+  ApprovalService,
   ChatConfigSchema,
   GitService,
   HarnessId,
@@ -41,6 +43,13 @@ const HARNESS: Record<StudioSettings['harness'], HarnessId> = {
 /** A new thread's id: the client picks it (`CreateThread.chat_id`). */
 export function newThreadId(): string {
   return globalThis.crypto.randomUUID();
+}
+
+/** A new thread's approval mode: Settings › Studio's choice, `supervised` by default (Q803). */
+export function newThreadApprovalMode(): ApprovalMode {
+  return readSettings().approvalMode === 'full-access'
+    ? ApprovalMode.FULL_ACCESS
+    : ApprovalMode.SUPERVISED;
 }
 
 /** This device's defaults for a new thread (Settings › Studio, T15-6). */
@@ -101,6 +110,7 @@ export function useThreadActions(o: {
         ? {
             threads: createClient(ThreadService, transport),
             git: createClient(GitService, transport),
+            approvals: createClient(ApprovalService, transport),
           }
         : null,
     [transport],
@@ -151,6 +161,13 @@ export function useThreadActions(o: {
       run('start a thread', async (c) => {
         const id = newThreadId();
         await c.threads.createThread({ chatId: id, cwd: project.path, config: newThreadConfig() });
+        // The thread's approval mode (G22, SD1 Task 13), before its first run. A
+        // daemon without approvals answers `unimplemented`: its threads run as before.
+        try {
+          await c.approvals.setThreadApprovalMode({ chatId: id, mode: newThreadApprovalMode() });
+        } catch (e) {
+          if (!(e instanceof ConnectError && e.code === Code.Unimplemented)) throw e;
+        }
         navigate(studioHref({ kind: 'thread', threadId: id }));
       }),
     pin: (id, p) => changePin('pin the thread', { case: 'pin', value: position(id, p) }),

@@ -1,9 +1,9 @@
 // The thread page's server streams (SD1 Task 18). connect-query reads unary methods;
 // these hooks hold the long-lived watches: the transcript through the shared store
 // (`@loams/studio-ui/chat`, one watch per thread for the page and the dock, D917),
-// the thread's own record from `WatchThreads`, and its pending approvals from
-// `WatchApprovals` (G17). A daemon without approvals (`unimplemented`, before SD1
-// Task 13) shows none.
+// the thread's own record from `WatchThreads`, and its pending approvals and
+// effective approval mode from `WatchApprovals` (G17, SD1 Task 13). A daemon
+// without approvals (`unimplemented`, before SD1 Task 13) shows none.
 
 import { toJson } from '@bufbuild/protobuf';
 import { ValueSchema } from '@bufbuild/protobuf/wkt';
@@ -11,6 +11,7 @@ import { Code, ConnectError, createClient, type Transport } from '@connectrpc/co
 import { fromConnectTranscript } from '@loams/agentd-client/connect';
 import {
   type Approval,
+  ApprovalMode,
   ApprovalRisk,
   ApprovalService,
   type Chat,
@@ -124,9 +125,21 @@ export function pendingApprovalOf(approval: Approval): PendingApproval {
   };
 }
 
-/** The thread's pending approvals (G17), oldest first. */
+/** A thread's approval mode as the header names it. */
+export type ThreadApprovalMode = 'supervised' | 'full-access';
+
+const MODE: Partial<Record<ApprovalMode, ThreadApprovalMode>> = {
+  [ApprovalMode.SUPERVISED]: 'supervised',
+  [ApprovalMode.FULL_ACCESS]: 'full-access',
+};
+
+/**
+ * The thread's pending approvals (G17), oldest first, and its effective approval
+ * mode as the daemon applies it (SD1 Task 13; `undefined` until it says).
+ */
 export function useThreadApprovals(transport: Transport | undefined, chatId: string) {
   const [pending, setPending] = useState<PendingApproval[]>([]);
+  const [mode, setMode] = useState<ThreadApprovalMode | undefined>(undefined);
   const state = useWatch(
     transport,
     (t, signal) => createClient(ApprovalService, t).watchApprovals({ chatId }, { signal }),
@@ -137,8 +150,13 @@ export function useThreadApprovals(transport: Transport | undefined, chatId: str
           .map(pendingApprovalOf)
           .sort((a, b) => a.createdAtMs - b.createdAtMs),
       );
+      setMode(response.mode === undefined ? undefined : MODE[response.mode]);
     },
     [chatId],
   );
-  return { pending: state.unsupported ? [] : pending, ...state };
+  return {
+    pending: state.unsupported ? [] : pending,
+    mode: state.unsupported ? undefined : mode,
+    ...state,
+  };
 }

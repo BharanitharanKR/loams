@@ -18,8 +18,9 @@
 //!   turn (`cancelled` → Interrupted, `refusal` → Errored, else Completed).
 //! - `session/update` notifications normalize per [`normalize::map_update`].
 //! - Permission requests auto-accept with the agent's preferred allow option
-//!   (loams-desktop sessions run unattended); question-shaped requests block on the
-//!   engine's input bridge.
+//!   in a full-access thread (unattended); in a supervised one (SD1 Task 13,
+//!   `RunControls::request_approval`) each waits for the person's decision.
+//!   Question-shaped requests block on the engine's input bridge in both.
 //! - Steering: agents advertising `_session/steering` get mid-turn injection;
 //!   others queue steers and deliver them as the next `session/prompt` at the
 //!   turn boundary. The session stays parked between turns while the
@@ -28,6 +29,7 @@
 //!   always ends with `Done { status: Interrupted }`.
 
 mod antigravity_paths;
+mod approvals;
 mod devin_models;
 mod loams_bot; // loams
 mod normalize;
@@ -2144,6 +2146,10 @@ fn trait_from_config_option(option: &Value) -> Option<ModelOption> {
 
 #[async_trait]
 impl Harness for AcpHarness {
+    fn supports_approvals(&self) -> bool {
+        true
+    }
+
     fn id(&self) -> HarnessId {
         self.spec.id
     }
@@ -3028,6 +3034,7 @@ fn handle_server_request_live(
     method: &str,
     params: &Value,
     request_input: &std::sync::Arc<RequestInputFn>,
+    request_approval: Option<&std::sync::Arc<crate::RequestApproval>>,
     session_id: &str,
 ) -> Vec<AgentEvent> {
     if params
@@ -3047,7 +3054,18 @@ fn handle_server_request_live(
         .cloned()
         .unwrap_or_default();
     if !is_user_question(&options) {
-        return handle_server_request(client, id, method, params);
+        let Some(request_approval) = request_approval else {
+            return handle_server_request(client, id, method, params);
+        };
+        // Supervised (SD1 Task 13): the person decides; a dropped bridge
+        // rejects.
+        let answer = request_approval(approvals::ask(&id, params));
+        let client = client.clone();
+        tokio::spawn(async move {
+            let allowed = crate::approval_allows(answer).await;
+            client.respond(&id, approvals::outcome(&options, allowed));
+        });
+        return Vec::new();
     }
     let names: Vec<String> = options
         .iter()
@@ -3520,10 +3538,12 @@ async fn run_session(session: Session) {
     let RunControls {
         execution_lease: _execution_lease,
         request_input,
+        request_approval,
         mut steering,
         interrupt,
     } = controls;
     let request_input = std::sync::Arc::new(request_input);
+    let request_approval = request_approval.map(std::sync::Arc::new);
 
     // ---- handshake + session (interruptible) ------------------------------
     let setup = async {
@@ -4060,6 +4080,7 @@ async fn run_session(session: Session) {
                                 &method,
                                 &params,
                                 &request_input,
+                                request_approval.as_ref(),
                                 &session_id,
                             ) {
                                 if !send(&event_tx, ev).await {
@@ -4284,6 +4305,7 @@ async fn run_session(session: Session) {
                         &method,
                         &params,
                         &request_input,
+                        request_approval.as_ref(),
                         &session_id,
                     ) {
                         if !send(&event_tx, ev).await {
@@ -4394,6 +4416,7 @@ async fn run_session(session: Session) {
                                         &method,
                                         &params,
                                         &request_input,
+                                        request_approval.as_ref(),
                                 &session_id,
                                     ) {
                                         if !send(&event_tx, ev).await {

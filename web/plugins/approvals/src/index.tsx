@@ -7,15 +7,30 @@
 // the target for DESTRUCTIVE, and step-up when the session is older than 5
 // minutes. The generic `approval.renderer` is registered under "*"; other
 // plugins may register richer renderers for their own kinds.
+//
+// Beside them, labelled by source, are the agent's approvals (design §53 §4.5,
+// §8.1; plan SD1 Task 13): the tool calls a supervised loams-agentd thread waits
+// on, from agentd's own `WatchApprovals` while a daemon is reachable
+// (`./agent.ts`), answered once, always for the thread, or denied.
 
-import { timestampDate } from '@bufbuild/protobuf/wkt';
+import { toJson } from '@bufbuild/protobuf';
+import { timestampDate, ValueSchema } from '@bufbuild/protobuf/wkt';
 import { type PlatformService, type PluginModule, service, watch } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
 import { approvals } from '@loams/proto';
+import { ApprovalRisk } from '@loams/proto/agentd';
 import { Badge, Button, Card, Empty, Field, Input, Notice, StatusTag } from '@loams/ui';
 import { useRef, useState, useSyncExternalStore } from 'react';
+import {
+  type AgentApproval,
+  AgentDecision,
+  AgentInbox,
+  followAgentApprovals,
+  resolveAgentApproval,
+} from './agent.js';
 import { Inbox, REASON_TEXT, reasonOf } from './store.js';
 
+export { AgentDecision, AgentInbox, followAgentApprovals } from './agent.js';
 export { Inbox, REASON_TEXT, reasonOf } from './store.js';
 
 type Client = ReturnType<typeof service<'rpc.approvals'>>;
@@ -83,6 +98,7 @@ export function ApprovalCard({
       title={approval.summary}
       actions={
         <>
+          <Badge>Server</Badge>{' '}
           {approval.environment?.protected && <StatusTag status="progress">protected</StatusTag>}{' '}
           <Badge>{RISK_TEXT[approval.risk] ?? 'unknown risk'}</Badge>
         </>
@@ -136,8 +152,109 @@ export function ApprovalCard({
   );
 }
 
-export function InboxPage({ inbox, client }: { inbox: Inbox; client: Client }) {
+/** An agent approval's arguments as text (redacted by the daemon; never HTML). */
+function argsText(approval: AgentApproval): string {
+  if (!approval.args) return '';
+  try {
+    return JSON.stringify(toJson(ValueSchema, approval.args), null, 2);
+  } catch {
+    return '';
+  }
+}
+
+const AGENT_RISK_TEXT: Record<number, string> = {
+  [ApprovalRisk.READ]: 'reads',
+  [ApprovalRisk.WRITE]: 'writes',
+  [ApprovalRisk.DESTRUCTIVE]: 'destructive',
+};
+
+/** What answers an agent approval: once, always for its thread, or deny. */
+export type ResolveAgentApproval = (
+  approval: AgentApproval,
+  decision: AgentDecision,
+) => Promise<void>;
+
+/** One tool call a supervised agent thread waits on. */
+export function AgentApprovalCard({
+  approval,
+  resolve,
+  onResolved,
+}: {
+  approval: AgentApproval;
+  resolve: ResolveAgentApproval;
+  onResolved: (a: AgentApproval) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const decide = async (decision: AgentDecision) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await resolve(approval, decision);
+      onResolved(approval);
+    } catch (e) {
+      setError(reasonOf(e) === 'approval_not_pending' ? 'It was already answered.' : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const args = argsText(approval);
+  const created = new Date(Number(approval.createdAtMs));
+  return (
+    <Card
+      title={`${approval.tool} wants to run`}
+      actions={
+        <>
+          <Badge>Agent</Badge> <Badge>{AGENT_RISK_TEXT[approval.risk] ?? 'unknown risk'}</Badge>
+        </>
+      }
+    >
+      <p className="lc-muted">
+        loams-agentd thread{' '}
+        <a href={`#/studio/t/${encodeURIComponent(approval.chatId)}`}>{approval.chatId}</a> · asked{' '}
+        {created.toLocaleString()}
+      </p>
+      {args && <pre className="lc-detail-lines">{args}</pre>}
+      {error && (
+        <Notice tone="danger" title="Not answered">
+          {error}
+        </Notice>
+      )}
+      <div className="lc-actions">
+        <Button variant="primary" disabled={busy} onClick={() => decide(AgentDecision.ONCE)}>
+          Allow once
+        </Button>
+        <Button disabled={busy} onClick={() => decide(AgentDecision.ALWAYS)}>
+          Always for this thread
+        </Button>
+        <Button variant="danger" disabled={busy} onClick={() => decide(AgentDecision.DENY)}>
+          Deny
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+/** The agent approvals of the inbox page, when a daemon serves them. */
+export interface AgentSource {
+  inbox: AgentInbox;
+  resolve: ResolveAgentApproval;
+}
+
+const NO_AGENT = new AgentInbox();
+
+export function InboxPage({
+  inbox,
+  client,
+  agent,
+}: {
+  inbox: Inbox;
+  client: Client;
+  agent?: AgentSource;
+}) {
   const state = useSyncExternalStore(inbox.subscribe, inbox.getSnapshot);
+  const agentInbox = agent?.inbox ?? NO_AGENT;
+  const agentState = useSyncExternalStore(agentInbox.subscribe, agentInbox.getSnapshot);
   return (
     <div className="lc-page">
       <header className="lc-page-head">
@@ -149,27 +266,44 @@ export function InboxPage({ inbox, client }: { inbox: Inbox; client: Client }) {
           The list may be out of date: {state.error}
         </Notice>
       )}
-      {state.approvals.length === 0 ? (
+      {agentState.error && (
+        <Notice tone="warn" title="The agent approvals stream dropped">
+          The agent's list may be out of date: {agentState.error}
+        </Notice>
+      )}
+      {state.approvals.length === 0 && agentState.approvals.length === 0 ? (
         <Empty title="Nothing to approve">
           Destructive operations and agent actions that need a person show up here.
         </Empty>
       ) : (
-        state.approvals.map((a) => (
-          <ApprovalCard
-            key={`${a.id}@${a.revision}`}
-            approval={a}
-            client={client}
-            onDecided={(d) => inbox.replace(d)}
-          />
-        ))
+        <>
+          {state.approvals.map((a) => (
+            <ApprovalCard
+              key={`${a.id}@${a.revision}`}
+              approval={a}
+              client={client}
+              onDecided={(d) => inbox.replace(d)}
+            />
+          ))}
+          {agent &&
+            agentState.approvals.map((a) => (
+              <AgentApprovalCard
+                key={`agent:${a.chatId}:${a.id}`}
+                approval={a}
+                resolve={agent.resolve}
+                onResolved={(r) => agent.inbox.remove(r)}
+              />
+            ))}
+        </>
       )}
     </div>
   );
 }
 
-function PendingChip({ inbox }: { inbox: Inbox }) {
+function PendingChip({ inbox, agent }: { inbox: Inbox; agent: AgentInbox }) {
   const state = useSyncExternalStore(inbox.subscribe, inbox.getSnapshot);
-  const n = state.approvals.length;
+  const agentState = useSyncExternalStore(agent.subscribe, agent.getSnapshot);
+  const n = state.approvals.length + agentState.approvals.length;
   if (n === 0) return null;
   return (
     <a className="lc-chip" href="#/approvals">
@@ -202,12 +336,20 @@ function notifier(platform: PlatformService) {
 
 const plugin: PluginModule<ApprovalsConfig> = {
   name: 'approvals',
-  inject: ['rpc.approvals', 'router', 'slots', 'platform'],
+  inject: ['rpc.approvals', 'router', 'slots', 'platform', 'agentd'],
   apply(ctx: Context, config: ApprovalsConfig) {
     const client = service(ctx, 'rpc.approvals');
     const router = service(ctx, 'router');
     const slots = service(ctx, 'slots');
+    const agentd = service(ctx, 'agentd');
     const inbox = new Inbox();
+    // The agent's approvals while a daemon is reachable (SD1 Task 13).
+    const agentInbox = new AgentInbox();
+    ctx.effect(() => followAgentApprovals(agentd, agentInbox));
+    const agent: AgentSource = {
+      inbox: agentInbox,
+      resolve: (approval, decision) => resolveAgentApproval(agentd, approval, decision),
+    };
     if (config?.notify) inbox.onNew = notifier(service(ctx, 'platform'));
     watch(
       ctx,
@@ -222,15 +364,17 @@ const plugin: PluginModule<ApprovalsConfig> = {
       if (!shell) return () => {};
       let last = -1;
       const sync = () => {
-        const n = pendingCount(inbox.getSnapshot());
+        const n = pendingCount(inbox.getSnapshot()) + agentInbox.getSnapshot().approvals.length;
         if (n === last) return;
         last = n;
         shell.setBadge(n).catch(() => {});
       };
       sync();
       const off = inbox.subscribe(sync);
+      const offAgent = agentInbox.subscribe(sync);
       return () => {
         off();
+        offAgent();
         shell.setBadge(0).catch(() => {});
       };
     });
@@ -243,12 +387,12 @@ const plugin: PluginModule<ApprovalsConfig> = {
           plugin: 'approvals',
           nav: { group: 'Operate', order: 20 },
         },
-        () => <InboxPage inbox={inbox} client={client} />,
+        () => <InboxPage inbox={inbox} client={client} agent={agent} />,
       ),
     );
     ctx.effect(() =>
       slots.register({ name: 'shell.overlay', plugin: 'approvals' }, () => (
-        <PendingChip inbox={inbox} />
+        <PendingChip inbox={inbox} agent={agentInbox} />
       )),
     );
   },

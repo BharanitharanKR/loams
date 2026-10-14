@@ -8,6 +8,7 @@ import { Code, ConnectError, createRouterTransport } from '@connectrpc/connect';
 import { desktopAgentdEndpoint } from '@loams/platform-electron';
 import { createMockAgentdApi } from '@loams/plugin-desktop-agentd';
 import {
+  ApprovalMode,
   type ApprovalSchema,
   ApprovalService,
   type ChatSchema,
@@ -240,6 +241,10 @@ export function sidebarDaemon(
       service(ApprovalService, {
         async *watchApprovals(_req, ctx) {
           for await (const v of approvals.stream(ctx.signal)) yield { pending: v };
+        },
+        setThreadApprovalMode: (req) => {
+          calls.push(`SetThreadApprovalMode:${req.chatId.length > 0}:${ApprovalMode[req.mode]}`);
+          return {};
         },
       });
     }

@@ -349,6 +349,7 @@ macro_rules! wire_struct {
     };
 }
 
+mod approvals;
 mod attachments;
 mod checkpoints;
 mod diff;

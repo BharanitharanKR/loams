@@ -113,6 +113,30 @@ case "$first" in
   esac
   ;;
 
+*scenario:supervised*)
+  # SD1 Task 13: a supervised run never bypasses permissions.
+  for arg in "$@"; do
+    case "$arg" in
+      --dangerously-skip-permissions|bypassPermissions) exit 1 ;;
+    esac
+  done
+  emit '{"type":"system","subtype":"init","model":"claude-fable-5","tools":["Bash"],"cwd":"/tmp","session_id":"sess-sup-1"}'
+  emit '{"type":"assistant","parent_tool_use_id":null,"message":{"content":[{"type":"tool_use","id":"toolu_rm","name":"Bash","input":{"command":"rm -rf build","api_key":"sk-live-secret"}}]}}'
+  emit '{"type":"control_request","request_id":"cr-s1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"rm -rf build","api_key":"sk-live-secret"},"tool_use_id":"toolu_rm"}}'
+  read -r resp || exit 1
+  case "$resp" in
+  *'"request_id":"cr-s1"'*'"behavior":"allow"'*)
+    emit '{"type":"result","subtype":"success","result":"ran","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-sup-1"}'
+    ;;
+  *'"request_id":"cr-s1"'*'"behavior":"deny"'*)
+    emit '{"type":"result","subtype":"success","result":"denied","errors":[],"usage":{"input_tokens":1,"output_tokens":1},"session_id":"sess-sup-1"}'
+    ;;
+  *)
+    exit 3
+    ;;
+  esac
+  ;;
+
 *scenario:steer*)
   emit '{"type":"system","subtype":"init","model":"claude-fable-5","tools":[],"cwd":"/tmp","session_id":"sess-steer"}'
   emit '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"first"}}}'

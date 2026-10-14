@@ -1,0 +1,5 @@
+{
+  "callId": "call-1",
+  "decision": "once",
+  "type": "approvalResolved"
+}

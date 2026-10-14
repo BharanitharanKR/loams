@@ -5,6 +5,7 @@
 //! turn for the thread header (`usage`, SD1 Task 14), informational and never billing.
 
 pub mod agent;
+pub mod approvals;
 pub mod brand;
 pub mod chat;
 pub mod checkpoints;

@@ -3,8 +3,10 @@
 //!
 //! The turns are the Mock harness's, scripted per prompt through
 //! `MockHarness::run_with`, so no test reads the process environment:
-//! `ok` completes, `fail` errors, `ask` asks for an approval before its edit,
-//! and `usage <in> <out> <cache> [cost]` reports that usage before `Done`.
+//! `ok` completes, `fail` errors, `question` asks the person a question,
+//! `ask` asks for an approval before its edit (in a supervised thread, SD1
+//! Task 13), and `usage <in> <out> <cache> [cost]` reports that usage before
+//! `Done`.
 #![allow(clippy::unwrap_used)]
 
 use std::path::{Path, PathBuf};
@@ -62,6 +64,9 @@ impl Harness for ScriptedMock {
     fn supports_steering(&self) -> bool {
         false
     }
+    fn supports_approvals(&self) -> bool {
+        true
+    }
     fn steering_mode(&self) -> SteeringMode {
         MockHarness { script: Vec::new() }.steering_mode()
     }
@@ -78,6 +83,23 @@ impl Harness for ScriptedMock {
     ) -> Result<BoxStream<'static, Result<AgentEvent, HarnessError>>, HarnessError> {
         let words: Vec<&str> = request.prompt.split_whitespace().collect();
         let mut edits = MockEdits::default();
+        if words.as_slice() == ["question"] {
+            let answer = (controls.request_input)(vec![loams_agentd_proto::UserInputQuestion {
+                id: "q-continue".into(),
+                header: "Choice".into(),
+                question: "Continue?".into(),
+                options: vec!["Yes".into(), "No".into()],
+                prefill: None,
+                multiline: false,
+                multi_select: false,
+            }]);
+            return Ok(futures::stream::once(async move {
+                let _ = answer.await;
+                Ok(text("Answered."))
+            })
+            .chain(futures::stream::iter([Ok(done(DoneStatus::Completed))]))
+            .boxed());
+        }
         let script = match words.as_slice() {
             ["fail"] => vec![text("Trying."), done(DoneStatus::Errored)],
             ["ask"] => {
@@ -311,9 +333,8 @@ async fn notifications_for_each_kind() {
     assert_eq!(n["title"], "Fix the login");
     daemon.settled().await;
 
-    // A question (the Mock's approval before its edit). Answered, the run
-    // goes on and its turn completes.
-    daemon.send("ask", "msg-3").await;
+    // A question. Answered, the run goes on and its turn completes.
+    daemon.send("question", "msg-3").await;
     let n = next(&mut feed).await;
     assert_eq!(n["kind"], "question", "{n}");
     assert_eq!(n["chatId"], CHAT);
@@ -324,7 +345,34 @@ async fn notifications_for_each_kind() {
         .call(
             methods::QUEUE_COMMAND,
             json!({ "chatId": CHAT, "command": { "kind": "respondInput", "requestId": request_id,
-                    "answers": [{ "questionId": question_id, "labels": ["Deny"] }] } }),
+                    "answers": [{ "questionId": question_id, "labels": ["No"] }] } }),
+        )
+        .await
+        .unwrap();
+    let n = next(&mut feed).await;
+    assert_eq!(n["kind"], "turn_done", "{n}");
+    daemon.settled().await;
+
+    // An approval (SD1 Task 13): the Mock's edit in a supervised thread.
+    // Denied, the run goes on and its turn completes.
+    daemon
+        .client
+        .call(
+            methods::SET_THREAD_APPROVAL_MODE,
+            json!({ "chatId": CHAT, "mode": "supervised" }),
+        )
+        .await
+        .unwrap();
+    daemon.send("ask", "msg-4").await;
+    let n = next(&mut feed).await;
+    assert_eq!(n["kind"], "approval", "{n}");
+    assert_eq!(n["chatId"], CHAT);
+    assert_eq!(n["title"], "Fix the login");
+    daemon
+        .client
+        .call(
+            methods::RESOLVE_APPROVAL,
+            json!({ "chatId": CHAT, "callId": "mock-edit-t1-0", "decision": "deny" }),
         )
         .await
         .unwrap();
@@ -390,7 +438,7 @@ async fn notifications_for_each_kind() {
     // A watcher that connects later gets the buffer, oldest first.
     let mut late = daemon.watch().await;
     let mut kinds = Vec::new();
-    for _ in 0..7 {
+    for _ in 0..9 {
         kinds.push(next(&mut late).await["kind"].as_str().unwrap().to_owned());
     }
     assert_eq!(
@@ -399,6 +447,8 @@ async fn notifications_for_each_kind() {
             "turn_done",
             "error",
             "question",
+            "turn_done",
+            "approval",
             "turn_done",
             "approval",
             "group_ready",

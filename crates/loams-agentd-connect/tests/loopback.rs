@@ -34,6 +34,7 @@ impl Daemon {
             terminal_shell: None,
             tool_outputs: Default::default(),
             mcp_endpoint: None,
+            approvals: Default::default(),
         };
         let runtime = Engine::assemble_runtime(&config, EngineProfile::local(dir.path()).unwrap())
             .await
@@ -234,23 +235,17 @@ async fn connect_unary_and_stream_work() {
 }
 
 #[tokio::test]
-async fn gaps_and_bad_requests_answer_connect_errors() {
+async fn bad_requests_answer_connect_errors() {
+    // Every §53 §6.5 gap is served since SD1 Task 13, so no RPC answers
+    // `unimplemented` any more; a request the daemon cannot map is refused.
     let daemon = Daemon::start().await;
-    // A gap until SD1 Task 13.
-    let approvals = pb::ApprovalServiceClient::new(HttpClient::plaintext(), daemon.config());
-    let error = approvals
-        .set_thread_approval_mode(pb::SetThreadApprovalModeRequest::default())
-        .await
-        .unwrap_err();
-    assert_eq!(error.code, ErrorCode::Unimplemented);
-    assert!(!error.details.is_empty(), "the ErrorInfo detail");
-
     let harness = pb::HarnessServiceClient::new(HttpClient::plaintext(), daemon.config());
     let error = harness
         .list_models(pb::ListModelsRequest::default())
         .await
         .unwrap_err();
     assert_eq!(error.code, ErrorCode::InvalidArgument, "an unset harness");
+    assert!(!error.details.is_empty(), "the ErrorInfo detail");
 
     let host = pb::StudioServiceClient::new(HttpClient::plaintext(), daemon.config())
         .get_host(pb::GetHostRequest::default())

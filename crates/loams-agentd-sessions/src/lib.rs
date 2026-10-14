@@ -13,6 +13,7 @@ pub use loams_agentd_proto::{EngineInfo, HarnessId, WorkspaceScope};
 use loams_agentd_store::DocsStore;
 
 pub mod agent_accounts;
+pub mod approvals;
 pub mod change_request_create;
 pub mod change_requests;
 mod chat_persistence;
@@ -47,6 +48,7 @@ pub mod workspace_host;
 pub mod worktree_list;
 
 pub use agent_accounts::{AgentAccounts, AgentAccountsConfig};
+pub use approvals::{ApprovalSettings, Approvals};
 pub use change_requests::{ChangeRequestCacheKey, CheckoutChangeRequests};
 pub use checkpoints::Checkpoints;
 pub use diff_sync::{
@@ -126,6 +128,9 @@ pub struct EngineConfig {
     /// The daemon's port and run-token issuer for the injected MCP shim, set
     /// before stale runs are recovered so a resumed run gets the shim too.
     pub mcp_endpoint: Option<sessions::McpEndpoint>,
+    /// The approval default and timeout (SD1 Task 13), set before stale runs
+    /// are recovered so a resumed run is supervised as its thread says.
+    pub approvals: ApprovalSettings,
 }
 
 /// The assembled engine core — also constructible without the IPC server for tests.
@@ -150,6 +155,8 @@ pub struct EngineCore {
     pub notifications: Notifications,
     /// Each thread's per-turn usage (SD1 Task 14, G20).
     pub usage: ThreadUsageLog,
+    /// Supervised approvals (SD1 Task 13, G17, G18, G22).
+    pub approvals: Approvals,
     pub spaces_sync: SpacesSync,
     pub uploads: Uploads,
     pub agent_accounts: AgentAccounts,
@@ -176,6 +183,19 @@ impl EngineCore {
     ) -> Result<Self, EngineError> {
         let profile = EngineProfile::local(data_dir)?;
         Self::assemble_with_profile(profile, registry, default_harness)
+    }
+
+    /// [`Self::assemble`] with the approval settings (SD1 Task 13).
+    pub fn assemble_with_approvals(
+        data_dir: &Path,
+        registry: Arc<HarnessRegistry>,
+        default_harness: HarnessId,
+        approvals: ApprovalSettings,
+    ) -> Result<Self, EngineError> {
+        let profile = EngineProfile::local(data_dir)?;
+        std::fs::create_dir_all(profile.device_root())?;
+        let lock = InstanceLock::acquire(profile.device_root())?;
+        Self::assemble_with_settings(profile, registry, default_harness, lock, None, approvals)
     }
 
     /// Assemble the engine against one resolved, immutable workspace profile.
@@ -213,6 +233,26 @@ impl EngineCore {
         lock: InstanceLock,
         mcp_endpoint: Option<sessions::McpEndpoint>,
     ) -> Result<Self, EngineError> {
+        Self::assemble_with_settings(
+            profile,
+            registry,
+            default_harness,
+            lock,
+            mcp_endpoint,
+            ApprovalSettings::default(),
+        )
+    }
+
+    /// [`Self::assemble_with_endpoint`] with the approval settings (SD1 Task
+    /// 13), applied before stale runs are recovered.
+    pub fn assemble_with_settings(
+        profile: EngineProfile,
+        registry: Arc<HarnessRegistry>,
+        default_harness: HarnessId,
+        lock: InstanceLock,
+        mcp_endpoint: Option<sessions::McpEndpoint>,
+        approval_settings: ApprovalSettings,
+    ) -> Result<Self, EngineError> {
         let data_dir = profile.device_root();
         std::fs::create_dir_all(data_dir)?;
         let device_id = load_or_create_device_id(data_dir)?;
@@ -221,6 +261,7 @@ impl EngineCore {
         registry.load_prefs(data_dir);
         let store = Arc::new(DocsStore::open(profile.store_root())?);
         let run_groups = RunGroups::open(store.clone())?;
+        let approvals = Approvals::open(store.clone(), approval_settings)?;
         let journal = Arc::new(RunJournal::open(profile.store_root().join("journals"))?);
         let sessions = SessionsEngine::new(device_id.clone(), journal, registry.clone());
         let doc_host = DocHost::new(
@@ -248,6 +289,31 @@ impl EngineCore {
         if let Some(endpoint) = mcp_endpoint {
             sessions.set_mcp_endpoint(endpoint.port, endpoint.tokens);
         }
+        // Supervised approvals (SD1 Task 13), wired before stale runs are
+        // recovered: a side chat takes its parent's mode, and each ask posts
+        // an `approval` notification titled with its thread's title.
+        let notifications = Notifications::new();
+        let parents = workspace.clone();
+        approvals.set_parent_of(Arc::new(move |chat_id: &str| {
+            parents
+                .chat(chat_id)
+                .ok()
+                .flatten()
+                .and_then(|chat| chat.parent_chat_id)
+        }));
+        let titles = workspace.clone();
+        approvals.set_notifications(
+            notifications.clone(),
+            Arc::new(move |chat_id: &str| {
+                titles
+                    .chat(chat_id)
+                    .ok()
+                    .flatten()
+                    .and_then(|chat| chat.title.or(chat.last_message_preview))
+            }),
+        );
+        sessions.set_approvals(approvals.clone());
+        sessions.add_turn_observer(Arc::new(approvals.clone()));
         match sessions.recover_stale() {
             Ok(0) => {}
             Ok(recovered) => tracing::info!(recovered, "stale sessions recovered on boot"),
@@ -304,7 +370,6 @@ impl EngineCore {
             terminals.clone(),
         );
         // Notifications and per-turn usage follow every turn (SD1 Task 14).
-        let notifications = Notifications::new();
         let titles = workspace.clone();
         sessions.add_turn_observer(Arc::new(notify::TurnNotifier::new(
             notifications.clone(),
@@ -336,6 +401,7 @@ impl EngineCore {
             run_groups,
             notifications,
             usage,
+            approvals,
             spaces_sync,
             uploads,
             agent_accounts,
@@ -371,6 +437,7 @@ impl EngineCore {
         .with_run_groups(self.run_groups.clone())
         .with_notifications(self.notifications.clone())
         .with_usage(self.usage.clone())
+        .with_approvals(self.approvals.clone())
         .with_harness_updates(self.harness_updates.clone());
         Arc::new(rpc)
     }
@@ -379,6 +446,9 @@ impl EngineCore {
     /// kill live PTYs, stamp our workspace `lastSeenAt`, and flush every open doc
     /// snapshot.
     pub async fn shutdown(&self) {
+        // A turn the shutdown ends keeps its approvals: they are listed
+        // again after the restart (SD1 Task 13).
+        self.approvals.freeze();
         self.previews.shutdown().await;
         self.harness_updates.shutdown().await;
         // Stop sending queued group members before runs are settled.
@@ -486,12 +556,13 @@ impl Engine {
                 InstanceLock::acquire(profile.device_root())?
             }
         };
-        let core = EngineCore::assemble_with_endpoint(
+        let core = EngineCore::assemble_with_settings(
             profile,
             Arc::new(default_registry()),
             config.default_harness,
             lock,
             config.mcp_endpoint.clone(),
+            config.approvals,
         )?;
         core.terminals.set_shell(config.terminal_shell.clone());
         core.doc_host.set_tool_output_limits(config.tool_outputs);

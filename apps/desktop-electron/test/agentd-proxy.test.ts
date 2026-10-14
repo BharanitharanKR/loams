@@ -74,8 +74,6 @@ describe("routeAgentd", () => {
 		const lookup = vi.fn(() => target());
 		const fetchImpl = vi.fn(async () => new Response("{}"));
 		for (const path of [
-			// A §53 §6.5 gap, not served yet.
-			"/loams.agentd.v1.ApprovalService/SetThreadApprovalMode",
 			// No such method.
 			"/loams.agentd.v1.ThreadService/Shutdown",
 			// A path, not an exact method.

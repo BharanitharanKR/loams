@@ -3,8 +3,7 @@ syntax = "proto3";
 // Approvals (design §53 §8.1, §6.5 G17, G18, G22; plan SD1 Task 4): the
 // pending tool calls of supervised threads, and their answers. `ResolveApproval`
 // keeps DD1 Task 24's contract (Ruling 7); the `mcp` role can never call it.
-// Declared here; every RPC answers `unimplemented` until SD1 Task 13. See
-// studio.proto for the package's rules.
+// Served since SD1 Task 13. See studio.proto for the package's rules.
 package loams.agentd.v1;
 
 import "google/protobuf/struct.proto";
@@ -63,10 +62,13 @@ message WatchApprovalsRequest {
 
 message WatchApprovalsResponse {
   repeated Approval pending = 1;
+  // The watched thread's effective mode (with `chat_id` only).
+  optional ApprovalMode mode = 2;
 }
 
 message ResolveApprovalRequest {
   string call_id = 1;
+  // The thread; optional while the call id is unique among the pending.
   optional string chat_id = 2;
   ApprovalDecision decision = 3;
 }

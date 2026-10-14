@@ -236,6 +236,7 @@ async fn exercise(prompt: &str, resume: Option<&str>) {
     let (steer_tx, steering) = mpsc::channel(4);
     let interrupt = CancellationToken::new();
     let controls = RunControls {
+        request_approval: None,
         execution_lease: None,
         request_input: Box::new(|_| {
             let (tx, rx) = oneshot::channel();
@@ -330,6 +331,7 @@ async fn exercise_tree(prompt: &str, drop_stream: bool) {
     let (_steer, steering) = mpsc::channel(1);
     let interrupt = CancellationToken::new();
     let controls = RunControls {
+        request_approval: None,
         execution_lease: None,
         request_input: Box::new(|_| {
             let (_, rx) = oneshot::channel();
@@ -492,6 +494,7 @@ async fn batch_overrides_launch_through_cmd() {
         };
         let (_steer, steering) = mpsc::channel(1);
         let controls = RunControls {
+            request_approval: None,
             execution_lease: None,
             request_input: Box::new(|_| {
                 let (tx, rx) = oneshot::channel();

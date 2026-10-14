@@ -385,6 +385,7 @@ impl Harness for PiHarness {
             let RunControls {
                 execution_lease: _lease,
                 request_input,
+                request_approval: _request_approval,
                 mut steering,
                 interrupt,
             } = controls;

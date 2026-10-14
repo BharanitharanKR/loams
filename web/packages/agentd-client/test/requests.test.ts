@@ -327,6 +327,9 @@ const REQUESTS: Request[] = [
     force: false,
     expectedChecksum: 'sum-1',
   }),
+  request('WatchApprovals', { chatId }),
+  request('ResolveApproval', { callId: 'call-1', chatId, decision: 'always' }),
+  request('SetThreadApprovalMode', { chatId, mode: 'supervised' }),
   request('GetCheckoutFileDiffText', {
     checkoutId: 'checkout-1',
     cwd: '/home/dev/project',

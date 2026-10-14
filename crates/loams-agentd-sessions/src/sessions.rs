@@ -112,10 +112,13 @@ struct RuntimeConfig {
     sandbox: loams_agentd_proto::SandboxLevel,
     auto_approve: bool,
     worktree: Option<loams_agentd_proto::WorktreeSpec>,
+    /// The run has an approval bridge (a supervised thread, SD1 Task 13): a
+    /// change of mode needs a new runtime, as a changed sandbox does.
+    supervised: bool,
 }
 
 impl RuntimeConfig {
-    fn from_request(harness_id: HarnessId, request: &RunRequest) -> Self {
+    fn from_request(harness_id: HarnessId, request: &RunRequest, supervised: bool) -> Self {
         Self {
             harness_id,
             model: request.model.clone(),
@@ -125,11 +128,13 @@ impl RuntimeConfig {
             sandbox: request.sandbox,
             auto_approve: request.auto_approve,
             worktree: request.worktree.clone(),
+            supervised,
         }
     }
 
-    fn can_route(&self, harness_id: HarnessId, request: &RunRequest) -> bool {
-        request.attachments.is_empty() && self == &Self::from_request(harness_id, request)
+    fn can_route(&self, harness_id: HarnessId, request: &RunRequest, supervised: bool) -> bool {
+        request.attachments.is_empty()
+            && self == &Self::from_request(harness_id, request, supervised)
     }
 }
 
@@ -205,6 +210,9 @@ struct Inner {
     turn_checkpoints: OnceLock<Arc<dyn TurnCheckpoints>>,
     /// Turn observers (SD1 Task 14: notifications and per-turn usage).
     turn_observers: Mutex<Vec<Arc<dyn TurnObserver>>>,
+    /// Supervised approvals (SD1 Task 13). Absent in bare tests: every
+    /// thread is then full access.
+    approvals: OnceLock<crate::approvals::Approvals>,
 }
 
 /// What happens in a chat's turns, for the notifications and the per-turn
@@ -279,6 +287,7 @@ impl SessionsEngine {
                 turn_listener: OnceLock::new(),
                 turn_checkpoints: OnceLock::new(),
                 turn_observers: Mutex::new(Vec::new()),
+                approvals: OnceLock::new(),
             }),
         }
     }
@@ -331,6 +340,11 @@ impl SessionsEngine {
     /// Wire the checkpoint hook (called once at engine assembly).
     pub fn set_turn_checkpoints(&self, checkpoints: Arc<dyn TurnCheckpoints>) {
         let _ = self.inner.turn_checkpoints.set(checkpoints);
+    }
+
+    /// Wire the approvals (called once at engine assembly; SD1 Task 13).
+    pub fn set_approvals(&self, approvals: crate::approvals::Approvals) {
+        let _ = self.inner.approvals.set(approvals);
     }
 
     /// Add a turn observer (called at engine assembly; SD1 Task 14).
@@ -404,10 +418,18 @@ impl SessionsEngine {
         if !self.turn_in_flight(chat_id) {
             return false;
         }
+        let request = request.map(|(id, r)| {
+            let mut r = r.clone();
+            let supervised = self.inner.apply_approval_mode(chat_id, &mut r);
+            (id, r, supervised)
+        });
         let live = lock(&self.inner.runs).get(chat_id).map(|h| {
             (
                 h.runtime_config.harness_id,
-                h.steerable && request.is_none_or(|(id, r)| h.runtime_config.can_route(id, r)),
+                h.steerable
+                    && request.as_ref().is_none_or(|(id, r, supervised)| {
+                        h.runtime_config.can_route(*id, r, *supervised)
+                    }),
             )
         });
         live.is_some_and(|(harness, routable)| routable && !self.steers_mid_turn(harness))
@@ -507,11 +529,14 @@ impl SessionsEngine {
         // cross-harness delivery before recording or routing the user turn.
         loams_agentd_proto::invocation::validate_harness_invocations(&request.prompt, harness_id)
             .map_err(EngineError::Other)?;
+        // The thread's approval mode (SD1 Task 13) decides `autoApprove` and
+        // whether the run gets an approval bridge.
+        let supervised = self.inner.apply_approval_mode(chat_id, &mut request);
         let routed = lock(&self.inner.runs).get(chat_id).map(|h| {
             (
                 h.run_id.clone(),
                 h.steerable,
-                h.runtime_config.can_route(harness_id, &request),
+                h.runtime_config.can_route(harness_id, &request, supervised),
                 h.steer_tx.clone(),
                 h.routed_steers.clone(),
                 h.fork_history_sent.clone(),
@@ -610,6 +635,14 @@ impl SessionsEngine {
         }
 
         let harness = self.inner.registry.resolve(harness_id)?;
+        // A supervised thread never runs unsupervised: a harness that cannot
+        // ask is refused, and Studio says so (§53 §8.2).
+        if supervised && !harness.supports_approvals() {
+            return Err(EngineError::Other(format!(
+                "{} cannot ask for approvals: set this thread to full access to run it",
+                harness.display_name()
+            )));
+        }
         let handle = self.doc_handle(chat_id)?;
         let user_id = message_id.unwrap_or_else(new_id);
         handle.write_user_message(&user_id, &request.prompt, now_ms())?;
@@ -665,9 +698,20 @@ impl SessionsEngine {
         };
         let interrupt_token = CancellationToken::new();
         let fork_history_sent = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        // A supervised thread's approval bridge (SD1 Task 13): its asks and
+        // answers ride this run's event pipeline, like questions.
+        let request_approval = if supervised {
+            self.inner
+                .approvals
+                .get()
+                .map(|approvals| approvals.bridge(chat_id, engine_tx.clone()))
+        } else {
+            None
+        };
         let controls = RunControls {
             execution_lease: None,
             request_input,
+            request_approval,
             steering: steer_rx,
             interrupt: interrupt_token.clone(),
         };
@@ -677,7 +721,7 @@ impl SessionsEngine {
             RunHandle {
                 run_id: run_id.clone(),
                 steerable: harness.supports_steering(),
-                runtime_config: RuntimeConfig::from_request(harness_id, &request),
+                runtime_config: RuntimeConfig::from_request(harness_id, &request, supervised),
                 steer_tx,
                 interrupt_token,
                 cancel: cancel_tx,
@@ -874,10 +918,14 @@ impl SessionsEngine {
         // EOF after token.cancel() can beat this watch notification and be
         // classified as an error instead of an interrupted turn.
         let _ = cancel.send(true);
-        // Unpark questions before harness teardown, which can await them.
+        // Unpark questions and approvals before harness teardown, which can
+        // await them.
         let parked: Vec<_> = lock(&pending).drain().map(|(_, tx)| tx).collect();
         for tx in parked {
             let _ = tx.send(Vec::new());
+        }
+        if let Some(approvals) = self.inner.approvals.get() {
+            approvals.deny_chat(chat_id);
         }
         // Harness-level interrupt (protocol + child teardown) …
         token.cancel();
@@ -1153,6 +1201,29 @@ impl Inner {
                 event
             })
             .collect()
+    }
+
+    /// Apply `chat_id`'s approval mode to a run of it (SD1 Task 13): a
+    /// supervised thread's run is never auto-approved and gets a bridge; an
+    /// explicit full-access thread's run is auto-approved; a thread on the
+    /// daemon's full-access default keeps its request's `autoApprove`.
+    /// Answers whether the run is supervised.
+    fn apply_approval_mode(&self, chat_id: &str, request: &mut RunRequest) -> bool {
+        let Some(approvals) = self.approvals.get() else {
+            return false;
+        };
+        match approvals.resolved_mode(chat_id) {
+            (loams_agentd_proto::approvals::ApprovalMode::Supervised, _) => {
+                request.auto_approve = false;
+                true
+            }
+            (loams_agentd_proto::approvals::ApprovalMode::FullAccess, explicit) => {
+                if explicit {
+                    request.auto_approve = true;
+                }
+                false
+            }
+        }
     }
 
     /// The turn observers, copied out so none is called under the lock.
@@ -2530,6 +2601,22 @@ async fn drive_run(
                 continue;
             }
         }
+        // The same rule for approvals (SD1 Task 13): only the engine's bridge
+        // announces one, after it is pending.
+        if let AgentEvent::ApprovalRequested { call_id, .. } = &event {
+            let known = inner
+                .approvals
+                .get()
+                .is_some_and(|approvals| approvals.is_waiting(&chat_id, call_id));
+            if !known {
+                tracing::warn!(
+                    chat = %chat_id,
+                    call = %call_id,
+                    "dropping an ApprovalRequested no approval bridge announced"
+                );
+                continue;
+            }
+        }
         // Capacity/occupancy can settle after Done; updating it must not reopen a turn.
         if let AgentEvent::ContextUsage { tokens, window } = &event {
             if let Err(err) = doc_ref.update_context_usage(*tokens, *window) {
@@ -2612,6 +2699,15 @@ async fn drive_run(
                     // A stale answer settling after its turn already closed:
                     // nothing is running — stay parked.
                     AgentEvent::InputResolved { .. } => continue,
+                    // An approval with no turn behind it is denied, as a
+                    // question is answered empty (SD1 Task 13).
+                    AgentEvent::ApprovalRequested { call_id, .. } => {
+                        if let Some(approvals) = inner.approvals.get() {
+                            approvals.deny(&chat_id, call_id);
+                        }
+                        tracing::debug!(chat = %chat_id, "parked session: post-turn approval request denied");
+                        continue;
+                    }
                     _ => continue,
                 }
             }
@@ -2782,6 +2878,13 @@ async fn drive_run(
                 inner.set_status(&chat_id, SessionStatus::AwaitingInput, false);
             }
             AgentEvent::InputResolved { .. } => {
+                inner.set_status(&chat_id, SessionStatus::Working, false);
+            }
+            // A supervised tool call waits for the person, as a question does.
+            AgentEvent::ApprovalRequested { .. } => {
+                inner.set_status(&chat_id, SessionStatus::AwaitingInput, false);
+            }
+            AgentEvent::ApprovalResolved { .. } => {
                 inner.set_status(&chat_id, SessionStatus::Working, false);
             }
             _ => {}
@@ -3082,23 +3185,23 @@ mod tests {
     #[test]
     fn live_routing_requires_the_same_runtime_configuration() {
         let initial = request();
-        let config = RuntimeConfig::from_request(HarnessId::Grok, &initial);
+        let config = RuntimeConfig::from_request(HarnessId::Grok, &initial, false);
 
         let mut follow_up = initial.clone();
         follow_up.prompt = "second".into();
         follow_up.resume = Some("session-1".into());
-        assert!(config.can_route(HarnessId::Grok, &follow_up));
+        assert!(config.can_route(HarnessId::Grok, &follow_up, false));
 
         follow_up.model = Some("grok-4.5".into());
-        assert!(!config.can_route(HarnessId::Grok, &follow_up));
+        assert!(!config.can_route(HarnessId::Grok, &follow_up, false));
         follow_up.model = initial.model.clone();
 
         follow_up.reasoning = Some(loams_agentd_proto::ReasoningLevel::Medium);
-        assert!(!config.can_route(HarnessId::Grok, &follow_up));
+        assert!(!config.can_route(HarnessId::Grok, &follow_up, false));
         follow_up.reasoning = initial.reasoning;
 
         follow_up.attachments.push("/tmp/image.png".into());
-        assert!(!config.can_route(HarnessId::Grok, &follow_up));
+        assert!(!config.can_route(HarnessId::Grok, &follow_up, false));
     }
 
     #[test]

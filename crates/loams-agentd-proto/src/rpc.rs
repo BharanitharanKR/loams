@@ -17,6 +17,9 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::approvals::{
+    ApprovalList, ResolveApprovalParams, SetThreadApprovalModeParams, WatchApprovalsParams,
+};
 use crate::chat::{BeginQueueEditOutcome, FinishQueueEditOutcome, RenewQueueEditOutcome};
 use crate::checkpoints::{
     CheckpointList, ListCheckpointsParams, RestoreCheckpointParams, RestoreCheckpointReply,
@@ -100,6 +103,7 @@ pub const ERROR_REASONS: &[&str] = &[
     crate::git_write::PROVIDER_NOT_CONFIGURED,
     crate::checkpoints::CHECKPOINT_MISSING,
     crate::groups::GROUP_NOT_READY,
+    crate::approvals::APPROVAL_NOT_PENDING,
 ];
 
 /// The MCP shim's environment, set only by the daemon when it injects the
@@ -460,6 +464,14 @@ method_table! {
     /// G16: merge, push and open a change request, or keep the winner, through
     /// Task 9's git writes; `group_not_ready` while members run.
     RESOLVE_RUN_GROUP = ResolveRunGroup: Unary(ResolveRunGroupParams -> ResolveRunGroupReply), Owner, renderer: true;
+    /// G17 (SD1 Task 13): the pending approvals, again on each change; with a
+    /// `chatId`, that thread's only and its effective mode.
+    WATCH_APPROVALS = WatchApprovals: Stream(WatchApprovalsParams -> ApprovalList), Owner, renderer: true;
+    /// G18: DD1 Task 24's answer to an approval. `owner` (and, on the remote
+    /// listener, `studio`) only: never `mcp` (DD1 Ruling 8).
+    RESOLVE_APPROVAL = ResolveApproval: Unary(ResolveApprovalParams -> OkReply), Owner, renderer: true;
+    /// G22: a thread's approval mode, `full-access` or `supervised`.
+    SET_THREAD_APPROVAL_MODE = SetThreadApprovalMode: Unary(SetThreadApprovalModeParams -> OkReply), Owner, renderer: true;
     GET_CHECKOUT_FILE_DIFF_TEXT = GetCheckoutFileDiffText: Unary(GetCheckoutFileDiffTextRequest -> CheckoutFileDiffText), Owner, renderer: true;
     LIST_AGENT_ACCOUNTS = ListAgentAccounts: Unary(ListAgentAccountsParams -> AgentAccountsSnapshot), Owner, renderer: true;
     ACTIVATE_AGENT_ACCOUNT = ActivateAgentAccount: Unary(AgentAccountParams -> AgentAccountsSnapshot), Owner, renderer: true;

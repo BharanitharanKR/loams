@@ -86,7 +86,7 @@ macro_rules! methods {
     };
 }
 
-use Twin::{Command, Gap, Host, Method, Mutate};
+use Twin::{Command, Host, Method, Mutate};
 
 methods! {
     StudioService {
@@ -230,9 +230,9 @@ methods! {
         PostReviewToChangeRequest => Method("PostReviewToChangeRequest"),
     }
     ApprovalService {
-        WatchApprovals => Gap { gap: "G17", task: "SD1 Task 13" },
-        ResolveApproval => Gap { gap: "G18", task: "SD1 Task 13" },
-        SetThreadApprovalMode => Gap { gap: "G22", task: "SD1 Task 13" },
+        WatchApprovals => Method("WatchApprovals"),
+        ResolveApproval => Method("ResolveApproval"),
+        SetThreadApprovalMode => Method("SetThreadApprovalMode"),
     }
     RunGroupService {
         CreateRunGroup => Method("CreateRunGroup"),

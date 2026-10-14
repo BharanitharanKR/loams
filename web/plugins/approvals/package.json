@@ -22,7 +22,8 @@
         "rpc.approvals",
         "router",
         "slots",
-        "platform"
+        "platform",
+        "agentd"
       ],
       "provides": [],
       "slots": [
@@ -33,7 +34,8 @@
       "permissions": [
         "approvals:read",
         "approvals:decide",
-        "ui:notifications"
+        "ui:notifications",
+        "agentd:use"
       ],
       "requires": {
         "console": "^0.1.0",

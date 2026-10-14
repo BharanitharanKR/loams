@@ -267,7 +267,7 @@ function ThreadView({
         title={title}
         harness={config ? HARNESS_LABEL[config.harness] : undefined}
         model={config?.model}
-        approvalMode={settings.approvalMode}
+        approvalMode={approvals.mode ?? settings.approvalMode}
         sandbox={config ? SANDBOX_LABEL[config.sandbox] : undefined}
         branch={chat?.branch ?? chat?.sourceContext?.branch}
         usage={
