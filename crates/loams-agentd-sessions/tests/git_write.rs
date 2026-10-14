@@ -9,6 +9,8 @@
 //! binary sets the same values once, before any engine reads them.
 #![allow(clippy::unwrap_used)]
 
+mod support;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -632,57 +634,19 @@ async fn push_never_plain_force() {
 // G4: CreateChangeRequest
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Default)]
-struct Recorded {
-    path: String,
-    authorization: String,
-    body: serde_json::Value,
-}
-
-/// A fake Forgejo on loopback that records each `POST …/pulls`.
-async fn fake_forgejo() -> (String, Arc<Mutex<Vec<Recorded>>>) {
-    use axum::Json;
-    use axum::extract::State;
-    use axum::http::{HeaderMap, StatusCode, Uri};
-    use axum::routing::post;
-
-    let seen: Arc<Mutex<Vec<Recorded>>> = Arc::default();
-    let app = axum::Router::new()
-        .route(
-            "/api/v1/repos/{owner}/{repo}/pulls",
-            post(
-                |State(seen): State<Arc<Mutex<Vec<Recorded>>>>,
-                 uri: Uri,
-                 headers: HeaderMap,
-                 Json(body): Json<serde_json::Value>| async move {
-                    let authorization = headers
-                        .get("authorization")
-                        .and_then(|value| value.to_str().ok())
-                        .unwrap_or_default()
-                        .to_owned();
-                    seen.lock().unwrap().push(Recorded {
-                        path: uri.path().to_owned(),
-                        authorization,
-                        body,
-                    });
-                    (
-                        StatusCode::CREATED,
-                        Json(serde_json::json!({
-                            "number": 7,
-                            "html_url": "http://forgejo.invalid/dev/project/pulls/7",
-                            "state": "open",
-                        })),
-                    )
-                },
-            ),
+/// The shared fake Forgejo, answering each `POST …/pulls` with pull 7.
+async fn fake_forgejo() -> (String, Arc<Mutex<Vec<support::forgejo::Recorded>>>) {
+    support::forgejo::fake_forgejo(|_, _| {
+        (
+            201,
+            serde_json::json!({
+                "number": 7,
+                "html_url": "http://forgejo.invalid/dev/project/pulls/7",
+                "state": "open",
+            }),
         )
-        .with_state(seen.clone());
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let base = format!("http://{}", listener.local_addr().unwrap());
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.ok();
-    });
-    (base, seen)
+    })
+    .await
 }
 
 fn change_request(provider: ChangeRequestProvider, repo: &Path) -> CreateChangeRequestParams {

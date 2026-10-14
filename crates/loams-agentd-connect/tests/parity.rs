@@ -74,6 +74,7 @@ struct Clients {
     terminals: pb::TerminalServiceClient<HttpClient>,
     preview: pb::PreviewServiceClient<HttpClient>,
     attachments: pb::AttachmentServiceClient<HttpClient>,
+    review: pb::ReviewServiceClient<HttpClient>,
 }
 
 struct Daemon {
@@ -179,7 +180,8 @@ impl Daemon {
             files: pb::FileServiceClient::new(http(), config.clone()),
             terminals: pb::TerminalServiceClient::new(http(), config.clone()),
             preview: pb::PreviewServiceClient::new(http(), config.clone()),
-            attachments: pb::AttachmentServiceClient::new(http(), config),
+            attachments: pb::AttachmentServiceClient::new(http(), config.clone()),
+            review: pb::ReviewServiceClient::new(http(), config),
         };
         let ndjson = memory_client(engine);
         let info: rs::EngineInfo = ndjson
@@ -1528,6 +1530,85 @@ async fn scenario() {
         |d| json!({ "terminalId": d.get("terminal") }),
         terminals.close_terminal(json!({ "terminalId": d.get("terminal") })),
         |r| ok(r.ok)
+    );
+
+    // ---- ReviewService (G8–G11; SD1 Task 11) ----
+    // A comment on chat-1's checkout, on the README line WriteFile added.
+    let (a, b) = unary!(
+        s,
+        "/loams.agentd.v1.ReviewService/UpsertReviewComment",
+        UpsertReviewComment,
+        |d| json!({ "checkoutId": d.get("file-checkout"), "path": "README.md", "side": "new",
+                    "line": 1, "body": "Say \"why\".", "diffChecksum": "sum-parity" }),
+        review.upsert_review_comment(
+            json!({ "comment": { "checkoutId": d.get("file-checkout"), "path": "README.md",
+                    "side": "DIFF_SIDE_NEW", "line": 1, "body": "Say \"why\".",
+                    "diffChecksum": "sum-parity" } })
+        ),
+        |r| rs::IdReply { id: r.id }
+    );
+    s.learn("comment", &a["id"], &b["id"]);
+    first!(
+        s,
+        "/loams.agentd.v1.ReviewService/WatchReviewComments",
+        WatchReviewComments,
+        |d| json!({ "checkoutId": d.get("file-checkout") }),
+        review.watch_review_comments(json!({ "checkoutId": d.get("file-checkout") })),
+        |r| Wire::from_pb(r)?
+    );
+    unary!(
+        s,
+        "/loams.agentd.v1.ReviewService/ResolveReviewComment",
+        ResolveReviewComment,
+        |d| json!({ "checkoutId": d.get("file-checkout"), "id": d.get("comment"), "resolved": true }),
+        review.resolve_review_comment(
+            json!({ "checkoutId": d.get("file-checkout"), "id": d.get("comment"), "resolved": true })
+        ),
+        |r| rs::IdReply { id: r.id }
+    );
+    // An id the thread's checkout doesn't have: nothing is queued.
+    unary!(
+        s,
+        "/loams.agentd.v1.ReviewService/SendReviewToThread",
+        SendReviewToThread,
+        |d| json!({ "chatId": "chat-1", "commentIds": ["no-such-comment"] }),
+        review.send_review_to_thread(
+            json!({ "chatId": "chat-1", "commentIds": ["no-such-comment"] })
+        ),
+        |r| command(r.command_id)
+    );
+    // The repository has no remote: nothing is posted.
+    unary!(
+        s,
+        "/loams.agentd.v1.ReviewService/PostReviewToChangeRequest",
+        PostReviewToChangeRequest,
+        |d| json!({ "checkoutId": d.get("file-checkout"), "commentIds": [d.get("comment")],
+                    "event": "comment" }),
+        review.post_review_to_change_request(
+            json!({ "checkoutId": d.get("file-checkout"), "commentIds": [d.get("comment")],
+                    "event": "REVIEW_EVENT_COMMENT" })
+        ),
+        |r| Wire::from_pb(r)?
+    );
+    unary!(
+        s,
+        "/loams.agentd.v1.ReviewService/DeleteReviewComment",
+        DeleteReviewComment,
+        |d| json!({ "checkoutId": d.get("file-checkout"), "id": d.get("comment") }),
+        review.delete_review_comment(
+            json!({ "checkoutId": d.get("file-checkout"), "id": d.get("comment") })
+        ),
+        |r| rs::IdReply { id: r.id }
+    );
+
+    // ---- FileService.SearchContent (G23; SD1 Task 11) ----
+    first!(
+        s,
+        "/loams.agentd.v1.FileService/SearchContent",
+        SearchWorkspaceContent,
+        |d| json!({ "spaceId": "space-1", "query": "parity, WRITTEN" }),
+        files.search_content(json!({ "spaceId": "space-1", "query": "parity, WRITTEN" })),
+        |r| Wire::from_pb(r)?
     );
 
     // ---- Tear down what the scenario made ----
