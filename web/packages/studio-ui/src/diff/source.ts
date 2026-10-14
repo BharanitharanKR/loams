@@ -117,6 +117,7 @@ export interface DiffSource {
     listener: (comments: readonly ReviewComment[]) => void,
     onError: (error: Error) => void,
   ): () => void;
+  /** Creates (an empty `id`: the daemon assigns one) or edits a comment; answers its id. */
   upsertComment(comment: ReviewCommentDraft): Promise<string>;
   deleteComment(checkoutId: string, id: string): Promise<void>;
   resolveComment(checkoutId: string, id: string, resolved: boolean): Promise<void>;

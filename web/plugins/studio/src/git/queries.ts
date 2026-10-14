@@ -37,6 +37,7 @@ import type {
 } from '@loams/studio-ui';
 import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import { follow } from '../thread/diff-source.js';
 import { gitErrorOf } from './errors.js';
 
 /** The latest message of a server stream while `input` is set; restarted when its key changes. */
@@ -152,6 +153,26 @@ export function useCheckoutGit(input: {
     DiffService.method.getCheckoutDiff,
     cwd ? { cwd, mode: '' } : skipToken,
   );
+  // The checkout changes under the toolbar (the agent's turns, a restore, the diff
+  // panel's discards): follow the daemon's diff sync and re-read what the toolbar
+  // shows when this checkout's checksum moves, so a confirm carries the checksum the
+  // daemon has (SD1 Task 29 met `stale_diff` and a "clean" worktree otherwise).
+  const transport = useAgentdTransport();
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!cwd || !transport) return;
+    const diffs = createClient(DiffService, transport);
+    let last: string | undefined;
+    return follow(
+      (signal) => diffs.watchCheckoutDiffs({}, { signal }),
+      ({ diffs: frame }) => {
+        const mine = frame.find((d) => d.cwd === cwd);
+        if (!mine || mine.checksum === last) return;
+        last = mine.checksum;
+        void invalidateGit(queryClient);
+      },
+    );
+  }, [cwd, transport, queryClient]);
   const rows = worktrees.data?.worktrees ?? [];
   const worktree = rows.find((w) => w.path === cwd);
   const refName = worktree && worktree.branch !== 'HEAD' ? worktree.branch : null;

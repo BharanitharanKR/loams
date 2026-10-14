@@ -130,7 +130,7 @@ export function diffRequest(thread: DiffThread, selection: DiffSelection) {
  * Follows a server stream until the returned function is called: a stream that ends or
  * fails is reopened after a backoff; `unimplemented` and `permission_denied` stop it.
  */
-function follow<T>(
+export function follow<T>(
   open: (signal: AbortSignal) => AsyncIterable<T>,
   onFrame: (frame: T) => void,
   onError?: (error: Error) => void,

@@ -156,6 +156,7 @@ export default defineConfig({
     // So do the browser tests (AP1d Task 4, D638), which need a real Chrome and
     // run under `test:browser`. Under jsdom `document.modelContext` does not
     // exist at all, which is the whole reason that harness is separate.
-    exclude: [...configDefaults.exclude, 'deploy/**', 'browser/**'],
+    // Studio's end-to-end specs are Playwright's (SD1 Task 29, `test:e2e`).
+    exclude: [...configDefaults.exclude, 'deploy/**', 'browser/**', 'test/e2e/**'],
   },
 });

@@ -36,7 +36,7 @@
 		"@loams-plugins/plugin-openpanel-adapter": "workspace:*",
 		"@loams-plugins/plugin-zulip-adapter": "workspace:*",
 		"@loams/proto": "workspace:*",
-		"@playwright/test": "1.63.0",
+		"@playwright/test": "catalog:",
 		"@types/node": "24.13.6",
 		"@types/pg": "8.23.1",
 		"@types/pg-cursor": "2.7.2",

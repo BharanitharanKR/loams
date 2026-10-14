@@ -1,0 +1,139 @@
+# Loams Studio end to end (SD1 Task 29; design §53 §10): Playwright drives Studio
+# against a real loams-agentd running the Mock harness.
+#
+# - web: the console's dev server (demo mode) against `loams-agentd serve
+#   --remote` on loopback TLS with the debug-build test issuer
+#   (web/apps/console/test/e2e).
+# - electron: the built desktop app under xvfb, against `loams-agentd run
+#   --child` in its user-data directory (apps/desktop-electron/test/e2e/studio.spec.ts).
+#
+# What runs (the two tiers, owner, 2026-10-13):
+# - fast tier, a pull request into dev that touches Studio, its daemon or its
+#   transports: the web edition. A draft skips it (label `ci:full`, then a push,
+#   runs it), as the heavy CI jobs do.
+# - full tier, a pull request into main (the dev -> main release gate), a push to
+#   main, a manual dispatch and the nightly on dev (nightly.yml): both editions.
+on:
+  pull_request:
+    branches: [dev, main]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+    paths:
+      - 'crates/loams-agentd*/**'
+      - 'proto/loams/agentd/**'
+      - 'Cargo.lock'
+      - 'web/packages/studio-ui/**'
+      - 'web/packages/agentd-client/**'
+      - 'web/packages/console-host/**'
+      - 'web/packages/ui/**'
+      - 'web/plugins/studio/**'
+      - 'web/plugins/factory/**'
+      - 'web/plugins/shell/**'
+      - 'web/plugins/rpc/**'
+      - 'web/plugins/approvals/**'
+      - 'web/plugins/agent/**'
+      - 'web/apps/console/**'
+      - 'apps/desktop-electron/src/main/protocol/**'
+      - 'apps/desktop-electron/src/main/agentd/**'
+      - 'apps/desktop-electron/test/e2e/studio.spec.ts'
+      - 'apps/desktop-electron/playwright.config.ts'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/studio-e2e.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: studio-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CI: 'true'
+  CARGO_TERM_COLOR: always
+  NX_DAEMON: 'false'
+  NX_NO_CLOUD: 'true'
+
+jobs:
+  web:
+    name: "Studio e2e: web"
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # loams-agentd-connect's build.rs generates loams.agentd.v1 with protoc.
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: studio-e2e
+          save-if: ${{ github.event_name != 'pull_request' }}
+      # A debug build: only a debug daemon honours LOAMS_AGENTD_TEST_ISSUER (ruling T7-7).
+      - name: loams-agentd (debug)
+        run: cargo build -p loams-agentd --locked
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Chromium for Playwright
+        run: pnpm --filter @loams/console exec playwright install --with-deps chromium
+      - name: Studio e2e (web)
+        run: pnpm --filter @loams/console test:e2e
+      - uses: actions/upload-artifact@v7.0.1
+        if: failure()
+        with:
+          name: studio-e2e-web-results
+          path: web/apps/console/test-results
+          retention-days: 7
+
+  electron:
+    name: "Studio e2e: Electron"
+    if: github.event_name != 'pull_request' || github.base_ref == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: studio-e2e
+          save-if: ${{ github.event_name != 'pull_request' }}
+      - name: loams-agentd (debug)
+        run: cargo build -p loams-agentd --locked
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: build the console and the desktop app
+        run: pnpm nx run-many -t build -p @loams/console loams-desktop-electron --outputStyle=static
+      - name: Studio e2e (Electron)
+        working-directory: apps/desktop-electron
+        env:
+          LOAMS_E2E_STUDIO: '1'
+          # Ubuntu 24.04 restricts unprivileged user namespaces, so Chromium's sandbox cannot start.
+          LOAMS_E2E_ELECTRON_ARGS: --no-sandbox
+        run: xvfb-run -a pnpm exec playwright test studio
+      - uses: actions/upload-artifact@v7.0.1
+        if: failure()
+        with:
+          name: studio-e2e-electron-results
+          path: apps/desktop-electron/test-results
+          retention-days: 7
