@@ -159,7 +159,10 @@ describe('markdown files in the file viewer (T21-3)', () => {
     const renderFile = createMarkdownFileRenderer({ onOpenFile });
     const { container, getByText } = render(
       <>
-        {renderFile('# Guide\n\n<script>x</script> [api](api.md) [up](../x.md)', 'docs/guide.md')}
+        {renderFile(
+          '# Guide\n\n<script>x</script>\n\n[api](api.md) [up](../x.md)',
+          'docs/guide.md',
+        )}
       </>,
     );
     expect(container.querySelector('h1')?.textContent).toBe('Guide');
