@@ -1946,6 +1946,83 @@ pub async fn capture_turn_diff(
     })
 }
 
+/// A tree-to-tree diff, run in `root` (any worktree of the repository whose
+/// object store holds both): a run group's pair diff (SD1 Task 12), where
+/// `from` and `to` are [`snapshot_tree`]s of two worktrees or the group's base
+/// commit. `path`, when set, limits it to that one literal path. Nothing is
+/// committed and no index is touched.
+pub async fn capture_tree_diff(
+    repos: &Repos,
+    root: &Path,
+    from: &str,
+    to: &str,
+    path: Option<&str>,
+) -> Result<DiffSnapshot, EngineError> {
+    let pathspec = path.map(|path| format!(":(literal){path}"));
+    let with_path = |args: &[&'static str]| -> Vec<String> {
+        let mut all: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
+        all.push(from.to_string());
+        all.push(to.to_string());
+        all.push("--".into());
+        all.extend(pathspec.clone());
+        all
+    };
+    let names = with_path(&["diff", "--name-status", "-z", "--find-renames"]);
+    let nums = with_path(&["diff", "--numstat", "-z", "--find-renames"]);
+    let patch_args = with_path(&[
+        "diff",
+        "--no-ext-diff",
+        "--no-color",
+        "--find-renames",
+        "--unified=3",
+    ]);
+    fn as_refs(args: &[String]) -> Vec<&str> {
+        args.iter().map(String::as_str).collect()
+    }
+    let names = capture_git(root, &as_refs(&names), 2 * 1024 * 1024).await?;
+    let nums = capture_git(root, &as_refs(&nums), 2 * 1024 * 1024).await?;
+    let tracked = capture_git(root, &as_refs(&patch_args), MAX_PATCH_BYTES).await?;
+    let branch = repos
+        .current_branch(root)
+        .await
+        .unwrap_or_else(|_| "HEAD".into());
+
+    let mut files = parse_name_status(&names.stdout);
+    apply_numstat(&mut files, &nums.stdout);
+    let mut patch = String::from_utf8_lossy(&tracked.stdout).to_string();
+    let truncated = tracked.truncated || names.truncated || nums.truncated;
+    if tracked.truncated {
+        let boundary = patch.rfind('\n').unwrap_or(0);
+        patch.truncate(boundary);
+        patch.push_str("\n# Loams Desktop diff truncated\n");
+    }
+    let additions: u32 = files.iter().map(|f| f.additions).sum();
+    let deletions: u32 = files.iter().map(|f| f.deletions).sum();
+    let files_json = serde_json::to_string(&files)
+        .map_err(|e| EngineError::Other(format!("diff files serialize: {e}")))?;
+    let mut hasher = Sha256::new();
+    hasher.update(from.as_bytes());
+    hasher.update([0u8]);
+    hasher.update(to.as_bytes());
+    hasher.update([0u8]);
+    hasher.update(patch.as_bytes());
+    hasher.update([0u8]);
+    hasher.update(files_json.as_bytes());
+    hasher.update(if truncated { b"1" } else { b"0" });
+    let checksum = crate::repos::hex(&hasher.finalize());
+    Ok(DiffSnapshot {
+        branch,
+        head_sha: None,
+        git_status: None,
+        patch,
+        files,
+        additions,
+        deletions,
+        truncated,
+        checksum,
+    })
+}
+
 #[cfg(test)]
 mod watch_budget_tests {
     use super::{

@@ -354,6 +354,7 @@ mod checkpoints;
 mod diff;
 mod files;
 mod git;
+mod groups;
 mod harness;
 mod notify;
 mod projects;

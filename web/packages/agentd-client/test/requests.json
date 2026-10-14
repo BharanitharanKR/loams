@@ -781,6 +781,77 @@
     }
   },
   {
+    "method": "CreateRunGroup",
+    "params": {
+      "spaceId": "space-1",
+      "repoPath": "/home/dev/project",
+      "base": "main",
+      "prompt": "Fix the build",
+      "attachments": [],
+      "variants": [
+        {
+          "harness": "claude-code",
+          "model": "claude-sonnet",
+          "reasoning": "high",
+          "modelOptions": {}
+        },
+        {
+          "harness": "codex",
+          "model": null,
+          "reasoning": null,
+          "modelOptions": {}
+        }
+      ],
+      "checkActionId": "test",
+      "approvalMode": "supervised"
+    }
+  },
+  {
+    "method": "WatchRunGroups",
+    "params": {
+      "spaceId": null
+    }
+  },
+  {
+    "method": "GetRunGroupComparison",
+    "params": {
+      "groupId": "group-1",
+      "a": "chat-1",
+      "b": "chat-2",
+      "path": null
+    }
+  },
+  {
+    "method": "RunGroupCheck",
+    "params": {
+      "groupId": "group-1",
+      "chatId": null
+    }
+  },
+  {
+    "method": "ResolveRunGroup",
+    "params": {
+      "groupId": "group-1",
+      "winnerChatId": "chat-1",
+      "action": "pr",
+      "merge": null,
+      "pr": {
+        "cwd": "/home/dev/.loams-desktop/worktrees/project/brave-otter",
+        "provider": "github",
+        "base": "main",
+        "head": "loams-desktop/brave-otter",
+        "title": "Fix the build",
+        "body": "",
+        "draft": false,
+        "linkIssue": null
+      },
+      "archiveOthers": true,
+      "removeOtherWorktrees": false,
+      "force": false,
+      "expectedChecksum": "sum-1"
+    }
+  },
+  {
     "method": "GetCheckoutFileDiffText",
     "params": {
       "checkoutId": "checkout-1",

@@ -1,0 +1,34 @@
+{
+  "matrix": [
+    {
+      "path": "src/main.rs",
+      "perMember": [
+        {
+          "additions": 3,
+          "chatId": "chat-1",
+          "deletions": 1
+        }
+      ]
+    }
+  ],
+  "pairDiff": {
+    "additions": 3,
+    "checkoutId": "checkout-1",
+    "checksum": "sum-1",
+    "cwd": "/home/dev/project",
+    "deletions": 1,
+    "deviceId": "device-1",
+    "files": [
+      {
+        "additions": 3,
+        "binary": false,
+        "deletions": 1,
+        "path": "src/main.rs",
+        "status": "modified"
+      }
+    ],
+    "patch": "--- a/src/main.rs\n+++ b/src/main.rs\n",
+    "truncated": false,
+    "updatedAt": "2026-10-12T09:30:00Z"
+  }
+}

@@ -28,6 +28,8 @@ import type { ContentSearchMatch } from "./ContentSearchMatch";
 import type { CreateChangeRequestParams } from "./CreateChangeRequestParams";
 import type { CreateChangeRequestReply } from "./CreateChangeRequestReply";
 import type { CreateRepoParams } from "./CreateRepoParams";
+import type { CreateRunGroupParams } from "./CreateRunGroupParams";
+import type { CreateRunGroupReply } from "./CreateRunGroupReply";
 import type { CreateWorktreeOutcome } from "./CreateWorktreeOutcome";
 import type { CreateWorktreeParams } from "./CreateWorktreeParams";
 import type { DeleteProjectActionParams } from "./DeleteProjectActionParams";
@@ -50,6 +52,7 @@ import type { FolderListing } from "./FolderListing";
 import type { ForkSideChatParams } from "./ForkSideChatParams";
 import type { GetCheckoutDiffParams } from "./GetCheckoutDiffParams";
 import type { GetCheckoutFileDiffTextRequest } from "./GetCheckoutFileDiffTextRequest";
+import type { GetRunGroupComparisonParams } from "./GetRunGroupComparisonParams";
 import type { GetThreadUsageParams } from "./GetThreadUsageParams";
 import type { GitAvatars } from "./GitAvatars";
 import type { GitHistoryPage } from "./GitHistoryPage";
@@ -107,11 +110,17 @@ import type { RepoRefList } from "./RepoRefList";
 import type { ResizeTerminalParams } from "./ResizeTerminalParams";
 import type { ResolveGitAvatarsParams } from "./ResolveGitAvatarsParams";
 import type { ResolveReviewCommentParams } from "./ResolveReviewCommentParams";
+import type { ResolveRunGroupParams } from "./ResolveRunGroupParams";
+import type { ResolveRunGroupReply } from "./ResolveRunGroupReply";
 import type { RestoreCheckpointParams } from "./RestoreCheckpointParams";
 import type { RestoreCheckpointReply } from "./RestoreCheckpointReply";
 import type { ReviewComment } from "./ReviewComment";
 import type { ReviewCommentsFrame } from "./ReviewCommentsFrame";
 import type { Role } from "./Role";
+import type { RunGroupCheckParams } from "./RunGroupCheckParams";
+import type { RunGroupCheckReply } from "./RunGroupCheckReply";
+import type { RunGroupComparison } from "./RunGroupComparison";
+import type { RunGroupList } from "./RunGroupList";
 import type { RunProjectActionParams } from "./RunProjectActionParams";
 import type { SearchFilesParams } from "./SearchFilesParams";
 import type { SearchGitHistoryParams } from "./SearchGitHistoryParams";
@@ -146,6 +155,7 @@ import type { WatchCheckoutChangeRequestParams } from "./WatchCheckoutChangeRequ
 import type { WatchDocMessagesParams } from "./WatchDocMessagesParams";
 import type { WatchPreviewsParams } from "./WatchPreviewsParams";
 import type { WatchReviewCommentsParams } from "./WatchReviewCommentsParams";
+import type { WatchRunGroupsParams } from "./WatchRunGroupsParams";
 import type { WatchWorkspaceFilesRequest } from "./WatchWorkspaceFilesRequest";
 import type { WorkspaceDirectoryPage } from "./WorkspaceDirectoryPage";
 import type { WorkspaceFileChanges } from "./WorkspaceFileChanges";
@@ -185,6 +195,7 @@ export const ERROR_CODES = [
   "push_rejected",
   "provider_not_configured",
   "checkpoint_missing",
+  "group_not_ready",
 ] as const;
 
 export type AgentdErrorCode = (typeof ERROR_CODES)[number];
@@ -290,6 +301,11 @@ export const METHODS = [
   { name: "SendReviewToThread", kind: "unary", params: "SendReviewToThreadParams", result: "QueueCommandReply", role: "owner", renderer: true },
   { name: "PostReviewToChangeRequest", kind: "unary", params: "PostReviewToChangeRequestParams", result: "PostReviewToChangeRequestReply", role: "owner", renderer: true },
   { name: "SearchWorkspaceContent", kind: "stream", params: "SearchWorkspaceContentParams", result: "ContentSearchMatch", role: "owner", renderer: true },
+  { name: "CreateRunGroup", kind: "unary", params: "CreateRunGroupParams", result: "CreateRunGroupReply", role: "owner", renderer: true },
+  { name: "WatchRunGroups", kind: "stream", params: "WatchRunGroupsParams", result: "RunGroupList", role: "owner", renderer: true },
+  { name: "GetRunGroupComparison", kind: "unary", params: "GetRunGroupComparisonParams", result: "RunGroupComparison", role: "owner", renderer: true },
+  { name: "RunGroupCheck", kind: "unary", params: "RunGroupCheckParams", result: "RunGroupCheckReply", role: "owner", renderer: true },
+  { name: "ResolveRunGroup", kind: "unary", params: "ResolveRunGroupParams", result: "ResolveRunGroupReply", role: "owner", renderer: true },
   { name: "GetCheckoutFileDiffText", kind: "unary", params: "GetCheckoutFileDiffTextRequest", result: "CheckoutFileDiffText", role: "owner", renderer: true },
   { name: "ListAgentAccounts", kind: "unary", params: "ListAgentAccountsParams", result: "AgentAccountsSnapshot", role: "owner", renderer: true },
   { name: "ActivateAgentAccount", kind: "unary", params: "AgentAccountParams", result: "AgentAccountsSnapshot", role: "owner", renderer: true },
@@ -401,6 +417,11 @@ export type Methods = {
   SendReviewToThread: { params: SendReviewToThreadParams; result: QueueCommandReply; kind: "unary"; role: "owner"; renderer: true };
   PostReviewToChangeRequest: { params: PostReviewToChangeRequestParams; result: PostReviewToChangeRequestReply; kind: "unary"; role: "owner"; renderer: true };
   SearchWorkspaceContent: { params: SearchWorkspaceContentParams; result: ContentSearchMatch; kind: "stream"; role: "owner"; renderer: true };
+  CreateRunGroup: { params: CreateRunGroupParams; result: CreateRunGroupReply; kind: "unary"; role: "owner"; renderer: true };
+  WatchRunGroups: { params: WatchRunGroupsParams; result: RunGroupList; kind: "stream"; role: "owner"; renderer: true };
+  GetRunGroupComparison: { params: GetRunGroupComparisonParams; result: RunGroupComparison; kind: "unary"; role: "owner"; renderer: true };
+  RunGroupCheck: { params: RunGroupCheckParams; result: RunGroupCheckReply; kind: "unary"; role: "owner"; renderer: true };
+  ResolveRunGroup: { params: ResolveRunGroupParams; result: ResolveRunGroupReply; kind: "unary"; role: "owner"; renderer: true };
   GetCheckoutFileDiffText: { params: GetCheckoutFileDiffTextRequest; result: CheckoutFileDiffText; kind: "unary"; role: "owner"; renderer: true };
   ListAgentAccounts: { params: ListAgentAccountsParams; result: AgentAccountsSnapshot; kind: "unary"; role: "owner"; renderer: true };
   ActivateAgentAccount: { params: AgentAccountParams; result: AgentAccountsSnapshot; kind: "unary"; role: "owner"; renderer: true };

@@ -90,6 +90,14 @@ const MIGRATIONS: &[&str] = &[
         resolved      INTEGER NOT NULL DEFAULT 0
      ) STRICT;
      CREATE INDEX review_comments_checkout ON review_comments(checkout_id, created_at, id);",
+    // Run groups (plan SD1 Task 12, Ruling 5): one row per group, its record
+    // as JSON (`crate::run_groups`).
+    "CREATE TABLE run_groups (
+        group_id   TEXT PRIMARY KEY,
+        space_id   TEXT,
+        created_at INTEGER NOT NULL,
+        record     TEXT NOT NULL
+     ) STRICT;",
 ];
 
 /// Tables created with `IF NOT EXISTS` after [`MIGRATIONS`], so they need no

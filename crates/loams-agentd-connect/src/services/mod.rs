@@ -24,6 +24,7 @@ mod diff;
 mod files;
 mod gaps;
 mod git;
+mod groups;
 mod harness;
 mod notifications;
 mod projects;

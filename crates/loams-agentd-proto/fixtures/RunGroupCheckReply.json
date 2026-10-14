@@ -1,0 +1,8 @@
+{
+  "runs": [
+    {
+      "chatId": "chat-1",
+      "terminalId": "term-1"
+    }
+  ]
+}

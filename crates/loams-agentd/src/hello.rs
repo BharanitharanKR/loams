@@ -36,6 +36,7 @@ pub const BUILD_SHA: &str = match option_env!("LOAMS_BUILD_SHA") {
 /// `checkpoints` the per-turn checkpoints and restore (SD1 Task 10);
 /// `review` the review comments and `content-search` the content search
 /// (SD1 Task 11);
+/// `run-groups` the parallel run groups (SD1 Task 12);
 /// `notifications` and `usage` the notification feed and per-thread usage
 /// (SD1 Task 14).
 pub const FEATURES: &[&str] = &[
@@ -44,6 +45,7 @@ pub const FEATURES: &[&str] = &[
     loams_agentd_proto::checkpoints::FEATURE,
     loams_agentd_connect::REVIEW_FEATURE,
     loams_agentd_connect::CONTENT_SEARCH_FEATURE,
+    loams_agentd_proto::groups::FEATURE,
     loams_agentd_proto::notify::FEATURE,
     loams_agentd_proto::usage::FEATURE,
 ];

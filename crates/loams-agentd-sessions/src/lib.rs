@@ -21,6 +21,7 @@ pub mod content_search;
 pub mod diff_sync;
 pub mod doc_host;
 pub mod git_write;
+pub mod groups;
 pub mod harness_updates;
 pub mod instance_lock;
 mod model_catalogs;
@@ -54,6 +55,7 @@ pub use diff_sync::{
     read_diff_file_text, snapshot_tree, working_diff_base,
 };
 pub use doc_host::{ChatDocHandle, DocHost, DocHostConfig};
+pub use groups::{RunGroupLimits, RunGroups};
 pub use instance_lock::{InstanceLock, LockError};
 pub use notify::Notifications;
 pub use profile::EngineProfile;
@@ -141,6 +143,8 @@ pub struct EngineCore {
     pub diff_sync: CheckoutDiffSync,
     /// Per-turn checkpoints (SD1 Task 10).
     pub checkpoints: Checkpoints,
+    /// Parallel run groups (SD1 Task 12).
+    pub run_groups: RunGroups,
     /// Studio's notifications (SD1 Task 14, G19): run groups and approvals
     /// post theirs here too.
     pub notifications: Notifications,
@@ -216,6 +220,7 @@ impl EngineCore {
         // engine data dir — per-device, like the CLI installs it gates.
         registry.load_prefs(data_dir);
         let store = Arc::new(DocsStore::open(profile.store_root())?);
+        let run_groups = RunGroups::open(store.clone())?;
         let journal = Arc::new(RunJournal::open(profile.store_root().join("journals"))?);
         let sessions = SessionsEngine::new(device_id.clone(), journal, registry.clone());
         let doc_host = DocHost::new(
@@ -287,7 +292,17 @@ impl EngineCore {
         }));
         // Each turn's `pre` and `post` hidden commits (SD1 Task 10).
         let checkpoints = Checkpoints::new(repos.clone());
-        sessions.set_turn_checkpoints(Arc::new(checkpoints.clone()));
+        // ... and the run groups' note of each member's turn (SD1 Task 12).
+        sessions.set_turn_checkpoints(Arc::new(groups::GroupTurns {
+            checkpoints: checkpoints.clone(),
+            groups: run_groups.clone(),
+        }));
+        run_groups.start(
+            doc_host.clone(),
+            sessions.clone(),
+            diff_sync.clone(),
+            terminals.clone(),
+        );
         // Notifications and per-turn usage follow every turn (SD1 Task 14).
         let notifications = Notifications::new();
         let titles = workspace.clone();
@@ -302,6 +317,8 @@ impl EngineCore {
             }),
         )));
         sessions.add_turn_observer(Arc::new(usage.clone()));
+        // Run groups post `group_ready` and `check_failed` (SD1 Tasks 12, 14).
+        run_groups.set_notifications(notifications.clone());
         let spaces_sync = SpacesSync::start(repos.clone(), workspace.clone(), &device_id);
         Ok(Self {
             sessions,
@@ -316,6 +333,7 @@ impl EngineCore {
             change_requests,
             diff_sync,
             checkpoints,
+            run_groups,
             notifications,
             usage,
             spaces_sync,
@@ -350,6 +368,7 @@ impl EngineCore {
         )
         .with_previews(self.previews.clone())
         .with_checkpoints(self.checkpoints.clone())
+        .with_run_groups(self.run_groups.clone())
         .with_notifications(self.notifications.clone())
         .with_usage(self.usage.clone())
         .with_harness_updates(self.harness_updates.clone());
@@ -362,6 +381,8 @@ impl EngineCore {
     pub async fn shutdown(&self) {
         self.previews.shutdown().await;
         self.harness_updates.shutdown().await;
+        // Stop sending queued group members before runs are settled.
+        self.run_groups.shutdown().await;
         // A run interruption transitions its chat to Idle, and Idle normally
         // releases the next queued row. Freeze first so quitting never starts
         // recovered work while the engine is being torn down.
