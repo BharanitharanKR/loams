@@ -125,6 +125,17 @@ pub(crate) fn forgejo_api_url(
     remote: &GitRemote,
     rest: &[&str],
 ) -> Result<reqwest::Url, GitWriteError> {
+    // `url` drops a `.` or `..` segment rather than escaping it, so a remote
+    // named `…/../..` would send the token to another API path of the same
+    // host (SD1 Task 30).
+    for segment in [remote.owner.as_str(), remote.repository.as_str()] {
+        if matches!(segment, "" | "." | "..") {
+            return Err(failed(format!(
+                "the remote names no repository: {}/{}",
+                remote.owner, remote.repository
+            )));
+        }
+    }
     let mut url = base.clone();
     url.path_segments_mut()
         .map_err(|_| not_configured("the Forgejo credential's URL is not valid"))?
@@ -460,5 +471,33 @@ impl ChangeRequestCreator {
             url,
             state: ChangeRequestState::Open,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// SD1 Task 30: a remote's owner or repository of `.` or `..` would move
+    /// the token's request to another API path; it is refused instead.
+    #[test]
+    fn forgejo_api_urls_stay_under_the_repository() {
+        let base = reqwest::Url::parse("https://forgejo.example.test/sub/").unwrap();
+        let remote = |owner: &str, repository: &str| GitRemote {
+            host: "forgejo.example.test".into(),
+            owner: owner.into(),
+            repository: repository.into(),
+        };
+        let url = forgejo_api_url(&base, &remote("o", "r?x#y"), &["pulls"]).unwrap();
+        assert_eq!(
+            url.as_str(),
+            "https://forgejo.example.test/sub/api/v1/repos/o/r%3Fx%23y/pulls"
+        );
+        for (owner, repository) in [("..", ".."), ("o", ".."), (".", "r"), ("", "r")] {
+            assert!(
+                forgejo_api_url(&base, &remote(owner, repository), &["pulls"]).is_err(),
+                "{owner}/{repository}"
+            );
+        }
     }
 }

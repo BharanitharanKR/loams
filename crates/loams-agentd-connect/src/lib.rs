@@ -32,6 +32,7 @@ pub mod proto {
 pub mod cors;
 pub mod engine;
 pub mod error;
+pub mod fuzz;
 pub mod listener;
 pub mod map;
 pub mod oidc;

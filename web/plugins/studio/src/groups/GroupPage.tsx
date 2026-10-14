@@ -49,7 +49,11 @@ import { httpUrl } from '../factory.js';
 import { gitErrorOf } from '../git/errors.js';
 import { studioHref } from '../routes.js';
 import { useWatch } from '../sidebar/data.js';
-import { newThreadConfig, newThreadId } from '../sidebar/useThreadActions.js';
+import {
+  applyNewThreadApprovalMode,
+  newThreadConfig,
+  newThreadId,
+} from '../sidebar/useThreadActions.js';
 import { groupView, pendingView, resolveErrorOf, resolveRequest } from './data.js';
 
 function Padded({ children }: { children: ReactNode }) {
@@ -315,6 +319,7 @@ export function GroupPage({
       });
       const config = newThreadConfig();
       const chatId = newThreadId();
+      await applyNewThreadApprovalMode(createClient(ApprovalService, transport), chatId);
       await createClient(ThreadService, transport).send({
         chatId,
         messageId: newThreadId(),

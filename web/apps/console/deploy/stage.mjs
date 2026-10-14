@@ -25,7 +25,7 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hostedConfig } from './config.mjs';
+import { agentdOrigins, hostedConfig } from './config.mjs';
 
 /** The base path the console is built for (vite.config.ts `base`). */
 export const BASE = '/ui/';
@@ -45,10 +45,13 @@ export function inlineScriptHashes(html) {
   return hashes;
 }
 
-/** Where the hosted console may fetch: itself, the tailnet, the fixed engine, the issuer. */
-export function connectSources(config = {}) {
+/**
+ * Where the hosted console may fetch: itself, the tailnet, the fixed engine, the issuer,
+ * and the agentd hosts (LOAMS_AGENTD_ORIGINS, `agentdOrigins`).
+ */
+export function connectSources(config = {}, agentd = []) {
   const sources = ["'self'", TAILNET];
-  for (const url of [config.engineUrl, config.authIssuer]) {
+  for (const url of [config.engineUrl, config.authIssuer, ...agentd]) {
     if (!url) continue;
     const origin = new URL(url).origin;
     if (!sources.includes(origin)) sources.push(origin);
@@ -56,8 +59,15 @@ export function connectSources(config = {}) {
   return sources;
 }
 
-/** The console's Content-Security-Policy: no eval, no remote code, fetches only to `connect`. */
-export function contentSecurityPolicy({ scriptHashes = [], connect = ["'self'"] } = {}) {
+/**
+ * The console's Content-Security-Policy: no eval, no remote code, fetches only to
+ * `connect`, frames only from itself and `frame` (the agentd hosts' previews).
+ */
+export function contentSecurityPolicy({
+  scriptHashes = [],
+  connect = ["'self'"],
+  frame = [],
+} = {}) {
   return [
     "default-src 'self'",
     `script-src ${["'self'", ...scriptHashes].join(' ')}`,
@@ -65,7 +75,7 @@ export function contentSecurityPolicy({ scriptHashes = [], connect = ["'self'"] 
     "img-src 'self' data: blob:",
     "font-src 'self'",
     `connect-src ${connect.join(' ')}`,
-    "frame-src 'self'",
+    `frame-src ${["'self'", ...frame].join(' ')}`,
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'self'",
@@ -124,8 +134,8 @@ export function checkBase(html) {
   }
 }
 
-/** vercel.json's static CSP must admit what this deploy's config fetches. */
-export function checkVercelCsp(vercelJson, connect) {
+/** vercel.json's static CSP must admit what this deploy's config fetches and frames. */
+export function checkVercelCsp(vercelJson, connect, frame = []) {
   // The site-wide rule; the sandbox frame's own, stricter policy overrides it on one path.
   const policies = (vercelJson.headers ?? [])
     .filter((h) => h.source === '/(.*)')
@@ -134,17 +144,22 @@ export function checkVercelCsp(vercelJson, connect) {
     .map((h) => h.value);
   if (policies.length === 0) throw new Error('vercel.json sets no Content-Security-Policy');
   for (const policy of policies) {
-    const directive = policy
-      .split(';')
-      .map((d) => d.trim())
-      .find((d) => d.startsWith('connect-src '));
-    const allowed = new Set(directive?.split(/\s+/).slice(1) ?? []);
-    const missing = connect.filter((s) => !allowed.has(s));
-    if (missing.length > 0) {
-      throw new Error(
-        `vercel.json's Content-Security-Policy connect-src lacks ${missing.join(', ')}: add ` +
-          'them there (Vercel headers are static), or the browser blocks those requests',
-      );
+    for (const [name, wanted] of [
+      ['connect-src', connect],
+      ['frame-src', frame],
+    ]) {
+      const directive = policy
+        .split(';')
+        .map((d) => d.trim())
+        .find((d) => d.startsWith(`${name} `));
+      const allowed = new Set(directive?.split(/\s+/).slice(1) ?? []);
+      const missing = wanted.filter((s) => !allowed.has(s));
+      if (missing.length > 0) {
+        throw new Error(
+          `vercel.json's Content-Security-Policy ${name} lacks ${missing.join(', ')}: add ` +
+            'them there (Vercel headers are static), or the browser blocks those requests',
+        );
+      }
     }
   }
 }
@@ -172,8 +187,9 @@ export function stage({
   if (target !== 'cloudflare' && target !== 'vercel') throw new Error(`unknown target ${target}`);
   // Validate everything before touching `out`.
   const config = hostedConfig(env, { requireAuth });
-  const connect = connectSources(config);
-  if (target === 'vercel') checkVercelCsp(vercelJson ?? {}, connect);
+  const agentd = agentdOrigins(env);
+  const connect = connectSources(config, agentd);
+  if (target === 'vercel') checkVercelCsp(vercelJson ?? {}, connect, agentd);
   const index = join(dist, 'index.html');
   if (!existsSync(index)) throw new Error(`${index} is missing: run the console build first`);
   checkBase(readFileSync(index, 'utf8'));
@@ -191,7 +207,11 @@ export function stage({
     if (!name.endsWith('.html')) continue;
     const file = join(ui, name);
     const html = readFileSync(file, 'utf8');
-    const csp = contentSecurityPolicy({ scriptHashes: inlineScriptHashes(html), connect });
+    const csp = contentSecurityPolicy({
+      scriptHashes: inlineScriptHashes(html),
+      connect,
+      frame: agentd,
+    });
     writeFileSync(file, injectCsp(html, csp, true));
   }
   cpSync(join(ui, ENTRY), join(out, 'index.html'));

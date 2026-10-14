@@ -75,6 +75,8 @@ jobs:
           LOAMS_AUTH_MODE: ${{ vars.LOAMS_AUTH_MODE || 'tailscale' }}
           LOAMS_AUTH_ISSUER: ${{ vars.LOAMS_AUTH_ISSUER }}
           LOAMS_AUTH_CLIENT_ID: ${{ vars.LOAMS_AUTH_CLIENT_ID }}
+          # The remote agentd hosts Studio may call and frame (SD1 Task 30).
+          LOAMS_AGENTD_ORIGINS: ${{ vars.LOAMS_AGENTD_ORIGINS }}
           DEPLOYING: ${{ steps.secrets.outputs.ok }}
         run: |
           if [ "$DEPLOYING" = true ]; then

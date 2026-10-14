@@ -6,7 +6,7 @@
 // answers with the new order, which shows at once (`applyPins`).
 
 import { create, type MessageInitShape } from '@bufbuild/protobuf';
-import { Code, ConnectError, createClient } from '@connectrpc/connect';
+import { type Client, Code, ConnectError, createClient } from '@connectrpc/connect';
 import { useAgentdTransport } from '@loams/console-host/query';
 import {
   ApprovalMode,
@@ -50,6 +50,25 @@ export function newThreadApprovalMode(): ApprovalMode {
   return readSettings().approvalMode === 'full-access'
     ? ApprovalMode.FULL_ACCESS
     : ApprovalMode.SUPERVISED;
+}
+
+/**
+ * Records Settings › Studio's approval mode for a new thread `chatId`, before its first
+ * run (G22, SD1 Task 13). Every way a thread starts calls it: New thread and Mod+N, the
+ * project page's composer, the judge (SD1 Task 30: the composer never did, so on a
+ * desktop daemon its threads ran at the daemon's `full-access` default). The daemon keys
+ * the mode by id, so it can be set before `Send` creates the thread. A daemon without
+ * approvals answers `unimplemented`: its threads run as before.
+ */
+export async function applyNewThreadApprovalMode(
+  approvals: Client<typeof ApprovalService>,
+  chatId: string,
+): Promise<void> {
+  try {
+    await approvals.setThreadApprovalMode({ chatId, mode: newThreadApprovalMode() });
+  } catch (e) {
+    if (!(e instanceof ConnectError && e.code === Code.Unimplemented)) throw e;
+  }
 }
 
 /** This device's defaults for a new thread (Settings › Studio, T15-6). */
@@ -161,13 +180,7 @@ export function useThreadActions(o: {
       run('start a thread', async (c) => {
         const id = newThreadId();
         await c.threads.createThread({ chatId: id, cwd: project.path, config: newThreadConfig() });
-        // The thread's approval mode (G22, SD1 Task 13), before its first run. A
-        // daemon without approvals answers `unimplemented`: its threads run as before.
-        try {
-          await c.approvals.setThreadApprovalMode({ chatId: id, mode: newThreadApprovalMode() });
-        } catch (e) {
-          if (!(e instanceof ConnectError && e.code === Code.Unimplemented)) throw e;
-        }
+        await applyNewThreadApprovalMode(c.approvals, id);
         navigate(studioHref({ kind: 'thread', threadId: id }));
       }),
     pin: (id, p) => changePin('pin the thread', { case: 'pin', value: position(id, p) }),

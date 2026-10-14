@@ -276,21 +276,6 @@ impl Verifier {
         }
     }
 
-    fn find<'a>(keys: &'a JwkSet, kid: Option<&str>, alg: Algorithm) -> Option<&'a Jwk> {
-        match kid {
-            Some(kid) => keys.find(kid),
-            // No kid: only an unambiguous key of the right family.
-            None => {
-                let mut candidates = keys
-                    .keys
-                    .iter()
-                    .filter(|k| DecodingKey::from_jwk(k).is_ok_and(|_| family_matches(k, alg)));
-                let first = candidates.next();
-                candidates.next().is_none().then_some(first).flatten()
-            }
-        }
-    }
-
     /// Checks `token`; `Ok` means it is the enrolled subject's.
     ///
     /// # Errors
@@ -309,48 +294,93 @@ impl Verifier {
     ///
     /// As [`Verifier::verify`].
     pub async fn verify_until(&self, token: &str) -> Result<u64, Rejection> {
-        let header = jsonwebtoken::decode_header(token)
-            .map_err(|_| Rejection::unauthenticated("the bearer token is not a JWT"))?;
-        if !matches!(header.alg, Algorithm::RS256 | Algorithm::EdDSA) {
-            return Err(Rejection::unauthenticated(format!(
-                "tokens signed with {:?} are refused; use RS256 or EdDSA",
-                header.alg
-            )));
-        }
+        let header = token_header(token)?;
         let mut keys = self.keys(false).await?;
-        let mut jwk = Self::find(&keys, header.kid.as_deref(), header.alg).cloned();
+        let mut jwk = find_key(&keys, header.kid.as_deref(), header.alg).cloned();
         if jwk.is_none() {
             keys = self.keys(true).await?;
-            jwk = Self::find(&keys, header.kid.as_deref(), header.alg).cloned();
+            jwk = find_key(&keys, header.kid.as_deref(), header.alg).cloned();
         }
-        let jwk = jwk.ok_or_else(|| {
-            Rejection::unauthenticated("the token is signed with a key the issuer does not publish")
-        })?;
-        if !family_matches(&jwk, header.alg) {
-            return Err(Rejection::unauthenticated(
-                "the token's alg does not match its signing key",
-            ));
-        }
-        let key = DecodingKey::from_jwk(&jwk)
-            .map_err(|_| Rejection::unauthenticated("the issuer's signing key is not usable"))?;
-        let issuer = self.options.issuer.trim_end_matches('/');
-        let mut validation = Validation::new(header.alg);
-        validation.set_issuer(&[issuer.to_owned(), format!("{issuer}/")]);
-        validation.set_audience(&[&self.options.audience]);
-        validation.set_required_spec_claims(&["exp", "iss", "aud", "sub"]);
-        validation.validate_nbf = true;
-        validation.leeway = LEEWAY_SECS;
-        let data =
-            jsonwebtoken::decode::<Claims>(token, &key, &validation).map_err(|e| map_error(&e))?;
-        if data.claims.sub != self.options.subject {
-            return Err(Rejection {
-                code: ErrorCode::PermissionDenied,
-                reason: Some("forbidden_role"),
-                message: "signed in, but this agentd serves another account (--subject)".to_owned(),
-            });
-        }
-        Ok(data.claims.exp)
+        verify_with_key(&self.options, &header, jwk.as_ref(), token)
     }
+}
+
+/// The header of a bearer `token`, refused unless it is a JWT signed with
+/// RS256 or EdDSA (so `none`, HMAC and the other algorithms never reach a
+/// key).
+///
+/// # Errors
+///
+/// 401 (`unauthenticated`).
+pub fn token_header(token: &str) -> Result<jsonwebtoken::Header, Rejection> {
+    let header = jsonwebtoken::decode_header(token)
+        .map_err(|_| Rejection::unauthenticated("the bearer token is not a JWT"))?;
+    if !matches!(header.alg, Algorithm::RS256 | Algorithm::EdDSA) {
+        return Err(Rejection::unauthenticated(format!(
+            "tokens signed with {:?} are refused; use RS256 or EdDSA",
+            header.alg
+        )));
+    }
+    Ok(header)
+}
+
+/// The key of `keys` that `kid` names; without a `kid`, the one usable key
+/// of `alg`'s family, if there is exactly one.
+pub fn find_key<'a>(keys: &'a JwkSet, kid: Option<&str>, alg: Algorithm) -> Option<&'a Jwk> {
+    match kid {
+        Some(kid) => keys.find(kid),
+        None => {
+            let mut candidates = keys
+                .keys
+                .iter()
+                .filter(|k| DecodingKey::from_jwk(k).is_ok_and(|_| family_matches(k, alg)));
+            let first = candidates.next();
+            candidates.next().is_none().then_some(first).flatten()
+        }
+    }
+}
+
+/// Verifies `token`, whose header is `header`, with `jwk`, the issuer's key
+/// it names, against `options`: the signature, `iss`, `aud`, `exp`, `nbf`,
+/// then `sub`. Pure, so the `jwt` fuzz target runs it on a fixed key set
+/// (SD1 Task 30).
+///
+/// # Errors
+///
+/// As [`Verifier::verify`], apart from unavailable keys.
+pub fn verify_with_key(
+    options: &OidcOptions,
+    header: &jsonwebtoken::Header,
+    jwk: Option<&Jwk>,
+    token: &str,
+) -> Result<u64, Rejection> {
+    let jwk = jwk.ok_or_else(|| {
+        Rejection::unauthenticated("the token is signed with a key the issuer does not publish")
+    })?;
+    if !family_matches(jwk, header.alg) {
+        return Err(Rejection::unauthenticated(
+            "the token's alg does not match its signing key",
+        ));
+    }
+    let key = DecodingKey::from_jwk(jwk)
+        .map_err(|_| Rejection::unauthenticated("the issuer's signing key is not usable"))?;
+    let issuer = options.issuer.trim_end_matches('/');
+    let mut validation = Validation::new(header.alg);
+    validation.set_issuer(&[issuer.to_owned(), format!("{issuer}/")]);
+    validation.set_audience(&[&options.audience]);
+    validation.set_required_spec_claims(&["exp", "iss", "aud", "sub"]);
+    validation.validate_nbf = true;
+    validation.leeway = LEEWAY_SECS;
+    let data =
+        jsonwebtoken::decode::<Claims>(token, &key, &validation).map_err(|e| map_error(&e))?;
+    if data.claims.sub != options.subject {
+        return Err(Rejection {
+            code: ErrorCode::PermissionDenied,
+            reason: Some("forbidden_role"),
+            message: "signed in, but this agentd serves another account (--subject)".to_owned(),
+        });
+    }
+    Ok(data.claims.exp)
 }
 
 fn family_matches(jwk: &Jwk, alg: Algorithm) -> bool {

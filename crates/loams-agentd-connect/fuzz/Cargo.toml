@@ -1,0 +1,55 @@
+# cargo-fuzz targets for Loams Studio's untrusted input to the daemon
+# (SD1 Task 30). Outside the workspace (it needs nightly and libFuzzer):
+#   cargo +nightly-2026-09-24 fuzz run connect_decode -- -max_total_time=60
+#   cargo +nightly-2026-09-24 fuzz run jwt -- -max_total_time=60
+#   cargo +nightly-2026-09-24 fuzz run ndjson_params -- -max_total_time=60
+#   cargo +nightly-2026-09-24 fuzz run path_jail -- -max_total_time=60
+# The invariants live in loams_agentd_connect::fuzz and
+# loams_agentd_sessions::fuzz; their unit tests run them on seeds under stable.
+# The ndjson frame decoder and the WebSocket upgrade head are fuzzed in
+# crates/loams-agentd-rpc/fuzz.
+[package]
+name = "loams-agentd-connect-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+loams-agentd-connect = { path = ".." }
+loams-agentd-sessions = { path = "../../loams-agentd-sessions" }
+
+[[bin]]
+name = "connect_decode"
+path = "fuzz_targets/connect_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "jwt"
+path = "fuzz_targets/jwt.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ndjson_params"
+path = "fuzz_targets/ndjson_params.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "path_jail"
+path = "fuzz_targets/path_jail.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

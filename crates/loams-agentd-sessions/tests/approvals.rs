@@ -129,6 +129,7 @@ impl Harness for Asker {
                 auto_approve,
                 decision,
             });
+            let _ = tx.send(Ok(AgentEvent::TextDelta { text: "ok".into() }));
             let _ = tx.send(Ok(done(DoneStatus::Completed)));
         });
         Ok(futures::stream::unfold(rx, |mut rx| async move {
@@ -560,6 +561,48 @@ async fn supervised_thread_refused_on_a_harness_that_cannot_ask() {
         daemon.seen.lock().unwrap().is_empty(),
         "nothing ran unsupervised"
     );
+}
+
+/// SD1 Task 30: a fork of a supervised thread hung under a thread with no
+/// mode (so the full-access default) stays supervised.
+#[tokio::test]
+async fn fork_keeps_its_source_mode() {
+    let tmp = tempfile::tempdir().unwrap();
+    let daemon = Daemon::start(tmp.path(), ApprovalSettings::default());
+    daemon.create_chat("src").await;
+    daemon.create_chat("other").await;
+    daemon.send("src", "hello", "m1", false).await;
+    daemon.seen(1).await;
+    daemon.set_mode("src", "supervised").await;
+    let deadline = tokio::time::Instant::now() + WAIT;
+    let forked = loop {
+        match daemon
+            .client
+            .call(
+                methods::FORK_SIDE_CHAT,
+                json!({ "chatId": "fork", "sourceChatId": "src", "parentChatId": "other" }),
+            )
+            .await
+        {
+            Ok(chat) => break chat,
+            Err(error) => {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "the fork failed: {error}"
+                );
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        }
+    };
+    assert_eq!(forked["parentChatId"], "other");
+    let list = daemon
+        .approvals_until(json!({ "chatId": "fork" }), |_| true)
+        .await;
+    assert_eq!(list["mode"], "supervised");
+    let list = daemon
+        .approvals_until(json!({ "chatId": "other" }), |_| true)
+        .await;
+    assert_eq!(list["mode"], "full-access");
 }
 
 #[tokio::test]

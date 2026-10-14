@@ -42,6 +42,10 @@ url.workspace = true
 # WebSocket, and ring's CSPRNG for preview tickets. All are already in the lock.
 hyper = { version = "1", features = ["client", "http1"] }
 ring.workspace = true
+# The fuzz invariants (`fuzz`, SD1 Task 30): a recording fake engine behind
+# the real router, called as a tower service. Both are already in the lock.
+async-trait.workspace = true
+tower.workspace = true
 
 [build-dependencies]
 connectrpc-build.workspace = true
