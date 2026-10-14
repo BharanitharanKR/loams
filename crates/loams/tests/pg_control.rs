@@ -956,6 +956,7 @@ mod postgres {
         assert_eq!(health.status().as_u16(), 200);
         let launch = json!({
             "compute_id": "cmp-01K7AAAAAAAAAAAAAAAAAAAAAA",
+            "namespace": "acme",
             "binding": {
                 "namespace": "acme",
                 "project_id": "prj-01K7AAAAAAAAAAAAAAAAAAAAAA",

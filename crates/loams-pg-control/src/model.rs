@@ -623,7 +623,7 @@ pub struct PoolKey {
 /// warm-pool compute serves no project until it is bound, Task 14) and
 /// added `ctl_url`; Task 14 added `pool` and `bound_at_ms`. `FORMAT`
 /// stays 1: no compute record exists outside tests (R5.11's precedent;
-/// no release has shipped endpoints yet, R14.8).
+/// no release has shipped endpoints yet, R14.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputeRec {
     pub id: String,
