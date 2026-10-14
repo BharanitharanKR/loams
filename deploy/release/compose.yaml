@@ -125,6 +125,10 @@ services:
       # `tailscale serve` proxy adds, on LOAMS_TAILSCALE_LISTEN only: a loopback
       # port of its own that is the serve target and nothing else.
       LOAMS_AUTH_MODE: ${LOAMS_AUTH_MODE:-tailscale}
+      # Browser origins allowed to call the engine (comma-separated). The hosted
+      # console by default; add your own console's origin if you self-host one.
+      # Empty would allow any origin.
+      LOAMS_CORS_ORIGINS: ${LOAMS_CORS_ORIGINS:-https://console.loams.dev}
       LOAMS_TAILSCALE_LISTEN: ${LOAMS_TAILSCALE_LISTEN:-127.0.0.1:7781}
       LOAMS_OIDC_ISSUER: ${LOAMS_OIDC_ISSUER:-https://auth.loams.dev}
       LOAMS_OIDC_AUDIENCE: ${LOAMS_OIDC_AUDIENCE:-loams-console}
