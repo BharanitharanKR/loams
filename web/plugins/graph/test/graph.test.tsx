@@ -291,7 +291,11 @@ describe('graph page', () => {
     expect(mark.tagName).toBe('MARK');
     const box = statementBox();
     expect(box.getAttribute('aria-invalid')).toBe('true');
-    expect(box.value.slice(box.selectionStart, box.selectionEnd)).toBe('RETURN');
+    // The editor moves its selection to the error span after the render that shows it,
+    // so wait for it rather than reading it once (it raced on a busy CI runner).
+    await waitFor(() =>
+      expect(box.value.slice(box.selectionStart, box.selectionEnd)).toBe('RETURN'),
+    );
     // Columns count characters, not UTF-16 units.
     expect(spanRange('é\n𝔾 X', { line: 2, column: 3, length: 1 })).toEqual([5, 6]);
   });
