@@ -59,6 +59,14 @@ export function FilesTab({
     if (linkPath) setOpen({ path: linkPath, line: linkLine ?? null });
   }, [linkPath, linkLine]);
 
+  // SD1 Task 18's renderer (T21-3): a document's relative links open here.
+  const markdown = useMemo(
+    () =>
+      renderMarkdown ??
+      createMarkdownFileRenderer({ onOpenFile: (path) => setOpen({ path, line: null }) }),
+    [renderMarkdown],
+  );
+
   if (!source) {
     return (
       <div className="p-3">
@@ -70,13 +78,6 @@ export function FilesTab({
   }
 
   const openFile = (path: string) => setOpen({ path, line: null });
-  // SD1 Task 18's renderer (T21-3): a document's relative links open here.
-  const markdown = useMemo(
-    () =>
-      renderMarkdown ??
-      createMarkdownFileRenderer({ onOpenFile: (path) => setOpen({ path, line: null }) }),
-    [renderMarkdown],
-  );
   const openMatch = (match: ContentMatch) => setOpen({ path: match.path, line: match.line });
 
   return (

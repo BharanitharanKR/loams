@@ -34,7 +34,9 @@ import {
 } from '@loams/studio-ui/chat';
 import { Button, Empty, Notice, Spinner } from '@loams/ui';
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { studioHref } from '../routes.js';
 import { readSettings } from '../settings/Settings.js';
+import { ThreadComposer } from './Composer.js';
 import { useThreadApprovals, useThreadRecord, useTranscriptStore } from './streams.js';
 
 const HARNESS_LABEL: Partial<Record<HarnessId, string>> = {
@@ -342,6 +344,14 @@ function ThreadView({
         activeMatchId={activeMatchId}
         empty={empty}
       />
+      {/* The composer (SD1 Task 19). */}
+      <div className="shrink-0 border-rule-soft border-t px-4 py-3">
+        <ThreadComposer
+          threadId={threadId}
+          openFile={(path) => navigate(threadHref(threadId, { panel: 'files', path }))}
+          onGroupStarted={(groupId) => navigate(studioHref({ kind: 'group', groupId }))}
+        />
+      </div>
     </div>
   );
 }
