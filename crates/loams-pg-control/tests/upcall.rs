@@ -280,6 +280,8 @@ impl Rig {
                 &ComputeRec {
                     id: id.to_string(),
                     binding,
+                    pool: None,
+                    bound_at_ms: None,
                     spec_version: 0,
                     status,
                     jwt_key_id: Some(self.keys.kid().to_string()),

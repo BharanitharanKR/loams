@@ -460,6 +460,8 @@ fn compute(project: &str, id: &str) -> ComputeRec {
             project_id: project.into(),
             endpoint_id: "ep-1".into(),
         }),
+        pool: None,
+        bound_at_ms: None,
         spec_version: 1,
         status: ComputeStatus::Pending,
         jwt_key_id: None,

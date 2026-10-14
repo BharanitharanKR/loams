@@ -1941,3 +1941,38 @@ No task of this plan put `pg-control` in the preview release stack: R10.10 noted
   - against a stand-in API server: `start_is_idempotent_by_compute_id`, `bad_launches_are_refused`, `bind_moves_selector`, `resize_unsupported_maps_to_outcome`, `status_stop_and_remove`, `certificate_mounted_with_a_ca` and `secret_holds_the_token`.
 
   **Deviation:** `tests/it_kind.rs` is `it_kind_start_bind_and_stop`, not `it_kind_start_select_1_and_stop`. No storage runs in kind, so the compute gets no spec and `SELECT 1` through the Service waits for Task 48's chart. It checks that the kubelet admits and starts the Pod as rendered, that `bind_address` moves the selector, and the cleanup. It runs in `pg2-e2e.yml`'s new kind job. It was not run on this host: rootless kind needs systemd `Delegate=yes`.
+
+### Task 14 rulings (2026-10-14)
+
+- **R14.1 The key is per Loams namespace.** `PoolKey { namespace, pg_version, image }` (`model.rs`). The plan's key was (region, `pg_version`, image digest). A Kubernetes compute Pod lives in `loams-pg-<ns>` (§46 §15.1), and only that namespace's endpoint Services can select it, so a warm Pod serves one namespace. The region is the deployment's: one `pg-control` serves one region. A namespace's pool is kept while one of its projects has an endpoint. Every pass over such a project (`WarmPool::want`, before the lease) keeps its (namespace, major) wanted for `want_ttl`, 10 minutes. Every instance passes over every project at each resync, so each instance knows the same keys. An instance drains nothing for want of demand until it has been up for `want_ttl`, so a restart never empties the pools.
+- **R14.2 Compose has no warm pool.** Compose fixes a container's published ports when it starts, and an unbound compute has no endpoint port to publish (R10.4).
+  - The compose runtime, and the compute runner that wraps it, still refuse an unbound start.
+  - `--warm-pool-size` defaults to 2 on Kubernetes. With `--runtime compose`, any size but 0 is refused, both on the CLI and in `PgControlConfig`.
+  - Kubernetes keeps a pool of size 0 too, so the computes left from a larger size drain.
+- **R14.3 Records.**
+  - `ComputeRec` gains `pool: Option<PoolKey>` (the pool it was started for, kept once bound) and `bound_at_ms`.
+  - `FORMAT` stays 1. No release has shipped endpoints: preview.1 predates Task 11, and the `loams-pg-control` image first builds at the next tag. This follows the precedent of R5.11, R8.3 and R11.1.
+  - A warm compute's record is written unbound before the runtime starts it, so a crash never leaves a compute without a record. Its status is `Pending` until `compute_ctl` reports `empty`, then `Running` (warm), and `Stopping` while it drains.
+  - `ComputeLaunch` gains `namespace`, which a binding must match (`ComputeLaunch::namespace`). This changes the R13.1 contract: an unbound launch has no other place to name its namespace. The runner's wire carries the new field.
+- **R14.4 One maintainer.**
+  - The instance holding the lease `e/pg/warm-pool` ticks every 10 s, or every 1 s while computes start, and at once after a take (`WarmPool::kick`).
+  - Each tick it starts up to `size_per_key` computes per wanted key, at most 16 per tick. It marks computes `Running` once their `compute_ctl` reports `empty`.
+  - It drains a compute that died, did not report within the start timeout (60 s), is older than `max_age` (24 h, so a taken compute has a fresh image and token), is signed with another key, or whose key is unwanted or whose image is no longer the major's. A changed image drains the pool.
+  - A drain first writes `Stopping` by compare-and-set, and a take binds by compare-and-set. One of the two writes fails, so a taken compute is never stopped. A write that finds the record bound fails the project check (`InvalidArgument`) and is treated as lost.
+  - Every instance's tick reads the unbound computes and keeps the warm ones in memory for takes. The read is a full `C/` scan, per instance per tick, made only while a pool is wanted or exists. An index (a new tag) can replace the scan when compute counts make it costly (Task 46 measures it).
+- **R14.5 Taking (the endpoint reconciler, under the project's lease).**
+  - An endpoint whose `min_cu` equals the pool's size, 0.25 CU (the default `min_cu`, R11.2), takes a warm compute of its key. Before binding, it checks that the compute's `compute_ctl` still reports `empty`, so a dead compute does not count as the endpoint's crash.
+  - One batch binds the compute (`binding`, `Pending`, `bound_at_ms`, the inputs' `spec_version`) and names it on the endpoint.
+  - It then pushes `/configure`, waiting at most `push_wait` (2 s). `compute_ctl` takes the spec at once but answers only when Postgres runs, and the passes poll for that. A warm compute never reads its spec again, so a bound pool compute that still reports `empty` is pushed again (`CtlStatus::Empty`, new).
+  - The start timeout counts from `bound_at_ms`. Token-age replacement still counts from creation, when the token was issued.
+  - An endpoint of another size starts its own compute. Resizing a warm compute on take is Task 15's to consider.
+  - On Kubernetes, `bind_address` also labels the Pod `loams.dev/{project,endpoint}`, because a warm Pod starts with them empty. The Role gains `patch` on `pods`. This adds no reach: `pg-control` already creates Pods with any spec in these namespaces.
+  - A warm Pod's certificate names its own Pod (`cmp-<ulid>.computes.loams-pg-<ns>.svc…`), because its endpoint is not known yet. **Carry to Task 23:** PgDog's hop to a pool-born compute must verify the compute's own name or the CA (`verify-ca`), not the endpoint Service's name, or Task 23 issues a bound certificate on take.
+- **R14.6 Lifecycle and metrics.** A warm compute serves no endpoint, so it sends no lifecycle event until it is bound. From then on it is an ordinary compute (`Started` when it runs, then `Suspended` or `Failed`). `loams_pg_pool_size{state}` and `compute_starts_total{cause=pool}` belong to Task 46, which can read `ComputeRec.pool`.
+- **R14.7 Tests.**
+  - `tests/pool.rs` (local store, `endpoints/env.rs`'s fakes, with the fake `compute_ctl` answering `empty` for a warm compute until it is configured) covers the five named cases: `pool_refills_to_size`, `take_binds_and_refills`, `image_change_drains_pool`, `pool_size_zero_disables` and `bound_compute_gets_attached_spec`. The last runs through the upcall listener: `empty`, then `attached` with the pushed spec.
+  - It adds `other_sizes_start_their_own`, `one_instance_maintains` and `unwanted_pool_drains_once_settled`.
+  - `tests/runtime_kube.rs` adds `unbound_pod_starts_and_bind_labels_it` and `unbound_certificate_names_the_pod`. `role.json` is re-blessed for `patch`. The CLI adds `the_warm_pool_is_kubernetes_only`.
+  - No TiKV variant: the pool's writes are plain fenced compare-and-sets, which the conformance suite covers.
+  - No kind run: the pool on kind needs storage, which waits for Task 48. Task 17's cold-start harness measures it with the pool on and off.
+- **R14.8 Also changed.** `WatchEvent::Endpoint` holds a `Box<EndpointView>`, because `ComputeRec` grew past clippy's `large_enum_variant`.

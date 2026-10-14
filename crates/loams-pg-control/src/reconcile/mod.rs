@@ -479,6 +479,31 @@ impl<S: PgControlStore, N: NeonWrite> Reconciler<S, N> {
         pass(&self.ctx, namespace, project_id).await
     }
 
+    /// One tick of the warm pool (Task 14, [`crate::pool`]): `None` without
+    /// one. The run loop ticks it; tests call this directly.
+    ///
+    /// # Errors
+    ///
+    /// [`ReconcileError`]: the tick stopped, and the next one starts again.
+    pub async fn tick_pool(&self) -> Result<Option<crate::pool::PoolTick>, ReconcileError> {
+        let Some(computes) = &self.ctx.computes else {
+            return Ok(None);
+        };
+        let Some(pool) = &computes.pool else {
+            return Ok(None);
+        };
+        let config = &self.ctx.config;
+        pool.tick(
+            &self.ctx.store,
+            computes,
+            &config.holder,
+            config.lease_ttl,
+            self.ctx.now_ms(),
+        )
+        .await
+        .map(Some)
+    }
+
     /// The resync's sweep: deletes the role secrets no record names that
     /// are older than [`secret_grace`](ReconcilerConfig::secret_grace), and
     /// answers how many it deleted.
@@ -525,6 +550,12 @@ impl<S: PgControlStore, N: NeonWrite> Reconciler<S, N> {
         let mut delays: JoinSet<String> = JoinSet::new();
         let mut sweeps: JoinSet<()> = JoinSet::new();
         let mut last_sweep: Option<tokio::time::Instant> = None;
+        let mut pool: JoinSet<()> = JoinSet::new();
+        if let Some(computes) = &self.ctx.computes
+            && let Some(warm) = computes.pool.clone()
+        {
+            pool.spawn(pool_loop(self.ctx.clone(), warm));
+        }
         tokio::pin!(shutdown);
         tracing::info!(holder = %config.holder, "pg-control reconciler started");
         loop {
@@ -581,8 +612,56 @@ impl<S: PgControlStore, N: NeonWrite> Reconciler<S, N> {
         passes.abort_all();
         delays.abort_all();
         sweeps.abort_all();
+        pool.abort_all();
         tracing::info!(holder = %config.holder, "pg-control reconciler stopped");
         Ok(())
+    }
+}
+
+/// The warm pool's loop (Task 14): a tick every
+/// [`every`](crate::pool::PoolConfig::every), after
+/// [`poll`](crate::pool::PoolConfig::poll) while computes start, and at
+/// once when a compute was taken.
+async fn pool_loop<S: PgControlStore, N: NeonWrite>(
+    ctx: Arc<Ctx<S, N>>,
+    warm: Arc<crate::pool::WarmPool>,
+) {
+    let Some(computes) = ctx.computes.as_ref() else {
+        return;
+    };
+    loop {
+        let config = &ctx.config;
+        let wait = match warm
+            .tick(
+                &ctx.store,
+                computes,
+                &config.holder,
+                config.lease_ttl,
+                ctx.now_ms(),
+            )
+            .await
+        {
+            Ok(t) if t.pending > 0 => warm.config().poll,
+            Ok(t) => {
+                if t.started + t.drained > 0 {
+                    tracing::debug!(
+                        started = t.started,
+                        drained = t.drained,
+                        warm = t.warm,
+                        "warm pool ticked"
+                    );
+                }
+                warm.config().every
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "the warm pool's tick stopped");
+                warm.config().every
+            }
+        };
+        tokio::select! {
+            () = tokio::time::sleep(wait) => {}
+            () = warm.kicked() => {}
+        }
     }
 }
 
@@ -596,6 +675,13 @@ async fn pass<S: PgControlStore, N: NeonWrite>(
         ctx.leases.forget(project_id);
         return Ok(Pass::Idle);
     };
+    // A project with endpoints keeps its namespace's warm pool (Task 14).
+    if let Some(pool) = ctx.computes.as_ref().and_then(|c| c.pool.as_ref())
+        && !snapshot.endpoints.is_empty()
+        && snapshot.project.record.state != crate::model::ProjectState::Deleting
+    {
+        pool.want(namespace, snapshot.project.record.pg_version, ctx.now_ms());
+    }
     if !snapshot.needs_work(ctx) {
         return Ok(Pass::Idle);
     }
