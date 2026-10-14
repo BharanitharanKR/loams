@@ -99,6 +99,7 @@ const plugin: PluginModule = {
               factory={factory}
               route={routeOf(page.kind, params)}
               navigate={navigate}
+              openExternal={(url) => void platform.openExternal(url)}
               hostParam={params.host}
               keys={keys}
             />

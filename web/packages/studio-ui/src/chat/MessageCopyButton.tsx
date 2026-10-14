@@ -1,71 +1,62 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/chat/MessageCopyButton.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// ported to agentd transcript parts (@loams/agentd-client), @loams/ui primitives and tokens; no Effect. Loams' changes are Apache-2.0.
-import { memo, useRef } from "react";
-import { Check, Copy } from "lucide";
-import { Button } from "../ui/button";
-import { MorphIcon } from "~/components/MorphIcon";
-import { cn } from "~/lib/utils";
-import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
-import {
-  ANCHORED_COPY_TOAST_TIMEOUT_MS,
-  showAnchoredCopyErrorToast,
-  showAnchoredCopySuccessToast,
-} from "../ui/anchoredCopyToast";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+// a plain pill button with lucide's Copy and Check and a timed "Copied" state, instead of T3's MorphIcon, anchored toasts and clipboard hook. Loams' changes are Apache-2.0.
+
+import { Check, Copy } from "lucide-react";
+import { memo, useEffect, useRef, useState } from "react";
+
+const COPIED_MS = 1200;
 
 export const MessageCopyButton = memo(function MessageCopyButton({
   text,
   label = "Copy message",
-  icon = Copy,
-  extraFlavors,
-  size = "xs",
-  variant = "outline",
-  className,
+  copy,
 }: {
   text: string;
   label?: string;
-  /** The icon shown until the copy lands. */
-  icon?: typeof Copy;
-  /** Additional clipboard types written beside `text/plain` when the platform allows it. */
-  extraFlavors?: Readonly<Record<string, string>>;
-  size?: "xs" | "icon-xs";
-  variant?: "outline" | "ghost";
-  className?: string;
+  /** The clipboard writer; defaults to `navigator.clipboard`. */
+  copy?: (text: string) => Promise<void>;
 }) {
-  const ref = useRef<HTMLButtonElement>(null);
-  const { copyToClipboard, isCopied } = useCopyToClipboard<void>({
-    onCopy: () => showAnchoredCopySuccessToast(ref),
-    onError: (error: Error) => showAnchoredCopyErrorToast(ref, error),
-    timeout: ANCHORED_COPY_TOAST_TIMEOUT_MS,
-    ...(extraFlavors ? { extraFlavors } : {}),
-  });
-
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+  const write =
+    copy ??
+    ((value: string) =>
+      typeof navigator !== "undefined" && navigator.clipboard
+        ? navigator.clipboard.writeText(value)
+        : Promise.reject(new Error("no clipboard")));
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            aria-label={label}
-            disabled={isCopied}
-            onClick={() => copyToClipboard(text)}
-            ref={ref}
-            type="button"
-            size={size}
-            variant={variant === "ghost" ? "ghost-muted" : variant}
-            className={className}
-          />
-        }
-      >
-        <MorphIcon
-          className={cn("size-3", isCopied && "text-primary")}
-          icon={isCopied ? Check : icon}
-        />
-      </TooltipTrigger>
-      <TooltipPopup>
-        <p>{label}</p>
-      </TooltipPopup>
-    </Tooltip>
+    <button
+      type="button"
+      aria-label={copied ? "Copied" : label}
+      title={copied ? "Copied" : label}
+      disabled={copied}
+      onClick={() => {
+        write(text).then(
+          () => {
+            setCopied(true);
+            if (timer.current) clearTimeout(timer.current);
+            timer.current = setTimeout(() => setCopied(false), COPIED_MS);
+          },
+          () => {
+            // The clipboard refused: nothing changes.
+          },
+        );
+      }}
+      className="inline-flex size-6 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-faint hover:bg-raised hover:text-ink"
+    >
+      {copied ? (
+        <Check className="size-3 text-grow" aria-hidden />
+      ) : (
+        <Copy className="size-3" aria-hidden />
+      )}
+    </button>
   );
 });

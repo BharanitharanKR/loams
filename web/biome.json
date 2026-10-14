@@ -37,6 +37,15 @@
           "correctness": { "useExhaustiveDependencies": "off" }
         }
       }
+    },
+    {
+      "includes": ["packages/studio-ui/src/chat/tools/commandLabel.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": { "noControlCharactersInRegex": "off" },
+          "style": { "noNonNullAssertion": "off" }
+        }
+      }
     }
   ]
 }

@@ -30,6 +30,14 @@ catalog:
   '@xyflow/react': 12.12.0
   tailwindcss: 4.3.3
   '@tailwindcss/vite': 4.3.3
+  # SD1 Task 18: Studio's chat markdown and code highlighting (MIT; npm licence and
+  # publish time checked 2026-10-14, each release at least 14 days old). No rehype-raw (D919).
+  react-markdown: 10.1.0
+  remark-gfm: 4.0.1
+  remark-breaks: 4.0.0
+  rehype-sanitize: 6.0.0
+  unified: 11.0.5
+  shiki: 4.2.0
 
 # Keep Vite+ isolated from the console's ordinary Vite/Vitest toolchain.
 overrides:
@@ -48,6 +56,11 @@ overrides:
   # js-yaml 4 uses argparse (Python-2.0) only for its command-line tool, which nothing
   # here runs; the library (`load`, `dump`) never imports it.
   'js-yaml@4.3.2>argparse': '-'
+  # SD1 Task 18 (Pins: at least 14 days old): react-markdown and remark-gfm accept these
+  # mdast utilities' October 2026 releases; keep the previous ones until those age.
+  mdast-util-find-and-replace: 3.0.2
+  mdast-util-from-markdown: 2.0.3
+  mdast-util-to-markdown: 2.1.3
 
 allowBuilds:
   esbuild: true

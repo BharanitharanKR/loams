@@ -1,29 +1,13 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/pendingUserInput.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// inline timeline cards on agentd approvals (G17) and input parts, @loams/ui primitives and tokens. Loams' changes are Apache-2.0.
-import type { ThreadContextRecord, UserInputQuestion } from "@t3tools/contracts";
-import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
-import { formatThreadLink } from "@t3tools/shared/threadLinks";
+// the draft-answer rules (normalising selections and custom text, the active question, progress and completeness) over agentd's `UserInputQuestion` (string options, `prefill`) and `UserInputAnswer` (labels); no attachments, thread links or context references. Loams' changes are Apache-2.0.
 
-/** Question responses carry text, so send thread chips as links with the actual thread IDs. */
-export function projectPendingUserInputAnswer(
-  answer: unknown,
-  threadContexts: ReadonlyArray<ThreadContextRecord>,
-) {
-  if (typeof answer !== "string" || threadContexts.length === 0) return answer;
-  const recordsById = new Map(threadContexts.map((record) => [record.contextId, record]));
-  return replaceComposerContextReferences(answer, (reference) => {
-    const record = reference.kind === "thread" ? recordsById.get(reference.contextId) : undefined;
-    return record ? formatThreadLink(record.threadId, reference.label) : reference.source;
-  });
-}
+import type { UserInputAnswer, UserInputQuestion } from "@loams/agentd-client";
 
 export interface PendingUserInputDraftAnswer {
   selectedOptionValues?: string[];
   customAnswer?: string;
-  attachmentCount?: number;
-  attachmentsBlocked?: boolean;
 }
 
 export interface PendingUserInputProgress {
@@ -32,7 +16,7 @@ export interface PendingUserInputProgress {
   activeDraft: PendingUserInputDraftAnswer | undefined;
   selectedOptionValues: string[];
   customAnswer: string;
-  resolvedAnswer: string | string[] | null;
+  resolvedAnswer: string[] | null;
   usingCustomAnswer: boolean;
   answeredQuestionCount: number;
   isLastQuestion: boolean;
@@ -44,7 +28,6 @@ function normalizeDraftAnswer(value: string | undefined): string | null {
   if (typeof value !== "string") {
     return null;
   }
-
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
@@ -53,143 +36,44 @@ function normalizeSelectedOptionValues(value: string[] | undefined): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
-
-  // Provider option IDs must stay unchanged, including whitespace.
+  // Option labels must stay unchanged, including whitespace.
   return Array.from(new Set(value.filter((entry) => typeof entry === "string")));
 }
 
+/** The draft for `question`, starting from its prefill. */
+export function initialDraftAnswer(question: UserInputQuestion): PendingUserInputDraftAnswer {
+  return question.prefill ? { customAnswer: question.prefill } : {};
+}
+
+/** The labels a draft answers `question` with, or null when it does not answer it yet. */
 export function resolvePendingUserInputAnswer(
   question: UserInputQuestion,
   draft: PendingUserInputDraftAnswer | undefined,
-): string | string[] | null {
-  if (draft?.attachmentsBlocked) return null;
-  const customAnswer =
-    question.allowCustomAnswer === false
-      ? null
-      : question.initialAnswer !== undefined
-        ? (draft?.customAnswer ?? null)
-        : normalizeDraftAnswer(draft?.customAnswer);
-  if (customAnswer !== null && customAnswer.length > 0) {
-    return customAnswer;
+): string[] | null {
+  const customAnswer = normalizeDraftAnswer(draft?.customAnswer);
+  if (customAnswer !== null) {
+    return [customAnswer];
   }
-
   const selectedOptionValues = normalizeSelectedOptionValues(draft?.selectedOptionValues).filter(
-    (value) => question.options.some((option) => (option.value ?? option.label) === value),
+    (value) => question.options.includes(value),
   );
-  if (question.multiSelect) {
-    return selectedOptionValues.length > 0
-      ? selectedOptionValues
-      : (customAnswer ??
-          (question.allowCustomAnswer !== false && (draft?.attachmentCount ?? 0) > 0 ? "" : null));
-  }
-
-  return (
-    selectedOptionValues[0] ??
-    customAnswer ??
-    (question.allowCustomAnswer !== false && (draft?.attachmentCount ?? 0) > 0 ? "" : null)
-  );
+  if (selectedOptionValues.length === 0) return null;
+  return question.multiSelect ? selectedOptionValues : selectedOptionValues.slice(0, 1);
 }
 
-export function setPendingUserInputCustomAnswer(
-  draft: PendingUserInputDraftAnswer | undefined,
-  customAnswer: string,
-  question?: Pick<UserInputQuestion, "initialAnswer">,
-): PendingUserInputDraftAnswer {
-  const selectedOptionValues =
-    question?.initialAnswer !== undefined || customAnswer.trim().length > 0
-      ? undefined
-      : normalizeSelectedOptionValues(draft?.selectedOptionValues);
-
-  return {
-    customAnswer,
-    ...(selectedOptionValues && selectedOptionValues.length > 0 ? { selectedOptionValues } : {}),
-  };
-}
-
-const DISPLACED_ANSWER_SEPARATOR = "\n\n";
-
-/**
- * Selecting an option replaces the custom answer, because a non-empty custom
- * answer outranks selected options in `resolvePendingUserInputAnswer`. Text the
- * user typed into the answer field must not vanish on that click: it moves back
- * into the thread draft, after whatever was already waiting there.
- */
-export function carryDisplacedCustomAnswerIntoPrompt(
-  prompt: string,
-  customAnswer: string | undefined,
-): string {
-  const displaced = customAnswer?.trim() ?? "";
-  if (displaced.length === 0) {
-    return prompt;
-  }
-  if (prompt.trim().length === 0) {
-    return displaced;
-  }
-  return `${prompt.trimEnd()}${DISPLACED_ANSWER_SEPARATOR}${displaced}`;
-}
-
-export function togglePendingUserInputOptionSelection(
+/** Selecting an option: multi-select toggles it; single select replaces the choice. */
+export function toggleDraftOption(
   question: UserInputQuestion,
   draft: PendingUserInputDraftAnswer | undefined,
-  optionValue: string,
+  option: string,
 ): PendingUserInputDraftAnswer {
-  if (question.multiSelect) {
-    const selectedOptionValues = normalizeSelectedOptionValues(draft?.selectedOptionValues);
-    const nextSelectedOptionValues = selectedOptionValues.includes(optionValue)
-      ? selectedOptionValues.filter((value) => value !== optionValue)
-      : [...selectedOptionValues, optionValue];
-
-    return {
-      customAnswer: "",
-      ...(nextSelectedOptionValues.length > 0
-        ? { selectedOptionValues: nextSelectedOptionValues }
-        : {}),
-    };
-  }
-
+  const selected = normalizeSelectedOptionValues(draft?.selectedOptionValues);
+  if (!question.multiSelect) return { selectedOptionValues: [option] };
   return {
-    customAnswer: "",
-    selectedOptionValues: [optionValue],
+    selectedOptionValues: selected.includes(option)
+      ? selected.filter((value) => value !== option)
+      : [...selected, option],
   };
-}
-
-export function buildPendingUserInputAnswers(
-  questions: ReadonlyArray<UserInputQuestion>,
-  draftAnswers: Record<string, PendingUserInputDraftAnswer>,
-): Record<string, string | string[]> | null {
-  const answers: Record<string, string | string[]> = {};
-
-  for (const question of questions) {
-    const answer = resolvePendingUserInputAnswer(question, draftAnswers[question.id]);
-    if (answer === null) {
-      return null;
-    }
-    answers[question.id] = answer;
-  }
-
-  return answers;
-}
-
-export function countAnsweredPendingUserInputQuestions(
-  questions: ReadonlyArray<UserInputQuestion>,
-  draftAnswers: Record<string, PendingUserInputDraftAnswer>,
-): number {
-  return questions.reduce((count, question) => {
-    return resolvePendingUserInputAnswer(question, draftAnswers[question.id]) !== null
-      ? count + 1
-      : count;
-  }, 0);
-}
-
-export function findFirstUnansweredPendingUserInputQuestionIndex(
-  questions: ReadonlyArray<UserInputQuestion>,
-  draftAnswers: Record<string, PendingUserInputDraftAnswer>,
-): number {
-  const unansweredIndex = questions.findIndex(
-    (question) => resolvePendingUserInputAnswer(question, draftAnswers[question.id]) === null,
-  );
-
-  return unansweredIndex === -1 ? Math.max(questions.length - 1, 0) : unansweredIndex;
 }
 
 export function derivePendingUserInputProgress(
@@ -204,11 +88,10 @@ export function derivePendingUserInputProgress(
   const resolvedAnswer = activeQuestion
     ? resolvePendingUserInputAnswer(activeQuestion, activeDraft)
     : null;
-  const customAnswer =
-    activeQuestion?.allowCustomAnswer === false ? "" : (activeDraft?.customAnswer ?? "");
-  const answeredQuestionCount = countAnsweredPendingUserInputQuestions(questions, draftAnswers);
-  const isLastQuestion =
-    questions.length === 0 ? true : normalizedQuestionIndex >= questions.length - 1;
+  const customAnswer = activeDraft?.customAnswer ?? "";
+  const answeredQuestionCount = questions.filter(
+    (question) => resolvePendingUserInputAnswer(question, draftAnswers[question.id]) !== null,
+  ).length;
 
   return {
     questionIndex: normalizedQuestionIndex,
@@ -217,11 +100,24 @@ export function derivePendingUserInputProgress(
     selectedOptionValues: normalizeSelectedOptionValues(activeDraft?.selectedOptionValues),
     customAnswer,
     resolvedAnswer,
-    usingCustomAnswer:
-      (activeQuestion?.initialAnswer !== undefined ? customAnswer : customAnswer.trim()).length > 0,
+    usingCustomAnswer: normalizeDraftAnswer(customAnswer) !== null,
     answeredQuestionCount,
-    isLastQuestion,
-    isComplete: buildPendingUserInputAnswers(questions, draftAnswers) !== null,
+    isLastQuestion: questions.length === 0 ? true : normalizedQuestionIndex >= questions.length - 1,
+    isComplete: questions.length > 0 && answeredQuestionCount === questions.length,
     canAdvance: resolvedAnswer !== null,
   };
+}
+
+/** Every question's answer for `AnswerQuestion`, or null while one is unanswered. */
+export function buildPendingUserInputAnswers(
+  questions: ReadonlyArray<UserInputQuestion>,
+  draftAnswers: Record<string, PendingUserInputDraftAnswer>,
+): UserInputAnswer[] | null {
+  const answers: UserInputAnswer[] = [];
+  for (const question of questions) {
+    const labels = resolvePendingUserInputAnswer(question, draftAnswers[question.id]);
+    if (labels === null) return null;
+    answers.push({ questionId: question.id, labels });
+  }
+  return answers;
 }

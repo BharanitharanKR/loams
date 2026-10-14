@@ -1,12 +1,11 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/chat/HighlightedTokens.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// ported to agentd transcript parts (@loams/agentd-client), @loams/ui primitives and tokens; no Effect. Loams' changes are Apache-2.0.
-import { use, useMemo, type CSSProperties } from "react";
+// the token-span renderer and `keyedLines`, fed by an effect that keeps the plain text until Studio's highlighter answers (no Suspense, no embedded scripts, no word grouping). Loams' changes are Apache-2.0.
 
-import { resolveDiffThemeName } from "../../lib/diffRendering";
-import type { EmbeddedScript } from "../../lib/embeddedScripts";
-import { getSyntaxHighlighterPromise } from "../../lib/syntaxHighlighting";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import { LRUCache } from "../lib/lruCache";
+import { highlightToTokens, type TokenLines } from "./highlight";
 
 interface SyntaxToken {
   readonly content: string;
@@ -15,9 +14,9 @@ interface SyntaxToken {
   readonly fontStyle?: number;
 }
 
-type TokenLines = ReadonlyArray<ReadonlyArray<SyntaxToken>>;
-
-const NO_EMBEDDED_SCRIPTS: ReadonlyArray<EmbeddedScript> = [];
+const MAX_CACHE_ENTRIES = 300;
+const MAX_CACHE_BYTES = 8 * 1024 * 1024;
+const tokenCache = new LRUCache<TokenLines>(MAX_CACHE_ENTRIES, MAX_CACHE_BYTES);
 
 function syntaxTokenStyle(token: SyntaxToken): CSSProperties {
   const fontStyle = token.fontStyle ?? 0;
@@ -27,131 +26,6 @@ function syntaxTokenStyle(token: SyntaxToken): CSSProperties {
     ...(fontStyle & 2 ? { fontWeight: 700 } : {}),
     ...(fontStyle & 4 ? { textDecoration: "underline" } : {}),
   };
-}
-
-/**
- * Colors `code` inside the caller's `<pre>` without changing its text, so
- * selection and copy match the plain version. Suspends while the grammar
- * loads; wrap it in Suspense with the plain text as the fallback.
- * `wordClassName` goes on each whitespace-separated word. `embedded`
- * scripts are colored with their own grammar inside `code`.
- */
-export function HighlightedTokens({
-  code,
-  language,
-  embedded = NO_EMBEDDED_SCRIPTS,
-  theme,
-  wordClassName,
-}: {
-  code: string;
-  language: string;
-  embedded?: ReadonlyArray<EmbeddedScript>;
-  theme: "light" | "dark";
-  wordClassName?: string;
-}) {
-  const highlighter = use(getSyntaxHighlighterPromise(language));
-  // Every grammar loads into the same shared highlighter.
-  for (const script of embedded) use(getSyntaxHighlighterPromise(script.language));
-  const lines = useMemo(() => {
-    const themeName = resolveDiffThemeName(theme);
-    const tokenize = (text: string, lang: string) =>
-      highlighter.codeToTokens(text, { lang, theme: themeName }).tokens;
-    return keyedLines(
-      code,
-      withEmbeddedScripts(code, tokenize(code, language), embedded, tokenize),
-    );
-  }, [code, embedded, highlighter, language, theme]);
-
-  return lines.map(({ key, tokens, ending }) => (
-    <span key={key}>
-      {wordClassName
-        ? wordsOf(tokens).map((part) =>
-            typeof part === "string" ? (
-              part
-            ) : (
-              <span key={part.key} className={wordClassName}>
-                {part.pieces.map((piece) => (
-                  <span key={piece.key} style={syntaxTokenStyle(piece.token)}>
-                    {piece.text}
-                  </span>
-                ))}
-              </span>
-            ),
-          )
-        : tokens.map((token) => (
-            <span key={`${token.offset}:${token.content}`} style={syntaxTokenStyle(token)}>
-              {token.content}
-            </span>
-          ))}
-      {ending}
-    </span>
-  ));
-}
-
-/**
- * Recolors each embedded script's span of `code` with its own grammar,
- * outermost first so nested scripts win. A script whose grammar is missing
- * keeps the colors around it.
- */
-export function withEmbeddedScripts(
-  code: string,
-  lines: TokenLines,
-  embedded: ReadonlyArray<EmbeddedScript>,
-  tokenize: (text: string, language: string) => TokenLines,
-): TokenLines {
-  if (embedded.length === 0) return lines;
-  const styles = Array.from<SyntaxToken | undefined>({ length: code.length });
-  for (const token of lines.flat()) {
-    styles.fill(token, token.offset, token.offset + token.content.length);
-  }
-  for (const script of embedded) {
-    let scriptLines: TokenLines;
-    try {
-      scriptLines = tokenize(script.text, script.language);
-    } catch {
-      continue;
-    }
-    for (const token of scriptLines.flat()) {
-      if (token.content === "") continue;
-      const last = token.offset + token.content.length - 1;
-      styles.fill(token, script.starts[token.offset], script.ends[last]);
-    }
-  }
-  return restyledLines(code, styles);
-}
-
-/** Splits `code` into lines of tokens, one per run of characters sharing a style. */
-function restyledLines(
-  code: string,
-  styles: ReadonlyArray<SyntaxToken | undefined>,
-): SyntaxToken[][] {
-  const lines: SyntaxToken[][] = [];
-  let start = 0;
-  for (const lineBreak of [...code.matchAll(/\r?\n/gu), undefined]) {
-    const end = lineBreak?.index ?? code.length;
-    const tokens: SyntaxToken[] = [];
-    for (let index = start; index < end;) {
-      const style = styles[index];
-      let next = index + 1;
-      while (
-        next < end &&
-        styles[next]?.color === style?.color &&
-        styles[next]?.fontStyle === style?.fontStyle
-      ) {
-        next += 1;
-      }
-      tokens.push({
-        content: code.slice(index, next),
-        offset: index,
-        ...(style?.color ? { color: style.color } : {}),
-        ...(style?.fontStyle ? { fontStyle: style.fontStyle } : {}),
-      });
-      index = next;
-    }
-    lines.push(tokens);
-    if (lineBreak) start = lineBreak.index + lineBreak[0].length;
-  }
-  return lines;
 }
 
 /**
@@ -174,35 +48,53 @@ export function keyedLines<Token extends SyntaxToken>(
   });
 }
 
-interface Word {
-  readonly key: string;
-  readonly pieces: Array<{ key: string; text: string; token: SyntaxToken }>;
+/** The tokens of `code`, or null while they load (or when highlighting is unavailable). */
+export function useHighlightedTokens(code: string, language: string): TokenLines | null {
+  const cacheKey = `${language}\u0000${code}`;
+  const [state, setState] = useState<{ key: string; lines: TokenLines | null }>(() => ({
+    key: cacheKey,
+    lines: tokenCache.get(cacheKey),
+  }));
+  useEffect(() => {
+    const cached = tokenCache.get(cacheKey);
+    if (cached) {
+      setState({ key: cacheKey, lines: cached });
+      return;
+    }
+    let live = true;
+    highlightToTokens(code, language).then(
+      (lines) => {
+        tokenCache.set(cacheKey, lines, code.length * 4);
+        if (live) setState({ key: cacheKey, lines });
+      },
+      () => {
+        // Shiki could not start: the plain text stays.
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [cacheKey, code, language]);
+  return state.key === cacheKey ? state.lines : null;
 }
 
 /**
- * Regroups a line's tokens into whitespace runs and whole words, matching
- * `text.split(/(\s+)/)`, so a word made of several tokens (`"$HOME/x"`) wraps
- * exactly like its plain-text fallback.
+ * Colours `code` inside the caller's `<code>` without changing its text, so selection
+ * and copy match the plain version. Until the tokens arrive the text is plain. Every
+ * token is a React text node: nothing here is parsed as HTML (§53 D919).
  */
-export function wordsOf(tokens: ReadonlyArray<SyntaxToken>): Array<string | Word> {
-  const parts: Array<string | Word> = [];
-  let word: Word | null = null;
-  for (const token of tokens) {
-    let offset = token.offset;
-    for (const text of token.content.split(/(\s+)/u)) {
-      if (text === "") continue;
-      if (/^\s/u.test(text)) {
-        parts.push(text);
-        word = null;
-      } else {
-        if (!word) {
-          word = { key: String(offset), pieces: [] };
-          parts.push(word);
-        }
-        word.pieces.push({ key: String(offset), text, token });
-      }
-      offset += text.length;
-    }
-  }
-  return parts;
+export function HighlightedTokens({ code, language }: { code: string; language: string }) {
+  const tokens = useHighlightedTokens(code, language);
+  const lines = useMemo(() => (tokens ? keyedLines(code, tokens) : null), [code, tokens]);
+  if (!lines) return <>{code}</>;
+  return lines.map(({ key, tokens: lineTokens, ending }) => (
+    <span key={key} data-line="">
+      {lineTokens.map((token) => (
+        <span key={`${token.offset}:${token.content}`} style={syntaxTokenStyle(token)}>
+          {token.content}
+        </span>
+      ))}
+      {ending}
+    </span>
+  ));
 }

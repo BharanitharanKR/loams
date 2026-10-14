@@ -1,312 +1,241 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/chat/ComposerPendingUserInputPanel.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// inline timeline cards on agentd approvals (G17) and input parts, @loams/ui primitives and tokens. Loams' changes are Apache-2.0.
-import { type RuntimeRequestId } from "@t3tools/contracts";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { type PendingUserInput } from "../../session-logic";
-import {
-  derivePendingUserInputProgress,
-  type PendingUserInputDraftAnswer,
-} from "../../pendingUserInput";
-import { CheckIcon } from "lucide-react";
-import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
-import { cn } from "~/lib/utils";
-import { ComposerBanner } from "./ComposerBanner";
+// an inline timeline card for an agentd `input` part: one question at a time with its progress, option buttons with 1–9 shortcuts (scoped to the card), single-select auto-advance, free text, and Send through `AnswerQuestion`; @loams/ui tokens, no composer banner, collapse or dismiss. Loams' changes are Apache-2.0.
 
-interface PendingUserInputPanelProps {
-  pendingUserInputs: PendingUserInput[];
+// A question the agent asked (SD1 Task 18; Q802 keeps DD1e's question card's job, here
+// drawn from upstream's panel). An answered question shows its state; an open one takes
+// answers until it is sent.
+
+import type { UserInputAnswer, UserInputQuestion } from "@loams/agentd-client";
+import { Button, cx } from "@loams/ui";
+import { CheckIcon, MessageCircleQuestion } from "lucide-react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import {
+  buildPendingUserInputAnswers,
+  derivePendingUserInputProgress,
+  initialDraftAnswer,
+  type PendingUserInputDraftAnswer,
+  toggleDraftOption,
+} from "./pendingUserInput";
+
+const AUTO_ADVANCE_MS = 150;
+
+export interface QuestionCardProps {
+  requestId: string;
+  questions: UserInputQuestion[];
+  /** The daemon marked the request answered. */
+  resolved: boolean;
   disabled?: boolean;
-  respondingRequestIds: RuntimeRequestId[];
-  answers: Record<string, PendingUserInputDraftAnswer>;
-  questionIndex: number;
-  onToggleOption: (questionId: string, optionValue: string) => void;
-  onAdvance: () => void;
-  onDismiss: (requestId: RuntimeRequestId) => void;
+  onAnswer?: (requestId: string, answers: UserInputAnswer[]) => Promise<unknown>;
 }
 
-export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserInputPanel({
-  pendingUserInputs,
+function initialDrafts(questions: ReadonlyArray<UserInputQuestion>) {
+  return Object.fromEntries(questions.map((q) => [q.id, initialDraftAnswer(q)]));
+}
+
+export const QuestionCard = memo(function QuestionCard({
+  requestId,
+  questions,
+  resolved,
   disabled = false,
-  respondingRequestIds,
-  answers,
-  questionIndex,
-  onToggleOption,
-  onAdvance,
-  onDismiss,
-}: PendingUserInputPanelProps) {
-  if (pendingUserInputs.length === 0) return null;
-  const activePrompt = pendingUserInputs[0];
-  if (!activePrompt) return null;
-
-  return (
-    <ComposerPendingUserInputCard
-      key={activePrompt.requestId}
-      prompt={activePrompt}
-      disabled={disabled}
-      isResponding={respondingRequestIds.includes(activePrompt.requestId)}
-      answers={answers}
-      questionIndex={questionIndex}
-      onToggleOption={onToggleOption}
-      onAdvance={onAdvance}
-      onDismiss={onDismiss}
-    />
+  onAnswer,
+}: QuestionCardProps) {
+  const [answers, setAnswers] = useState<Record<string, PendingUserInputDraftAnswer>>(() =>
+    initialDrafts(questions),
   );
-});
-
-const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard({
-  prompt,
-  disabled,
-  isResponding,
-  answers,
-  questionIndex,
-  onToggleOption,
-  onAdvance,
-  onDismiss,
-}: {
-  prompt: PendingUserInput;
-  disabled: boolean;
-  isResponding: boolean;
-  answers: Record<string, PendingUserInputDraftAnswer>;
-  questionIndex: number;
-  onToggleOption: (questionId: string, optionValue: string) => void;
-  onAdvance: () => void;
-  onDismiss: (requestId: RuntimeRequestId) => void;
-}) {
-  // Message-mode requests remain answerable after their provider turn ends.
-  const canRespond = prompt.responseCapability !== "not_resumable";
-  const responseDisabled = disabled || isResponding || !canRespond;
-  const progress = derivePendingUserInputProgress(prompt.questions, answers, questionIndex);
-  const activeQuestion = progress.activeQuestion;
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const autoAdvanceTimerRef = useRef<number | null>(null);
-  const onAdvanceRef = useRef(onAdvance);
-  const [optimisticSingleSelect, setOptimisticSingleSelect] = useState<{
-    questionId: string;
-    optionValue: string;
-  } | null>(null);
-  // Collapsing hides everything but the header so a tall prompt stops covering
-  // the thread the user is trying to read. Scoped to a single question: the card
-  // is keyed by request id so the next prompt starts expanded, and storing the
-  // collapsed question's id (rather than a bare flag) reopens the card when the
-  // prompt advances to its next question, which can happen without a click —
-  // sending from the composer advances the active question.
-  const [collapsedQuestionId, setCollapsedQuestionId] = useState<string | null>(null);
-  const isCollapsed = collapsedQuestionId !== null && collapsedQuestionId === activeQuestion?.id;
+  const progress = derivePendingUserInputProgress(questions, answers, questionIndex);
+  const activeQuestion = progress.activeQuestion;
+  const responseDisabled = disabled || sending || resolved || !onAnswer;
 
-  useEffect(() => {
-    onAdvanceRef.current = onAdvance;
-  }, [onAdvance]);
+  useEffect(
+    () => () => {
+      if (autoAdvanceTimerRef.current !== null) window.clearTimeout(autoAdvanceTimerRef.current);
+    },
+    [],
+  );
 
-  useEffect(() => {
-    if (!activeQuestion || activeQuestion.multiSelect || !optimisticSingleSelect) {
-      return;
-    }
-    if (optimisticSingleSelect.questionId !== activeQuestion.id) {
-      setOptimisticSingleSelect(null);
-      return;
-    }
-    if (
-      progress.customAnswer.trim().length === 0 &&
-      progress.selectedOptionValues.includes(optimisticSingleSelect.optionValue)
-    ) {
-      setOptimisticSingleSelect(null);
-    }
-  }, [
-    activeQuestion,
-    optimisticSingleSelect,
-    progress.customAnswer,
-    progress.selectedOptionValues,
-  ]);
-
-  // A delayed answer only advances its own question, while permission remains granted.
-  useEffect(() => {
-    const clearAutoAdvance = () => {
-      if (autoAdvanceTimerRef.current !== null) {
-        window.clearTimeout(autoAdvanceTimerRef.current);
-        autoAdvanceTimerRef.current = null;
+  const send = useCallback(
+    async (drafts: Record<string, PendingUserInputDraftAnswer>) => {
+      const built = buildPendingUserInputAnswers(questions, drafts);
+      if (!built || !onAnswer) return;
+      setSending(true);
+      setError(null);
+      try {
+        await onAnswer(requestId, built);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      } finally {
+        setSending(false);
       }
-    };
-    if (disabled || activeQuestion?.id === undefined) clearAutoAdvance();
-    return clearAutoAdvance;
-  }, [activeQuestion?.id, disabled]);
+    },
+    [onAnswer, questions, requestId],
+  );
 
-  const handleOptionSelection = useCallback(
-    (questionId: string, optionValue: string) => {
-      if (disabled || isResponding) return;
-      if (activeQuestion?.multiSelect) {
-        onToggleOption(questionId, optionValue);
-        return;
-      }
-      setOptimisticSingleSelect({ questionId, optionValue });
-      onToggleOption(questionId, optionValue);
-      if (autoAdvanceTimerRef.current !== null) {
-        window.clearTimeout(autoAdvanceTimerRef.current);
-      }
+  const advance = useCallback(
+    (drafts: Record<string, PendingUserInputDraftAnswer>) => {
+      const next = derivePendingUserInputProgress(questions, drafts, questionIndex);
+      if (!next.canAdvance) return;
+      if (next.isLastQuestion) void send(drafts);
+      else setQuestionIndex(next.questionIndex + 1);
+    },
+    [questionIndex, questions, send],
+  );
+
+  const select = useCallback(
+    (question: UserInputQuestion, option: string) => {
+      if (responseDisabled) return;
+      const nextDrafts = {
+        ...answers,
+        [question.id]: toggleDraftOption(question, answers[question.id], option),
+      };
+      setAnswers(nextDrafts);
+      if (question.multiSelect) return;
+      if (autoAdvanceTimerRef.current !== null) window.clearTimeout(autoAdvanceTimerRef.current);
       autoAdvanceTimerRef.current = window.setTimeout(() => {
         autoAdvanceTimerRef.current = null;
-        onAdvanceRef.current();
-      }, 200);
+        advance(nextDrafts);
+      }, AUTO_ADVANCE_MS);
     },
-    [activeQuestion, disabled, isResponding, onToggleOption],
+    [advance, answers, responseDisabled],
   );
 
-  // Keyboard shortcut: number keys 1-9 select corresponding options when focus is
-  // outside editable fields. Multi-select prompts toggle options in place; single-
-  // select prompts keep the existing auto-advance behavior. Collapsed prompts opt
-  // out, since the numbers they refer to are not on screen.
-  useEffect(() => {
-    if (!activeQuestion || responseDisabled || isCollapsed) return;
-    const handler = (event: globalThis.KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      const target = event.target;
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-        return;
-      }
-      if (
-        target instanceof HTMLElement &&
-        target.closest('[contenteditable]:not([contenteditable="false"])')
-      ) {
-        return;
-      }
-      const digit = Number.parseInt(event.key, 10);
-      if (Number.isNaN(digit) || digit < 1 || digit > 9) return;
-      const optionIndex = digit - 1;
-      if (optionIndex >= activeQuestion.options.length) return;
-      const option = activeQuestion.options[optionIndex];
-      if (!option) return;
-      event.preventDefault();
-      handleOptionSelection(activeQuestion.id, option.value ?? option.label);
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [activeQuestion, handleOptionSelection, isCollapsed, responseDisabled]);
-
-  if (!activeQuestion) {
-    return null;
+  if (resolved || !activeQuestion) {
+    return (
+      <div
+        className="flex items-center gap-2 border border-rule-soft bg-surface px-3 py-1.5 text-sm text-muted"
+        data-question-card="answered"
+      >
+        <CheckIcon className="size-3.5 text-grow" aria-hidden />
+        <span className="min-w-0 truncate">{questions[0]?.header ?? "Question"}: answered</span>
+      </div>
+    );
   }
 
-  const customAnswerActive = progress.customAnswer.trim().length > 0;
-
   return (
-    <Collapsible
-      open={!isCollapsed}
-      onOpenChange={(open) => {
-        setCollapsedQuestionId(open ? null : activeQuestion.id);
+    <fieldset
+      aria-label={`Question: ${activeQuestion.header}`}
+      className="m-0 min-w-0 border border-accent bg-surface p-0"
+      data-question-card="open"
+      onKeyDown={(event) => {
+        if (event.metaKey || event.ctrlKey || event.altKey) return;
+        const target = event.target;
+        if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+        const digit = Number.parseInt(event.key, 10);
+        if (Number.isNaN(digit) || digit < 1 || digit > 9) return;
+        const option = activeQuestion.options[digit - 1];
+        if (option === undefined) return;
+        event.preventDefault();
+        select(activeQuestion, option);
       }}
     >
-      <CollapsibleTrigger
-        render={<ComposerBanner.Row render={<button type="button" />} />}
-        title={
-          isCollapsed ? "Show the question and its options" : "Hide the question and its options"
-        }
-        data-pending-user-input-toggle={isCollapsed ? "collapsed" : "expanded"}
-      >
-        <ComposerBanner.Icon />
-        <ComposerBanner.Content>
-          <span className="shrink-0 font-medium text-muted-foreground">
-            {activeQuestion.header}
+      <div className="flex items-center gap-2 border-b border-rule-soft px-3 py-1.5 text-xs text-muted">
+        <MessageCircleQuestion className="size-3.5 text-accent" aria-hidden />
+        <span className="font-medium text-ink">{activeQuestion.header}</span>
+        {questions.length > 1 ? (
+          <span className="ml-auto tabular-nums">
+            {progress.questionIndex + 1}/{questions.length}
           </span>
-          {isCollapsed ? (
-            <span className="min-w-0 flex-1 truncate text-secondary-label">
-              {activeQuestion.question}
-            </span>
-          ) : null}
-        </ComposerBanner.Content>
-        <ComposerBanner.Actions>
-          {prompt.questions.length > 1 ? (
-            <span className="text-3xs font-medium text-muted-foreground tabular-nums">
-              {questionIndex + 1}/{prompt.questions.length}
-            </span>
-          ) : null}
-          <ComposerBanner.ToggleIcon expanded={!isCollapsed} />
-          {prompt.dismissible ? (
-            // Sits inside the trigger button, so stop the click from toggling
-            // the disclosure. Dismiss closes the question without a reply.
-            <ComposerBanner.Dismiss
-              render={<span role="button" tabIndex={0} />}
-              aria-label="Dismiss question without answering"
-              title="Dismiss question without answering"
-              disabled={isResponding}
-              data-pending-user-input-dismiss
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onDismiss(prompt.requestId);
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter" && event.key !== " ") return;
-                event.preventDefault();
-                event.stopPropagation();
-                onDismiss(prompt.requestId);
-              }}
+        ) : null}
+      </div>
+      <div className="px-3 py-2">
+        <p className="m-0 text-sm text-ink">{activeQuestion.question}</p>
+        {activeQuestion.multiSelect ? (
+          <p className="m-0 mt-1 text-xs text-muted">Select one or more options.</p>
+        ) : null}
+        {activeQuestion.options.length > 0 ? (
+          <div className="mt-2 flex flex-col gap-0.5">
+            {activeQuestion.options.map((option, index) => {
+              const isSelected =
+                !progress.usingCustomAnswer && progress.selectedOptionValues.includes(option);
+              const shortcutKey = index < 9 ? index + 1 : null;
+              return (
+                <button
+                  key={`${activeQuestion.id}:${option}`}
+                  type="button"
+                  disabled={responseDisabled}
+                  aria-pressed={isSelected}
+                  onClick={() => select(activeQuestion, option)}
+                  className={cx(
+                    "flex w-full items-center gap-2 rounded-none border-0 px-2.5 py-1.5 text-left text-sm",
+                    isSelected
+                      ? "bg-accent-soft text-ink"
+                      : "bg-transparent text-ink hover:bg-raised",
+                    responseDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+                  )}
+                >
+                  <span className="min-w-0 flex-1 font-medium">{option}</span>
+                  {isSelected ? (
+                    <CheckIcon className="size-3.5 shrink-0 text-accent" aria-hidden />
+                  ) : shortcutKey !== null ? (
+                    <kbd className="text-xs text-faint tabular-nums">{shortcutKey}</kbd>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+        <div className="mt-2 flex items-end gap-2">
+          {activeQuestion.multiline ? (
+            <textarea
+              aria-label={activeQuestion.options.length > 0 ? "Other answer" : "Answer"}
+              placeholder={
+                activeQuestion.options.length > 0 ? "Or type an answer" : "Type an answer"
+              }
+              rows={3}
+              disabled={responseDisabled}
+              value={progress.customAnswer}
+              onChange={(event) =>
+                setAnswers({
+                  ...answers,
+                  [activeQuestion.id]: { customAnswer: event.target.value },
+                })
+              }
+              className="min-w-0 flex-1 rounded-none border border-rule bg-bg px-2 py-1 text-sm text-ink"
             />
-          ) : null}
-        </ComposerBanner.Actions>
-      </CollapsibleTrigger>
-      <CollapsiblePanel>
-        <ComposerBanner.Scroll>
-          <ComposerBanner.Body className="pe-1 pb-1 wrap-anywhere">
-            <p className="text-sm text-foreground/85">{activeQuestion.question}</p>
-            {activeQuestion.multiSelect ? (
-              <p className="mt-1 text-secondary-label text-xs">Select one or more options.</p>
-            ) : null}
-            <div className="mt-2 space-y-0.5">
-              {activeQuestion.options.map((option, index) => {
-                const optionValue = option.value ?? option.label;
-                const isOptimisticallySelected =
-                  optimisticSingleSelect?.questionId === activeQuestion.id &&
-                  optimisticSingleSelect.optionValue === optionValue;
-                const isSelected =
-                  isOptimisticallySelected ||
-                  (!customAnswerActive && progress.selectedOptionValues.includes(optionValue));
-                const shortcutKey = index < 9 ? index + 1 : null;
-                const className = cn(
-                  "group flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/25",
-                  isSelected
-                    ? "bg-muted/55 text-foreground"
-                    : "bg-transparent text-foreground/85 hover:bg-muted/30",
-                  (disabled || isResponding) && "opacity-50 cursor-not-allowed",
-                  !disabled && !isResponding && "cursor-pointer",
-                );
-                const content = (
-                  <>
-                    <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-                      <span className="text-sm font-medium">{option.label}</span>
-                      {option.description && option.description !== option.label ? (
-                        <span className="text-secondary-label text-2xs">{option.description}</span>
-                      ) : null}
-                    </div>
-                    {isSelected ? (
-                      <CheckIcon className="size-3.5 shrink-0 text-primary" />
-                    ) : shortcutKey !== null ? (
-                      <kbd
-                        className={cn(
-                          "flex size-5 shrink-0 items-center justify-center text-3xs font-medium text-muted-foreground tabular-nums",
-                        )}
-                      >
-                        {shortcutKey}
-                      </kbd>
-                    ) : null}
-                  </>
-                );
-                return (
-                  <button
-                    key={`${activeQuestion.id}:${optionValue}`}
-                    type="button"
-                    disabled={disabled || isResponding}
-                    onClick={() => {
-                      handleOptionSelection(activeQuestion.id, optionValue);
-                    }}
-                    className={className}
-                  >
-                    {content}
-                  </button>
-                );
-              })}
-            </div>
-          </ComposerBanner.Body>
-        </ComposerBanner.Scroll>
-      </CollapsiblePanel>
-    </Collapsible>
+          ) : (
+            <input
+              type="text"
+              aria-label={activeQuestion.options.length > 0 ? "Other answer" : "Answer"}
+              placeholder={
+                activeQuestion.options.length > 0 ? "Or type an answer" : "Type an answer"
+              }
+              disabled={responseDisabled}
+              value={progress.customAnswer}
+              onChange={(event) =>
+                setAnswers({
+                  ...answers,
+                  [activeQuestion.id]: { customAnswer: event.target.value },
+                })
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  advance(answers);
+                }
+              }}
+              className="min-w-0 flex-1 rounded-none border border-rule bg-bg px-2 py-1 text-sm text-ink"
+            />
+          )}
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={responseDisabled || !progress.canAdvance}
+            onClick={() => advance(answers)}
+          >
+            {progress.isLastQuestion ? (sending ? "Sending…" : "Send answer") : "Next"}
+          </Button>
+        </div>
+        {error ? (
+          <p role="alert" className="m-0 mt-1 text-xs text-danger">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    </fieldset>
   );
 });

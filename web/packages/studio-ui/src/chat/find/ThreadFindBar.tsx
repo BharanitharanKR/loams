@@ -1,86 +1,84 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/chat/ThreadFindBar.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// ported to agentd transcript parts (@loams/agentd-client), @loams/ui primitives and tokens; no Effect. Loams' changes are Apache-2.0.
-import { useEffect, useRef, type KeyboardEvent } from "react";
+// the find bar (query, "n/total", previous, next, close; Enter and Shift+Enter, Esc) on @loams/ui's InputGroup, with `formatThreadFindCount` from threadFind.ts; no remote search status or details-card layout. Loams' changes are Apache-2.0.
+
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@loams/ui";
 import { ChevronDownIcon, ChevronUpIcon, XIcon } from "lucide-react";
-import { Button } from "../ui/button";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "../ui/input-group";
-import { cn } from "~/lib/utils";
-import { formatThreadFindCount } from "./threadFind";
-import { THREAD_DETAILS_CARD_GAP } from "./threadDetailsCardLayout";
+import { type KeyboardEvent, useEffect, useRef } from "react";
 
 interface ThreadFindBarProps {
-  readonly open: boolean;
   readonly query: string;
   readonly matchCount: number;
-  readonly counting?: boolean;
-  readonly status: "loading" | "error" | null;
-  readonly onRetry: () => void;
   readonly activeIndex: number;
-  readonly focusRequestId: number;
   readonly onQueryChange: (query: string) => void;
   readonly onNext: () => void;
   readonly onPrevious: () => void;
   readonly onClose: () => void;
 }
 
-/**
- * Room the open bar takes at the top of the chat canvas: its `h-9` height plus
- * the shared 12px gap below it, so the details card starts on the same rhythm.
- */
-export const THREAD_FIND_BAR_RESERVED_HEIGHT = 36 + THREAD_DETAILS_CARD_GAP;
+export function clampThreadFindIndex(index: number, total: number): number {
+  if (total <= 0) return 0;
+  return ((index % total) + total) % total;
+}
+
+export function formatThreadFindCount(index: number, total: number): string {
+  return total <= 0 ? "0/0" : `${clampThreadFindIndex(index, total) + 1}/${total}`;
+}
+
+function IconButton(props: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+  icon: typeof XIcon;
+}) {
+  const Icon = props.icon;
+  return (
+    <button
+      type="button"
+      aria-label={props.label}
+      title={props.label}
+      disabled={props.disabled}
+      onClick={props.onClick}
+      className="inline-flex size-6 cursor-pointer items-center justify-center rounded-pill border-0 bg-transparent text-muted hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      <Icon className="size-3.5" aria-hidden />
+    </button>
+  );
+}
 
 export function ThreadFindBar(props: ThreadFindBarProps) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const wrapper = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!props.open) return;
-    inputRef.current?.focus();
-    inputRef.current?.select();
-  }, [props.focusRequestId, props.open]);
-
-  if (!props.open) return null;
+    const input = wrapper.current?.querySelector("input");
+    input?.focus();
+    input?.select();
+  }, []);
 
   const hasQuery = props.query.trim().length > 0;
-  const noResults = hasQuery && !props.status && props.matchCount === 0;
-  let label = "";
-  if (hasQuery) {
-    label = props.counting ? "1/…" : formatThreadFindCount(props.activeIndex, props.matchCount);
-  }
-  if (props.status === "loading") label = "Searching…";
-  if (props.status === "error") label = "Search failed";
-  const navigationDisabled =
-    props.matchCount === 0 || props.status === "loading" || props.counting === true;
+  const noResults = hasQuery && props.matchCount === 0;
+  const label = hasQuery ? formatThreadFindCount(props.activeIndex, props.matchCount) : "";
+  const navigationDisabled = props.matchCount === 0;
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+    if (event.nativeEvent.isComposing) return;
     if (event.key === "Enter") {
       event.preventDefault();
       event.stopPropagation();
       if (event.shiftKey) props.onPrevious();
       else props.onNext();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      props.onClose();
     }
   };
 
   return (
-    // Fades in while the details popover slides out from under it.
-    <div
-      data-thread-find-bar
-      className="absolute top-3 right-3 z-40 w-[min(var(--thread-details-panel-width),calc(100%-1.5rem))] transition-opacity duration-150 ease-out starting:opacity-0 motion-reduce:transition-none"
-    >
-      <InputGroup
-        variant="popover"
-        size="lg"
-        onContextMenu={(event) => event.stopPropagation()}
-        role="search"
-        aria-label="Find in thread"
-        aria-busy={props.status === "loading" || props.counting === true}
-        className="w-full"
-      >
+    <div ref={wrapper} data-thread-find-bar="" className="w-full max-w-sm">
+      <InputGroup role="search" aria-label="Find in thread" className="bg-surface shadow-pop">
         <InputGroupInput
-          ref={inputRef}
-          type="search"
-          size="sm"
+          type="text"
           value={props.query}
           aria-label="Find in thread"
           placeholder="Find in thread"
@@ -90,42 +88,30 @@ export function ThreadFindBar(props: ThreadFindBarProps) {
           onChange={(event) => props.onQueryChange(event.target.value)}
           onKeyDown={handleKeyDown}
         />
-        <InputGroupAddon align="inline-end" inset="pill">
+        <InputGroupAddon align="end">
           <span
             aria-live="polite"
-            className={cn(
-              "min-w-10 text-center text-xs tabular-nums",
-              noResults ? "text-destructive" : "text-muted-foreground",
-            )}
+            className={
+              noResults
+                ? "min-w-10 text-center text-xs tabular-nums text-danger"
+                : "min-w-10 text-center text-xs tabular-nums text-muted"
+            }
           >
             {label}
           </span>
-          {props.status === "error" ? (
-            <Button size="xs" variant="ghost" onClick={props.onRetry}>
-              Retry
-            </Button>
-          ) : null}
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label="Previous match"
+          <IconButton
+            label="Previous match"
             disabled={navigationDisabled}
             onClick={props.onPrevious}
-          >
-            <ChevronUpIcon />
-          </Button>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label="Next match"
+            icon={ChevronUpIcon}
+          />
+          <IconButton
+            label="Next match"
             disabled={navigationDisabled}
             onClick={props.onNext}
-          >
-            <ChevronDownIcon />
-          </Button>
-          <Button size="icon-xs" variant="ghost" aria-label="Close find" onClick={props.onClose}>
-            <XIcon />
-          </Button>
+            icon={ChevronDownIcon}
+          />
+          <IconButton label="Close find" onClick={props.onClose} icon={XIcon} />
         </InputGroupAddon>
       </InputGroup>
     </div>

@@ -1,9 +1,10 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/chat/WorkLog.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// ported to agentd transcript parts (@loams/agentd-client), @loams/ui primitives and tokens; no Effect. Loams' changes are Apache-2.0.
-import { createContext, use, type ComponentProps, type ReactNode } from "react";
-import { cn } from "../../lib/utils";
+// @loams/ui token classes, `cx` and hard corners; the row geometry and the grouped-rows context are upstream's. Loams' changes are Apache-2.0.
+
+import { cx } from "@loams/ui";
+import { type ComponentProps, createContext, type ReactNode, use } from "react";
 
 const GroupedRows = createContext(false);
 
@@ -51,24 +52,20 @@ type RowContent = {
 function WorkLogLine({ icon, label, trailing, wrapLabel }: RowContent) {
   return (
     <div
-      className={cn(
-        "flex min-h-6 min-w-0 gap-1.5 text-sm leading-relaxed select-none [&_*]:select-none",
+      className={cx(
+        "flex min-h-6 min-w-0 gap-1.5 text-sm leading-relaxed",
         wrapLabel ? "items-start" : "items-center",
       )}
     >
-      <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
         {icon ? (
-          // Align with the first line's capital letters. Centering line boxes drifts
-          // when font ascent/descent rounding changes at fractional browser zoom.
-          <span className="relative w-6 shrink-0 leading-0">
-            <span className="inline-block size-6 overflow-hidden align-[calc(0.5cap_-_0.75rem)]">
-              <span className="flex size-full items-center justify-center">{icon}</span>
-            </span>
+          <span className="flex size-6 shrink-0 items-center justify-center text-faint">
+            {icon}
           </span>
         ) : null}
         <div
-          className={cn(
-            "min-w-0 flex-1 text-secondary-label",
+          className={cx(
+            "min-w-0 flex-1 text-muted",
             !wrapLabel && "truncate [&_*]:whitespace-nowrap",
           )}
         >
@@ -81,12 +78,12 @@ function WorkLogLine({ icon, label, trailing, wrapLabel }: RowContent) {
 }
 
 const interactionClassName =
-  "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70";
+  "cursor-pointer hover:bg-surface focus-visible:outline-2 focus-visible:outline-accent";
 
 function useRowClassName(interactive: boolean) {
   const grouped = use(GroupedRows);
-  return cn(
-    "group/timeline-row relative w-full min-w-0 rounded-md px-0.5 text-left transition-colors",
+  return cx(
+    "relative w-full min-w-0 rounded-none border-0 bg-transparent px-0.5 text-left text-inherit",
     grouped ? "py-0" : "py-0.5",
     interactive && interactionClassName,
   );
@@ -126,26 +123,9 @@ export function WorkLogRow({
   );
 }
 
-export function WorkLogDetails({
-  children,
-  kind = "text",
-}: {
-  children: ReactNode;
-  kind?: "text" | "panel" | "media";
-}) {
+export function WorkLogDetails({ children }: { children: ReactNode }) {
   return (
-    <div
-      className={cn(
-        "cursor-auto",
-        kind === "text"
-          ? "ms-7 flex max-h-96 flex-col gap-3 overflow-auto px-0.5 py-1 select-text"
-          : kind === "panel"
-            ? "mt-0.5 mb-1.5 pb-2"
-            : "mt-1",
-      )}
-      onClick={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
-    >
+    <div className="ms-7 flex max-h-96 flex-col gap-2 overflow-auto px-0.5 py-1 select-text">
       {children}
     </div>
   );
