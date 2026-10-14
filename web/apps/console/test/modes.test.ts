@@ -120,9 +120,9 @@ describe('catalogs', () => {
     const base = parseCatalog(baseCatalog);
     expect(base.find((r) => r.id === 'studio')).toMatchObject({
       name: '@loams/plugin-studio',
-      inject: ['router', 'slots', 'mode', 'platform', 'flags'],
+      inject: ['router', 'slots', 'mode', 'platform', 'flags', 'agentd'],
     });
     const desktop = parsePatch(desktopYml).find((r) => 'id' in r && r.id === 'studio');
-    expect(desktop).toMatchObject({ inject: expect.arrayContaining(['desktop']) });
+    expect(desktop).toMatchObject({ inject: expect.arrayContaining(['agentd', 'desktop']) });
   });
 });

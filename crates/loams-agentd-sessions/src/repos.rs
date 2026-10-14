@@ -143,6 +143,41 @@ fn default_worktrees_root() -> PathBuf {
         .unwrap_or_else(|| home_dir().join(".loams-desktop").join("worktrees"))
 }
 
+/// The remote URLs `CloneRepo` hands to git (SD1 Task 6; §53 §8.3): https,
+/// ssh or git, or scp-like `user@host:path`. Never an option (a leading `-`
+/// would reach git as `--upload-pack=…`), a local path or `file:`, a remote
+/// helper such as `ext::`, or anything with whitespace or control characters.
+/// The renderer reaches `CloneRepo` directly over the Connect proxy, so the
+/// daemon checks it rather than trusting a client to.
+pub fn is_remote_git_url(url: &str) -> bool {
+    if url.is_empty()
+        || url.len() > 2048
+        || url.starts_with('-')
+        || url.contains("::")
+        || url.chars().any(|c| c.is_whitespace() || c.is_control())
+    {
+        return false;
+    }
+    if let Some((scheme, rest)) = url.split_once("://") {
+        let host = rest.split(['/', ':', '?', '#']).next().unwrap_or_default();
+        let host = host.rsplit('@').next().unwrap_or_default();
+        return matches!(scheme, "https" | "ssh" | "git") && !host.is_empty();
+    }
+    // scp-like: user@host:path, with a host that is not a drive letter.
+    let Some((user_host, path)) = url.split_once(':') else {
+        return false;
+    };
+    let Some((user, host)) = user_host.split_once('@') else {
+        return false;
+    };
+    let word = |s: &str, extra: &str| {
+        !s.is_empty()
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || "._-".contains(c) || extra.contains(c))
+    };
+    word(user, "") && word(host, "") && !host.starts_with('-') && word(path, "/~")
+}
+
 struct ReposInner {
     data_dir: PathBuf,
     device_id: String,
@@ -414,6 +449,11 @@ impl Repos {
     /// `Clone::clone` unambiguous on the service handle.)
     pub async fn clone_repo(&self, url: &str) -> Result<Repo, EngineError> {
         let trimmed = url.trim().trim_end_matches('/');
+        if !is_remote_git_url(trimmed) {
+            return Err(EngineError::Other(
+                "invalid_url: expected an https, ssh or user@host:path git URL".into(),
+            ));
+        }
         let name = trimmed
             .trim_end_matches(".git")
             .rsplit(['/', ':'])
@@ -430,7 +470,7 @@ impl Repos {
             )));
         }
         std::fs::create_dir_all(&repos_dir)?;
-        self.git(&["clone", trimmed, &target.to_string_lossy()], None)
+        self.git(&["clone", "--", trimmed, &target.to_string_lossy()], None)
             .await?;
         self.register(&target.to_string_lossy())?;
         self.to_repo(&target).await

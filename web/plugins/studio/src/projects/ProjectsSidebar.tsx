@@ -88,12 +88,12 @@ export function ProjectsSidebar({
 }) {
   const reach = useReach(agentd);
   const projects = useProjects(agentd);
-  const add = useAddProject(agentd);
+  const add = useAddProject();
   const [cloning, setCloning] = useState(false);
   const ready = reach.state === 'ready';
 
   const onAdd = async () => {
-    if (agentd.pickFolder && agentd.addProject) {
+    if (agentd.pickFolder) {
       const path = await agentd.pickFolder();
       if (path) add.mutate({ path });
       return;
@@ -169,7 +169,7 @@ export function ProjectsSidebar({
         {!ready && <p className="m-0 px-4 py-2 text-[0.84rem] text-faint">Not connected.</p>}
         {add.isError && !cloning && (
           <p role="alert" className="m-0 px-4 py-2 text-[0.84rem] text-danger">
-            Could not add the project: {add.error.message}
+            Could not add the project: {add.error?.message}
           </p>
         )}
       </nav>
@@ -187,7 +187,7 @@ export function ProjectsSidebar({
         open={cloning}
         onClose={() => setCloning(false)}
         pending={add.isPending}
-        failure={add.isError ? add.error.message : undefined}
+        failure={add.isError ? add.error?.message : undefined}
         onClone={(url) => add.mutate({ url }, { onSuccess: () => setCloning(false) })}
       />
     </div>

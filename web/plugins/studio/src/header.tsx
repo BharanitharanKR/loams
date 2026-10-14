@@ -3,6 +3,7 @@
 // plugin is `modes: ["studio"]`).
 
 import type { RouterService } from '@loams/console-host';
+import { AgentdScope } from '@loams/console-host/query';
 import { FolderGit2, GitBranch, Server } from 'lucide-react';
 import { useSyncExternalStore } from 'react';
 import type { StudioAgentd } from './agentd.js';
@@ -12,7 +13,7 @@ const CHIP =
   'inline-flex h-7 max-w-[180px] items-center gap-1.5 rounded-pill border border-rule bg-bg px-2.5 ' +
   'text-[0.8rem] text-muted';
 
-export function StudioContext({ agentd, router }: { agentd: StudioAgentd; router: RouterService }) {
+function Context({ agentd, router }: { agentd: StudioAgentd; router: RouterService }) {
   const location = useSyncExternalStore(router.subscribe, () => router.current());
   const projects = useProjects(agentd);
   const projectId = location.params.projectId;
@@ -39,5 +40,14 @@ export function StudioContext({ agentd, router }: { agentd: StudioAgentd; router
         </span>
       )}
     </div>
+  );
+}
+
+/** The header's Studio context, reading projects over `agentd`'s transport. */
+export function StudioContext(props: Parameters<typeof Context>[0]) {
+  return (
+    <AgentdScope agentd={props.agentd}>
+      <Context {...props} />
+    </AgentdScope>
   );
 }
