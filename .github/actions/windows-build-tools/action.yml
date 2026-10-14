@@ -1,0 +1,78 @@
+name: Windows build tools
+description: >-
+  protoc and, unless `nasm` is "false", NASM for the engine's build scripts on a
+  Windows runner (docs/build-from-source/windows.md has the crate-by-crate
+  list). protoc comes from the protobuf GitHub release, pinned by version and
+  SHA-256, not from Chocolatey: the community feed answered 504 in Desktop run
+  38619527317, and `choco install` then exits 0 having installed nothing
+  ("Unable to find package"), so the job failed 25 minutes later in a build
+  script. Every download here retries, and each tool is run before its step
+  ends, so a missing tool fails (or falls back) here and nowhere later.
+
+inputs:
+  nasm:
+    description: >-
+      "true" installs NASM (aws-lc-sys on x86_64), falling back to aws-lc-sys's
+      prebuilt NASM objects (AWS_LC_SYS_PREBUILT_NASM=1, with a warning) when
+      Chocolatey fails every attempt. "false" installs none; the caller sets
+      AWS_LC_SYS_PREBUILT_NASM=1 itself.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: protoc
+      shell: pwsh
+      env:
+        PROTOC_VERSION: "36.2"
+        PROTOC_SHA256: f0c128dc0d8492eceece83bb459a4c0e316764b929ffbf1aa416357fd644edd3
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $url = "https://github.com/protocolbuffers/protobuf/releases/download/v$env:PROTOC_VERSION/protoc-$env:PROTOC_VERSION-win64.zip"
+        $zip = Join-Path $env:RUNNER_TEMP 'protoc.zip'
+        # Retries every 4xx/5xx answer and network error.
+        Invoke-WebRequest -Uri $url -OutFile $zip -MaximumRetryCount 6 -RetryIntervalSec 10
+        $sha = (Get-FileHash -Algorithm SHA256 -Path $zip).Hash.ToLowerInvariant()
+        if ($sha -ne $env:PROTOC_SHA256) {
+          throw "protoc-$env:PROTOC_VERSION-win64.zip has SHA-256 $sha, not $env:PROTOC_SHA256"
+        }
+        $dir = Join-Path $env:RUNNER_TEMP 'protoc'
+        Expand-Archive -Path $zip -DestinationPath $dir -Force
+        $exe = Join-Path $dir 'bin\protoc.exe'
+        & $exe --version
+        if ($LASTEXITCODE) { exit $LASTEXITCODE }
+        # prost-build and tonic-build read PROTOC first; PATH serves everything else.
+        "PROTOC=$exe" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+        (Join-Path $dir 'bin') | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+    - name: NASM
+      if: inputs.nasm == 'true'
+      shell: pwsh
+      run: |
+        # Chocolatey exits 0 when its feed fails ("installed 0/0 packages"), so
+        # success is a nasm.exe that runs, not choco's exit code.
+        $places = @("$env:ProgramFiles\NASM", "$env:ChocolateyInstall\bin")
+        function Find-Nasm {
+          foreach ($p in $places) {
+            $candidate = Join-Path $p 'nasm.exe'
+            if (Test-Path $candidate) { return $candidate }
+          }
+          return $null
+        }
+        $nasm = Find-Nasm
+        for ($i = 1; -not $nasm -and $i -le 4; $i++) {
+          if ($i -gt 1) { Start-Sleep -Seconds (15 * ($i - 1)) }
+          choco install --no-progress -y nasm
+          $nasm = Find-Nasm
+        }
+        if ($nasm) {
+          & $nasm -v
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          (Split-Path $nasm) | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+        } else {
+          # The escape hatch of docs/build-from-source/windows.md; ci.yml's
+          # Windows check builds with it.
+          Write-Output '::warning title=NASM::Chocolatey failed 4 times; building aws-lc-sys with its prebuilt NASM objects (AWS_LC_SYS_PREBUILT_NASM=1)'
+          'AWS_LC_SYS_PREBUILT_NASM=1' | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+        }
