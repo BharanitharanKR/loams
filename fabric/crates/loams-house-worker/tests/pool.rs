@@ -92,7 +92,6 @@ async fn kill_is_the_cancel() {
     let pool = pool("cancel", small(2)).await;
     let mut lease = pool.acquire("ns-cancel").await.expect("a worker");
     let pid = lease.pid();
-    let spawned_before = pool.stats().spawned_total;
 
     lease
         .start(statement("SELECT count() FROM numbers(1e12)", "TSV"))
@@ -133,17 +132,12 @@ async fn kill_is_the_cancel() {
         "{:?}",
         pool.stats()
     );
+    // The warm pool keeps `min_idle_workers` idle or starting: the worker
+    // that replaces this one may have started when it was leased, before the
+    // kill, so what holds is an idle worker that is not the killed one.
     assert!(
         eventually(Duration::from_secs(20), || pool.stats().idle_unbound >= 1).await,
         "the pool is replenished: {:?}",
-        pool.stats()
-    );
-    assert!(
-        eventually(Duration::from_secs(20), || {
-            pool.stats().spawned_total > spawned_before
-        })
-        .await,
-        "a worker was started after the kill: {:?}",
         pool.stats()
     );
     let mut next = pool.acquire("ns-cancel").await.expect("another worker");
