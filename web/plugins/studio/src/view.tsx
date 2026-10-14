@@ -116,7 +116,7 @@ function Body({
         </>
       );
     case 'project':
-      return <ProjectPage agentd={agentd} projectId={route.projectId} />;
+      return <ProjectPage agentd={agentd} projectId={route.projectId} navigate={navigate} />;
     case 'thread':
       return (
         <Suspense

@@ -643,6 +643,142 @@
       "verdict": "adapt",
       "group": "g",
       "note": "the inventory's verdict is as-is (types adapted); adapted because T3's work-log row, shimmer and contracts snapshot are not in Studio"
+    },
+    {
+      "path": "src/composer/codeBlock.ts",
+      "upstreamPath": "apps/web/src/composer-code-block.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "6b5c5ed463666777c05d087cb3bf788b29520473ddc6a33c37afdee718cfa9d3",
+      "localSha256": "86ddfda71b16199000dc01dc2df6dd6b8cad6ec2b59b05ae9093f0954fce492b",
+      "verdict": "as-is",
+      "group": "c"
+    },
+    {
+      "path": "src/composer/contextReferences.ts",
+      "upstreamPath": "apps/web/src/lib/composerContextReferences.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "5f2a6aa11b1b911d7cdab5ea3738357adad45dd5c48969595498a9e68c74b152",
+      "localSha256": "32362ea7af80a5ef6d36c25a8772c5cd51bc7e8a5ecbf14df63130481291eb8d",
+      "verdict": "as-is",
+      "group": "c"
+    },
+    {
+      "path": "src/composer/doc.ts",
+      "upstreamPath": "apps/web/src/composer-rich-text-doc.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "e80744e326e65d15f8e6c16822c2998a887072e9af343b7b7666d0d14e1f1750",
+      "localSha256": "5122e408f7dd342f7918e6efca06bdaed64a2d29beb974774130effc0ed996b9",
+      "verdict": "as-is",
+      "group": "c"
+    },
+    {
+      "path": "src/composer/Editor.tsx",
+      "upstreamPath": "apps/web/src/components/ComposerPromptEditorTiptap.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "f12aa662cf74eac804427f659cb8cd082af28c2aaf0c430db86b0890b5f30f88",
+      "localSha256": "29025193f73ecb838f8bbec0d6a71e148f796c61a8d3a1ac3f2a493bf6778e6f",
+      "verdict": "adapt",
+      "group": "c"
+    },
+    {
+      "path": "src/composer/listContinuation.ts",
+      "upstreamPath": "apps/web/src/composer-list-continuation.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "8e6f4c87914d4692a028eeed39693dde0d18b993503725813b088d7aee487945",
+      "localSha256": "08c9b4db1d502941cb2acd3bc558231ad7748eece3956ef3bfaf371cb87bb9ed",
+      "verdict": "as-is",
+      "group": "c"
+    },
+    {
+      "path": "src/composer/logic.ts",
+      "upstreamPath": "apps/web/src/composer-logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "22d9bd75c95c112abe8800e125b43b9f89fa4991c953993e4ada3be98cddd7f8",
+      "localSha256": "75e3f73f8e92959d5f0f5d53fa851050f6c44159e89025683f613568876ebe09",
+      "verdict": "adapt",
+      "group": "c"
+    },
+    {
+      "path": "src/composer/mentions.ts",
+      "upstreamPath": "apps/web/src/composer-editor-mentions.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "fab7cda0bc01b59c165b03baede55d13764fa7a135267604e6f839235512ea78",
+      "localSha256": "a8c7fa3cc02ac5674198c064a5d3f4afeb3eb0bc743c024bad474701c9418a04",
+      "verdict": "adapt",
+      "group": "c"
+    },
+    {
+      "path": "src/composer/richText.ts",
+      "upstreamPath": "apps/web/src/composer-rich-text.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "c1619849068b2d9d8dc3dd4414ad24af6bf44fb90ecb8ce73b9b7b48e93e71b7",
+      "localSha256": "6c01c7702aa7a3b49961fc8d296b4d15e8c76b62c59a6e1cc3e9d80bcaf84808",
+      "verdict": "as-is",
+      "group": "c"
+    },
+    {
+      "path": "src/composer/shared/composerContextReferences.ts",
+      "upstreamPath": "packages/shared/src/composerContextReferences.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "675e867d5346c1b0d89e565591f386b62853892d87a058863fa5bc6525f1d7ff",
+      "localSha256": "f6555ebee4104cb031ed7300d6ff393e7ba68acd6660d0e997b1f8f3a7c00028",
+      "verdict": "as-is",
+      "group": "c"
+    },
+    {
+      "path": "src/composer/shared/composerInlineTokens.ts",
+      "upstreamPath": "packages/shared/src/composerInlineTokens.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "876081c52b707f6ca365df6f6fcaf6e725893f752bba5a0b08504e9b98ac56a5",
+      "localSha256": "c508a8a13698441aba0382d4567286dea3d983dc68fe0827edb1d6026ee569d2",
+      "verdict": "as-is",
+      "group": "c"
+    },
+    {
+      "path": "src/composer/shared/composerTrigger.ts",
+      "upstreamPath": "packages/shared/src/composerTrigger.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "f162906ade8b91a0c89fae70e8d7a6cfe786cf3eb4d39a64b401cd466e7a63ab",
+      "localSha256": "179d01807bad29e6bd2953cce292054552e5fb03206fb9b0698968f0f9fe543e",
+      "verdict": "as-is",
+      "group": "c"
+    },
+    {
+      "path": "src/composer/shared/contracts.ts",
+      "upstreamPath": "packages/contracts/src/composerContext.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "b236286aa3a47b0597cc4a1416e12e262c61c38fd57a0d9957e4162638fcec4e",
+      "localSha256": "38a8eed67b2c1a135f93056cb8758d9d3478d74d6f787a75ff0be8fe6fa83566",
+      "verdict": "adapt",
+      "group": "c",
+      "note": "types from packages/contracts/src/{composerContext,server,assistantCitations}.ts restated by hand"
+    },
+    {
+      "path": "src/composer/shared/inlineSkills.ts",
+      "upstreamPath": "packages/shared/src/inlineSkills.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "e20524db9b74a5d6b0a0d5a871fd1d0dae2a04f663e81c6eb192303f65372c10",
+      "localSha256": "2da7164c12e7f2b36d262515bea424bdf9eb5f22851e3b5bbcb4a06447df0842",
+      "verdict": "as-is",
+      "group": "c"
+    },
+    {
+      "path": "src/composer/shared/searchRanking.ts",
+      "upstreamPath": "packages/shared/src/searchRanking.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "f2df1729c7dd5086cbf3a211178f773712af28a00e415984399ffa8423eacbb5",
+      "localSha256": "a8bae7d794790c1e31964e767eff3b451e615f89486c9bc39bbe44e27b0b6897",
+      "verdict": "as-is",
+      "group": "c"
+    },
+    {
+      "path": "src/composer/undoGrouping.ts",
+      "upstreamPath": "apps/web/src/composer-undo-grouping.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "8a8a6aba594fa071901204daab2707e22991cbdc7bc5eced741f4062280a5730",
+      "localSha256": "683408b17a9971e412debf348d050473ebb6a9d6aab6064a1645df88f27fea0d",
+      "verdict": "as-is",
+      "group": "c"
     }
   ]
 }

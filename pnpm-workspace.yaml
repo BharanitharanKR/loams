@@ -42,6 +42,20 @@ catalog:
   '@xterm/addon-fit': 0.11.0
   # Client-only UI stores (Q819), MIT, 2026-05-28: the version T3 Code uses.
   zustand: 5.0.14
+  # Studio's composer (SD1 Task 19): Tiptap core and the free extensions, MIT,
+  # 2026-09-04, the version T3 Code uses. Never @tiptap-pro/* or @tiptap-cloud/*.
+  '@tiptap/core': 3.31.3
+  '@tiptap/pm': 3.31.3
+  '@tiptap/react': 3.31.3
+  '@tiptap/starter-kit': 3.31.3
+  '@tiptap/extension-blockquote': 3.31.3
+  '@tiptap/extension-code': 3.31.3
+  '@tiptap/extension-code-block': 3.31.3
+  '@tiptap/extension-heading': 3.31.3
+  '@tiptap/extension-horizontal-rule': 3.31.3
+  '@tiptap/extension-list': 3.31.3
+  '@tiptap/extension-task-item': 3.31.3
+  '@tiptap/extension-task-list': 3.31.3
   # SD1 Task 18: Studio's chat markdown and code highlighting (MIT; npm licence and
   # publish time checked 2026-10-14, each release at least 14 days old). No rehype-raw (D919).
   react-markdown: 10.1.0
@@ -78,6 +92,9 @@ overrides:
   '@dnd-kit/sortable@10.0.0>tslib': '-'
   '@dnd-kit/utilities@3.2.2>tslib': '-'
   '@dnd-kit/accessibility@3.1.1>tslib': '-'
+  # The 14-day rule (SD1 Task 19): @tiptap/react 3.31.3 asks for fast-equals ^5.3.3,
+  # whose newest release (5.4.4) is from 2026-10-08; keep 5.4.3 (2026-09-20).
+  '@tiptap/react@3.31.3>fast-equals': 5.4.3
   # SD1 Task 18 (Pins: at least 14 days old): react-markdown and remark-gfm accept these
   # mdast utilities' October 2026 releases; keep the previous ones until those age.
   mdast-util-find-and-replace: 3.0.2
