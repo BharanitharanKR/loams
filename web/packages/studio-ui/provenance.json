@@ -779,6 +779,123 @@
       "localSha256": "683408b17a9971e412debf348d050473ebb6a9d6aab6064a1645df88f27fea0d",
       "verdict": "as-is",
       "group": "c"
+    },
+    {
+      "path": "src/diff/diffCollapse.ts",
+      "upstreamPath": "apps/web/src/lib/diffCollapse.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "6e3fb1d0e2c4e5763b58bb021bdcc4b5aabf568fd5e6524b6349bca2c36aa3b7",
+      "localSha256": "9abf05cffa546a7c8e76c4e42a9d1a9bd01349eb99b399c8167d76fcbe8af337",
+      "verdict": "as-is",
+      "group": "diff"
+    },
+    {
+      "path": "src/diff/diffFileContents.ts",
+      "upstreamPath": "apps/web/src/lib/diffFileContents.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "6116c20b16904d389e683bedd76e22852ab485ca355d266bd513b262759b6c27",
+      "localSha256": "814b8411962f46d8be1318b1f8ae32889716b4668776cc061bf07d135b1ed9e3",
+      "verdict": "adapt",
+      "group": "diff"
+    },
+    {
+      "path": "src/diff/DiffPanel.tsx",
+      "upstreamPath": "apps/web/src/components/DiffPanel.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "32cdc5deb2d953b7c627474378ec35f16636170ec9d6a019fe15047dce2aea38",
+      "localSha256": "3691a3d3281a6848fb862d44a7081f9bd69dd640f7b6fd07f1f2acb582b2ca1a",
+      "verdict": "adapt",
+      "group": "diff"
+    },
+    {
+      "path": "src/diff/DiffPanelShell.tsx",
+      "upstreamPath": "apps/web/src/components/DiffPanelShell.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "a79e8c085fc3e37efb41eeaf233242dd15b5d9b6267558d9c05438f4f73bb866",
+      "localSha256": "8149315ae7bb04791eeb75a296daf107746a500fced37e0e9379bd7026c89dc6",
+      "verdict": "adapt",
+      "group": "diff"
+    },
+    {
+      "path": "src/diff/diffPanelStore.ts",
+      "upstreamPath": "apps/web/src/diffPanelStore.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "6651fa491e23e5dbf5422bf3ef30f1bc161fe14a9e2a374abb040e73f0db017d",
+      "localSha256": "8034464fad45a0c47f6c48d03504badf594dfbad9b81751a37cf76739a7d4e1e",
+      "verdict": "adapt",
+      "group": "diff"
+    },
+    {
+      "path": "src/diff/diffRendering.ts",
+      "upstreamPath": "apps/web/src/lib/diffRendering.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "7cd89dab5874a2e84f2172bd0b5b6814157d0fb10cf34e2e883a185b7e2f0f95",
+      "localSha256": "3801a9dc0cce0f11cc58240b36712000fc436a4ad3a7f2d221e151301bc9aef4",
+      "verdict": "as-is",
+      "group": "diff"
+    },
+    {
+      "path": "src/diff/review/AnnotatableCodeView.tsx",
+      "upstreamPath": "apps/web/src/components/diffs/AnnotatableCodeView.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "35aa11abb7aa1fa31fddb8fb1d9b7f99e0cc55cf4d16bf0192e764aca6c83c7a",
+      "localSha256": "4791571f1e34e6c2e4915c0c29abfe7f15a4268ab93c9d0f7dafc51d97aae114",
+      "verdict": "adapt",
+      "group": "diff"
+    },
+    {
+      "path": "src/diff/review/commentSubmitShortcut.ts",
+      "upstreamPath": "apps/web/src/components/diffs/commentSubmitShortcut.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "f3e11f36bdb31eca2daeb9d97f35131675d82a84b2895a0508717e680113a222",
+      "localSha256": "870c4d8e761bbfe6453b163ade98b243ef77ccc0dab21b6ad00338a5d5f1f366",
+      "verdict": "as-is",
+      "group": "diff"
+    },
+    {
+      "path": "src/diff/review/DiffCommentAnnotation.tsx",
+      "upstreamPath": "apps/web/src/components/diffs/DiffCommentAnnotation.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "b69b967bf110f54b3681382e4694918a39d2dc2dad2d16453779ce7f70bc1e38",
+      "localSha256": "0ec09704fe4def77be34a65d2517f7d6b67a62dd5936304f0d4145251580e0ec",
+      "verdict": "adapt",
+      "group": "diff"
+    },
+    {
+      "path": "src/diff/review/StyledDiffCodeView.tsx",
+      "upstreamPath": "apps/web/src/components/diffs/StyledDiffCodeView.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "68e68f30b4a41de6e22a911f6e1dd86ce920dd52cd08101b48ef987e8d6a9fda",
+      "localSha256": "0bd561b6bde07802d98067cd6bec43f4e61f5db73ee9c9125b734d2c06a76506",
+      "verdict": "adapt",
+      "group": "diff"
+    },
+    {
+      "path": "src/diff/reviewCommentContext.ts",
+      "upstreamPath": "apps/web/src/reviewCommentContext.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "5d997d9c63259c77d2c2c427d1c4defb138e6a6b2130aa65d0cf17c9d7a77f68",
+      "localSha256": "435dfbc8b6bf91ac2b8c90c2069eb8febd463a8e0eb02de4bee69e065e79096d",
+      "verdict": "adapt",
+      "group": "diff"
+    },
+    {
+      "path": "src/diff/tree/diffFileTree.logic.ts",
+      "upstreamPath": "apps/web/src/components/diffs/diffFileTree.logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "7d6c14ee445f7c315c7fc67e8ee14b851bc9d763f3328493198aeb5eafd69f6d",
+      "localSha256": "6538454f7313712f9a616217ffb06f5d5d528601fc257af0ec69e73ac038577a",
+      "verdict": "as-is",
+      "group": "diff"
+    },
+    {
+      "path": "src/diff/tree/DiffFileTree.tsx",
+      "upstreamPath": "apps/web/src/components/diffs/DiffFileTree.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "da13f199d8b60065ad06cb94376bfea83e6c26115dfd9be3c3ea33c9bee83d76",
+      "localSha256": "cb18d4b43fbf6d441236a6284ceaa1ff831fd1c640780d24b00a9ea15bdaf2dd",
+      "verdict": "adapt",
+      "group": "diff"
     }
   ]
 }

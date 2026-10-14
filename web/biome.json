@@ -48,6 +48,13 @@
     },
     {
       "includes": [
+        "packages/studio-ui/src/diff/diffRendering.ts",
+        "packages/studio-ui/src/diff/tree/diffFileTree.logic.ts"
+      ],
+      "assist": { "actions": { "source": { "organizeImports": "off" } } }
+    },
+    {
+      "includes": [
         "packages/studio-ui/src/composer/doc.ts",
         "packages/studio-ui/src/composer/richText.ts",
         "packages/studio-ui/src/composer/listContinuation.ts",

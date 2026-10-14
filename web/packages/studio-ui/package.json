@@ -11,6 +11,10 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./diff": {
+      "types": "./src/diff/index.ts",
+      "default": "./src/diff/index.ts"
+    },
     "./files": {
       "types": "./src/files/index.ts",
       "default": "./src/files/index.ts"

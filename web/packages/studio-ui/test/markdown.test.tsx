@@ -158,12 +158,12 @@ describe('markdown files in the file viewer (T21-3)', () => {
     const onOpenFile = vi.fn();
     const renderFile = createMarkdownFileRenderer({ onOpenFile });
     const { container, getByText } = render(
-      <>
+      <div>
         {renderFile(
           '# Guide\n\n<script>x</script>\n\n[api](api.md) [up](../x.md)',
           'docs/guide.md',
         )}
-      </>,
+      </div>,
     );
     expect(container.querySelector('h1')?.textContent).toBe('Guide');
     expect(container.querySelector('script')).toBeNull();
