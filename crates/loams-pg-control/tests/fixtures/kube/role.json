@@ -21,6 +21,7 @@
         "list",
         "watch",
         "create",
+        "patch",
         "delete"
       ]
     },

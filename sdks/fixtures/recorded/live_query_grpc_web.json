@@ -1,6 +1,6 @@
 {
   "name": "live_query_grpc_web",
-  "about": "The unavailable-service path on a unary RPC: `loams.live.v1` is a `full`-variant engine, so every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (gRPC-Web, the framing a browser sends. One length-prefixed frame: flag 0 and a zero-length message.)",
+  "about": "The unavailable-service path on a unary RPC: the corpus is recorded from `loams dev --no-live`, so `loams.live.v1` is not running and every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (gRPC-Web, the framing a browser sends. One length-prefixed frame: flag 0 and a zero-length message.)",
   "request": {
     "method": "POST",
     "path": "/loams.live.v1.LiveService/Query",

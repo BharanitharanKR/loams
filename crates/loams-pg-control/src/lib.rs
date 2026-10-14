@@ -18,7 +18,9 @@
 //! the compute state machine ([`reconcile::endpoint`]) (Task 11); idle
 //! detection and the suspend ([`idle`], with PgDog's pools read through
 //! [`pgdog::PgDogAdmin`]) and the compute lifecycle events
-//! ([`observer::ComputeLifecycleObserver`]) (Task 12). Reached
+//! ([`observer::ComputeLifecycleObserver`]) (Task 12); the Kubernetes
+//! runtime (Task 13); the warm pool of unbound computes ([`pool`])
+//! (Task 14). Reached
 //! only through `loams`'s feature `postgres` (Task 9), whose `pg-control`
 //! role serves this crate.
 
@@ -31,6 +33,7 @@ pub mod names;
 pub mod neon;
 pub mod observer;
 pub mod pgdog;
+pub mod pool;
 pub mod reconcile;
 pub mod runtime;
 pub mod secrets;

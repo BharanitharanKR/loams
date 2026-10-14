@@ -64,6 +64,7 @@ async fn it_kind_start_bind_and_stop() {
     let id = ComputeId::new();
     let launch = ComputeLaunch {
         compute_id: id,
+        namespace: NS.into(),
         binding: Some(ComputeBinding {
             namespace: NS.into(),
             project_id: PRJ.into(),

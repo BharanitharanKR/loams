@@ -28,6 +28,7 @@
 pub mod append;
 pub mod files;
 pub mod metadata;
+pub mod write;
 
 pub use iceberg::spec;
 pub use iceberg::{

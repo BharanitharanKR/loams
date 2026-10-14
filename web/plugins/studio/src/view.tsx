@@ -17,6 +17,7 @@ import {
   useStudioCommand,
   useStudioKeybindings,
 } from './palette/commands.js';
+import { PreviewTab } from './preview/PreviewTab.js';
 import { useProjects, useReach } from './projects/queries.js';
 import { PANELS, type Panel, type StudioRoute, studioHref } from './routes.js';
 import { SettingsPage } from './settings/Settings.js';
@@ -43,11 +44,15 @@ const PANEL_LABEL: Record<Panel, string> = {
 
 /** The thread's right-hand panel: its tabs are routes (`?panel=`). */
 function ThreadPanel({
+  agentd,
   route,
   navigate,
+  openExternal,
 }: {
+  agentd: StudioAgentd;
   route: Extract<StudioRoute, { kind: 'thread' }>;
   navigate: (to: string) => void;
+  openExternal?: (url: string) => Promise<void>;
 }) {
   const panel = route.panel ?? 'diff';
   return (
@@ -65,6 +70,12 @@ function ThreadPanel({
         />
       ) : panel === 'files' ? (
         <FilesTab threadId={route.threadId} {...(route.file ? { link: route.file } : {})} />
+      ) : panel === 'preview' ? (
+        <PreviewTab
+          threadId={route.threadId}
+          {...(agentd.preview ? { preview: agentd.preview } : {})}
+          {...(openExternal ? { openExternal } : {})}
+        />
       ) : (
         <div className="min-h-0 flex-1 overflow-auto py-4">
           <Empty title={`No ${PANEL_LABEL[panel].toLowerCase()} yet`} seed={panel.length}>
@@ -240,7 +251,16 @@ function StudioPage({
           />
         ) : undefined
       }
-      panel={thread && connected ? <ThreadPanel route={thread} navigate={navigate} /> : undefined}
+      panel={
+        thread && connected ? (
+          <ThreadPanel
+            agentd={agentd}
+            route={thread}
+            navigate={navigate}
+            {...(openExternal ? { openExternal } : {})}
+          />
+        ) : undefined
+      }
       drawer={
         thread && connected ? (
           <ThreadTerminalDrawer

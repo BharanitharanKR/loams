@@ -12,6 +12,7 @@ import type { AgentdReach, AgentdService } from '@loams/console-host';
 import type { LoamsDesktopApi } from '@loams/platform-electron';
 import type { Repo as RepoMessage } from '@loams/proto/agentd';
 import type { StudioHosts } from './hosts/agentd.js';
+import type { StudioPreview } from './preview/access.js';
 
 /** Whether Studio can talk to a daemon right now. */
 export type Reach = AgentdReach;
@@ -38,6 +39,8 @@ export interface StudioAgentd extends AgentdService {
    * Electron main carries out. Absent on the web.
    */
   desktop?: StudioDesktop;
+  /** How the Preview tab reaches dev servers (SD1 Task 26); absent: port-forward hint. */
+  preview?: StudioPreview;
 }
 
 /** The desktop bridge's `studio` group (`window.loamsDesktop.studio`). */
@@ -47,6 +50,7 @@ export function studioAgentd(
   agentd: AgentdService,
   shell?: { pickFolder(title?: string): Promise<string | null> },
   desktop?: StudioDesktop,
+  preview?: StudioPreview,
 ): StudioAgentd {
   return {
     kind: agentd.kind,
@@ -61,6 +65,7 @@ export function studioAgentd(
     ...(agentd.start && { start: () => agentd.start?.() ?? Promise.resolve() }),
     ...(shell && { pickFolder: () => shell.pickFolder('Add a project folder') }),
     ...(desktop && { desktop }),
+    ...(preview && { preview }),
   };
 }
 

@@ -16,7 +16,11 @@
 // ## The two servers, and why both are needed
 //
 // `loams dev` is the **primary** target (D617). It answers a successful unary
-// call and both structured-reason refusals, in every encoding.
+// call and both structured-reason refusals, in every encoding. It is run with
+// `--no-live`: the unavailable-service cases are `loams.live.v1` refusing with
+// `feature_not_in_variant`, which is what that package answers while Live is not
+// running. With Live on (the default since LV1 Task 12) the same RPCs reach the
+// running Live server instead and answer `not_found`.
 //
 // It cannot answer a paged list, an idempotency-keyed mutation or a resumable
 // stream, because `loams.collection.v1` has not landed and the app packages are
@@ -109,9 +113,10 @@ const RPCS = [
     name: 'live_query',
     path: '/loams.live.v1.LiveService/Query',
     about:
-      'The unavailable-service path on a unary RPC: `loams.live.v1` is a ' +
-      '`full`-variant engine, so every one of its RPCs answers `unimplemented` ' +
-      'with reason `feature_not_in_variant` and the variant in `metadata`.',
+      'The unavailable-service path on a unary RPC: the corpus is recorded from ' +
+      '`loams dev --no-live`, so `loams.live.v1` is not running and every one of ' +
+      'its RPCs answers `unimplemented` with reason `feature_not_in_variant` and ' +
+      'the variant in `metadata`.',
     reason: 'feature_not_in_variant',
     pinnedBy: ['R5', 'R8'],
   },
@@ -2396,8 +2401,8 @@ async function main() {
     const base = process.env.LOAMS_TEST_ENDPOINT;
     if (!base) {
       throw new Error(
-        'LOAMS_TEST_ENDPOINT is not set; `loams dev` must be running to record the primary ' +
-          'half of the corpus (see sdks/conformance/run.sh)',
+        'LOAMS_TEST_ENDPOINT is not set; `loams dev --no-live` must be running to record the ' +
+          'primary half of the corpus (see sdks/conformance/run.sh)',
       );
     }
     const outDir = join(fixturesDir, 'recorded');

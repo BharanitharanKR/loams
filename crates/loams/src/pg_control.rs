@@ -151,6 +151,10 @@ pub struct ComputesConfig {
     /// With `--runtime kubernetes`: the cluster's DNS domain
     /// (`cluster.local` when unset).
     pub cluster_domain: Option<String>,
+    /// Warm computes per (namespace, major, image) (Task 14); `None`: the
+    /// runtime's default, 2 on Kubernetes. Compose has no warm pool
+    /// (R14.2), and refuses any size but 0.
+    pub warm_pool_size: Option<u32>,
 }
 
 /// A compute runner, as `pg-control` reaches it (`--compute-runner`).
@@ -182,6 +186,7 @@ impl Default for ComputesConfig {
             runner: None,
             runtime_class: None,
             cluster_domain: None,
+            warm_pool_size: None,
         }
     }
 }
@@ -617,6 +622,13 @@ impl PgControl {
         let upcall_addr = upcall.local_addr();
         let computes = match (&config.runtime, &config.computes) {
             (PgRuntime::Compose, Some(settings)) => {
+                if settings.warm_pool_size.is_some_and(|n| n > 0) {
+                    return Err(PgControlError::Config(
+                        "the compose runtime has no warm pool: an unbound compute has no port \
+                         to publish (R14.2)"
+                            .into(),
+                    ));
+                }
                 let runtime = compose_or_runner(&config, settings, upcall_addr)?;
                 Some(computes(
                     &config,
@@ -630,14 +642,16 @@ impl PgControl {
             #[cfg(feature = "postgres-kubernetes")]
             (PgRuntime::Kubernetes { .. }, Some(settings)) => {
                 let runtime = kube_runtime(settings, secrets.as_ref()).await?;
-                Some(computes(
-                    &config,
-                    settings,
-                    runtime,
-                    &keys,
-                    &clock,
-                    upcall_addr,
-                )?)
+                let mut computes =
+                    computes(&config, settings, runtime, &keys, &clock, upcall_addr)?;
+                // Kept at size 0 too, so a pool left from a larger size drains.
+                let size = settings
+                    .warm_pool_size
+                    .unwrap_or(loams_pg_control::pool::DEFAULT_POOL_SIZE);
+                computes.pool = Some(Arc::new(loams_pg_control::pool::WarmPool::new(
+                    loams_pg_control::pool::PoolConfig::new(size),
+                )));
+                Some(computes)
             }
             // Without the feature, open_secrets refused the runtime already.
             #[cfg(not(feature = "postgres-kubernetes"))]

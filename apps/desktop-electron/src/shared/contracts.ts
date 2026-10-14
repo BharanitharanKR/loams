@@ -647,3 +647,43 @@ export interface LoamsDesktopApi {
 		setNotifications(prefs: StudioNotifyPrefs): Promise<IpcResult<void>>;
 	};
 }
+
+// ---- SD1 Task 26: Studio's preview view (design §53 §5.8, D678) ----
+
+/** What the preview view shows, pushed to the console after each change. */
+export interface PreviewViewState {
+	/** The page's URL, or "" before the first load. */
+	url: string;
+	canGoBack: boolean;
+	canGoForward: boolean;
+	loading: boolean;
+	/** The last main-frame load failure, until the next successful load. */
+	error?: { code: number; description: string; url: string };
+}
+
+/** The preview view's IPC channels (kept apart from CH, so tasks add without conflict). */
+export const PREVIEW_CH = {
+	show: "preview:show",
+	hide: "preview:hide",
+	reload: "preview:reload",
+	back: "preview:back",
+	forward: "preview:forward",
+	state: "preview:state",
+} as const;
+
+export interface LoamsDesktopApi {
+	/**
+	 * Studio's Preview tab: one WebContentsView placed by main over `rect` (CSS px in
+	 * the console window), in its own partition, with no preload and sandboxed. Only
+	 * http(s) URLs on this machine load (`bad_request` otherwise). Optional: an older
+	 * desktop build has none, and Studio opens the URL in the browser instead.
+	 */
+	preview?: {
+		show(url: string, rect: EmbedRect): Promise<IpcResult<void>>;
+		hide(): Promise<void>;
+		reload(): Promise<void>;
+		back(): Promise<void>;
+		forward(): Promise<void>;
+		onState(cb: (s: PreviewViewState) => void): () => void;
+	};
+}
