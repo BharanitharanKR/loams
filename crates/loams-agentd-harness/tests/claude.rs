@@ -203,11 +203,12 @@ async fn happy_path_normalizes_events_and_tags_subagents() {
     // Informational rate-limit frames stay quiet.
     assert!(!events.iter().any(|e| matches!(e, AgentEvent::Error { .. })));
 
+    // The CLI's own cost rides along; no cache counts in this result (SD1 Task 14).
     assert!(events.contains(&AgentEvent::Usage {
         input_tokens: 10,
         output_tokens: 20,
         cache_tokens: None,
-        cost_usd: None,
+        cost_usd: Some(0.01),
     }));
     assert_eq!(
         events.last(),
