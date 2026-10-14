@@ -39,6 +39,13 @@ use crate::engine::GraphError;
 pub const PORTABLE_FORMAT: &str = "loams.graph.portable";
 /// The version of [`PORTABLE_FORMAT`] this build writes and reads.
 pub const PORTABLE_VERSION: u32 = 1;
+
+/// Whether this release reads a portable snapshot of `version`: the
+/// registry's range (UP1 Task 1), not only [`PORTABLE_VERSION`].
+pub fn portable_version_readable(version: u32) -> bool {
+    loams_common::formats::check_wide(loams_common::formats::GRAPH_PORTABLE, u64::from(version))
+        .is_ok()
+}
 /// The object name of a portable snapshot's manifest.
 pub const MANIFEST_FILE: &str = "manifest.json";
 /// The most rows one Parquet file holds.
@@ -388,7 +395,7 @@ where
 {
     let manifest: PortableManifest =
         serde_json::from_slice(&fetch(MANIFEST_FILE.to_string()).await?).map_err(corrupt)?;
-    if manifest.format != PORTABLE_FORMAT || manifest.version != PORTABLE_VERSION {
+    if manifest.format != PORTABLE_FORMAT || !portable_version_readable(manifest.version) {
         return Err(corrupt(format!(
             "{} version {} is not {PORTABLE_FORMAT} version {PORTABLE_VERSION}",
             manifest.format, manifest.version

@@ -1202,7 +1202,7 @@ async fn mutation_attempt(
 
     if let Some(idem) = &idem {
         let record = pb::IdempotencyRecord {
-            format: 1,
+            format: crate::RECORD_FORMAT,
             result: result.to_proto().into(),
             expires_ms: now_ms
                 .saturating_add(u64::try_from(IDEMPOTENCY_TTL.as_millis()).unwrap_or(u64::MAX)),
@@ -1295,10 +1295,11 @@ pub fn idempotency_hash(key: &str) -> Result<[u8; IDEMPOTENCY_HASH_BYTES], LiveE
 pub(crate) fn decode_idempotency(bytes: &[u8]) -> Result<pb::IdempotencyRecord, LiveError> {
     let record = pb::IdempotencyRecord::decode_from_slice(bytes)
         .map_err(|e| LiveError::Corrupt(format!("an idempotency record: {e}")))?;
-    if record.format != 1 {
+    if !crate::record_format_readable(record.format) {
         return Err(LiveError::Corrupt(format!(
-            "idempotency record format {} (expected 1)",
-            record.format
+            "idempotency record format {} (this release reads {})",
+            record.format,
+            crate::record_format_range()
         )));
     }
     Ok(record)

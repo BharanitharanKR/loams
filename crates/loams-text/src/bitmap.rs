@@ -13,6 +13,7 @@
 //! ```
 
 use bytes::Bytes;
+use loams_common::formats;
 use roaring::RoaringBitmap;
 use ulid::Ulid;
 
@@ -73,9 +74,9 @@ pub fn decode_delete_bitmap(bytes: &[u8]) -> Result<(Ulid, u32, RoaringBitmap), 
         return Err(corrupt("crc mismatch"));
     }
     let version = u16::from_le_bytes([body[4], body[5]]);
-    if version != DELETE_BITMAP_VERSION {
-        return Err(corrupt(format!("unknown format version {version}")));
-    }
+    // The registry's readable range (UP1 Task 1), not only the current one.
+    formats::check(formats::TEXT_DELETE_BITMAP, version)
+        .map_err(|e| corrupt(format!("unknown format version {version} ({e})")))?;
     let split = Ulid(u128::from_be_bytes(array(&body[6..22])));
     let doc_count = u32::from_le_bytes(array(&body[22..26]));
     let cardinality = u64::from_le_bytes(array(&body[26..34]));
@@ -109,4 +110,47 @@ fn array<const N: usize>(bytes: &[u8]) -> [u8; N] {
     let mut out = [0; N];
     out.copy_from_slice(bytes);
     out
+}
+
+/// UP1 Task 1: the delete bitmap reader checks the registry's readable range.
+#[cfg(test)]
+mod format_tests {
+    use loams_common::formats::{self, FormatSpec};
+
+    use super::*;
+
+    fn object(version: u16) -> Vec<u8> {
+        let bytes = encode_delete_bitmap(Ulid(7), 4, &RoaringBitmap::from_iter([1u32])).unwrap();
+        let mut out = bytes[..bytes.len() - CRC_LEN].to_vec();
+        out[4..6].copy_from_slice(&version.to_le_bytes());
+        let crc = crc32c::crc32c(&out);
+        out.extend_from_slice(&crc.to_le_bytes());
+        out
+    }
+
+    #[test]
+    fn format_constants_match_registry() {
+        let current = formats::spec_of(formats::TEXT_DELETE_BITMAP).current;
+        assert_eq!(DELETE_BITMAP_VERSION, current);
+    }
+
+    #[test]
+    fn reader_accepts_previous_version() {
+        let older = object(DELETE_BITMAP_VERSION - 1);
+        assert!(decode_delete_bitmap(&older).is_err());
+        let spec = formats::spec_of(formats::TEXT_DELETE_BITMAP);
+        let spec = FormatSpec {
+            min_read: spec.current - 1,
+            ..spec
+        };
+        formats::with_override(spec, || {
+            decode_delete_bitmap(&older).expect("N-1 opens once min_read allows it");
+        });
+    }
+
+    #[test]
+    fn reader_refuses_next_version() {
+        let err = decode_delete_bitmap(&object(DELETE_BITMAP_VERSION + 1)).unwrap_err();
+        assert!(err.to_string().contains("format_unreadable"), "{err}");
+    }
 }

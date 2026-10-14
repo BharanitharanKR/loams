@@ -1809,7 +1809,7 @@ impl DeploymentRecord {
     /// The catalog record.
     pub fn to_proto(&self) -> pb::DeploymentRecord {
         pb::DeploymentRecord {
-            format: 1,
+            format: crate::RECORD_FORMAT,
             id: self.id.to_bytes().to_vec(),
             bundle_sha256: self.bundle_sha256.to_vec(),
             schema: buffa::MessageField::some(self.schema.to_proto()),
@@ -1832,10 +1832,11 @@ impl DeploymentRecord {
 
     /// The record of a catalog record.
     pub fn from_proto(p: pb::DeploymentRecord) -> Result<Self, LiveError> {
-        if p.format != 1 {
+        if !crate::record_format_readable(p.format) {
             return Err(LiveError::Corrupt(format!(
-                "deployment record format {} (expected 1)",
-                p.format
+                "deployment record format {} (this release reads {})",
+                p.format,
+                crate::record_format_range()
             )));
         }
         let state = match p.state.as_known() {

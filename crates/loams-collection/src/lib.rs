@@ -64,6 +64,8 @@ mod deadletter;
 mod doc;
 mod dynamic;
 mod error;
+#[cfg(test)]
+mod format_tests;
 mod gc;
 mod index_build;
 mod lance;

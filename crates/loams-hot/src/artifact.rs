@@ -22,6 +22,7 @@ use std::path::{Component, Path};
 use bytes::Bytes;
 use futures::{StreamExt, TryStreamExt};
 use loams_collection::{CollectionError, CollectionManifest, CommitKind, ManifestCache};
+use loams_common::formats;
 use loams_common::meta::collection_prefix;
 use loams_common::{CollectionId, NamespaceId};
 use loams_hnsw::{BuildSpec, BuiltFiles, engine_by_name};
@@ -139,9 +140,9 @@ fn open_envelope<'a>(what: &str, magic: &[u8; 4], bytes: &'a [u8]) -> Result<&'a
         return Err(corrupt(format!("{what}: bad magic")));
     }
     let version = u16::from_le_bytes([bytes[4], bytes[5]]);
-    if version != ARTIFACT_FORMAT_VERSION {
-        return Err(corrupt(format!("{what}: unknown format version {version}")));
-    }
+    // The registry's readable range (UP1 Task 1), not only the current one.
+    formats::check(formats::HOT_ARTIFACT, version)
+        .map_err(|e| corrupt(format!("{what}: unknown format version {version} ({e})")))?;
     let (covered, trailer) = bytes.split_at(bytes.len() - CRC_LEN);
     let stored = u32::from_le_bytes([trailer[0], trailer[1], trailer[2], trailer[3]]);
     if crc32c::crc32c(covered) != stored {

@@ -188,10 +188,12 @@ fn deserialize_split_footer_trailer(trailer: &[u8]) -> anyhow::Result<Option<u64
     if reader != SPLIT_FOOTER_TRAILER_MAGIC {
         return Ok(None);
     }
-    ensure!(
-        version == SPLIT_FOOTER_TRAILER_VERSION,
-        "unsupported split footer trailer version {version}"
-    );
+    // The registry's readable range (UP1 Task 1), not only the current one.
+    loams_common::formats::check_wide(
+        loams_common::formats::TEXT_SPLIT_TRAILER,
+        u64::from(version),
+    )
+    .map_err(|e| anyhow::anyhow!("unsupported split footer trailer version {version} ({e})"))?;
     Ok(Some(footer_start_inclusive))
 }
 
@@ -607,6 +609,47 @@ mod tests {
     use crate::storage::{PutPayload, RamStorageBuilder, SplitPayloadBuilder};
 
     const DEFAULT_SPLIT_TAIL_WINDOW_NUM_BYTES: u64 = 1024 * 1024;
+
+    /// UP1 Task 1: the trailer reader checks the registry's readable range.
+    mod format_tests {
+        use loams_common::formats::{self, FormatSpec};
+
+        use super::super::*;
+
+        fn trailer(version: u32) -> Vec<u8> {
+            let mut out = 42u64.to_le_bytes().to_vec();
+            out.extend_from_slice(&version.to_le_bytes());
+            out.extend_from_slice(SPLIT_FOOTER_TRAILER_MAGIC);
+            out
+        }
+
+        #[test]
+        fn format_constants_match_registry() {
+            let current = formats::spec_of(formats::TEXT_SPLIT_TRAILER).current;
+            assert_eq!(SPLIT_FOOTER_TRAILER_VERSION, u32::from(current));
+        }
+
+        #[test]
+        fn reader_accepts_previous_version() {
+            let older = trailer(SPLIT_FOOTER_TRAILER_VERSION - 1);
+            assert!(deserialize_split_footer_trailer(&older).is_err());
+            let spec = formats::spec_of(formats::TEXT_SPLIT_TRAILER);
+            let spec = FormatSpec {
+                min_read: spec.current - 1,
+                ..spec
+            };
+            formats::with_override(spec, || {
+                let start = deserialize_split_footer_trailer(&older).unwrap();
+                assert_eq!(start, Some(42));
+            });
+        }
+
+        #[test]
+        fn reader_refuses_next_version() {
+            let newer = trailer(SPLIT_FOOTER_TRAILER_VERSION + 1);
+            assert!(deserialize_split_footer_trailer(&newer).is_err());
+        }
+    }
 
     #[tokio::test]
     async fn bundle_storage_locates_footer_from_object_storage() {

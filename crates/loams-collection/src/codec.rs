@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use bytes::Bytes;
+use loams_common::formats;
 use loams_log::Record;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -104,7 +105,7 @@ pub fn decode(record: &Record) -> Result<DocOp, CodecError> {
     if value.len() > MAX_RECORD_VALUE_BYTES {
         return Err(CodecError::TooLarge(value.len()));
     }
-    if version != CODEC_VERSION {
+    if formats::check(formats::COLLECTION_RECORD, u16::from(version)).is_err() {
         return Err(CodecError::UnknownVersion(version));
     }
     let pk = PrimaryKey::from_canonical(key)?;

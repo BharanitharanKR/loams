@@ -77,3 +77,74 @@ pub use txn::{
     Queried, ReadSet, Runner, RunnerOptions, Usage, Visibility,
 };
 pub use value::{LiveValue, fields_from_proto, fields_to_proto};
+
+/// The `format` every Live record on the store carries (`DocumentRecord`,
+/// `TableDef`, `TableJobRecord`, `AppDef`, `DeploymentRecord`,
+/// `IdempotencyRecord`), registry id `live.record` (UP1 Task 1).
+pub const RECORD_FORMAT: u32 = 1;
+
+/// Whether this release reads a Live record of `format`: the registry's
+/// range, not only [`RECORD_FORMAT`].
+pub fn record_format_readable(format: u32) -> bool {
+    loams_common::formats::check_wide(loams_common::formats::LIVE_RECORD, u64::from(format)).is_ok()
+}
+
+/// The record formats this release reads, for error messages.
+pub(crate) fn record_format_range() -> String {
+    let spec = loams_common::formats::spec_of(loams_common::formats::LIVE_RECORD);
+    format!("{}..={}", spec.min_read, spec.current)
+}
+
+/// UP1 Task 1: Live's record readers check the registry's readable range.
+#[cfg(test)]
+mod format_tests {
+    use loams_common::formats::{self, FormatSpec};
+
+    use super::*;
+
+    fn document(format: u32) -> pb::DocumentRecord {
+        pb::DocumentRecord {
+            format,
+            ..Default::default()
+        }
+    }
+
+    fn id() -> DocId {
+        DocId {
+            table: TableId(1),
+            bytes: [1; crate::ids::DOC_ID_BYTES],
+        }
+    }
+
+    #[test]
+    fn format_constants_match_registry() {
+        let current = formats::spec_of(formats::LIVE_RECORD).current;
+        assert_eq!(RECORD_FORMAT, u32::from(current));
+    }
+
+    #[test]
+    fn reader_accepts_previous_version() {
+        let id = id();
+        assert!(Doc::from_record(id, document(RECORD_FORMAT)).is_ok());
+        assert!(Doc::from_record(id, document(RECORD_FORMAT - 1)).is_err());
+        let spec = formats::spec_of(formats::LIVE_RECORD);
+        let spec = FormatSpec {
+            min_read: spec.current - 1,
+            ..spec
+        };
+        formats::with_override(spec, || {
+            Doc::from_record(id, document(RECORD_FORMAT - 1))
+                .expect("N-1 opens once min_read allows it");
+        });
+    }
+
+    #[test]
+    fn reader_refuses_next_version() {
+        let id = id();
+        let err = Doc::from_record(id, document(RECORD_FORMAT + 1)).unwrap_err();
+        assert!(
+            err.to_string().contains("this release reads 1..=1"),
+            "{err}"
+        );
+    }
+}

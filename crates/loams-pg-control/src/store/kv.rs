@@ -1018,8 +1018,10 @@ fn encode_value(version: u64, body: &[u8]) -> Vec<u8> {
 /// The version and the record bytes of a stored value.
 fn decode_version(value: &[u8]) -> Result<(u64, &[u8]), StoreError> {
     match value.split_first() {
-        Some((&FORMAT, rest)) => postcard::take_from_bytes::<u64>(rest)
-            .map_err(|e| StoreError::Corrupt(format!("a version does not decode: {e}"))),
+        Some((&format, rest)) if crate::model::format_readable(format) => {
+            postcard::take_from_bytes::<u64>(rest)
+                .map_err(|e| StoreError::Corrupt(format!("a version does not decode: {e}")))
+        }
         Some((format, _)) => Err(StoreError::Corrupt(format!("unknown format {format}"))),
         None => Err(StoreError::Corrupt("empty value".into())),
     }
@@ -1041,8 +1043,10 @@ fn encode_lease(lease: &LeaseRec) -> Vec<u8> {
 
 fn decode_lease(value: &[u8]) -> Result<LeaseRec, StoreError> {
     match value.split_first() {
-        Some((&FORMAT, rest)) => postcard::from_bytes(rest)
-            .map_err(|e| StoreError::Corrupt(format!("a lease does not decode: {e}"))),
+        Some((&format, rest)) if crate::model::format_readable(format) => {
+            postcard::from_bytes(rest)
+                .map_err(|e| StoreError::Corrupt(format!("a lease does not decode: {e}")))
+        }
         _ => Err(StoreError::Corrupt("a lease has an unknown format".into())),
     }
 }
@@ -1068,7 +1072,40 @@ fn prefix_end(prefix: &[u8]) -> Option<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
+    use loams_common::formats::{self, FormatSpec};
+
     use super::*;
+
+    fn value_at(format: u8) -> Vec<u8> {
+        let mut v = encode_value(300, b"body");
+        v[0] = format;
+        v
+    }
+
+    #[test]
+    fn format_constants_match_registry() {
+        let current = formats::spec_of(formats::PG_CONTROL_RECORD).current;
+        assert_eq!(u16::from(FORMAT), current);
+    }
+
+    #[test]
+    fn reader_accepts_previous_version() {
+        let older = value_at(FORMAT - 1);
+        assert!(decode_version(&older).is_err());
+        let spec = formats::spec_of(formats::PG_CONTROL_RECORD);
+        let spec = FormatSpec {
+            min_read: spec.current - 1,
+            ..spec
+        };
+        formats::with_override(spec, || {
+            assert_eq!(decode_version(&older), Ok((300, b"body".as_slice())));
+        });
+    }
+
+    #[test]
+    fn reader_refuses_next_version() {
+        assert!(decode_version(&value_at(FORMAT + 1)).is_err());
+    }
 
     #[test]
     fn values_carry_their_version() {

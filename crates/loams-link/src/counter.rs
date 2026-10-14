@@ -87,9 +87,9 @@ fn decode<T: DeserializeOwned>(magic: &[u8; 8], path: &str, bytes: &[u8]) -> Res
         return Err(corrupt("checksum mismatch"));
     }
     let version = u16::from_le_bytes([covered[8], covered[9]]);
-    if version != FORMAT_VERSION {
-        return Err(corrupt(&format!("unsupported format version {version}")));
-    }
+    // The registry's readable range (UP1 Task 1), not only FORMAT_VERSION.
+    loams_common::formats::check(loams_common::formats::LINK_COUNTER, version)
+        .map_err(|e| corrupt(&format!("unsupported format version {version} ({e})")))?;
     let (value, rest) =
         postcard::take_from_bytes(&covered[HEADER_LEN..]).map_err(|e| corrupt(&e.to_string()))?;
     if !rest.is_empty() {
@@ -499,5 +499,53 @@ impl LinkTarget for CounterTable {
         self.step(CommitStep::AfterCas, fence).await;
         self.remember(Arc::new(manifest));
         Ok(version)
+    }
+}
+
+/// UP1 Task 1: the counter reader checks the registry's readable range.
+#[cfg(test)]
+mod format_tests {
+    use loams_common::formats::{self, FormatSpec};
+
+    use super::*;
+
+    const MAGIC: &[u8; 8] = b"TESTFMT1";
+
+    fn object(version: u16) -> Vec<u8> {
+        let bytes = encode(MAGIC, &(7u64, "seven".to_string())).unwrap();
+        let mut out = bytes[..bytes.len() - TRAILER_LEN].to_vec();
+        out[8..10].copy_from_slice(&version.to_le_bytes());
+        let crc = crc32c::crc32c(&out);
+        out.extend_from_slice(&crc.to_le_bytes());
+        out
+    }
+
+    #[test]
+    fn format_constants_match_registry() {
+        assert_eq!(
+            FORMAT_VERSION,
+            formats::spec_of(formats::LINK_COUNTER).current
+        );
+    }
+
+    #[test]
+    fn reader_accepts_previous_version() {
+        let older = object(FORMAT_VERSION - 1);
+        assert!(decode::<(u64, String)>(MAGIC, "p", &older).is_err());
+        let spec = formats::spec_of(formats::LINK_COUNTER);
+        let spec = FormatSpec {
+            min_read: spec.current - 1,
+            ..spec
+        };
+        formats::with_override(spec, || {
+            let value: (u64, String) = decode(MAGIC, "p", &older).expect("N-1 opens");
+            assert_eq!(value.0, 7);
+        });
+    }
+
+    #[test]
+    fn reader_refuses_next_version() {
+        let err = decode::<(u64, String)>(MAGIC, "p", &object(FORMAT_VERSION + 1)).unwrap_err();
+        assert!(err.to_string().contains("format_unreadable"), "{err}");
     }
 }

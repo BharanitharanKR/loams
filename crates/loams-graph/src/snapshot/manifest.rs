@@ -29,6 +29,13 @@ use crate::GraphId;
 /// The manifest document's format; a reader refuses another.
 pub const MANIFEST_FORMAT: u32 = 1;
 
+/// Whether this release reads a graph manifest of `format`: the registry's
+/// range (UP1 Task 1), not only [`MANIFEST_FORMAT`].
+pub fn manifest_format_readable(format: u32) -> bool {
+    loams_common::formats::check_wide(loams_common::formats::GRAPH_MANIFEST, u64::from(format))
+        .is_ok()
+}
+
 /// How many times a manifest write retries a CAS it lost or whose outcome is unknown.
 const MAX_ATTEMPTS: usize = 16;
 
@@ -381,7 +388,9 @@ impl ManifestStore {
                                 pointer.value
                             ))
                         })?;
-                    if manifest.format != MANIFEST_FORMAT || manifest.graph != graph.to_string() {
+                    if !manifest_format_readable(manifest.format)
+                        || manifest.graph != graph.to_string()
+                    {
                         return Err(SnapshotError::Corrupt(format!(
                             "graph manifest {} is format {} of {}, not format {MANIFEST_FORMAT} \
                              of {graph}",

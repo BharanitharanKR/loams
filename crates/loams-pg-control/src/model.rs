@@ -46,6 +46,14 @@ use crate::store::StoreError;
 /// The format byte in front of every stored record.
 pub const FORMAT: u8 = 1;
 
+/// Whether this release reads a record of format byte `format`: the
+/// registry's range for `pg_control.record` (UP1 Task 1), not only
+/// [`FORMAT`].
+pub fn format_readable(format: u8) -> bool {
+    loams_common::formats::check(loams_common::formats::PG_CONTROL_RECORD, u16::from(format))
+        .is_ok()
+}
+
 /// The tags of `pg-control`'s keys (§46 §6.2, plus Task 5's operations `O`,
 /// their indexes `Q` and the idempotency ledger `I`).
 pub const TAGS: [u8; 9] = *b"xXECRDOQI";
