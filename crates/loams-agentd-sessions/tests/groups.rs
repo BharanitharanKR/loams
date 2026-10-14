@@ -184,7 +184,10 @@ impl Studio {
     async fn start(open: bool) -> Self {
         environment();
         let tmp = tempfile::tempdir().unwrap();
-        let repo = init_repo(&tmp.path().join("repo"));
+        // Worktrees go to `<root>/<repository's name>/<generated name>`, and
+        // the tests share the root and run at once: a name of its own each.
+        let name = tmp.path().file_name().unwrap().to_owned();
+        let repo = init_repo(&tmp.path().join(name));
         let (gate, _) = watch::channel(open);
         let running = Arc::new(AtomicUsize::new(0));
         let peak = Arc::new(AtomicUsize::new(0));

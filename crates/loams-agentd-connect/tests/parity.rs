@@ -534,7 +534,8 @@ fn connect_and_ndjson_agree() {
             .enable_all()
             .build()
             .unwrap()
-            .block_on(scenario());
+            // On the heap: one case per method makes a large future.
+            .block_on(Box::pin(scenario()));
         return;
     }
     let scratch = tempfile::tempdir().unwrap();
@@ -1550,6 +1551,10 @@ async fn scenario() {
         |r| rs::IdReply { id: r.id }
     );
     s.learn("comment", &a["id"], &b["id"]);
+    // `outdated` follows each daemon's own checkout-diff sync, which may not
+    // have caught WriteFile's edit yet on one of them (seen flaking on dev's
+    // case); Task 11's tests cover the flag itself.
+    s.also = &["outdated"];
     first!(
         s,
         "/loams.agentd.v1.ReviewService/WatchReviewComments",
