@@ -22,13 +22,18 @@ import type { CheckoutDiffList } from "./gen/CheckoutDiffList";
 import type { CheckoutFileDiffText } from "./gen/CheckoutFileDiffText";
 import type { CheckpointList } from "./gen/CheckpointList";
 import type { CloneRepoParams } from "./gen/CloneRepoParams";
+import type { CommitWorktreeParams } from "./gen/CommitWorktreeParams";
+import type { CommitWorktreeReply } from "./gen/CommitWorktreeReply";
 import type { CompleteAgentLoginParams } from "./gen/CompleteAgentLoginParams";
+import type { CreateChangeRequestParams } from "./gen/CreateChangeRequestParams";
+import type { CreateChangeRequestReply } from "./gen/CreateChangeRequestReply";
 import type { CreateRepoParams } from "./gen/CreateRepoParams";
 import type { CreateWorktreeOutcome } from "./gen/CreateWorktreeOutcome";
 import type { CreateWorktreeParams } from "./gen/CreateWorktreeParams";
 import type { DeleteProjectActionParams } from "./gen/DeleteProjectActionParams";
 import type { DeleteWorkspaceEntryRequest } from "./gen/DeleteWorkspaceEntryRequest";
 import type { DeleteWorktreeParams } from "./gen/DeleteWorktreeParams";
+import type { DiscardPathsParams } from "./gen/DiscardPathsParams";
 import type { DiscardWorkingTreeParams } from "./gen/DiscardWorkingTreeParams";
 import type { DiscardWorkingTreeReply } from "./gen/DiscardWorkingTreeReply";
 import type { DismissHarnessUpdateParams } from "./gen/DismissHarnessUpdateParams";
@@ -64,6 +69,8 @@ import type { ListProjectActionsParams } from "./gen/ListProjectActionsParams";
 import type { ListWorkspaceDirectoryRequest } from "./gen/ListWorkspaceDirectoryRequest";
 import type { LocalDeviceReply } from "./gen/LocalDeviceReply";
 import type { LoginIdParams } from "./gen/LoginIdParams";
+import type { MergeBranchParams } from "./gen/MergeBranchParams";
+import type { MergeBranchReply } from "./gen/MergeBranchReply";
 import type { MessagePart } from "./gen/MessagePart";
 import type { ModelList } from "./gen/ModelList";
 import type { MoveQueuedMessageParams } from "./gen/MoveQueuedMessageParams";
@@ -76,6 +83,8 @@ import type { PreviewSnapshot } from "./gen/PreviewSnapshot";
 import type { ProjectActionRun } from "./gen/ProjectActionRun";
 import type { ProjectActionSetup } from "./gen/ProjectActionSetup";
 import type { ProjectActionsSnapshot } from "./gen/ProjectActionsSnapshot";
+import type { PushBranchParams } from "./gen/PushBranchParams";
+import type { PushBranchReply } from "./gen/PushBranchReply";
 import type { QueueCommandParams } from "./gen/QueueCommandParams";
 import type { QueueCommandReply } from "./gen/QueueCommandReply";
 import type { QueueMessageParams } from "./gen/QueueMessageParams";
@@ -135,6 +144,7 @@ import type { WorkspaceFileText } from "./gen/WorkspaceFileText";
 import type { WorkspaceGitStatusFrame } from "./gen/WorkspaceGitStatusFrame";
 import type { WorkspaceImageChunk } from "./gen/WorkspaceImageChunk";
 import type { WorkspaceMutationOutcome } from "./gen/WorkspaceMutationOutcome";
+import type { WorktreeList } from "./gen/WorktreeList";
 import type { WriteTerminalParams } from "./gen/WriteTerminalParams";
 import type { WriteWorkspaceFileOutcome } from "./gen/WriteWorkspaceFileOutcome";
 import type { WriteWorkspaceFileRequest } from "./gen/WriteWorkspaceFileRequest";
@@ -1430,6 +1440,95 @@ export const fixture_DiscardWorkingTreeReply = {
   "ok": true
 } satisfies DiscardWorkingTreeReply;
 
+export const fixture_WorktreeList = [
+  {
+    "ahead": 2,
+    "behind": 1,
+    "branch": "loams-desktop/fix-linker",
+    "chatIds": [
+      "chat-1"
+    ],
+    "checkoutId": "checkout-2",
+    "dirty": true,
+    "head": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+    "lastActivityMs": 1791797400000,
+    "path": "/home/dev/.loams-desktop/worktrees/project/fix-linker"
+  }
+] satisfies WorktreeList;
+
+export const fixture_CommitWorktreeParams = {
+  "all": false,
+  "amend": false,
+  "checkoutId": "checkout-1",
+  "cwd": "/home/dev/project",
+  "expectedChecksum": "sum-1",
+  "message": "Fix the linker",
+  "paths": [
+    "src/main.rs"
+  ],
+  "signoff": true
+} satisfies CommitWorktreeParams;
+
+export const fixture_CommitWorktreeReply = {
+  "sha": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+  "summary": "Fix the linker"
+} satisfies CommitWorktreeReply;
+
+export const fixture_PushBranchParams = {
+  "branch": "fix-linker",
+  "cwd": "/home/dev/project",
+  "forceWithLease": false,
+  "remote": "origin",
+  "setUpstream": true
+} satisfies PushBranchParams;
+
+export const fixture_PushBranchReply = {
+  "ref": "refs/heads/fix-linker",
+  "remote": "origin",
+  "url": "https://forgejo.example.com/dev/project.git"
+} satisfies PushBranchReply;
+
+export const fixture_CreateChangeRequestParams = {
+  "base": "main",
+  "body": "Links again.",
+  "cwd": "/home/dev/project",
+  "draft": false,
+  "head": "fix-linker",
+  "linkIssue": "42",
+  "provider": "forgejo",
+  "title": "Fix the linker"
+} satisfies CreateChangeRequestParams;
+
+export const fixture_CreateChangeRequestReply = {
+  "number": 7,
+  "provider": "forgejo",
+  "state": "open",
+  "url": "https://forgejo.example.com/dev/project/pulls/7"
+} satisfies CreateChangeRequestReply;
+
+export const fixture_MergeBranchParams = {
+  "deleteSource": true,
+  "expectedSourceHead": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+  "message": "Fix the linker",
+  "removeWorktree": true,
+  "repoPath": "/home/dev/project",
+  "source": "loams-desktop/fix-linker",
+  "strategy": "squash",
+  "target": "main"
+} satisfies MergeBranchParams;
+
+export const fixture_MergeBranchReply = {
+  "sha": "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+} satisfies MergeBranchReply;
+
+export const fixture_DiscardPathsParams = {
+  "checkoutId": "checkout-1",
+  "expectedChecksum": "sum-1",
+  "paths": [
+    "src/main.rs"
+  ]
+} satisfies DiscardPathsParams;
+
 export const fixture_GetCheckoutFileDiffTextRequest = {
   "chatId": "chat-1",
   "checkoutId": "checkout-1",
@@ -2150,6 +2249,16 @@ export const FIXTURES = [
   { name: "GetCheckoutDiffParams", type: "GetCheckoutDiffParams", value: fixture_GetCheckoutDiffParams },
   { name: "DiscardWorkingTreeParams", type: "DiscardWorkingTreeParams", value: fixture_DiscardWorkingTreeParams },
   { name: "DiscardWorkingTreeReply", type: "DiscardWorkingTreeReply", value: fixture_DiscardWorkingTreeReply },
+  { name: "WorktreeList", type: "WorktreeList", value: fixture_WorktreeList },
+  { name: "CommitWorktreeParams", type: "CommitWorktreeParams", value: fixture_CommitWorktreeParams },
+  { name: "CommitWorktreeReply", type: "CommitWorktreeReply", value: fixture_CommitWorktreeReply },
+  { name: "PushBranchParams", type: "PushBranchParams", value: fixture_PushBranchParams },
+  { name: "PushBranchReply", type: "PushBranchReply", value: fixture_PushBranchReply },
+  { name: "CreateChangeRequestParams", type: "CreateChangeRequestParams", value: fixture_CreateChangeRequestParams },
+  { name: "CreateChangeRequestReply", type: "CreateChangeRequestReply", value: fixture_CreateChangeRequestReply },
+  { name: "MergeBranchParams", type: "MergeBranchParams", value: fixture_MergeBranchParams },
+  { name: "MergeBranchReply", type: "MergeBranchReply", value: fixture_MergeBranchReply },
+  { name: "DiscardPathsParams", type: "DiscardPathsParams", value: fixture_DiscardPathsParams },
   { name: "GetCheckoutFileDiffTextRequest", type: "GetCheckoutFileDiffTextRequest", value: fixture_GetCheckoutFileDiffTextRequest },
   { name: "CheckoutFileDiffText", type: "CheckoutFileDiffText", value: fixture_CheckoutFileDiffText },
   { name: "ListWorkspaceDirectoryRequest", type: "ListWorkspaceDirectoryRequest", value: fixture_ListWorkspaceDirectoryRequest },

@@ -4,17 +4,10 @@
 // `loams.studio.panel`, and every storage access is wrapped. Below 768px the
 // sidebar becomes a drawer and the panel an overlay. Tokens only, via Tailwind.
 
-import { useMediaQuery, useResizeDrag } from '@loams/studio-ui';
-import { cx } from '@loams/ui';
+import { useMediaQuery } from '@loams/studio-ui';
+import { cx, ResizeHandle } from '@loams/ui';
 import { PanelBottom, PanelLeft, PanelRight, X } from 'lucide-react';
-import {
-  type KeyboardEvent,
-  type PointerEvent,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useState,
-} from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 
 export const LAYOUT_KEY = 'loams.studio.panel';
 
@@ -83,7 +76,7 @@ export function useLayoutState() {
   return [state, update] as const;
 }
 
-/** A focusable splitter: drag with the pointer, or use the arrow keys, Home and End. */
+/** A splitter on one of the layout's sizes; @loams/ui's ResizeHandle does the work. */
 function Splitter({
   label,
   size,
@@ -95,82 +88,20 @@ function Splitter({
   size: Size;
   value: number;
   /** Which side of the splitter the resized region is on. */
-  edge: 'left' | 'right';
+  edge: 'left' | 'right' | 'below';
   onResize: (n: number) => void;
 }) {
-  const drag = useResizeDrag<HTMLDivElement>(() => ({
-    width: value,
-    edge: edge === 'left' ? 'right' : 'left',
-    resize: (w) => {
-      const next = clamp(size, w);
-      onResize(next);
-      return next;
-    },
-    finish: () => {},
-  }));
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const grow = edge === 'left' ? 1 : -1;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-      e.preventDefault();
-      onResize(clamp(size, value + (e.key === 'ArrowRight' ? grow : -grow) * STEP));
-    } else if (e.key === 'Home') onResize(LIMITS[size][0]);
-    else if (e.key === 'End') onResize(LIMITS[size][1]);
-  };
   return (
-    // biome-ignore lint/a11y/useSemanticElements: a focusable window splitter has no native element
-    <div
-      role="separator"
-      aria-orientation="vertical"
-      aria-label={label}
-      aria-valuemin={LIMITS[size][0]}
-      aria-valuemax={LIMITS[size][1]}
-      aria-valuenow={value}
-      tabIndex={0}
-      onKeyDown={onKeyDown}
-      onPointerDown={drag.onPointerDown}
-      onPointerMove={drag.onPointerMove}
-      onPointerUp={drag.onPointerUp}
-      onPointerCancel={drag.onPointerCancel}
-      onLostPointerCapture={drag.onLostPointerCapture}
-      className="relative w-px shrink-0 cursor-col-resize touch-none bg-rule-soft outline-none after:absolute after:inset-y-0 after:-left-1 after:w-2 after:content-[''] hover:bg-accent focus-visible:bg-accent"
-    />
-  );
-}
-
-/** The drawer's splitter: vertical drag and the up and down keys. */
-function DrawerSplitter({ value, onResize }: { value: number; onResize: (n: number) => void }) {
-  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const startY = e.clientY;
-    const start = value;
-    const move = (ev: globalThis.PointerEvent) =>
-      onResize(clamp('drawer', start + startY - ev.clientY));
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-  };
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      e.preventDefault();
-      onResize(clamp('drawer', value + (e.key === 'ArrowUp' ? STEP : -STEP)));
-    }
-  };
-  return (
-    // biome-ignore lint/a11y/useSemanticElements: a focusable window splitter has no native element
-    <div
-      role="separator"
-      aria-orientation="horizontal"
-      aria-label="Resize terminal"
-      aria-valuemin={LIMITS.drawer[0]}
-      aria-valuemax={LIMITS.drawer[1]}
-      aria-valuenow={value}
-      tabIndex={0}
-      onPointerDown={onPointerDown}
-      onKeyDown={onKeyDown}
-      className="h-px shrink-0 cursor-row-resize touch-none bg-rule-soft outline-none hover:bg-accent focus-visible:bg-accent"
+    <ResizeHandle
+      label={label}
+      value={value}
+      min={LIMITS[size][0]}
+      max={LIMITS[size][1]}
+      step={STEP}
+      orientation={edge === 'below' ? 'horizontal' : 'vertical'}
+      // `end`: the region is before the handle (the sidebar); `start`: after it.
+      edge={edge === 'left' ? 'end' : 'start'}
+      onResize={(n) => onResize(clamp(size, n))}
     />
   );
 }
@@ -349,7 +280,13 @@ export function StudioLayout({
         </div>
         {drawer !== undefined && state.drawerOpen && (
           <>
-            <DrawerSplitter value={state.drawer} onResize={(n) => update({ drawer: n })} />
+            <Splitter
+              label="Resize terminal"
+              size="drawer"
+              value={state.drawer}
+              edge="below"
+              onResize={(n) => update({ drawer: n })}
+            />
             <section
               aria-label="Terminal"
               className="shrink-0 overflow-auto bg-surface"

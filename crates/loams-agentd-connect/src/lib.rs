@@ -42,3 +42,7 @@ pub const DESCRIPTOR_SET: &[u8] =
 /// The daemon feature this surface adds to `Hello` and `GetHost` (SD1 Shared
 /// contracts).
 pub const FEATURE: &str = "studio.v1";
+
+/// The daemon feature of the worktree list and the git writes (§53 §6.5 G1–G5,
+/// G21; SD1 Task 9).
+pub const GIT_WRITE_FEATURE: &str = "git.write";

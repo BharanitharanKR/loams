@@ -112,3 +112,37 @@ describe('router hardening', () => {
     expect(router.current().params.threadId).toBe('c_2');
   });
 });
+
+describe('replacing navigation (SD1 Task 27)', () => {
+  it('navigate_replace_uses_the_source_replace', () => {
+    const slots = new SlotRegistry();
+    const pushed: string[] = [];
+    const replaced: string[] = [];
+    let path = '/factory';
+    const source: HashSource = {
+      get: () => path,
+      set: (p) => {
+        pushed.push(p);
+        path = p;
+      },
+      replace: (p) => {
+        replaced.push(p);
+        path = p;
+      },
+      listen: () => () => {},
+    };
+    const router = new HashRouter(slots, source);
+    router.navigate('/studio/factory', { replace: true });
+    expect(replaced).toEqual(['/studio/factory']);
+    expect(pushed).toEqual([]);
+    expect(router.current().path).toBe('/studio/factory');
+    router.navigate('/studio');
+    expect(pushed).toEqual(['/studio']);
+  });
+
+  it('a source without replace falls back to set', () => {
+    const router = new HashRouter(new SlotRegistry(), memory('/factory'));
+    router.navigate('/studio/factory', { replace: true });
+    expect(router.current().path).toBe('/studio/factory');
+  });
+});

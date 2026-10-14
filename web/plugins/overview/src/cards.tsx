@@ -305,7 +305,7 @@ export function FactoryCard({ load }: { load: Load<FactoryAppInfo[]> }) {
     );
   }
   return (
-    <OverviewCard id="factory" title="Software Factory" href="/factory" tag={tag}>
+    <OverviewCard id="factory" title="Software Factory" href="/studio/factory" tag={tag}>
       {body}
     </OverviewCard>
   );

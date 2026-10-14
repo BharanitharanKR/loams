@@ -1,10 +1,18 @@
 import type { LoamsDesktopApi } from '@loams/desktop/contracts';
-import { Stat, Stats } from '@loams/ui';
+import { Button, Stat, Stats } from '@loams/ui';
+import { MessageSquarePlus } from 'lucide-react';
+import { draftFromPlaneIssue, threadDraftHref } from '../drafts.js';
 import { QueryCard, useQuery } from '../model.js';
 import { DataTable, label, mono, num, rel } from './common.js';
 import type { PlaneIssue } from './dto.js';
 
-export function PlanePanel({ desktop }: { desktop: LoamsDesktopApi }) {
+export function PlanePanel({
+  desktop,
+  navigate,
+}: {
+  desktop: LoamsDesktopApi;
+  navigate: (to: string) => void;
+}) {
   const stats = useQuery<Record<string, number>>(desktop, 'plane', 'stats');
   const issues = useQuery<PlaneIssue[]>(desktop, 'plane', 'issues', { limit: 20 });
   return (
@@ -35,6 +43,22 @@ export function PlanePanel({ desktop }: { desktop: LoamsDesktopApi }) {
               { key: 'title', header: 'Title', cell: (r) => r.title },
               { key: 'prio', header: 'Priority', cell: (r) => r.priority },
               { key: 'upd', header: 'Updated', cell: (r) => rel(r.updatedAt) },
+              {
+                key: 'thread',
+                header: <span className="sr-only">Studio</span>,
+                cell: (r) => (
+                  // "Start thread from issue" (§53 §5.9): a thread draft in Studio.
+                  <Button
+                    size="sm"
+                    variant="quiet"
+                    aria-label={`Start thread from ${r.id ?? r.title ?? 'issue'}`}
+                    title="Start a Studio thread from this issue"
+                    onClick={() => navigate(threadDraftHref(draftFromPlaneIssue(r)))}
+                  >
+                    <MessageSquarePlus aria-hidden="true" size={14} /> Start thread
+                  </Button>
+                ),
+              },
             ]}
           />
         )}

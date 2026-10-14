@@ -22,6 +22,11 @@ use crate::checkpoints::{
     CheckpointList, ListCheckpointsParams, RestoreCheckpointParams, RestoreCheckpointReply,
 };
 use crate::daemon::DaemonMode;
+use crate::git_write::{
+    CommitWorktreeParams, CommitWorktreeReply, CreateChangeRequestParams, CreateChangeRequestReply,
+    DiscardPathsParams, MergeBranchParams, MergeBranchReply, PushBranchParams, PushBranchReply,
+    WorktreeList,
+};
 use crate::params::*;
 use crate::transcript::TranscriptUpdate;
 use crate::{
@@ -57,7 +62,8 @@ pub const LIMIT_EXCEEDED: &str = "limit_exceeded";
 
 /// Every error reason a client can see as the `{err}` text prefix, which
 /// the TypeScript client turns into `AgentdError.code` (Shared contracts,
-/// plus [`LIMIT_EXCEEDED`] from Task 7 and `harness_unsupported` from Task 3).
+/// plus [`LIMIT_EXCEEDED`] from Task 7, `harness_unsupported` from Task 3 and
+/// SD1 Task 9's git-write reasons).
 /// Texts without one of these prefixes are plain failures.
 pub const ERROR_REASONS: &[&str] = &[
     UNAUTHENTICATED,
@@ -75,7 +81,11 @@ pub const ERROR_REASONS: &[&str] = &[
     "keyring_unavailable",
     LIMIT_EXCEEDED,
     crate::HARNESS_UNSUPPORTED,
-    crate::checkpoints::STALE_DIFF,
+    crate::git_write::STALE_DIFF,
+    crate::git_write::MERGE_CONFLICT,
+    crate::git_write::NOTHING_TO_COMMIT,
+    crate::git_write::PUSH_REJECTED,
+    crate::git_write::PROVIDER_NOT_CONFIGURED,
     crate::checkpoints::CHECKPOINT_MISSING,
 ];
 
@@ -217,6 +227,7 @@ list_wire!(
     FileSearchMatchList(Vec<crate::FileSearchMatch>),
     WorkspaceFileSearchMatchList(Vec<crate::WorkspaceFileSearchMatch>),
     CheckoutDiffList(Vec<CheckoutDiff>),
+    WorktreeList(Vec<crate::git_write::WorktreeInfo>),
 );
 
 macro_rules! method_table {
@@ -386,6 +397,21 @@ method_table! {
     /// Permanently restore one chat-owned checkout to its current HEAD and
     /// remove only its untracked, non-ignored paths.
     DISCARD_WORKING_TREE = DiscardWorkingTree: Unary(DiscardWorkingTreeParams -> DiscardWorkingTreeReply), Owner, renderer: true;
+    /// G21 (SD1 Task 9): restore only these paths of one checkout to HEAD,
+    /// refused (`stale_diff`) unless the diff checksum is still the one the
+    /// person confirmed.
+    DISCARD_PATHS = DiscardPaths: Unary(DiscardPathsParams -> Empty), Owner, renderer: true;
+    /// G1: a repository's worktrees, joined with this device's chats.
+    LIST_WORKTREES = ListWorktrees: Unary(RepoPathParams -> WorktreeList), Owner, renderer: true;
+    /// G2: stage and commit in one checkout, with the user's own identity.
+    COMMIT_WORKTREE = CommitWorktree: Unary(CommitWorktreeParams -> CommitWorktreeReply), Owner, renderer: true;
+    /// G3: push one branch; a forced push is only ever `--force-with-lease`.
+    PUSH_BRANCH = PushBranch: Unary(PushBranchParams -> PushBranchReply), Owner, renderer: true;
+    /// G4: open a pull request on Forgejo (REST API) or GitHub (`gh`).
+    CREATE_CHANGE_REQUEST = CreateChangeRequest: Unary(CreateChangeRequestParams -> CreateChangeRequestReply), Owner, renderer: true;
+    /// G5: merge, squash, rebase or fast-forward one branch into another;
+    /// stops on conflicts with a clean tree (`merge_conflict`).
+    MERGE_BRANCH = MergeBranch: Unary(MergeBranchParams -> MergeBranchReply), Owner, renderer: true;
     GET_CHECKOUT_FILE_DIFF_TEXT = GetCheckoutFileDiffText: Unary(GetCheckoutFileDiffTextRequest -> CheckoutFileDiffText), Owner, renderer: true;
     LIST_AGENT_ACCOUNTS = ListAgentAccounts: Unary(ListAgentAccountsParams -> AgentAccountsSnapshot), Owner, renderer: true;
     ACTIVATE_AGENT_ACCOUNT = ActivateAgentAccount: Unary(AgentAccountParams -> AgentAccountsSnapshot), Owner, renderer: true;

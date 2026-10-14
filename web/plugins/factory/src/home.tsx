@@ -36,14 +36,14 @@ function Tile({
             <Button
               size="sm"
               variant={configured ? 'secondary' : 'primary'}
-              onClick={() => navigate(`/factory/${app.id}/configure`)}
+              onClick={() => navigate(`/studio/factory/${app.id}/configure`)}
             >
               Configure
             </Button>
             <Button
               size="sm"
               disabled={!configured}
-              onClick={() => navigate(`/factory/${app.id}/app`)}
+              onClick={() => navigate(`/studio/factory/${app.id}/app`)}
             >
               Open app
             </Button>
@@ -55,7 +55,7 @@ function Tile({
                 size="sm"
                 variant="quiet"
                 disabled={!configured}
-                onClick={() => navigate(`/factory/${app.id}`)}
+                onClick={() => navigate(`/studio/factory/${app.id}`)}
               >
                 Panels
               </Button>
@@ -84,7 +84,7 @@ export function useApps(desktop: LoamsDesktopApi) {
   return { apps, error, reload };
 }
 
-/** `/factory`: the Software Factory hub, one tile per app. */
+/** `/studio/factory`: the Software Factory hub, one tile per app. */
 export function FactoryHome({
   desktop,
   navigate,

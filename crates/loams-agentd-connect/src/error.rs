@@ -55,14 +55,40 @@ pub fn code_of(reason: &str) -> Option<ErrorCode> {
 
 /// A Connect error carrying `reason` in a `loams.errors.v1.ErrorInfo`.
 pub fn refuse(code: ErrorCode, reason: &str, message: impl Into<String>) -> ConnectError {
-    let info = ErrorInfo {
+    refuse_with(code, reason, message, None)
+}
+
+/// [`refuse`] with one `ErrorInfo.metadata` entry.
+fn refuse_with(
+    code: ErrorCode,
+    reason: &str,
+    message: impl Into<String>,
+    metadata: Option<(&str, String)>,
+) -> ConnectError {
+    let mut info = ErrorInfo {
         reason: reason.to_owned(),
         ..Default::default()
     };
+    if let Some((key, value)) = metadata {
+        info.metadata.insert(key.to_owned(), value);
+    }
     ConnectError::new(code, message).with_detail(ErrorDetail::from_message(
         "loams.errors.v1.ErrorInfo",
         &info,
     ))
+}
+
+/// The detail some reasons carry in their text, as `ErrorInfo.metadata`:
+/// `merge_conflict: ["a.txt", …]` lists its paths under `paths`, a JSON
+/// array (SD1 Shared contracts, "details list the paths").
+fn metadata_of(reason: &str, text: &str) -> Option<(&'static str, String)> {
+    if reason != "merge_conflict" {
+        return None;
+    }
+    let paths = text.strip_prefix("merge_conflict:")?.trim();
+    serde_json::from_str::<Vec<String>>(paths)
+        .ok()
+        .map(|_| ("paths", paths.to_owned()))
 }
 
 /// The reason an ndjson error text starts with, if it is a known one:
@@ -88,7 +114,15 @@ pub fn from_rpc(error: RpcError) -> ConnectError {
         ),
         RpcError::BadParams(message) => refuse(ErrorCode::InvalidArgument, "bad_params", message),
         RpcError::Failed(text) | RpcError::Fatal(text) => match reason_of(&text) {
-            Some(reason) => refuse(code_of(reason).unwrap_or(ErrorCode::Unknown), reason, text),
+            Some(reason) => {
+                let metadata = metadata_of(reason, &text);
+                refuse_with(
+                    code_of(reason).unwrap_or(ErrorCode::Unknown),
+                    reason,
+                    text,
+                    metadata,
+                )
+            }
             None => ConnectError::new(ErrorCode::Unknown, text),
         },
         RpcError::Transport(text) => ConnectError::new(ErrorCode::Unavailable, text),
@@ -143,5 +177,17 @@ mod tests {
         assert_eq!(error.code, ErrorCode::Unknown);
         let error = from_rpc(RpcError::BadParams("missing field".into()));
         assert_eq!(error.code, ErrorCode::InvalidArgument);
+    }
+
+    #[test]
+    fn a_merge_conflict_lists_its_paths() {
+        assert_eq!(
+            metadata_of("merge_conflict", "merge_conflict: [\"a.txt\",\"b c\"]"),
+            Some(("paths", "[\"a.txt\",\"b c\"]".to_owned()))
+        );
+        assert_eq!(metadata_of("merge_conflict", "merge_conflict: oops"), None);
+        assert_eq!(metadata_of("stale_diff", "stale_diff: []"), None);
+        let error = from_rpc(RpcError::Failed("merge_conflict: [\"a.txt\"]".into()));
+        assert_eq!(error.code, ErrorCode::Aborted);
     }
 }

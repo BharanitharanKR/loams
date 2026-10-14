@@ -86,7 +86,7 @@ export const KINDS: Readonly<Record<ServiceKind, KindInfo>> = {
     kind: 'git-repo',
     label: 'Git repository',
     blurb: 'A Loams Git repository that deployments build from.',
-    page: '/factory',
+    page: '/studio/factory',
     product: 'Software Factory',
     metric: { name: 'Pushes', unit: '/h' },
     glyph: 'GIT',

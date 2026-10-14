@@ -238,14 +238,29 @@ fn every_studio_method_has_rpc() {
             .iter()
             .find(|row| format!("{}/{}", row.service, row.method) == *method)
             .unwrap();
-        // A gap stays marked until its task serves it through its ndjson twin.
+        // A gap is marked as one until its task serves it with the ndjson
+        // method of the same name.
+        let served = SERVED_GAPS.contains(gap);
+        let rpc = method.split('/').nth(1).unwrap();
         assert!(
-            matches!(row.twin, Twin::Gap { gap: declared, .. } if declared == *gap)
-                || matches!(row.twin, Twin::Method(_)),
-            "{method} is neither marked as gap {gap} nor served"
+            if served {
+                row.twin == Twin::Method(rpc)
+            } else {
+                matches!(row.twin, Twin::Gap { gap: declared, .. } if declared == *gap)
+            },
+            "{method}: gap {gap} is {}",
+            if served {
+                "served, but not by its ndjson twin"
+            } else {
+                "not marked as a gap"
+            }
         );
     }
 }
+
+/// The §53 §6.5 gaps a task has served: G1–G5 and G21 (SD1 Task 9), G6 and
+/// G7 (SD1 Task 10).
+const SERVED_GAPS: &[&str] = &["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G21"];
 
 #[test]
 fn connect_methods_match_descriptors() {

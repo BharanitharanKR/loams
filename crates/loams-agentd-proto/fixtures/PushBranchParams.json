@@ -1,0 +1,7 @@
+{
+  "branch": "fix-linker",
+  "cwd": "/home/dev/project",
+  "forceWithLease": false,
+  "remote": "origin",
+  "setUpstream": true
+}

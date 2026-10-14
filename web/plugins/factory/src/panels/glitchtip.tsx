@@ -1,11 +1,66 @@
 import type { LoamsDesktopApi } from '@loams/desktop/contracts';
-import { Select, Stat, Stats } from '@loams/ui';
+import { Button, Select, Stat, Stats } from '@loams/ui';
+import { Wrench } from 'lucide-react';
 import { useState } from 'react';
+import { draftFromGlitchtipIssue, type GlitchtipEvent, threadDraftHref } from '../drafts.js';
 import { QueryCard, useQuery } from '../model.js';
 import { DataTable, mono, rel } from './common.js';
 import type { GlitchtipIssue, GlitchtipOrg } from './dto.js';
 
-export function GlitchtipPanel({ desktop }: { desktop: LoamsDesktopApi }) {
+/**
+ * "Fix this error" (§53 §5.9): reads the issue's latest event for its stack trace and
+ * release, then opens a thread draft in Studio. An event that cannot be read still
+ * starts the draft, which then says so.
+ */
+function FixButton({
+  desktop,
+  issue,
+  navigate,
+}: {
+  desktop: LoamsDesktopApi;
+  issue: GlitchtipIssue;
+  navigate: (to: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const fix = async () => {
+    setBusy(true);
+    let event: GlitchtipEvent | undefined;
+    try {
+      if (issue.id) {
+        const r = await desktop.factory.query<GlitchtipEvent>({
+          app: 'glitchtip',
+          op: 'latestEvent',
+          params: { issueId: issue.id },
+        });
+        if (r.ok) event = r.value;
+      }
+    } catch {
+      // The draft says the stack trace could not be read.
+    }
+    setBusy(false);
+    navigate(threadDraftHref(draftFromGlitchtipIssue(issue, event)));
+  };
+  return (
+    <Button
+      size="sm"
+      variant="quiet"
+      disabled={busy}
+      aria-label={`Fix this error: ${issue.id ?? issue.title ?? 'issue'}`}
+      title="Start a Studio thread to fix this error"
+      onClick={() => void fix()}
+    >
+      <Wrench aria-hidden="true" size={14} /> {busy ? 'Reading…' : 'Fix this error'}
+    </Button>
+  );
+}
+
+export function GlitchtipPanel({
+  desktop,
+  navigate,
+}: {
+  desktop: LoamsDesktopApi;
+  navigate: (to: string) => void;
+}) {
   const orgs = useQuery<GlitchtipOrg[]>(desktop, 'glitchtip', 'organizations');
   const [picked, setPicked] = useState<string>();
   const list = orgs[0].state === 'ready' ? orgs[0].data : [];
@@ -58,6 +113,11 @@ export function GlitchtipPanel({ desktop }: { desktop: LoamsDesktopApi }) {
               { key: 'level', header: 'Level', cell: (r) => r.level },
               { key: 'count', header: 'Events', numeric: true, cell: (r) => r.count },
               { key: 'seen', header: 'Last seen', cell: (r) => rel(r.lastSeen) },
+              {
+                key: 'fix',
+                header: <span className="sr-only">Studio</span>,
+                cell: (r) => <FixButton desktop={desktop} issue={r} navigate={navigate} />,
+              },
             ]}
           />
         )}

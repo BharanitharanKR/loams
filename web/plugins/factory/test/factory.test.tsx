@@ -93,9 +93,9 @@ describe('factory home', () => {
     fireEvent.click(within(tile).getByRole('button', { name: 'Panels' }));
     fireEvent.click(within(tile).getByRole('button', { name: 'Open app' }));
     expect(n.to).toEqual([
-      '/factory/forgejo/configure',
-      '/factory/forgejo',
-      '/factory/forgejo/app',
+      '/studio/factory/forgejo/configure',
+      '/studio/factory/forgejo',
+      '/studio/factory/forgejo/app',
     ]);
   });
 });
@@ -126,7 +126,7 @@ describe('embedded', () => {
     await waitFor(() => expect(shown).toHaveLength(3));
     calls.length = 0;
     fireEvent.click(screen.getByRole('button', { name: /Pop out/ }));
-    await waitFor(() => expect(n.to).toEqual(['/factory']));
+    await waitFor(() => expect(n.to).toEqual(['/studio/factory']));
     expect(calls).toContain('popout:forgejo');
     unmount();
     expect(calls).toContain('hide');
@@ -363,7 +363,7 @@ describe('panels', () => {
     });
     render(<PanelsPage desktop={d2.api} app="forgejo" navigate={nav().navigate} />);
     const links = await screen.findAllByRole('link', { name: 'Update credentials' });
-    expect(links[0]?.getAttribute('href')).toBe('#/factory/forgejo/configure');
+    expect(links[0]?.getAttribute('href')).toBe('#/studio/factory/forgejo/configure');
     expect(screen.getAllByText('Token rejected').length).toBeGreaterThan(0);
   });
 

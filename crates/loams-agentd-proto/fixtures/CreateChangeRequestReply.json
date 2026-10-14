@@ -1,0 +1,6 @@
+{
+  "number": 7,
+  "provider": "forgejo",
+  "state": "open",
+  "url": "https://forgejo.example.com/dev/project/pulls/7"
+}

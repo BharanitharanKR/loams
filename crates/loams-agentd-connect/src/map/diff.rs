@@ -36,3 +36,11 @@ wire_struct!(rs::CheckoutFileDiffText => pb::CheckoutFileDiffText {
     truncated => truncated,
     stale => stale,
 });
+
+// G21 (SD1 Task 9).
+
+wire_struct!(rs::DiscardPathsParams => pb::DiscardPathsRequest {
+    checkout_id => checkout_id,
+    paths => paths,
+    expected_checksum => expected_checksum,
+});

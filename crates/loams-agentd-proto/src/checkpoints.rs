@@ -17,8 +17,8 @@ pub const FEATURE: &str = "checkpoints";
 pub const CHECKPOINT_MISSING: &str = "checkpoint_missing";
 
 /// Error reason: the checkout's diff checksum no longer matches the one the
-/// caller confirmed (Connect `failed_precondition`).
-pub const STALE_DIFF: &str = "stale_diff";
+/// caller confirmed (Connect `failed_precondition`); the git writes' reason.
+pub const STALE_DIFF: &str = crate::git_write::STALE_DIFF;
 
 /// The ref namespace every checkpoint lives under.
 pub const REF_PREFIX: &str = "refs/loams/checkpoints";
