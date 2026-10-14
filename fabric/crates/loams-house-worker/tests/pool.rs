@@ -1213,8 +1213,12 @@ async fn worker_sessions_expire_cap_close_and_do_not_keep_url_settings() {
 async fn a_set_inside_the_statement_survives_its_url_setting() {
     let pool = pool("set-survives", small(1)).await;
     let mut lease = pool.acquire("ns").await.expect("worker");
-    let mut set = in_session("SET max_threads = 5", "k", 60_000, false);
-    set.settings = vec![("max_threads".to_string(), "3".to_string())];
+    // Two values under the worker's `max_threads` cap (the node's cores; a
+    // 4-core runner refuses 5 with 452 SETTING_CONSTRAINT_VIOLATION).
+    let own = loams_house_worker::settings::max_threads_cap().min(5);
+    assert!(own >= 2, "the test needs two cores");
+    let mut set = in_session(&format!("SET max_threads = {own}"), "k", 60_000, false);
+    set.settings = vec![("max_threads".to_string(), (own - 1).to_string())];
     lease
         .run(set)
         .await
@@ -1228,7 +1232,11 @@ async fn a_set_inside_the_statement_survives_its_url_setting() {
         ))
         .await
         .expect("read");
-    assert_eq!(after.bytes, b"5\n", "the statement's SET stays");
+    assert_eq!(
+        &after.bytes[..],
+        format!("{own}\n").as_bytes(),
+        "the statement's SET stays"
+    );
 
     // And a URL setting the statement did not touch is still put back.
     let mut url_only = in_session("SELECT getSetting('max_block_size')", "k", 60_000, false);

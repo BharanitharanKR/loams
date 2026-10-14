@@ -28,6 +28,41 @@ use loams_chdb::{ChdbError, Engine, EngineConfig, SessionId, Settings};
 /// second has stopped the statement as far as the client is concerned.
 const WITHIN: Duration = Duration::from_secs(1);
 
+/// A statement that runs far longer than [`WITHIN`] if it is left alone, and
+/// still ends on its own: the engine keeps running a cancelled statement until
+/// it finishes (see above), and a process that exits while libchdb is running
+/// one can crash in its teardown (SIGSEGV after every test had passed, seen on
+/// a 4-core CI runner). So it stops itself after `max_execution_time`, and each
+/// test waits for that before it returns.
+const LONG: &str = "SELECT count() FROM numbers(1e12) \
+                    SETTINGS max_execution_time = 5, timeout_overflow_mode = 'break'";
+
+/// How long [`wait_until_idle`] waits for the engine to finish [`LONG`].
+const IDLE_WITHIN: Duration = Duration::from_secs(60);
+
+/// Waits until the engine runs no [`LONG`] statement.
+fn wait_until_idle(session: &loams_chdb::Session) {
+    let deadline = Instant::now() + IDLE_WITHIN;
+    loop {
+        let running = session
+            .query(
+                "SELECT count() FROM system.processes \
+                 WHERE query LIKE '%numbers(1e12)%' AND query NOT LIKE '%system.processes%'",
+                "TSV",
+                &[],
+            )
+            .expect("system.processes reads");
+        if running == b"0\n" {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the cancelled statement still runs after {IDLE_WITHIN:?}"
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
 /// This binary's engine configuration.
 fn config() -> EngineConfig {
     let tmp_dir = std::env::temp_dir().join(format!(
@@ -62,12 +97,7 @@ fn cancel_stops_a_long_query() {
     // A statement that takes minutes if it is left alone: the engine answers
     // `chdb_stream_query` in about a millisecond and runs the work itself.
     let mut stream = session
-        .execute_with_id(
-            query_id,
-            "SELECT count() FROM numbers(1e12)",
-            "RowBinary",
-            &[],
-        )
+        .execute_with_id(query_id, LONG, "RowBinary", &[])
         .expect("the long statement starts");
     assert_eq!(
         stream.query_id(),
@@ -131,6 +161,7 @@ fn cancel_stops_a_long_query() {
         .cancel("loams-cancel-finished")
         .expect_err("a finished statement cannot be cancelled");
     assert_eq!(err.name, "QUERY_ID_UNKNOWN");
+    wait_until_idle(&session);
 }
 
 #[tokio::test]
@@ -140,12 +171,7 @@ async fn cancel_on_a_blocking_thread() {
     let query_id = "loams-cancel-test-3";
 
     let stream = session
-        .execute_with_id(
-            query_id,
-            "SELECT count() FROM numbers(1e12)",
-            "RowBinary",
-            &[],
-        )
+        .execute_with_id(query_id, LONG, "RowBinary", &[])
         .expect("the long statement starts");
     session
         .cancel_async(query_id.to_string())
@@ -156,4 +182,5 @@ async fn cancel_on_a_blocking_thread() {
         .await
         .expect_err("a cancelled stream yields no block");
     assert_eq!(err.code, 394, "the same answer through the async API");
+    wait_until_idle(&session);
 }
