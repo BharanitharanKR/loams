@@ -14,6 +14,7 @@ pub mod clock;
 pub mod error;
 pub mod fork;
 pub mod format;
+pub mod forward;
 pub mod gc;
 pub mod ids;
 pub mod limits;
@@ -37,13 +38,17 @@ pub use error::IdError;
 pub use fork::{ForkError, fork_repo, open_fork_odb};
 pub use format::FormatError;
 pub use format::segment::{WalBatch, WalSegment};
+pub use forward::{FORWARD_PATH, SeqCommit, SeqForwarder};
 pub use gc::{SegmentGcPlan, plan_segment_gc, run_segment_gc};
 pub use ids::{
     IdemKey, MountId, NamespaceId, ObjectId, Principal, RefName, RepoId, RepoName, RepoPath,
     SecretId, Seq, SnapN, TraceParent, WsId, WsName,
 };
 pub use odb::{ObjectDb, OdbError, PackCache, PackCacheOdb};
-pub use owner::RepoSequencers;
+pub use owner::{
+    AlwaysHere, Cluster, LeaseError, OwnerConfig, OwnerStatsSnapshot, RepoSequencers, SeqLeases,
+    SeqOwner, SeqPlacement, repo_placement_hash, seq_lease_key,
+};
 pub use paths::RepoPaths;
 pub use reflog::{
     CommittedTxn, Expect, ReadAt, Receipt, RefError, RefLog, RefSnapshot, RefTxn, RefUpdate,

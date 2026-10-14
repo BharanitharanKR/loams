@@ -26,6 +26,8 @@ loams-common.workspace = true
 # Spill files for large blob uploads (§36 §5.3, §17).
 loams-fs.workspace = true
 loams-store.workspace = true
+# The body of a commit forwarded to the sequencer's owner (Ruling 27).
+postcard.workspace = true
 # The loams.git.v1 on-disk messages (R0.5).
 prost.workspace = true
 # Retry jitter.
