@@ -11,6 +11,9 @@ import type {} from '@loams/platform-electron';
 import { desktopAgentd, type StudioAgentd, webAgentd } from './agentd.js';
 import { desktopFactory } from './factory.js';
 import { StudioContext } from './header.js';
+import { createStudioKeys } from './palette/commands.js';
+import { StudioPalette } from './palette/StudioPalette.js';
+import { pendingPaletteSource } from './palette/source.js';
 import { routeOf, STUDIO_PAGES } from './routes.js';
 import { StudioView } from './view.js';
 
@@ -32,12 +35,29 @@ export {
 } from './factory.js';
 export { LAYOUT_DEFAULTS, LAYOUT_KEY, StudioLayout } from './layout/StudioLayout.js';
 export {
+  type CommandName,
+  createStudioKeys,
+  StudioCommands,
+  type StudioKeys,
+  useStudioCommand,
+  useStudioKeybindings,
+} from './palette/commands.js';
+export { StudioPalette } from './palette/StudioPalette.js';
+export {
+  type GitAction,
+  type PaletteGitAction,
+  type PaletteHarness,
+  pendingPaletteSource,
+  type StudioPaletteSource,
+} from './palette/source.js';
+export {
   routeOf,
   STUDIO_PAGES,
   type StudioRoute,
   studioHref,
   type ThreadDraft,
 } from './routes.js';
+export { KeybindingsCard } from './settings/Keybindings.js';
 export { FactoryGroup } from './sidebar/Factory.js';
 export { BranchPr, DraftCard } from './thread/FactoryLinks.js';
 export { StudioView } from './view.js';
@@ -56,6 +76,10 @@ const plugin: PluginModule = {
     // until SF1 (D922).
     const factory = desktop?.factory ? desktopFactory(desktop) : undefined;
     const navigate = (to: string) => router.navigate(to);
+    // One keyboard layer and palette source for every Studio page (SD1 Task 24). The
+    // palette's agentd rows wait for Task 6's client (`pendingPaletteSource`).
+    const keys = createStudioKeys({ edition: platform.kind });
+    const paletteSource = pendingPaletteSource();
 
     for (const page of STUDIO_PAGES) {
       ctx.effect(() =>
@@ -67,6 +91,7 @@ const plugin: PluginModule = {
               factory={factory}
               route={routeOf(page.kind, params)}
               navigate={navigate}
+              keys={keys}
             />
           ),
         ),
@@ -106,6 +131,22 @@ const plugin: PluginModule = {
           },
         },
         () => null,
+      ),
+    );
+    ctx.effect(() =>
+      slots.register(
+        { name: 'palette.command', plugin: 'studio', meta: { mode: 'studio' } },
+        ({ query, publish }) => (
+          <StudioPalette
+            query={query}
+            publish={publish}
+            agentd={agentd}
+            source={paletteSource}
+            router={router}
+            keys={keys}
+            copy={(text) => platform.clipboardWrite(text)}
+          />
+        ),
       ),
     );
     ctx.effect(() =>

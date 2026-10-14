@@ -8,6 +8,7 @@ import { useMediaQuery } from '@loams/studio-ui';
 import { cx, ResizeHandle } from '@loams/ui';
 import { PanelBottom, PanelLeft, PanelRight, X } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { StudioCommands, useStudioCommand } from '../palette/commands.js';
 
 export const LAYOUT_KEY = 'loams.studio.panel';
 
@@ -35,6 +36,8 @@ const LIMITS = {
 const STEP = 24;
 
 type Size = keyof typeof LIMITS;
+
+const NO_COMMANDS = new StudioCommands();
 
 const clamp = (key: Size, n: number) =>
   Math.min(LIMITS[key][1], Math.max(LIMITS[key][0], Math.round(n)));
@@ -169,6 +172,7 @@ export function StudioLayout({
   tools,
   panel,
   drawer,
+  commands,
   children,
 }: {
   sidebar: ReactNode;
@@ -180,6 +184,8 @@ export function StudioLayout({
   panel?: ReactNode;
   /** The bottom drawer (terminals); none hides it. */
   drawer?: ReactNode;
+  /** Studio's command bus: the layout handles its panel, terminal and sidebar commands. */
+  commands?: StudioCommands;
   children: ReactNode;
 }) {
   const wide = useMediaQuery('md');
@@ -192,6 +198,27 @@ export function StudioLayout({
     wide ? update({ panelOpen: !state.panelOpen }) : setOverlayPanel((v) => !v);
   const closeSide = useCallback(() => setSideOpen(false), []);
   const closePanel = useCallback(() => setOverlayPanel(false), []);
+  const bus = commands ?? NO_COMMANDS;
+  const hasPanel = panel !== undefined;
+  useStudioCommand(bus, 'rightPanel.toggle', commands && hasPanel ? togglePanel : undefined);
+  useStudioCommand(
+    bus,
+    'rightPanel.show',
+    commands && hasPanel
+      ? () => (wide ? update({ panelOpen: true }) : setOverlayPanel(true))
+      : undefined,
+  );
+  useStudioCommand(
+    bus,
+    'terminal.toggle',
+    commands && drawer !== undefined ? () => update({ drawerOpen: !state.drawerOpen }) : undefined,
+  );
+  // On a wide window the sidebar is always there; on a narrow one it is an overlay.
+  useStudioCommand(
+    bus,
+    'sidebar.toggle',
+    commands && !wide ? () => setSideOpen((open) => !open) : undefined,
+  );
 
   return (
     <div className="flex h-[calc(100svh-var(--top,56px))] min-h-0 bg-bg" data-studio-layout>
