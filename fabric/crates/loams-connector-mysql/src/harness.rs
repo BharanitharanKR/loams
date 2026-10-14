@@ -27,15 +27,17 @@ use arrow_array::types::Int64Type;
 use async_trait::async_trait;
 use loams_connector_sdk::testing::memory::{MemoryCheckpointStore, MemoryFabric};
 use loams_connector_sdk::{
-    Budget, CloudEvent, ConnectorContext, ConnectorFactory, EventBatch, FabricReader, InstanceKey,
-    Pipeline, PipelineConfig, PipelineHandle, PipelineState, Scrubber, SinkFactory, StaticSecrets,
+    Budget, CloudEvent, ConnectorContext, ConnectorError, ConnectorFactory, EventBatch,
+    FabricReader, InstanceKey, Pipeline, PipelineConfig, PipelineHandle, PipelineState, Position,
+    Scrubber, SinkFactory, Source, SourceBatch, SourceFactory, Split, StaticSecrets,
 };
 use loams_flow_conformance::{
     BulkReport, CdcReport, ConnectorHarness, CrashingReader, CrashingSinkFactory, CrashingWriter,
-    FaultPoint, FaultSwitch, HarnessError, KillTarget, MemoryReport, Observed, Seeded, ServiceKind,
+    Direction, FaultPoint, FaultSwitch, HarnessError, KillTarget, MemoryReport, Observed, Seeded,
+    ServiceKind,
 };
 use serde_json::{Value, json};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, watch};
 
 use crate::cdc::CdcPos;
 use crate::config::{TableName, Target};
@@ -177,6 +179,53 @@ pub enum Role {
     /// The Fabric into the upsert sink (exactly-once unless not
     /// `transactional`).
     Sink { transactional: bool },
+}
+
+/// How long [`MyHarness::start`] waits for the source to open.
+const OPEN_WAIT: Duration = Duration::from_secs(60);
+
+/// Wraps the family's source factory to count the splits whose `open` has
+/// returned. A fresh CDC start reads the server's binlog position in `open`
+/// (`snapshot: never` starts there; R10), so what a test writes before that
+/// is legitimately not captured: [`MyHarness::start`] waits for it.
+struct Opened {
+    inner: Arc<dyn SourceFactory>,
+    opened: watch::Sender<usize>,
+}
+
+impl SourceFactory for Opened {
+    fn create(&self, split: &Split) -> Result<Box<dyn Source>, ConnectorError> {
+        Ok(Box::new(OpenedSource {
+            inner: self.inner.create(split)?,
+            opened: self.opened.clone(),
+        }))
+    }
+}
+
+struct OpenedSource {
+    inner: Box<dyn Source>,
+    opened: watch::Sender<usize>,
+}
+
+#[async_trait]
+impl Source for OpenedSource {
+    async fn open(&mut self, split: &Split, pos: Option<Position>) -> Result<(), ConnectorError> {
+        self.inner.open(split, pos).await?;
+        self.opened.send_modify(|n| *n += 1);
+        Ok(())
+    }
+
+    async fn next(&mut self, budget: Budget) -> Result<Option<SourceBatch>, ConnectorError> {
+        self.inner.next(budget).await
+    }
+
+    async fn committed(&mut self, upto: &Position) -> Result<(), ConnectorError> {
+        self.inner.committed(upto).await
+    }
+
+    async fn close(&mut self) -> Result<(), ConnectorError> {
+        self.inner.close().await
+    }
 }
 
 struct State {
@@ -526,6 +575,15 @@ impl ConnectorHarness for MyHarness {
         self.services
     }
 
+    /// The source roles are held to the manifest's source delivery
+    /// (`at_least_once`, R11.9), the sink to the sink's.
+    fn direction(&self) -> Option<Direction> {
+        Some(match self.role {
+            Role::Cdc | Role::Batch => Direction::Source,
+            Role::Sink { .. } => Direction::Sink,
+        })
+    }
+
     async fn seed(&self, n: usize) -> Result<Seeded, HarnessError> {
         let mut s = self.state.lock().await;
         let from = s.seeded;
@@ -639,6 +697,7 @@ impl ConnectorHarness for MyHarness {
             return Err(failed("already running"));
         }
         s.epoch += 1;
+        let (opened_tx, mut opened) = watch::channel(0usize);
         let ctx = self.context()?;
         let factory = MysqlFactory::new(self.target);
         let handle = match self.role {
@@ -647,9 +706,13 @@ impl ConnectorHarness for MyHarness {
                     .source(&ctx)
                     .map_err(failed)?
                     .ok_or_else(|| failed("no source for this config"))?;
+                let sources = Opened {
+                    inner: Arc::from(sources),
+                    opened: opened_tx.clone(),
+                };
                 Pipeline::source(self.instance.clone(), self.config.clone())
                     .enumerator(enumerator)
-                    .sources(Arc::from(sources))
+                    .sources(Arc::new(sources))
                     .writer(Arc::new(CrashingWriter::new(
                         s.fabric.clone(),
                         self.switch.clone(),
@@ -685,6 +748,20 @@ impl ConnectorHarness for MyHarness {
                     .map_err(|e| failed(format!("sink: {e}")))?
             }
         };
+        if self.role == Role::Cdc {
+            // Until the binlog split is open, its start position is not
+            // fixed. Bounded, and over early if the pipeline stops: a
+            // failed open is the caller's to see (settle, or the status).
+            let _ = tokio::time::timeout(OPEN_WAIT, async {
+                while *opened.borrow_and_update() == 0
+                    && handle.status().state == PipelineState::Running
+                {
+                    let _ =
+                        tokio::time::timeout(Duration::from_millis(100), opened.changed()).await;
+                }
+            })
+            .await;
+        }
         s.running = vec![handle];
         Ok(())
     }

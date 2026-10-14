@@ -9,6 +9,7 @@
 //! stream alive. An error 1236 (purged binlogs, a GTID the server no longer
 //! has) is `PositionLost`.
 
+use std::borrow::Cow;
 use std::time::Duration;
 
 use loams_connector_sdk::{ConnectorError, ErrorClass};
@@ -161,6 +162,12 @@ impl BinlogStream {
         conn.exec("SET @master_binlog_checksum = @@global.binlog_checksum")
             .await
             .map_err(setup)?;
+        let checksum = conn
+            .query("SELECT @@global.binlog_checksum")
+            .await
+            .map_err(setup)?
+            .scalar()
+            .is_some_and(|alg| !alg.eq_ignore_ascii_case("NONE"));
         if !heartbeat.is_zero() {
             conn.exec(&format!(
                 "SET @master_heartbeat_period = {}",
@@ -207,7 +214,7 @@ impl BinlogStream {
         req.as_cmd().serialize(&mut buf);
         conn.command(&buf).await.map_err(setup)?;
         let (tx, rx) = mpsc::channel(CHANNEL);
-        let task = tokio::spawn(read_loop(conn, tx));
+        let task = tokio::spawn(read_loop(conn, tx, checksum));
         Ok(Self { rx, task })
     }
 
@@ -243,14 +250,45 @@ impl BinlogStream {
     }
 }
 
-async fn read_loop(mut conn: MyConn, tx: mpsc::Sender<StreamItem>) {
+/// The event type byte's offset in the header.
+const TYPE_AT: usize = 4;
+
+/// A checksum-aware replica's dump starts with a fake `ROTATE_EVENT` that
+/// carries a CRC32 too, sent before any `FORMAT_DESCRIPTION_EVENT` tells the
+/// reader that events end in one; read as it is, the four checksum bytes end
+/// up in the file name. Until the stream's first FDE, a rotate loses them here
+/// (its size field shrinks to match).
+fn strip_early_checksum(data: &[u8], checksum: bool, seen_fde: bool) -> Cow<'_, [u8]> {
+    const CRC: usize = 4;
+    if !checksum
+        || seen_fde
+        || data.get(TYPE_AT) != Some(&(EventType::ROTATE_EVENT as u8))
+        || !whole_event(data)
+        || data.len() < HEADER + 8 + CRC
+    {
+        return Cow::Borrowed(data);
+    }
+    let mut v = data[..data.len() - CRC].to_vec();
+    let size = u32::try_from(v.len()).unwrap_or(u32::MAX);
+    v[9..13].copy_from_slice(&size.to_le_bytes());
+    Cow::Owned(v)
+}
+
+async fn read_loop(mut conn: MyConn, tx: mpsc::Sender<StreamItem>, checksum: bool) {
     let mut esr = EventStreamReader::new(BinlogVersion::Version4);
+    let mut seen_fde = false;
     loop {
         let item = match conn.read_packet().await {
             Err(e) => Err(dump_error(&e)),
             Ok(p) => match p.first() {
-                Some(0x00) => match decode_packet(&mut esr, &p[1..]) {
+                Some(0x00) => match decode_packet(
+                    &mut esr,
+                    &strip_early_checksum(&p[1..], checksum, seen_fde),
+                ) {
                     Ok(events) => {
+                        seen_fde = seen_fde
+                            || p.get(1 + TYPE_AT)
+                                == Some(&(EventType::FORMAT_DESCRIPTION_EVENT as u8));
                         for e in events {
                             if tx.send(Ok(e)).await.is_err() {
                                 return;
@@ -292,6 +330,40 @@ mod tests {
         let mut h = vec![0u8; 19];
         h[9..13].copy_from_slice(&100u32.to_le_bytes());
         assert!(decode_packet(&mut esr, &h).is_err());
+    }
+
+    /// The fake rotate a checksum-aware dump starts with: its CRC32 is not
+    /// read into the file name, and only before the first FDE.
+    #[test]
+    fn the_first_rotate_loses_its_checksum() {
+        let mut s = Synth::new();
+        let mut body = 4u64.to_le_bytes().to_vec();
+        body.extend(b"binlog.000004");
+        let mut ev = s.bytes(EventType::ROTATE_EVENT as u8, &body);
+        let size = u32::try_from(ev.len() + 4).expect("size");
+        ev[9..13].copy_from_slice(&size.to_le_bytes());
+        ev.extend([0x66, 0x26, 0xa4, 0x1e]);
+        let name = |data: &[u8]| {
+            let mut esr = EventStreamReader::new(BinlogVersion::Version4);
+            let raw = decode_packet(&mut esr, data).expect("decodes").remove(0);
+            let r = raw
+                .event
+                .read_event::<mysql_common::binlog::events::RotateEvent<'_>>()
+                .expect("rotate");
+            r.name().into_owned()
+        };
+        assert_eq!(
+            name(&strip_early_checksum(&ev, true, false)),
+            "binlog.000004"
+        );
+        assert_ne!(
+            name(&strip_early_checksum(&ev, true, true)),
+            "binlog.000004"
+        );
+        assert_ne!(
+            name(&strip_early_checksum(&ev, false, false)),
+            "binlog.000004"
+        );
     }
 
     use crate::conn::fake::{Reply, script};

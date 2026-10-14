@@ -317,6 +317,9 @@ pub struct MyCdcSource {
     locked: Option<Locked>,
     carry: VecDeque<Item>,
     pending: Option<RawEvent>,
+    /// An error met after events were gathered: those go out first, with
+    /// the position of the last of them, and the error on the next call.
+    deferred: Option<ConnectorError>,
     last_position: Option<CdcPos>,
     budget: Budget,
     last_lag: Option<Instant>,
@@ -364,6 +367,7 @@ impl MyCdcSource {
             locked: None,
             carry: VecDeque::new(),
             pending: None,
+            deferred: None,
             last_position: None,
             budget: Budget {
                 max_rows: 1024,
@@ -689,7 +693,14 @@ impl MyCdcSource {
 
     async fn next_stream(&mut self, budget: Budget) -> Result<Option<SourceBatch>, ConnectorError> {
         self.budget = budget;
-        if let Some(raw) = self.pending.take() {
+        if self.carry.is_empty()
+            && let Some(e) = self.deferred.take()
+        {
+            return Err(e);
+        }
+        if self.deferred.is_none()
+            && let Some(raw) = self.pending.take()
+        {
             self.feed(raw).await?;
         }
         let mut events: Vec<CloudEvent> = Vec::new();
@@ -700,7 +711,8 @@ impl MyCdcSource {
             if let Some(answer) = self.take_carry(budget, &mut events, &mut bytes, &mut last) {
                 return answer.map(Some);
             }
-            if !self.carry.is_empty() || events.len() >= budget.max_rows {
+            if !self.carry.is_empty() || events.len() >= budget.max_rows || self.deferred.is_some()
+            {
                 break;
             }
             if self.window.is_none() && self.snap.is_some() && events.is_empty() {
@@ -732,10 +744,19 @@ impl MyCdcSource {
                 break;
             };
             let ts = raw.event.header().timestamp();
-            self.feed(raw).await?;
+            if let Err(e) = self.feed(raw).await {
+                // What came before the failing event (a refused DDL, say)
+                // is delivered and checkpointed before the instance stops
+                // or pauses on it.
+                if events.is_empty() && self.carry.is_empty() {
+                    return Err(e);
+                }
+                self.deferred = Some(e);
+                break;
+            }
             self.report_lag(Some(ts));
         }
-        let position = if self.carry.is_empty() {
+        let position = if self.carry.is_empty() && self.deferred.is_none() {
             match self.position_now() {
                 Some(p) => p,
                 None => return Ok(None),
