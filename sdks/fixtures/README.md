@@ -18,7 +18,7 @@ prove that the SDK agrees with whoever wrote it; a recording proves it agrees
 with the server.
 
 ```
-loams dev --listen 127.0.0.1:8080 &
+loams dev --listen 127.0.0.1:8080 --no-live &   # the corpus is recorded with Live off
 LOAMS_TEST_ENDPOINT=http://127.0.0.1:8080 node sdks/conformance/record-fixtures.mjs
 git diff -- sdks/fixtures          # re-recording is only meaningful if nothing changes
 ```

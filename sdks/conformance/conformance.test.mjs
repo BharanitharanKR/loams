@@ -8,7 +8,7 @@
 // `fixtures_pass_against_real_server` and `mock_injects_retryable_errors`.
 //
 //   node --test sdks/conformance/
-//   LOAMS_TEST_ENDPOINT=http://127.0.0.1:8080 node --test sdks/conformance/
+//   LOAMS_TEST_ENDPOINT=http://127.0.0.1:8080 node --test sdks/conformance/   # `loams dev --no-live`
 //
 // With `LOAMS_TEST_ENDPOINT` set, `fixtures_pass_against_real_server` replays
 // every recorded case against the **real** server as well, and a difference
