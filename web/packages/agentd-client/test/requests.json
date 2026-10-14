@@ -701,6 +701,76 @@
     }
   },
   {
+    "method": "WatchReviewComments",
+    "params": {
+      "checkoutId": "checkout-1"
+    }
+  },
+  {
+    "method": "UpsertReviewComment",
+    "params": {
+      "id": "",
+      "checkoutId": "checkout-1",
+      "path": "src/main.rs",
+      "side": "new",
+      "line": 12,
+      "endLine": 14,
+      "body": "This loop never ends.",
+      "diffChecksum": "sum-1",
+      "createdAtMs": 0,
+      "resolved": false,
+      "outdated": false
+    }
+  },
+  {
+    "method": "DeleteReviewComment",
+    "params": {
+      "checkoutId": "checkout-1",
+      "id": "comment-1"
+    }
+  },
+  {
+    "method": "ResolveReviewComment",
+    "params": {
+      "checkoutId": "checkout-1",
+      "id": "comment-1",
+      "resolved": true
+    }
+  },
+  {
+    "method": "SendReviewToThread",
+    "params": {
+      "chatId": "chat-1",
+      "commentIds": [
+        "comment-1"
+      ]
+    }
+  },
+  {
+    "method": "PostReviewToChangeRequest",
+    "params": {
+      "checkoutId": "checkout-1",
+      "commentIds": [
+        "comment-1"
+      ],
+      "event": "request_changes"
+    }
+  },
+  {
+    "method": "SearchWorkspaceContent",
+    "params": {
+      "spaceId": "space-1",
+      "chatId": null,
+      "query": "fn main",
+      "regex": false,
+      "caseSensitive": true,
+      "globs": [
+        "*.rs"
+      ],
+      "maxResults": 200
+    }
+  },
+  {
     "method": "CreateRunGroup",
     "params": {
       "spaceId": "space-1",

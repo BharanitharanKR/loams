@@ -1,9 +1,7 @@
-//! The services that are §53 §6.5 gaps only: `ReviewService` (G8–G11, SD1
-//! Task 11), `ApprovalService` (G17, G18, G22, SD1 Task 13) and
-//! `NotificationService` (G19, SD1 Task 14). Each method answers
-//! `unimplemented` with reason `not_implemented` until its task replaces it
-//! here. `RunGroupService` (G12–G16) is served since SD1 Task 12
-//! (`groups.rs`).
+//! The services that are §53 §6.5 gaps only: `ApprovalService` (G17, G18,
+//! G22, SD1 Task 13) and `NotificationService` (G19, SD1 Task 14). Each
+//! method answers `unimplemented` with reason `not_implemented` until its
+//! task replaces it here.
 
 use connectrpc::{RequestContext, ServiceRequest, ServiceResult, ServiceStream};
 
@@ -27,21 +25,6 @@ macro_rules! gaps {
         }
     };
 }
-
-gaps!(ReviewService {
-    watch_review_comments("WatchReviewComments", "G8, SD1 Task 11"):
-        WatchReviewCommentsRequest -> ServiceStream<pb::WatchReviewCommentsResponse>;
-    upsert_review_comment("UpsertReviewComment", "G9, SD1 Task 11"):
-        UpsertReviewCommentRequest -> pb::UpsertReviewCommentResponse;
-    delete_review_comment("DeleteReviewComment", "G9, SD1 Task 11"):
-        DeleteReviewCommentRequest -> pb::DeleteReviewCommentResponse;
-    resolve_review_comment("ResolveReviewComment", "G9, SD1 Task 11"):
-        ResolveReviewCommentRequest -> pb::ResolveReviewCommentResponse;
-    send_review_to_thread("SendReviewToThread", "G10, SD1 Task 11"):
-        SendReviewToThreadRequest -> pb::SendReviewToThreadResponse;
-    post_review_to_change_request("PostReviewToChangeRequest", "G11, SD1 Task 11"):
-        PostReviewToChangeRequestRequest -> pb::PostReviewToChangeRequestResponse;
-});
 
 gaps!(ApprovalService {
     watch_approvals("WatchApprovals", "G17, SD1 Task 13"):

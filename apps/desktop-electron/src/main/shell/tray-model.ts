@@ -1,5 +1,11 @@
 // Pure tray model: no electron import, so it is unit-testable.
 import type { EngineState, ServerEntry } from "../../shared/contracts";
+import {
+	EMPTY_STUDIO,
+	type StudioSnapshot,
+	studioTooltip,
+	studioTrayItems,
+} from "./studio-tray-model";
 
 export interface TrayItem {
 	id: string;
@@ -18,6 +24,8 @@ export function trayModel(
 	engine: EngineState,
 	badge: number,
 	server: ServerEntry,
+	/** Loams Studio's threads and approvals (SD1 Task 28); none without a daemon. */
+	studio: StudioSnapshot = EMPTY_STUDIO,
 ): { tooltip: string; items: TrayItem[] } {
 	const n = Math.max(0, Math.floor(badge) || 0);
 	let engineLabel: string;
@@ -40,6 +48,7 @@ export function trayModel(
 		"Loams Desktop",
 		`engine ${engine.phase}`,
 		n > 0 ? `${n} pending approval${n === 1 ? "" : "s"}` : "",
+		studioTooltip(studio),
 	]
 		.filter(Boolean)
 		.join(" - ");
@@ -47,6 +56,7 @@ export function trayModel(
 		tooltip,
 		items: [
 			{ id: "open", label: "Open Loams Desktop", enabled: true },
+			...studioTrayItems(studio),
 			{ id: "engine", label: engineLabel, enabled: engineEnabled },
 			{ id: "approvals", label: `Pending approvals (${n})`, enabled: n > 0 },
 			{ id: "servers", label: `Servers › ${server.name}`, enabled: true },

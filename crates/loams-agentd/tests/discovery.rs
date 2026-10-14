@@ -292,6 +292,11 @@ fn discovery_has_connect_port() {
     let features = daemon.hello(AGENTD_PROTOCOL).unwrap().features;
     assert!(features.contains(&"studio.v1".to_owned()));
     assert!(features.contains(&"git.write".to_owned()), "SD1 Task 9");
+    assert!(features.contains(&"review".to_owned()), "SD1 Task 11");
+    assert!(
+        features.contains(&"content-search".to_owned()),
+        "SD1 Task 11"
+    );
     assert!(features.contains(&"run-groups".to_owned()), "SD1 Task 12");
     assert!(
         body["host"]["features"]

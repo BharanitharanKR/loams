@@ -33,6 +33,11 @@ use crate::groups::{
     RunGroupList, WatchRunGroupsParams,
 };
 use crate::params::*;
+use crate::review::{
+    ContentSearchMatch, DeleteReviewCommentParams, PostReviewToChangeRequestParams,
+    PostReviewToChangeRequestReply, ResolveReviewCommentParams, ReviewComment, ReviewCommentsFrame,
+    SearchWorkspaceContentParams, SendReviewToThreadParams, WatchReviewCommentsParams,
+};
 use crate::transcript::TranscriptUpdate;
 use crate::{
     AgentAccountsSnapshot, AgentLoginPoll, AgentLoginStart, AttachmentChunk, Chat,
@@ -418,6 +423,22 @@ method_table! {
     /// G5: merge, squash, rebase or fast-forward one branch into another;
     /// stops on conflicts with a clean tree (`merge_conflict`).
     MERGE_BRANCH = MergeBranch: Unary(MergeBranchParams -> MergeBranchReply), Owner, renderer: true;
+    /// G8 (SD1 Task 11): a checkout's review comments, as a reset and then
+    /// upserts and removals; `outdated` follows the checkout's diff.
+    WATCH_REVIEW_COMMENTS = WatchReviewComments: Stream(WatchReviewCommentsParams -> ReviewCommentsFrame), Owner, renderer: true;
+    /// G9: create (empty `id`) or edit one review comment.
+    UPSERT_REVIEW_COMMENT = UpsertReviewComment: Unary(ReviewComment -> IdReply), Owner, renderer: true;
+    /// G9.
+    DELETE_REVIEW_COMMENT = DeleteReviewComment: Unary(DeleteReviewCommentParams -> IdReply), Owner, renderer: true;
+    /// G9.
+    RESOLVE_REVIEW_COMMENT = ResolveReviewComment: Unary(ResolveReviewCommentParams -> IdReply), Owner, renderer: true;
+    /// G10: queue one run on the thread, a fixed template quoting the
+    /// comments as data.
+    SEND_REVIEW_TO_THREAD = SendReviewToThread: Unary(SendReviewToThreadParams -> QueueCommandReply), Owner, renderer: true;
+    /// G11: post the comments as a review on the branch's pull request.
+    POST_REVIEW_TO_CHANGE_REQUEST = PostReviewToChangeRequest: Unary(PostReviewToChangeRequestParams -> PostReviewToChangeRequestReply), Owner, renderer: true;
+    /// G23: search a workspace's file contents, one match per item.
+    SEARCH_WORKSPACE_CONTENT = SearchWorkspaceContent: Stream(SearchWorkspaceContentParams -> ContentSearchMatch), Owner, renderer: true;
     /// G12 (SD1 Task 12): one chat and one worktree per variant from the same
     /// base, and the same run queued in each within the concurrency limits.
     CREATE_RUN_GROUP = CreateRunGroup: Unary(CreateRunGroupParams -> CreateRunGroupReply), Owner, renderer: true;

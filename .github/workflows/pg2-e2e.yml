@@ -247,10 +247,17 @@ jobs:
         run: |
           image="$(python3 -c 'import tomllib; p = tomllib.load(open("deploy/pins/loams-postgres-images.toml", "rb")); c = p["images"]["compute-v17"]; print(c["repository"] + "@" + c["digest"])')"
           kind create cluster --name loams-pg --wait 120s
-          for i in 1 2 3; do docker pull "$image" && break; sleep $((i * 15)); done
-          # A digest reference may not survive `docker save`; the node then
-          # pulls the (public) image itself.
-          kind load docker-image "$image" --name loams-pg || echo "the node pulls $image"
+          # Pull inside the node, so containerd records the image under its
+          # digest reference. `kind load docker-image` of a digest-only image
+          # imports it as `import-<date>@sha256:...`, which the kubelet then
+          # resolves to an image containerd cannot find ("failed to check if
+          # this is a checkpoint image").
+          for i in 1 2 3; do
+            docker exec loams-pg-control-plane crictl pull "$image" && break
+            test "$i" -lt 3 || { echo "could not pull $image into the kind node"; exit 1; }
+            sleep $((i * 15))
+          done
+          docker exec loams-pg-control-plane crictl inspecti "$image" > /dev/null
       - name: it_kind_start_bind_and_stop
         run: cargo test -p loams-pg-control --locked --features kubernetes --test it_kind -- --ignored
       - name: logs

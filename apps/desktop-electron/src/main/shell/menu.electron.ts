@@ -10,6 +10,9 @@ export function installAppMenu(o: {
 		if (n.type) out.type = n.type;
 		if (n.label) out.label = n.label;
 		if (n.role) out.role = n.role;
+		if (n.accelerator) out.accelerator = n.accelerator;
+		if (n.registerAccelerator !== undefined)
+			out.registerAccelerator = n.registerAccelerator;
 		if (n.submenu) out.submenu = n.submenu.map(map);
 		const id = n.id;
 		if (id) out.click = () => o.onAction(id);

@@ -25,6 +25,7 @@ import type { CloneRepoParams } from "./gen/CloneRepoParams";
 import type { CommitWorktreeParams } from "./gen/CommitWorktreeParams";
 import type { CommitWorktreeReply } from "./gen/CommitWorktreeReply";
 import type { CompleteAgentLoginParams } from "./gen/CompleteAgentLoginParams";
+import type { ContentSearchMatch } from "./gen/ContentSearchMatch";
 import type { CreateChangeRequestParams } from "./gen/CreateChangeRequestParams";
 import type { CreateChangeRequestReply } from "./gen/CreateChangeRequestReply";
 import type { CreateRepoParams } from "./gen/CreateRepoParams";
@@ -33,6 +34,7 @@ import type { CreateRunGroupReply } from "./gen/CreateRunGroupReply";
 import type { CreateWorktreeOutcome } from "./gen/CreateWorktreeOutcome";
 import type { CreateWorktreeParams } from "./gen/CreateWorktreeParams";
 import type { DeleteProjectActionParams } from "./gen/DeleteProjectActionParams";
+import type { DeleteReviewCommentParams } from "./gen/DeleteReviewCommentParams";
 import type { DeleteWorkspaceEntryRequest } from "./gen/DeleteWorkspaceEntryRequest";
 import type { DeleteWorktreeParams } from "./gen/DeleteWorktreeParams";
 import type { DiscardPathsParams } from "./gen/DiscardPathsParams";
@@ -82,6 +84,8 @@ import type { MutateParams } from "./gen/MutateParams";
 import type { MutateReply } from "./gen/MutateReply";
 import type { OkReply } from "./gen/OkReply";
 import type { OpenTerminalParams } from "./gen/OpenTerminalParams";
+import type { PostReviewToChangeRequestParams } from "./gen/PostReviewToChangeRequestParams";
+import type { PostReviewToChangeRequestReply } from "./gen/PostReviewToChangeRequestReply";
 import type { PreviewSnapshot } from "./gen/PreviewSnapshot";
 import type { ProjectActionRun } from "./gen/ProjectActionRun";
 import type { ProjectActionSetup } from "./gen/ProjectActionSetup";
@@ -105,10 +109,13 @@ import type { RepoPathParams } from "./gen/RepoPathParams";
 import type { RepoRefList } from "./gen/RepoRefList";
 import type { ResizeTerminalParams } from "./gen/ResizeTerminalParams";
 import type { ResolveGitAvatarsParams } from "./gen/ResolveGitAvatarsParams";
+import type { ResolveReviewCommentParams } from "./gen/ResolveReviewCommentParams";
 import type { ResolveRunGroupParams } from "./gen/ResolveRunGroupParams";
 import type { ResolveRunGroupReply } from "./gen/ResolveRunGroupReply";
 import type { RestoreCheckpointParams } from "./gen/RestoreCheckpointParams";
 import type { RestoreCheckpointReply } from "./gen/RestoreCheckpointReply";
+import type { ReviewComment } from "./gen/ReviewComment";
+import type { ReviewCommentsFrame } from "./gen/ReviewCommentsFrame";
 import type { RunGroupCheckParams } from "./gen/RunGroupCheckParams";
 import type { RunGroupCheckReply } from "./gen/RunGroupCheckReply";
 import type { RunGroupComparison } from "./gen/RunGroupComparison";
@@ -116,7 +123,9 @@ import type { RunGroupList } from "./gen/RunGroupList";
 import type { RunProjectActionParams } from "./gen/RunProjectActionParams";
 import type { SearchFilesParams } from "./gen/SearchFilesParams";
 import type { SearchGitHistoryParams } from "./gen/SearchGitHistoryParams";
+import type { SearchWorkspaceContentParams } from "./gen/SearchWorkspaceContentParams";
 import type { SearchWorkspaceFilesRequest } from "./gen/SearchWorkspaceFilesRequest";
+import type { SendReviewToThreadParams } from "./gen/SendReviewToThreadParams";
 import type { SentReply } from "./gen/SentReply";
 import type { SessionCommandPayload } from "./gen/SessionCommandPayload";
 import type { SessionList } from "./gen/SessionList";
@@ -145,6 +154,7 @@ import type { UpsertProjectActionParams } from "./gen/UpsertProjectActionParams"
 import type { WatchCheckoutChangeRequestParams } from "./gen/WatchCheckoutChangeRequestParams";
 import type { WatchDocMessagesParams } from "./gen/WatchDocMessagesParams";
 import type { WatchPreviewsParams } from "./gen/WatchPreviewsParams";
+import type { WatchReviewCommentsParams } from "./gen/WatchReviewCommentsParams";
 import type { WatchRunGroupsParams } from "./gen/WatchRunGroupsParams";
 import type { WatchWorkspaceFilesRequest } from "./gen/WatchWorkspaceFilesRequest";
 import type { WorkspaceDirectoryPage } from "./gen/WorkspaceDirectoryPage";
@@ -1539,6 +1549,112 @@ export const fixture_DiscardPathsParams = {
   ]
 } satisfies DiscardPathsParams;
 
+export const fixture_ReviewComment = {
+  "body": "This loop never ends.",
+  "checkoutId": "checkout-1",
+  "createdAtMs": 1791797400000,
+  "diffChecksum": "sum-1",
+  "endLine": 14,
+  "id": "comment-1",
+  "line": 12,
+  "outdated": false,
+  "path": "src/main.rs",
+  "resolved": false,
+  "side": "new"
+} satisfies ReviewComment;
+
+export const fixture_WatchReviewCommentsParams = {
+  "checkoutId": "checkout-1"
+} satisfies WatchReviewCommentsParams;
+
+export const fixture_ReviewCommentsFrame_reset = {
+  "reset": [
+    {
+      "body": "This loop never ends.",
+      "checkoutId": "checkout-1",
+      "createdAtMs": 1791797400000,
+      "diffChecksum": "sum-1",
+      "endLine": 14,
+      "id": "comment-1",
+      "line": 12,
+      "outdated": false,
+      "path": "src/main.rs",
+      "resolved": false,
+      "side": "new"
+    }
+  ]
+} satisfies ReviewCommentsFrame;
+
+export const fixture_ReviewCommentsFrame_delta = {
+  "remove": [
+    "comment-2"
+  ],
+  "upsert": [
+    {
+      "body": "This loop never ends.",
+      "checkoutId": "checkout-1",
+      "createdAtMs": 1791797400000,
+      "diffChecksum": "sum-1",
+      "endLine": 14,
+      "id": "comment-1",
+      "line": 12,
+      "outdated": true,
+      "path": "src/main.rs",
+      "resolved": false,
+      "side": "new"
+    }
+  ]
+} satisfies ReviewCommentsFrame;
+
+export const fixture_DeleteReviewCommentParams = {
+  "checkoutId": "checkout-1",
+  "id": "comment-1"
+} satisfies DeleteReviewCommentParams;
+
+export const fixture_ResolveReviewCommentParams = {
+  "checkoutId": "checkout-1",
+  "id": "comment-1",
+  "resolved": true
+} satisfies ResolveReviewCommentParams;
+
+export const fixture_SendReviewToThreadParams = {
+  "chatId": "chat-1",
+  "commentIds": [
+    "comment-1"
+  ]
+} satisfies SendReviewToThreadParams;
+
+export const fixture_PostReviewToChangeRequestParams = {
+  "checkoutId": "checkout-1",
+  "commentIds": [
+    "comment-1"
+  ],
+  "event": "request_changes"
+} satisfies PostReviewToChangeRequestParams;
+
+export const fixture_PostReviewToChangeRequestReply = {
+  "url": "https://forgejo.example.com/dev/project/pulls/7#issuecomment-3"
+} satisfies PostReviewToChangeRequestReply;
+
+export const fixture_SearchWorkspaceContentParams = {
+  "caseSensitive": true,
+  "chatId": null,
+  "globs": [
+    "*.rs"
+  ],
+  "maxResults": 200,
+  "query": "fn main",
+  "regex": false,
+  "spaceId": "space-1"
+} satisfies SearchWorkspaceContentParams;
+
+export const fixture_ContentSearchMatch = {
+  "column": 1,
+  "line": 3,
+  "path": "src/main.rs",
+  "preview": "fn main() {"
+} satisfies ContentSearchMatch;
+
 export const fixture_CreateRunGroupParams = {
   "approvalMode": "supervised",
   "attachments": [
@@ -2460,6 +2576,17 @@ export const FIXTURES = [
   { name: "MergeBranchParams", type: "MergeBranchParams", value: fixture_MergeBranchParams },
   { name: "MergeBranchReply", type: "MergeBranchReply", value: fixture_MergeBranchReply },
   { name: "DiscardPathsParams", type: "DiscardPathsParams", value: fixture_DiscardPathsParams },
+  { name: "ReviewComment", type: "ReviewComment", value: fixture_ReviewComment },
+  { name: "WatchReviewCommentsParams", type: "WatchReviewCommentsParams", value: fixture_WatchReviewCommentsParams },
+  { name: "ReviewCommentsFrame.reset", type: "ReviewCommentsFrame", value: fixture_ReviewCommentsFrame_reset },
+  { name: "ReviewCommentsFrame.delta", type: "ReviewCommentsFrame", value: fixture_ReviewCommentsFrame_delta },
+  { name: "DeleteReviewCommentParams", type: "DeleteReviewCommentParams", value: fixture_DeleteReviewCommentParams },
+  { name: "ResolveReviewCommentParams", type: "ResolveReviewCommentParams", value: fixture_ResolveReviewCommentParams },
+  { name: "SendReviewToThreadParams", type: "SendReviewToThreadParams", value: fixture_SendReviewToThreadParams },
+  { name: "PostReviewToChangeRequestParams", type: "PostReviewToChangeRequestParams", value: fixture_PostReviewToChangeRequestParams },
+  { name: "PostReviewToChangeRequestReply", type: "PostReviewToChangeRequestReply", value: fixture_PostReviewToChangeRequestReply },
+  { name: "SearchWorkspaceContentParams", type: "SearchWorkspaceContentParams", value: fixture_SearchWorkspaceContentParams },
+  { name: "ContentSearchMatch", type: "ContentSearchMatch", value: fixture_ContentSearchMatch },
   { name: "CreateRunGroupParams", type: "CreateRunGroupParams", value: fixture_CreateRunGroupParams },
   { name: "CreateRunGroupReply", type: "CreateRunGroupReply", value: fixture_CreateRunGroupReply },
   { name: "WatchRunGroupsParams", type: "WatchRunGroupsParams", value: fixture_WatchRunGroupsParams },

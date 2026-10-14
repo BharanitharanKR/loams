@@ -39,6 +39,9 @@ function colourLiterals(): string[] {
       lines.forEach((line, i) => {
         // A `colour-literal-ok` comment marks a line whose match is not a colour.
         if (line.includes('colour-literal-ok')) return;
+        // Vendored as-is comments (SD1 Task 19's composer) name `#1234` as a pull
+        // request reference; those files cannot carry the marker.
+        if (line.includes('pull request reference')) return;
         for (const m of line.matchAll(LITERAL)) {
           found.push(`${relative(WEB, path)}:${i + 1}: ${m[0]}`);
         }

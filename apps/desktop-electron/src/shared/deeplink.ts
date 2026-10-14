@@ -42,6 +42,12 @@ export function parseDeepLink(raw: string): { path: string } | null {
 				? { path: `/studio/${kind}/${id}` }
 				: null;
 		}
+		case "agent": {
+			// DD1's agent links (`loams://open/agent/<id>`) name a thread: Studio shows it
+			// (SD1 Task 28, ruling T3-11).
+			const [id, ...extra] = rest;
+			return id && extra.length === 0 ? { path: `/studio/t/${id}` } : null;
+		}
 		case "servers":
 			// The console has no per-server route (only /settings/:section): open the list.
 			return { path: TRAY_ROUTES.servers };

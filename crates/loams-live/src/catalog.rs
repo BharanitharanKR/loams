@@ -13,7 +13,7 @@
 //!
 //! Every catalog change also appends a `catalog` journal entry in its own
 //! transaction (LV1 plan Task 11, [`record_changes`]): a table created, a
-//! table's indexes or validators changed ([`put_table`] compares the record
+//! table's indexes or validators changed (`put_table` compares the record
 //! with the stored one), a deployment activated. Every node's subscription
 //! manager sees it at the tick that contains it.
 
