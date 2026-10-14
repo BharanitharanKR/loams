@@ -11,6 +11,78 @@
   ],
   "files": [
     {
+      "path": "src/git/actions.logic.ts",
+      "upstreamPath": "apps/web/src/components/GitActionsControl.logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "a2a3ee66a6b8ed769e1960d8b793ab174a317d63d0d9084b75fd2c2e1be60f4f",
+      "localSha256": "56057686d858d55783aecf38fd8eb80f91830f2b60535410fafae0a8f569ec81",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
+      "path": "src/git/BranchSelector.tsx",
+      "upstreamPath": "apps/web/src/components/BranchToolbarBranchSelector.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "1181bda01d948a7257379a372c0e7de46c16af49a8b6e7deecd64c2549fb9787",
+      "localSha256": "10126b7a7c355431dc67059e807cc2111d40cb3080796a04e7e98246836203c1",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
+      "path": "src/git/BranchToolbar.logic.ts",
+      "upstreamPath": "apps/web/src/components/BranchToolbar.logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "2e0e7e84acfd52d6724a04699604932108bcc964c30f23f044f46a443de9b646",
+      "localSha256": "56f841c28ceb6f22386485684df2ffde9cb9ff686df2efcd5d1ed830923c1252",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
+      "path": "src/git/BranchToolbar.tsx",
+      "upstreamPath": "apps/web/src/components/BranchToolbar.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "c5b51e7818aa86cb2214f3748c6349ae34747ff198b4d808d4d03c3dfae71142",
+      "localSha256": "c9e5e2dfffe6d418ad55e230b2f4e58f617e1383b5ce2abc692183f7da079203",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
+      "path": "src/git/EnvModeSelector.tsx",
+      "upstreamPath": "apps/web/src/components/BranchToolbarEnvModeSelector.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "b6eb78d5d71aaf5657ec3e4d4f2eef82d307673ad080d0464586369960e4db07",
+      "localSha256": "2ade671bf59eae2620cbfe83095c346fb3cb3c5bc43a2a0dbcddd23473ffa9b1",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
+      "path": "src/git/GitActions.tsx",
+      "upstreamPath": "apps/web/src/components/GitActionsControl.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "6307222beeda72d6e5b083b80d887e9532f5f76df86dac8821439f202a59eab1",
+      "localSha256": "f2ce52105e24d86b13bc6e009b1bfa644cdb175ebc46a86d3d3b8b54138d7be0",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
+      "path": "src/git/shared.ts",
+      "upstreamPath": "packages/shared/src/git.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "08e7d48d4465a4c967af6c2bd90706568dff7dffe2d15b4a6b81619adb18c0b7",
+      "localSha256": "b46c202f98d759aa669759215f7d9c7b9ccef39a5f2c6c9aeebd61bb64e7215f",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
+      "path": "src/git/WorktreeSetupCard.tsx",
+      "upstreamPath": "apps/web/src/components/chat/WorktreeSetupCard.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "940e21b4867c8d13614b6acaba5eb4ce8ac3e0ac00a1a63d07af207b99bcf402",
+      "localSha256": "b60c8a99b513dc6707458f903990fbf3686ac728bc6c4029896bc553714694dd",
+      "verdict": "adapt",
+      "group": "g"
+    },
+    {
       "path": "src/hooks/useMediaQuery.ts",
       "upstreamPath": "apps/web/src/hooks/useMediaQuery.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
