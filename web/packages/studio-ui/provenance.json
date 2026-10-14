@@ -440,14 +440,79 @@
       "note": "the ranking half lives in @loams/ui src/command-rank.ts, which the shell's palette also uses"
     },
     {
-      "path": "src/terminal/TerminalDrawer.tsx",
-      "upstreamPath": "apps/web/src/components/ThreadTerminalDrawer.tsx",
+      "path": "src/preview/constants.ts",
+      "upstreamPath": "apps/web/src/components/preview/previewConstants.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
-      "upstreamSha256": "b875e7f684a02d8d68c60c5fec2e923a49a422699c47cbf27f6612c0a5622f07",
-      "localSha256": "0493219f24343bf7b5dec601e2a5126d7426ea765b11a3a35200adf1b947fc4e",
+      "upstreamSha256": "c66c3cd443c2b660ad0beca0edb0cad90fc53571955cb4c4b05e8bcfd21569ee",
+      "localSha256": "dfc892aac81a1eaf2a2b20ff65117c23e74c140fdc321a8001ebfc3daa40dd9c",
       "verdict": "adapt",
-      "group": "f",
-      "note": "the libghostty-vt surface (inventory (f), skipped in SD1) replaced by xterm.js 6 with the fit addon (Q818, D920)"
+      "group": "preview"
+    },
+    {
+      "path": "src/preview/discoveredServers.ts",
+      "upstreamPath": "apps/web/src/components/preview/useDiscoveredLocalServers.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "918b82339dcc3413ebc847b20242db0f51ee0b0ecd29d2ec7f6c5ad17f0aefcd",
+      "localSha256": "35e049d1ce1d0995164e83b708b5697c6e079d4970d71d14f144e7a76215a91d",
+      "verdict": "adapt",
+      "group": "preview",
+      "note": "loams-agentd's WatchPreviews snapshot replaces T3's port scanner; parsePreviewUrl keeps the URL bar to this machine"
+    },
+    {
+      "path": "src/preview/errorMessages.ts",
+      "upstreamPath": "apps/web/src/components/preview/errorCodeMessages.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "aa31a5ac03b4983c15069816f8d7695b6f1a50959f5ae5ceaf98aec756fcb74b",
+      "localSha256": "c0bc82823ddc2a440d8d2d978d6486d7d0409b1bb51d4ff2559868eab3013482",
+      "verdict": "adapt",
+      "group": "preview"
+    },
+    {
+      "path": "src/preview/openDiscoveredPort.ts",
+      "upstreamPath": "apps/web/src/components/preview/openDiscoveredPort.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "6d4328c015ecda14d3d75514ab29afb8620a20693f1352236ac6c663e8a6c3f5",
+      "localSha256": "53a229bdd8f62cca4eb0a263aa42ba0954cb7866b8556a277959c8ff65b7f8e9",
+      "verdict": "adapt",
+      "group": "preview",
+      "note": "upstream opened a T3 preview session; here it resolves a server for the desktop's loopback view, the remote listener's /preview/ ticket (Q806) or the ssh port-forward hint"
+    },
+    {
+      "path": "src/preview/PreviewChromeRow.tsx",
+      "upstreamPath": "apps/web/src/components/preview/PreviewChromeRow.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "6b8c68ee1aa90f29dc7a7e147b542b02256bdf3b7747324e87ae0c884d4246fb",
+      "localSha256": "add379e4695aee1929e3873fcd03493920ac01c9fd0a6cb084874afd68c1d26f",
+      "verdict": "adapt",
+      "group": "preview",
+      "note": "capture, picture-in-picture and annotation dropped with browser streaming (inventory (n): browser/** skipped)"
+    },
+    {
+      "path": "src/preview/PreviewEmptyState.tsx",
+      "upstreamPath": "apps/web/src/components/preview/PreviewEmptyState.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "b235a760be4c1d6300a9e7d0f18bc720ac9415f1192907ba70cd15fd83f4e92b",
+      "localSha256": "3e82c928cd1e94bbd71f2a3057021ff2257113bcb56df44c1e77e0048090cf9e",
+      "verdict": "adapt",
+      "group": "preview"
+    },
+    {
+      "path": "src/preview/PreviewLocalServerCard.tsx",
+      "upstreamPath": "apps/web/src/components/preview/PreviewLocalServerCard.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "b28196746f4624d8db592ff7086fd3d60d1a568b820892669903632dcd3c5343",
+      "localSha256": "db2bf555c8aac252fd4c3a7140dc6e9da54b24c0274538cd9b21d01f4152e585",
+      "verdict": "adapt",
+      "group": "preview"
+    },
+    {
+      "path": "src/preview/PreviewUnreachable.tsx",
+      "upstreamPath": "apps/web/src/components/preview/PreviewUnreachable.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "89ac02f5167bc8ac9e70b2360a9399d9d19ff7c20b5fac1cd1a5ba8ab246725b",
+      "localSha256": "f40d0b944ce2aca157da413b77c19998f9d7493b244037150b30e640a5f26090",
+      "verdict": "adapt",
+      "group": "preview"
     },
     {
       "path": "src/terminal/closeConfirm.ts",
@@ -505,6 +570,16 @@
       "note": "also apps/web/src/state/terminalSessions.ts (the attach hook), folded into the TerminalSessions registry"
     },
     {
+      "path": "src/terminal/TerminalDrawer.tsx",
+      "upstreamPath": "apps/web/src/components/ThreadTerminalDrawer.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "b875e7f684a02d8d68c60c5fec2e923a49a422699c47cbf27f6612c0a5622f07",
+      "localSha256": "0493219f24343bf7b5dec601e2a5126d7426ea765b11a3a35200adf1b947fc4e",
+      "verdict": "adapt",
+      "group": "f",
+      "note": "the libghostty-vt surface (inventory (f), skipped in SD1) replaced by xterm.js 6 with the fit addon (Q818, D920)"
+    },
+    {
       "path": "src/terminal/uiStore.ts",
       "upstreamPath": "apps/web/src/terminalUiStateStore.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
@@ -513,15 +588,6 @@
       "verdict": "adapt",
       "group": "f",
       "note": "the inventory's verdict is as-is; adapted because loams-agentd chooses terminal ids and the store is keyed by thread id (SD1 ruling T22-2)"
-    },
-    {
-      "path": "src/thread-list/StatusIndicators.tsx",
-      "upstreamPath": "apps/web/src/components/ThreadStatusIndicators.tsx",
-      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
-      "upstreamSha256": "36d891d3bc73187b6c7daffb12ae784e71d7f8b852205e2c191641011d85e3ac",
-      "localSha256": "ca3f2ee99900a43b941d99b3819357eff3d492520c56ff09f008c64d76d09f20",
-      "verdict": "adapt",
-      "group": "thread-list"
     },
     {
       "path": "src/thread-list/actionMenu.ts",
@@ -547,6 +613,15 @@
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "6e56c7e546ba0e3b4179fc75f2c5d0997129fbef2e5bcee0b61decf72002bd3c",
       "localSha256": "d8e34f0985d8aaa7b1787768819b9be6c0ee0c81787e666d34d6de440c14201d",
+      "verdict": "adapt",
+      "group": "thread-list"
+    },
+    {
+      "path": "src/thread-list/StatusIndicators.tsx",
+      "upstreamPath": "apps/web/src/components/ThreadStatusIndicators.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "36d891d3bc73187b6c7daffb12ae784e71d7f8b852205e2c191641011d85e3ac",
+      "localSha256": "ca3f2ee99900a43b941d99b3819357eff3d492520c56ff09f008c64d76d09f20",
       "verdict": "adapt",
       "group": "thread-list"
     },

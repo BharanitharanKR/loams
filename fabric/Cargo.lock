@@ -5157,8 +5157,14 @@ dependencies = [
 name = "loams-house-lake"
 version = "0.0.1"
 dependencies = [
+ "arrow-array 58.4.0",
+ "arrow-buffer 58.4.0",
+ "arrow-cast 58.4.0",
+ "arrow-ipc 58.4.0",
+ "arrow-schema 58.4.0",
  "bytes",
  "iceberg",
+ "parquet 58.4.0",
  "serde_json",
  "thiserror",
  "tokio",
@@ -5182,6 +5188,7 @@ version = "0.0.1"
 dependencies = [
  "arrow",
  "arrow-ipc 59.3.0",
+ "async-trait",
  "base64 0.22.1",
  "buffa",
  "bytes",

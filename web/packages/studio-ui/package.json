@@ -30,6 +30,10 @@
     "./approvals": {
       "types": "./src/approvals/index.ts",
       "default": "./src/approvals/index.ts"
+    },
+    "./preview": {
+      "types": "./src/preview/index.ts",
+      "default": "./src/preview/index.ts"
     }
   },
   "scripts": {

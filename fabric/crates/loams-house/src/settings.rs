@@ -68,14 +68,25 @@ fn over(name: &str, cap: impl std::fmt::Display) -> HouseError {
     readonly(format!("Setting {name} shouldn't be greater than {cap}"))
 }
 
+/// ClickHouse settings the front takes for itself and never passes to chDB:
+/// `insert_deduplication_token` names an insert's deduplication key on lake
+/// tables (HS1 Task 12).
+pub const FRONT_SETTINGS: &[&str] = &["insert_deduplication_token"];
+
 /// Whether `name` is one of Loams's settings.
 pub fn is_loams(name: &str) -> bool {
     LOAMS_SETTINGS.contains(&name)
 }
 
+/// Whether `name` is the front's alone: Loams's settings and
+/// [`FRONT_SETTINGS`]. chDB never sees them.
+pub fn is_front_only(name: &str) -> bool {
+    is_loams(name) || FRONT_SETTINGS.contains(&name)
+}
+
 /// Whether `name` may be set at all.
 pub fn is_allowed(name: &str) -> bool {
-    (is_loams(name) || loams_house_ipc::policy::on_the_lists(name))
+    (is_front_only(name) || loams_house_ipc::policy::on_the_lists(name))
         && !crate::deny::is_denied_setting(name)
 }
 
@@ -259,7 +270,7 @@ impl Settings {
     pub fn for_engine(&self) -> Vec<(String, String)> {
         self.pairs
             .iter()
-            .filter(|(n, _)| !is_loams(n))
+            .filter(|(n, _)| !is_front_only(n))
             .cloned()
             .collect()
     }

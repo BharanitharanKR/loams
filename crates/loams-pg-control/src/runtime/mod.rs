@@ -111,10 +111,15 @@ impl fmt::Display for BackendAddr {
 #[derive(Debug, Clone)]
 pub struct ComputeLaunch {
     pub compute_id: ComputeId,
+    /// The Loams namespace it runs in (R13.1). A bound launch's binding
+    /// names the same one ([`namespace`](Self::namespace) checks it); an
+    /// unbound warm-pool compute (Task 14) has only this.
+    pub namespace: String,
     /// The endpoint it serves; `None` for an unbound warm-pool compute
     /// (Task 14), whose spec upcall answers `empty`.
     pub binding: Option<ComputeBinding>,
-    /// The endpoint's address ([`ComputeRuntime::ensure_address`]).
+    /// The endpoint's address ([`ComputeRuntime::ensure_address`]); `None`
+    /// for an unbound compute.
     pub address: Option<BackendAddr>,
     /// The compute image, pinned by digest (`repo@sha256:<64 hex>`).
     pub image: String,
@@ -125,6 +130,29 @@ pub struct ComputeLaunch {
     /// `NEON_CONTROL_PLANE_TOKEN`. Never logged or written where anything
     /// but the compute reads it.
     pub upcall_token: Secret<String>,
+}
+
+impl ComputeLaunch {
+    /// The launch's Loams namespace, once checked against its binding's.
+    ///
+    /// # Errors
+    ///
+    /// [`RuntimeError::InvalidArgument`] when the binding names another
+    /// namespace, or an unbound launch names an address.
+    pub fn namespace(&self) -> Result<&str, RuntimeError> {
+        match &self.binding {
+            Some(b) if b.namespace != self.namespace => {
+                Err(RuntimeError::InvalidArgument(format!(
+                    "the launch's namespace {:?} is not its binding's ({:?})",
+                    self.namespace, b.namespace
+                )))
+            }
+            None if self.address.is_some() => Err(RuntimeError::InvalidArgument(
+                "an unbound compute has no address".into(),
+            )),
+            _ => Ok(&self.namespace),
+        }
+    }
 }
 
 /// A started compute, as the runtime reports it.

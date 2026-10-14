@@ -606,17 +606,35 @@ pub struct ComputeBinding {
     pub endpoint_id: String,
 }
 
+/// The warm pool a compute was started for (§46 §7.3; PG2 Task 14): its
+/// Loams namespace (a Kubernetes Pod serves only Services of its own
+/// namespace, `loams-pg-<ns>`), the Postgres major and the image, pinned
+/// by digest. The region is the deployment's: one `pg-control` serves one.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct PoolKey {
+    pub namespace: String,
+    pub pg_version: u32,
+    pub image: String,
+}
+
 /// One compute process (§46 §3; §28 §5.3).
 ///
 /// Task 8 replaced `project_id` and `endpoint_id` with `binding` (a
 /// warm-pool compute serves no project until it is bound, Task 14) and
-/// added `ctl_url`. `FORMAT` stays 1: no compute record exists outside
-/// tests (R5.11's precedent).
+/// added `ctl_url`; Task 14 added `pool` and `bound_at_ms`. `FORMAT`
+/// stays 1: no compute record exists outside tests (R5.11's precedent;
+/// no release has shipped endpoints yet, R14.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputeRec {
     pub id: String,
     /// `None`: unbound (the spec upcall answers `empty`).
     pub binding: Option<ComputeBinding>,
+    /// The warm pool it was started for (Task 14); kept once it is bound.
+    /// `None`: started for its endpoint.
+    pub pool: Option<PoolKey>,
+    /// When a warm-pool compute was bound to its endpoint: its start
+    /// timeout counts from here, not from its creation.
+    pub bound_at_ms: Option<u64>,
     pub spec_version: u64,
     pub status: ComputeStatus,
     /// The id of the key its upcall JWT was signed with (never the key):

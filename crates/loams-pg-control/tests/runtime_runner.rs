@@ -162,6 +162,7 @@ fn endpoint() -> EndpointRec {
 fn launch() -> ComputeLaunch {
     ComputeLaunch {
         compute_id: CMP.parse().unwrap(),
+        namespace: "acme".into(),
         binding: Some(ComputeBinding {
             namespace: "acme".into(),
             project_id: PRJ.into(),
@@ -300,6 +301,7 @@ async fn runner_refuses_malformed_launches_and_endpoints() {
     cases.push(("an unbound compute", c));
     let mut c = launch();
     c.binding.as_mut().unwrap().namespace = "../etc".into();
+    c.namespace = "../etc".into();
     cases.push(("a namespace that is no DNS label", c));
     let mut c = launch();
     c.binding.as_mut().unwrap().project_id = "prj-\"quoted\"".into();

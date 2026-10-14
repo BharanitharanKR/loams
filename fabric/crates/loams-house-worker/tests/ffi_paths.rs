@@ -127,6 +127,14 @@ fn no_hanging_ffi_paths_called() {
             .map(|c| c.as_os_str().to_string_lossy().into_owned())
             .unwrap_or_default();
         let defining = krate == "loams-chdb" || krate == "loams-chdb-sys";
+        // Only crates that can reach libchdb can call its paths: the defining
+        // ones and those depending on them. Another crate's `arrow_stream(` (a
+        // ClickHouse client's, in a connector's tests) is not chDB's.
+        let manifest =
+            std::fs::read_to_string(crates.join(&krate).join("Cargo.toml")).unwrap_or_default();
+        if !defining && !manifest.contains("loams-chdb") {
+            continue;
+        }
         // The defining crates' own tests run the paths in a child process to keep
         // the defect measured.
         if defining

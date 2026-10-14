@@ -47,6 +47,7 @@ fn endpoint() -> EndpointRec {
 fn launch(id: &str) -> ComputeLaunch {
     ComputeLaunch {
         compute_id: id.parse().unwrap(),
+        namespace: "acme".into(),
         binding: Some(ComputeBinding {
             namespace: "acme".into(),
             project_id: PRJ.into(),
@@ -387,8 +388,9 @@ async fn start_is_idempotent_by_compute_id() {
     assert!(object(&api, "services", "computes").is_some());
 }
 
-/// A launch whose address is not its endpoint's Service, an unbound one,
-/// an unpinned image, a namespace too long for `loams-pg-<ns>` and a
+/// A launch whose address is not its endpoint's Service, an unbound one
+/// with an address, one whose namespace is not its binding's, an unpinned
+/// image, a namespace too long for `loams-pg-<ns>` and a
 /// recorded address of another kind are refused, and nothing is created.
 #[tokio::test]
 async fn bad_launches_are_refused() {
@@ -401,10 +403,14 @@ async fn bad_launches_are_refused() {
     l.binding = None;
     cases.push(l);
     let mut l = launch(CMP);
+    l.namespace = "other".into();
+    cases.push(l);
+    let mut l = launch(CMP);
     l.image = "ghcr.io/neondatabase/compute-node-v17:latest".into();
     cases.push(l);
     let mut l = launch(CMP);
     l.binding.as_mut().unwrap().namespace = "a".repeat(60);
+    l.namespace = "a".repeat(60);
     cases.push(l);
     let mut l = launch(CMP);
     l.upcall_token = Secret::new(format!("{TOKEN}\nX=1"));
@@ -481,6 +487,70 @@ async fn resize_unsupported_maps_to_outcome() {
         rt.resize("acme", &other, Cu(4)).await,
         Err(RuntimeError::InvalidArgument(_))
     ));
+}
+
+/// A warm-pool compute (Task 14) starts with no binding and no address in
+/// its namespace, its Pod naming no project or endpoint; binding it labels
+/// the Pod with its endpoint and points the endpoint's Service at it.
+#[tokio::test]
+async fn unbound_pod_starts_and_bind_labels_it() {
+    let (api, rt) = stand_in(None).await;
+    let mut warm = launch(CMP);
+    warm.binding = None;
+    warm.address = None;
+    let handle = rt.start(&warm).await.unwrap();
+    assert_eq!(handle.address, None);
+    let pod = object(&api, "pods", CMP).unwrap();
+    let labels = &pod["metadata"]["labels"];
+    assert_eq!(labels["loams.dev/namespace"], "acme");
+    assert_eq!(labels["loams.dev/project"], "");
+    assert_eq!(labels["loams.dev/endpoint"], "");
+
+    let addr = rt.ensure_address("acme", &endpoint()).await.unwrap();
+    let mut ep = endpoint();
+    ep.backend_addr = Some(addr.to_string());
+    rt.bind_address("acme", &ep, &handle).await.unwrap();
+    let pod = object(&api, "pods", CMP).unwrap();
+    assert_eq!(pod["metadata"]["labels"]["loams.dev/project"], PRJ);
+    assert_eq!(pod["metadata"]["labels"]["loams.dev/endpoint"], EP);
+    let service = object(&api, "services", EP).unwrap();
+    assert_eq!(service["spec"]["selector"]["loams.dev/compute"], CMP);
+}
+
+/// With a CA, a warm-pool compute's certificate names its own Pod (the
+/// endpoint it will serve is not known yet), never an endpoint's Service.
+#[tokio::test]
+async fn unbound_certificate_names_the_pod() {
+    use base64::Engine as _;
+    let ca = ComputeCa::generate(SystemTime::now()).unwrap();
+    let (api, rt) = stand_in(Some(ca)).await;
+    let mut warm = launch(CMP);
+    warm.binding = None;
+    warm.address = None;
+    rt.start(&warm).await.unwrap();
+    let secret = object(&api, "secrets", CMP).unwrap();
+    let pem = base64::engine::general_purpose::STANDARD
+        .decode(secret["data"]["tls.crt"].as_str().unwrap())
+        .unwrap();
+    let (_, pem) = x509_parser::pem::parse_x509_pem(&pem).unwrap();
+    let cert = pem.parse_x509().unwrap();
+    let names: Vec<String> = cert
+        .subject_alternative_name()
+        .unwrap()
+        .unwrap()
+        .value
+        .general_names
+        .iter()
+        .map(|n| n.to_string())
+        .collect();
+    let pod = CMP.to_lowercase();
+    assert!(
+        names
+            .iter()
+            .any(|n| n.contains(&format!("{pod}.computes.loams-pg-acme.svc.cluster.local"))),
+        "{names:?}"
+    );
+    assert!(names.iter().all(|n| !n.contains("ep-")), "{names:?}");
 }
 
 /// What the Pod says is the compute's status; stop removes the Pod and its

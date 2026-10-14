@@ -185,6 +185,7 @@ fn endpoint(id: &str) -> EndpointRec {
 fn launch(compute: &str, ep: &str, addr: &BackendAddr, cu: Cu) -> ComputeLaunch {
     ComputeLaunch {
         compute_id: compute.parse().unwrap(),
+        namespace: "acme".into(),
         binding: Some(ComputeBinding {
             namespace: "acme".into(),
             project_id: PRJ.into(),
@@ -508,6 +509,10 @@ async fn bad_launches_are_refused() {
     cases.push(l);
     let mut l = good.clone();
     l.binding.as_mut().unwrap().namespace = "Acme Corp".into();
+    l.namespace = "Acme Corp".into();
+    cases.push(l);
+    let mut l = good.clone();
+    l.namespace = "other".into();
     cases.push(l);
     let mut l = good.clone();
     l.binding = None;

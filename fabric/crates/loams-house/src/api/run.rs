@@ -189,6 +189,9 @@ struct Started {
     running: RunningGuard,
     deadline: Option<Deadline>,
     started: Instant,
+    /// What an `INSERT` into a lake table wrote, which the front ran to its
+    /// commit before answering (HS1 Task 12).
+    inserted: Option<crate::insert::Inserted>,
 }
 
 pub(super) fn sorted<'a>(
@@ -385,6 +388,7 @@ impl HouseApi {
                         running,
                         deadline: None,
                         started: Instant::now(),
+                        inserted: None,
                     });
                 }
                 gate::CatalogOutcome::Rows(query) => {
@@ -395,6 +399,61 @@ impl HouseApi {
                     };
                 }
                 gate::CatalogOutcome::NotOurs => {}
+                outcome @ (gate::CatalogOutcome::Insert(_) | gate::CatalogOutcome::CreateAs(_)) => {
+                    // An `INSERT` into a lake table (HS1 Task 12): run to its
+                    // commit, then answered with what it wrote.
+                    let Some(lake) = self.lake.as_deref() else {
+                        return Err(to_connect(&HouseError::from(ChError::not_implemented(
+                            "this House has no catalog",
+                        ))));
+                    };
+                    let running = self.running.register(&st.query_id, user)?;
+                    let started = Instant::now();
+                    let lease = self
+                        .pool
+                        .acquire(&user.namespace.to_string())
+                        .await
+                        .map_err(|err| to_connect(&err))?;
+                    let known = self.pool.known_settings();
+                    let ctx = crate::insert::InsertContext {
+                        lake,
+                        pool: &self.pool,
+                        namespace: user.namespace,
+                        database,
+                        user: &user.user,
+                        query_id: &st.query_id,
+                        params: &st.params,
+                        settings: &st.settings,
+                        limits: &config.session_limits,
+                        known: &known,
+                        max_insert_bytes: config.lake_insert_max_bytes,
+                    };
+                    let inserted = match outcome {
+                        gate::CatalogOutcome::Insert(target) => {
+                            let streams =
+                                matches!(target.source, crate::insert::Source::Stream { .. });
+                            let mut feed =
+                                crate::insert::BytesFeed(std::mem::take(&mut plan.first_data));
+                            let feed: Option<&mut dyn crate::insert::Feed> =
+                                if streams { Some(&mut feed) } else { None };
+                            crate::insert::run(&ctx, lease, *target, feed).await
+                        }
+                        gate::CatalogOutcome::CreateAs(create) => {
+                            crate::insert::create_as(&ctx, lease, *create).await
+                        }
+                        _ => unreachable!("matched above"),
+                    }
+                    .map_err(|err| to_connect(&err))?;
+                    return Ok(Started {
+                        lease: None,
+                        header: Some(Vec::new()),
+                        framer: Framer::Json(JsonFramer::new(st.caps, false)),
+                        running,
+                        deadline: None,
+                        started,
+                        inserted: Some(inserted),
+                    });
+                }
             }
         }
         let (expect, unparsed, is_read, is_query) = match &classified {
@@ -420,6 +479,7 @@ impl HouseApi {
                             running,
                             deadline: None,
                             started: Instant::now(),
+                            inserted: None,
                         });
                     }
                     Some(Err(err)) => return Err(to_connect(&err)),
@@ -526,7 +586,7 @@ impl HouseApi {
         let mut settings: Vec<(String, String)> = st
             .settings
             .iter()
-            .filter(|(k, _)| !crate::settings::is_loams(k))
+            .filter(|(k, _)| !crate::settings::is_front_only(k))
             .cloned()
             .collect();
         let limits = Limits {
@@ -652,6 +712,7 @@ impl HouseApi {
             running,
             deadline,
             started,
+            inserted: None,
         })
     }
 
@@ -774,6 +835,8 @@ struct Run {
     block_start: bool,
     failed: Option<ConnectError>,
     done: bool,
+    /// An `INSERT` into a lake table the front ran (HS1 Task 12).
+    inserted: Option<crate::insert::Inserted>,
     _running: RunningGuard,
     _deadline: Option<Deadline>,
 }
@@ -787,6 +850,7 @@ impl Run {
             running,
             deadline,
             started,
+            inserted,
         } = started;
         let front_only = lease.is_none();
         let mut run = Self {
@@ -807,6 +871,7 @@ impl Run {
             block_start: true,
             failed: None,
             done: false,
+            inserted,
             _running: running,
             _deadline: deadline,
         };
@@ -887,10 +952,19 @@ impl Run {
             result_bytes: self.framer.bytes(),
             read_rows: self.last.rows_read,
             read_bytes: self.last.bytes_read,
-            written_rows: self.last.written_rows,
+            written_rows: self
+                .inserted
+                .as_ref()
+                .map_or(self.last.written_rows, |i| i.written_rows),
             elapsed_ms: u64::try_from(self.started.elapsed().as_millis()).unwrap_or(u64::MAX),
             truncated: self.framer.truncated(),
             query_id: self.query_id.clone(),
+            snapshot_ids: self
+                .inserted
+                .as_ref()
+                .and_then(|i| i.snapshot_id.map(|id| (i.table.clone(), id)))
+                .into_iter()
+                .collect(),
             ..Default::default()
         }));
         self.done = true;

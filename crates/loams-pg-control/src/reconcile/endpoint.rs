@@ -73,11 +73,12 @@ use crate::ids::ComputeId;
 use crate::model::{
     BranchState, CRASH_WINDOW_MS, ComputeBinding, ComputeKey, ComputeRec, ComputeStatus,
     DesiredState, EndpointRec, EndpointState, OperationError, OperationKey, OperationKind,
-    OperationRec, OperationState, ProjectState, Record as _,
+    OperationRec, OperationState, PoolKey, ProjectState, Record as _,
 };
 use crate::neon::NeonWrite;
 use crate::observer::{Lifecycle, LifecycleKind};
 use crate::pgdog::NoPgDog;
+use crate::pool::WarmPool;
 use crate::runtime::{
     BackendAddr, ComputeHandle, ComputeLaunch, ComputeRuntime, RuntimeError, RuntimeStatus,
 };
@@ -100,7 +101,10 @@ pub const CRASHES_TO_FAIL: usize = 3;
 /// What `compute_ctl` reports, as the reconciler reads it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CtlStatus {
-    /// Waiting for its spec, or starting Postgres.
+    /// Waiting for a spec (`empty`): a warm-pool compute (Task 14), or a
+    /// compute that has not read its spec yet.
+    Empty,
+    /// Starting Postgres with its spec.
     Starting,
     /// Postgres runs (also while it applies a new spec).
     Running,
@@ -196,9 +200,8 @@ impl ComputeCtl for HttpComputeCtl {
             }
         };
         let status = match status.status {
-            CtlState::Empty | CtlState::Init | CtlState::ConfigurationPending => {
-                CtlStatus::Starting
-            }
+            CtlState::Empty => CtlStatus::Empty,
+            CtlState::Init | CtlState::ConfigurationPending => CtlStatus::Starting,
             CtlState::Running
             | CtlState::Configuration
             | CtlState::RefreshConfigurationPending
@@ -260,6 +263,9 @@ pub struct Computes {
     ///
     /// [`DefaultObserver`]: crate::observer::DefaultObserver
     pub lifecycle: Lifecycle,
+    /// The warm pool a start takes a compute from (Task 14); `None` by
+    /// default.
+    pub pool: Option<Arc<WarmPool>>,
 }
 
 impl Computes {
@@ -282,6 +288,7 @@ impl Computes {
             poll: Duration::from_millis(500),
             idle: Arc::new(IdleMonitor::new(Arc::new(NoPgDog))),
             lifecycle: Lifecycle::default(),
+            pool: None,
         }
     }
 }
@@ -295,6 +302,7 @@ impl std::fmt::Debug for Computes {
             .field("poll", &self.poll)
             .field("idle", &self.idle)
             .field("lifecycle", &self.lifecycle)
+            .field("pool", &self.pool)
             .finish_non_exhaustive()
     }
 }
@@ -890,7 +898,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
                 ))
                 .await;
         };
-        if self.compute.is_none() {
+        if self.compute.is_none() && !self.take_warm(&image).await? {
             self.create_compute().await?;
         }
         let Some(compute) = self.compute.clone() else {
@@ -922,6 +930,13 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
             Err(e) => return Err(runtime_error("reading the compute's status", &e)),
         }
         let status = self.c.ctl.status(&compute.record).await;
+        if matches!(status.as_ref().map(|r| &r.status), Ok(CtlStatus::Empty))
+            && compute.record.pool.is_some()
+        {
+            // A warm-pool compute does not read its spec again: the spec
+            // pushed when it was bound did not reach it.
+            self.configure_warm(&compute.record).await?;
+        }
         match status.as_ref().map(|r| &r.status) {
             Ok(CtlStatus::Running) => {
                 let last_active = status.map_or(Activity::NotYet, |r| r.last_active);
@@ -932,11 +947,16 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
                 self.crash("compute_ctl reported a failure").await
             }
             Ok(CtlStatus::Terminated) => self.crash("compute_ctl terminated").await,
-            Ok(CtlStatus::Starting) | Err(_) => {
+            Ok(CtlStatus::Empty | CtlStatus::Starting) | Err(_) => {
                 if let Err(e) = &status {
                     tracing::debug!(compute = %compute.record.id, error = %e, "compute_ctl not answering yet");
                 }
-                let age = self.now().saturating_sub(compute.record.created_at_ms);
+                // A warm-pool compute's start counts from its binding.
+                let since = compute
+                    .record
+                    .bound_at_ms
+                    .unwrap_or(compute.record.created_at_ms);
+                let age = self.now().saturating_sub(since);
                 let limit = u64::try_from(self.c.start_timeout.as_millis()).unwrap_or(u64::MAX);
                 if age >= limit {
                     return self
@@ -951,44 +971,170 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         }
     }
 
-    /// The endpoint's address, then one batch: the compute's `C/` record and
-    /// the endpoint naming it.
-    async fn create_compute(&mut self) -> Result<(), ReconcileError> {
+    /// The endpoint's address ([`ComputeRuntime::ensure_address`]); `None`
+    /// when the runtime refused it, and the endpoint failed.
+    async fn address(&mut self) -> Result<Option<BackendAddr>, ReconcileError> {
         self.act.renew().await?;
-        let addr = match self.c.runtime.ensure_address(self.ns(), self.ep()).await {
-            Ok(a) => a,
+        match self.c.runtime.ensure_address(self.ns(), self.ep()).await {
+            Ok(a) => Ok(Some(a)),
             Err(RuntimeError::InvalidArgument(why)) => {
                 tracing::error!(endpoint = %self.ep().id, why, "the runtime refused the endpoint's address");
                 self.fail("the runtime refused the endpoint's address".into())
                     .await?;
-                return Ok(());
+                Ok(None)
             }
-            Err(e) => return Err(runtime_error("the endpoint's address", &e)),
-        };
+            Err(e) => Err(runtime_error("the endpoint's address", &e)),
+        }
+    }
+
+    /// The endpoint naming compute `id` at `addr`, its binding, and the
+    /// version of its spec's inputs as they are now, before the compute can
+    /// read anything (a later change makes it differ).
+    async fn binding_for(
+        &self,
+        id: &str,
+        addr: &BackendAddr,
+    ) -> Result<(EndpointRec, ComputeBinding, u64), ReconcileError> {
         let project = &self.snap.project.record;
-        let id = ComputeId::new();
         let binding = ComputeBinding {
             namespace: project.namespace.clone(),
             project_id: project.id.clone(),
             endpoint_id: self.ep().id.clone(),
         };
         let mut endpoint = self.ep().clone();
-        endpoint.compute_id = Some(id.to_string());
+        endpoint.compute_id = Some(id.to_owned());
         endpoint.backend_addr = Some(addr.to_string());
-        // The version of the spec's inputs as they are now, before the
-        // compute can read anything: a later change makes it differ.
         let spec_version = match spec::read_inputs(&self.act.ctx.store, &binding, None).await {
             Ok(mut inputs) => {
                 inputs.endpoint = endpoint.clone();
-                spec::build(&self.c.sources, &id.to_string(), &inputs)
-                    .map_or(0, |(_, version)| version)
+                spec::build(&self.c.sources, id, &inputs).map_or(0, |(_, version)| version)
             }
             Err(SpecError::Store(e)) => return Err(e.into()),
             Err(_) => 0,
         };
+        Ok((endpoint, binding, spec_version))
+    }
+
+    /// Binds a warm-pool compute (Task 14) of the endpoint's key and size,
+    /// when the pool has one: one batch binds its record (compare-and-set,
+    /// so no other endpoint takes it) and names it on the endpoint; then it
+    /// gets its spec through `/configure`, and the pool refills. `false`:
+    /// none was taken.
+    async fn take_warm(&mut self, image: &str) -> Result<bool, ReconcileError> {
+        let Some(pool) = self.c.pool.clone() else {
+            return Ok(false);
+        };
+        if !pool.enabled() || self.ep().min_cu != pool.config().cu {
+            return Ok(false);
+        }
+        let project = &self.snap.project.record;
+        let key = PoolKey {
+            namespace: project.namespace.clone(),
+            pg_version: project.pg_version,
+            image: image.to_owned(),
+        };
+        let store = &self.act.ctx.store;
+        while let Some(id) = pool.pop(&key) {
+            let Some(warm) = store.get::<ComputeRec>(&ComputeKey { id }).await? else {
+                continue;
+            };
+            let rec = &warm.record;
+            if rec.binding.is_some()
+                || rec.pool.as_ref() != Some(&key)
+                || rec.status != ComputeStatus::Running
+                || rec.ctl_url.is_none()
+                || rec.jwt_key_id.as_deref() != Some(self.c.keys.kid())
+            {
+                continue;
+            }
+            // It still waits for a spec (a dead one would count as the
+            // endpoint's crash).
+            if !matches!(
+                self.c.ctl.status(rec).await.map(|r| r.status),
+                Ok(CtlStatus::Empty)
+            ) {
+                continue;
+            }
+            let Some(addr) = self.address().await? else {
+                return Ok(true);
+            };
+            let (endpoint, binding, spec_version) = self.binding_for(&rec.id, &addr).await?;
+            let mut bound = rec.clone();
+            bound.binding = Some(binding);
+            bound.status = ComputeStatus::Pending;
+            bound.bound_at_ms = Some(self.now());
+            bound.spec_version = spec_version;
+            let mut batch = Batch::new();
+            let at = batch.put(&bound, Some(warm.version))?;
+            let out = self
+                .write("compute.take", endpoint, batch, Settle::default())
+                .await?;
+            self.compute = Some(Versioned {
+                record: bound,
+                version: out[at].unwrap_or_default(),
+            });
+            pool.kick();
+            tracing::info!(endpoint = %self.ep().id, compute = %warm.record.id, address = %addr, "warm compute taken");
+            if let Some(c) = self.compute.clone() {
+                self.configure_warm(&c.record).await?;
+            }
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    /// Hands a bound warm-pool compute its spec through `/configure`,
+    /// waiting at most the pool's `push_wait`: `compute_ctl` takes the spec
+    /// at once and answers only once Postgres runs, which the passes poll.
+    async fn configure_warm(&self, compute: &ComputeRec) -> Result<(), ReconcileError> {
+        let Some(binding) = &compute.binding else {
+            return Ok(());
+        };
+        let inputs = match spec::read_inputs(&self.act.ctx.store, binding, Some(&compute.id)).await
+        {
+            Ok(i) => i,
+            Err(SpecError::Store(e)) => return Err(e.into()),
+            Err(e) => {
+                tracing::info!(compute = %compute.id, error = ?e, "no spec for the warm compute yet");
+                return Ok(());
+            }
+        };
+        let spec = match spec::build(&self.c.sources, &compute.id, &inputs) {
+            Ok((spec, _)) => spec,
+            Err(e) => {
+                tracing::info!(compute = %compute.id, error = ?e, "no spec for the warm compute yet");
+                return Ok(());
+            }
+        };
+        let wait = self
+            .c
+            .pool
+            .as_ref()
+            .map_or(Duration::from_secs(2), |p| p.config().push_wait);
+        self.act.renew().await?;
+        match tokio::time::timeout(wait, self.c.ctl.configure(compute, &spec)).await {
+            Ok(Ok(())) => tracing::debug!(compute = %compute.id, "the warm compute runs its spec"),
+            Ok(Err(e)) => {
+                tracing::info!(compute = %compute.id, error = %e, "the warm compute did not take its spec; retrying");
+            }
+            Err(_) => tracing::debug!(compute = %compute.id, "the warm compute is starting"),
+        }
+        Ok(())
+    }
+
+    /// The endpoint's address, then one batch: the compute's `C/` record and
+    /// the endpoint naming it.
+    async fn create_compute(&mut self) -> Result<(), ReconcileError> {
+        let Some(addr) = self.address().await? else {
+            return Ok(());
+        };
+        let id = ComputeId::new();
+        let (endpoint, binding, spec_version) = self.binding_for(&id.to_string(), &addr).await?;
         let compute = ComputeRec {
             id: id.to_string(),
             binding: Some(binding),
+            pool: None,
+            bound_at_ms: None,
             spec_version,
             status: ComputeStatus::Pending,
             jwt_key_id: Some(self.c.keys.kid().to_owned()),
@@ -1032,6 +1178,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
             .map_err(|e| ReconcileError::Runtime(format!("signing the upcall token: {e}")))?;
         let launch = ComputeLaunch {
             compute_id: id,
+            namespace: self.ns().to_owned(),
             binding: compute.record.binding.clone(),
             address,
             image,
@@ -1152,7 +1299,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
                     return self.crash("compute_ctl reported a failure").await;
                 }
                 CtlStatus::Terminated => return self.crash("compute_ctl terminated").await,
-                CtlStatus::Starting | CtlStatus::Running => report.last_active,
+                CtlStatus::Empty | CtlStatus::Starting | CtlStatus::Running => report.last_active,
             },
             Err(e) => {
                 tracing::info!(compute = %compute.record.id, error = %e, "compute_ctl did not answer");

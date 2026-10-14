@@ -265,7 +265,10 @@ async fn create_each_tier1_engine() {
         "48",
     )
     .await;
+    // This House has no store, so it writes no rows (HS1 Task 12) and makes no
+    // table for them.
     refused(addr, "CREATE TABLE bad AS SELECT 1", "48").await;
+    assert_eq!(ok(addr, "EXISTS TABLE bad").await, "0\n");
     // SETTINGS: MergeTree's are recorded, unknown ones 115, `realtime` needs FL1.
     ok(
         addr,
@@ -750,7 +753,7 @@ async fn external_tables_listed_read_only() {
     refused(addr, "DROP TABLE events", "497").await;
     refused(addr, "ALTER TABLE events ADD COLUMN x UInt8", "497").await;
     refused(addr, "RENAME TABLE events TO e2", "497").await;
-    // A lake table's INSERT is Task 12's.
+    // A House without a store writes no lake table (HS1 Task 12).
     refused(addr, "INSERT INTO mine VALUES (1)", "48").await;
     // Still there, unchanged.
     assert_eq!(ok(addr, "EXISTS events").await, "1\n");

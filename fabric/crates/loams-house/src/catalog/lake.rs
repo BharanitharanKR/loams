@@ -184,6 +184,8 @@ pub struct Lake {
     retention: Duration,
     grants: Option<Arc<dyn PrefixGrants>>,
     store: Option<loams_store::Store>,
+    /// The tables' commit queues (HS1 Task 12), made at the first write.
+    committer: std::sync::OnceLock<Arc<crate::commit::Committer>>,
 }
 
 impl fmt::Debug for Lake {
@@ -219,7 +221,19 @@ impl Lake {
             retention: DEFAULT_RETENTION,
             grants: None,
             store: None,
+            committer: std::sync::OnceLock::new(),
         }
+    }
+
+    /// The commit queues of this lake's tables (HS1 Task 12).
+    pub fn committer(&self) -> Arc<crate::commit::Committer> {
+        Arc::clone(self.committer.get_or_init(|| {
+            Arc::new(crate::commit::Committer::new(crate::commit::CommitIo {
+                catalog: Arc::clone(&self.catalog),
+                store: self.store.clone(),
+                root: self.root.clone(),
+            }))
+        }))
     }
 
     /// The store the tables live in, which the front reads manifests from

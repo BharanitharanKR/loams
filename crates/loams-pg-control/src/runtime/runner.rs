@@ -127,10 +127,12 @@ impl RunnerPolicy {
                 c.image
             ));
         }
+        // The runner runs the compose runtime, which has no warm pool
+        // (R14.2).
         let Some(binding) = &c.binding else {
             return invalid("the runner starts computes bound to an endpoint only".into());
         };
-        check_namespace(&binding.namespace)?;
+        check_namespace(c.namespace()?)?;
         canonical::<ProjectId>(&binding.project_id, "project")?;
         canonical::<EndpointId>(&binding.endpoint_id, "endpoint")?;
         if c.cu < MIN_CU || c.cu > MAX_CU {
@@ -199,6 +201,7 @@ impl WireEndpoint {
 #[derive(Serialize, Deserialize)]
 pub(crate) struct WireLaunch {
     pub compute_id: ComputeId,
+    pub namespace: String,
     pub binding: Option<ComputeBinding>,
     pub address: Option<BackendAddr>,
     pub image: String,
@@ -210,6 +213,7 @@ impl WireLaunch {
     pub(crate) fn of(c: &ComputeLaunch) -> Self {
         WireLaunch {
             compute_id: c.compute_id,
+            namespace: c.namespace.clone(),
             binding: c.binding.clone(),
             address: c.address.clone(),
             image: c.image.clone(),
@@ -221,6 +225,7 @@ impl WireLaunch {
     fn launch(self) -> ComputeLaunch {
         ComputeLaunch {
             compute_id: self.compute_id,
+            namespace: self.namespace,
             binding: self.binding,
             address: self.address,
             image: self.image,
