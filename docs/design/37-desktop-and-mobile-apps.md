@@ -1319,6 +1319,7 @@ Every panel is read-only and backed by an existing adapter method. "Op" is the I
 
 The owner widened the scope the same day: "current console ui only focused on collection search, but i have serverless postgres, wesql, loam live, resonate durable execution, fabric, connector, i want ui for all that, it is a cloud ui with agent chat on side … publish linux packages, signpath … itsaplan is what i meant". Rulings D666–D675:
 
+- *Amended 2026-10-13 by [§53](53-studio-ade.md) (D900, D916; built by SD1, 2026-10-15): the console has two modes, Console and Studio, and the desktop opens in Studio. The factory's nav entry moved under Studio (`/studio/factory`, with redirects from `/factory`), and Data Studio's label is now "Data explorer" (Q812).*
 - **D666: a cloud-console layout.** The window takes the shape of a cloud console: a product navigation on the left, a header with the server switcher and the agent toggle, the page in the middle, and the **agent panel docked on the right**. Product navigation, in order:
   - Overview;
   - Data (collections, search, SQL, ingest);

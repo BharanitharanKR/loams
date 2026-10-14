@@ -8,6 +8,8 @@
 > - [SDK2](2026-10-02-sdk2-languages.md): all 13 languages have a runtime under `sdks/<lang>/` that passes the 28 required fixtures, but the corpus covers only `loams.instance.v1`, `loams.live.v1` and the AP0 mock packages. Making each language cover the whole API and ship is API2 Tasks 19–23.
 >
 > When a task of this plan lands, the matching row of API1, SDK1 or SDK2 gets a one-line pointer to it (Task 28). Do not edit those plans' rulings.
+>
+> **SD1 pointer.** `loams.agentd.v1`, the agent daemon's Connect surface ([SD1](2026-10-13-sd1-studio-ade.md) Task 4), is outside the SDK catalogue (Q816): `loams-facade-gen`'s `NOT_SDK_PACKAGES` keeps it out of `PROTO_PACKAGES`, it is a §44 §7.2 row with no SDK module, and its reasons are a daemon-only table in `docs/api/reasons.md` (SD1 T4-2–T4-4).
 
 ## Owner rulings 2026-10-10 (defaults)
 

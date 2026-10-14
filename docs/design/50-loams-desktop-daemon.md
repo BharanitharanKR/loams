@@ -2,6 +2,8 @@
 
 Status: **Proposed** · 2026-10-09. The owner made five binding decisions on 2026-10-09 (§1.1). This document turns them into a design for **`loams-agentd`**, a per-user Rust daemon that becomes Loams Desktop's only agent system. Decisions are **D780–D799** and open questions **Q700–Q714**. Both are in the [decision log](13-decision-log.md). The owner's five decisions are binding; every other decision here is **Proposed** until the owner confirms it. The implementation plan is [DD1](../plans/2026-10-09-dd1-desktop-daemon.md). **No code is written by this document.**
 
+**Amended by [§53](53-studio-ade.md) (Loams Studio, SD1; built on `dev` 2026-10-15).** The daemon also serves `loams.agentd.v1`, a Connect surface, on a second loopback listener (D907, D908), and, only with `serve --remote` or `[remote] enabled`, on a TLS listener for one person's browser console (D909, D921). D788's "no browsers" rule still holds for the ndjson and loopback listeners; the remote listener admits only configured console origins with an OIDC token for its one subject. SD1 Task 13 built §8's approval loop for the harness drivers (D911), and Q802's split narrows DD1e's UI (D917). Details: [`crates/loams-agentd/README.md`](../../crates/loams-agentd/README.md) and [the Studio guides](../guides/studio/index.md).
+
 This document amends §37 §19 (the Electron desktop) and retires §37 §18 (the native zeron fork) for good. §19 below lists each amendment. Where this document and §37 disagree, this document wins for the topics it covers.
 
 Markers: **(estimate)** means computed or guessed, not measured. **(verify)** means not checked against a primary source; the task that depends on it checks it.

@@ -7,7 +7,7 @@
 > - Where this plan gives exact values (names, paths, methods, flags, reasons), use them verbatim.
 > - The code is not pre-written in this plan (M0.3 Ruling 1). Record every deviation in "Rulings made during execution" at the end of this file.
 >
-> **Status: Planned** (2026-10-13). This is **Track SD**, Loams Studio. The design is [§53](../design/53-studio-ade.md) (proposed D900–D922, Q800–Q819); the inventory is [studio-vendor-inventory.md](../design/studio-vendor-inventory.md). It carries out the owner's direction of 2026-10-13:
+> **Status: In progress** (2026-10-15: Tasks 0–28 merged into `dev`, the last being Task 13, #598; Task 31's guides are in [docs/guides/studio](../guides/studio/index.md); Tasks 29, 30 and 32 remain. Planned 2026-10-13). This is **Track SD**, Loams Studio. The design is [§53](../design/53-studio-ade.md) (proposed D900–D922, Q800–Q819); the inventory is [studio-vendor-inventory.md](../design/studio-vendor-inventory.md). It carries out the owner's direction of 2026-10-13:
 > - one console shell with two modes, Console and Studio;
 > - the factory apps under Studio;
 > - UI vendored from T3 Code (MIT) and rebuilt on our stack, backed by `loams-agentd`;
