@@ -783,7 +783,10 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
         previousSnapshot.contextIds.length === contextIds.length &&
         previousSnapshot.contextIds.every((id, index) => id === contextIds[index])
       );
-      if (isApplyingControlledUpdateRef.current) return;
+      // Until the controlled value and caret are applied, the view's own selection
+      // (the start of the document) is not the user's.
+      if (isApplyingControlledUpdateRef.current || !hasAppliedControlledSelectionRef.current)
+        return;
       if (!snapshotChanged) {
         if (
           previousSelectionRange.start !== nextSelectionRange.start ||
@@ -828,6 +831,8 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
         className,
       ),
       "data-testid": "composer-editor",
+      // The surrounding box shows focus; the console's global focus ring would draw a second one.
+      style: "outline: none",
       "data-composer-rich-text": richText ? "true" : "false",
       role: "textbox",
       "aria-multiline": "true",
@@ -1262,6 +1267,20 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     editorHolder.current = editor;
   }, [editor]);
 
+  // The view mounts in EditorContent's effect, after this component's layout effects
+  // on the first commit; Tiptap 3 throws on a view that is not mounted yet. The
+  // controlled update below waits for the mount.
+  const [viewMounted, setViewMounted] = useState(0);
+  useEffect(() => {
+    if (!editor) return;
+    if (hasMountedView(editor)) setViewMounted((n) => n + 1);
+    const onMount = () => setViewMounted((n) => n + 1);
+    editor.on("mount", onMount);
+    return () => {
+      editor.off("mount", onMount);
+    };
+  }, [editor]);
+
   // Tiptap forwards option changes to the view from a passive effect, so a
   // class change here would reach the ProseMirror element one tick after
   // React commits; push the attributes to the view in a layout effect instead.
@@ -1293,7 +1312,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
 
   // Controlled value/cursor from the store (history recall, chip insertion…).
   useLayoutEffect(() => {
-    if (!editor) return;
+    if (!editor || viewMounted === 0 || !hasMountedView(editor)) return;
     const initialSelection = !hasAppliedControlledSelectionRef.current;
     hasAppliedControlledSelectionRef.current = true;
     const normalizedCursor = clampEditorCursor(value, cursor);
@@ -1346,11 +1365,12 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
     richText,
     skillLabelFor,
     value,
+    viewMounted,
   ]);
 
   const focusAt = useCallback(
     (nextCursor: number) => {
-      if (!editor) return;
+      if (!editor || !hasMountedView(editor)) return;
       // view.focus() writes the state selection to the DOM as it focuses. A
       // bare DOM focus leaves the native caret at the start until
       // ProseMirror resyncs it 20ms later, and dictation tools type fast
@@ -1417,7 +1437,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
         if (edge === "start" ? beforeCaret.includes("\n") : afterCaret.includes("\n")) {
           return false;
         }
-        const rootElement = editor?.view.dom;
+        const rootElement = editor && hasMountedView(editor) ? editor.view.dom : undefined;
         const selection = window.getSelection();
         if (
           !rootElement ||
@@ -1520,12 +1540,23 @@ function insertMarkdownParagraphs(
   insertContent(blocks as JSONContent[]);
 }
 
+/** Whether the editor's ProseMirror view is mounted (Tiptap 3 throws otherwise). */
+function hasMountedView(editor: TiptapEditor): boolean {
+  if (editor.isDestroyed) return false;
+  try {
+    return Boolean(editor.view.dom);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Follow a programmatically placed caret: native scrolling only happens for
  * real input, so controlled rewrites, pastes, and focus restores scroll the
  * composer to the caret explicitly.
  */
 function scrollTiptapCaretIntoView(editor: TiptapEditor): void {
+  if (!hasMountedView(editor)) return;
   editor.view.dispatch(editor.state.tr.scrollIntoView());
 }
 

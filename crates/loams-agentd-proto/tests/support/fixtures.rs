@@ -41,6 +41,22 @@ fn some(text: &str) -> Option<String> {
 // Shared sample values
 // ---------------------------------------------------------------------------
 
+fn review_comment() -> ReviewComment {
+    ReviewComment {
+        id: s("comment-1"),
+        checkout_id: s("checkout-1"),
+        path: s("src/main.rs"),
+        side: DiffSide::New,
+        line: 12,
+        end_line: Some(14),
+        body: s("This loop never ends."),
+        diff_checksum: s("sum-1"),
+        created_at_ms: MS,
+        resolved: false,
+        outdated: false,
+    }
+}
+
 fn chat_config() -> ChatConfig {
     let mut model_options = serde_json::Map::new();
     model_options.insert(s("effort"), serde_json::json!("high"));
@@ -1609,6 +1625,88 @@ pub fn all() -> Vec<Fixture> {
             checkout_id: s("checkout-1"),
             paths: vec![s("src/main.rs")],
             expected_checksum: s("sum-1"),
+        },
+    ));
+
+    // Review comments and content search (SD1 Task 11, §53 §6.5 G8–G11, G23).
+    add(Fixture::new("ReviewComment", review_comment()));
+    add(Fixture::new(
+        "WatchReviewCommentsParams",
+        WatchReviewCommentsParams {
+            checkout_id: s("checkout-1"),
+        },
+    ));
+    add(Fixture::new(
+        "ReviewCommentsFrame.reset",
+        ReviewCommentsFrame::Reset {
+            reset: vec![review_comment()],
+        },
+    ));
+    add(Fixture::new(
+        "ReviewCommentsFrame.delta",
+        ReviewCommentsFrame::Delta {
+            upsert: vec![ReviewComment {
+                outdated: true,
+                ..review_comment()
+            }],
+            remove: vec![s("comment-2")],
+        },
+    ));
+    add(Fixture::new(
+        "DeleteReviewCommentParams",
+        DeleteReviewCommentParams {
+            checkout_id: s("checkout-1"),
+            id: s("comment-1"),
+        },
+    ));
+    add(Fixture::new(
+        "ResolveReviewCommentParams",
+        ResolveReviewCommentParams {
+            checkout_id: s("checkout-1"),
+            id: s("comment-1"),
+            resolved: true,
+        },
+    ));
+    add(Fixture::new(
+        "SendReviewToThreadParams",
+        SendReviewToThreadParams {
+            chat_id: s("chat-1"),
+            comment_ids: vec![s("comment-1")],
+        },
+    ));
+    add(Fixture::new(
+        "PostReviewToChangeRequestParams",
+        PostReviewToChangeRequestParams {
+            checkout_id: s("checkout-1"),
+            comment_ids: vec![s("comment-1")],
+            event: ReviewEvent::RequestChanges,
+        },
+    ));
+    add(Fixture::new(
+        "PostReviewToChangeRequestReply",
+        PostReviewToChangeRequestReply {
+            url: s("https://forgejo.example.com/dev/project/pulls/7#issuecomment-3"),
+        },
+    ));
+    add(Fixture::new(
+        "SearchWorkspaceContentParams",
+        SearchWorkspaceContentParams {
+            space_id: some("space-1"),
+            chat_id: None,
+            query: s("fn main"),
+            regex: false,
+            case_sensitive: true,
+            globs: vec![s("*.rs")],
+            max_results: 200,
+        },
+    ));
+    add(Fixture::new(
+        "ContentSearchMatch",
+        ContentSearchMatch {
+            path: s("src/main.rs"),
+            line: 3,
+            column: 1,
+            preview: s("fn main() {"),
         },
     ));
     add(Fixture::new(

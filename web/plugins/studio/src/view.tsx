@@ -2,10 +2,12 @@
 // daemon every route but Settings shows how to get one (`NotConnected`).
 
 import { AgentdScope } from '@loams/console-host/query';
-import { Empty, Tabs } from '@loams/ui';
-import { useEffect, useState } from 'react';
+import { Empty, Spinner, Tabs } from '@loams/ui';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { StudioAgentd } from './agentd.js';
 import type { StudioFactory } from './factory.js';
+import type { GitActionBus } from './git/bus.js';
+import { StudioGitTools } from './git/GitToolbar.js';
 import { Home, ProjectPage } from './home/Home.js';
 import { NotConnected } from './home/states.js';
 import { StudioLayout } from './layout/StudioLayout.js';
@@ -21,10 +23,14 @@ import { SettingsPage } from './settings/Settings.js';
 import { FactoryGroup } from './sidebar/Factory.js';
 import { StudioSidebar } from './sidebar/Sidebar.js';
 import { useNewThread } from './sidebar/useThreadActions.js';
-import { ThreadComposer } from './thread/Composer.js';
 import { DraftCard } from './thread/FactoryLinks.js';
 import { FilesTab } from './thread/LazyFilesTab.js';
 import { ThreadTerminalDrawer } from './thread/TerminalDrawer.js';
+
+// The thread page carries the markdown and highlighting stack: loaded on first use (SD1 Task 18).
+const ThreadPage = lazy(() =>
+  import('./thread/ThreadPage.js').then((m) => ({ default: m.ThreadPage })),
+);
 
 const PANEL_LABEL: Record<Panel, string> = {
   diff: 'Diff',
@@ -93,11 +99,13 @@ function Body({
   route,
   keys,
   navigate,
+  openExternal,
 }: {
   agentd: StudioAgentd;
   route: StudioRoute;
   keys: StudioKeys;
-  navigate?: (to: string) => void;
+  navigate: (to: string) => void;
+  openExternal?: ((url: string) => void) | undefined;
 }) {
   switch (route.kind) {
     case 'home':
@@ -108,37 +116,22 @@ function Body({
         </>
       );
     case 'project':
-      return (
-        <ProjectPage
-          agentd={agentd}
-          projectId={route.projectId}
-          {...(navigate ? { navigate } : {})}
-        />
-      );
+      return <ProjectPage agentd={agentd} projectId={route.projectId} navigate={navigate} />;
     case 'thread':
       return (
-        <div className="flex min-h-full flex-col gap-4 p-6">
-          <Empty title="This thread is not available">
-            Studio cannot open threads in this version yet. The link <code>{route.threadId}</code>{' '}
-            will open here once it can.
-          </Empty>
-          {/* The composer (SD1 Task 19); the timeline above it is Task 18's. */}
-          <div className="mt-auto">
-            <ThreadComposer
-              threadId={route.threadId}
-              {...(navigate
-                ? {
-                    openFile: (path: string) =>
-                      navigate(
-                        `${studioHref({ ...route, panel: 'files' })}&${new URLSearchParams({ path })}`,
-                      ),
-                    onGroupStarted: (groupId: string) =>
-                      navigate(studioHref({ kind: 'group', groupId })),
-                  }
-                : {})}
-            />
-          </div>
-        </div>
+        <Suspense
+          fallback={
+            <div className="p-6">
+              <Spinner label="Loading the thread" />
+            </div>
+          }
+        >
+          <ThreadPage
+            threadId={route.threadId}
+            navigate={navigate}
+            {...(openExternal ? { openExternal } : {})}
+          />
+        </Suspense>
       );
     case 'group':
       return (
@@ -194,6 +187,7 @@ function StudioPage({
   hostParam,
   keys: given,
   openExternal,
+  gitBus,
 }: {
   agentd: StudioAgentd;
   /** The software factory (§53 §5.9): the desktop's bridge; none on the web until SF1. */
@@ -206,6 +200,8 @@ function StudioPage({
   keys?: StudioKeys;
   /** Opens an http(s) link outside Studio (the platform's; a terminal's links, SD1 Task 22). */
   openExternal?: (url: string) => Promise<void>;
+  /** The git toolbar's link to the palette (SD1 Task 23, T24-6). */
+  gitBus?: GitActionBus;
 }) {
   useEffect(() => {
     if (hostParam) agentd.hosts?.select(hostParam);
@@ -226,6 +222,17 @@ function StudioPage({
         </StudioSidebar>
       }
       commands={keys.commands}
+      tools={
+        connected ? (
+          <StudioGitTools
+            agentd={agentd}
+            route={route}
+            factory={factory}
+            bus={gitBus}
+            openTerminal={() => keys.commands.run('terminal.toggle')}
+          />
+        ) : undefined
+      }
       panel={thread && connected ? <ThreadPanel route={thread} navigate={navigate} /> : undefined}
       drawer={
         thread && connected ? (
@@ -239,7 +246,13 @@ function StudioPage({
       }
     >
       {connected ? (
-        <Body agentd={agentd} route={route} keys={keys} navigate={navigate} />
+        <Body
+          agentd={agentd}
+          route={route}
+          keys={keys}
+          navigate={navigate}
+          openExternal={openExternal}
+        />
       ) : (
         <div className="p-6">
           <NotConnected agentd={agentd} reach={reach} />

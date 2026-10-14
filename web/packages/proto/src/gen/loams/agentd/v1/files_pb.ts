@@ -5,9 +5,8 @@
 // Files (design §53 §5.2, §6.4; plan SD1 Task 4): the folder picker, the
 // file tree, reads and hash-guarded writes, moves and deletes, search, and a
 // checkout's change stream. Every call names its checkout through a
-// `WorkspaceTarget`, which the daemon resolves and jails. The gap G23
-// (content search) is declared here and answers `unimplemented` until SD1
-// Task 11. File content is data: a client renders it as text (§53 D919). See
+// `WorkspaceTarget`, which the daemon resolves and jails. Content search
+// (G23) is served since SD1 Task 11. File content is data: a client renders it as text (§53 D919). See
 // studio.proto for the package's rules.
 
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";

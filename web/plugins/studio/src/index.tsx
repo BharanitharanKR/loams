@@ -12,6 +12,7 @@ import type { Context } from '@loams/cordis';
 import type {} from '@loams/platform-electron';
 import { type StudioAgentd, studioAgentd } from './agentd.js';
 import { desktopFactory } from './factory.js';
+import { GitActionBus, withGitActions } from './git/bus.js';
 import { StudioContext } from './header.js';
 import { hostedAgentd } from './hosts/agentd.js';
 import { createStudioKeys } from './palette/commands.js';
@@ -34,6 +35,10 @@ export {
   type FactoryPull,
   type StudioFactory,
 } from './factory.js';
+export { GitActionBus, type GitToolbarEntry, withGitActions } from './git/bus.js';
+export { gitErrorOf } from './git/errors.js';
+export { ProjectGitTools, StudioGitTools, ThreadGitTools } from './git/GitToolbar.js';
+export { ProjectActionsEditor } from './git/ProjectActions.js';
 export {
   type HostedAgentdOptions,
   hostedAgentd,
@@ -109,7 +114,9 @@ const plugin: PluginModule = {
     // One keyboard layer and palette source for every Studio page (SD1 Task 24). The
     // palette's threads and run groups come from agentd (SD1 Task 17).
     const keys = createStudioKeys({ edition: platform.kind });
-    const paletteSource = agentdPaletteSource(agentd);
+    // Its git rows and commands are the open thread's toolbar's (SD1 Task 23, T24-6).
+    const gitBus = new GitActionBus();
+    const paletteSource = withGitActions(agentdPaletteSource(agentd), gitBus);
 
     for (const page of STUDIO_PAGES) {
       ctx.effect(() =>
@@ -124,6 +131,7 @@ const plugin: PluginModule = {
               hostParam={params.host}
               keys={keys}
               openExternal={(url) => platform.openExternal(url)}
+              gitBus={gitBus}
             />
           ),
         ),

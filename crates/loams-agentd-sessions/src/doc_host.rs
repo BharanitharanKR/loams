@@ -741,6 +741,11 @@ impl DocHost {
         &self.inner.config.device_id
     }
 
+    /// The engine's SQLite store (Studio's review comments, SD1 Task 11).
+    pub(crate) fn store(&self) -> Arc<DocsStore> {
+        Arc::clone(&self.inner.store)
+    }
+
     /// Open (or return) the chat's doc handle: load the local snapshot (or init fresh)
     /// and start the change-driven task.
     pub fn open(&self, chat_id: &str) -> Result<Arc<ChatDocHandle>, EngineError> {
