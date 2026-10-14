@@ -8,7 +8,7 @@
 import { cx, Spinner } from "@loams/ui";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AtSignIcon, ChevronRightIcon, FileIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 
 import type { EntryKind } from "./source";
 
@@ -42,6 +42,8 @@ export function VirtualTree(props: {
   readonly onMention?: (row: TreeRow) => void;
   /** Scroll this path into view when it changes. */
   readonly revealPath?: string | null;
+  /** Content at the end of a row, such as a diff's change mark (SD1 Task 20). */
+  readonly trailing?: (row: TreeRow) => ReactNode;
 }) {
   const { rows } = props;
   const scroller = useRef<HTMLDivElement>(null);
@@ -188,6 +190,7 @@ export function VirtualTree(props: {
                 className={cx("size-3.5 shrink-0", isDir ? "text-accent" : "text-muted")}
               />
               <span className="min-w-0 flex-1 truncate">{row.name}</span>
+              {props.trailing?.(row)}
               {row.loading ? (
                 <Spinner size="xs" tone="muted" label={`Loading ${row.name}`} />
               ) : null}

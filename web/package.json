@@ -10,7 +10,6 @@
   "scripts": {
     "dev": "pnpm --filter @loams/console dev",
     "build": "pnpm --filter @loams/ui build && pnpm --filter @loams/console build",
-    "gen:api": "pnpm --filter @loams/console gen:api",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome check",
     "format": "biome format --write",

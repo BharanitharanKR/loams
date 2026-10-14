@@ -115,8 +115,29 @@ impl ForgeCredentials for StaticForgeCredentials {
     }
 }
 
-fn not_configured(detail: impl std::fmt::Display) -> GitWriteError {
+pub(crate) fn not_configured(detail: impl std::fmt::Display) -> GitWriteError {
     GitWriteError::Failed(format!("{PROVIDER_NOT_CONFIGURED}: {detail}"))
+}
+
+/// `<base>/api/v1/repos/<owner>/<repo>/<rest…>`, each segment escaped.
+pub(crate) fn forgejo_api_url(
+    base: &reqwest::Url,
+    remote: &GitRemote,
+    rest: &[&str],
+) -> Result<reqwest::Url, GitWriteError> {
+    let mut url = base.clone();
+    url.path_segments_mut()
+        .map_err(|_| not_configured("the Forgejo credential's URL is not valid"))?
+        .pop_if_empty()
+        .extend([
+            "api",
+            "v1",
+            "repos",
+            remote.owner.as_str(),
+            remote.repository.as_str(),
+        ])
+        .extend(rest);
+    Ok(url)
 }
 
 /// Opens change requests for the engine.
@@ -207,7 +228,7 @@ impl ChangeRequestCreator {
     }
 
     /// The repository behind `head`'s remote (or `origin`).
-    async fn remote(&self, root: &Path, head: &str) -> Result<GitRemote, GitWriteError> {
+    pub(crate) async fn remote(&self, root: &Path, head: &str) -> Result<GitRemote, GitWriteError> {
         let name = git_try(root, &["config", "--get", &format!("branch.{head}.remote")])
             .await
             .filter(|name| !name.is_empty() && name != ".")
@@ -223,13 +244,13 @@ impl ChangeRequestCreator {
         })
     }
 
-    async fn forgejo(
+    /// The Forgejo credential for `remote`'s host: its base URL and token.
+    /// The token is only ever for that host, over `https` (plain `http` only
+    /// on loopback); the client follows no redirects (ruling T9-3).
+    pub(crate) async fn forgejo_credential_for(
         &self,
         remote: &GitRemote,
-        params: &CreateChangeRequestParams,
-        title: &str,
-        body: &str,
-    ) -> Result<CreateChangeRequestReply, GitWriteError> {
+    ) -> Result<(reqwest::Url, String), GitWriteError> {
         let credentials = Arc::clone(&self.credentials);
         let credential = tokio::task::spawn_blocking(move || credentials.forgejo())
             .await
@@ -254,17 +275,58 @@ impl ChangeRequestCreator {
         }
         url.set_query(None);
         url.set_fragment(None);
-        url.path_segments_mut()
-            .map_err(|_| not_configured("the Forgejo credential's URL is not valid"))?
-            .pop_if_empty()
-            .extend([
-                "api",
-                "v1",
-                "repos",
-                remote.owner.as_str(),
-                remote.repository.as_str(),
-                "pulls",
-            ]);
+        Ok((url, credential.token))
+    }
+
+    /// The HTTP client: a timeout, and no redirects (the token never follows
+    /// one).
+    pub(crate) fn http(&self) -> &reqwest::Client {
+        &self.http
+    }
+
+    /// A `gh` command in `root` that never prompts, with stdout and stderr
+    /// piped; its `PATH` puts [`Self::with_gh_path`]'s directories first,
+    /// else it is the login shell's.
+    pub(crate) fn gh_command(&self, root: &Path) -> tokio::process::Command {
+        let mut command = tokio::process::Command::new(&self.gh_program);
+        if self.gh_path.is_empty() {
+            loams_agentd_harness::compose_login_shell_path(&mut command);
+        } else {
+            let own = std::env::var_os("PATH").unwrap_or_default();
+            let dirs = self
+                .gh_path
+                .iter()
+                .cloned()
+                .chain(std::env::split_paths(&own));
+            if let Ok(joined) = std::env::join_paths(dirs) {
+                command.env("PATH", joined);
+            }
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.as_std_mut().creation_flags(0x08000000);
+        }
+        command
+            .current_dir(root)
+            .env("GH_PROMPT_DISABLED", "1")
+            .env("GH_NO_UPDATE_NOTIFIER", "1")
+            .env("NO_COLOR", "1")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+        command
+    }
+
+    async fn forgejo(
+        &self,
+        remote: &GitRemote,
+        params: &CreateChangeRequestParams,
+        title: &str,
+        body: &str,
+    ) -> Result<CreateChangeRequestReply, GitWriteError> {
+        let (base, token) = self.forgejo_credential_for(remote).await?;
+        let url = forgejo_api_url(&base, remote, &["pulls"])?;
 
         let title = if params.draft && !title.starts_with("WIP:") {
             format!("WIP: {title}")
@@ -274,7 +336,7 @@ impl ChangeRequestCreator {
         let response = self
             .http
             .post(url)
-            .header("authorization", format!("token {}", credential.token))
+            .header("authorization", format!("token {token}"))
             .header("accept", "application/json")
             .json(&serde_json::json!({
                 "base": params.base,
@@ -343,25 +405,7 @@ impl ChangeRequestCreator {
         title: &str,
         body: &str,
     ) -> Result<CreateChangeRequestReply, GitWriteError> {
-        let mut command = tokio::process::Command::new(&self.gh_program);
-        if self.gh_path.is_empty() {
-            loams_agentd_harness::compose_login_shell_path(&mut command);
-        } else {
-            let own = std::env::var_os("PATH").unwrap_or_default();
-            let dirs = self
-                .gh_path
-                .iter()
-                .cloned()
-                .chain(std::env::split_paths(&own));
-            if let Ok(joined) = std::env::join_paths(dirs) {
-                command.env("PATH", joined);
-            }
-        }
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            command.as_std_mut().creation_flags(0x08000000);
-        }
+        let mut command = self.gh_command(root);
         // `--flag=value` keeps a value that starts with `-` a value.
         command
             .arg("pr")
@@ -377,15 +421,7 @@ impl ChangeRequestCreator {
         if params.draft {
             command.arg("--draft");
         }
-        command
-            .current_dir(root)
-            .env("GH_PROMPT_DISABLED", "1")
-            .env("GH_NO_UPDATE_NOTIFIER", "1")
-            .env("NO_COLOR", "1")
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true);
+        command.stdin(Stdio::null());
         let child = match command.spawn() {
             Ok(child) => child,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {

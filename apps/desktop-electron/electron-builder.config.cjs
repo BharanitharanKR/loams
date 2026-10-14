@@ -53,6 +53,10 @@ module.exports = {
 		{ from: "../../deploy/wesql", to: "stacks/wesql" },
 		{ from: "../../deploy/tikv", to: "stacks/tikv" },
 		{ from: "resources/connectors.json", to: "connectors.json" },
+		// Attribution (SD1 T1-7, Task 28): the desktop's NOTICE and T3 Code's MIT licence
+		// for the vendored Loams Studio code in the console bundle.
+		{ from: "NOTICE", to: "NOTICE" },
+		{ from: "../../web/packages/studio-ui/LICENSE.t3code", to: "LICENSE.t3code" },
 	],
 	artifactName: "loams-desktop-${version}-${os}-${arch}.${ext}",
 	linux: {
