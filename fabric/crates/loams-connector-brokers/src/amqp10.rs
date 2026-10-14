@@ -36,6 +36,7 @@ use fe2o3_amqp::link::CreditMode;
 use fe2o3_amqp::link::delivery::DeliveryInfo;
 use fe2o3_amqp::sasl_profile::SaslProfile;
 use fe2o3_amqp::session::SessionHandle;
+use fe2o3_amqp::types::definitions::{AmqpError, ErrorCondition};
 use fe2o3_amqp::types::messaging::{
     ApplicationProperties, Body, Data, Message, MessageId, Outcome, Properties,
 };
@@ -493,6 +494,30 @@ fn open_err(context: &str, e: OpenError) -> ConnectorError {
         } => ConnectorError::retryable(format!("{context}: {e}")),
         OpenError::SaslError { .. } => ConnectorError::auth(format!("{context}: {e}")),
         _ => amqp_err(context, e),
+    }
+}
+
+/// A rejected delivery. A broker that is busy or throttling (Service Bus's
+/// `com.microsoft:server-busy`, AMQP's `resource-limit-exceeded`) rejects
+/// for now, not for good: throttled, for the 10 s Service Bus asks a client
+/// to wait after server-busy. Any other condition is the message's fault:
+/// poison.
+fn rejected(id: &str, condition: Option<ErrorCondition>) -> ConnectorError {
+    let busy = match &condition {
+        Some(ErrorCondition::AmqpError(AmqpError::ResourceLimitExceeded)) => true,
+        Some(ErrorCondition::Custom(s)) => {
+            matches!(
+                s.as_str(),
+                "com.microsoft:server-busy" | "com.microsoft:timeout"
+            )
+        }
+        _ => false,
+    };
+    let msg = format!("{id}: the broker rejected a message: {condition:?}");
+    if busy {
+        ConnectorError::throttled(Duration::from_secs(10), msg)
+    } else {
+        ConnectorError::poison(msg)
     }
 }
 
@@ -1023,11 +1048,7 @@ impl Sink for Amqp10SinkTask {
             match outcome {
                 Outcome::Accepted(_) => {}
                 Outcome::Rejected(r) => {
-                    return Err(ConnectorError::poison(format!(
-                        "{}: the broker rejected a message: {:?}",
-                        self.cfg.id(),
-                        r.error.map(|e| e.condition)
-                    )));
+                    return Err(rejected(self.cfg.id(), r.error.map(|e| e.condition)));
                 }
                 other => {
                     return Err(ConnectorError::retryable(format!(
@@ -1413,6 +1434,25 @@ mod tests {
             additional_data: None,
         };
         assert!(open_err("x", busy).class.is_transient());
+    }
+
+    #[test]
+    fn a_busy_broker_rejects_for_now() {
+        let busy = rejected(
+            "x",
+            Some(ErrorCondition::Custom(Symbol::from(
+                "com.microsoft:server-busy",
+            ))),
+        );
+        assert!(busy.class.is_transient(), "{busy}");
+        let limit = rejected(
+            "x",
+            Some(ErrorCondition::AmqpError(AmqpError::ResourceLimitExceeded)),
+        );
+        assert!(limit.class.is_transient(), "{limit}");
+        let bad = rejected("x", Some(ErrorCondition::AmqpError(AmqpError::DecodeError)));
+        assert_eq!(bad.class, ErrorClass::Poison, "{bad}");
+        assert_eq!(rejected("x", None).class, ErrorClass::Poison);
     }
 
     #[test]

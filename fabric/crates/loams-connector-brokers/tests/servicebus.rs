@@ -8,6 +8,11 @@
 //! the queue `loams-conformance` is the input, and the topic
 //! `loams-conformance-topic` with its subscription `flow-conformance` is the
 //! output. Each run empties both first, and the tests take turns on them.
+//!
+//! A peek-lock outlives the receiver that took it: a killed consumer's
+//! messages come back only when their lock expires (`LockDuration`, 10 s in
+//! the emulator's config). So "empty" means quiet for longer than a lock,
+//! and redelivery is awaited for longer than one.
 
 // `unwrap_used` is a warning and CI runs `-D warnings`; tests unwrap freely.
 #![allow(clippy::unwrap_used)]
@@ -26,6 +31,12 @@ const SERVICES: &[ServiceKind] = &[ServiceKind::Emulator {
     system: "Azure Service Bus",
     vendor: "Microsoft",
 }];
+
+/// The entities' `LockDuration` (the emulator's config); a real namespace
+/// for the nightly sets the same.
+const LOCK: Duration = Duration::from_secs(10);
+/// Empty 500 ms polls in a row that make an entity "empty": 1.5 × LOCK.
+const QUIET_POLLS: u32 = 30;
 
 const QUEUE: &str = "loams-conformance";
 const TOPIC: &str = "loams-conformance-topic";
@@ -57,7 +68,11 @@ async fn empty(address: &str) -> Result<(), String> {
     )
     .await
     .map_err(|e| e.to_string())?;
-    drain(s.as_mut(), 2).await.map_err(|e| e.to_string())?;
+    // Quiet for longer than LOCK: a message a killed consumer still holds
+    // comes back within it, and must not leak into the next run.
+    drain(s.as_mut(), QUIET_POLLS)
+        .await
+        .map_err(|e| e.to_string())?;
     let _ = s.close().await;
     Ok(())
 }
@@ -137,8 +152,8 @@ async fn servicebus_peek_lock_redelivery() {
         "source",
         json!({"addresses": [QUEUE], "poll_wait_ms": 3000}),
     );
-    // Peek-locked, never completed: the connection drops and the locks go
-    // with it, so Service Bus redelivers every message.
+    // Peek-locked, never completed: the connection drops with the messages
+    // still locked.
     let mut first = open_source(f.as_ref(), "src", cfg.clone()).await.unwrap();
     let mut got = Vec::new();
     while got.len() < 5 {
@@ -146,9 +161,13 @@ async fn servicebus_peek_lock_redelivery() {
         got.extend(ids(&b.events));
     }
     drop(first);
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    // The locks expire (LOCK) and Service Bus redelivers every message.
     let mut second = open_source(f.as_ref(), "src", cfg).await.unwrap();
-    let mut again = drain(second.as_mut(), 2).await.unwrap();
+    let deadline = tokio::time::Instant::now() + LOCK * 6;
+    let mut again = Vec::new();
+    while again.len() < 5 && tokio::time::Instant::now() < deadline {
+        again.extend(drain(second.as_mut(), 2).await.unwrap());
+    }
     again.sort();
     assert_eq!(again, (0..5).map(|i| format!("sb{i}")).collect::<Vec<_>>());
     second.close().await.unwrap();
