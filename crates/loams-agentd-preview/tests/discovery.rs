@@ -78,13 +78,23 @@ async fn only_current_project_http_processes_are_exposed_and_removals_are_live()
     if let Some(listener) = occupied {
         assert!(service.catalog().snapshot().error.is_some());
         drop(listener);
-        tokio::time::timeout(Duration::from_secs(6), async {
+        let retried = tokio::time::timeout(Duration::from_secs(6), async {
             while service.catalog().snapshot().error.is_some() {
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
         })
-        .await
-        .expect("proxy did not retry the freed port");
+        .await;
+        // nextest runs every test in its own process, so SERIAL does not cover
+        // another crate's engine taking the freed port first (the workspace
+        // run starts many). The proxy can only be blamed if the port is free.
+        if retried.is_err() {
+            assert!(
+                tokio::net::TcpListener::bind("127.0.0.1:7331")
+                    .await
+                    .is_err(),
+                "proxy did not retry the freed port"
+            );
+        }
     }
     let found = &service.catalog().snapshot().services[0];
     assert!(found.loams_desktop_owned);

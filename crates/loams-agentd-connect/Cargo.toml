@@ -34,7 +34,6 @@ hyper-util = { version = "0.1", features = ["server-auto", "tokio", "service"] }
 jsonwebtoken.workspace = true
 jwks-http = { package = "reqwest", version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 rustls = { workspace = true, features = ["ring", "std", "tls12", "logging"] }
-rustls-pemfile = "2.2"
 thiserror.workspace = true
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
 url.workspace = true

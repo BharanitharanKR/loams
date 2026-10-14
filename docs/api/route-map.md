@@ -80,6 +80,7 @@ Merged outside `HotLayer` on every node (`api::router` and `api::internal_router
 | POST | `/internal/v1/hot/status` | internal | `loams.internal.v1.HotService/GetHotStatus` | `hot::local_status` | `cluster.rs`, `hot_http.rs` (owner path) |
 | POST | `/internal/v1/hot/warm` | internal | `loams.internal.v1.HotService/Warm` | `hot::warm_local` | `cluster.rs`, `hot_http.rs` (owner path) |
 | POST | `/internal/v1/graph/{method}` | internal | `loams.internal.v1.GraphForwardService/Forward` (GR1 Task 12; moves with API1 Task 8) | `GraphAdmin::serve_forwarded` (feature `graph`) | `loams-graph` `ownership` tests |
+| POST | `/internal/v1/git/commit` | internal | `loams.internal.v1.GitForwardService/Commit` (GT1 Task 14; moves with API1 Task 8) | `api::git_internal::commit` (a postcard `ForwardedTxn` to the sequencer owner) | `git/repos.rs::forwarded_commit_route_commits_here` |
 
 ## Cluster bootstrap (`crates/loams/src/server.rs`)
 

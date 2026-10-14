@@ -67,9 +67,15 @@ fn router_sources() -> Vec<PathBuf> {
     files
 }
 
-/// Files that only define path constants the routers use.
+/// Files that only define path constants the routers use. They come after the
+/// router sources, so an imported constant (`api/git_internal.rs` routes
+/// `loams_git::FORWARD_PATH`) resolves to its own crate's value rather than a
+/// same-named constant of another router file (`api/graph.rs`'s).
 fn constant_sources() -> Vec<PathBuf> {
-    vec![workspace().join("crates/loams-hot/src/remote.rs")]
+    vec![
+        workspace().join("crates/loams-hot/src/remote.rs"),
+        workspace().join("crates/loams-git/src/forward.rs"),
+    ]
 }
 
 /// The non-test, non-comment part of a source file.
