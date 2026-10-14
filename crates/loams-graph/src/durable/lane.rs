@@ -32,6 +32,7 @@ use std::time::Instant;
 use bytes::Bytes;
 use grafeo_engine::transaction::IsolationLevel;
 
+use super::faults::KillPoint;
 use super::idempotency::Outcome;
 use super::{Commit, ConsistencyToken, Durable, Isolation, WriteOptions};
 use crate::changeset::capture::{CdcCapture, CommitEvents};
@@ -336,11 +337,13 @@ impl WriteLane {
                 .into_iter()
                 .map(|value| log_record(value, now))
                 .collect();
+            durable.log.reach_blocking(KillPoint::Enqueued);
             match durable
                 .log
                 .append(durable.stream, batch, durable.fence.as_ref())
             {
                 Ok(ack) if ack.last_offset.checked_sub(ack.base_offset) == Some(count - 1) => {
+                    durable.log.reach_blocking(KillPoint::Appended);
                     // The checkpointer's "64 MiB of log" trigger (GR1 Task 13).
                     durable.log_bytes.fetch_add(bytes, Ordering::AcqRel);
                     Some((ack.base_offset, ack.last_offset + 1, now))
@@ -374,6 +377,7 @@ impl WriteLane {
             db.current_epoch().as_u64(),
             (db.node_count() as u64, db.edge_count() as u64),
         );
+        durable.log.reach_blocking(KillPoint::Published);
         let token_of = |ran: &Ran| ConsistencyToken {
             stream: durable.stream,
             offset: match (ran.record, base) {
@@ -462,6 +466,13 @@ fn fail(
         .collect()
 }
 
+/// Reaches kill point `point` on `graph`'s node (GR1 Task 16; nothing without `test-hooks`).
+fn reach(graph: &Graph, point: KillPoint) {
+    if let Some(durable) = graph.durable_state() {
+        durable.log.reach_blocking(point);
+    }
+}
+
 /// The answer to a key the index already holds.
 fn replayed(durable: &Durable, outcome: Outcome) -> Committed {
     Committed {
@@ -502,6 +513,7 @@ fn run(
         Isolation::Snapshot => IsolationLevel::SnapshotIsolation,
         Isolation::Serializable => IsolationLevel::Serializable,
     };
+    reach(graph, KillPoint::Begin);
     session
         .begin_transaction_with_isolation(level)
         .map_err(|err| Step::Refused(as_engine_error(err)))?;
@@ -518,6 +530,7 @@ fn run(
             }
         }
     }
+    reach(graph, KillPoint::Executed);
     if let Err(err) = session.commit() {
         let _ = session.rollback();
         return Err(match as_engine_error(err) {
@@ -535,6 +548,7 @@ fn run(
             "change capture: the engine reported no commit",
         ))
     })?;
+    reach(graph, KillPoint::Committed);
     // A failed capture, injected for one graph by name (`durability.rs`,
     // `a_refused_capture_reloads_and_hides`). The engine bug that used to provoke one (R9.8) is
     // fixed by the fork's LG-0004.
@@ -551,6 +565,7 @@ fn run(
     let captured = CdcCapture::new(graph.db())
         .and_then(|capture| capture.capture_events(events))
         .map_err(Step::Fatal)?;
+    reach(graph, KillPoint::Captured);
     let results = results
         .into_iter()
         .map(|mut result| {

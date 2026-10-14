@@ -97,6 +97,9 @@ reqwest.workspace = true
 proptest.workspace = true
 # The durable write path's tests read the graph's stream back (GR1 Task 11).
 loams-cache.workspace = true
+# The durability fault gate's history checker (GR1 Task 16): Elle's list-append check, without
+# the simulation (`default-features = false`, as loams-live takes it).
+loams-sim = { path = "../loams-sim", default-features = false }
 
 [lints]
 workspace = true

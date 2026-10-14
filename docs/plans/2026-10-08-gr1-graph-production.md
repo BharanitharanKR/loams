@@ -1834,3 +1834,42 @@ Carried in: the per-graph gate stays (R9.3, LG-0005 ruling 2026-10-13), so a fol
 - `strong_read_routed_to_owner`: a `strong` read (and the default) is forwarded and sees every write; a write sent with `eventual` goes to the owner.
 - `loams` `connect_graph` gains `consistency_tokens_ride_in_the_header`.
 - Unit tests: `consistency.rs` (levels, the header rule), `owner.rs` (`ranked_starts_with_the_rendezvous_choice`).
+
+### Task 16 (2026-10-14, on `gr1-b2-t16`)
+
+**R16.1 Kill points are a per-node hook, not failpoints (deviation in mechanism).**
+- `durable::faults::KillPoint` names ten points. The first seven are §48 §6.2's steps: `Begin`, `Executed`, `Committed` (steps 3–4: Grafeo's `commit` prepares and commits in one call), `Captured`, `Enqueued`, `Appended`, `Published`. The other three are `CheckpointUpload`, `ManifestCas` and `LogTrim`.
+- `GraphLog::set_kill_hook` (feature `test-hooks`) is awaited at each point that node reaches. Without the feature every point compiles to nothing.
+- The `fail` crate's failpoints are process-wide, and the gate runs several nodes in one process. `loams-sim` has the history checker, not failpoints.
+- A kill is the hook never returning there. The node renews nothing, nobody reaches it, and the other node sees only itself. Once the lease is out, the other node takes the graph and recovers it from its snapshot and stream.
+- At the end the dead node is released. Whatever it still had in flight is fenced, and the final state must not change.
+
+**R16.2 The history check is Elle's list-append (deviation in checker).**
+- `loams-sim` has no per-key register (linearizability) checker. Its `elle` list-append check finds what the plan asks about:
+  - a value a client saw and that was later lost, or values reordered (`IncompatibleOrder`);
+  - a read of a write that never committed (`G1a`), intermediate reads, and dependency cycles.
+- It adds no real-time edges, so "every acknowledged append is in the final state" is checked on its own.
+- A key's list is a text property appended with GQL's `||` (`MATCH (n:K {k: $k}) SET n.l = n.l || $s`). Clients write through the node that does not own the graph, so every write is forwarded.
+- A failed or timed-out append is recorded as an unknown outcome.
+
+**R16.3 Bucket faults.** `FaultyStore` errors 5 % of calls, applies then fails 2 %, and delays 10 % (up to 40 ms). On cue it also loses one WAL object and stalls another past a 500 ms append timeout. Writes and checkpoints run throughout. The owner then leaves, and the other node rebuilds the graph from the bucket and the stream. The test asserts the faults reached at least one write.
+
+**R16.4 A metastore outage stops writes, not eventual reads.**
+- The test shuts the in-process meta node down. No fault wrapper exists for the 59-method `MetaStore`.
+- A write is answered `UNAVAILABLE`, and so is a `strong` read on a node that does not own the graph.
+- A follower goes on serving `eventual` reads, which took three changes:
+  - a read a follower may serve falls back to the catalog record this process last read (`GraphCatalog::last_read`) when the catalog is unavailable;
+  - after such a failure it skips the catalog for `CATALOG_RETRY_AFTER` (5 s), because each metastore call retries for about 10 s;
+  - an open follower is answered without the metastore.
+
+**R16.5 Bug fixed: a follower's tail spun once the metastore stopped.** `LogReader::fetch` answers empty at once after `MetaStopped`. The tail looped on it without yielding, which held a runtime worker and blocked runtime shutdown. An empty fetch that returns before half its wait now backs off (`RETRY_AFTER`). Note for loams-log: any caller that loops on `fetch` must do the same.
+
+**R16.6 CI (deviation in trigger).** The gate takes about 80 s. It is `#[ignore]`d in the workspace run (every pull request), and the heavy `graph` job runs it with `--ignored`: nightly, on dev → main, and with `ci:full`. The plan's "on PRs touching durable/owner/snapshot/recovery" yields to the owner's CI tiers of 2026-10-13, which put Graph in the heavy tier.
+
+**R16.7** The multi-node harness moved from `tests/ownership.rs` to `tests/common/mod.rs`, which `tests/faults.rs` shares. `Cluster::start_with` takes a checkpoint policy.
+
+**R16.8 Tests** (`tests/faults.rs`, 3):
+- `kill_matrix_acked_writes_survive`: ten cases, each with a seeded workload of four clients. The survivor must have recovered from a snapshot.
+- `bucket_errors_are_retried_not_lost`.
+- `metastore_unavailable_stops_writes_not_reads`.
+- RED check: with a replay that skips the stream's last record, the kill matrix fails.

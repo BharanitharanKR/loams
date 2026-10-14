@@ -35,6 +35,7 @@ use super::manifest::{GraphManifest, ManifestStore, SnapshotEntry, SnapshotKind,
 use super::portable::{GraphRows, Header};
 use super::{SnapshotError, graph_prefix, native, portable};
 use crate::GraphId;
+use crate::durable::faults::KillPoint;
 use crate::durable::idempotency::IDEMPOTENCY_WINDOW_MS;
 use crate::engine::{Graph, GraphError};
 
@@ -254,7 +255,9 @@ impl Checkpointer {
                 .await
                 .map_err(|_| SnapshotError::Engine(GraphError::EnginePanic))???
         };
+        reach(&graph, KillPoint::CheckpointUpload).await;
         let entries = self.upload(&graph, namespace, id, &point, taken).await?;
+        reach(&graph, KillPoint::ManifestCas).await;
         let fence = graph
             .durable_state()
             .and_then(|durable| durable.fence.clone());
@@ -300,6 +303,7 @@ impl Checkpointer {
                     Some(bytes.saturating_sub(point.log_bytes))
                 });
         }
+        reach(&graph, KillPoint::LogTrim).await;
         let log_start = self.trim(&graph, &manifest).await?;
         Ok(Checkpointed {
             taken: entries,
@@ -408,6 +412,13 @@ impl Checkpointer {
                 Ok(None)
             }
         }
+    }
+}
+
+/// Reaches kill point `point` on `graph`'s node (GR1 Task 16; nothing without `test-hooks`).
+async fn reach(graph: &Graph, point: KillPoint) {
+    if let Some(durable) = graph.durable_state() {
+        durable.log.reach(point).await;
     }
 }
 

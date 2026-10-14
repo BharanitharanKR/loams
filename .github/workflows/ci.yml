@@ -1910,6 +1910,10 @@ jobs:
       # GR1 Task 3: panic containment (`engine_panic_poisons_one_graph`) behind a failpoint.
       - name: loams-graph with failpoints
         run: cargo test -p loams-graph --features failpoints --locked --test failpoints --test durability
+      # GR1 Task 16: the durability fault gate (kill matrix, bucket faults, metastore outage),
+      # about 80 s, ignored in the workspace run.
+      - name: loams-graph durability fault gate
+        run: cargo test -p loams-graph --locked --test faults -- --ignored --test-threads 1
       # GR1 Task 5: loams.graph.v1 on the main port, in both builds (the default build answers
       # feature_not_in_variant; the graph build serves it).
       - name: loams serves loams.graph.v1 (graph feature)
