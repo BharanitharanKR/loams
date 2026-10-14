@@ -267,16 +267,11 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      # protoc from its GitHub release (not Chocolatey, whose outages exit 0) and NASM. The engine
+      # step below may fail without failing the job, so a missing protoc would ship the app without
+      # its engine: this step fails instead.
       - name: protoc and NASM
-        shell: pwsh
-        run: |
-          # Chocolatey's package is `protoc` (there is no `protobuf`), and pwsh
-          # does not stop on a native command's failure, so check each one.
-          choco install --no-progress -y protoc
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          choco install --no-progress -y nasm
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          "$env:ChocolateyInstall\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+        uses: ./.github/actions/windows-build-tools
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: desktop-release-windows

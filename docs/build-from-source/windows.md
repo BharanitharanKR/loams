@@ -210,7 +210,8 @@ every one of them shells out to the **`protoc` binary on `PATH`**. **[verified]*
 Each one panics with *"is protoc installed?"* when it is missing. CI installs
 it with `sudo apt-get install -y protobuf-compiler libprotobuf-dev`, which is
 Linux-specific and not usable here. **[verified]** — that line is in `ci.yml`
-and `release-crates.yml`.
+and `release-crates.yml`. The Windows CI jobs download the pinned release zip
+(option 1 below) in `.github/actions/windows-build-tools`.
 
 There is **no vendored `protoc`**: `protoc-bin-vendored` is not in `Cargo.lock`,
 and no build script sets `PROTOC`. `buf` is not a substitute for `protoc` here,
@@ -227,7 +228,9 @@ or the `PROTOC` environment variable.
    against both a 3.21-series `protoc` (what `ci.yml` gets from Ubuntu 24.04)
    and 36.1 (what the Linux machine used to write it), and both build this tree.
    **[verified]** that both work, on Linux.
-2. `choco install protobuf`
+2. `choco install protoc` (the package is `protoc`, not `protobuf`). Check
+   `protoc --version` afterwards: when the community feed is down, `choco`
+   prints "Unable to find package" and still exits 0.
 3. `winget install protobuf` — **unverified**: I could not confirm a package with
    that exact identifier, so check `winget search protobuf` first.
 

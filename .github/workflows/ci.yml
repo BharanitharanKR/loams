@@ -2182,10 +2182,9 @@ jobs:
         with:
           persist-credentials: false
       - name: protoc
-        shell: pwsh
-        run: |
-          choco install --no-progress -y protoc
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+        uses: ./.github/actions/windows-build-tools
+        with:
+          nasm: "false"
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           save-if: ${{ github.event_name != 'pull_request' }}
