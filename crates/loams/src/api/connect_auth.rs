@@ -83,6 +83,71 @@ fn session_of(doc: &Doc, member: &MemberRec, csrf: String, expires_ms: i64) -> S
     }
 }
 
+/// The `Session` of a caller without a console session: an OIDC or tailnet
+/// user, an API key, or the developer on loopback. It names the caller and
+/// the org role the authorizer would give it, read-only (an invitation is
+/// accepted on the first admin call, not here), with no CSRF token (nothing
+/// rides on a cookie) and no expiry of its own. Someone outside the org has
+/// no role.
+fn ambient_session(doc: &Doc, principal: &Principal) -> Session {
+    let caller = || admin::User {
+        id: principal.subject.clone(),
+        name: principal.display_name.clone(),
+        email: principal.email.clone().unwrap_or_default(),
+        ..Default::default()
+    };
+    let (user, role) = match principal.kind {
+        PrincipalKind::User | PrincipalKind::Tailscale => match principal
+            .email
+            .as_deref()
+            .filter(|e| !e.is_empty())
+            .and_then(|email| doc.member_by_email(email))
+        {
+            Some(member) => (member.user.clone(), Some(member.role)),
+            None => (caller(), None),
+        },
+        PrincipalKind::ApiKey => {
+            let id = principal
+                .subject
+                .strip_prefix("apikey:")
+                .unwrap_or(&principal.subject);
+            match doc.key(id) {
+                Some(key) => {
+                    let subject = key.key.principal.as_option().cloned().unwrap_or_default();
+                    let member = (subject.kind.as_known()
+                        == Some(admin::SubjectKind::SUBJECT_KIND_USER))
+                    .then(|| doc.member(&subject.id))
+                    .flatten();
+                    match member {
+                        Some(member) => (member.user.clone(), Some(key.role)),
+                        None => (
+                            admin::User {
+                                id: subject.id,
+                                name: subject.name,
+                                ..Default::default()
+                            },
+                            Some(key.role),
+                        ),
+                    }
+                }
+                // A key from LOAMS_API_KEYS_FILE: the operator's.
+                None => (caller(), Some(Role::Owner)),
+            }
+        }
+        PrincipalKind::DevLoopback => (caller(), Some(Role::Owner)),
+        // Not reached: the caller handles a console session.
+        PrincipalKind::Session => (caller(), None),
+    };
+    Session {
+        user: user.into(),
+        org: doc.org.clone().unwrap_or_default().into(),
+        role: role
+            .map_or(admin::OrgRole::ORG_ROLE_UNSPECIFIED, Role::to_proto)
+            .into(),
+        ..Default::default()
+    }
+}
+
 /// The audit actor for a person signing in or out.
 fn person(member: &MemberRec) -> crate::auth::authorizer::Actor {
     crate::auth::authorizer::Actor {
@@ -223,17 +288,23 @@ impl AuthService for Auth {
         ctx: RequestContext,
         _request: ServiceRequest<'_, GetSessionRequest>,
     ) -> ServiceResult<GetSessionResponse> {
-        let principal = ctx.extensions().get::<Principal>();
-        if principal.is_none_or(|p| p.kind != PrincipalKind::Session) {
-            return Err(no_session());
-        }
-        let token = session_token(ctx.headers()).ok_or_else(no_session)?;
+        let principal = ctx.extensions().get::<Principal>().ok_or_else(no_session)?;
         let doc = self
             .principals
             .directory
             .read()
             .await
             .map_err(|err| unavailable(&err.0))?;
+        if principal.kind != PrincipalKind::Session {
+            // The hosted console signs in elsewhere (an OIDC token, an API
+            // key, the tailnet) and reads who it is here (API2 Task 10,
+            // rulings 10.4 and 10.5).
+            return Response::ok(GetSessionResponse {
+                session: ambient_session(&doc, principal).into(),
+                ..Default::default()
+            });
+        }
+        let token = session_token(ctx.headers()).ok_or_else(no_session)?;
         let digest = token_digest(&token);
         let record = doc
             .sessions

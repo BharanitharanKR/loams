@@ -514,7 +514,7 @@ async fn it_endpoint_starts_suspends_and_deletes() {
         h.service.get_operation(&suspend.id).await.unwrap().state,
         OperationState::Succeeded
     );
-    assert_eq!(rt.status(&first).await.unwrap(), RuntimeStatus::Missing);
+    assert_eq!(rt.status(ns, &first).await.unwrap(), RuntimeStatus::Missing);
 
     // A second start: a new compute at the same address.
     h.service
@@ -553,7 +553,10 @@ async fn it_endpoint_starts_suspends_and_deletes() {
         .await
         .unwrap();
     settle(r, store, ns, &project.to_string(), &id, None).await;
-    assert_eq!(rt.status(&second).await.unwrap(), RuntimeStatus::Missing);
+    assert_eq!(
+        rt.status(ns, &second).await.unwrap(),
+        RuntimeStatus::Missing
+    );
 }
 
 /// Idle detection on a real compute (Task 12). The fork's `compute_ctl`
@@ -702,5 +705,8 @@ async fn it_idle_long_query_is_activity_then_suspends() {
         ended.elapsed()
     );
     let id: ComputeId = compute_id.parse().unwrap();
-    assert_eq!(st.rt.status(&id).await.unwrap(), RuntimeStatus::Missing);
+    assert_eq!(
+        st.rt.status(st.ns, &id).await.unwrap(),
+        RuntimeStatus::Missing
+    );
 }

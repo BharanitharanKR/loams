@@ -227,6 +227,42 @@ jobs:
         working-directory: deploy/loams-postgres-dev
         run: docker compose down -v
 
+  # PG2 Task 13: the Kubernetes runtime on kind (preinstalled on the runner).
+  pg-control-kind:
+    if: github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full')
+    name: Kubernetes runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: pg2-loams-pg-control
+          save-if: false
+      - name: build the test
+        run: cargo test -p loams-pg-control --locked --features kubernetes --test it_kind --no-run
+      - name: kind, and the pinned compute image
+        run: |
+          image="$(python3 -c 'import tomllib; p = tomllib.load(open("deploy/pins/loams-postgres-images.toml", "rb")); c = p["images"]["compute-v17"]; print(c["repository"] + "@" + c["digest"])')"
+          kind create cluster --name loams-pg --wait 120s
+          for i in 1 2 3; do docker pull "$image" && break; sleep $((i * 15)); done
+          # A digest reference may not survive `docker save`; the node then
+          # pulls the (public) image itself.
+          kind load docker-image "$image" --name loams-pg || echo "the node pulls $image"
+      - name: it_kind_start_bind_and_stop
+        run: cargo test -p loams-pg-control --locked --features kubernetes --test it_kind -- --ignored
+      - name: logs
+        if: failure()
+        run: |
+          kubectl -n loams-pg-it get pods,services,secrets -o wide || true
+          kubectl -n loams-pg-it describe pods || true
+          kubectl -n loams-pg-it logs -l app.kubernetes.io/component=postgres-compute --tail 200 || true
+      - name: teardown
+        if: always()
+        run: kind delete cluster --name loams-pg || true
+
   pg-control-compose-runtime:
     if: github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full')
     name: Compose runtime
