@@ -2,8 +2,7 @@
 
 Loams Studio in the browser console works against a `loams-agentd` you run on a machine you control: a dev box, a VM, a container or a workspace sandbox (design [§53](../../design/53-studio-ade.md) §6.3, D909). One remote agentd serves one person (D921). The browser reaches it over TLS with your own short-lived access token, and the daemon's own token never leaves the machine.
 
-> **Status.** The remote listener, its checks and previews through it are on `dev` (SD1 Tasks 7 and 26). Three things are **pending**:
-> - the browser console's Content-Security-Policy for your host ([below](#the-consoles-content-security-policy), SD1 Task 30);
+> **Status.** The remote listener, its checks, previews through it and the console's Content-Security-Policy setting ([below](#the-consoles-content-security-policy)) are on `dev` (SD1 Tasks 7, 26 and 30). Two things are **pending**:
 > - a sign-in that issues the agentd token, so for now you paste one (MT1);
 > - Studio in the browser without the `studio` instance feature (SD1 Task 32; see [Getting started](getting-started.md#in-a-browser)).
 
@@ -67,16 +66,17 @@ openssl x509 -in cert.pem -noout -fingerprint -sha256
 
 ## A container recipe
 
-The release builds an image, `ghcr.io/ostrium-labs/loams-agentd`, from [`deploy/release/Containerfile.loams-agentd`](../../../deploy/release/Containerfile.loams-agentd) (`deploy/release/build.sh loams-agentd` builds it locally). Its entry point is `loams-agentd`, it runs as uid 10001, and it sets `LOAMS_AGENTD_CONFIG=/etc/loams-agentd/config.toml`, which overrides `--config`. **It holds no harness CLIs:** build your own image from it with the agents you use (Claude Code, Codex, opencode…) installed.
+The release builds an image, `ghcr.io/ostrium-labs/loams-agentd`, from [`deploy/release/Containerfile.loams-agentd`](../../../deploy/release/Containerfile.loams-agentd) (`deploy/release/build.sh loams-agentd` builds it locally). Its entry point is `loams-agentd`, it runs as uid 10001, and it sets `LOAMS_AGENTD_CONFIG=/home/loams/agentd/config.toml`, which overrides `--config`. The daemon keeps its token, lock and store beside `config.toml` and makes that directory owner-only, so it must be the daemon's own and writable: `/home/loams/agentd` is, in the image (SD1 Task 30). **It holds no harness CLIs:** build your own image from it with the agents you use (Claude Code, Codex, opencode…) installed.
 
 Run it with only your project directories mounted (§53 §8.2). Worktrees keep agents' edits apart, but they don't contain processes: an agent with a shell can read anything the daemon's user can.
 
 ```sh
-# The daemon writes its token, lock and store beside config.toml, so its directory is a
-# writable volume; the TLS files are mounted read-only somewhere else.
+# /home/loams (a volume) holds agentd/, the daemon's directory; the daemon needs a
+# config.toml there (it may be empty), mounted read-only on its own. The TLS files are
+# mounted read-only somewhere else.
 podman run -d --name loams-agentd \
-  -v loams-agentd-etc:/etc/loams-agentd \
   -v loams-agentd-home:/home/loams \
+  -v ./config.toml:/home/loams/agentd/config.toml:ro \
   -v ~/src:/home/loams/src \
   -v ./tls:/etc/loams-agentd-tls:ro \
   -p 8443:8443 \
@@ -85,8 +85,7 @@ podman run -d --name loams-agentd \
     --tls-cert /etc/loams-agentd-tls/cert.pem --tls-key /etc/loams-agentd-tls/key.pem \
     --issuer https://auth.example.com/application/o/loams-agentd/ \
     --audience loams-agentd --subject <your sub> \
-    --allow-origin https://console.example.com \
-    --config /etc/loams-agentd/config.toml
+    --allow-origin https://console.example.com
 ```
 
 **Unverified:** this recipe has not been run end to end against the published image. `deploy/release/compose.yaml`'s optional `agentd` service (`--profile agentd`) runs the same image with `run`, not `serve --remote`.
@@ -112,21 +111,21 @@ Without a host, or without a token for the selected host, Studio's home shows **
 
 ## The console's Content-Security-Policy
 
-**Pending (SD1 Task 30, ruling T26-9).** The browser console only fetches from and frames the origins its Content-Security-Policy names, and today none of the policies on `dev` names your agentd host:
+The browser console only fetches from and frames the origins its Content-Security-Policy names. A deployment lists its agentd hosts in **`LOAMS_AGENTD_ORIGINS`** (SD1 Task 30, ruling T30-3): origins separated by spaces or commas, each an exact `https://host[:port]` (`http://` only on `localhost`), with no wildcard, path or credentials. `deploy/stage.mjs` adds them to both `connect-src` (the Connect calls) and `frame-src` (the previews), and the console deploy workflow reads the repository variable of the same name. Each host must also name the console in its `--allow-origin`.
 
-| Console | `connect-src` (Connect calls) | `frame-src` (previews) |
-|---|---|---|
-| The production build (`vite.config.ts`'s `<meta>`), as the engine serves it | `'self'` | `'self'` |
-| The hosted console (`deploy/stage.mjs`, Cloudflare) | `'self'`, `https://*.ts.net`, the issuer and a fixed engine (`LOAMS_ENGINE_URL`) | `'self'` |
-| Vercel (`vercel.json`) | `'self'`, `https://*.ts.net`, `https://auth.loams.dev` | `'self'` |
-| The dev server (`pnpm dev`) | no policy | no policy |
+```sh
+LOAMS_AGENTD_ORIGINS="https://devbox.example.com:8443 https://vm.example.com" \
+  node apps/console/deploy/stage.mjs
+```
 
-So, on `dev`:
-- **The dev server works** with any host.
-- **The hosted and Vercel consoles reach an agentd on a `*.ts.net` name on port 443 only.** A source without a port matches only the scheme's default port, so `https://devbox.<tailnet>.ts.net:8443` is blocked. Listen on 443 (`--listen <tailnet address>:443`) to use them. Previews stay blocked by `frame-src 'self'`.
-- **The engine-served console reaches no remote agentd.**
+| Console | Reaches an agentd host when |
+|---|---|
+| The hosted console (`deploy/stage.mjs`, Cloudflare) | its origin is in `LOAMS_AGENTD_ORIGINS`; a `*.ts.net` name on port 443 is already in `connect-src`, but its previews need it listed |
+| Vercel (`vercel.json`) | its origin is in `vercel.json`'s `connect-src` and `frame-src` (Vercel headers are static; the stage step fails when `LOAMS_AGENTD_ORIGINS` names one they lack) |
+| The production build as the engine serves it | never: its policy is the build's `'self'` |
+| The dev server (`pnpm dev`) | always (no policy) |
 
-The fix (ruling T26-9) is that a deployment serves a policy naming the configured agentd origins in both `connect-src` and `frame-src`, as §39 does for the factory apps. Task 30 is making that change; this section will name its setting once it is on `dev`. The desktop is not affected: it reaches its local daemon through Electron main, and its preview is a native view.
+The desktop is not affected: it reaches its local daemon through Electron main, and its preview is a native view.
 
 ## Previews
 
