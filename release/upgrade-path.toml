@@ -25,6 +25,12 @@ store   = "meta"
 class   = "reversible"
 summary = "Record preview.2's versions (preview.2 writes no stack record)"
 
+[[release.migration]]
+id      = "0001-safekeeper-volume"
+store   = "host"
+class   = "reversible"
+summary = "Give the safekeeper a volume (after a drain)"
+
 [[release]]
 version = "0.1.0-preview.2"
 from    = "fresh"   # preview.1 → preview.2 keeps no data

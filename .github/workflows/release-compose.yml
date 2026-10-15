@@ -81,5 +81,15 @@ jobs:
             jq -e --arg s "$service" \
               '.services[$s].depends_on.migrate.condition == "service_completed_successfully"' <<<"$cfg"
           done
+      - name: compose_safekeeper_has_volume (UP1 Task 10)
+        working-directory: deploy/release
+        run: |
+          cfg="$(docker compose --env-file .env.example config --format json)"
+          jq -e '.services.safekeeper1.volumes
+                 | map(select(.source == "safekeeper-data" and .target == "/data")) | length == 1' <<<"$cfg"
+          # migrate reaches the Postgres storage APIs to drain before a recreate.
+          jq -e '.services.migrate.command
+                 | (index("--pageserver=http://pageserver:9898") != null)
+                   and (index("--safekeeper=http://safekeeper1:7676") != null)' <<<"$cfg"
       - name: shellcheck
         run: shellcheck deploy/release/build.sh deploy/release/byoc/install.sh deploy/release/byoc/uninstall.sh

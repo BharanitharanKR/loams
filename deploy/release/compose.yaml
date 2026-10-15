@@ -124,6 +124,11 @@ services:
       - --data-dir=/var/lib/loams
       - --house-dir=/var/lib/loams-house
       - --pg-control-dir=/var/lib/loams-pg-control
+      # Loams Postgres's storage APIs: `0001-safekeeper-volume` drains the
+      # safekeeper before it is recreated. A stack composed without Postgres
+      # (postgres-off.yaml) has no such names, and nothing to drain.
+      - --pageserver=http://pageserver:9898
+      - --safekeeper=http://safekeeper1:7676
     restart: "no"
     environment:
       RUST_LOG: ${RUST_LOG:-info}

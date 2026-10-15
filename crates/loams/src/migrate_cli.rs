@@ -84,13 +84,6 @@ pub(crate) enum MigrateCommand {
         /// The TiKV version the backup was taken at (`v8.5.8`).
         #[arg(long)]
         tikv_version: Option<String>,
-        /// Loams Postgres's pageserver management API: drain the safekeeper
-        /// and branch every timeline (with --safekeeper).
-        #[arg(long, requires = "safekeeper")]
-        pageserver: Option<String>,
-        /// Loams Postgres's safekeeper HTTP API.
-        #[arg(long, requires = "pageserver")]
-        safekeeper: Option<String>,
         /// How long the drain may take, in seconds.
         #[arg(long, default_value_t = 300)]
         drain_timeout_secs: u64,
@@ -180,6 +173,14 @@ pub(crate) struct StoreArgs {
     /// preview.2 stack needs it.
     #[arg(long)]
     declared_release: Option<String>,
+    /// Loams Postgres's pageserver management API (`http://pageserver:9898`):
+    /// a snapshot drains the safekeeper and branches every timeline;
+    /// `0001-safekeeper-volume` drains before the safekeeper is recreated.
+    #[arg(long, requires = "safekeeper")]
+    pageserver: Option<String>,
+    /// Loams Postgres's safekeeper HTTP API (`http://safekeeper1:7676`).
+    #[arg(long, requires = "pageserver")]
+    safekeeper: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
@@ -265,6 +266,7 @@ async fn open(args: &StoreArgs) -> Result<OpenStores, String> {
     cx.house_dir = args.house_dir.clone();
     cx.pg_control_dir = args.pg_control_dir.clone();
     cx.declared_release = args.declared_release.clone();
+    cx.postgres = args.pageserver.clone().zip(args.safekeeper.clone());
     cx.live = open_live(args.live_store.as_deref()).await?;
     Ok(OpenStores { cx, node })
 }
@@ -548,9 +550,8 @@ async fn execute(
             id,
             tikv,
             tikv_version,
-            pageserver,
-            safekeeper,
             drain_timeout_secs,
+            stores,
             output,
             ..
         } => {
@@ -564,7 +565,7 @@ async fn execute(
                 }
                 _ => None,
             };
-            let postgres = match (pageserver, safekeeper) {
+            let postgres = match (&stores.pageserver, &stores.safekeeper) {
                 (Some(pageserver), Some(safekeeper)) => {
                     Some(loams_migrate::snapshot::PostgresOptions {
                         pageserver: pageserver.clone(),

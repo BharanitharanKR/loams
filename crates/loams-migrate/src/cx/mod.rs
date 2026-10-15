@@ -56,6 +56,9 @@ pub struct Cx {
     pub pg_control_dir: Option<PathBuf>,
     /// The release the operator says the stack is at (`--declared-release`).
     pub declared_release: Option<String>,
+    /// Loams Postgres's pageserver and safekeeper APIs (`--pageserver`,
+    /// `--safekeeper`), when the stack runs Postgres.
+    pub postgres: Option<(String, String)>,
     /// What host migrations asked the CLI to change.
     pub host: HostCx,
 }
@@ -77,6 +80,7 @@ impl Cx {
             house_dir: None,
             pg_control_dir: None,
             declared_release: None,
+            postgres: None,
             host: HostCx::default(),
         }
     }
