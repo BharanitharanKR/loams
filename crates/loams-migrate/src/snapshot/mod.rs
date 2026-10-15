@@ -23,6 +23,8 @@
 
 mod files;
 mod manifest;
+pub mod postgres;
+pub mod tikv;
 
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -69,9 +71,25 @@ pub struct SnapshotOptions {
     pub raft_dir: Option<PathBuf>,
     /// agentd's data directory, when the stack runs it.
     pub agentd_dir: Option<PathBuf>,
-    /// Components another step took (TiKV, Postgres: UP1 Task 9), recorded
-    /// in the manifest as given.
+    /// Components another step took, recorded in the manifest as given.
     pub extra: Vec<Component>,
+    /// The snapshot id to use (`None`: a new ULID): the CLI picks it when a
+    /// helper (BR) writes into the snapshot directory first.
+    pub id: Option<String>,
+    /// TiKV's backup, taken by the CLI's helper into `<snapshot>/tikv`
+    /// (UP1 Task 9): how, and at which TiKV version.
+    pub tikv: Option<(tikv::TikvMethod, String)>,
+    /// Loams Postgres's storage (UP1 Task 9): drain the safekeeper, then
+    /// branch every timeline.
+    pub postgres: Option<PostgresOptions>,
+}
+
+/// Where Loams Postgres's storage answers, and how long a drain may take.
+#[derive(Clone, Debug)]
+pub struct PostgresOptions {
+    pub pageserver: String,
+    pub safekeeper: String,
+    pub drain_timeout: std::time::Duration,
 }
 
 fn now_ms() -> u64 {
@@ -87,7 +105,10 @@ pub async fn snapshot(
     to: &Path,
     opts: &SnapshotOptions,
 ) -> Result<SnapshotManifest, SnapshotError> {
-    let id = ulid::Ulid::generate().to_string();
+    let id = opts
+        .id
+        .clone()
+        .unwrap_or_else(|| ulid::Ulid::generate().to_string());
     let created_at_ms = now_ms();
     files::private_dir(to)?;
     let dir = to.join(&id);
@@ -146,6 +167,33 @@ pub async fn snapshot(
             agentd,
             &dir.join("agentd"),
         )?);
+    }
+    if let Some((method, version)) = &opts.tikv {
+        let bytes = files::size_of(&dir.join("tikv"));
+        if *method == tikv::TikvMethod::Br && bytes == 0 {
+            return Err(SnapshotError::Io(
+                "the TiKV backup is missing: run BR into <snapshot>/tikv first".to_string(),
+            ));
+        }
+        components.push(tikv::component(*method, version, bytes));
+    }
+    if let Some(pg) = &opts.postgres {
+        let storage = postgres::PostgresStorage::new(&pg.pageserver, &pg.safekeeper)?;
+        let drained = storage
+            .drain(pg.drain_timeout, std::time::Duration::from_secs(2))
+            .await?;
+        let branches = storage.branch_every_timeline().await?;
+        let target = dir.join("postgres");
+        files::private_dir(&target)?;
+        let body = serde_json::to_vec_pretty(&serde_json::json!({
+            "drained": drained,
+            "branches": branches,
+        }))
+        .map_err(|e| io("postgres/branches.json", e))?;
+        files::write_private(&target.join("branches.json"), &body)?;
+        let mut component = files::describe("postgres", "branch", &dir, "postgres")?;
+        component.method = "branch".to_string();
+        components.push(component);
     }
     components.extend(opts.extra.iter().cloned());
     let (stack_record, ledger) = match Ledger::open_existing(cx.meta.clone()).await {

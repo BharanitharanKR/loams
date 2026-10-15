@@ -113,8 +113,7 @@ impl Stores {
         SnapshotOptions {
             target_release: "0.1.0-preview.3".to_string(),
             raft_dir: Some(self.raft.path().to_path_buf()),
-            agentd_dir: None,
-            extra: Vec::new(),
+            ..SnapshotOptions::default()
         }
     }
 }

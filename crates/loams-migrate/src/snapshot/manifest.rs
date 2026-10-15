@@ -84,7 +84,10 @@ impl SnapshotManifest {
     /// Checks every file component against its digest.
     pub fn check(&self, dir: &Path) -> Result<(), SnapshotError> {
         for component in &self.components {
-            if !matches!(component.method.as_str(), "copy" | "sqlite_backup") {
+            if !matches!(
+                component.method.as_str(),
+                "copy" | "sqlite_backup" | "branch"
+            ) {
                 continue;
             }
             let (_, sha256) = files::digest(&dir.join(&component.path))?;

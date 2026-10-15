@@ -8490,6 +8490,7 @@ name = "loams-migrate"
 version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
+ "axum 0.8.9",
  "base64 0.23.1",
  "bytes",
  "crc32c",
@@ -8498,6 +8499,7 @@ dependencies = [
  "loams-kv",
  "loams-meta",
  "loams-meta-tikv",
+ "loams-postgres",
  "loams-store",
  "loams-tikv",
  "postcard",
@@ -8510,7 +8512,9 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "toml 0.8.23",
+ "tracing",
  "ulid 3.0.0",
+ "url",
 ]
 
 [[package]]
