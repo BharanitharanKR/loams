@@ -18,6 +18,8 @@
 version     = "0.1.0-preview.3"
 from        = "0.1.0-preview.2"
 free_factor = 1.5
+# Expected downtime of the upgrade, excluding image pulls (Q833's target).
+downtime_seconds = 300
 
 [[release.migration]]
 id      = "0000-adopt-preview-2"
@@ -30,6 +32,22 @@ id      = "0001-safekeeper-volume"
 store   = "host"
 class   = "reversible"
 summary = "Give the safekeeper a volume (after a drain)"
+
+# Third-party pins: scripts/release/check-upgrade-path.sh checks them
+# against .env.example, release/sqldb-images.toml,
+# deploy/pins/loams-postgres-images.toml, loams-chdb-sys and Cargo.toml.
+[release.components]
+pd             = "v8.5.8"
+tikv           = "v8.5.8"
+tidb           = "v8.5.8-loams.1"
+loams_postgres = "sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f"
+chdb           = "26.9.0"
+grafeo         = "0.5.43"
+
+# `.env` changes `loams upgrade` applies (old values kept).
+[[release.env]]
+add     = "LOAMS_UPGRADE_SNAPSHOT_DIR"
+default = ""
 
 [[release]]
 version = "0.1.0-preview.2"

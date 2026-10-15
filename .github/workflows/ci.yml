@@ -2280,6 +2280,18 @@ jobs:
       - if: ${{ !cancelled() }} # report every check, not only the first failure
         name: Unique decision and question declarations
         run: scripts/docs/check-decision-ids.sh
+      # Design §54 §11 (UP1 Task 11): the release train lists every compiled
+      # migration once and chains to `fresh`, its pins match the pin files,
+      # and a release pull request's CHANGELOG entry has its Upgrading section.
+      - if: ${{ !cancelled() }}
+        name: upgrade path checker self-test
+        run: scripts/release/check-upgrade-path.sh --self-test
+      - if: ${{ !cancelled() }}
+        name: the upgrade path matches the migrations and the pins
+        run: scripts/release/check-upgrade-path.sh
+      - if: ${{ !cancelled() && github.event_name == 'pull_request' && github.base_ref == 'main' }}
+        name: the release's CHANGELOG entry has its Upgrading section
+        run: python3 scripts/release/upgrade_path.py check-changelog
       # API2 Task 19's every_sdk_dir_has_a_job and only_wave1_is_required. Here
       # because this job is unconditional and light, so a new sdks/<lang>
       # without a job fails every pull request that adds it.
