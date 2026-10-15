@@ -11,15 +11,20 @@ publish = false
 [dependencies]
 async-trait.workspace = true
 base64.workspace = true
+bytes.workspace = true
 crc32c.workspace = true
 # The crash matrix's failpoints (`failpoints` feature only).
 fail = { workspace = true, optional = true }
 loams-common.workspace = true
+# Live's store, for `LiveCx` (embedded or TiKV, as `loams` builds it).
+loams-kv.workspace = true
 loams-store.workspace = true
 postcard.workspace = true
 # preview.2's Durable and House SQLite files (read-only; the same
 # libsqlite3-sys as sqlx).
-rusqlite.workspace = true
+rusqlite = { workspace = true, features = ["backup"] }
+# `HouseCx::swap_dir`: renameat2(RENAME_EXCHANGE).
+rustix = { workspace = true, features = ["fs"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -27,7 +32,6 @@ thiserror.workspace = true
 toml.workspace = true
 
 [dev-dependencies]
-bytes.workspace = true
 loams-meta.workspace = true
 # The preview.2 TiKV dump test (`LOAMS_TEST_PD`).
 loams-meta-tikv.workspace = true

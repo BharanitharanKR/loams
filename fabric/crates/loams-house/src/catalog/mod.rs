@@ -31,7 +31,7 @@ use loams_house_lake::spec::{Schema, TableMetadata};
 use loams_house_lake::{NamespaceIdent, TableCreation, TableIdent, TableRequirement, TableUpdate};
 
 pub use lake::{DatabaseInfo, Lake, LakeRoot, PrefixGrants, RESERVED_PREFIX, register_all};
-pub use local::LocalCatalog;
+pub use local::{CATALOG_USER_VERSION, LocalCatalog};
 pub use mem::MemCatalog;
 pub use rest::{RestCatalog, RestOptions};
 

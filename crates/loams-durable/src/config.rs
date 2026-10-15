@@ -529,7 +529,18 @@ pub(crate) fn configuration(
             loader = loader
                 .set("servers.server_sqlite.path", &quote(path))
                 .map_err(bad)?
-                .set("servers.server_sqlite.migrate", "true")
+                // Serving never migrates an existing database (design §54
+                // §6.1, UP1 Task 6): Resonate still creates a new one, and
+                // refuses one that is behind; `loams migrate run` and
+                // `loams durable migrate` apply its migrations.
+                .set(
+                    "servers.server_sqlite.migrate",
+                    if mode == Mode::Migrate {
+                        "true"
+                    } else {
+                        "false"
+                    },
+                )
                 .map_err(bad)?;
         }
         DurableStore::Mysql { url, tls } => {
@@ -850,6 +861,28 @@ mod tests {
         );
         // Nothing to hide without a password.
         assert_eq!(scrub("x mysql://u@h/d", "mysql://u@h/d"), "x mysql://u@h/d");
+    }
+
+    /// UP1 Task 6: serving opens a SQLite store with `migrate = false`
+    /// (Resonate still creates a new database, and refuses one that is
+    /// behind); `loams durable migrate` and `loams migrate run` migrate it.
+    #[test]
+    fn engine_does_not_migrate_sqlite_on_open() {
+        let config = DurableConfig::sqlite("/data/durable/default.db");
+        let migrate_of = |mode| {
+            #[derive(serde::Deserialize)]
+            struct Sqlite {
+                migrate: bool,
+            }
+            configuration(&config, &carried(), mode, None)
+                .expect("configuration")
+                .server("server_sqlite")
+                .extract::<Sqlite>()
+                .expect("server_sqlite settings")
+                .migrate
+        };
+        assert!(!migrate_of(Mode::Serve));
+        assert!(migrate_of(Mode::Migrate));
     }
 
     #[test]

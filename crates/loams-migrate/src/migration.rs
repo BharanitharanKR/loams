@@ -9,13 +9,10 @@
 //! everything. Migrations are compiled in ([`crate::migrations::MIGRATIONS`]);
 //! nothing is downloaded at upgrade time.
 
-use std::path::PathBuf;
-use std::sync::Arc;
-
 use async_trait::async_trait;
-use loams_common::meta::MetaStore;
 use sha2::{Digest, Sha256};
 
+pub use crate::cx::Cx;
 pub use crate::formats::{FormatId, Store};
 pub use crate::ledger::Class;
 
@@ -54,40 +51,6 @@ impl MigrationError {
             code: code.into(),
             message: message.into(),
         }
-    }
-}
-
-/// What a migration may touch. UP1 Task 6 adds the typed store contexts; a
-/// migration reaches only its own store's.
-#[derive(Clone, Debug)]
-pub struct Cx {
-    pub meta: Arc<dyn MetaStore>,
-    /// The bucket (`--bucket`), when the run has one.
-    pub bucket: Option<loams_store::Store>,
-    /// The engine's data directory (`--data-dir`), when the store has one.
-    pub data_dir: Option<PathBuf>,
-    /// The House data directory (`--house-dir`).
-    pub house_dir: Option<PathBuf>,
-    /// The release the operator says the stack is at (`--declared-release`).
-    pub declared_release: Option<String>,
-}
-
-impl Cx {
-    pub fn new(meta: Arc<dyn MetaStore>) -> Self {
-        Cx {
-            meta,
-            bucket: None,
-            data_dir: None,
-            house_dir: None,
-            declared_release: None,
-        }
-    }
-
-    /// Called by a migration right before its atomic switch: the crash
-    /// matrix's `migrate::before_switch` failpoint.
-    pub fn before_switch(&self) -> Result<(), MigrationError> {
-        crate::failpoint!("migrate::before_switch");
-        Ok(())
     }
 }
 

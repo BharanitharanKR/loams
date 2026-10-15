@@ -20,6 +20,11 @@ use super::{CatalogError, LakeRoot};
 
 const SEPARATOR: &str = "\u{1f}";
 
+/// The catalog's schema version, `PRAGMA user_version` (registry id
+/// `house.catalog`, UP1 Task 6). A catalog from before UP1 reads 0, which
+/// means 1: it is stamped on open.
+pub const CATALOG_USER_VERSION: i64 = 1;
+
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS namespaces (
     name TEXT PRIMARY KEY NOT NULL,
@@ -62,6 +67,20 @@ impl SqlitePointers {
             .busy_timeout(std::time::Duration::from_secs(5))
             .map_err(failed)?;
         connection.execute_batch(SCHEMA).map_err(failed)?;
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .map_err(failed)?;
+        if version == 0 {
+            // Absent means 1 (design §54 §4.1): stamp it, changing nothing else.
+            connection
+                .execute_batch(&format!("PRAGMA user_version = {CATALOG_USER_VERSION}"))
+                .map_err(failed)?;
+        } else if version != CATALOG_USER_VERSION {
+            return Err(CatalogError::Unavailable(format!(
+                "format_unreadable: the local catalog is at user_version {version}; this release \
+                 reads {CATALOG_USER_VERSION}"
+            )));
+        }
         Ok(Self {
             path: path.to_path_buf(),
             connection: Mutex::new(connection),

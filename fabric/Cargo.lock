@@ -5039,6 +5039,7 @@ dependencies = [
  "loams-house-cache",
  "loams-store",
  "rustls",
+ "tempfile",
  "tokio",
  "uuid",
 ]
@@ -5120,6 +5121,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "loams-chdb-sys",
+ "loams-common",
  "loams-house-ipc",
  "loams-house-lake",
  "loams-house-proto",

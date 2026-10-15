@@ -42,6 +42,8 @@ tokio = { workspace = true, features = ["rt-multi-thread", "signal", "macros"] }
 loams-chdb-sys = { path = "../loams-chdb-sys", optional = true }
 
 [dev-dependencies]
+# The data directory stamp's tests (UP1 Task 6).
+tempfile.workspace = true
 # `tls_listener_serves_with_its_certificate` (HS1 Task 20): a TLS client that
 # trusts only the House's own certificate.
 rustls.workspace = true
