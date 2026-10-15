@@ -205,23 +205,8 @@ impl<'a> Runner<'a> {
                     .iter()
                     .any(|e| e.id == m.id() && e.state == LedgerState::Done)
             })
-            .filter(|m| !stored.is_some_and(|s| self.introduced_at_or_before(m.id(), s)))
+            .filter(|m| !stored.is_some_and(|s| self.path.introduced_at_or_before(m.id(), s)))
             .collect()
-    }
-
-    /// Whether the release that introduced migration `id` is `release` or an
-    /// earlier one, by the train's order (newest first). A migration the
-    /// train does not list is never skipped.
-    fn introduced_at_or_before(&self, id: &str, release: &str) -> bool {
-        let at =
-            |pred: &dyn Fn(&crate::path::Release) -> bool| self.path.releases.iter().position(pred);
-        match (
-            at(&|r| r.migrations.iter().any(|m| m.id == id)),
-            at(&|r| r.version == release),
-        ) {
-            (Some(introduced), Some(stored)) => introduced >= stored,
-            _ => false,
-        }
     }
 
     /// Migrates the stack to `target`.

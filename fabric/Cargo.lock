@@ -4611,6 +4611,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "loams-common"
+version = "0.1.0-preview.2"
+dependencies = [
+ "async-trait",
+ "serde",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "loams-connector-analytics"
 version = "0.0.1"
 dependencies = [
@@ -5024,6 +5034,7 @@ dependencies = [
  "clap",
  "loams-cache",
  "loams-chdb-sys",
+ "loams-common",
  "loams-house",
  "loams-house-cache",
  "loams-store",

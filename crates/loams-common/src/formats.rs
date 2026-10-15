@@ -21,6 +21,7 @@
 
 use std::cell::RefCell;
 use std::fmt;
+use std::path::Path;
 
 /// A format's registry id: `<area>.<what>`, for example
 /// `collection.manifest`.
@@ -215,6 +216,66 @@ impl Unreadable {
     }
 }
 
+/// The file a directory store stamps its format version in: one line,
+/// `<registry id> <version>` (for example `house.dir 1`).
+pub const STAMP_FILE: &str = "FORMAT";
+
+/// Why a directory's stamp is not readable.
+#[derive(Debug, thiserror::Error)]
+pub enum StampError {
+    #[error(transparent)]
+    Unreadable(#[from] Unreadable),
+    #[error("{path}: {reason}")]
+    Malformed { path: String, reason: String },
+    #[error("{path}: {source}")]
+    Io {
+        path: String,
+        source: std::io::Error,
+    },
+}
+
+/// The version `dir`'s [`STAMP_FILE`] records for `id`: 1 when the file is
+/// absent ("absent means 1").
+pub fn read_dir_stamp(dir: &Path, id: FormatId) -> Result<u16, StampError> {
+    let path = dir.join(STAMP_FILE);
+    let shown = path.display().to_string();
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(1),
+        Err(source) => {
+            return Err(StampError::Io {
+                path: shown,
+                source,
+            });
+        }
+    };
+    let malformed = |reason: String| StampError::Malformed {
+        path: shown.clone(),
+        reason,
+    };
+    let mut parts = text.split_whitespace();
+    let (Some(found_id), Some(version), None) = (parts.next(), parts.next(), parts.next()) else {
+        return Err(malformed(format!(
+            "expected `<id> <version>`, found {text:?}"
+        )));
+    };
+    if found_id != id.as_str() {
+        return Err(malformed(format!("stamps {found_id}, not {id}")));
+    }
+    version
+        .parse()
+        .map_err(|_| malformed(format!("version {version:?} is not a number")))
+}
+
+/// Checks `dir`'s stamp for `id` against the registry's readable range: the
+/// startup gate of a process whose store is a directory (the House, UP1
+/// Task 4). Returns the stamped version.
+pub fn check_dir_stamp(dir: &Path, id: FormatId) -> Result<u16, StampError> {
+    let found = read_dir_stamp(dir, id)?;
+    check(id, found)?;
+    Ok(found)
+}
+
 thread_local! {
     static OVERRIDES: RefCell<Vec<FormatSpec>> = const { RefCell::new(Vec::new()) };
 }
@@ -290,6 +351,30 @@ mod tests {
         let s = spec(LOG_WAL.0, Store::Bucket, 2, 1);
         with_override(s, || assert!(check(LOG_WAL, 2).is_ok()));
         assert!(check(LOG_WAL, 2).is_err());
+    }
+
+    #[test]
+    fn dir_stamp_absent_reads_as_one_and_is_checked() {
+        let dir = std::env::temp_dir().join(format!(
+            "loams-stamp-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        assert_eq!(check_dir_stamp(&dir, HOUSE_DIR).expect("absent"), 1);
+        std::fs::write(dir.join(STAMP_FILE), "house.dir 1\n").expect("write");
+        assert_eq!(check_dir_stamp(&dir, HOUSE_DIR).expect("1"), 1);
+        std::fs::write(dir.join(STAMP_FILE), "house.dir 2\n").expect("write");
+        assert!(matches!(
+            check_dir_stamp(&dir, HOUSE_DIR),
+            Err(StampError::Unreadable(u)) if u.is_newer()
+        ));
+        std::fs::write(dir.join(STAMP_FILE), "graph.manifest 1").expect("write");
+        assert!(matches!(
+            check_dir_stamp(&dir, HOUSE_DIR),
+            Err(StampError::Malformed { .. })
+        ));
+        std::fs::remove_dir_all(&dir).expect("clean up");
     }
 
     #[test]

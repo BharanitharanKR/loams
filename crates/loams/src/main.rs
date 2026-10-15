@@ -1601,6 +1601,12 @@ async fn serve(cli: Cli) -> ExitCode {
     };
     let server = match Server::start(config).await {
         Ok(server) => server,
+        Err(loams::ServerError::Startup { code, detail }) => {
+            // Design §54 §4.3: one line with the code, exit 78 (EX_CONFIG).
+            tracing::error!(code, %detail, "refusing to start");
+            eprintln!("loams: refusing to start: {code}: {detail}");
+            return ExitCode::from(loams_migrate::startup::EXIT_REFUSED);
+        }
         Err(err) => {
             eprintln!("loams: {err}");
             return ExitCode::FAILURE;

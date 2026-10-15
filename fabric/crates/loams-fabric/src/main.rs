@@ -27,6 +27,14 @@ fn run_house(args: &HouseArgs) -> Result<(), HouseError> {
         None => HouseFile::default(),
     };
     let settings = house::resolve(args, file)?;
+    // The startup gate (design §54 §4.3, UP1 Task 4): refuse a data
+    // directory this release does not read, before anything listens.
+    if let Err(err) =
+        loams_common::formats::check_dir_stamp(&settings.data_dir, loams_common::formats::HOUSE_DIR)
+    {
+        eprintln!("loams-fabric house: refusing to start: format_unreadable: {err}");
+        std::process::exit(78);
+    }
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()

@@ -536,6 +536,8 @@ impl CollectionService {
             .await?
             .into_iter()
             .map(|namespace| namespace.name)
+            // Loams's own records are no caller's catalog (UP1 Task 2).
+            .filter(|name| !loams_common::meta::is_reserved_namespace(name))
             .collect();
         names.sort();
         Ok(names)

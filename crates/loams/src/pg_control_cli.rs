@@ -312,6 +312,16 @@ fn config(args: PgControlArgs) -> Result<PgControlConfig, String> {
 
 /// `loams pg-control`: runs until a shutdown signal.
 pub(crate) async fn run(args: PgControlArgs) -> ExitCode {
+    // The startup gate (design §54 §4.3, UP1 Task 4): refuse records this
+    // release does not read, before anything listens.
+    if let Err(err) = loams_common::formats::check_dir_stamp(
+        &args.data_dir,
+        loams_common::formats::PG_CONTROL_RECORD,
+    ) {
+        tracing::error!(code = "format_unreadable", %err, "refusing to start");
+        eprintln!("loams pg-control: refusing to start: format_unreadable: {err}");
+        return ExitCode::from(loams_migrate::startup::EXIT_REFUSED);
+    }
     let config = match config(args) {
         Ok(c) => c,
         Err(e) => {

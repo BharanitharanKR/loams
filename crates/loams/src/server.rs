@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 #[cfg(unix)]
 use std::os::fd::AsFd;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -717,6 +717,24 @@ impl ServerConfig {
     }
 }
 
+/// Runs the startup gate (design §54 §4.3, UP1 Task 4) before any listener
+/// of the node opens: a refused start is [`ServerError::Startup`], and an
+/// empty store is stamped at this release.
+async fn startup_gate(meta: &Arc<dyn MetaStore>, data_dir: &Path) -> Result<(), ServerError> {
+    use loams_migrate::startup::{self, StartupVerdict};
+    let release = env!("CARGO_PKG_VERSION");
+    match startup::check_startup(meta.clone(), data_dir, release).await? {
+        StartupVerdict::Ready => Ok(()),
+        StartupVerdict::NewStack => {
+            let holder = format!("loams-{}-{}", std::process::id(), Ulid::generate());
+            startup::stamp_new_stack(meta.clone(), release, &holder, None).await?;
+            tracing::info!(release, "new stack: stamped the stack record");
+            Ok(())
+        }
+        StartupVerdict::Refuse { code, detail } => Err(ServerError::Startup { code, detail }),
+    }
+}
+
 /// Why the server could not start.
 #[derive(Debug, thiserror::Error)]
 pub enum ServerError {
@@ -732,6 +750,14 @@ pub enum ServerError {
     Store(#[from] loams_store::StoreError),
     #[error("metastore: {0}")]
     Meta(#[from] loams_meta::MetaError),
+    /// The startup gate refused the data (design §54 §4.3, UP1 Task 4):
+    /// `format_unreadable`, `migration_incomplete` or `stack_unrecognised`.
+    /// The process exits 78.
+    #[error("{code}: {detail}")]
+    Startup { code: &'static str, detail: String },
+    /// The startup gate could not read the ledger.
+    #[error("the upgrade ledger: {0}")]
+    Ledger(#[from] loams_migrate::ledger::Error),
     /// The TiKV metastore's GC loop could not start (R1 plan Task 6).
     #[cfg(feature = "tikv")]
     #[error("TiKV: {0}")]
@@ -1963,6 +1989,7 @@ impl Server {
         mut config: ServerConfig,
         pre: Prebuilt,
     ) -> Result<Self, ServerError> {
+        startup_gate(&meta_store, &config.data_dir).await?;
         let (listener, local_addr) = bind(config.listen).await?;
         // After the leader, before the collection service (row T0-6).
         let durable = Durable::start(&config, NODE_ID).await?;
