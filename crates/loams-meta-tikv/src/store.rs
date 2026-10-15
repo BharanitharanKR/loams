@@ -261,6 +261,15 @@ impl MetaStore for TikvMeta {
         self.pointer_impl(namespace, key).await
     }
 
+    async fn pointers_with_prefix(
+        &self,
+        _consistency: Consistency,
+        namespace: NamespaceId,
+        prefix: &str,
+    ) -> MetaResult<Vec<(String, Pointer)>> {
+        self.pointers_with_prefix_impl(namespace, prefix).await
+    }
+
     // ----- Collections -----
 
     async fn create_collection(

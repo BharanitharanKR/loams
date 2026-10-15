@@ -21,7 +21,9 @@ pub const STACK_RECORD_VERSION: u8 = 0x01;
 pub struct StackRecord {
     /// The release the data was last migrated to, e.g. `0.1.0-preview.3`.
     pub release: String,
-    /// Registry id → the version enabled for writing.
+    /// Registry id → the version enabled for writing. A format at version 1
+    /// is left out ("absent means 1", D924), which keeps the record within a
+    /// metastore pointer value (1024 bytes) as the registry grows.
     pub formats: BTreeMap<String, u16>,
     pub migrated_at: SystemTime,
     /// The digest of the image that wrote the record, when known.
@@ -42,6 +44,7 @@ pub enum DecodeError {
 impl StackRecord {
     /// A record at `release` enabling every format of `registry` at its
     /// current version (what a new stack, or a finished `migrate`, writes).
+    /// Formats at version 1 are left out.
     pub fn current(
         release: impl Into<String>,
         registry: &[FormatSpec],
@@ -52,6 +55,7 @@ impl StackRecord {
             release: release.into(),
             formats: registry
                 .iter()
+                .filter(|s| s.current != 1)
                 .map(|s| (s.id.as_str().to_string(), s.current))
                 .collect(),
             migrated_at,
@@ -115,8 +119,7 @@ impl Unreadable {
 impl StoredVersions<'_> {
     /// `Ok` when every stored version is in its format's readable range; the
     /// first one that is not, in id order, otherwise. A registry format the
-    /// record does not name is new in this release and reads as nothing
-    /// written yet.
+    /// record does not name is at version 1 ("absent means 1").
     pub fn readable_by(&self, registry: &[FormatSpec]) -> Result<(), Unreadable> {
         for (id, &found) in self.0 {
             match registry.iter().find(|s| s.id.as_str() == id) {
@@ -137,6 +140,17 @@ impl StoredVersions<'_> {
                         current: None,
                     });
                 }
+            }
+        }
+        for spec in registry {
+            let id = spec.id.as_str();
+            if !self.0.contains_key(id) && !spec.reads(1) {
+                return Err(Unreadable {
+                    id: id.to_string(),
+                    found: 1,
+                    min_read: Some(spec.min_read),
+                    current: Some(spec.current),
+                });
             }
         }
         Ok(())

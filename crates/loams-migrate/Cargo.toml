@@ -9,10 +9,17 @@ authors.workspace = true
 publish = false
 
 [dependencies]
+base64.workspace = true
 loams-common.workspace = true
 postcard.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+loams-meta.workspace = true
+loams-store.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true

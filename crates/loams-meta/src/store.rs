@@ -426,6 +426,20 @@ impl MetaStore for MetaClient {
             .await
     }
 
+    async fn pointers_with_prefix(
+        &self,
+        consistency: Consistency,
+        namespace: NamespaceId,
+        prefix: &str,
+    ) -> MetaResult<Vec<(String, Pointer)>> {
+        self.read(consistency, |s| {
+            s.pointers_with_prefix(namespace, prefix)
+                .map(|(key, pointer)| (key.to_string(), pointer.clone()))
+                .collect()
+        })
+        .await
+    }
+
     // ----- Collections -----
 
     async fn create_collection(

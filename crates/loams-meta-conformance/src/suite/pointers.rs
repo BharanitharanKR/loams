@@ -292,3 +292,54 @@ pub async fn a_key_over_the_limit_is_invalid(backend: &dyn Backend) {
         pointer(1, "m-1")
     );
 }
+
+/// `pointers_with_prefix` lists exactly the namespace's pointers under the
+/// prefix, in key order, at their current versions (UP1 Task 2).
+pub async fn pointers_with_prefix_lists_only_that_prefix(backend: &dyn Backend) {
+    let db = backend.start().await;
+    let meta = db.first();
+    let ns = namespace(meta, "ptr-prefix").await;
+    let other = namespace(meta, "ptr-prefix-other").await;
+    for (key, value) in [
+        ("upgrade/ledger/00000002", "b"),
+        ("upgrade/ledger/00000001", "a"),
+        ("upgrade/stack", "s"),
+        ("upgrade/ledgerx", "x"),
+    ] {
+        meta.cas_pointer(cas(ns, key, None, value))
+            .await
+            .into_result()
+            .expect("create");
+    }
+    meta.cas_pointer(cas(ns, "upgrade/ledger/00000001", Some(1), "a2"))
+        .await
+        .into_result()
+        .expect("update");
+    meta.cas_pointer(cas(other, "upgrade/ledger/00000009", None, "o"))
+        .await
+        .into_result()
+        .expect("other namespace");
+    let listed = db
+        .last()
+        .pointers_with_prefix(L, ns, "upgrade/ledger/")
+        .await
+        .expect("list");
+    assert_eq!(
+        listed,
+        vec![
+            (
+                "upgrade/ledger/00000001".to_string(),
+                pointer(2, "a2").expect("a pointer")
+            ),
+            (
+                "upgrade/ledger/00000002".to_string(),
+                pointer(1, "b").expect("a pointer")
+            ),
+        ]
+    );
+    let none = meta
+        .pointers_with_prefix(L, ns, "nothing/")
+        .await
+        .expect("list");
+    assert!(none.is_empty());
+}

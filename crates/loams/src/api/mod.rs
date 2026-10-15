@@ -65,6 +65,7 @@ use bytes::Bytes;
 use loams_collection::ConsistencyToken;
 use loams_common::meta::{
     Consistency, Link, MetaStore, Retention, StreamState, TargetRef, WalClass,
+    is_reserved_namespace,
 };
 use loams_common::{NamespaceId, StreamId};
 use loams_hot::{ForwardStats, HotTierImpl, Roles};
@@ -293,6 +294,7 @@ pub fn router(state: AppState) -> Router {
         .merge(hot::routes())
         .fallback(no_route)
         .method_not_allowed_fallback(method_not_allowed)
+        .layer(axum::middleware::from_fn(refuse_reserved_namespace))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .with_state(state)
         .layer(hot_layer)
@@ -403,6 +405,9 @@ async fn create_namespace(
 ) -> ApiResult {
     let body = body?;
     let request: CreateNamespace = parse_json(&body)?;
+    if is_reserved_namespace(&request.name) {
+        return Err(ApiError::namespace_reserved(&request.name));
+    }
     let id = state.meta.create_namespace(&request.name).await?;
     Ok((StatusCode::CREATED, axum::Json(json!({ "id": id.0 }))).into_response())
 }
@@ -420,7 +425,28 @@ struct CreateStream {
     retention: Option<RetentionBody>,
 }
 
+/// Every `/v1/namespaces/{ns}/…` route refuses the reserved namespace
+/// (`namespace_reserved`, UP1 Task 2) before its handler runs.
+async fn refuse_reserved_namespace(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let reserved = request
+        .uri()
+        .path()
+        .strip_prefix("/v1/namespaces/")
+        .map(|rest| rest.split('/').next().unwrap_or_default())
+        .filter(|ns| is_reserved_namespace(ns));
+    match reserved {
+        Some(ns) => ApiError::namespace_reserved(ns).into_response(),
+        None => next.run(request).await,
+    }
+}
+
 async fn namespace_id(meta: &dyn MetaStore, name: &str) -> Result<NamespaceId, ApiError> {
+    if is_reserved_namespace(name) {
+        return Err(ApiError::namespace_reserved(name));
+    }
     meta.namespace_by_name(Consistency::Local, name)
         .await?
         .map(|n| n.id)

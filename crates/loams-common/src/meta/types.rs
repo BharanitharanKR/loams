@@ -260,6 +260,16 @@ pub const MAX_NAME_LEN: usize = 255;
 pub const MAX_PARTITIONS: u32 = 10_000;
 /// Longest object path, lease key or pointer key, in bytes.
 pub const MAX_KEY_LEN: usize = 1024;
+
+/// The namespace Loams keeps its own records in: the auth principal
+/// directory and the upgrade ledger (design §54 §6.2, UP1 Task 2). The
+/// metastore accepts it (Loams creates it); the APIs refuse it to callers.
+pub const SYSTEM_NAMESPACE: &str = "_system";
+
+/// Whether `name` is a namespace callers may not create or address.
+pub fn is_reserved_namespace(name: &str) -> bool {
+    name == SYSTEM_NAMESPACE
+}
 /// Longest lease a holder may take or renew for: one hour.
 pub const MAX_LEASE_TTL_MS: u64 = 3_600_000;
 

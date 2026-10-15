@@ -527,6 +527,16 @@ pub trait MetaStore: Send + Sync + fmt::Debug + 'static {
         key: &str,
     ) -> MetaResult<Option<Pointer>>;
 
+    /// Every pointer of `namespace` whose key starts with `prefix`, in key
+    /// order, from one state (UP1 Task 2: the migration ledger lists its
+    /// entries with it). Read-only: it changes no stored format.
+    async fn pointers_with_prefix(
+        &self,
+        consistency: Consistency,
+        namespace: NamespaceId,
+        prefix: &str,
+    ) -> MetaResult<Vec<(String, Pointer)>>;
+
     // ----- Collections -----
 
     /// Creates a collection with its implicit stream and link (both named

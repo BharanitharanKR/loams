@@ -40,7 +40,10 @@ impl fmt::Display for FormatId {
 }
 
 /// Which store holds a format (design §54 §3).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
 pub enum Store {
     /// The bucket's objects and mutable bucket documents (S1, S2).
     Bucket,

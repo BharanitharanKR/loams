@@ -859,6 +859,11 @@ impl GraphCatalog {
     }
 
     async fn ensure_namespace(&self, namespace: &str) -> Result<NamespaceId, CatalogError> {
+        if loams_common::meta::is_reserved_namespace(namespace) {
+            return Err(CatalogError::Invalid(format!(
+                "namespace_reserved: namespace {namespace:?} is reserved for Loams"
+            )));
+        }
         if let Some(id) = self.namespace_id(namespace).await? {
             return Ok(id);
         }
