@@ -27,7 +27,7 @@ tokio.workspace = true
 tracing.workspace = true
 # The remote listener (SD1 Task 7): TLS on rustls with ring, as loams-sqlgate
 # serves it; HTTP/1.1 and HTTP/2 through hyper-util, as connectrpc's own
-# server does; OIDC access tokens through jsonwebtoken 9.3.1 (T0-6), with the
+# server does; OIDC access tokens through jsonwebtoken 10.4.0 (T0-6), with the
 # issuer's JWKS fetched by reqwest 0.12 (rustls on ring), as the other agentd
 # crates fetch. All are already in the lock.
 hyper-util = { version = "0.1", features = ["server-auto", "tokio", "service"] }
