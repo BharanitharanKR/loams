@@ -96,6 +96,9 @@ pub struct HouseConfig {
     pub unmapped_principals: Option<UserMap>,
     /// Where every statement's audit record goes (HS1 Task 20); `None`, nowhere.
     pub audit: Option<std::sync::Arc<dyn crate::audit::AuditSink>>,
+    /// How often background compaction looks at tables that took commits
+    /// (HS1 Task 13): 30 s; zero turns it off.
+    pub compaction_interval: Duration,
 }
 
 /// A TLS listener (HS1 Task 20).
@@ -129,6 +132,7 @@ impl Default for HouseConfig {
             principals: Vec::new(),
             unmapped_principals: None,
             audit: None,
+            compaction_interval: Duration::from_secs(30),
             default_buffer_size: 1024 * 1024,
             max_query_size: 256 * 1024,
             receive_timeout: Duration::from_secs(30),

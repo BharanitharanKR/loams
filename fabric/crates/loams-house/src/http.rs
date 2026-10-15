@@ -119,6 +119,7 @@ pub struct HouseHandle {
     tls_addr: Option<SocketAddr>,
     accept: JoinHandle<()>,
     tls_accept: Option<JoinHandle<()>>,
+    compaction: Option<JoinHandle<()>>,
 }
 
 impl HouseHandle {
@@ -141,6 +142,9 @@ impl HouseHandle {
         self.accept.abort();
         if let Some(tls) = &self.tls_accept {
             tls.abort();
+        }
+        if let Some(compaction) = &self.compaction {
+            compaction.abort();
         }
     }
 }
@@ -268,6 +272,18 @@ async fn serve_all(
         lake,
     });
     let tls_shared = Arc::clone(&shared);
+    // Background compaction of the lake's tables (HS1 Task 13).
+    let compaction = match (&shared.lake, shared.config.compaction_interval) {
+        (Some(lake), every) if !every.is_zero() => Some(
+            crate::compact::Scheduler::new(
+                Arc::clone(lake),
+                shared.pool.clone(),
+                shared.config.clone(),
+            )
+            .spawn(every),
+        ),
+        _ => None,
+    };
     let accept = tokio::spawn(async move {
         loop {
             let Ok(permit) = Arc::clone(&permits).acquire_owned().await else {
@@ -326,6 +342,7 @@ async fn serve_all(
         tls_addr,
         accept,
         tls_accept,
+        compaction,
     })
 }
 
@@ -1151,7 +1168,11 @@ async fn run(
                 query,
             ),
             Ok(gate::CatalogOutcome::NotOurs) => (classified, sql),
-            Ok(outcome @ (gate::CatalogOutcome::Insert(_) | gate::CatalogOutcome::CreateAs(_))) => {
+            Ok(
+                outcome @ (gate::CatalogOutcome::Insert(_)
+                | gate::CatalogOutcome::CreateAs(_)
+                | gate::CatalogOutcome::Optimize(_)),
+            ) => {
                 let mut all: Vec<(String, String)> = session
                     .as_ref()
                     .map(|guard| guard.state().settings.pairs().to_vec())
@@ -1160,6 +1181,7 @@ async fn run(
                 let job = match outcome {
                     gate::CatalogOutcome::Insert(target) => LakeJob::Insert(target),
                     gate::CatalogOutcome::CreateAs(plan) => LakeJob::CreateAs(plan),
+                    gate::CatalogOutcome::Optimize(plan) => LakeJob::Optimize(plan),
                     _ => unreachable!("matched above"),
                 };
                 let write = LakeWrite {
@@ -1592,6 +1614,7 @@ async fn stream_input(
 enum LakeJob {
     Insert(Box<crate::insert::Target>),
     CreateAs(Box<crate::insert::CreateAs>),
+    Optimize(Box<crate::compact::OptimizePlan>),
 }
 
 /// A write to a lake table and what it runs with (HS1 Task 12).
@@ -1677,6 +1700,13 @@ async fn lake_insert(
     let inserted = match write.job {
         LakeJob::Insert(target) => crate::insert::run(&ctx, lease, *target, feed).await,
         LakeJob::CreateAs(plan) => crate::insert::create_as(&ctx, lease, *plan).await,
+        LakeJob::Optimize(plan) => {
+            // Compaction takes its own workers.
+            shared
+                .pool
+                .release(lease, crate::admission::Outcome::Completed);
+            crate::compact::optimize(&ctx, &plan).await
+        }
     };
     match inserted {
         Ok(inserted) => {

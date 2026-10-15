@@ -136,7 +136,13 @@ fn later(stmt: &Stmt) -> Option<String> {
                 "TRUNCATE serves the catalog's lake tables only (not temporary tables)".to_string(),
             );
         }
-        Stmt::Optimize { .. } => ("OPTIMIZE TABLE", "HS1 Task 13"),
+        Stmt::Optimize { .. } => {
+            return Some(
+                "OPTIMIZE TABLE compacts lake tables, and this House has no catalog (start it \
+                 with --catalog or --single-node)"
+                    .to_string(),
+            );
+        }
         Stmt::KillQuery(_) => ("KILL QUERY", "HS1 Task 21"),
         Stmt::Unsupported { kind } => {
             return Some(format!("{kind} is not on the House's ClickHouse surface"));
@@ -255,6 +261,9 @@ pub enum CatalogOutcome {
     /// `CREATE TABLE … AS SELECT` of a lake table, for
     /// [`crate::insert::create_as`] (HS1 Task 12).
     CreateAs(Box<crate::insert::CreateAs>),
+    /// `OPTIMIZE TABLE` of a lake table, for [`crate::compact::optimize`]
+    /// (HS1 Task 13).
+    Optimize(Box<crate::compact::OptimizePlan>),
     /// Not the catalog's: on to [`front_answer`] and chDB.
     NotOurs,
 }
@@ -283,6 +292,20 @@ pub async fn catalog_answer(
             guard.state().database = database.clone();
         }
         return Ok(CatalogOutcome::Done);
+    }
+    if let Stmt::Optimize { .. } = stmt {
+        let plan = crate::compact::OptimizePlan::parse(text, current)?;
+        if !crate::identity::granted(user, &plan.database, &plan.name) {
+            return Err(crate::identity::not_granted(
+                user,
+                &plan.database,
+                &plan.name,
+            ));
+        }
+        // A table the catalog lacks is `60`, an external one `497`, as for DDL.
+        lake.lake_table(namespace, &plan.database, &plan.name, "OPTIMIZE TABLE")
+            .await?;
+        return Ok(CatalogOutcome::Optimize(Box::new(plan)));
     }
     if let Stmt::CreateTableAs { .. } = stmt {
         let plan = crate::insert::CreateAs::parse(text, current)?;

@@ -144,11 +144,15 @@ impl CommitIo {
 
 type Queues = Arc<Mutex<HashMap<String, mpsc::UnboundedSender<Pending>>>>;
 
+/// Tables that took a commit since compaction last looked (HS1 Task 13).
+type Dirty = Arc<Mutex<std::collections::HashSet<TableIdent>>>;
+
 /// The lake's commit queues, one per table (see the module docs).
 #[derive(Debug)]
 pub struct Committer {
     io: Arc<CommitIo>,
     queues: Queues,
+    dirty: Dirty,
 }
 
 impl Committer {
@@ -157,7 +161,23 @@ impl Committer {
         Self {
             io: Arc::new(io),
             queues: Arc::new(Mutex::new(HashMap::new())),
+            dirty: Arc::new(Mutex::new(std::collections::HashSet::new())),
         }
+    }
+
+    /// The tables that took commits since the last call (compaction's
+    /// candidates, HS1 Task 13).
+    pub fn take_dirty(&self) -> Vec<TableIdent> {
+        let mut dirty = self.dirty.lock().unwrap_or_else(|e| e.into_inner());
+        dirty.drain().collect()
+    }
+
+    /// Marks a table for compaction's next look.
+    pub fn mark_dirty(&self, table: &TableIdent) {
+        self.dirty
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(table.clone());
     }
 
     /// The store and catalog it commits through.
@@ -186,6 +206,7 @@ impl Committer {
             receiver,
             Arc::clone(&self.queues),
             name,
+            Arc::clone(&self.dirty),
         ));
     }
 }
@@ -204,6 +225,7 @@ async fn run_table(
     mut receiver: mpsc::UnboundedReceiver<Pending>,
     queues: Queues,
     name: String,
+    dirty: Dirty,
 ) {
     let mut last_commit: Option<Instant> = None;
     let mut last_cycle = Duration::ZERO;
@@ -259,6 +281,10 @@ async fn run_table(
         }
         let cycle = Instant::now();
         commit_batch(&io, &table, batch).await;
+        dirty
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(table.clone());
         last_cycle = cycle.elapsed();
         last_commit = Some(Instant::now());
     }

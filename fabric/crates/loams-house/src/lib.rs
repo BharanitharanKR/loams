@@ -84,6 +84,7 @@ pub mod auth;
 pub mod catalog;
 pub mod classify;
 pub mod commit;
+pub mod compact;
 pub mod compress;
 pub mod config;
 pub mod ddl;

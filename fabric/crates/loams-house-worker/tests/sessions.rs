@@ -442,7 +442,7 @@ async fn owned_statements_of_later_tasks_are_48() {
             "CREATE TABLE q (a String) ENGINE = LoamsStream('s', 'JSONEachRow')",
             "Tasks 16 and 18",
         ),
-        ("OPTIMIZE TABLE t FINAL", "Task 13"),
+        ("OPTIMIZE TABLE t FINAL", "has no catalog"),
         ("KILL QUERY WHERE query_id = 'x'", "Task 21"),
         ("UNDROP TABLE t", "has no catalog"),
     ] {

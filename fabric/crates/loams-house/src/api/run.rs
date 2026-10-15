@@ -442,7 +442,9 @@ impl HouseApi {
                     };
                 }
                 gate::CatalogOutcome::NotOurs => {}
-                outcome @ (gate::CatalogOutcome::Insert(_) | gate::CatalogOutcome::CreateAs(_)) => {
+                outcome @ (gate::CatalogOutcome::Insert(_)
+                | gate::CatalogOutcome::CreateAs(_)
+                | gate::CatalogOutcome::Optimize(_)) => {
                     // An `INSERT` into a lake table (HS1 Task 12): run to its
                     // commit, then answered with what it wrote.
                     let Some(lake) = self.lake.as_deref() else {
@@ -483,6 +485,10 @@ impl HouseApi {
                         }
                         gate::CatalogOutcome::CreateAs(create) => {
                             crate::insert::create_as(&ctx, lease, *create).await
+                        }
+                        gate::CatalogOutcome::Optimize(plan) => {
+                            self.pool.release(lease, Outcome::Completed);
+                            crate::compact::optimize(&ctx, &plan).await
                         }
                         _ => unreachable!("matched above"),
                     }
