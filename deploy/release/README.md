@@ -184,6 +184,16 @@ directory and `deploy/loams-postgres-dev` to `~/loams`, writes `.env` with mode
 0600 and starts `loams tailscale tidb` (`--all` for everything). The VM
 needs SSH and outbound internet only.
 
+```sh
+deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.0-preview.3 --check   # loams upgrade check
+deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.0-preview.3           # loams upgrade, on the VM
+deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.0-preview.3 --rollback
+```
+
+`upgrade.sh` fetches the target release's `loams` CLI on the VM (its Linux
+package, checked against the release's `SHA256SUMS`) and runs `loams upgrade` in
+`~/loams/release`, streaming its output; its exit code is the CLI's.
+
 ## Known gaps in the preview
 
 - With 0.1.0-preview.2 images the engine does not reach the House: its TLS link
