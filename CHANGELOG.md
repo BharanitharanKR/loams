@@ -4,7 +4,35 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Upgrading
+
+From **0.1.0-preview.2** (one step at a time): `loams upgrade --to 0.1.0-preview.3`.
+
+It takes a snapshot first, and `loams upgrade rollback` restores it.
+
+| Migration | Store | Class | What it does |
+|---|---|---|---|
+| `0000-adopt-preview-2` | meta | Reversible | Record preview.2's versions (preview.2 writes no stack record) |
+| `0001-safekeeper-volume` | host | Reversible | Give the safekeeper a volume (after a drain) |
+
+Third-party bumps: none.
+Free space needed: 1.5× the snapshot estimate (`loams upgrade check` shows it).
+Expected downtime: about 5 minutes, excluding image pulls.
+
+See [docs/release/upgrades.md](docs/release/upgrades.md).
+
 ### Added
+- **Upgrades that keep data** (design §54, plan UP1). `loams upgrade check|--to|rollback|status|snapshots`
+  upgrades a self-hosted compose stack one release at a time:
+  - it takes a snapshot of every store first (TiKV by BR or a cold copy, the bucket's pointers and a GC
+    root, Postgres drained and branched, House, `pg-control`, Durable);
+  - it runs the release's migrations in the new one-shot `migrate` service, restarts in order and verifies;
+  - on a failure it rolls back automatically.
+
+  The engine, the House and `pg-control` refuse data they cannot read (exit 78). Every persisted format
+  has a version in one registry. The console works with the engine before it, and an older engine gets an
+  upgrade page. CI gains `Upgrade: previous release → candidate`, which upgrades the previous release's
+  stack with fixtures in every product and rolls it back.
 - **Git push and fetch to the bucket from the release packages.** `git-remote-loams`, git's
   remote helper for `loams::<store-url>/ns/<ns>/repos/<repo>` URLs (`crates/loams-git-remote`),
   now ships next to `loams` in the .deb, .rpm and .pkg.tar.zst (`/usr/bin`), the macOS

@@ -507,6 +507,31 @@ Read on `dev` at `7957cfb0`. Paths are from the repository root. UP1 Task 0 (the
 
 **The desktop.** `apps/desktop-electron`: the engine's data is `userData/engine` (`src/main/paths.ts`); compose stacks are copied to `userData/stacks` and re-copied when the app version changes (`.loams-stack-version`); `electron-updater` 6.8.9 with `allowDowngrade = false`; the `desktop-latest` feed is written only by `desktop-promote.yml`. A Postgres major mismatch is reported (`pg_major_mismatch`) and the only remedy is a reset.
 
+### 17.1 As built (UP1, 2026-10-16)
+
+The table above is the state before UP1. What UP1 built, and where it differs from §1–§16 (the rulings are in
+the plan's "Rulings made during execution"):
+
+- **`_system` already existed in preview.2** (the auth principal directory). The ledger shares it under
+  `upgrade/*` pointers. The stack record is the commit point, because the metastore has no multi-key
+  transaction (T0-2).
+- **The client is `crates/loams-upgrade`**, flattened into `loams` as `loams upgrade` (CL1's `loams-cli` had
+  not landed, T0-3). It also builds as `loams-upgrade` for CI.
+- **TiKV:** BR `backup txn` when the stack's `tikv` mounts the snapshot volume (preview.3 on). A stack without
+  that mount, such as preview.2, gets a cold copy of `pd-data` and `tikv-data` as one archive.
+- **The host files** of a snapshot live in `<stack>/.loams-upgrade/snapshots/<id>/host/`, beside the history
+  file, not in the snapshot volume.
+- **The signed manifest (CLI2) does not exist yet.** A downloaded bundle is checked against the release's
+  `SHA256SUMS`; the manifest's `upgrade` object is the asset `loams-upgrade-<version>.json` (T11-1, T12-1).
+- **`loams-postgres`** (the pageserver and safekeeper HTTP client) is in the default build through
+  `loams-migrate`, because the release `loams` image runs `migrate` (T9-1).
+- **An older release over newer data** that only `Reversible` migrations changed is accepted by both the
+  startup gate and `migrate run` (a no-op). This is what makes `rollback --keep-writes` work (T14-2).
+- **The safekeeper volume** cannot be guarded by compose alone, because the included Postgres file cannot
+  depend on `migrate`. A hand-run `compose up` across preview.2 → preview.3 is unsupported (T10-1).
+- **The console** gates plugins on `requires.api` and the new `requires.engine`. `GetInstance.features`
+  announces `feature.*` and `role.*` (T16-1 to T16-3).
+
 ## 18. Risks
 
 | # | Risk | Likelihood | Impact | Mitigation |

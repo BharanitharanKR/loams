@@ -172,6 +172,22 @@ HTTP on the tailnet (`TS_SERVE_MODE=http`, inside WireGuard). A console served
 over HTTPS cannot call it (mixed content); serve the console over HTTP from the
 tailnet or this machine.
 
+## Upgrading
+
+From 0.1.0-preview.2, `loams upgrade` upgrades this stack in place, one release at a
+time, with a snapshot first:
+
+```sh
+loams upgrade check --to 0.1.0-preview.3   # what it will do and what would stop it
+loams upgrade --to 0.1.0-preview.3         # snapshot, migrate, restart, verify
+loams upgrade rollback                     # back to the snapshot
+```
+
+Snapshots go to the `upgrade-snapshots` volume, or to `LOAMS_UPGRADE_SNAPSHOT_DIR`
+on this host. Do not upgrade by editing `LOAMS_VERSION` and running `docker compose
+up`. The [upgrade guide](../../docs/release/upgrades.md) has the steps, rollback and
+every error code.
+
 ## On your own VM (BYOC)
 
 ```sh
