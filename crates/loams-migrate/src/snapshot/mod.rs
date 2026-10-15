@@ -169,13 +169,18 @@ pub async fn snapshot(
         )?);
     }
     if let Some((method, version)) = &opts.tikv {
-        let bytes = files::size_of(&dir.join("tikv"));
-        if *method == tikv::TikvMethod::Br && bytes == 0 {
-            return Err(SnapshotError::Io(
-                "the TiKV backup is missing: run BR into <snapshot>/tikv first".to_string(),
-            ));
+        if files::size_of(&dir.join("tikv")) == 0 {
+            return Err(SnapshotError::Io(format!(
+                "the TiKV {} copy is missing: the CLI's helper writes <snapshot>/tikv first",
+                method.as_str()
+            )));
         }
-        components.push(tikv::component(*method, version, bytes));
+        // The helper's files are TiKV's and BR's (other users): the
+        // snapshot directory above them is 0700.
+        let (bytes, sha256) = files::digest(&dir.join("tikv"))?;
+        let mut component = tikv::component(*method, version, bytes);
+        component.sha256 = sha256;
+        components.push(component);
     }
     if let Some(pg) = &opts.postgres {
         let storage = postgres::PostgresStorage::new(&pg.pageserver, &pg.safekeeper)?;
@@ -185,11 +190,8 @@ pub async fn snapshot(
         let branches = storage.branch_every_timeline().await?;
         let target = dir.join("postgres");
         files::private_dir(&target)?;
-        let body = serde_json::to_vec_pretty(&serde_json::json!({
-            "drained": drained,
-            "branches": branches,
-        }))
-        .map_err(|e| io("postgres/branches.json", e))?;
+        let body = serde_json::to_vec_pretty(&postgres::Branches { drained, branches })
+            .map_err(|e| io("postgres/branches.json", e))?;
         files::write_private(&target.join("branches.json"), &body)?;
         let mut component = files::describe("postgres", "branch", &dir, "postgres")?;
         component.method = "branch".to_string();
@@ -399,19 +401,40 @@ pub struct RestoreReport {
     pub restored: Vec<String>,
     /// Bucket objects that were missing and were put back.
     pub objects_put_back: usize,
+    /// The Postgres branches the snapshot made: the CLI points each
+    /// timeline's computes back at its branch (or calls `pg-control`'s
+    /// `RestoreBranch`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub postgres_branches: Vec<postgres::SnapshotBranch>,
 }
 
 /// Restores every Loams-owned component of the snapshot at `from` (a
 /// snapshot directory). The stack must be stopped. Refuses an incomplete or
 /// corrupt snapshot before changing anything.
+///
+/// TiKV is restored by the CLI's helper (BR into a fresh cluster) before
+/// this runs: `tikv_version` is that cluster's version, and a snapshot with
+/// a `tikv` component is refused without it or at another version
+/// (`component_downgrade`).
 pub async fn restore(
     cx: &Cx,
     from: &Path,
     raft_dir: Option<&Path>,
     agentd_dir: Option<&Path>,
+    tikv_version: Option<&str>,
 ) -> Result<RestoreReport, SnapshotError> {
     let manifest = SnapshotManifest::read(from)?;
     manifest.check(from)?;
+    if let Some(taken) = manifest.components.iter().find(|c| c.store == "tikv") {
+        let taken = tikv::component_version(taken).unwrap_or_default();
+        let cluster = tikv_version.ok_or_else(|| {
+            SnapshotError::Io(format!(
+                "the snapshot holds TiKV at {taken}: restore it with BR into a fresh cluster \
+                 at that version, then pass --tikv-version"
+            ))
+        })?;
+        tikv::check_restore_target(taken, cluster)?;
+    }
     let mut report = RestoreReport {
         id: manifest.id.clone(),
         ..RestoreReport::default()
@@ -464,7 +487,15 @@ pub async fn restore(
                 })?;
                 files::replace_dir(&source, target)?;
             }
-            // TiKV and Postgres are restored by their own steps (Task 9).
+            // Restored by the CLI's helper; its version was checked above.
+            "tikv" => {}
+            "postgres" => {
+                let file = source.join("branches.json");
+                let body = std::fs::read(&file).map_err(|e| io(file.display(), e))?;
+                let branches: postgres::Branches =
+                    serde_json::from_slice(&body).map_err(|e| io(file.display(), e))?;
+                report.postgres_branches = branches.branches;
+            }
             _ => continue,
         }
         report.restored.push(component.store.clone());

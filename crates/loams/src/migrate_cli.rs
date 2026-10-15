@@ -107,6 +107,10 @@ pub(crate) enum MigrateCommand {
         from: PathBuf,
         #[arg(long)]
         agentd_dir: Option<PathBuf>,
+        /// The version of the fresh TiKV cluster the CLI's helper restored
+        /// the snapshot's BR backup (or cold copy) into (`v8.5.8`).
+        #[arg(long)]
+        tikv_version: Option<String>,
         #[arg(long, value_enum, default_value_t = Output::Json)]
         output: Output,
     },
@@ -604,9 +608,18 @@ async fn execute(
         MigrateCommand::Restore {
             from,
             agentd_dir,
+            tikv_version,
             output,
             ..
-        } => match loams_migrate::snapshot::restore(cx, from, None, agentd_dir.as_deref()).await {
+        } => match loams_migrate::snapshot::restore(
+            cx,
+            from,
+            None,
+            agentd_dir.as_deref(),
+            tikv_version.as_deref(),
+        )
+        .await
+        {
             Ok(mut report) => {
                 if staged_raft.is_none() && embedded_restored(from) {
                     report.restored.insert(0, "raft".to_string());

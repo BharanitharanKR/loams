@@ -44,7 +44,7 @@ pub struct PostgresStorage {
 }
 
 /// One timeline's state in a drain.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TimelineDrain {
     pub tenant: String,
     pub timeline: String,
@@ -63,6 +63,14 @@ pub struct SnapshotBranch {
     pub branch: String,
     /// Where: the timeline's last record LSN.
     pub lsn: String,
+}
+
+/// `<snapshot>/postgres/branches.json`: the drain's final state and the
+/// branches made after it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Branches {
+    pub drained: Vec<TimelineDrain>,
+    pub branches: Vec<SnapshotBranch>,
 }
 
 impl PostgresStorage {

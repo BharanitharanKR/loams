@@ -128,6 +128,7 @@ pub(crate) fn describe(
         path: path.to_string(),
         bytes,
         sha256,
+        version: None,
     })
 }
 

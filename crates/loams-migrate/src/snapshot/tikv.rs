@@ -32,22 +32,21 @@ impl TikvMethod {
 }
 
 /// The `tikv` component of a snapshot taken by `method` at TiKV `version`
-/// (`v8.5.8`), into `<snapshot>/tikv`.
+/// (`v8.5.8`), into `<snapshot>/tikv`. `snapshot()` fills in its digest.
 pub fn component(method: TikvMethod, version: &str, bytes: u64) -> Component {
     Component {
         store: "tikv".to_string(),
         method: method.as_str().to_string(),
         path: "tikv".to_string(),
         bytes,
-        // BR's backup carries its own checksums; the field records the
-        // version the cluster ran.
-        sha256: format!("tikv-version:{version}"),
+        sha256: String::new(),
+        version: Some(version.to_string()),
     }
 }
 
 /// The TiKV version a `tikv` component was taken at.
 pub fn component_version(component: &Component) -> Option<&str> {
-    component.sha256.strip_prefix("tikv-version:")
+    component.version.as_deref()
 }
 
 /// Refuses to restore a snapshot taken at TiKV `snapshot_version` into a

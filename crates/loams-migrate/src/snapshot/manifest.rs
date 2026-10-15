@@ -25,6 +25,10 @@ pub struct Component {
     pub path: String,
     pub bytes: u64,
     pub sha256: String,
+    /// The version of the component the copy was taken from (TiKV's, for
+    /// `tikv`): a restore goes into that version only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
 }
 
 /// `snapshot.json`.
@@ -86,7 +90,7 @@ impl SnapshotManifest {
         for component in &self.components {
             if !matches!(
                 component.method.as_str(),
-                "copy" | "sqlite_backup" | "branch"
+                "copy" | "sqlite_backup" | "branch" | "br" | "cold"
             ) {
                 continue;
             }
