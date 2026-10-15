@@ -1,0 +1,108 @@
+# Rendered by pg-control (PG2 Task 20); do not edit.
+[general]
+host = "0.0.0.0"
+port = 6432
+openmetrics_port = 9090
+auth_type = "scram"
+pooler_mode = "transaction"
+checkout_timeout = 20000
+connect_timeout = 1000
+connect_attempts = 1
+connect_attempt_delay = 500
+ban_timeout = 1000
+healthcheck_interval = 30000
+idle_healthcheck_interval = 0
+min_pool_size = 0
+idle_timeout = 30000
+tls_certificate = "/etc/pgdog/tls/tls.crt"
+tls_private_key = "/etc/pgdog/tls/tls.key"
+tls_client_required = true
+tls_verify = "verify_ca"
+tls_server_ca_certificate = "/etc/pgdog/compute-ca/ca.crt"
+
+[admin]
+name = "admin"
+user = "admin"
+password = "admin-secret"
+
+[[databases]]
+name = "blog"
+host = "ep-01jz0000000000000000000004.loams-pg-acme.svc.cluster.local"
+port = 5432
+database_name = "postgres"
+role = "primary"
+pool_size = 720
+pooler_mode = "transaction"
+
+[[databases]]
+name = "blog__main"
+host = "ep-01jz0000000000000000000004.loams-pg-acme.svc.cluster.local"
+port = 5432
+database_name = "postgres"
+role = "primary"
+pool_size = 720
+pooler_mode = "transaction"
+
+[[databases]]
+name = "blog__main.posts"
+host = "ep-01jz0000000000000000000004.loams-pg-acme.svc.cluster.local"
+port = 5432
+database_name = "posts"
+role = "primary"
+pool_size = 720
+pooler_mode = "transaction"
+
+[[databases]]
+name = "shop"
+host = "ep-01jz0000000000000000000001.loams-pg-acme.svc.cluster.local"
+port = 5432
+database_name = "postgres"
+role = "primary"
+pool_size = 360
+pooler_mode = "transaction"
+
+[[databases]]
+name = "shop__dev"
+host = "ep-01jz0000000000000000000003.loams-pg-acme.svc.cluster.local"
+port = 5432
+database_name = "postgres"
+role = "primary"
+pool_size = 89
+pooler_mode = "transaction"
+
+[[databases]]
+name = "shop__main"
+host = "ep-01jz0000000000000000000001.loams-pg-acme.svc.cluster.local"
+port = 5432
+database_name = "postgres"
+role = "primary"
+pool_size = 360
+pooler_mode = "transaction"
+
+[[databases]]
+name = "shop__main.catalog"
+host = "ep-01jz0000000000000000000001.loams-pg-acme.svc.cluster.local"
+port = 5432
+database_name = "catalog"
+role = "primary"
+pool_size = 360
+pooler_mode = "transaction"
+
+[[databases]]
+name = "shop__main.orders"
+host = "ep-01jz0000000000000000000001.loams-pg-acme.svc.cluster.local"
+port = 5432
+database_name = "orders"
+role = "primary"
+pool_size = 360
+pooler_mode = "transaction"
+
+[[databases]]
+name = "shop__main__ro"
+host = "ep-01jz0000000000000000000002.loams-pg-acme.svc.cluster.local"
+port = 5432
+database_name = "postgres"
+role = "replica"
+read_only = true
+pool_size = 180
+pooler_mode = "transaction"

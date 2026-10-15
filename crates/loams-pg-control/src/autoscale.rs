@@ -58,6 +58,14 @@ pub fn file_cache_mb(cu: Cu) -> u64 {
     u64::from(cu.0) * FILE_CACHE_MB_PER_QUARTER
 }
 
+/// `max_connections` of a compute whose endpoint goes up to `cu` (PG2
+/// Task 20, R20.3): Neon's table, about 450 per CU (112 at 0.25 CU, 450 at
+/// 1 CU, 1802 at 4 CU), at most 4,000. A start-time setting, so the
+/// endpoint's largest size sets it; PgDog's pools take 80 % of it.
+pub fn max_connections(cu: Cu) -> u32 {
+    (u32::from(cu.0) * 4505 / 40).clamp(1, 4000)
+}
+
 /// The thresholds of §46 §7.4.
 #[derive(Debug, Clone)]
 pub struct Policy {

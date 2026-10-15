@@ -6,6 +6,8 @@
 //! endpoint's pools through it; rendering, the config push and the admin
 //! adapter itself are PG2c's (Tasks 20–22), the waker's polling Task 26's.
 
+pub mod render;
+
 use async_trait::async_trait;
 
 use crate::model::{BranchRec, EndpointRec, EndpointType, ProjectRec};
