@@ -119,6 +119,14 @@ impl TestStore {
                 c.root = random_root();
                 StoreConfig::Tikv(c)
             }
+            // `loams-kv/tikv` can be on through another crate (the release image
+            // builds `loams` with `postgres,tikv`) while this crate's `tikv` is off;
+            // no TiKV store config is built here then.
+            #[allow(unreachable_patterns)]
+            other => unreachable!(
+                "a {:?} test store without loams-live's tikv feature",
+                other.backend()
+            ),
         };
         Self::open(config, self.dir.clone()).await
     }
