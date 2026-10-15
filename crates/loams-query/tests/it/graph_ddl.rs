@@ -49,7 +49,10 @@ const KG: &str = "CREATE GRAPH kg
 #[test]
 fn sql_create_graph_equals_rpc_mapping() {
     assert!(is_create_graph(KG));
+    assert!(is_create_graph("/* a graph */ create\n\tgraph kg"));
     assert!(!is_create_graph("SELECT 1"));
+    assert!(!is_create_graph("CREATE \"GRAPH\" kg"));
+    assert!(!is_create_graph("CREATE 'unterminated"));
     let parsed = parse_create_graph(KG).expect("§07 §2.1's example parses");
     assert_eq!(parsed.name, "kg");
     assert_eq!(parsed.mapping, rpc_mapping());

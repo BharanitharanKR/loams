@@ -1147,14 +1147,21 @@ impl GraphAdmin {
         let invalid =
             |message: String| refuse(ErrorCode::InvalidArgument, "invalid_argument", message);
         let given = req.mapping.as_option();
-        if req.mode.as_known() != Some(pb::GraphMode::Linked) {
-            if given.is_some_and(|m| !m.vertices.is_empty() || !m.edges.is_empty()) {
-                return Err(invalid(
-                    "a mapping is for a LINKED graph; an OWNED graph is written with GQL"
-                        .to_string(),
-                ));
+        match req.mode.as_known() {
+            Some(pb::GraphMode::Linked) => {}
+            Some(pb::GraphMode::Unspecified | pb::GraphMode::Owned) => {
+                if given.is_some_and(|m| !m.vertices.is_empty() || !m.edges.is_empty()) {
+                    return Err(invalid(
+                        "a mapping is for a LINKED graph; an OWNED graph is written with GQL"
+                            .to_string(),
+                    ));
+                }
+                return Ok((GraphMode::Owned, None));
             }
-            return Ok((GraphMode::Owned, None));
+            // A wire number that names no mode is refused, not read as OWNED.
+            None => {
+                return Err(invalid(format!("mode {:?} is not a graph mode", req.mode)));
+            }
         }
         let mapping = crate::mapping::GraphMapping::from_proto(
             given.ok_or_else(|| invalid("a LINKED graph needs a mapping".to_string()))?,

@@ -35,15 +35,26 @@ pub struct CreateGraph {
 #[error("CREATE GRAPH: {0}")]
 pub struct GraphDdlError(pub String);
 
-/// Whether `sql` is a `CREATE GRAPH` statement (its first two words), so a caller can route it
-/// here rather than to DataFusion.
+/// Whether `sql` is a `CREATE GRAPH` statement: its first two tokens (comments and whitespace
+/// skipped) are the unquoted words `CREATE` and `GRAPH`, so a caller can route it here rather than
+/// to DataFusion. Text the tokenizer refuses is not one.
 #[must_use]
 pub fn is_create_graph(sql: &str) -> bool {
-    let mut words = sql.split_whitespace();
-    matches!(
-        (words.next(), words.next()),
-        (Some(a), Some(b)) if a.eq_ignore_ascii_case("CREATE") && b.eq_ignore_ascii_case("GRAPH")
-    )
+    let Ok(tokens) = tokens(sql) else {
+        return false;
+    };
+    let keyword = |token: Option<&Token>, word: &str| matches!(token, Some(Token::Word(w)) if w.quote_style.is_none() && w.value.eq_ignore_ascii_case(word));
+    keyword(tokens.first(), "CREATE") && keyword(tokens.get(1), "GRAPH")
+}
+
+/// `sql`'s tokens, without whitespace and comments.
+fn tokens(sql: &str) -> Result<Vec<Token>, GraphDdlError> {
+    Ok(Tokenizer::new(&GenericDialect {}, sql)
+        .tokenize()
+        .map_err(|err| GraphDdlError(err.to_string()))?
+        .into_iter()
+        .filter(|token| !matches!(token, Token::Whitespace(_)))
+        .collect())
 }
 
 /// Parses one `CREATE GRAPH` statement.
@@ -52,13 +63,11 @@ pub fn is_create_graph(sql: &str) -> bool {
 ///
 /// [`GraphDdlError`] naming what was expected where the statement went wrong.
 pub fn parse_create_graph(sql: &str) -> Result<CreateGraph, GraphDdlError> {
-    let tokens = Tokenizer::new(&GenericDialect {}, sql)
-        .tokenize()
-        .map_err(|err| GraphDdlError(err.to_string()))?
-        .into_iter()
-        .filter(|token| !matches!(token, Token::Whitespace(_)))
-        .collect();
-    Parser { tokens, at: 0 }.statement()
+    Parser {
+        tokens: tokens(sql)?,
+        at: 0,
+    }
+    .statement()
 }
 
 struct Parser {

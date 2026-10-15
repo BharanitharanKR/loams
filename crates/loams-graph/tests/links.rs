@@ -251,6 +251,17 @@ async fn mapping_validates_against_schema() {
         assert_eq!(reason(&err), "invalid_argument", "{what}");
     }
 
+    // A mode the wire does not name is refused, not read as OWNED.
+    let err = fixture
+        .admin
+        .create_graph(pb::CreateGraphRequest {
+            mode: buffa::EnumValue::from(42),
+            ..linked("unknown", &kg())
+        })
+        .await
+        .expect_err("an unknown mode");
+    assert_eq!(err.code, ErrorCode::InvalidArgument);
+
     // A LINKED graph needs a mapping; an OWNED one may not have one.
     let err = fixture
         .admin
