@@ -307,7 +307,7 @@ impl InsertSettings {
 }
 
 /// What a write path knows about its request.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct InsertContext<'a> {
     /// The catalog.
     pub lake: &'a Lake,
@@ -531,31 +531,12 @@ impl From<HouseError> for Stop {
 /// lease is released or killed here. `feed` sends a streamed source's data.
 pub async fn run(
     ctx: &InsertContext<'_>,
-    mut lease: WorkerLease,
+    lease: WorkerLease,
     target: Target,
     feed: Option<&mut (dyn Feed + '_)>,
 ) -> Result<Inserted, HouseError> {
     let started = Instant::now();
-    if let Err(err) = ctx.lake.committer().io().store() {
-        ctx.pool.release(lease, Outcome::Completed);
-        return Err(err);
-    }
-    let session = format!("{SESSION_PREFIX}{}", uuid::Uuid::new_v4());
-    let staged = stage(ctx, &mut lease, &target, &session, feed).await;
-    let written = match staged {
-        Ok(written) => {
-            ctx.pool.release(lease, Outcome::Completed);
-            written
-        }
-        Err(stop) => {
-            if stop.kill || close_session(ctx, &mut lease, &session).await.is_err() {
-                ctx.pool.kill(lease, ExitReason::Cancel);
-            } else {
-                ctx.pool.release(lease, Outcome::Completed);
-            }
-            return Err(stop.error);
-        }
-    };
+    let written = write_staged(ctx, lease, &target, feed).await?;
     let Staged {
         written,
         hash,
@@ -623,6 +604,50 @@ pub async fn run(
         snapshot_id: Some(committed.snapshot_id),
         elapsed_ns: started.elapsed().as_nanos() as u64,
     })
+}
+
+/// The worker's part of a write ([`stage`]) on `lease`, which is released, or
+/// killed when it was left mid-statement.
+async fn write_staged(
+    ctx: &InsertContext<'_>,
+    mut lease: WorkerLease,
+    target: &Target,
+    feed: Option<&mut (dyn Feed + '_)>,
+) -> Result<Staged, HouseError> {
+    if let Err(err) = ctx.lake.committer().io().store() {
+        ctx.pool.release(lease, Outcome::Completed);
+        return Err(err);
+    }
+    let session = format!("{SESSION_PREFIX}{}", uuid::Uuid::new_v4());
+    match stage(ctx, &mut lease, target, &session, feed).await {
+        Ok(written) => {
+            ctx.pool.release(lease, Outcome::Completed);
+            Ok(written)
+        }
+        Err(stop) => {
+            if stop.kill || close_session(ctx, &mut lease, &session).await.is_err() {
+                ctx.pool.kill(lease, ExitReason::Cancel);
+            } else {
+                ctx.pool.release(lease, Outcome::Completed);
+            }
+            Err(stop.error)
+        }
+    }
+}
+
+/// A target's rows written as data files and uploaded, not committed (HS1
+/// Task 13's compaction commits them as a `replace`).
+pub async fn write_files(
+    ctx: &InsertContext<'_>,
+    lease: WorkerLease,
+    target: &Target,
+) -> Result<loams_house_lake::write::Written, HouseError> {
+    let staged = write_staged(ctx, lease, target, None).await?;
+    let committer = ctx.lake.committer();
+    for (location, bytes) in &staged.written.files {
+        committer.io().write(location, bytes.clone()).await?;
+    }
+    Ok(staged.written)
 }
 
 /// What the worker's part of a write gave.
@@ -719,11 +744,21 @@ async fn stage(
         Source::Select { text } => {
             let text = deny::rewrite_host_functions(text, &gate::host_values(&ctx.user.user));
             let internal = format!("{head}\n{text}");
-            let analysis = lease
+            let mut analysis = lease
                 .analyze(&internal, ctx.params)
                 .await
                 .map_err(deny::as_setting_refusal)?;
             gate::admit(&analysis, &internal, expect, false, None)?;
+            // Which tables the query reads with `FINAL` is in its query tree,
+            // which ClickHouse builds for a query but not for an `INSERT`: the
+            // query alone gives it (HS1 Task 13), so a Replacing or Summing
+            // table it reads `FINAL` reads merged.
+            let query = lease
+                .analyze(&text, ctx.params)
+                .await
+                .map_err(deny::as_setting_refusal)?;
+            gate::admit(&query, &text, crate::classify::Expect::Read, true, None)?;
+            analysis.query_tree = query.query_tree;
             let plan = gate::read_plan(
                 Some(ctx.lake),
                 ctx.namespace,

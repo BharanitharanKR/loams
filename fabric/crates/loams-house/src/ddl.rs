@@ -1188,6 +1188,57 @@ pub fn parse_insert(text: &str) -> Result<InsertHead, HouseError> {
     })
 }
 
+/// `OPTIMIZE TABLE` (HS1 Task 13).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OptimizeStmt {
+    /// The table.
+    pub table: QualifiedName,
+    /// `PARTITION …` (the House compacts the whole table, R13.2).
+    pub partition: bool,
+    /// `FINAL`.
+    pub final_: bool,
+    /// `DEDUPLICATE`.
+    pub deduplicate: bool,
+}
+
+/// Reads `OPTIMIZE TABLE [db.]t [ON CLUSTER c] [PARTITION p | PARTITION ID 'p']
+/// [FINAL] [DEDUPLICATE]`. `DEDUPLICATE BY` is `48`.
+pub fn parse_optimize(text: &str) -> Result<OptimizeStmt, HouseError> {
+    let mut c = Cursor::new(text);
+    c.expect("OPTIMIZE")?;
+    c.expect("TABLE")?;
+    let table = c.qualified()?;
+    c.skip_on_cluster()?;
+    let mut out = OptimizeStmt {
+        table,
+        partition: false,
+        final_: false,
+        deduplicate: false,
+    };
+    if c.eat("PARTITION") {
+        out.partition = true;
+        // The partition's expression runs to FINAL, DEDUPLICATE or the end.
+        while let Some(t) = c.peek() {
+            if t.depth == 0 && (c.is_word_at(c.at, "FINAL") || c.is_word_at(c.at, "DEDUPLICATE")) {
+                break;
+            }
+            c.at += 1;
+        }
+    }
+    out.final_ = c.eat("FINAL");
+    if c.eat("DEDUPLICATE") {
+        out.deduplicate = true;
+        if c.eat("BY") {
+            return Err(HouseError::from(ChError::not_implemented(
+                "OPTIMIZE … DEDUPLICATE BY is not served on lake tables; DEDUPLICATE compares \
+                 whole rows",
+            )));
+        }
+    }
+    c.expect_end()?;
+    Ok(out)
+}
+
 /// `TRUNCATE [TABLE] [IF EXISTS] [db.]t [ON CLUSTER c]`: the table and `IF
 /// EXISTS` (HS1 Task 12).
 pub fn parse_truncate(text: &str) -> Option<(QualifiedName, bool)> {
@@ -2395,6 +2446,25 @@ mod tests {
                 .ttl
         );
         assert!(parse_create_table("CREATE TABLE t (a UInt8) BANANA").is_err());
+    }
+
+    #[test]
+    fn optimize_is_read() {
+        let o = parse_optimize(
+            "OPTIMIZE TABLE d.t ON CLUSTER c PARTITION tuple(1, 'x') FINAL DEDUPLICATE",
+        )
+        .expect("parses");
+        assert_eq!(o.table, (Some("d".to_string()), "t".to_string()));
+        assert!(o.partition && o.final_ && o.deduplicate);
+        let o = parse_optimize("optimize table t").expect("bare");
+        assert!(!o.partition && !o.final_ && !o.deduplicate);
+        assert_eq!(
+            parse_optimize("OPTIMIZE TABLE t FINAL DEDUPLICATE BY a")
+                .expect_err("by")
+                .code(),
+            48
+        );
+        assert!(parse_optimize("OPTIMIZE TABLE t FINAL; DROP TABLE x").is_err());
     }
 
     #[test]

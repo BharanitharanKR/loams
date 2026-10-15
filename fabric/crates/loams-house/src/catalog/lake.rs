@@ -297,6 +297,22 @@ impl Lake {
         NamespaceIdent::new(format!("ns_{namespace}"))
     }
 
+    /// The namespace, database and table of a table's identifier (the inverse
+    /// of [`Lake::namespace`]), unless it is not one of the House's.
+    pub fn names_of(table: &TableIdent) -> Option<(u64, String, String)> {
+        let levels = table.namespace().as_ref();
+        let namespace = levels.first()?.strip_prefix("ns_")?.parse().ok()?;
+        let database = match levels.len() {
+            1 => "default".to_string(),
+            2 => levels[1].clone(),
+            _ => return None,
+        };
+        if database.starts_with(RESERVED_PREFIX) {
+            return None;
+        }
+        Some((namespace, database, table.name().to_string()))
+    }
+
     /// The Iceberg namespace of a ClickHouse database.
     pub fn namespace(namespace: u64, database: &str) -> NamespaceIdent {
         if database == "default" {

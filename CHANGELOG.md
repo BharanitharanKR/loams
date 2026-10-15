@@ -24,6 +24,10 @@ All notable changes to this project are documented here. The format follows [Kee
   for every call, and starts nothing but the compute images pinned in
   `deploy/pins/loams-postgres-images.toml`. Prefer a rootless Podman socket (PG2 ruling
   R-REL.1).
+- **Loams House compacts lake tables** (HS1 Task 13): `OPTIMIZE TABLE … [FINAL] [DEDUPLICATE]`
+  and a background scheduler rewrite a table's files with Replacing and Summing rows merged as
+  `FINAL` merges them, committed as Iceberg `replace` snapshots that a concurrent commit
+  always wins. `INSERT … SELECT … FINAL` now reads merged rows.
 - **Loams House writes lake tables** (HS1 Task 12): `INSERT` in every declared input format,
   `VALUES` and `INSERT … SELECT`, `CREATE TABLE … AS SELECT` and `TRUNCATE`. Rows become
   Parquet data files with Iceberg statistics and are committed as Iceberg snapshots before

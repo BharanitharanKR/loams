@@ -169,6 +169,8 @@ async fn lakehouse_with(test: &str, edit: impl FnOnce(&mut HouseConfig)) -> Lake
             UserMap::dev("reader", "r", 2, true),
         ],
         tmp_dir: tmp_root(&format!("{test}-spool")),
+        // Compaction is `compact.rs`'s: it would change these tests' files.
+        compaction_interval: Duration::ZERO,
         ..HouseConfig::default()
     };
     edit(&mut config);
