@@ -524,7 +524,14 @@ jobs:
           CSC_KEY_PASSWORD: ${{ needs.plan.outputs.sign_mac == 'true' && secrets.MACOS_CERTIFICATE_PASSWORD || '' }}
           APPLE_API_KEY_ID: ${{ needs.plan.outputs.notarize_mac == 'true' && secrets.APPLE_API_KEY_ID || '' }}
           APPLE_API_ISSUER: ${{ needs.plan.outputs.notarize_mac == 'true' && secrets.APPLE_API_ISSUER || '' }}
-        run: pnpm nx run loams-desktop-electron:package-macos --outputStyle=static
+        # An empty CSC_LINK is not "no certificate" to electron-builder: it resolves ''
+        # against the project directory and fails with "<dir> not a file" (v0.1.0-preview.2,
+        # run 38733095344). Unset the empty ones so the ad-hoc path is taken.
+        run: |
+          set -euo pipefail
+          [ -n "${CSC_LINK:-}" ] || { unset CSC_LINK CSC_KEY_PASSWORD; export CSC_IDENTITY_AUTO_DISCOVERY=false; }
+          [ -n "${APPLE_API_KEY_ID:-}" ] || unset APPLE_API_KEY_ID APPLE_API_ISSUER
+          pnpm nx run loams-desktop-electron:package-macos --outputStyle=static
       - name: verify the signature
         env:
           SIGN_MAC: ${{ needs.plan.outputs.sign_mac }}
