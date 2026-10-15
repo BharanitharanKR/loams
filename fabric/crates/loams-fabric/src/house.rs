@@ -364,6 +364,24 @@ impl Running {
     }
 }
 
+/// The House data directory's format version (registry id `house.dir`, UP1
+/// Task 6).
+pub const DATA_DIR_VERSION: u16 = 1;
+
+/// Writes the data directory's `FORMAT` stamp when it has none: absent means
+/// 1 (design §54 §4.1), so this records what is already there.
+fn stamp_data_dir(dir: &Path) -> Result<(), HouseError> {
+    use loams_common::formats::{HOUSE_DIR, STAMP_FILE};
+    let stamp = dir.join(STAMP_FILE);
+    if stamp.exists() {
+        return Ok(());
+    }
+    let tmp = dir.join(format!("{STAMP_FILE}.tmp"));
+    std::fs::write(&tmp, format!("{} {DATA_DIR_VERSION}\n", HOUSE_DIR.as_str()))
+        .and_then(|()| std::fs::rename(&tmp, &stamp))
+        .map_err(|err| bad(format!("stamping {}: {err}", stamp.display())))
+}
+
 /// Starts the pool (booting one worker first, HS1 R1.12) and the HTTP interface.
 pub async fn start(mut settings: HouseSettings) -> Result<Running, HouseError> {
     std::fs::create_dir_all(&settings.data_dir).map_err(|err| {
@@ -372,6 +390,7 @@ pub async fn start(mut settings: HouseSettings) -> Result<Running, HouseError> {
             settings.data_dir.display()
         ))
     })?;
+    stamp_data_dir(&settings.data_dir)?;
     if let Some(path) = &settings.local_key {
         let password = local_key(path)?;
         settings
@@ -657,4 +676,39 @@ fn addr(text: &str) -> SocketAddr {
 
 fn bad(message: String) -> HouseError {
     HouseError::from(ChError::bad_arguments(message))
+}
+
+/// UP1 Task 6: the data directory's stamp.
+#[cfg(test)]
+mod format_tests {
+    use loams_common::formats::{self, HOUSE_DIR, STAMP_FILE};
+
+    use super::*;
+
+    #[test]
+    fn format_constants_match_registry() {
+        assert_eq!(DATA_DIR_VERSION, formats::spec_of(HOUSE_DIR).current);
+    }
+
+    #[test]
+    fn house_dir_format_stamp_absent_reads_as_one() {
+        let dir = tempfile::tempdir().expect("dir");
+        // A preview.2 directory has no stamp: it reads as 1.
+        assert_eq!(
+            formats::check_dir_stamp(dir.path(), HOUSE_DIR).expect("absent"),
+            1
+        );
+        stamp_data_dir(dir.path()).expect("stamp");
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join(STAMP_FILE)).expect("read"),
+            "house.dir 1\n"
+        );
+        assert_eq!(
+            formats::check_dir_stamp(dir.path(), HOUSE_DIR).expect("stamped"),
+            1
+        );
+        // A stamp already there is kept.
+        std::fs::write(dir.path().join(STAMP_FILE), "house.dir 1\n").expect("write");
+        stamp_data_dir(dir.path()).expect("again");
+    }
 }

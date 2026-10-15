@@ -17,7 +17,10 @@
 //! - [`adopt`] and [`migrations`]: `0000-adopt-preview-2`, which recognises
 //!   an unstamped preview.2 stack by fingerprint (§54 §5.3).
 //!
-//! Later UP1 tasks add the store contexts, snapshots and restores.
+//! - [`cx`]: the store contexts a migration works through, each with an
+//!   expand-then-switch helper (§54 §6.3).
+//!
+//! Later UP1 tasks add snapshots and restores.
 
 /// Evaluates a named failpoint of the crash matrix. With the `failpoints`
 /// feature a configured failpoint stops the caller as a crash would (it
@@ -36,6 +39,7 @@ macro_rules! failpoint {
 pub(crate) use failpoint;
 
 pub mod adopt;
+pub mod cx;
 pub mod formats;
 pub mod ledger;
 pub mod migration;

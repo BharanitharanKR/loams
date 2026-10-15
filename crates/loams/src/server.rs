@@ -893,13 +893,32 @@ impl Durable {
     #[cfg(feature = "durable")]
     async fn start(config: &ServerConfig, node_id: u64) -> Result<Self, ServerError> {
         match &config.durable {
-            Some(durable) => Ok(Self {
-                server: Some(
-                    loams_durable::DurableServer::start(durable.clone(), &node_id.to_string())
-                        .await?,
-                ),
-                runtime: None,
-            }),
+            Some(durable) => {
+                let server = match loams_durable::DurableServer::start(
+                    durable.clone(),
+                    &node_id.to_string(),
+                )
+                .await
+                {
+                    Ok(server) => server,
+                    // A store whose schema is behind is not migrated by
+                    // serving (UP1 Task 6): the startup gate's refusal.
+                    Err(err) if err.to_string().contains("database is at migration") => {
+                        return Err(ServerError::Startup {
+                            code: "migration_incomplete",
+                            detail: format!(
+                                "the durable store needs its migrations: {err}; run \
+                                     `loams migrate run` (or `loams durable migrate`)"
+                            ),
+                        });
+                    }
+                    Err(err) => return Err(err.into()),
+                };
+                Ok(Self {
+                    server: Some(server),
+                    runtime: None,
+                })
+            }
             None => Ok(Self::none()),
         }
     }
