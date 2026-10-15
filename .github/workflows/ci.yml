@@ -265,6 +265,9 @@ jobs:
               - "buf.yaml"
               - "buf.gen.*.yaml"
               - "web/packages/proto/**"
+              # UP1 Task 17: the SDKs stay additive against the previous release.
+              - "sdks/**"
+              - "release/upgrade-path.toml"
             # SDK2 Task 0: the TypeScript SDK (@loams/client, @loams/live), its
             # generator (crates/loams-facade-gen), and the conformance corpus.
             sdk-typescript:
@@ -1240,6 +1243,21 @@ jobs:
       # buf.yaml ignores loams.live.v1 for breaking changes (R1).
       - name: buf breaking (against main)
         run: web/packages/proto/node_modules/.bin/buf breaking --against ".git#branch=origin/main"
+      # Design §54 §13.2 (D939, UP1 Task 17): also against the previous
+      # release's tag (the newest release's `from` in release/upgrade-path.toml),
+      # so a break that reached main between releases is still caught at the
+      # release; and the supported SDKs keep every public symbol of that release.
+      - name: buf breaking (against the previous release)
+        run: |
+          prev="$(python3 -c 'import sys; sys.path.insert(0, "sdks/fixtures"); import removed_symbols as r; print(r.previous_release(r.ROOT) or "")')"
+          if [ -z "$prev" ]; then echo "no previous release keeps data"; exit 0; fi
+          git rev-parse --verify --quiet "refs/tags/$prev" >/dev/null || git fetch --no-tags origin "refs/tags/$prev:refs/tags/$prev"
+          web/packages/proto/node_modules/.bin/buf breaking --against ".git#tag=$prev"
+      - if: ${{ !cancelled() }}
+        name: SDK public symbols (against the previous release)
+        run: |
+          python3 sdks/fixtures/removed_symbols.py --self-test
+          python3 sdks/fixtures/removed_symbols.py
       - name: regenerate @loams/proto
         working-directory: web
         run: pnpm --filter @loams/proto generate
