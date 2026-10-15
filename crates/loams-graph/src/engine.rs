@@ -176,6 +176,9 @@ pub enum GraphError {
     /// (a forwarded call is never forwarded again); retry, and it reaches the owner (GR1 Task 12).
     #[error("{0}")]
     OwnerMoved(String),
+    /// A writing statement on a LINKED graph: only its links write it (GR1 Task 17).
+    #[error("this graph is LINKED: its links write it, and GQL may only read it")]
+    Linked,
     /// An `at_least` read waited its `consistency_wait` and the replica serving it had not yet
     /// applied the token's offset (GR1 Task 15, §48 §7.2); retry, or read `strong`.
     #[error(
@@ -247,6 +250,7 @@ impl GraphError {
             Self::VersionMismatch { .. } => "graph_version_mismatch",
             Self::LogUnavailable(_) => "unavailable",
             Self::ConsistencyWaitTimeout { .. } => "consistency_wait_timeout",
+            Self::Linked => "graph_is_linked",
         }
     }
 }
@@ -271,6 +275,9 @@ pub struct OpenSpec {
     /// A follower (GR1 Task 15): a durable graph's read-only replica, which tails its stream
     /// ([`crate::replica`]) and never appends. Every writing statement is refused.
     follower: bool,
+    /// A LINKED graph (GR1 Task 17): only its links write it, so every writing statement is
+    /// refused (`graph_is_linked`).
+    linked: bool,
 }
 
 impl OpenSpec {
@@ -291,6 +298,7 @@ impl OpenSpec {
             read_only: false,
             durable: None,
             follower: false,
+            linked: false,
         })
     }
 
@@ -321,6 +329,14 @@ impl OpenSpec {
     #[must_use]
     pub fn durable(mut self, durable: crate::durable::DurableSpec) -> Self {
         self.durable = Some(durable);
+        self
+    }
+
+    /// The same spec for a LINKED graph when `linked` (GR1 Task 17): every writing statement is
+    /// refused with `graph_is_linked`.
+    #[must_use]
+    pub fn linked(mut self, linked: bool) -> Self {
+        self.linked = linked;
         self
     }
 
@@ -1010,6 +1026,9 @@ impl Graph {
                 file_access: false,
                 what: "schema DDL is not served until Task 24".to_string(),
             });
+        }
+        if self.spec.linked && access != Access::Read {
+            return Err(GraphError::Linked);
         }
         if (read_only || self.read_only) && access != Access::Read {
             return Err(GraphError::ReadOnly);

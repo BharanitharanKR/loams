@@ -241,7 +241,7 @@ impl pb::GraphAdminService for GraphMock {
             return Err(refuse(
                 ErrorCode::Unimplemented,
                 "not_implemented",
-                "LINKED graphs are not served yet (GR1 Task 17)",
+                "the mock serves OWNED graphs only; a LINKED graph needs collections (GR1 Task 17)",
             ));
         }
         let mut graphs = self.graphs();

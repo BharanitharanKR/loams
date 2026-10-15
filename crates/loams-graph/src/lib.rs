@@ -30,6 +30,7 @@ pub mod durable;
 pub mod engine;
 pub mod evict;
 pub mod limits;
+pub mod mapping;
 pub mod owner;
 pub mod recovery;
 pub mod redact;

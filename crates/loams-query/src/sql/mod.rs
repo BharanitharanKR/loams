@@ -6,6 +6,7 @@
 
 mod catalog;
 mod exprs;
+pub mod graph_ddl;
 mod json_rows;
 mod provider;
 mod udtf;
@@ -26,6 +27,7 @@ use loams_common::meta::Collection;
 
 pub use catalog::{CollectionsSchema, NamespaceCatalog};
 pub use exprs::expr_to_query;
+pub use graph_ddl::{CreateGraph, GraphDdlError, is_create_graph, parse_create_graph};
 pub use json_rows::{rows_to_json, value_to_json};
 pub use provider::{CollectionProvider, CollectionScanExec, collection_arrow_schema};
 pub use udtf::{

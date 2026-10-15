@@ -25,6 +25,9 @@ moka = { workspace = true, features = ["sync"] }
 loams-collection.workspace = true
 loams-common.workspace = true
 loams-log.workspace = true
+# `CREATE GRAPH` (§07 §2.1) parses into `loams.graph.v1.GraphMapping`, the mapping a LINKED
+# graph's `CreateGraph` takes (GR1 Task 17).
+loams-proto.workspace = true
 loams-quickwit.workspace = true
 loams-store.workspace = true
 loams-text.workspace = true
