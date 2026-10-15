@@ -213,6 +213,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
 serde_json_borrow = "0.9"
 serde_with = "3"
+# JSON schemas of `loams upgrade`'s outputs (UP1 Task 12); 0.8.22 is already
+# in the lockfile.
+schemars = "0.8"
 sha2 = "0.11"
 slatedb = { version = "0.17", default-features = false }
 # The MySQL driver resonate-server-mysql uses (0.8.6, rustls); loams-durable
@@ -291,6 +294,7 @@ loams-meta = { path = "crates/loams-meta", version = "0.1.0-preview.2" }
 loams-meta-conformance = { path = "crates/loams-meta-conformance", version = "0.1.0-preview.2" }
 loams-meta-tikv = { path = "crates/loams-meta-tikv", version = "0.1.0-preview.2" }
 loams-migrate = { path = "crates/loams-migrate", version = "0.1.0-preview.2" }
+loams-upgrade = { path = "crates/loams-upgrade", version = "0.1.0-preview.2" }
 loams-stream-grpc = { path = "crates/loams-stream-grpc", version = "0.1.0-preview.2" }
 loams-pk = { path = "crates/loams-pk", version = "0.1.0-preview.2" }
 loams-qdrant = { path = "crates/loams-qdrant", version = "0.1.0-preview.2" }

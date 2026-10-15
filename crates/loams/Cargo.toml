@@ -82,6 +82,9 @@ loams-meta.workspace = true
 loams-meta-tikv = { workspace = true, optional = true }
 # The startup gate, `loams migrate` and the ledger (design §54, UP1).
 loams-migrate.workspace = true
+# `loams upgrade` (UP1 Task 12): the client that upgrades a compose stack;
+# it links no storage crate.
+loams-upgrade.workspace = true
 # Loams Postgres's control plane: the `loams pg-control` role (feature
 # `postgres`, PG2 Task 9, design §46 §6.1), and the Neon clients it is
 # configured with. Never in the default build (`pg_control.rs`'s
