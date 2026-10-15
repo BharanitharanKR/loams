@@ -56,6 +56,26 @@ pub struct HouseArgs {
     /// start, mode 0600) [default: <data-dir>/house.key].
     #[arg(long)]
     pub local_key_file: Option<PathBuf>,
+    /// With --single-node: where the engine's link key is kept (created on first
+    /// start, mode 0600). The link acts for the Loams principals of
+    /// --principals; without this flag the House has no link user.
+    #[arg(long)]
+    pub link_key_file: Option<PathBuf>,
+    /// With --single-node: the Loams principals the engine's link may act for,
+    /// `principal=scopes` separated by `;` (scopes: read, write, ddl, admin,
+    /// joined by `+` or `,`), such as
+    /// `tailscale:alice@example.com=read+write+ddl;apikey:ci=read`. Also
+    /// LOAMS_HOUSE_PRINCIPALS. A principal not listed has no House access.
+    #[arg(long)]
+    pub principals: Option<String>,
+    /// With --single-node, for development: a principal not listed acts as the
+    /// local user instead of being refused.
+    #[arg(long)]
+    pub dev_unmapped_principals: bool,
+    /// The audit log, one JSON line per statement
+    /// [default with --single-node: <data-dir>/audit.log].
+    #[arg(long)]
+    pub audit_log: Option<PathBuf>,
     /// The native protocol listener (9000; served from HS1 Task 31)
     /// [default with --single-node: 127.0.0.1:9000].
     #[arg(long)]

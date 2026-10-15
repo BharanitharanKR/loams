@@ -138,10 +138,11 @@ pub struct Target {
 /// name chDB will answer for). An external table is `497`.
 pub async fn target(
     lake: &Lake,
-    namespace: u64,
+    user: &crate::config::UserMap,
     current: &str,
     insert: &InsertStmt,
 ) -> Result<Option<Target>, HouseError> {
+    let namespace = user.namespace;
     let Some((db, name)) = ddl::insert_target(&insert.text) else {
         return Ok(None);
     };
@@ -152,6 +153,10 @@ pub async fn target(
     let Some(table) = lake.load(namespace, &database, &name).await? else {
         return Ok(None);
     };
+    // The identity's grants (HS1 Task 20).
+    if !crate::identity::granted(user, &database, &name) {
+        return Err(crate::identity::not_granted(user, &database, &name));
+    }
     if ddl::class_of(&table.metadata) == TableClass::External {
         return Err(HouseError::from(ChError::access_denied(format!(
             "INSERT INTO {database}.{name}: the table belongs to another writer (an external \
@@ -312,8 +317,8 @@ pub struct InsertContext<'a> {
     pub namespace: u64,
     /// The request's current database.
     pub database: &'a str,
-    /// The caller.
-    pub user: &'a str,
+    /// The caller: its name, scopes and grants (HS1 Task 20).
+    pub user: &'a crate::config::UserMap,
     /// The client's query id.
     pub query_id: &'a str,
     /// Query parameters (`{name:Type}`), for a `SELECT`.
@@ -676,7 +681,8 @@ async fn stage(
     feed: Option<&mut (dyn Feed + '_)>,
 ) -> Result<Staged, Stop> {
     // The statement as the client wrote it, as every statement is admitted.
-    let statement = deny::rewrite_host_functions(&target.statement, &gate::host_values(ctx.user));
+    let statement =
+        deny::rewrite_host_functions(&target.statement, &gate::host_values(&ctx.user.user));
     let analysis = lease
         .analyze(&statement, ctx.params)
         .await
@@ -711,7 +717,7 @@ async fn stage(
     let head = staging_head(target.columns.as_deref());
     match &target.source {
         Source::Select { text } => {
-            let text = deny::rewrite_host_functions(text, &gate::host_values(ctx.user));
+            let text = deny::rewrite_host_functions(text, &gate::host_values(&ctx.user.user));
             let internal = format!("{head}\n{text}");
             let analysis = lease
                 .analyze(&internal, ctx.params)
@@ -923,7 +929,8 @@ pub async fn create_as(
         // Nothing is made when its rows could not be written.
         ctx.lake.committer().io().store()?;
         // The statement as written, as any catalog DDL is admitted.
-        let statement = deny::rewrite_host_functions(&plan.statement, &gate::host_values(ctx.user));
+        let statement =
+            deny::rewrite_host_functions(&plan.statement, &gate::host_values(&ctx.user.user));
         let analysis = lease
             .analyze(&statement, ctx.params)
             .await
@@ -934,7 +941,7 @@ pub async fn create_as(
         }
         // The query's columns, as ClickHouse names and types them, read through
         // the namespace's pinned views.
-        let select = deny::rewrite_host_functions(&plan.select, &gate::host_values(ctx.user));
+        let select = deny::rewrite_host_functions(&plan.select, &gate::host_values(&ctx.user.user));
         let analysis = lease
             .analyze(&select, ctx.params)
             .await
@@ -1023,7 +1030,7 @@ pub async fn create_as(
     match gate::catalog_answer(
         Some(ctx.lake),
         ctx.pool,
-        ctx.namespace,
+        ctx.user,
         ctx.database,
         &stmt,
         &create,
@@ -1052,7 +1059,7 @@ pub async fn create_as(
         format: None,
         table: None,
     };
-    let Some(target) = target(ctx.lake, ctx.namespace, ctx.database, &insert).await? else {
+    let Some(target) = target(ctx.lake, ctx.user, ctx.database, &insert).await? else {
         return Err(HouseError::from(ChError::unknown_table(format!(
             "Table {}.{} does not exist",
             plan.database, plan.name

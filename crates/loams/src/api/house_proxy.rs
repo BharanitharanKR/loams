@@ -13,7 +13,10 @@
 //!   authenticated the caller already (its auth layer wraps this one), and the
 //!   front is signed in to with the key instead: the caller's credentials
 //!   (`Authorization`, `Cookie`, `X-ClickHouse-User`/`-Key`) never leave this
-//!   process;
+//!   process, and the principal this port authenticated is named in
+//!   `X-Loams-Principal` (and `X-Loams-Principal-Email`), which the House maps
+//!   to its scopes and tables. A caller's own `X-Loams-Principal*` headers are
+//!   never forwarded;
 //! - an `https` front (HS1 Task 20) is reached over TLS, trusting the PEM roots
 //!   of `--house-ca` (a single-node House's own certificate) or the platform's;
 //!   a plaintext front must be on loopback;
@@ -145,6 +148,24 @@ const CALLER_CREDENTIALS: [&str; 4] = [
     "x-clickhouse-user",
     "x-clickhouse-key",
 ];
+
+/// The headers that name the Loams principal a keyed link acts for (HS1 Task
+/// 20): set by this port from the caller it authenticated, never taken from
+/// the caller.
+const PRINCIPAL_HEADER: &str = "x-loams-principal";
+const PRINCIPAL_EMAIL_HEADER: &str = "x-loams-principal-email";
+
+/// The principal's name on the link: its subject, prefixed by its kind
+/// unless the subject names it already (`apikey:<id>`, `tailscale:<login>`).
+fn principal_name(principal: &crate::auth::Principal) -> String {
+    use crate::auth::PrincipalKind;
+    match principal.kind {
+        PrincipalKind::User => format!("user:{}", principal.subject),
+        PrincipalKind::Session => format!("session:{}", principal.subject),
+        PrincipalKind::DevLoopback => "dev-loopback".to_string(),
+        PrincipalKind::ApiKey | PrincipalKind::Tailscale => principal.subject.clone(),
+    }
+}
 
 /// The HTTP client for `endpoint`: TLS with the ring provider, trusting `ca`'s
 /// roots when given.
@@ -288,6 +309,7 @@ impl HouseProxy {
             Ok(link) => link,
             Err(error) => return refusal(protocol, &error),
         };
+        let principal = parts.extensions.get::<crate::auth::Principal>().cloned();
         let mut upstream = self
             .client
             .request(parts.method.clone(), self.target(path_and_query))
@@ -296,10 +318,23 @@ impl HouseProxy {
             if link.is_some() && CALLER_CREDENTIALS.contains(&name.as_str()) {
                 continue;
             }
+            if name.as_str() == PRINCIPAL_HEADER || name.as_str() == PRINCIPAL_EMAIL_HEADER {
+                continue;
+            }
             upstream = upstream.header(name, value);
         }
         if let Some(value) = link {
             upstream = upstream.header(header::AUTHORIZATION, value);
+            // The House maps this principal to its scopes and tables; without
+            // one (no auth on this port) the House refuses the link request.
+            if let Some(principal) = &principal {
+                if let Ok(value) = HeaderValue::from_str(&principal_name(principal)) {
+                    upstream = upstream.header(PRINCIPAL_HEADER, value);
+                }
+                if let Some(Ok(value)) = principal.email.as_deref().map(HeaderValue::from_str) {
+                    upstream = upstream.header(PRINCIPAL_EMAIL_HEADER, value);
+                }
+            }
         }
         match upstream.send().await {
             Ok(answer) => {

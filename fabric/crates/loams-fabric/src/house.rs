@@ -59,6 +59,9 @@ pub const WORKER_BINARY: &str = "loams-house-worker";
 /// where the desktop runs one).
 pub const LOCAL_USER: &str = "default";
 
+/// The engine's link user (HS1 Task 20): it acts for `--principals`.
+pub const LINK_USER: &str = "engine";
+
 /// The namespace a single node's local user queries in.
 pub const LOCAL_NAMESPACE: u64 = 1;
 
@@ -103,6 +106,15 @@ pub struct HouseSettings {
     pub local_key: Option<PathBuf>,
     /// The TLS listener (HS1 Task 20).
     pub tls: Option<TlsSettings>,
+    /// The Loams principals the engine's link acts for (HS1 Task 20).
+    pub principals: Vec<loams_house::identity::PrincipalMap>,
+    /// With `--single-node`: the engine's link key's file, created on first
+    /// start.
+    pub link_key: Option<PathBuf>,
+    /// With `--single-node`: unlisted principals act as the local user.
+    pub dev_unmapped_principals: bool,
+    /// Where the audit is appended.
+    pub audit_log: Option<PathBuf>,
 }
 
 /// The TLS listener's settings (HS1 Task 20).
@@ -230,6 +242,48 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
             .clone()
             .unwrap_or_else(|| data_dir.join(LOCAL_KEY_FILE))
     });
+    // The Loams principals the engine's link may act for (HS1 Task 20).
+    let mut principals = Vec::new();
+    for entry in &house.principals {
+        principals.push(
+            entry
+                .to_map()
+                .map_err(|why| bad(format!("principal {:?}: {why}", entry.principal)))?,
+        );
+    }
+    let listed = args
+        .principals
+        .clone()
+        .or_else(|| std::env::var("LOAMS_HOUSE_PRINCIPALS").ok())
+        .filter(|list| !list.trim().is_empty());
+    if let Some(list) = listed {
+        if !single_node {
+            return Err(bad(
+                "--principals names principals in the single node's namespace: with \
+                 --single-node only (elsewhere, [[house.principals]] in --config)"
+                    .to_string(),
+            ));
+        }
+        for entry in list.split(';').map(str::trim).filter(|e| !e.is_empty()) {
+            principals.push(
+                loams_house::identity::PrincipalMap::parse(entry, LOCAL_NAMESPACE)
+                    .map_err(|why| bad(format!("--principals: {why}")))?,
+            );
+        }
+    }
+    for (flag, set) in [
+        ("--link-key-file", args.link_key_file.is_some()),
+        ("--dev-unmapped-principals", args.dev_unmapped_principals),
+    ] {
+        if set && !single_node {
+            return Err(bad(format!("{flag} is for --single-node only")));
+        }
+    }
+    let audit_log = args
+        .audit_log
+        .clone()
+        .or(house.audit_log)
+        .or_else(|| single_node.then(|| data_dir.join("audit.log")));
     let tls = match args.house_tls_listen.or(house.tls_listen) {
         None => None,
         Some(listen) => {
@@ -274,6 +328,10 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
         cgroup_root: args.cgroup_root.clone().or(house.pool.cgroup_root),
         local_key,
         tls,
+        principals,
+        link_key: args.link_key_file.clone(),
+        dev_unmapped_principals: args.dev_unmapped_principals,
+        audit_log,
     })
 }
 
@@ -320,6 +378,25 @@ pub async fn start(mut settings: HouseSettings) -> Result<Running, HouseError> {
             .http
             .users
             .push(UserMap::dev(LOCAL_USER, &password, LOCAL_NAMESPACE, false));
+    }
+    // The engine's link and the principals it acts for (HS1 Task 20).
+    if let Some(path) = &settings.link_key {
+        let key = local_key(path)?;
+        settings.http.users.push(UserMap::link(LINK_USER, &key));
+    }
+    settings.http.principals = settings.principals.clone();
+    if settings.dev_unmapped_principals {
+        settings.http.unmapped_principals = settings
+            .http
+            .users
+            .iter()
+            .find(|u| u.user == LOCAL_USER)
+            .cloned();
+    }
+    if let Some(path) = &settings.audit_log {
+        let sink = loams_house::audit::JsonLines::open(path)
+            .map_err(|err| bad(format!("the audit log {}: {err}", path.display())))?;
+        settings.http.audit = Some(Arc::new(sink));
     }
     if let Some(tls) = &settings.tls {
         if tls.make {

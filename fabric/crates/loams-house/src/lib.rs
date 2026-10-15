@@ -79,6 +79,7 @@
 
 pub mod admission;
 pub mod api;
+pub mod audit;
 pub mod auth;
 pub mod catalog;
 pub mod classify;
@@ -94,6 +95,7 @@ pub mod expr;
 pub mod fuzz;
 pub mod gate;
 pub mod http;
+pub mod identity;
 pub mod insert;
 pub mod read;
 pub mod request;

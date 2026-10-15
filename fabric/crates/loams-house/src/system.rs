@@ -436,12 +436,16 @@ pub async fn views(
     lease: &mut WorkerLease,
     tables: &BTreeSet<String>,
 ) -> Result<Vec<String>, HouseError> {
-    let catalog = match ctx.lake {
+    let mut catalog = match ctx.lake {
         Some(lake) if tables.iter().any(|t| t != "processes" && t != "errors") => {
             catalog_tables(lake, ctx.namespace).await?
         }
         _ => Vec::new(),
     };
+    // Only the tables the identity may touch are listed (HS1 Task 20).
+    if let Some(grants) = ctx.grants {
+        catalog.retain(|(database, name, _)| grants.allows(database, name));
+    }
     let mut out = vec![format!(
         "CREATE DATABASE IF NOT EXISTS {} ENGINE = Memory",
         quote_name(SYSTEM_VIEWS)
@@ -513,6 +517,12 @@ async fn databases(ctx: ReadContext<'_>, shape: &[ShapeColumn]) -> Result<String
     match ctx.lake {
         Some(lake) => {
             for database in lake.databases(ctx.namespace).await? {
+                if ctx
+                    .grants
+                    .is_some_and(|grants| !grants.mentions_database(&database.name))
+                {
+                    continue;
+                }
                 rows.rows.push(vec![
                     Some(database.name),
                     Some("Atomic".to_string()),

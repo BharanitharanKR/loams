@@ -301,7 +301,6 @@ the tailnet:
 
 ```sh
 docker compose exec house cat /var/lib/loams-house/house.key    # the password, made on first start
-# (images after preview.2 keep it in /var/lib/loams-house-link/house.key)
 curl -u "default:$PASSWORD" https://loams-house.<tailnet>.ts.net/ --data-binary 'SELECT version()'
 ```
 
