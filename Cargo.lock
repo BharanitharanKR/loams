@@ -7590,6 +7590,7 @@ dependencies = [
  "loams-graph",
  "loams-hnsw",
  "loams-hot",
+ "loams-kv",
  "loams-link",
  "loams-live",
  "loams-live-js",

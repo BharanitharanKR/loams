@@ -168,7 +168,7 @@ impl<'a> Runner<'a> {
             None => (None, Vec::new()),
         };
         let mut steps = Vec::new();
-        for migration in self.pending(&entries, from.as_deref()) {
+        for migration in self.pending(&entries, from.as_deref(), target) {
             let state = entries
                 .iter()
                 .rev()
@@ -196,7 +196,12 @@ impl<'a> Runner<'a> {
     /// The compiled migrations not yet `Done`, in order, leaving out those a
     /// release at or before `stored` introduced: a stack stamped fresh at a
     /// release never needs that release's own migrations.
-    fn pending(&self, entries: &[LedgerEntry], stored: Option<&str>) -> Vec<&'a dyn Migration> {
+    fn pending(
+        &self,
+        entries: &[LedgerEntry],
+        stored: Option<&str>,
+        target: &str,
+    ) -> Vec<&'a dyn Migration> {
         self.migrations
             .iter()
             .copied()
@@ -206,6 +211,7 @@ impl<'a> Runner<'a> {
                     .any(|e| e.id == m.id() && e.state == LedgerState::Done)
             })
             .filter(|m| !stored.is_some_and(|s| self.path.introduced_at_or_before(m.id(), s)))
+            .filter(|m| !self.path.introduced_after(m.id(), target))
             .collect()
     }
 
@@ -284,7 +290,7 @@ impl<'a> Runner<'a> {
             report.stack_written = true;
             return Ok(report);
         }
-        let mut pending = self.pending(&entries, stored.as_deref());
+        let mut pending = self.pending(&entries, stored.as_deref(), target);
         // An unstamped store is migrated only by an adoption, which runs first
         // and records the release it found.
         if stored.is_none() {

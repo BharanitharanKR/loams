@@ -60,5 +60,26 @@ jobs:
           jq -e '.networks["pg-runner"].internal == true' <<<"$cfg"
           jq -e '[.services | to_entries[] | select((.value.networks // {}) | has("pg-runner")) | .key]
                  | sort == ["pg-control", "pg-runner"]' <<<"$cfg"
+      - name: the migrate service runs first and has no door (UP1 Task 7)
+        working-directory: deploy/release
+        run: |
+          cfg="$(docker compose --env-file .env.example --profile '*' config --format json)"
+          # One-shot, nothing published, no tailnet sidecar, no socket, no privilege.
+          jq -e '.services.migrate
+                 | ((.ports // []) == []) and (.restart == "no")
+                   and ((.networks | keys) == ["default"])
+                   and (.network_mode == null) and (.privileged != true)
+                   and ((.cap_add // []) == []) and ((.cap_drop // []) == ["ALL"])
+                   and (.read_only == true)
+                   and ([(.volumes // [])[] | ((.source // "") + " " + (.target // ""))
+                         | test("\\.sock( |$)")] | any | not)
+                   and (.command[0:2] == ["migrate", "run"])' <<<"$cfg"
+          # No tailscale sidecar shares its network namespace.
+          jq -e '[.services[] | select((.network_mode // "") == "service:migrate")] | length == 0' <<<"$cfg"
+          # The engine, the House and pg-control start only after it succeeded.
+          for service in loams house pg-control; do
+            jq -e --arg s "$service" \
+              '.services[$s].depends_on.migrate.condition == "service_completed_successfully"' <<<"$cfg"
+          done
       - name: shellcheck
         run: shellcheck deploy/release/build.sh deploy/release/byoc/install.sh deploy/release/byoc/uninstall.sh

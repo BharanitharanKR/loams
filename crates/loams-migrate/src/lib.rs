@@ -20,6 +20,8 @@
 //! - [`cx`]: the store contexts a migration works through, each with an
 //!   expand-then-switch helper (§54 §6.3).
 //!
+//! - [`verify`]: the store probes of `loams migrate verify` (§54 §10.4).
+//!
 //! Later UP1 tasks add snapshots and restores.
 
 /// Evaluates a named failpoint of the crash matrix. With the `failpoints`
@@ -48,6 +50,7 @@ pub mod path;
 pub mod runner;
 pub mod stack;
 pub mod startup;
+pub mod verify;
 
 pub use ledger::{Class, Ledger, LedgerEntry, LedgerError, LedgerState, MigrationLease};
 pub use migration::{Cursor, Cx, Estimate, Migration, MigrationError, Step};

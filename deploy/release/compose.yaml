@@ -101,6 +101,48 @@ services:
       tikv:
         condition: service_healthy
 
+  # Upgrades (design §54 §6.1, UP1 Task 7): one-shot, before the engine, the
+  # House and pg-control. It reads the stack record and the ledger in the
+  # metastore, runs this release's pending migrations (and Durable's own),
+  # and exits 0; on an ordinary restart there is nothing to do and it exits
+  # in about a second. A failed migration exits non-zero, so nothing that
+  # depends on it starts, and the old data stays readable. `loams upgrade`
+  # runs it with the stack's previous release (--declared-release) and a
+  # snapshot first. No listener, no published port, no tailnet door, no
+  # container socket.
+  migrate:
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.0-preview.2}
+    command:
+      - migrate
+      - run
+      - --meta=tikv://pd:2379/loams_meta
+      - --live-store=tikv://pd:2379/loams_live_dev
+      - --bucket=${LOAMS_BUCKET:-file:///var/lib/loams/bucket}
+      - --data-dir=/var/lib/loams
+      - --house-dir=/var/lib/loams-house
+      - --pg-control-dir=/var/lib/loams-pg-control
+    restart: "no"
+    environment:
+      RUST_LOG: ${RUST_LOG:-info}
+    # The engine's own settings (AWS_* for an s3:// LOAMS_BUCKET): no new
+    # credentials (D944).
+    env_file:
+      - path: ./secrets/engine.env
+        required: false
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - loams-data:/var/lib/loams
+      - house-data:/var/lib/loams-house
+      - pg-control-data:/var/lib/loams-pg-control
+    depends_on:
+      pd:
+        condition: service_healthy
+      tikv:
+        condition: service_healthy
+
   loams:
     <<: *restart
     image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.0-preview.2}
@@ -160,6 +202,8 @@ services:
         condition: service_healthy
       tikv:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
       interval: 10s
@@ -221,6 +265,9 @@ services:
     volumes:
       - house-data:/var/lib/loams-house
       - house-link:/var/lib/loams-house-link
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
   # The House's tailnet node, in the House's network namespace (its only
   # neighbour there). A second node on the tailnet: give it its own auth key
@@ -352,6 +399,8 @@ services:
     depends_on:
       pg-runner:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   # The compute runner: the only service given a container runtime's socket
   # (CONTAINER_SOCKET; prefer rootless Podman's, see the README). It runs

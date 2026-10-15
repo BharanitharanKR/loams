@@ -125,6 +125,7 @@ pub async fn check_startup_with(
                     .any(|e| e.id == m.id() && e.state == LedgerState::Done)
             })
             .filter(|m| !path.introduced_at_or_before(m.id(), &stack.release))
+            .filter(|m| !path.introduced_after(m.id(), release))
             .map(|m| m.id())
             .collect();
         let finished_unstamped = !entries.is_empty()

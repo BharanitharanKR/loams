@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use clap::{Parser, Subcommand};
 
+mod migrate_cli;
 #[cfg(feature = "postgres")]
 mod pg_control_cli;
 use loams::{ClusterConfig, MetaBackend, Server, ServerConfig};
@@ -1200,6 +1201,12 @@ enum Command {
         #[command(subcommand)]
         command: DurableCommand,
     },
+    /// Upgrades (design §54): migrate the stack's stores to this release,
+    /// before the engine starts (the compose `migrate` service).
+    Migrate {
+        #[command(subcommand)]
+        command: migrate_cli::MigrateCommand,
+    },
     /// Engine authentication (LOAMS_AUTH_MODE): API keys.
     Auth {
         #[command(subcommand)]
@@ -1357,6 +1364,7 @@ fn config(command: Command) -> ServerConfig {
         Command::Warm { .. } => unreachable!("loams warm starts no server"),
         Command::Durable { .. } => unreachable!("loams durable starts no server"),
         Command::Auth { .. } => unreachable!("loams auth starts no server"),
+        Command::Migrate { .. } => unreachable!("loams migrate starts no server"),
         #[cfg(feature = "live")]
         Command::LiveWorker => unreachable!("loams live-worker starts no server"),
         #[cfg(feature = "postgres")]
@@ -1579,6 +1587,12 @@ async fn serve(cli: Cli) -> ExitCode {
     }
     if let Command::Auth { command } = &cli.command {
         return auth_command(command);
+    }
+    if let Command::Migrate { .. } = &cli.command {
+        let Command::Migrate { command } = cli.command else {
+            unreachable!("matched above")
+        };
+        return migrate_cli::run(command).await;
     }
     #[cfg(feature = "postgres")]
     let cli = match cli.command {
@@ -2756,6 +2770,82 @@ mod tests {
         }
         parse_error(&["--durable-set", "no-equals"]);
         parse_error(&["--durable-store", "redis://x"]);
+    }
+
+    /// `loams migrate` (UP1 Task 7): every subcommand and its flags.
+    #[test]
+    fn migrate_subcommands_parse() {
+        for args in [
+            &["loams", "migrate", "run", "--data-dir", "/d"][..],
+            &[
+                "loams",
+                "migrate",
+                "run",
+                "--bucket",
+                "file:///var/lib/loams/bucket",
+                "--data-dir",
+                "/var/lib/loams",
+                "--house-dir",
+                "/var/lib/loams-house",
+                "--pg-control-dir",
+                "/var/lib/loams-pg-control",
+                "--declared-release",
+                "0.1.0-preview.2",
+                "--target-release",
+                "0.1.0-preview.3",
+                "--no-snapshot-i-accept-data-loss",
+                "--output",
+                "json",
+            ],
+            &[
+                "loams",
+                "migrate",
+                "run",
+                "--data-dir",
+                "/d",
+                "--abandon",
+                "0001-x",
+            ],
+            &["loams", "migrate", "plan", "--data-dir", "/d"],
+            &[
+                "loams",
+                "migrate",
+                "status",
+                "--data-dir",
+                "/d",
+                "--output",
+                "text",
+            ],
+            &[
+                "loams",
+                "migrate",
+                "verify",
+                "--data-dir",
+                "/d",
+                "--engine",
+                "http://127.0.0.1:8080",
+            ],
+        ] {
+            let cli = Cli::try_parse_from(args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
+            assert!(matches!(cli.command, Command::Migrate { .. }), "{args:?}");
+        }
+        // The compose service's stores (a TiKV build).
+        #[cfg(feature = "live-tikv")]
+        Cli::try_parse_from([
+            "loams",
+            "migrate",
+            "run",
+            "--meta",
+            "tikv://pd:2379/loams_meta",
+            "--live-store",
+            "tikv://pd:2379/loams_live_dev",
+            "--data-dir",
+            "/var/lib/loams",
+        ])
+        .expect("tikv stores");
+        // --data-dir is required; an unknown subcommand is refused.
+        assert!(Cli::try_parse_from(["loams", "migrate", "run"]).is_err());
+        assert!(Cli::try_parse_from(["loams", "migrate", "rollback", "--data-dir", "/d"]).is_err());
     }
 
     /// `loams durable migrate --durable-store …` (D1 Task 4): a store is
