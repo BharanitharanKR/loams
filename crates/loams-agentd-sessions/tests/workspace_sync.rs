@@ -18,7 +18,7 @@ use loams_agentd_proto::{
     SessionStatus, SteeringMode,
 };
 use loams_agentd_rpc::methods;
-use loams_agentd_sessions::{EngineCore, HarnessRegistry};
+use loams_agentd_sessions::{ApprovalSettings, EngineCore, HarnessRegistry};
 
 const VIEWER: &str = "viewer-device";
 
@@ -110,7 +110,13 @@ fn registry() -> Arc<HarnessRegistry> {
 fn assemble(dir: &std::path::Path, device_id: &str) -> EngineCore {
     std::fs::create_dir_all(dir).expect("create data dir");
     std::fs::write(dir.join("device-id"), device_id).expect("write device id");
-    EngineCore::assemble(dir, registry(), HarnessId::Mock).expect("engine core assembles")
+    EngineCore::assemble_with_approvals(
+        dir,
+        registry(),
+        HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
+    )
+    .expect("engine core assembles")
 }
 
 async fn wait_for<F>(mut predicate: F, what: &str)

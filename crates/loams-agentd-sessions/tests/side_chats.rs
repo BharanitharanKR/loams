@@ -8,7 +8,7 @@ use loams_agentd_proto::{
     SteeringMode,
 };
 use loams_agentd_rpc::methods;
-use loams_agentd_sessions::{EngineCore, HarnessRegistry};
+use loams_agentd_sessions::{ApprovalSettings, EngineCore, HarnessRegistry};
 use std::sync::{Arc, Mutex};
 
 struct Capture(Arc<Mutex<Vec<RunRequest>>>);
@@ -74,7 +74,13 @@ async fn fork_is_frozen_durable_idempotent_and_has_an_independent_provider_sessi
     let requests = Arc::new(Mutex::new(Vec::new()));
     let registry = HarnessRegistry::new();
     registry.register(Arc::new(Capture(requests.clone())));
-    let core = EngineCore::assemble(dir.path(), Arc::new(registry), HarnessId::Mock).unwrap();
+    let core = EngineCore::assemble_with_approvals(
+        dir.path(),
+        Arc::new(registry),
+        HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
+    )
+    .unwrap();
     core.workspace
         .create_chat(
             "main",
@@ -217,10 +223,11 @@ async fn fork_is_frozen_durable_idempotent_and_has_an_independent_provider_sessi
     drop(source);
     drop(target);
     drop(core);
-    let restarted = EngineCore::assemble(
+    let restarted = EngineCore::assemble_with_approvals(
         dir.path(),
         Arc::new(HarnessRegistry::new()),
         HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
     )
     .unwrap();
     assert_eq!(
@@ -248,10 +255,11 @@ async fn fork_is_frozen_durable_idempotent_and_has_an_independent_provider_sessi
 #[tokio::test]
 async fn cannot_fork_an_empty_chat_or_overwrite_a_main_chat() {
     let dir = tempfile::tempdir().unwrap();
-    let core = EngineCore::assemble(
+    let core = EngineCore::assemble_with_approvals(
         dir.path(),
         Arc::new(HarnessRegistry::new()),
         HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
     )
     .unwrap();
     core.workspace
@@ -282,10 +290,11 @@ async fn cannot_fork_an_empty_chat_or_overwrite_a_main_chat() {
 #[tokio::test]
 async fn forking_a_side_chat_can_land_as_a_sibling_under_the_main_chat() {
     let dir = tempfile::tempdir().unwrap();
-    let core = EngineCore::assemble(
+    let core = EngineCore::assemble_with_approvals(
         dir.path(),
         Arc::new(HarnessRegistry::new()),
         HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
     )
     .unwrap();
     core.workspace
@@ -449,7 +458,13 @@ async fn native_commands_and_empty_side_chats_skip_the_history_wrapper() {
     let requests = Arc::new(Mutex::new(Vec::new()));
     let registry = HarnessRegistry::new();
     registry.register(Arc::new(Capture(requests.clone())));
-    let core = EngineCore::assemble(dir.path(), Arc::new(registry), HarnessId::Mock).unwrap();
+    let core = EngineCore::assemble_with_approvals(
+        dir.path(),
+        Arc::new(registry),
+        HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
+    )
+    .unwrap();
     for (id, parent) in [
         ("main", None),
         ("plus-review", Some("main")),
@@ -587,7 +602,13 @@ async fn warm_side_chat_sends_owed_fork_history_once() {
     let seen = Arc::new(Mutex::new(Vec::new()));
     let registry = HarnessRegistry::new();
     registry.register(Arc::new(Warm(seen.clone())));
-    let core = EngineCore::assemble(dir.path(), Arc::new(registry), HarnessId::Mock).unwrap();
+    let core = EngineCore::assemble_with_approvals(
+        dir.path(),
+        Arc::new(registry),
+        HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
+    )
+    .unwrap();
     core.workspace
         .create_chat(
             "main",
@@ -775,7 +796,13 @@ async fn orphaned_history_steer_still_owes_the_history() {
         runs: runs.clone(),
         release: release.clone(),
     }));
-    let core = EngineCore::assemble(dir.path(), Arc::new(registry), HarnessId::Mock).unwrap();
+    let core = EngineCore::assemble_with_approvals(
+        dir.path(),
+        Arc::new(registry),
+        HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
+    )
+    .unwrap();
     core.workspace
         .create_chat(
             "main",

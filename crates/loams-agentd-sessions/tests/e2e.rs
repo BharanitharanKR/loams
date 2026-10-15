@@ -20,7 +20,7 @@ use loams_agentd_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SandboxLevel,
     SessionStatus, SteeringMode, ToolCall,
 };
-use loams_agentd_sessions::{EngineCore, HarnessRegistry, RunJournal};
+use loams_agentd_sessions::{ApprovalSettings, EngineCore, HarnessRegistry, RunJournal};
 use loams_agentd_store::DocsStore;
 
 const CHAT: &str = "chat-e2e";
@@ -216,8 +216,13 @@ fn registry_with(harness: Arc<dyn Harness>) -> Arc<HarnessRegistry> {
 }
 
 fn assemble(dir: &std::path::Path, harness: Arc<dyn Harness>) -> EngineCore {
-    EngineCore::assemble(dir, registry_with(harness), HarnessId::Mock)
-        .expect("engine core assembles")
+    EngineCore::assemble_with_approvals(
+        dir,
+        registry_with(harness),
+        HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
+    )
+    .expect("engine core assembles")
 }
 
 #[tokio::test]
@@ -277,7 +282,13 @@ async fn update_deferred_steering_preserves_the_active_turn_and_queued_prompt() 
     });
     let registry = registry_with(harness.clone());
     let dir = tempfile::tempdir().unwrap();
-    let core = EngineCore::assemble(dir.path(), registry.clone(), HarnessId::Mock).unwrap();
+    let core = EngineCore::assemble_with_approvals(
+        dir.path(),
+        registry.clone(),
+        HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
+    )
+    .unwrap();
     let handle = core.doc_host.open(CHAT).unwrap();
     core.sessions
         .dispatch(
@@ -408,7 +419,13 @@ async fn pending_update_does_not_block_dispatch_or_other_harnesses() {
     for id in [HarnessId::ClaudeCode, HarnessId::Codex] {
         registry.register(Arc::new(RecordingHarness(id, started.clone())));
     }
-    let core = EngineCore::assemble(dir.path(), registry.clone(), HarnessId::ClaudeCode).unwrap();
+    let core = EngineCore::assemble_with_approvals(
+        dir.path(),
+        registry.clone(),
+        HarnessId::ClaudeCode,
+        ApprovalSettings::full_access_default(),
+    )
+    .unwrap();
     let active_turn = registry.execution_lease(HarnessId::ClaudeCode).await;
     registry.begin_update(HarnessId::ClaudeCode);
     // These awaits model the shared queue watcher's serial dispatch calls.
@@ -2391,10 +2408,11 @@ async fn real_claude_sees_uploaded_image_inline() {
     let cwd = tmp.path().join("project");
     std::fs::create_dir_all(&cwd).unwrap();
 
-    let core = EngineCore::assemble(
+    let core = EngineCore::assemble_with_approvals(
         &dir,
         Arc::new(loams_agentd_sessions::default_registry()),
         HarnessId::ClaudeCode,
+        ApprovalSettings::full_access_default(),
     )
     .expect("engine core assembles");
     // Pre-title the chat so the auto-titler doesn't spend a second model call.
@@ -3181,10 +3199,11 @@ async fn generated_image_is_materialized_before_publication_and_survives_reopen(
 #[ignore = "requires authenticated Codex with image generation; consumes quota"]
 async fn real_image_generation_profile_smoke() {
     let dir = tempfile::tempdir().unwrap();
-    let core = EngineCore::assemble(
+    let core = EngineCore::assemble_with_approvals(
         dir.path(),
         registry_with(Arc::new(loams_agentd_harness::CodexHarness::new())),
         HarnessId::Codex,
+        ApprovalSettings::full_access_default(),
     )
     .unwrap();
     core.sessions

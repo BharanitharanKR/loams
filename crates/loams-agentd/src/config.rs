@@ -21,7 +21,7 @@
 //! max_running_per_group = 4
 //! max_running = 8
 //! [approvals]               # plan SD1 Task 13: supervised approvals (D911)
-//! default_mode = "full-access"   # unset: full-access, or supervised with [remote]
+//! default_mode = "supervised"    # or "full-access", only when set (I-1)
 //! timeout_secs = 1800
 //! [remote]                  # plan SD1 Task 7: `serve --remote` (D909)
 //! enabled = false
@@ -72,9 +72,9 @@ pub struct Config {
 #[serde(default)]
 pub struct ApprovalsConfig {
     /// The mode of a thread that has none of its own and no parent's. Unset,
-    /// it is `full-access` (the behaviour before Task 13), and `supervised`
-    /// when the remote listener is on: a remote daemon is reachable over the
-    /// network.
+    /// it is `supervised`, on a local daemon as on a remote one (threat model
+    /// I-1, owner 2026-10-15): a client that wants full access asks for it
+    /// (`SetThreadApprovalMode`, or a run group's `approvalMode`).
     pub default_mode: Option<ApprovalMode>,
     /// How long an approval waits for a person before it is denied.
     pub timeout_secs: u64,
@@ -90,14 +90,10 @@ impl Default for ApprovalsConfig {
 }
 
 impl ApprovalsConfig {
-    /// The engine's settings, `remote` when the remote listener is on.
-    pub fn settings(&self, remote: bool) -> ApprovalSettings {
+    /// The engine's settings.
+    pub fn settings(&self) -> ApprovalSettings {
         ApprovalSettings {
-            default_mode: self.default_mode.unwrap_or(if remote {
-                ApprovalMode::Supervised
-            } else {
-                ApprovalMode::FullAccess
-            }),
+            default_mode: self.default_mode.unwrap_or(ApprovalMode::Supervised),
             timeout: Duration::from_secs(self.timeout_secs),
         }
     }
@@ -366,32 +362,45 @@ mod tests {
         );
     }
 
+    /// Threat model I-1 (owner, 2026-10-15): a local daemon supervises a
+    /// thread that has no mode, as a remote one does; full access is asked
+    /// for explicitly.
     #[test]
-    fn approvals_default_to_full_access_and_supervised_when_remote() {
+    fn default_mode_is_supervised_locally() {
         let config = Config::default();
         assert_eq!(
-            config.approvals.settings(false).default_mode,
-            ApprovalMode::FullAccess
-        );
-        assert_eq!(
-            config.approvals.settings(true).default_mode,
+            config.approvals.settings().default_mode,
             ApprovalMode::Supervised
         );
         assert_eq!(
-            config.approvals.settings(false).timeout,
+            Config::parse("[approvals]\ntimeout_secs = 60\n")
+                .expect("parse")
+                .approvals
+                .settings()
+                .default_mode,
+            ApprovalMode::Supervised
+        );
+        assert_eq!(
+            ApprovalSettings::default().default_mode,
+            ApprovalMode::Supervised
+        );
+    }
+
+    #[test]
+    fn approvals_parse_their_mode_and_timeout() {
+        let config = Config::default();
+        assert_eq!(
+            config.approvals.settings().timeout,
             Duration::from_secs(30 * 60)
         );
         let config =
-            Config::parse("[approvals]\ndefault_mode = \"supervised\"\ntimeout_secs = 60\n")
+            Config::parse("[approvals]\ndefault_mode = \"full-access\"\ntimeout_secs = 60\n")
                 .expect("parse");
         assert_eq!(
-            config.approvals.settings(false).default_mode,
-            ApprovalMode::Supervised
+            config.approvals.settings().default_mode,
+            ApprovalMode::FullAccess
         );
-        assert_eq!(
-            config.approvals.settings(false).timeout,
-            Duration::from_secs(60)
-        );
+        assert_eq!(config.approvals.settings().timeout, Duration::from_secs(60));
         assert_eq!(
             invalid("[approvals]\ntimeout_secs = 0\n").0,
             "`approvals.timeout_secs`"

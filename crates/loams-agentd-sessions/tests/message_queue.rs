@@ -27,7 +27,7 @@ use loams_agentd_proto::{
 use loams_agentd_sessions::doc_host::{
     BeginQueueEditOutcome, FinishQueueEditAction, FinishQueueEditOutcome,
 };
-use loams_agentd_sessions::{EngineCore, HarnessRegistry};
+use loams_agentd_sessions::{ApprovalSettings, EngineCore, HarnessRegistry};
 
 const CHAT: &str = "chat-queue";
 
@@ -264,7 +264,13 @@ async fn setup_with(
 fn assemble_at(path: &std::path::Path, harness: Arc<HeldHarness>) -> EngineCore {
     let registry = HarnessRegistry::new();
     registry.register(harness);
-    EngineCore::assemble(path, Arc::new(registry), HarnessId::Mock).expect("engine core assembles")
+    EngineCore::assemble_with_approvals(
+        path,
+        Arc::new(registry),
+        HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
+    )
+    .expect("engine core assembles")
 }
 
 async fn create_chat(core: &EngineCore) {
@@ -1795,10 +1801,11 @@ async fn pending_update_does_not_stall_another_chats_queue_flush() {
     let registry = Arc::new(HarnessRegistry::new());
     registry.register(updating.clone());
     registry.register(other.clone());
-    let core = EngineCore::assemble(
+    let core = EngineCore::assemble_with_approvals(
         &tmp.path().join("data"),
         registry.clone(),
         HarnessId::ClaudeCode,
+        ApprovalSettings::full_access_default(),
     )
     .expect("engine core assembles");
     create_chat(&core).await;

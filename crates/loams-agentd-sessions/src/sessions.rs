@@ -1205,8 +1205,9 @@ impl Inner {
 
     /// Apply `chat_id`'s approval mode to a run of it (SD1 Task 13): a
     /// supervised thread's run is never auto-approved and gets a bridge; an
-    /// explicit full-access thread's run is auto-approved; a thread on the
-    /// daemon's full-access default keeps its request's `autoApprove`.
+    /// explicit full-access thread's run is auto-approved; a thread on a
+    /// configured full-access default (`[approvals] default_mode`) keeps its
+    /// request's `autoApprove`.
     /// Answers whether the run is supervised.
     fn apply_approval_mode(&self, chat_id: &str, request: &mut RunRequest) -> bool {
         let Some(approvals) = self.approvals.get() else {
@@ -3330,6 +3331,14 @@ mod tests {
         let core =
             crate::EngineCore::assemble(dir.path(), Arc::new(registry), HarnessId::Mock).unwrap();
         let chat = "chat-sink-spin";
+        // The feed cannot ask, and a thread with no mode is supervised
+        // (threat model I-1, SD1 T30-19): ask for full access.
+        core.approvals
+            .set_mode(
+                chat,
+                loams_agentd_proto::approvals::ApprovalMode::FullAccess,
+            )
+            .unwrap();
         core.sessions
             .dispatch(chat, HarnessId::Mock, request(), None)
             .await

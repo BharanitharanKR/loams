@@ -1,6 +1,6 @@
 # Loams Studio: threat model
 
-> **Status:** SD1 Task 30 (2026-10-15), reviewed against `dev` after Tasks 0–28 and Task 13 (#598) merged. Covers Studio (`@loams/plugin-studio`, `@loams/studio-ui`), the daemon surfaces it added (`loams-agentd-connect`: the loopback and remote Connect listeners, preview tickets, the twins table and roles; the git writes, checkpoints, review, search, run groups, approvals, notifications and usage in `loams-agentd-sessions` and `loams-agentd-harness`), Electron main's agentd proxy, preview view and editor launcher, and the browser console's deployment. Design: [§53](../design/53-studio-ade.md) §6 and §8; plan: [SD1](../plans/2026-10-13-sd1-studio-ade.md), Task 30 and rulings T30-1…T30-18.
+> **Status:** SD1 Task 30 (2026-10-15), reviewed against `dev` after Tasks 0–28 and Task 13 (#598) merged. Covers Studio (`@loams/plugin-studio`, `@loams/studio-ui`), the daemon surfaces it added (`loams-agentd-connect`: the loopback and remote Connect listeners, preview tickets, the twins table and roles; the git writes, checkpoints, review, search, run groups, approvals, notifications and usage in `loams-agentd-sessions` and `loams-agentd-harness`), Electron main's agentd proxy, preview view and editor launcher, and the browser console's deployment. Design: [§53](../design/53-studio-ade.md) §6 and §8; plan: [SD1](../plans/2026-10-13-sd1-studio-ade.md), Task 30 and rulings T30-1…T30-19.
 
 ## 1. Assets and actors
 
@@ -51,7 +51,7 @@ Out of scope: a compromised OS account, a compromised identity provider, and the
 - **Timeouts deny** (`[approvals] timeout_secs`, 30 min); a turn that ends denies what it still waits for; an ask outside a turn is denied (T13-7). Pending approvals survive a restart (T13-8).
 - **Per driver.** Claude: `--permission-mode default`, each `can_use_tool` waits. Codex: `on-request` with the thread's sandbox. opencode: forwards its permission event and is told `once`. ACP: forwards `session/request_permission`; **asks during `session/new`/`load` and the session setup calls are now rejected in a supervised thread** instead of auto-accepted (T30-6, fixed). Pi cannot ask, so a supervised Pi thread is refused (T13-10).
 - **Escapes, fixed here:** a fork hung under another thread took that thread's or the default mode (T30-7); a side-chat chain deeper than the 16-parent walk fell back to the default, and each side chat's own run can make 8 more (T30-8); a thread started from the project page's composer (and the run group's judge) never set the mode, so on a desktop daemon it ran at the `full-access` default (T30-9, **high**).
-- **Residual:** the daemon's default is `full-access` unless the remote listener is on (T13-3, I-1); a thread created by another client (the dock, the CLI) without a mode runs full access.
+- **The default, resolved:** the daemon's `[approvals] default_mode` is now `supervised` on a local daemon too, not only with the remote listener; a thread or run group created without a mode is supervised, and full access is only ever asked for (`SetThreadApprovalMode`, a run group's `approvalMode`, or `default_mode = "full-access"` in the daemon's own config). I-1, resolved (owner, 2026-10-15; T30-19).
 
 ## 6. Git write misuse (§53 §8.2, Task 9)
 
@@ -91,7 +91,7 @@ The invariants run on their seeds under stable in `cargo test` (`fuzz::tests`); 
 
 | # | Issue | Severity | Owner |
 |---|---|---|---|
-| I-1 | The daemon's default mode is `full-access` unless the remote listener is on; any client that creates a thread without `SetThreadApprovalMode` runs it unsupervised | Medium | Owner decision (Q803): make `supervised` the default, or require the mode at creation |
+| I-1 | ~~The daemon's default mode is `full-access` unless the remote listener is on; any client that creates a thread without `SetThreadApprovalMode` runs it unsupervised~~ **Resolved (owner, 2026-10-15):** `supervised` is the default everywhere; full access must be asked for (T30-19, `default_mode_is_supervised_locally`) | ~~Medium~~ | — |
 | I-2 | The remote `studio` role may resolve approvals and switch a thread to full access; a stolen remote token can approve its own runs | Info (by design, §53 §8.1) | — |
 | I-3 | The verifier does not check the token type (`typ`/`azp`): an ID token minted for the `loams-agentd` client is accepted like an access token | Low | MT1 |
 | I-4 | With no cached keys and the issuer down, each request triggers a (serialized, 5 s) JWKS fetch | Low | Follow-up |

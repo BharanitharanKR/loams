@@ -46,11 +46,11 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 /// How many parents a thread's mode is looked up through.
 const MAX_PARENTS: usize = 16;
 
-/// The daemon's approval settings (`config.toml` `[approvals]`, and
-/// `serve --remote`).
+/// The daemon's approval settings (`config.toml` `[approvals]`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ApprovalSettings {
-    /// The mode of a thread that has none of its own and no parent's.
+    /// The mode of a thread that has none of its own and no parent's:
+    /// `supervised` unless configured (threat model I-1, owner 2026-10-15).
     pub default_mode: ApprovalMode,
     /// How long an approval waits before it is denied.
     pub timeout: Duration,
@@ -59,8 +59,21 @@ pub struct ApprovalSettings {
 impl Default for ApprovalSettings {
     fn default() -> Self {
         Self {
-            default_mode: ApprovalMode::FullAccess,
+            default_mode: ApprovalMode::Supervised,
             timeout: DEFAULT_TIMEOUT,
+        }
+    }
+}
+
+impl ApprovalSettings {
+    /// What `[approvals] default_mode = "full-access"` configures: a thread
+    /// with no mode of its own runs unsupervised. Never the default (threat
+    /// model I-1, SD1 T30-19); an engine that wants it asks for it, as the
+    /// tests of harnesses that cannot ask do.
+    pub fn full_access_default() -> Self {
+        Self {
+            default_mode: ApprovalMode::FullAccess,
+            ..Self::default()
         }
     }
 }
@@ -599,13 +612,13 @@ mod tests {
     use super::*;
 
     /// SD1 Task 30: a side chat deeper than the walk, under a supervised
-    /// thread, is supervised, not the full-access default; a chain that ends
-    /// with no mode still takes the default.
+    /// thread, is supervised, not a configured full-access default; a chain
+    /// that ends with no mode still takes the default.
     #[test]
     fn deep_side_chats_fail_safe_to_supervised() {
         let dir = tempfile::tempdir().unwrap();
         let store = Arc::new(DocsStore::open(dir.path()).unwrap());
-        let approvals = Approvals::open(store, ApprovalSettings::default()).unwrap();
+        let approvals = Approvals::open(store, ApprovalSettings::full_access_default()).unwrap();
         // c0 <- c1 <- … <- c40: each chat's parent is the one before it.
         approvals.set_parent_of(Arc::new(|chat: &str| {
             let n: usize = chat.strip_prefix('c')?.parse().ok()?;
