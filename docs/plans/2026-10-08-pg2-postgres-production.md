@@ -2164,3 +2164,32 @@ The checks ran on the scratch stack `deploy/pgdog/compose.yaml`: the pinned PgDo
   - It then runs `scripts/spec/provenance.sh`.
   - Its `--self-test` covers `no_pgdog_in_lockfiles`, `pgdog_image_pinned_by_digest` and `licence_bundle_present` (eleven fixture repositories).
 - **R19.4 Where it runs.** It runs in `ci.yml`'s unconditional light job, not in `pg2.yml` as the plan said. `pg2.yml` runs only when Postgres paths change, and a PgDog package could arrive through any lockfile or deploy file. It is part of `CI required`.
+
+### Task 20 rulings (2026-10-15)
+
+- **R20.1 Where the renderer lives.** It is `crates/loams-pg-control/src/pgdog/render.rs`: pure and deterministic, from the records.
+  - RT1's renderer was planned as `loams-sqlrouter/src/render/pgdog.rs`, and RT1 has not built it or `loams-sqlrouter-io`. This task does not create another track's crates.
+  - When RT1's sharded renderer exists, a sharded project delegates to it. Until then, sharded projects (a shard map, R2.14) are left out and listed in `RenderedConfig::left_out` (`sharded_project_is_left_out`, in place of `sharded_project_delegates_to_rt1_renderer`).
+- **R20.2 Routed names.** They follow §46 §8.1 through `format_routed` only.
+  - `<project>` (the default branch) and `<project>__<branch>` reach the branch's `postgres` database. No record names a default database, and every compute has `postgres`.
+  - `<project>__<branch>.<db>` reaches each database record of the branch.
+  - `<project>__<branch>__ro` reaches each read-only endpoint as a `replica` (`read_only = true`) of one cluster, so PgDog balances them. Primary names never list replicas, so no read/write split happens on them (§46 §8.1's default).
+  - Hosts are the endpoints' recorded backend addresses. An endpoint without an address is left out. Compose's network alias (R10.10) is Task 22's mapping.
+- **R20.3 Pool sizes and `max_connections`.**
+  - `max_connections(cu)` follows Neon's table: about 450 per CU, 112 at 0.25 CU, at most 4,000. It is computed at the endpoint's largest size (`max_cu`), because it is a start-time setting.
+  - The spec now sets it, after the endpoint's settings (R11.3 already reserves it).
+  - Each `[[databases]]` entry's `pool_size` is 80 % of it (§46 §8.1). The role limit is absent: no role record has one yet.
+  - The pool mode is the endpoint's, and a role's `pool_mode` overrides it in `users.toml`.
+- **R20.4 Users and grants.**
+  - A login, non-system role is granted every routed name of its own branch, and only those. That is until Task 24's explicit grants.
+  - One `[[users]]` entry per role lists its names, with `password_hash` (the role's SCRAM verifier), `server_user` (the same role) and `server_password` (the backend-only secret, R18.3).
+  - A role without credentials is left out. `NamespaceRecords::read` reads the records without credentials, and Task 24 supplies them.
+- **R20.5 Both files are secrets.** `RenderedConfig` returns `pgdog_toml: Secret<String>`, not a plain string, because `[admin] password` lives in `pgdog.toml` (PgDog takes it from nowhere else). Both go to a Secret, not a ConfigMap (Task 21).
+- **R20.6 `[general]`.**
+  - Listener 6432, OpenMetrics 9090, `auth_type = "scram"`, transaction pooling, and R18.9's timeouts:
+    - `checkout_timeout` 20 s, `connect_timeout` 1 s, `connect_attempts` 1, `connect_attempt_delay` 500 ms, `ban_timeout` 1 s, `healthcheck_interval` 30 s;
+    - `idle_healthcheck_interval` 0, `min_pool_size` 0, `idle_timeout` 30 s, so health checks never keep a compute awake.
+  - TLS toward clients (`tls_certificate`, `tls_private_key`, `tls_client_required = true`) and toward computes (`tls_verify = "verify_ca"` with the compute CA) when configured; otherwise off (Task 23).
+- **R20.7 Checked against the pinned PgDog.** v0.1.60 loaded the rendered golden (TLS paths dropped) and built one pool per (routed name, role) as rendered: `migrator`'s pools in session mode, and `shop__main__ro` as a replica. Tests in `tests/render.rs`:
+  - `render_is_deterministic`, `render_golden_two_projects_three_branches` (goldens in `tests/golden/pgdog/`), `ungranted_role_absent_from_users`, `ro_endpoint_rendered_as_replica`, `pool_size_follows_cu`;
+  - `sharded_project_is_left_out`, `plain_settings_and_addressless_endpoints` and `records_are_read_from_the_store`.

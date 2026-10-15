@@ -24,7 +24,7 @@ use loams_postgres::spec::{
 use loams_postgres::{TenantId, TimelineId};
 use sha2::{Digest, Sha256};
 
-use crate::autoscale::{MAX_CU, file_cache_mb};
+use crate::autoscale::{MAX_CU, file_cache_mb, max_connections};
 use crate::model::{
     BranchKey, BranchRec, BranchScope, BranchState, ComputeBinding, ComputeRec, Cu, DatabaseRec,
     EndpointKey, EndpointRec, EndpointType, ProjectKey, ProjectRec, ProjectState, Record, RoleRec,
@@ -351,6 +351,13 @@ pub(crate) fn build(
         .setting(Setting::new(
             "port",
             &crate::runtime::COMPUTE_PG_PORT.to_string(),
+            "integer",
+        ))
+        // Connections (Task 20, R20.3): at the endpoint's largest size, as
+        // PgDog's pool sizes assume.
+        .setting(Setting::new(
+            "max_connections",
+            &max_connections(endpoint.max_cu.max(endpoint.min_cu)).to_string(),
             "integer",
         ))
         // The local file cache (Task 15, R15.3): its ceiling is the
