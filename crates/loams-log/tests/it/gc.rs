@@ -546,3 +546,62 @@ async fn a_roots_object_time_overrides_the_default() {
 fn millis(duration: Duration) -> u64 {
     u64::try_from(duration.as_millis()).expect("millis fit a u64")
 }
+
+/// UP1 Task 8 (Review Focus 3): while an upgrade snapshot is kept, an object
+/// its metastore state may name is never deleted: here, WAL objects retired
+/// after the snapshot was taken. Once the snapshot is pruned they go.
+#[tokio::test]
+async fn gc_between_snapshot_and_restore_keeps_pinned_objects() {
+    use loams_common::meta::{MetaStore, PointerCas, SNAPSHOT_ROOT_PREFIX, SYSTEM_NAMESPACE};
+    let f = Fixture::start(Store::in_memory()).await;
+    f.writer.append(f.stream, 0, records("a", 3)).await.unwrap();
+    f.writer.append(f.stream, 0, records("b", 3)).await.unwrap();
+    // The snapshot: its root names the time it was taken.
+    let taken = f.clock.now_ms();
+    let system = f
+        .meta
+        .client
+        .create_namespace(SYSTEM_NAMESPACE)
+        .await
+        .expect("_system");
+    let key = format!("{SNAPSHOT_ROOT_PREFIX}01SNAPSHOT");
+    let root = |expected, value: String| PointerCas {
+        namespace: system,
+        key: key.clone(),
+        expected,
+        value,
+        fence: None,
+        fresh: None,
+    };
+    MetaStore::cas_pointer(&f.meta.client, root(None, format!("v1;{taken};digest")))
+        .await
+        .into_result()
+        .expect("root");
+    // After it, compaction retires the WAL objects.
+    f.clock.advance(Duration::from_secs(1));
+    segment_now(&f.meta.client, &f.store, f.ns, f.stream, 0, 10)
+        .await
+        .expect("segment");
+    let retired = f.retired().await;
+    assert_eq!(retired.len(), 2);
+    let source = GcSource::new(f.store.clone(), config());
+    f.clock.advance(GRACE + Duration::from_secs(1));
+    assert_eq!(f.gc(&source).await.retired, 0, "pinned by the snapshot");
+    for path in &retired {
+        assert!(f.exists(path).await, "{path} is pinned");
+    }
+    // Pruned: the next run collects them.
+    MetaStore::cas_pointer(
+        &f.meta.client,
+        root(Some(1), loams_common::meta::PRUNED.to_string()),
+    )
+    .await
+    .into_result()
+    .expect("prune");
+    assert_eq!(f.gc(&source).await.retired, 2);
+    for path in &retired {
+        assert!(!f.exists(path).await, "{path} was not deleted");
+    }
+    f.check().await;
+    f.shutdown().await;
+}

@@ -438,6 +438,22 @@ impl MetaDirectoryStore {
         }
     }
 
+    /// Whether an upgrade snapshot may name directory object `path` (its
+    /// ULID is not newer than the oldest kept snapshot, UP1 Task 8): it then
+    /// stays, so a rollback finds the directory it restores.
+    async fn pinned_by_snapshot(&self, path: &str) -> bool {
+        let written_ms = path
+            .strip_prefix(OBJECT_PREFIX)
+            .and_then(|name| name.strip_suffix(".json"))
+            .and_then(|id| id.parse::<ulid::Ulid>().ok())
+            .map(|id| id.timestamp_ms());
+        match loams_common::meta::snapshot_gc_floor(&*self.meta).await {
+            Ok(floor) => written_ms.is_none_or(|ms| loams_common::meta::pinned_by(floor, ms)),
+            // Unknown: keep it; it only costs storage.
+            Err(_) => true,
+        }
+    }
+
     /// The reserved namespace, if it exists yet (reads never create it).
     async fn existing_namespace(&self) -> Result<Option<NamespaceId>, Unavailable> {
         if let Some(id) = self.namespace.get() {
@@ -536,6 +552,7 @@ impl DirectoryStore for MetaDirectoryStore {
             match cas.result {
                 Ok(version) => {
                     if let Some(old) = previous.filter(|old| *old != object)
+                        && !self.pinned_by_snapshot(&old).await
                         && let Err(err) = self.store.delete(&old).await
                     {
                         tracing::debug!(%err, "the replaced directory object stays");

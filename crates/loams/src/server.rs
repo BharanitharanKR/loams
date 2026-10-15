@@ -1635,6 +1635,19 @@ async fn purge_deleted_repos(
     catalog: &loams_git::BucketRepoCatalog,
     grace: Duration,
 ) {
+    // A kept upgrade snapshot may restore a repository deleted since: purge
+    // nothing until it is pruned (UP1 Task 8).
+    match loams_common::meta::snapshot_gc_floor(meta).await {
+        Ok(None) => {}
+        Ok(Some(_)) => {
+            tracing::debug!("an upgrade snapshot is kept: the repository purge waits");
+            return;
+        }
+        Err(err) => {
+            tracing::warn!(%err, "reading the upgrade snapshots for the repository purge failed");
+            return;
+        }
+    }
     let namespaces = match meta
         .namespaces(loams_common::meta::Consistency::Local)
         .await

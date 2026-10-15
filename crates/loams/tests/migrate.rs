@@ -83,3 +83,53 @@ fn migrate_refuses_a_non_adjacent_target() {
     assert_eq!(code, Some(78), "{err}");
     assert!(err.contains("release_not_found"), "{err}");
 }
+
+/// UP1 Task 8: `snapshot`, `snapshots list`, `restore` and `snapshots prune`
+/// on a local stack with the embedded metastore (copied and put back while
+/// no node has it open).
+#[test]
+fn migrate_snapshot_restore_round_trip_on_a_local_stack() {
+    let dir = TempDir::new().expect("dir");
+    let snapshots = TempDir::new().expect("snapshots");
+    let snapshots_dir = snapshots.path().join("upgrade-snapshots");
+    let (code, _, err) = migrate(&["run"], dir.path());
+    assert_eq!(code, Some(0), "{err}");
+    let to = snapshots_dir.to_str().expect("utf-8");
+    let (code, out, err) = migrate(&["snapshot", "--to", to], dir.path());
+    assert_eq!(code, Some(0), "{out}{err}");
+    let taken: Value = serde_json::from_str(out.trim()).expect("json");
+    let id = taken["id"].as_str().expect("id").to_string();
+    let stores: Vec<&str> = taken["components"]
+        .as_array()
+        .expect("components")
+        .iter()
+        .map(|c| c["store"].as_str().expect("store"))
+        .collect();
+    assert!(stores.contains(&"raft"), "{stores:?}");
+    let listed = Command::new(env!("CARGO_BIN_EXE_loams"))
+        .args(["migrate", "snapshots", "list", "--dir", to])
+        .output()
+        .expect("list");
+    let listed: Value = serde_json::from_slice(&listed.stdout).expect("json");
+    assert_eq!(listed[0]["id"], id.as_str());
+    assert_eq!(listed[0]["complete"], true);
+    let from = snapshots_dir.join(&id);
+    let (code, out, err) = migrate(
+        &["restore", "--from", from.to_str().expect("utf-8")],
+        dir.path(),
+    );
+    assert_eq!(code, Some(0), "{out}{err}");
+    let restored: Value = serde_json::from_str(out.trim()).expect("json");
+    assert_eq!(restored["restored"][0], "raft");
+    // The stack still opens, at its release.
+    let (code, out, _) = migrate(&["status"], dir.path());
+    assert_eq!(code, Some(0));
+    let status: Value = serde_json::from_str(out.trim()).expect("json");
+    assert_eq!(status["stack"]["release"], env!("CARGO_PKG_VERSION"));
+    let (code, _, err) = migrate(
+        &["snapshots", "prune", "--dir", to, "--id", &id],
+        dir.path(),
+    );
+    assert_eq!(code, Some(0), "{err}");
+    assert!(!from.exists());
+}

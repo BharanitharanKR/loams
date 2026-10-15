@@ -22,7 +22,8 @@
 //!
 //! - [`verify`]: the store probes of `loams migrate verify` (§54 §10.4).
 //!
-//! Later UP1 tasks add snapshots and restores.
+//! - [`snapshot`]: snapshots and restores of the Loams-owned stores, and
+//!   their GC roots (§54 §7, §8).
 
 /// Evaluates a named failpoint of the crash matrix. With the `failpoints`
 /// feature a configured failpoint stops the caller as a crash would (it
@@ -48,6 +49,7 @@ pub mod migration;
 pub mod migrations;
 pub mod path;
 pub mod runner;
+pub mod snapshot;
 pub mod stack;
 pub mod startup;
 pub mod verify;

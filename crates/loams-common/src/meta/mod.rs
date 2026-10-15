@@ -12,6 +12,7 @@
 mod error;
 mod store;
 mod types;
+pub mod upgrade;
 mod views;
 
 pub use error::{ApplyError, MetaError, MetaResult, StaleLag, log_stale_object};
@@ -27,6 +28,7 @@ pub use types::{
     graph_stream_name, implicit_name, is_graph_id, is_reserved_namespace, legacy_graph_stream_name,
     link_pointer_key, system_stream_partitions,
 };
+pub use upgrade::{PRUNED, SNAPSHOT_ROOT_PREFIX, pinned_by, snapshot_gc_floor, snapshot_root_time};
 pub use views::{
     CollectionHead, CollectionRoots, IdempotencyClaim, IdempotencyCompletion, LinkHead, NameTarget,
     PartitionBounds, PartitionIndex, PointerCas, SegmentSwap, StreamState, WalCommit,
