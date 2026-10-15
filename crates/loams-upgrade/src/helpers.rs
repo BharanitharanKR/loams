@@ -7,8 +7,6 @@
 //! volumes of its step and the snapshots; its only credentials are the
 //! engine's own (`secrets/engine.env`), passed as an env file.
 
-use std::path::Path;
-
 use crate::stackdir::{PROJECT, StackDir};
 
 /// Where the snapshots are mounted in every helper (and in `tikv`, for BR).
@@ -195,19 +193,29 @@ pub fn br_helper(stack: &StackDir, image: &str, restore: bool, id: &str) -> Help
     }
 }
 
-/// A cold copy of `pd-data` and `tikv-data` (both stopped) into
-/// `<snapshots>/<id>/tikv-cold/` (or back, for a restore), with the target
-/// `loams` image's `cp`. A stack whose `tikv` does not mount the snapshots
-/// (preview.2) takes this path (UP1 Task 13 ruling).
+/// The uid and gid the `loams` image runs as.
+pub const LOAMS_UID: &str = "10001";
+
+/// A cold copy of `pd-data` and `tikv-data` (both stopped) as one archive,
+/// `<snapshots>/<id>/tikv/volumes.tar`, that keeps their owners and modes;
+/// or, for a restore, both volumes emptied and the archive unpacked into
+/// them. Runs the target `loams` image's `tar` as root with only the
+/// capabilities a copy of another user's files needs, on no network. A
+/// stack whose `tikv` does not mount the snapshots (preview.2) takes this
+/// path; BR needs that mount (UP1 Task 13 ruling).
 pub fn cold_copy_helper(stack: &StackDir, image: &str, restore: bool, id: &str) -> HelperSpec {
-    let snap = format!("{SNAPSHOTS}/{id}/tikv-cold");
+    let dir = format!("{SNAPSHOTS}/{id}/tikv");
     let script = if restore {
         format!(
-            "set -e; for v in pd tikv; do rm -rf /vol/$v/* /vol/$v/.[!.]* 2>/dev/null || true; \
-             cp -a {snap}/$v/. /vol/$v/; done"
+            "set -e; test -f {dir}/volumes.tar; \
+             for v in pd tikv; do find /vol/$v -mindepth 1 -delete; done; \
+             tar -C /vol -xpf {dir}/volumes.tar"
         )
     } else {
-        format!("set -e; mkdir -p {snap}; for v in pd tikv; do cp -a /vol/$v {snap}/$v; done")
+        format!(
+            "set -e; mkdir -p {dir}; tar -C /vol -cpf {dir}/volumes.tar pd tikv; \
+             chown -R {LOAMS_UID}:{LOAMS_UID} {dir}; chmod 0700 {dir}; chmod 0600 {dir}/volumes.tar"
+        )
     };
     HelperSpec {
         image: image.to_string(),
@@ -240,10 +248,40 @@ pub fn cold_copy_helper(stack: &StackDir, image: &str, restore: bool, id: &str) 
     }
 }
 
-/// Whether the stack's compose file mounts the snapshots into `tikv`
-/// (preview.3 and later): BR can be used.
-pub fn tikv_mounts_snapshots(dir: &Path) -> bool {
-    std::fs::read_to_string(dir.join("compose.yaml")).is_ok_and(|text| {
-        text.contains(":/var/lib/loams-upgrade-snapshots") && text.contains("BR's")
-    })
+/// Makes `<snapshots>/<id>/tikv` (0700, the `loams` user's) before BR
+/// writes into it, so `loams migrate snapshot` can still write the
+/// snapshot's other files and its manifest beside it.
+pub fn prepare_helper(stack: &StackDir, image: &str, id: &str) -> HelperSpec {
+    HelperSpec {
+        image: image.to_string(),
+        entrypoint: Some("/bin/sh".to_string()),
+        args: vec![
+            "-c".to_string(),
+            format!(
+                "set -e; mkdir -p {SNAPSHOTS}/{id}/tikv; chown {LOAMS_UID}:{LOAMS_UID} {SNAPSHOTS} \
+                 {SNAPSHOTS}/{id} {SNAPSHOTS}/{id}/tikv; chmod 0700 {SNAPSHOTS} {SNAPSHOTS}/{id}"
+            ),
+        ],
+        network: "none".to_string(),
+        mounts: vec![Mount {
+            source: snapshots_source(stack),
+            target: SNAPSHOTS.to_string(),
+            read_only: false,
+        }],
+        env_file: None,
+        user: Some("0".to_string()),
+        cap_add: ["CHOWN", "DAC_OVERRIDE", "FOWNER"]
+            .iter()
+            .map(|c| (*c).to_string())
+            .collect(),
+    }
+}
+
+/// Whether `tikv` mounts the snapshots at [`SNAPSHOTS`] in the stack's
+/// resolved compose file (`compose config --format json`; preview.3 and
+/// later): BR can then write its backup where `migrate` reads it.
+pub fn tikv_mounts_snapshots(config: &serde_json::Value) -> bool {
+    config["services"]["tikv"]["volumes"]
+        .as_array()
+        .is_some_and(|v| v.iter().any(|m| m["target"] == SNAPSHOTS))
 }

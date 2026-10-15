@@ -10,9 +10,15 @@
 
 pub mod bundle;
 pub mod check;
+pub mod compose;
+pub mod door;
 pub mod errors;
 pub mod helpers;
+pub mod history;
+pub mod install;
 pub mod path;
+pub mod rollback;
+pub mod run;
 pub mod runtime;
 pub mod snapshots;
 pub mod stackdir;
@@ -35,6 +41,65 @@ pub struct UpgradeArgs {
     pub command: Option<UpgradeCommand>,
     #[command(flatten)]
     pub common: Common,
+    /// On a failure after the snapshot, leave the stack stopped with the
+    /// door closed instead of rolling back.
+    #[arg(long)]
+    pub no_auto_rollback: bool,
+    /// Keep the earlier snapshots after this upgrade verifies.
+    #[arg(long)]
+    pub keep_snapshot: bool,
+}
+
+/// `release/companions.toml`, compiled in: the helper images' pins.
+const COMPANIONS: &str = include_str!("../../../release/companions.toml");
+
+/// BR's image by digest, from `release/companions.toml`.
+pub fn br_image() -> String {
+    let parsed: toml::Value = toml::from_str(COMPANIONS).unwrap_or(toml::Value::Integer(0));
+    let br = &parsed["br"];
+    format!(
+        "{}@{}",
+        br["image"].as_str().unwrap_or("docker.io/pingcap/br"),
+        br["digest"].as_str().unwrap_or_default()
+    )
+}
+
+/// `.env` settings that are not secrets and that messages name.
+const PLAIN_ENV: [&str; 8] = [
+    "LOAMS_VERSION",
+    "LOAMS_REGISTRY",
+    "TIKV_TAG",
+    "TIDB_IMAGE",
+    "COMPOSE_PROFILES",
+    "LOAMS_UPGRADE_SNAPSHOT_DIR",
+    "LOAMS_POSTGRES_COMPOSE",
+    "RUST_LOG",
+];
+
+/// `text` with the stack's `.env` values replaced by `<redacted>`: every
+/// value of a secret-looking name (`KEY`, `SECRET`, `TOKEN`, `PASS`) of
+/// four characters or more, and every other value of eight or more but
+/// those of [`PLAIN_ENV`]. Nothing `upgrade` prints carries one.
+pub fn redact(text: &str, env: &std::collections::BTreeMap<String, String>) -> String {
+    let secret_name = |k: &str| {
+        ["KEY", "SECRET", "TOKEN", "PASS", "CREDENTIAL"]
+            .iter()
+            .any(|m| k.to_ascii_uppercase().contains(m))
+    };
+    let mut out = text.to_string();
+    let mut values: Vec<&str> = env
+        .iter()
+        .map(|(k, v)| (k, v.trim_matches(['"', '\''])))
+        .filter(|(k, v)| {
+            (secret_name(k) && v.len() >= 4) || (v.len() >= 8 && !PLAIN_ENV.contains(&k.as_str()))
+        })
+        .map(|(_, v)| v)
+        .collect();
+    values.sort_by_key(|v| std::cmp::Reverse(v.len()));
+    for v in values {
+        out = out.replace(v, "<redacted>");
+    }
+    out
 }
 
 /// Flags every form takes.
@@ -178,16 +243,114 @@ pub fn run_with(args: &UpgradeArgs, runtime: &dyn Runtime) -> Result<serde_json:
                 }
             }
         }
-        None => Err(UpgradeError::new(
-            "usage",
-            "`loams upgrade --to <version>` arrives with UP1 Task 13; use `check`",
-        )),
+        None => upgrade(args, runtime, stack, &current),
+    }
+}
+
+/// `loams upgrade --to <version>`: one release step at a time (Q825), each
+/// verified before the next; the walk stops at the first failure.
+fn upgrade(
+    args: &UpgradeArgs,
+    runtime: &dyn Runtime,
+    mut stack: StackDir,
+    current: &str,
+) -> Result<serde_json::Value> {
+    let (first, target) = target_path(&args.common, current)?;
+    // A resumed attempt keeps its own source.
+    let at = history::History::of(&stack.dir)
+        .open_attempt()
+        .map_or_else(|| current.to_string(), |e| e[0].from.clone());
+    let steps = if at == target {
+        vec![target.clone()]
+    } else {
+        first.path.steps(&at, &target)?
+    };
+    if steps.is_empty() {
+        return Err(UpgradeError::new(
+            "release_not_found",
+            format!("the stack is already at {target}"),
+        ));
+    }
+    if steps.len() > 1 && args.common.bundle.is_some() {
+        return Err(UpgradeError::new(
+            "upgrade_step_not_adjacent",
+            format!(
+                "a local bundle holds one release; upgrade one step at a time: {}",
+                steps.join(" -> ")
+            ),
+        ));
+    }
+    let question = format!(
+        "Upgrade the stack in {} from {at} to {target} ({})? It stops the stack for the upgrade.",
+        stack.dir.display(),
+        steps.join(" -> ")
+    );
+    if !confirmed(args.common.yes, &question) {
+        return Err(UpgradeError::new(
+            "confirmation_required",
+            "an upgrade stops the stack: pass --yes",
+        ));
+    }
+    let opts = run::Options {
+        no_auto_rollback: args.no_auto_rollback,
+        keep_snapshot: args.keep_snapshot,
+        br_image: br_image(),
+    };
+    let reports = upgrade_chain(runtime, &mut stack, &at, &steps, &opts, |version| {
+        if *version == target {
+            Ok(first.clone())
+        } else {
+            let work = std::env::temp_dir().join(format!("loams-upgrade-{version}"));
+            bundle::Bundle::download(version, &work)
+        }
+    })?;
+    serde_json::to_value(serde_json::json!({ "upgraded": reports }))
+        .map_err(|e| UpgradeError::new("internal", e.to_string()))
+}
+
+/// Walks `steps` (releases after `from`), one verified step at a time, with
+/// each release's bundle from `bundle_of`; stops at the first failure. Every
+/// step's snapshot is kept until the last step verifies (§7.3).
+pub fn upgrade_chain(
+    runtime: &dyn Runtime,
+    stack: &mut StackDir,
+    from: &str,
+    steps: &[String],
+    opts: &run::Options,
+    mut bundle_of: impl FnMut(&String) -> Result<bundle::Bundle>,
+) -> Result<Vec<run::UpgradeReport>> {
+    let mut reports = Vec::new();
+    let mut from = from.to_string();
+    for (i, version) in steps.iter().enumerate() {
+        let bundle = bundle_of(version)?;
+        let step_opts = run::Options {
+            keep_snapshot: opts.keep_snapshot || i + 1 < steps.len(),
+            ..opts.clone()
+        };
+        let report = run::upgrade_step(runtime, stack, &bundle, &from, version, &step_opts)?;
+        from.clone_from(version);
+        reports.push(report);
+    }
+    Ok(reports)
+}
+
+/// [`run_with`], with the stack's `.env` values taken out of the output and
+/// the error (`upgrade_output_has_no_env_values`).
+pub fn run_redacted(args: &UpgradeArgs, runtime: &dyn Runtime) -> Result<serde_json::Value> {
+    let result = run_with(args, runtime);
+    let env = stack_of(&args.common).map(|s| s.env).unwrap_or_default();
+    match result {
+        Ok(value) => Ok(serde_json::from_str(&redact(&value.to_string(), &env)).unwrap_or(value)),
+        Err(mut err) => {
+            err.message = redact(&err.message, &env);
+            Err(err)
+        }
     }
 }
 
 /// `loams upgrade …` on the real container runtime.
 pub fn run(args: &UpgradeArgs) -> ExitCode {
-    let result = runtime::Cli::detect().and_then(|cli| run_with(args, &cli));
+    let result = runtime::Cli::detect().and_then(|cli| run_redacted(args, &cli));
     match result {
         Ok(value) => {
             match args.common.output {
