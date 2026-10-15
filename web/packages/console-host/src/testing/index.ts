@@ -6,6 +6,7 @@ export { createQueryClient, ServerStateProvider } from '../root.js';
 export {
   createMockControl,
   createMockTransport,
+  MOCK_SERVER_VERSION,
   type MockControl,
   type MockOptions,
 } from './mock.js';

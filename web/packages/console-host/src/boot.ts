@@ -12,11 +12,12 @@
 // an import map and SRI (Task 2) replace the table without changing this
 // API.
 
-import { createClient, type Transport } from '@connectrpc/connect';
+import { Code, ConnectError, createClient, type Transport } from '@connectrpc/connect';
 import { Context, type Fiber, FiberStates } from '@loams/cordis';
 import { instance } from '@loams/proto';
 import { SlotRegistry } from '@loams/slots';
 import { ActionRegistry, type Admission } from './actions.js';
+import { capabilities, unmet } from './capabilities.js';
 import { type CatalogEntry, CatalogError } from './catalog.js';
 import { guard, injectsAgentd } from './guard.js';
 import { type PluginManifest, type Tier, validateManifest } from './manifest.js';
@@ -151,14 +152,16 @@ export const flagsPlugin: PluginModule = {
   async apply(ctx) {
     const transport = (ctx as unknown as { transport: Transport }).transport;
     const client = createClient(instance.InstanceService, transport);
-    const unknown: FlagsService = {
+    const unknown = (instanceError: FlagsService['instanceError']): FlagsService => ({
       edition: 'unknown',
       instanceName: '',
       serverVersion: '',
       features: {},
       apiVersions: [],
+      instanceError,
       has: () => false,
-    };
+    });
+    let failure: FlagsService['instanceError'] = 'unreachable';
     /** The instance's flags, or undefined when GetInstance failed. */
     const read = async (): Promise<FlagsService | undefined> => {
       try {
@@ -175,10 +178,14 @@ export const flagsPlugin: PluginModule = {
         };
       } catch (error) {
         console.warn('loams console: GetInstance failed; no API is available', error);
+        // An engine without GetInstance is older than this console supports
+        // (§54 §13.1); any other failure is a reachability problem.
+        failure =
+          ConnectError.from(error).code === Code.Unimplemented ? 'unimplemented' : 'unreachable';
         return undefined;
       }
     };
-    let release = ctx.provide('flags', (await read()) ?? unknown);
+    let release = ctx.provide('flags', (await read()) ?? unknown(failure));
     let disposed = false;
     ctx.effect(() => () => {
       disposed = true;
@@ -355,18 +362,30 @@ export async function boot(options: BootOptions): Promise<ConsoleHandle> {
     }
     const plugin = mod;
     const inject = entry.inject ?? manifest.inject;
+    // A plugin that needs an API or an engine version runs only when the
+    // engine has it (§54 §13.1, D938): its pages and nav items are not there
+    // otherwise. It follows `flags`, so it starts once a re-read says yes.
+    const gated =
+      tier !== 'core' &&
+      (manifest.requires.api.length > 0 || manifest.requires.engine !== undefined);
     record.status = 'loading';
     record.fiber = ctx.plugin(
       {
         name: entry.id,
-        inject,
-        apply: (c: Context, config: unknown) =>
-          plugin.apply(
+        inject: gated && !inject.includes('flags') ? [...inject, 'flags'] : inject,
+        apply: (c: Context, config: unknown) => {
+          if (gated) {
+            const flags = c.get('flags', true) as FlagsService | undefined;
+            record.reason = unmet(manifest.requires, capabilities(flags));
+            if (record.reason) return;
+          }
+          return plugin.apply(
             tier === 'core'
               ? c
               : guard(c, inject, record.id, { permissions: manifest.permissions }),
             config,
-          ),
+          );
+        },
       },
       entry.config ?? {},
     );

@@ -69,6 +69,11 @@
         "api": {
           "type": "array",
           "items": { "type": "string", "pattern": "^loams\\.[a-z]+\\.v[0-9]+$" }
+        },
+        "engine": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$",
+          "description": "The oldest engine version the plugin works with (design §54 §13.1)."
         }
       }
     },

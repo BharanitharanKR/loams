@@ -6,6 +6,7 @@
 // closures, never `ctx`.
 
 import {
+  capabilities,
   type FlagsService,
   MODE_HOME,
   type Mode,
@@ -46,6 +47,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
+import { EngineTooOld } from './engine.js';
 import { iconFor } from './icons.js';
 import { MODE_LABEL, ModeSwitcher, useMode, useModeShortcut } from './mode-switcher.js';
 import { type ScopedCommand, ShellPalette } from './palette.js';
@@ -705,6 +707,10 @@ export function Layout({
   const version = flags?.serverVersion;
   const gated = useGate(router, session);
   const hasContext = useSlot('shell.nav.context').length > 0;
+  // An engine older than N−1, or without GetInstance, gets the upgrade page
+  // instead of pages that would fail (§54 §13.1).
+  const caps = flags ? capabilities(flags) : undefined;
+  if (caps && !caps.supported) return <EngineTooOld caps={caps} />;
   if (gated) return <div className="lc-boot" aria-busy="true" />;
   if (router.spec()?.bare) {
     return (

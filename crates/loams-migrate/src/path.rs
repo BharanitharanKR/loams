@@ -56,6 +56,11 @@ pub struct Release {
     /// `.env` changes (UP1 Task 11).
     #[serde(default)]
     pub env: Vec<toml::Value>,
+    /// The oldest app per platform (`ios`, `android`, `desktop`) this
+    /// release supports; the engine serves it as
+    /// `GetInstance.min_app_versions` (design §54 §13.1).
+    #[serde(default)]
+    pub min_app_versions: BTreeMap<String, String>,
 }
 
 /// A migration as the release train lists it.

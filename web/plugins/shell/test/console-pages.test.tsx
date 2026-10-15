@@ -23,7 +23,7 @@ function memory(start = '/'): HashSource {
 const flags = {
   edition: 'oss',
   instanceName: 'Acme Loams',
-  serverVersion: '0.1.0-preview.1',
+  serverVersion: '0.1.0-preview.3',
   features: {},
   apiVersions: [],
   has: () => false,
