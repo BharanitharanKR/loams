@@ -600,12 +600,17 @@ impl PgControl {
         if let Some(path) = &config.endpoint_storage_pem_out {
             // The key endpoint storage verifies the computes' tokens with
             // (its `pemfile`); public, so written plainly.
-            std::fs::write(path, keys.public_key_pem()).map_err(|e| {
-                PgControlError::Config(format!(
-                    "--endpoint-storage-pem-out {}: {e}",
-                    path.display()
-                ))
-            })?;
+            // Written whole, then renamed: endpoint storage waits for the
+            // file and must never read half of it.
+            let tmp = path.with_extension("tmp");
+            std::fs::write(&tmp, keys.public_key_pem())
+                .and_then(|()| std::fs::rename(&tmp, path))
+                .map_err(|e| {
+                    PgControlError::Config(format!(
+                        "--endpoint-storage-pem-out {}: {e}",
+                        path.display()
+                    ))
+                })?;
         }
         let neon = NeonClients {
             storage: NeonClient::new(

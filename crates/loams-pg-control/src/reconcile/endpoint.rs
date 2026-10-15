@@ -173,17 +173,54 @@ pub trait ComputeCtl: Send + Sync + 'static {
         Err(CtlError("prewarming is not supported".into()))
     }
     /// `POST /promote` with a primary's `spec`, once the replica replayed
-    /// `wal_flush_lsn` (Task 16). `Err` is a refusal or a failure.
+    /// `wal_flush_lsn` (Task 16).
     async fn promote(
         &self,
         compute: &ComputeRec,
         spec: &ComputeSpec,
         wal_flush_lsn: Lsn,
-    ) -> Result<(), CtlError> {
+    ) -> Result<(), PromoteError> {
         let _ = (compute, spec, wal_flush_lsn);
-        Err(CtlError("promotion is not supported".into()))
+        Err(PromoteError::Refused("promotion is not supported".into()))
     }
 }
+
+/// Why `/promote` did not answer `completed` (the text is for logs).
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum PromoteError {
+    /// Refused before `pg_promote()`: the compute is still a replica.
+    #[error("refused: {0}")]
+    Refused(String),
+    /// Anything else (a timeout, a lost answer, a failure after
+    /// `pg_promote()`): the compute may already be a primary.
+    #[error("outcome unknown: {0}")]
+    Unknown(String),
+}
+
+impl PromoteError {
+    /// `compute_ctl`'s answer to `/promote`, read for whether it refused
+    /// before `pg_promote()` (the fork's `compute_promote.rs`: not a
+    /// replica, not prewarmed or prewarming, or not caught up with the
+    /// primary) or answered a client error.
+    fn of(e: &loams_postgres::NeonError) -> Self {
+        let before = [
+            "is not replica",
+            "NotPrewarmed",
+            "Prewarming",
+            "didn't catch up",
+        ];
+        if (400..500).contains(&e.status) || before.iter().any(|b| e.msg.contains(b)) {
+            PromoteError::Refused(e.to_string())
+        } else {
+            PromoteError::Unknown(e.to_string())
+        }
+    }
+}
+
+/// The longest a promotion waits for `/promote`: less than the project's
+/// lease (60 s), so a promotion whose outcome is unknown is still settled
+/// under the lease (R16.9).
+pub const PROMOTE_WAIT: Duration = Duration::from_secs(45);
 
 /// A replica's file cache prewarm, as `GET /lfc/prewarm` reports it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -328,11 +365,12 @@ impl ComputeCtl for HttpComputeCtl {
         compute: &ComputeRec,
         spec: &ComputeSpec,
         wal_flush_lsn: Lsn,
-    ) -> Result<(), CtlError> {
-        self.client(compute)?
+    ) -> Result<(), PromoteError> {
+        self.client(compute)
+            .map_err(|e| PromoteError::Refused(e.to_string()))?
             .promote(spec, wal_flush_lsn)
             .await
-            .map_err(|e| CtlError(e.to_string()))
+            .map_err(|e| PromoteError::of(&e))
     }
 }
 
@@ -561,6 +599,8 @@ fn resolve(
                 None
             } else if rec.kind == EndpointType::ReadWrite {
                 Some(Ok(()))
+            } else if rec.desired == DesiredState::Suspended || rec.state == EndpointState::Failed {
+                aborted("the read-only endpoint stopped before the promotion")
             } else {
                 Some(Err(OperationError {
                     reason: "failed_precondition".into(),
@@ -834,6 +874,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         match self.ep().state {
             EndpointState::Idle | EndpointState::Suspended | EndpointState::Failed => {
                 let mut rec = self.ep().clone();
+                rec.promote = false;
                 if rec.state == EndpointState::Failed {
                     rec.state = EndpointState::Suspended;
                     rec.failure = None;
@@ -862,6 +903,8 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         if self.ep().state != EndpointState::Suspending {
             let mut rec = self.ep().clone();
             rec.state = EndpointState::Suspending;
+            // A promotion asked of this replica ends with it.
+            rec.promote = false;
             let mut batch = Batch::new();
             let stopping = self.compute.as_ref().map(|c| {
                 let mut stopping = c.record.clone();
@@ -948,6 +991,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         self.stop_compute(false).await?;
         let mut rec = self.ep().clone();
         rec.state = EndpointState::Failed;
+        rec.promote = false;
         rec.compute_id = None;
         rec.failure = Some(why);
         let batch = self.without_compute()?;
@@ -1571,18 +1615,31 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         };
         spec.skip_pg_catalog_updates = true;
         self.act.renew().await?;
-        match self
-            .c
-            .ctl
-            .promote(&compute.record, &spec, heads.flush_lsn)
-            .await
-        {
+        let answer = tokio::time::timeout(
+            PROMOTE_WAIT,
+            self.c.ctl.promote(&compute.record, &spec, heads.flush_lsn),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            Err(PromoteError::Unknown(format!(
+                "no answer within {} s",
+                PROMOTE_WAIT.as_secs()
+            )))
+        });
+        match answer {
             Ok(()) => {
                 tracing::info!(endpoint = %ep.id, compute = %compute.record.id, "replica promoted");
                 self.end_promotion(Some((sibling, compute, 0))).await
             }
-            Err(e) => {
+            Err(PromoteError::Refused(e)) => {
                 tracing::warn!(endpoint = %ep.id, compute = %compute.record.id, error = %e, "compute_ctl refused the promotion");
+                self.end_promotion(None).await
+            }
+            Err(PromoteError::Unknown(e)) => {
+                // It may be a primary now: it must not serve as a replica,
+                // so a fresh replica replaces it.
+                tracing::warn!(endpoint = %ep.id, compute = %compute.record.id, error = %e, "the promotion's outcome is unknown; replacing the compute");
+                self.cur.record.replace_compute = true;
                 self.end_promotion(None).await
             }
         }
@@ -1765,6 +1822,41 @@ mod tests {
         e.desired = desired;
         e.state = state;
         e
+    }
+
+    /// Only `compute_ctl`'s refusals before `pg_promote()` (and client
+    /// errors) leave the compute a replica; anything else is unknown.
+    #[test]
+    fn promote_errors_are_refusals_only_before_pg_promote() {
+        let e = |status: u16, msg: &str| loams_postgres::NeonError {
+            status,
+            msg: msg.into(),
+            component: loams_postgres::Component::ComputeCtl,
+            op: loams_postgres::Op::Promote,
+        };
+        for (status, msg) in [
+            (500, "compute NotPrewarmed"),
+            (500, "compute Prewarming"),
+            (500, "didn't catch up with primary in 20 retries"),
+            (500, "compute mode \"primary\" is not replica"),
+            (400, "invalid spec"),
+        ] {
+            assert!(
+                matches!(PromoteError::of(&e(status, msg)), PromoteError::Refused(_)),
+                "{msg}"
+            );
+        }
+        for (status, msg) in [
+            (500, "promote sender dropped"),
+            (500, "pg_promote() failed"),
+            (500, "replica in read only mode after promotion"),
+            (0, "operation timed out"),
+        ] {
+            assert!(
+                matches!(PromoteError::of(&e(status, msg)), PromoteError::Unknown(_)),
+                "{msg}"
+            );
+        }
     }
 
     #[test]

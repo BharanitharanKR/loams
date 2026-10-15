@@ -416,7 +416,10 @@ services:
   # file cache's state in the stack's bucket, so a promoted read-only
   # endpoint starts with a warm cache. It checks the computes' tokens with
   # pg-control's public key, which pg-control writes at start into a volume
-  # mounted read-only here. Only computes reach it (no ports).
+  # mounted read-only here. Only computes reach it (no ports). Nothing
+  # orders it before the first compute starts (`service_started` only orders
+  # the containers): a compute that prewarms before it listens starts with a
+  # cold cache, which is all that is lost.
   endpoint-storage:
     <<: *restart
     profiles: [postgres-control]

@@ -23,7 +23,7 @@ use loams_pg_control::observer::{ComputeLifecycleEvent, ComputeLifecycleObserver
 use loams_pg_control::pgdog::{InstanceId, PgDogAdmin, PgDogError, PoolRow};
 use loams_pg_control::pool::{PoolConfig, WarmPool};
 use loams_pg_control::reconcile::endpoint::{
-    Activity, ComputeCtl, Computes, CtlError, CtlReport, CtlStatus, Prewarm,
+    Activity, ComputeCtl, Computes, CtlError, CtlReport, CtlStatus, Prewarm, PromoteError,
 };
 use loams_pg_control::reconcile::{Pass, Reconciler, ReconcilerConfig};
 use loams_pg_control::runtime::{
@@ -241,6 +241,8 @@ pub struct CtlInner {
     pub promotes: Vec<(String, String)>,
     /// The specs `/promote` got.
     pub promote_specs: Vec<ComputeSpec>,
+    /// `/promote` promotes, but its answer is lost (R16.9).
+    pub promote_lost: bool,
 }
 
 /// A fake `compute_ctl` of every compute.
@@ -347,7 +349,7 @@ impl ComputeCtl for FakeCtl {
         c: &ComputeRec,
         spec: &ComputeSpec,
         _wal_flush_lsn: loams_postgres::Lsn,
-    ) -> Result<(), CtlError> {
+    ) -> Result<(), PromoteError> {
         let mut inner = self.lock();
         let mode = serde_json::to_value(spec).expect("a spec")["mode"]
             .as_str()
@@ -357,8 +359,11 @@ impl ComputeCtl for FakeCtl {
         inner.promote_specs.push(spec.clone());
         // The pinned compute_ctl refuses an unprewarmed replica (R2.13).
         match inner.prewarm_of(&c.id) {
+            Prewarm::Done(_) if inner.promote_lost => {
+                Err(PromoteError::Unknown("promote sender dropped".into()))
+            }
             Prewarm::Done(_) => Ok(()),
-            other => Err(CtlError(format!("compute {other:?}"))),
+            other => Err(PromoteError::Refused(format!("compute {other:?}"))),
         }
     }
 }

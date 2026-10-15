@@ -668,6 +668,13 @@ impl<N: NeonRead> PgService<N> {
             batch.put(&rec, Some(current.version))?;
             if promote {
                 self.promotable(&mut batch, &rec).await?;
+            } else if rec.kind == EndpointType::ReadWrite
+                && matches!(
+                    kind,
+                    OperationKind::EndpointStart | OperationKind::EndpointRestart
+                )
+            {
+                self.no_promotion(&mut batch, &rec).await?;
             }
             add_operation(&mut batch, &op)?;
             batch.check::<ProjectRec>(
@@ -850,6 +857,30 @@ impl<N: NeonRead> PgService<N> {
                 .with("endpoint", o.id.clone()));
             }
             batch.check::<EndpointRec>(&o.key(), Some(other.version))?;
+        }
+        Ok(())
+    }
+
+    /// A read-write endpoint does not start while a read-only endpoint of
+    /// its branch is being promoted (two primaries could result, Task 16).
+    /// The branch's guard is rewritten unchanged, as [`Self::promotable`]
+    /// does, so a start and a promotion conflict whichever commits first.
+    async fn no_promotion(&self, batch: &mut Batch, rec: &EndpointRec) -> Result<(), ServiceError> {
+        let (guard, guard_version) = self.guard(&rec.project_id, &rec.branch_id).await?;
+        batch.put(&guard, guard_version)?;
+        if let Some(other) = self
+            .all_endpoints(&rec.project_id)
+            .await?
+            .into_iter()
+            .find(|o| {
+                o.record.id != rec.id && o.record.branch_id == rec.branch_id && o.record.promote
+            })
+        {
+            return Err(ServiceError::failed_precondition(format!(
+                "read-only endpoint {} of this branch is being promoted",
+                other.record.id
+            ))
+            .with("endpoint", other.record.id));
         }
         Ok(())
     }

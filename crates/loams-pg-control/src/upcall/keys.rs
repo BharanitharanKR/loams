@@ -328,9 +328,12 @@ impl ComputeKeys {
         const PREFIX: [u8; 12] = [
             0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00,
         ];
+        // `x` is the base64url of the 32-byte key, set in `from_pkcs8` from
+        // the key itself: it always decodes.
+        #[allow(clippy::expect_used)]
         let public = URL_SAFE_NO_PAD
             .decode(&self.trusted[0].x)
-            .unwrap_or_default();
+            .expect("`x` is valid base64url by construction");
         let der = [PREFIX.as_slice(), &public].concat();
         let b64 = base64::engine::general_purpose::STANDARD.encode(der);
         format!("-----BEGIN PUBLIC KEY-----\n{b64}\n-----END PUBLIC KEY-----\n")

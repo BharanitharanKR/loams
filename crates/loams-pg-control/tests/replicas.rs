@@ -215,23 +215,8 @@ async fn promote_refused_while_rw_running() {
     assert!(e.ctl.lock().promotes.is_empty());
     assert_eq!(e.kind(&project, &ro).await, EndpointType::ReadOnly);
 
-    // A read-write endpoint started after the promotion was asked fails it
-    // before compute_ctl is asked.
-    e.suspend(&project, &rw, "s3").await;
-    e.until(&project, "the read-write endpoint down", || async {
-        e.state(&project, &rw).await == Some(EndpointState::Suspended)
-    })
-    .await;
-    e.ctl.lock().prewarm_sticks = true;
-    let op = e.promote(&project, &ro, "p4").await.expect("promote");
-    e.pass(&project).await;
-    e.start(&project, &rw, "s4").await;
-    e.until(&project, "the promotion failed", || async {
-        e.op(&op).await == OperationState::Failed
-    })
-    .await;
-    assert!(e.ctl.lock().promotes.is_empty());
-    assert_eq!(e.kind(&project, &ro).await, EndpointType::ReadOnly);
+    // Once a promotion is asked, the read-write endpoint does not start
+    // until it ends (`rw_start_refused_while_promoting`).
 }
 
 /// `compute_ctl` refuses to promote a replica whose file cache is not
@@ -284,4 +269,96 @@ async fn promote_refuses_an_unprewarmed_replica() {
         e.op(&again).await == OperationState::Succeeded
     })
     .await;
+}
+
+/// A suspended replica ends its pending promotion (`aborted`), and nothing
+/// is left asking for it (CodeRabbit on #635).
+#[tokio::test]
+async fn suspend_ends_a_pending_promotion() {
+    let e = fakes!();
+    let (project, rw, ro, _) = e.primary_and_replica().await;
+    e.suspend(&project, &rw, "s").await;
+    e.until(&project, "the read-write endpoint down", || async {
+        e.state(&project, &rw).await == Some(EndpointState::Suspended)
+    })
+    .await;
+    e.ctl.lock().prewarm_sticks = true;
+    let op = e.promote(&project, &ro, "promote").await.expect("promote");
+    e.pass(&project).await;
+    e.suspend(&project, &ro, "suspend-ro").await;
+    e.until(&project, "the promotion ended", || async {
+        e.op(&op).await == OperationState::Failed
+    })
+    .await;
+    let ended = e.h.service.get_operation(&op).await.expect("the op");
+    assert_eq!(
+        ended.error.map(|err| err.reason).as_deref(),
+        Some("aborted")
+    );
+    let rec = e.endpoint(&project, &ro).await.expect("the endpoint");
+    assert!(!rec.promote);
+    assert_eq!(rec.kind, EndpointType::ReadOnly);
+    assert!(e.ctl.lock().promotes.is_empty());
+}
+
+/// While a read-only endpoint is being promoted, the branch's read-write
+/// endpoint is not started or restarted (two primaries could result).
+#[tokio::test]
+async fn rw_start_refused_while_promoting() {
+    let e = fakes!();
+    let (project, rw, ro, _) = e.primary_and_replica().await;
+    e.suspend(&project, &rw, "s").await;
+    e.until(&project, "the read-write endpoint down", || async {
+        e.state(&project, &rw).await == Some(EndpointState::Suspended)
+    })
+    .await;
+    e.ctl.lock().prewarm_sticks = true;
+    e.promote(&project, &ro, "promote").await.expect("promote");
+    let start =
+        e.h.service
+            .start_endpoint(&user(), Env::action(&project, &rw, "start-rw-again"))
+            .await
+            .expect_err("refused");
+    assert_eq!(start.reason, Reason::FailedPrecondition);
+    let restart =
+        e.h.service
+            .restart_endpoint(&user(), Env::action(&project, &rw, "restart-rw-again"))
+            .await
+            .expect_err("refused");
+    assert_eq!(restart.reason, Reason::FailedPrecondition);
+}
+
+/// When `/promote`'s outcome is unknown (its answer lost, a failure after
+/// `pg_promote()`), the compute may be a primary already: the operation
+/// fails, the endpoint stays read-only, and a fresh replica replaces the
+/// compute (CodeRabbit on #635).
+#[tokio::test]
+async fn an_unknown_promotion_outcome_replaces_the_compute() {
+    let e = fakes!();
+    let (project, rw, ro, compute) = e.primary_and_replica().await;
+    e.suspend(&project, &rw, "s").await;
+    e.until(&project, "the read-write endpoint down", || async {
+        e.state(&project, &rw).await == Some(EndpointState::Suspended)
+    })
+    .await;
+    e.ctl.lock().promote_lost = true;
+    let op = e.promote(&project, &ro, "promote").await.expect("promote");
+    e.until(&project, "the promotion failed", || async {
+        e.op(&op).await == OperationState::Failed
+    })
+    .await;
+    e.until(&project, "the compute replaced", || async {
+        e.endpoint(&project, &ro)
+            .await
+            .and_then(|r| r.compute_id)
+            .is_some_and(|c| c != compute)
+            && e.state(&project, &ro).await == Some(EndpointState::Running)
+    })
+    .await;
+    assert!(
+        e.runtime.stops().contains(&compute),
+        "the maybe-primary stopped"
+    );
+    assert_eq!(e.kind(&project, &ro).await, EndpointType::ReadOnly);
+    assert_eq!(e.kind(&project, &rw).await, EndpointType::ReadWrite);
 }
