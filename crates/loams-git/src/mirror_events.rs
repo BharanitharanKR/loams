@@ -60,6 +60,7 @@ pub trait GitEventSink: Send + Sync + fmt::Debug {
 #[derive(Clone, Debug)]
 pub struct MirrorCursor {
     store: Store,
+    paths: RepoPaths,
     path: String,
 }
 
@@ -71,10 +72,29 @@ struct CursorDoc {
 impl MirrorCursor {
     /// The cursor of `repo` in `ns`.
     pub fn new(store: Store, ns: NamespaceId, repo: &RepoId) -> Self {
+        let paths = RepoPaths::new(ns, repo);
         Self {
             store,
-            path: RepoPaths::new(ns, repo).mirror_cursor(),
+            path: paths.mirror_cursor(),
+            paths,
         }
+    }
+
+    /// The first segment the WAL still holds after `after`, by a listing: past a gap that
+    /// segment GC left (PR #612 review), the retained suffix starts there. `None` when no
+    /// later segment exists.
+    pub async fn first_retained_after(&self, after: Seq) -> Result<Option<Seq>, StoreError> {
+        let page = self
+            .store
+            .list_page(
+                &self.paths.wal_prefix(),
+                Some(&self.paths.segment(after)),
+                1,
+            )
+            .await?;
+        Ok(page
+            .first()
+            .and_then(|info| RepoPaths::parse_segment(&info.path)))
     }
 
     /// The last seq published, `0` when none (or the cursor is unreadable:
@@ -159,12 +179,23 @@ pub async fn run_mirror(
                 }
             }
             if let Some(err) = failure {
-                // Segments a reader needed are gone (GC after a long outage):
-                // the gap is reported and the mirror resumes where the log is.
+                // Segments the mirror needed are gone (GC after a long outage): their events
+                // are lost to `_git`, and the mirror resumes at the first segment the WAL
+                // still holds, never past one it has not published (PR #612 review).
                 if let RefError::Invalid { reason } = &err {
-                    tracing::warn!(%ns, %repo, %reason, "the _git mirror skips a gap the WAL no longer holds");
-                    if let Ok(snapshot) = log.snapshot(crate::reflog::ReadAt::Latest).await {
-                        from = snapshot.seq.next();
+                    match cursor
+                        .first_retained_after(Seq(from.0.saturating_sub(1)))
+                        .await
+                    {
+                        Ok(Some(next)) if next > from => {
+                            tracing::error!(
+                                %ns, %repo, %reason, lost_from = %from, lost_to = %Seq(next.0 - 1),
+                                "the _git mirror lost events: the WAL no longer holds these segments"
+                            );
+                            from = next;
+                        }
+                        Ok(_) => {}
+                        Err(err) => tracing::warn!(%ns, %repo, %err, "listing the WAL failed"),
                     }
                 } else {
                     tracing::warn!(%ns, %repo, error = %err, "following the WAL for _git failed");
@@ -196,7 +227,24 @@ pub async fn repair_repo(
     loop {
         let segments = wal.read_from(at.next(), BATCH).await?;
         let Some(last) = segments.last().map(|s| s.seq) else {
-            return Ok(published);
+            // Nothing at `at + 1`: either the mirror is current, or segment GC left a gap
+            // and later segments are still held (PR #612 review). Their events are lost to
+            // `_git`; the retained suffix is published, and the gap reported.
+            let next = cursor
+                .first_retained_after(at)
+                .await
+                .map_err(|err| RefError::Wal(err.into()))?;
+            match next {
+                Some(next) if next > at.next() => {
+                    tracing::error!(
+                        %ns, %repo, lost_from = %at.next(), lost_to = %Seq(next.0 - 1),
+                        "the _git repair found events the WAL no longer holds"
+                    );
+                    at = Seq(next.0 - 1);
+                    continue;
+                }
+                _ => return Ok(published),
+            }
         };
         let events: Vec<CloudEvent> = segments
             .iter()

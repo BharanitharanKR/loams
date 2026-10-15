@@ -257,3 +257,40 @@ async fn subscriber_resumes_from_seq_after_restart() {
     assert_eq!(resumed, vec!["k4", "k5"]);
     seqs.shutdown().await;
 }
+
+/// PR #612 review: segment GC left a gap behind the cursor. Repair publishes
+/// the segments the WAL still holds after the gap, never stops at it, and
+/// moves the cursor only past what it published.
+#[tokio::test(flavor = "multi_thread")]
+async fn repair_publishes_the_retained_suffix_past_a_gap() {
+    let store = store_with_repo().await;
+    let repo = test_repo();
+    let seqs = RepoSequencers::new(store.clone(), Arc::new(SystemClock));
+    for i in 1..=4u8 {
+        seqs.commit(TEST_NS, TENANT, &repo, create(&format!("k{i}"), i))
+            .await
+            .expect("commit");
+    }
+    seqs.shutdown().await;
+    // Segments 2 and 3 are gone, as GC after a long outage would leave them.
+    let paths = test_paths();
+    for seq in [2, 3] {
+        store
+            .delete(&paths.segment(Seq(seq)))
+            .await
+            .expect("delete");
+    }
+    let sink = MemSink::failing(0);
+    let wal = StoreWalStore::new(store.clone(), test_paths());
+    let cursor = MirrorCursor::new(store, TEST_NS, &repo);
+    let published = repair_repo(&wal, &cursor, sink.as_ref(), TEST_NS, &repo)
+        .await
+        .expect("repair");
+    assert_eq!(published, 2);
+    assert_eq!(sink.keys(), vec!["k1", "k4"]);
+    assert_eq!(cursor.get().await, Seq(4));
+    assert_eq!(
+        cursor.first_retained_after(Seq(1)).await.expect("list"),
+        Some(Seq(4))
+    );
+}
