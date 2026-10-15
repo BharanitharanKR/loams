@@ -158,7 +158,10 @@ pub fn read_dir(dir: &Path) -> BTreeMap<String, String> {
                 out.insert(format!("{name}/{k}"), v);
             }
         } else {
-            out.insert(name, fs::read_to_string(&path).expect("read"));
+            out.insert(
+                name,
+                String::from_utf8_lossy(&fs::read(&path).expect("read")).into_owned(),
+            );
         }
     }
     out

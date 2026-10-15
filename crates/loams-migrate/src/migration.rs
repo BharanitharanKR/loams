@@ -62,8 +62,12 @@ impl MigrationError {
 #[derive(Clone, Debug)]
 pub struct Cx {
     pub meta: Arc<dyn MetaStore>,
+    /// The bucket (`--bucket`), when the run has one.
+    pub bucket: Option<loams_store::Store>,
     /// The engine's data directory (`--data-dir`), when the store has one.
     pub data_dir: Option<PathBuf>,
+    /// The House data directory (`--house-dir`).
+    pub house_dir: Option<PathBuf>,
     /// The release the operator says the stack is at (`--declared-release`).
     pub declared_release: Option<String>,
 }
@@ -72,7 +76,9 @@ impl Cx {
     pub fn new(meta: Arc<dyn MetaStore>) -> Self {
         Cx {
             meta,
+            bucket: None,
             data_dir: None,
+            house_dir: None,
             declared_release: None,
         }
     }
