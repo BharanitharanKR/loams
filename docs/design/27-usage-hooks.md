@@ -79,7 +79,7 @@ A Rust trait in `loams-runner`, called at the end of every invocation by the sup
 
 ## 4. What is not in this repository (D202, D548)
 
-The node agent that reads usage for billing, the meter record, the reporter, aggregation per tenant, pricing, invoices and credits, the export to a billing provider, and the billing-grade usage API are part of Loams Cloud and live in `loams-platform`. This repository does not depend on them, and its chart does not deploy them. Anyone can build observability dashboards on the hooks in §3, but nothing here is, or claims to be, the source of truth for a charge. The reason is integrity: [open-core.md](../open-core.md), [§41](41-multitenant-byoc-control-plane.md) §10 to §11.
+The node agent that reads usage for billing, the meter record, the reporter, aggregation per tenant, pricing, invoices and credits, the export to a billing provider, and the billing-grade usage API are part of Loams Cloud and live in `loams-platform`. This repository does not depend on them, and its chart does not deploy them. Anyone can build observability dashboards on the hooks in §3, but nothing here is, or claims to be, the source of truth for a charge. The reason is integrity: [§41](41-multitenant-byoc-control-plane.md) §10 to §11.
 
 ## 5. Changes to §24
 

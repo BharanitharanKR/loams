@@ -75,4 +75,4 @@ Bug reports, client compatibility reports, docs fixes, tests and code are all we
 
 ## License
 
-[Apache License 2.0](LICENSE). Loams builds on DataFusion, Lance, Tantivy, Quickwit, qdrant-edge, SlateDB, openraft, TiKV, TiDB, Neon, Grafeo, chDB and Resonate; attributions are in [NOTICE](NOTICE). Everything needed to self-host Loams is open source here; only metering, billing and the commercial APIs are proprietary ([open core](docs/open-core.md)).
+[Apache License 2.0](LICENSE). Loams builds on DataFusion, Lance, Tantivy, Quickwit, qdrant-edge, SlateDB, openraft, TiKV, TiDB, Neon, Grafeo, chDB and Resonate; attributions are in [NOTICE](NOTICE). Everything needed to self-host Loams is open source here; only metering, billing and the commercial APIs are proprietary (open core).

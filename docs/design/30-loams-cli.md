@@ -694,7 +694,7 @@ Read on 2026-10-01.
 
 - **This repository at `9eaddae`:**
   - `crates/loams/src/main.rs` (the clap tree and the `Native` flags), `crates/loams/Cargo.toml` (features), `crates/loams/src/api/mod.rs` (`/health`, `/ready`), `crates/loams-cache/src/range_cache.rs` (`RangeCacheConfig`, `DiskConfig`), `.github/workflows/ci.yml`, `Cargo.toml`;
-  - docs §04, §10, §15 §10, §19, §21, §26, §28; plans M1.6 (Rulings 7, 8, 11, 19; Task 9's client configs), PG1, R1; `docs/open-core.md`;
+  - docs §04, §10, §15 §10, §19, §21, §26, §28; plans M1.6 (Rulings 7, 8, 11, 19; Task 9's client configs), PG1, R1;
   - D29, D33, D58, D61, D65, D111, D124, D138, D220, D230, D231, D260, D262, D-PG-1;
   - the pending §29 (PR #172, D273–D280) for numbering.
 - **`chatdump.md`** lines 1–51 (the owner's 2026-10-01 source).

@@ -6,7 +6,7 @@ by-hand hand-off comment instead of promoting anyone.
 ## Global constraints
 
 - One task per PR against `dev`, signed off. No new runtime dependency: the decision logic is Python
-  standard library, in the shape of `no-metering.py`.
+  standard library, in the shape of the other `scripts/ci` guards.
 - **No repository protection changes.** Team membership is not governed by a branch ruleset, so
   nothing in `rulesets` is touched by this task (see Task 0).
 - **The narrowest possible grant.** The workflow adds exactly one account — the author of the merged

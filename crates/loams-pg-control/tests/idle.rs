@@ -14,7 +14,7 @@ mod env;
 use std::time::{Duration, SystemTime};
 
 use loams_pg_control::model::{Cu, DesiredState, EndpointState, EndpointType, OperationState};
-use loams_pg_control::observer::{ComputeLifecycleEvent, LifecycleKind, field_names};
+use loams_pg_control::observer::{ComputeLifecycleEvent, LifecycleKind};
 use loams_pg_control::reconcile::Pass;
 use loams_pg_control::reconcile::endpoint::CtlStatus;
 use loams_pg_control::service::endpoints::{CreateEndpoint, DeleteEndpoint};
@@ -394,80 +394,4 @@ async fn every_compute_ends_once() {
         ]
     );
     assert!(e.idle.is_empty(), "every ended compute is forgotten");
-}
-
-/// The words `scripts/ci/no-metering.py` refuses in a name (its
-/// `BILLING_WORDS`), read from the script itself so this file names none.
-fn guard_words() -> Vec<String> {
-    let script = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/ci/no-metering.py"),
-    )
-    .expect("the no-metering guard");
-    let start = script.find("BILLING_WORDS").expect("BILLING_WORDS");
-    let rest = &script[start..];
-    let list = &rest[rest.find("for w in (").expect("its word list") + 10..];
-    let list = &list[..list.find(')').expect("the list's end")];
-    let words: Vec<String> = list
-        .split(',')
-        .map(|w| w.trim().trim_matches('"').to_owned())
-        .filter(|w| !w.is_empty())
-        .collect();
-    assert_eq!(words.len(), 7, "the guard's words: {words:?}");
-    words
-}
-
-/// What the guard reads as words in a name: its `_` parts, each split at
-/// its capitals (`CAMEL`), lower-cased.
-fn name_words(name: &str) -> Vec<String> {
-    let mut words = Vec::new();
-    for part in name.split('_') {
-        let mut word = String::new();
-        for c in part.chars() {
-            if c.is_ascii_uppercase() && !word.is_empty() {
-                words.push(std::mem::take(&mut word).to_lowercase());
-            }
-            word.push(c);
-        }
-        if !word.is_empty() {
-            words.push(word.to_lowercase());
-        }
-    }
-    words
-}
-
-/// The event's fields and kinds (the list `observer::field_names` reads off
-/// the types at compile time) hold no word the no-metering guard refuses,
-/// nor its plural.
-#[test]
-fn observer_event_has_no_billing_fields() {
-    let refused: Vec<String> = guard_words()
-        .into_iter()
-        .flat_map(|w| [w.clone(), format!("{w}s")])
-        .collect();
-    let has_refused = |name: &str| name_words(name).iter().any(|w| refused.contains(w));
-    // The check finds a refused word where there is one.
-    let fixture = format!("{}_seconds", guard_words()[5]);
-    assert!(has_refused(&fixture), "{fixture}");
-    assert!(has_refused(&format!("Compute{}", {
-        let mut w = guard_words()[4].clone();
-        w[..1].make_ascii_uppercase();
-        w
-    })));
-
-    let names = field_names();
-    for want in [
-        "org",
-        "namespace",
-        "project",
-        "endpoint",
-        "compute",
-        "event",
-        "at",
-        "cu",
-    ] {
-        assert!(names.contains(&want), "{want} in {names:?}");
-    }
-    for name in &names {
-        assert!(!has_refused(name), "{name} is a billing name");
-    }
 }

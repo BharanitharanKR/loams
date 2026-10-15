@@ -35,7 +35,7 @@ Same as the M1 overview §8, plus:
 - **Switching provider is configuration only.** A test (Task 4) renders every node template for both providers from the same variables and fails if anything but `TAILNET_PROVIDER`, `TAILNET_LOGIN_SERVER` and the key differs.
 - **Default deny.** A policy file without a `grants` section, or with an `acls` section allowing `*:*`, fails the check (Task 1).
 - **No public API.** The templates never publish `/api`, `/metrics`, `/debug` or `/swagger` on the public name.
-- **No metering, billing, plan or price field** in any type, metric or API of `loams-net` (the open-core boundary; `scripts/ci/no-metering.sh` from MT4 Task 8 also scans `crates/loams-net`).
+- **No metering, billing, plan or price field** in any type, metric or API of `loams-net` (the open-core boundary).
 - **Python tools** run with `uv`, stdlib plus `pyyaml` and `pytest` only. **Rust** build: one cargo build at a time, the shared target, `-j 6`, lld; Headscale containers run only in the `net` CI job and the e2e job, never during a cargo build on the build machine.
 - **Commit areas:** `net`, `deploy`, `ci`, `docs`.
 

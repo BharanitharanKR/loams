@@ -25,7 +25,7 @@
 - [§31](../design/31-loams-router-and-verification.md) §7.1, §13; [§12](../design/12-roadmap-testing-risks.md) §2 items 1–3; [§13](../design/13-decision-log.md) D28, D313, D314, D744.
 - [RT1](2026-10-01-rt1-postgres-slice-and-sim.md) Tasks 1–2 (`loams-detsim`), Global Constraints ("Bit-exact simulation") and Rulings 1 and 6.
 - [M0.4](2026-09-24-m0.4-workers-links-gates.md) (the seeded simulation and the crash gate), [M0.1](2026-09-23-m0.1-storage-primitives.md) (`FaultyStore`).
-- [open-core.md](../open-core.md) (D541, D552) for Task 19.
+- D541 and D552 for Task 19.
 
 ## Global Constraints
 
@@ -38,7 +38,7 @@
 - **Bit-exact means bit-exact.** No test under `crates/*/tests/sim/` reads the wall clock, spawns threads or uses an unseeded RNG (RT1's rule); `loams-detsim` asserts it runs on the thread that created the scheduler.
 - **The sweeps use real code.** Cancel sweeps and torn-disk tests run the production driver over a single-node metastore (`loams-meta`, openraft and redb in a temporary directory) and a `FaultyStore` over the in-memory store. They are seeded, not bit-exact, and report the suspension points they reached.
 - **Wall time the metastore checks stays the metastore's** (`MetaStore::now_ms`: ULID times, `created_at_ms`, freshness). `Clock::now_ms` is for everything else (D954).
-- **Nothing billing-grade** (Task 19): no namespace or tenant label, no new export path, and `scripts/ci/no-metering.py` passes.
+- **Nothing billing-grade** (Task 19): no namespace or tenant label, and no new export path.
 - **Hermetic tests.** Crate tests use the in-memory or `file://` store and in-process metastores. TiKV-backed sweeps (Task 15) are `#[ignore]` and run in the TiKV job.
 
 ## Rulings (from §55 and the owner's direction; binding for execution)
@@ -66,7 +66,7 @@
 5. **A false success.** `flush()` returning `Ok` for a flush that did not happen. Expected: never. Test: Task 7 `flush_task_panic_fails_waiters_not_ok` (H1).
 6. **An acknowledged append lost to a power cut.** Expected: never. Test: Task 6 `torn_meta_disk_loses_no_acked_append`.
 7. **A model that lies.** A `Race` that does not reach the inner store, a listing view that hides an object forever. Tests: Task 5 `race_create_makes_put_if_absent_fail_for_real`, `stale_view_hides_recent_puts`, `fresh_view_is_unchanged`.
-8. **Billing creep.** A CPU metric with a tenant label. Test: Task 19 `metrics_have_no_namespace_label`; `scripts/ci/no-metering.py`.
+8. **Billing creep.** A CPU metric with a tenant label. Test: Task 19 `metrics_have_no_namespace_label`.
 
 ---
 
@@ -506,7 +506,6 @@ Commit `task: TaskSet, hedge and spawn_concurrent; the log writer's flush task u
 - `metrics_have_no_namespace_label`
 - `accounting_overhead` (`#[ignore]`; the M1 query benchmark with and without accounting; records the overhead for Q839)
 - `ann_strategy_calibration_report` (`#[ignore]`; writes `bench/results/ann-calibration-<date>.md`: measured CPU and wall per strategy against §05's static thresholds; no default changes in this task)
-- `python3 scripts/ci/no-metering.py` passes
 
 Commit `query, task: CPU and wall time per operator`. **PR size:** M (~700 lines).
 

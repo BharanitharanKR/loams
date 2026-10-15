@@ -51,7 +51,7 @@ The code facts were checked on `dev` at `c6551a69` (2026-10-15). The research wa
    4. Sandbox the agentd sessions (Studio threads): Loams enforces `SandboxLevel` itself instead of trusting each harness's own sandbox (`crates/loams-agentd/src/roles.rs`, §50, §53).
    5. Add gvisor for functions (§24 tiers T0 and T2).
    6. Add microvm with snapshot forking for workspaces (§15).
-6. **Limits stay in the open repository. Billing-grade metering stays in `loams-platform`** ([open-core](../open-core.md)).
+6. **Limits stay in the open repository. Billing-grade metering stays in `loams-platform`** (§41).
 
 ### 1.2 Decisions
 
@@ -672,7 +672,7 @@ agentd injects its MCP shim, which dials agentd's loopback port with a per-run t
 ## 11. The open-core line (D995)
 
 - **What this repository has.** The spec, every limit and its enforcement, `stats()`, the report, the cgroup layout and labels. These are mechanism, useful to any self-hoster (open-core §3, the "Quotas" and "Observability" rows).
-- **What `loams-platform` has.** Billing-grade usage: signed records, delivery and acknowledgement, final reads, reconciliation. The platform may read `stats()` and the cgroup layout as hints, as it reads any open extension point. Nothing in `loams-sandbox` depends on it, names a meter record, or writes a usage stream. `scripts/ci/no-metering.sh` (planned in MT4) will check the crate like the rest of the repository.
+- **What `loams-platform` has.** Billing-grade usage: signed records, delivery and acknowledgement, final reads, reconciliation. The platform may read `stats()` and the cgroup layout as hints, as it reads any open extension point. Nothing in `loams-sandbox` depends on it, names a meter record, or writes a usage stream.
 
 ## 12. The conformance kit (D1001)
 
@@ -841,7 +841,7 @@ The function supervisor (F1, unbuilt) uses `Sandbox::stats()` for §24 §10's CP
 | §11 buy-vs-build, §16 fleet demo | `loams-sandbox` backends: microsandbox default | D1006 | Follow §15's amendment; the rows are updated when SB1f lands |
 | §50 §7 / §53 §8.2 | Worktrees do not contain processes; "OS-level confinement inside the daemon … is Q815" | D1004 | **Q815 answered**: Loams enforces `SandboxLevel` with the platform adapter |
 | §53 §8.1 (D911) | Codex forced to `danger-full-access` unless supervised; other drivers auto-approve | D1004 | Kept for approvals; with Loams enforcing, "full access" is inside the Loams sandbox |
-| [open-core](../open-core.md) | Limits and enforcement open; metering private | D995 | Kept |
+| Open-core boundary (§41) | Limits and enforcement open; metering private | D995 | Kept |
 
 ## 17. Where the code lives (D1008)
 
@@ -939,5 +939,5 @@ Read on 2026-10-15 unless noted.
 - [Ubuntu 23.10 restricted unprivileged user namespaces](https://ubuntu.com/blog/ubuntu-23-10-restricted-unprivileged-user-namespaces); the 24.04 default is **(verify)** against [Understanding AppArmor user namespace restriction](https://discourse.ubuntu.com/t/understanding-apparmor-user-namespace-restriction/58007).
 - [cloudflare/workerd README](https://github.com/cloudflare/workerd) ("not a hardened sandbox").
 - In-repository:
-  - §15, §24, §45, §49 and HS1 (R1.10, R1.11, R6.1, R6.6, R-ACL.1), §50, §53, `docs/open-core.md`;
+  - §15, §24, §45, §49 and HS1 (R1.10, R1.11, R6.1, R6.6, R-ACL.1), §50, §53;
   - the code paths in §3.

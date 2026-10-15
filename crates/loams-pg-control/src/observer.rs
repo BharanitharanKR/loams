@@ -58,68 +58,6 @@ pub struct ComputeLifecycleEvent {
     pub at: SystemTime,
 }
 
-/// The names of [`ComputeLifecycleEvent`]'s fields, and of
-/// [`LifecycleKind`]'s variants and their fields: what
-/// `observer_event_has_no_billing_fields` holds against the no-metering
-/// guard's words. The list is read off the types at compile time: the
-/// struct is destructured whole and each variant matched with its fields
-/// named, so a field or variant added does not compile here until it is
-/// named.
-pub fn field_names() -> Vec<&'static str> {
-    fn of_struct(e: &ComputeLifecycleEvent) -> [&'static str; 7] {
-        let ComputeLifecycleEvent {
-            org: _,
-            namespace: _,
-            project: _,
-            endpoint: _,
-            compute: _,
-            event: _,
-            at: _,
-        } = e;
-        [
-            "org",
-            "namespace",
-            "project",
-            "endpoint",
-            "compute",
-            "event",
-            "at",
-        ]
-    }
-    fn of_kind(k: &LifecycleKind) -> &'static [&'static str] {
-        match k {
-            LifecycleKind::Started { cu: _ } => &["Started", "cu"],
-            LifecycleKind::Resized { cu: _ } => &["Resized", "cu"],
-            LifecycleKind::Suspended => &["Suspended"],
-            LifecycleKind::Failed { reason: _ } => &["Failed", "reason"],
-        }
-    }
-    let kinds = [
-        LifecycleKind::Started { cu: Cu(1) },
-        LifecycleKind::Resized { cu: Cu(1) },
-        LifecycleKind::Suspended,
-        LifecycleKind::Failed {
-            reason: String::new(),
-        },
-    ];
-    let sample = ComputeLifecycleEvent {
-        org: String::new(),
-        namespace: String::new(),
-        project: ProjectId::new(),
-        endpoint: EndpointId::new(),
-        compute: ComputeId::new(),
-        event: LifecycleKind::Suspended,
-        at: SystemTime::UNIX_EPOCH,
-    };
-    let mut names = of_struct(&sample).to_vec();
-    for k in &kinds {
-        names.extend_from_slice(of_kind(k));
-    }
-    names.sort_unstable();
-    names.dedup();
-    names
-}
-
 /// Receives every compute's lifecycle events. Called on the reconciler's
 /// task: it must not block.
 pub trait ComputeLifecycleObserver: Send + Sync + 'static {

@@ -69,7 +69,7 @@ over the relevant alphabet (identical results) and runs in linear time on
 | rust/weak-sensitive-data-hashing | 2 | #149, #150 | SHA-256 fingerprints of high-entropy provider API keys/tokens used as account identifiers, not password storage. |
 | rust/weak-sensitive-data-hashing | 2 | #123, #124 | `crates/loams-sqlgate/src/codec/auth.rs`: MySQL `caching_sha2_password` is protocol-mandated SHA-256. |
 | rust/weak-sensitive-data-hashing | 1 | #244 | `fabric/crates/loams-house/src/config.rs`: dev-only `password_sha256` user map (ClickHouse `password_sha256_hex` shape); API keys replace it (Q30, see FL2 plan). Accepted, not a fix target here. |
-| py/clear-text-logging-sensitive-data | 1 | #275 | `scripts/ci/no-metering.py` prints a file name and a matched billing word; "private" is a package-privacy flag, not a secret. |
+| py/clear-text-logging-sensitive-data | 1 | #275 | The no-metering guard (removed 2026-10-15) printed a file name and a matched billing word; "private" is a package-privacy flag, not a secret. |
 
 ## Test paths in CodeQL configuration
 

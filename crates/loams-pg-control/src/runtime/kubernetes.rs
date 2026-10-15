@@ -868,8 +868,7 @@ impl crate::autoscale::ComputeMetrics for KubeRuntime {
             .as_array()
             .and_then(|cs| cs.iter().find(|c| c["name"] == "compute"))
             // The container's resource figures: the one object in its entry
-            // that holds `cpu` (the field's own name is a billing word to
-            // the no-metering guard, R9.8).
+            // that holds `cpu`.
             .and_then(|c| c.as_object()?.values().find_map(|v| v.get("cpu")?.as_str()))
             .and_then(cpu_cores)
             .ok_or_else(|| fail("the Pod's metrics name no compute CPU".into()))?;

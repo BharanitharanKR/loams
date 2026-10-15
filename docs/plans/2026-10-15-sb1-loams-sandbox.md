@@ -48,7 +48,6 @@
 - [§45](../design/45-loams-live-production.md) §3.1–§3.2 and [LV1](2026-10-08-lv1-live-production.md) Task 5.
 - [§50](../design/50-loams-desktop-daemon.md) §7, [§53](../design/53-studio-ade.md) §8, [DD1](2026-10-09-dd1-desktop-daemon.md), [SD1](2026-10-13-sd1-studio-ade.md) Task 13.
 - [§24](../design/24-cpu-time-runtime.md) §4, §10, §16, and [§15](../design/15-agent-workspaces.md) §5, §8.
-- [open-core](../open-core.md).
 
 ## Global Constraints
 
@@ -66,7 +65,7 @@
 - **Fail closed.** No code path may run a payload with a weaker sandbox than its spec asks for, unless the field is in `best_effort` and the `SandboxReport` names it. A reviewer rejects any "warn and continue".
 - **House's behaviour is frozen through Tasks 1–2.** The Landlock rules and seccomp programs a House worker installs are byte-identical before and after the move (`house_worker_preset_matches_legacy_rules`). Every House sandbox test passes unchanged.
 - **Live's behaviour is frozen through Task 3**, except `RLIMIT_CPU` and the optional cgroup (D1003).
-- **No metering.** Nothing in these crates uses a billing-grade metering name (the list `scripts/ci/no-metering.sh` enforces). Nothing aggregates or signs `stats()` (D995).
+- **No metering.** Nothing in these crates uses a billing-grade metering name. Nothing aggregates or signs `stats()` (D995).
 - **Hermetic tests.** Probes run against planted files, sockets and listeners that the test creates, under a temporary directory and on random high ports. No test touches the real home directory, the real `/run`, or a real network host. Proxy tests use a planted local HTTP and TLS server.
 - **CI hosts.** Every Linux job that starts a sandbox first runs `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`. Tests that need a delegated cgroup, KVM or `runsc` skip with a printed reason when it is absent, and the job that is meant to have it fails if any of them skipped (`SB1_REQUIRE=cgroup,kvm,runsc`).
 - **Pins.** Exact versions at least 14 days old. Record each pin in the commit that adds it.

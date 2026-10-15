@@ -42,7 +42,7 @@ The exit is the checklist at the end of this plan, with the owning tasks.
 - [§27](../design/27-usage-hooks.md) §3 (the hooks), §3.5 (what the engine keeps), §4 (what is not here), §6 (Q-UH-1 to Q-UH-3); D200–D202, D549.
 - [§21](../design/21-durable-execution.md) §3.5 (in-process functions), §5.1 (tenancy), §6, §8 (promise retention, Q40).
 - [§44](../design/44-unified-api-and-sdks.md) §4–§10 (API rules, facades, SDK generation).
-- [§41](../design/41-multitenant-byoc-control-plane.md) §9–§11 (limits, the open-core boundary), [open-core.md](../open-core.md).
+- [§41](../design/41-multitenant-byoc-control-plane.md) §9–§11 (limits, the open-core boundary).
 - [LV1](2026-10-08-lv1-live-production.md) Tasks 27–28 (the metrics registry, admin listener, OTLP), [RN1](2026-10-01-rn1-runner-usage.md) Task 3 (`InvocationObserver`), [MT1](2026-10-02-mt1-authentik-identity.md) (auth), [MT2](2026-10-02-mt2-knative.md) (pod labels), [MT4](2026-10-02-mt4-byoc-control-plane.md) Task 8 (the no-metering guard).
 
 ## Owner rulings 2026-10-10 (defaults)
@@ -80,7 +80,7 @@ The owner asked for the best default on every question that does not need money,
 - **The namespace comes from the credential.** `Ctx` is built by the transport layer. No request message has a namespace field that the server trusts (Task 1 test).
 - **Delivery wording.** No code comment, doc, error message or API description says "exactly once" about execution. Outcome records are exactly once; execution is at least once (§26 §6.1).
 - **Payloads are opaque.** No payload byte, task argument or result appears in a log line, span attribute, metric label or error message. Ids, queue names and task names may.
-- **No billing** (D548, D552). No field, metric, table or endpoint named `plan`, `price`, `invoice`, `credit`, `billable` or `meter` in JB1 code, and none of the guard's marker strings anywhere. `scripts/ci/no-metering.sh` runs on every PR and already scans every tracked file; JB1 adds nothing to its allow-list. The hooks are observability; nothing here claims to be the source of truth for a charge (§27 §4).
+- **No billing** (D548, D552). No field, metric, table or endpoint named `plan`, `price`, `invoice`, `credit`, `billable` or `meter` in JB1 code, and none of the guard's marker strings anywhere. The hooks are observability; nothing here claims to be the source of truth for a charge (§27 §4).
 - **Pins.** Exact versions for every new crate, package and image; images by digest. A new dependency must be at least 14 days old. Record each pin in the task's commit message.
 - **Upstream behaviour is checked, not remembered.** Every Celery, kombu, BullMQ, Resonate, Sail or Flink-operator behaviour a task relies on is checked against the pinned version and cited (path and line) in a test comment or fixture README, as §26 does.
 - **No Redis, no AMQP, no Lua**, and no BullMQ Pro feature (§26 §2.2).
@@ -113,7 +113,7 @@ The owner asked for the best default on every question that does not need money,
 6. **A chord body is sent twice, or a count is lost under `acks_late`.** Expected: neither. Tests: Task 9 `incr_counts_member_once`; Task 22 `chord_body_once_under_redelivery`, `acks_late_crash_before_incr_recounts`.
 7. **`watch` misses or repeats an event across reconnects.** Expected: neither within the stream's retention. Tests: Task 14 `nothing_between_snapshot_and_subscribe`, `resume_from_cursor_no_gap_no_dup`, `vector_cursor_resumes_every_partition`.
 8. **A long ETA causes redelivery.** Expected: never (delayed index, not a lease). Test: Task 21 `long_eta_not_redelivered`.
-9. **The default `loams` build gains jobs or Kubernetes code, or a billing name appears.** Expected: no. Tests: Task 12 `default_features_exclude_jobs`; Task 48 `default_features_exclude_kube`; `scripts/ci/no-metering.sh`.
+9. **The default `loams` build gains jobs or Kubernetes code, or a billing name appears.** Expected: no. Tests: Task 12 `default_features_exclude_jobs`; Task 48 `default_features_exclude_kube`.
 10. **A payload leaks into a log, span, label or error; per-namespace series grow without bound.** Expected: never; series capped. Tests: Task 37 `canary_payload_never_observed`; Task 34 `active_namespace_cap_bounds_series`.
 11. **A client-supplied tenant header reaches an access log.** Expected: stripped before the gateway sets it. Test: Task 39 `client_tenant_header_stripped`.
 12. **A Spark Connect session or engine run reaches another namespace's engine.** Expected: refused. Tests: Task 50 `session_routed_only_to_own_namespace`; Task 46 `engine_network_policy_denies_cross_namespace`.
