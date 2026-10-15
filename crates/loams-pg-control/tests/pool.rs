@@ -11,22 +11,16 @@ mod common;
 mod env;
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use loams_pg_control::PgControlStore;
-use loams_pg_control::ids::ComputeId;
 use loams_pg_control::model::{AllComputes, ComputeRec, ComputeStatus, Cu, EndpointType, PoolKey};
 use loams_pg_control::pool::{POOL_LEASE, PoolConfig, PoolTick};
 use loams_pg_control::reconcile::endpoint::CtlStatus;
-use loams_pg_control::service::Clock;
 use loams_pg_control::service::endpoints::CreateEndpoint;
 use loams_pg_control::store::Page;
 use loams_pg_control::store::conformance::{Factory, local_factory};
-use loams_pg_control::upcall::{
-    COMPUTE_TOKEN_TTL, ComputeCtlConfigurer, UpcallConfig, UpcallServer,
-};
 use serde_json::Value;
 
 use crate::env::{Env, IMAGE, IMAGE_NEXT, NS};
@@ -313,51 +307,7 @@ async fn bound_compute_gets_attached_spec() {
     let (project, id) = e.wanted().await;
     let warm = e.warm(1).await.remove(0);
 
-    let at = e.h.clock.0.clone();
-    let listen = "127.0.0.1:0".parse().unwrap();
-    let env_sources = crate::env::sources();
-    let server = UpcallServer::bind(
-        e.h.store.clone(),
-        e.keys.clone(),
-        Arc::new(ComputeCtlConfigurer::new(
-            e.keys.clone(),
-            Clock::from_fn(|| 0),
-        )),
-        UpcallConfig {
-            pageservers: env_sources.pageservers.clone(),
-            default_pageserver: env_sources.default_pageserver,
-            wal_pools: env_sources.wal_pools.clone(),
-            clock: Clock::from_fn(move || at.load(Ordering::SeqCst)),
-            ..UpcallConfig::defaults(listen)
-        },
-    )
-    .await
-    .expect("the upcall listener");
-    let base = format!("http://{}", server.local_addr());
-    let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
-    tokio::spawn(server.serve(async move {
-        let _ = stopped.await;
-    }));
-    let compute: ComputeId = warm.id.parse().unwrap();
-    let token = e
-        .keys
-        .issue_upcall_token(
-            &compute,
-            e.h.clock.0.load(Ordering::SeqCst),
-            COMPUTE_TOKEN_TTL,
-        )
-        .unwrap();
-    let spec = || async {
-        let resp = reqwest::Client::new()
-            .get(format!("{base}/compute/api/v2/computes/{compute}/spec"))
-            .bearer_auth(token.expose())
-            .send()
-            .await
-            .unwrap();
-        assert_eq!(resp.status().as_u16(), 200);
-        resp.json::<Value>().await.unwrap()
-    };
-    assert_eq!(spec().await["status"], "empty");
+    assert_eq!(e.upcall_spec(&warm.id).await["status"], "empty");
 
     e.start(&project, &id, "start1").await;
     e.pass(&project).await;
@@ -365,7 +315,7 @@ async fn bound_compute_gets_attached_spec() {
         e.endpoint(&project, &id).await.and_then(|r| r.compute_id),
         Some(warm.id.clone())
     );
-    let answer = spec().await;
+    let answer = e.upcall_spec(&warm.id).await;
     assert_eq!(answer["status"], "attached");
     let pushed: BTreeMap<String, Value> = e
         .ctl
@@ -374,7 +324,6 @@ async fn bound_compute_gets_attached_spec() {
         .map(|(c, s)| (c, serde_json::to_value(s).unwrap()))
         .collect();
     assert_eq!(pushed.get(&warm.id), Some(&answer["spec"]));
-    let _ = stop.send(());
 }
 
 /// An endpoint of another size starts its own compute; the pool keeps its

@@ -738,11 +738,19 @@ fn spec_prewarm_fields() {
     assert_eq!(v["endpoint_storage_token"], "es-token");
     assert_eq!(v["autoprewarm"], true);
     assert_eq!(v["mode"], "Replica");
+    // A primary saves its cache's state for a later promotion (Task 16).
+    let primary = golden_builder()
+        .endpoint_storage("endpoint-storage:9993", Secret::new("es-token".into()))
+        .offload_lfc_interval(300)
+        .build();
+    let v = serde_json::to_value(&primary).unwrap();
+    assert_eq!(v["offload_lfc_interval_seconds"], 300);
     let plain = serde_json::to_value(golden_builder().build()).unwrap();
     for k in [
         "endpoint_storage_addr",
         "endpoint_storage_token",
         "autoprewarm",
+        "offload_lfc_interval_seconds",
     ] {
         assert!(plain.get(k).is_none(), "{k}");
     }

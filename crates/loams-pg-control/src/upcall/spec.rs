@@ -45,7 +45,40 @@ pub struct Sources {
     pub default_pageserver: Option<u64>,
     /// Pool name → the connection strings of its acceptors or Service.
     pub wal_pools: BTreeMap<String, Vec<String>>,
+    /// Endpoint storage, where computes keep their file cache's state so a
+    /// promoted replica can prewarm (R2.13, Task 16); `None`: not run.
+    pub endpoint_storage: Option<EndpointStorage>,
 }
+
+/// Endpoint storage (the fork's `endpoint_storage`, Task 16): its address
+/// as computes reach it, and the key whose public half it verifies tokens
+/// with ([`ComputeKeys::public_key_pem`]).
+#[derive(Clone)]
+pub struct EndpointStorage {
+    /// `host:port`.
+    pub addr: String,
+    pub keys: std::sync::Arc<crate::upcall::ComputeKeys>,
+}
+
+impl std::fmt::Debug for EndpointStorage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EndpointStorage")
+            .field("addr", &self.addr)
+            .field("kid", &self.keys.kid())
+            .finish()
+    }
+}
+
+impl PartialEq for EndpointStorage {
+    fn eq(&self, other: &Self) -> bool {
+        self.addr == other.addr && self.keys.kid() == other.keys.kid()
+    }
+}
+
+impl Eq for EndpointStorage {}
+
+/// How often a primary saves its file cache's state to endpoint storage.
+pub const LFC_OFFLOAD_INTERVAL_S: u64 = 300;
 
 /// Why no spec.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -210,6 +243,38 @@ fn pageserver(sources: &Sources, branch: &BranchRec) -> Result<(u64, String), Sp
     Ok((node, url.clone()))
 }
 
+/// A hot standby's settings: `primary_conninfo` naming every safekeeper of
+/// the pool (`host=h1,h2 port=p1,p2`, the timeline and tenant as options),
+/// its slot, `hot_standby` and no recovery prefetch (Neon reads pages from
+/// the pageserver).
+fn replica_settings(
+    project: &ProjectRec,
+    branch: &BranchRec,
+    safekeepers: &[String],
+) -> Vec<(&'static str, String, &'static str)> {
+    let (hosts, ports): (Vec<&str>, Vec<&str>) = safekeepers
+        .iter()
+        .map(|sk| sk.rsplit_once(':').unwrap_or((sk.as_str(), "5454")))
+        .unzip();
+    let tenant = TenantId(project.tenant_id);
+    let timeline = TimelineId(branch.timeline_id);
+    vec![
+        (
+            "primary_conninfo",
+            format!(
+                "host={} port={} options='-c timeline_id={timeline} tenant_id={tenant}' \
+                 application_name=replica replication=true",
+                hosts.join(","),
+                ports.join(","),
+            ),
+            "string",
+        ),
+        ("primary_slot_name", format!("repl_{timeline}_"), "string"),
+        ("hot_standby", "on".into(), "bool"),
+        ("recovery_prefetch", "off".into(), "string"),
+    ]
+}
+
 /// The spec of compute `compute_id`, of size `cu`, from `inputs`, and its
 /// inputs' version.
 pub(crate) fn build(
@@ -244,6 +309,30 @@ pub(crate) fn build(
             .pageserver(node, &url)
             .suspend_timeout_seconds(suspend)
             .mode(mode);
+    // Endpoint storage (Task 16): every compute prewarms its cache from its
+    // endpoint's saved state at start, and a primary saves it, so a replica
+    // promoted in its place prewarms from it. The token's expiry follows
+    // from the compute's id (a ULID holds its creation time), so the same
+    // records still give the same bytes.
+    if let Some(es) = &sources.endpoint_storage {
+        let created_s = compute_id
+            .parse::<crate::ids::ComputeId>()
+            .map(|c| c.ulid().timestamp_ms() / 1000)
+            .unwrap_or_default();
+        let token = es
+            .keys
+            .issue_endpoint_storage_token(
+                &TenantId(project.tenant_id).to_string(),
+                &TimelineId(branch.timeline_id).to_string(),
+                &endpoint.id,
+                created_s.saturating_add(crate::upcall::COMPUTE_TOKEN_TTL.as_secs()),
+            )
+            .map_err(|e| SpecError::NotReady(format!("the endpoint storage token: {e}")))?;
+        builder = builder.endpoint_storage(&es.addr, token).autoprewarm(true);
+        if mode == ComputeMode::Primary {
+            builder = builder.offload_lfc_interval(LFC_OFFLOAD_INTERVAL_S);
+        }
+    }
     for (name, value) in &endpoint.pg_settings {
         // The API refuses these (Task 11); a record written before the
         // allow-list still never overrides what the platform owns.
@@ -277,6 +366,14 @@ pub(crate) fn build(
             &file_cache_mb(cu).to_string(),
             "integer",
         ));
+    // A replica streams the branch's WAL from the safekeepers (Task 16), as
+    // Neon's control plane configures one (`control_plane/src/endpoint.rs`):
+    // without `primary_conninfo` a standby never leaves its base backup.
+    if mode == ComputeMode::Replica {
+        for (name, value, vartype) in replica_settings(project, branch, safekeepers) {
+            builder = builder.setting(Setting::new(name, &value, vartype));
+        }
+    }
     for r in &inputs.roles {
         builder = builder.role(SpecRole {
             name: r.record.name.clone(),

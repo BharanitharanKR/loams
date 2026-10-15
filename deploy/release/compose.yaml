@@ -386,6 +386,10 @@ services:
       - --pageserver-pg=1234=postgresql://no_user@pageserver:6400
       - --default-pageserver=1234
       - --wal-pool=default=safekeeper1:5454
+      # Endpoint storage (below): the computes keep their file cache's state
+      # there, and pg-control writes the key it checks their tokens with.
+      - --endpoint-storage=endpoint-storage:51243
+      - --endpoint-storage-pem-out=/run/endpoint-storage/key.pem
     environment:
       RUST_LOG: ${RUST_LOG:-info}
     networks: [default, pg-runner]
@@ -394,6 +398,7 @@ services:
     volumes:
       - pg-control-data:/var/lib/loams-pg-control
       - pg-runner-token:/run/pg-runner:ro
+      - pg-endpoint-storage-key:/run/endpoint-storage
       - type: bind
         source: ./secrets/pg-api-keys.json
         target: /etc/loams-pg-control/api-keys.json
@@ -405,6 +410,37 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+
+  # Endpoint storage (PG2 Task 16, the fork's endpoint_storage from the
+  # storage image the included stack runs): where computes keep their local
+  # file cache's state in the stack's bucket, so a promoted read-only
+  # endpoint starts with a warm cache. It checks the computes' tokens with
+  # pg-control's public key, which pg-control writes at start into a volume
+  # mounted read-only here. Only computes reach it (no ports). Nothing
+  # orders it before the first compute starts (`service_started` only orders
+  # the containers): a compute that prewarms before it listens starts with a
+  # cold cache, which is all that is lost.
+  endpoint-storage:
+    <<: *restart
+    profiles: [postgres-control]
+    image: ${NEON_IMAGE:-ghcr.io/neondatabase/neon@sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f}
+    environment:
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+      AWS_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        until [ -s /run/endpoint-storage/key.pem ]; do echo waiting for pg-control's key; sleep 1; done;
+        exec endpoint_storage --config='{"listen": "0.0.0.0:51243",
+        "pemfile": "/run/endpoint-storage/key.pem", "type": "AwsS3",
+        "bucket_name": "neon", "bucket_region": "us-east-1",
+        "prefix_in_bucket": "endpoint-storage/", "endpoint": "http://rustfs:9000"}'
+    volumes:
+      - pg-endpoint-storage-key:/run/endpoint-storage:ro
+    depends_on:
+      pg-control:
+        condition: service_started
 
   # The compute runner: the only service given a container runtime's socket
   # (CONTAINER_SOCKET; prefer rootless Podman's, see the README). It runs
@@ -495,4 +531,5 @@ volumes:
   pg-control-data:
   pg-runner-data:
   pg-runner-token:
+  pg-endpoint-storage-key:
   upgrade-snapshots:

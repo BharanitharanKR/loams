@@ -62,7 +62,8 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --system --gid 10001 loams \
  && useradd --system --uid 10001 --gid loams --home-dir /var/lib/loams-pg-control --shell /usr/sbin/nologin loams \
- && install -d -o loams -g loams -m 0700 /var/lib/loams-pg-control /var/lib/loams-pg-runner /run/pg-runner
+ && install -d -o loams -g loams -m 0700 /var/lib/loams-pg-control /var/lib/loams-pg-runner /run/pg-runner \
+ && install -d -o loams -g loams -m 0755 /run/endpoint-storage
 COPY --from=build /out/loams /usr/local/bin/loams
 COPY --from=compose /docker-compose /usr/local/bin/docker-compose
 LABEL org.opencontainers.image.title="loams-pg-control" \

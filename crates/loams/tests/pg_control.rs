@@ -834,8 +834,9 @@ mod postgres {
                 None,
             )
             .await;
-        assert_eq!(status, 501, "{e}");
-        assert_eq!(reason(&e), "not_implemented");
+        // Task 16: promotion is served; this endpoint is read-write.
+        assert_eq!(status, 400, "{e}");
+        assert_eq!(reason(&e), "failed_precondition");
 
         let (status, deleted) = pg
             .call(
