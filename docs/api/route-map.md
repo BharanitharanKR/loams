@@ -104,6 +104,17 @@ Served on the cluster listener before the API router (`meta_rpc::router`). See r
 | POST | `/internal/v1/meta/leave` | raft | `loams.internal.v1.MetaService/Leave` | `MetaNode::leave` | `cluster.rs` |
 | POST | `/internal/v1/meta/status` | raft | `loams.internal.v1.MetaService/Status` | `MetaNode` metrics | `cluster.rs` |
 
+## Loams Git listener (`crates/loams/src/api/git_auth.rs`, `--git-listen`)
+
+Served on `--git-listen` (feature `git`, GT1 Task 16; loopback until MT1, D111): authentication by git token, the namespace from the token, and one bodiless `404` for anything outside it. An admitted request for an existing repository answers `501` until Task 46 adds the protocol routes listed under Git Smart HTTP below.
+
+| Method | Route | Kind | Target RPC | Internal call | Existing tests |
+|---|---|---|---|---|---|
+| GET | `/git/{ns}/{repo}` | protocol | none (stays HTTP, D602) | `git_auth::serve` | `git.rs` `http::` |
+| POST | `/git/{ns}/{repo}` | protocol | none (stays HTTP, D602) | `git_auth::serve` | `git.rs` `http::` |
+| GET | `/git/{ns}/{repo}/{*rest}` | protocol | none (stays HTTP, D602) | `git_auth::serve` | `git.rs` `http::` |
+| POST | `/git/{ns}/{repo}/{*rest}` | protocol | none (stays HTTP, D602) | `git_auth::serve` | `git.rs` `http::` |
+
 ## Console contract (`api/console/openapi.json`, served by `loams-apps-mock` from `loams-console-mock`'s routes)
 
 The real server does not serve `/api/v1` yet (the gateway work is AP4/MT1); only `loams-apps-mock` does, from the contract. `loams-console-mock` keeps the contract and the seed and its `routes()` list, and `loams-apps-mock::console` mounts that list over axum on the same listener as the app protos, so the console, the desktop, the phone apps and the SDKs all point at one address. Tests: `crates/loams-console-mock/tests/contract.rs` (`every_operation_has_a_mock_and_every_mock_an_operation`, `every_mocked_body_matches_its_response_schema`, `the_server_answers_from_the_seed`) and the console's `web/apps/console` tests over `openapi-fetch`. Services are in `loams.admin.v1` unless noted.
@@ -223,6 +234,8 @@ Git Smart HTTP (§36 §6.1, D602, D603) is a **protocol** surface and stays HTTP
 | `/git/{ns}/{repo}.git/info/refs` | GET | protocol | `?service=git-upload-pack` or `git-receive-pack` |
 | `/git/{ns}/{repo}.git/git-upload-pack` | POST | protocol | v2 (`Git-Protocol: version=2`), and v0/v1 for libgit2 (Task 52, R0.10) |
 | `/git/{ns}/{repo}.git/git-receive-pack` | POST | protocol | v0/v1 receive-pack |
+
+Until Task 46 the listener serves only the authenticated catch-all routes listed under "Loams Git listener" above.
 
 ## Out of scope: compatibility surfaces (D603)
 

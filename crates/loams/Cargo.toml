@@ -59,6 +59,9 @@ loams-graph = { workspace = true, optional = true }
 loams-es = { workspace = true, optional = true }
 # Loams Git's portable core (feature `git`, GT1 Task 12, design §36).
 loams-git = { workspace = true, optional = true }
+# Loams Git's token file (`--git-tokens`, GT1 Task 16): TOML with SHA-256 hashes.
+toml = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
 loams-hnsw.workspace = true
 loams-hot.workspace = true
 loams-link.workspace = true
@@ -172,7 +175,7 @@ graph = ["dep:loams-graph"]
 # `loams` links no `loams-git` or gitoxide crate (`tests/git/main.rs`'s
 # `default_features_exclude_git`) and every `loams.repos.v1` RPC answers
 # `feature_not_in_variant`.
-git = ["dep:loams-git"]
+git = ["dep:loams-git", "dep:toml", "dep:hex"]
 # The sccache build cache (GT1 Tasks 68–71, design §36 §8). Reserved by GT1
 # Task 12: its crate, `loams-buildcache`, does not exist yet.
 buildcache = []

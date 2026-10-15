@@ -7,6 +7,7 @@
 //! `loams-store`, `loams-cloudevents`, `loams-fs` and gitoxide crates only,
 //! and opens no listener.
 
+pub mod auth;
 pub mod blob;
 pub mod catalog;
 pub mod checkpointer;
@@ -28,6 +29,10 @@ pub mod state;
 pub mod testing;
 pub mod wal;
 
+pub use auth::{
+    EnvAccess, EnvGrant, GitAccess, GitAuthError, GitAuthorizer, GitDenied, GitGrant, RepoMatch,
+    Secret, TrustClass, WsMatch,
+};
 pub use blob::{BlobError, BlobId, BlobStore, LpkWriter, Put, StoreBlobStore};
 pub use catalog::{
     BucketRepoCatalog, CatalogError, Created, RepoCatalog, RepoLifecycle, RepoRecord,

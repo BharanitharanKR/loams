@@ -100,7 +100,7 @@ fn already_exists(kind: &str, name: &str) -> ConnectError {
 
 /// An [`Authorizer`](crate::auth::authorizer::Authorizer) refusal as an RPC
 /// error.
-fn denied(denied: Denied) -> ConnectError {
+pub(crate) fn denied(denied: Denied) -> ConnectError {
     match denied {
         Denied::SetupRequired => refuse(
             ErrorCode::FailedPrecondition,

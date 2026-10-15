@@ -35,6 +35,7 @@ pub(super) fn register(router: Router, state: &AppState) -> Router {
         return Arc::new(served::ReposServed {
             meta: Arc::clone(&state.meta),
             git: Arc::clone(git),
+            principals: state.principals.clone(),
         })
         .register(router);
     }
@@ -161,8 +162,8 @@ mod served {
     use loams_git::format::pb as gitpb;
     use loams_git::owner::RepoSequencers;
     use loams_git::{
-        BucketRefLog, CommittedTxn, IdemKey, NamespaceId, ReadAt, RefError, RefLog, RefName,
-        RefSnapshot, RejectReason, RepoId, RepoName, Seq, StateError,
+        BucketRefLog, CommittedTxn, GitAccess, IdemKey, NamespaceId, ReadAt, RefError, RefLog,
+        RefName, RefSnapshot, RejectReason, RepoId, RepoName, Seq, StateError,
     };
     use loams_proto::google::protobuf::Timestamp;
     use loams_proto::loams::operations::v1 as ops;
@@ -198,6 +199,8 @@ mod served {
     pub(super) struct ReposServed {
         pub(super) meta: Arc<dyn MetaStore>,
         pub(super) git: Arc<GitRuntime>,
+        /// Who may do what (GT1 Task 16): the engine's principal store and authorizer.
+        pub(super) principals: crate::auth::Principals,
     }
 
     fn invalid(field: &str, message: impl Into<String>) -> ConnectError {
@@ -572,6 +575,25 @@ mod served {
     }
 
     impl ReposServed {
+        /// Refuses a caller below `need` (GT1 Task 16): reads and writes need the org role
+        /// `member`, administration `admin`; the operator always passes.
+        async fn require(&self, ctx: &RequestContext, need: GitAccess) -> Result<(), ConnectError> {
+            let principal = ctx
+                .extensions()
+                .get::<crate::auth::Principal>()
+                .ok_or_else(|| {
+                    refuse(
+                        ErrorCode::Unauthenticated,
+                        crate::auth::reason::TOKEN_MISSING,
+                        "this RPC needs a credential",
+                        &[],
+                    )
+                })?;
+            crate::api::git_auth::authorize_caller(&self.principals, principal, need)
+                .await
+                .map_err(crate::api::connect_admin::denied)
+        }
+
         /// The namespace named `name`; with `create`, made when it does not exist.
         async fn namespace(&self, name: &str, create: bool) -> Result<NamespaceId, ConnectError> {
             if name.is_empty() {
@@ -652,9 +674,10 @@ mod served {
     impl RepoService for ReposServed {
         async fn create_repo(
             &self,
-            _ctx: RequestContext,
+            ctx: RequestContext,
             request: ServiceRequest<'_, pb::CreateRepoRequest>,
         ) -> ServiceResult<pb::CreateRepoResponse> {
+            self.require(&ctx, GitAccess::Admin).await?;
             let req = request.to_owned_message();
             let name = repo_name("name", &req.name)?;
             let object_format = match req.object_format {
@@ -714,9 +737,10 @@ mod served {
 
         async fn get_repo(
             &self,
-            _ctx: RequestContext,
+            ctx: RequestContext,
             request: ServiceRequest<'_, pb::GetRepoRequest>,
         ) -> ServiceResult<pb::GetRepoResponse> {
+            self.require(&ctx, GitAccess::Read).await?;
             let req = request.to_owned_message();
             let name = repo_name("name", &req.name)?;
             let ns = self.namespace(&req.namespace, false).await?;
@@ -746,9 +770,10 @@ mod served {
 
         async fn list_repos(
             &self,
-            _ctx: RequestContext,
+            ctx: RequestContext,
             request: ServiceRequest<'_, pb::ListReposRequest>,
         ) -> ServiceResult<pb::ListReposResponse> {
+            self.require(&ctx, GitAccess::Read).await?;
             let req = request.to_owned_message();
             let limit = page_size(req.page_size, REPOS_PAGE)?;
             let after = match req.page_token.as_str() {
@@ -785,9 +810,10 @@ mod served {
 
         async fn fork_repo(
             &self,
-            _ctx: RequestContext,
+            ctx: RequestContext,
             request: ServiceRequest<'_, pb::ForkRepoRequest>,
         ) -> ServiceResult<pb::ForkRepoResponse> {
+            self.require(&ctx, GitAccess::Admin).await?;
             let req = request.to_owned_message();
             let source = repo_name("source", &req.source)?;
             let name = repo_name("name", &req.name)?;
@@ -838,9 +864,10 @@ mod served {
 
         async fn delete_repo(
             &self,
-            _ctx: RequestContext,
+            ctx: RequestContext,
             request: ServiceRequest<'_, pb::DeleteRepoRequest>,
         ) -> ServiceResult<pb::DeleteRepoResponse> {
+            self.require(&ctx, GitAccess::Admin).await?;
             let req = request.to_owned_message();
             let name = repo_name("name", &req.name)?;
             idem_key(&req.idempotency_key)?;
@@ -877,9 +904,10 @@ mod served {
 
         async fn update_repo_config(
             &self,
-            _ctx: RequestContext,
+            ctx: RequestContext,
             request: ServiceRequest<'_, pb::UpdateRepoConfigRequest>,
         ) -> ServiceResult<pb::UpdateRepoConfigResponse> {
+            self.require(&ctx, GitAccess::Admin).await?;
             let req = request.to_owned_message();
             let name = repo_name("name", &req.name)?;
             let paths: Vec<String> = req
@@ -984,9 +1012,10 @@ mod served {
 
         async fn list_refs(
             &self,
-            _ctx: RequestContext,
+            ctx: RequestContext,
             request: ServiceRequest<'_, pb::ListRefsRequest>,
         ) -> ServiceResult<pb::ListRefsResponse> {
+            self.require(&ctx, GitAccess::Read).await?;
             let req = request.to_owned_message();
             let name = repo_name("name", &req.name)?;
             let limit = page_size(req.page_size, REFS_PAGE)?;
@@ -1047,9 +1076,10 @@ mod served {
 
         async fn compact_repo(
             &self,
-            _ctx: RequestContext,
+            ctx: RequestContext,
             request: ServiceRequest<'_, pb::CompactRepoRequest>,
         ) -> ServiceResult<pb::CompactRepoResponse> {
+            self.require(&ctx, GitAccess::Admin).await?;
             let req = request.to_owned_message();
             let name = repo_name("name", &req.name)?;
             let ns = self.namespace(&req.namespace, false).await?;
@@ -1061,9 +1091,10 @@ mod served {
 
         async fn watch_repo(
             &self,
-            _ctx: RequestContext,
+            ctx: RequestContext,
             request: ServiceRequest<'_, pb::WatchRepoRequest>,
         ) -> ServiceResult<ServiceStream<pb::WatchRepoResponse>> {
+            self.require(&ctx, GitAccess::Read).await?;
             let req = request.to_owned_message();
             let name = repo_name("name", &req.name)?;
             let ns = self.namespace(&req.namespace, false).await?;

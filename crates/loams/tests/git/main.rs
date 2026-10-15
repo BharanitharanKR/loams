@@ -19,6 +19,8 @@ use serde_json::{Value, json};
 use tempfile::TempDir;
 
 #[cfg(feature = "git")]
+mod http;
+#[cfg(feature = "git")]
 mod repos;
 
 /// Every RPC of `RepoService`, with whether it streams.

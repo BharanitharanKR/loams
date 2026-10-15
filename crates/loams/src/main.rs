@@ -221,6 +221,14 @@ enum HotSwitch {
 /// `cluster`.
 #[derive(Debug, clap::Args)]
 struct Native {
+    /// Loams Git's listener for stock git with git tokens (feature `git`, GT1 Task 16):
+    /// loopback only (127.0.0.0/8, ::1) until the unified auth plan (D111). Needs --git-tokens.
+    #[arg(long)]
+    git_listen: Option<SocketAddr>,
+    /// The git token file (feature `git`): TOML `[[tokens]]` entries of a token's SHA-256 and
+    /// its grant (namespace, repositories, access, branch prefixes).
+    #[arg(long)]
+    git_tokens: Option<PathBuf>,
     /// Loams Graph's data directory (feature `graph`): graphs live under
     /// <DIR>/graphs/<graph_id>/ [default: <data-dir>/graph for dev; required
     /// for standalone unless --graph-ephemeral or --no-graph].
@@ -563,6 +571,22 @@ impl Native {
     /// Loams Graph's settings (GR1 Task 5). `dev` keeps graphs under `<data-dir>/graph` by
     /// default; `standalone` and `cluster` need `--graph-data-dir` (or `--graph-ephemeral`, or
     /// `--no-graph`), and the server refuses to start without one.
+    /// Loams Git's listener and token file (GT1 Task 16).
+    fn apply_git(&self, config: &mut ServerConfig) {
+        #[cfg(feature = "git")]
+        {
+            config.git.listen = self.git_listen;
+            config.git.tokens = self.git_tokens.clone();
+        }
+        #[cfg(not(feature = "git"))]
+        {
+            let _ = config;
+            if self.git_listen.is_some() || self.git_tokens.is_some() {
+                tracing::warn!("this build has no Loams Git (the git feature is off)");
+            }
+        }
+    }
+
     fn apply_graph(&self, config: &mut ServerConfig, dev: bool) {
         #[cfg(feature = "graph")]
         {
@@ -1326,6 +1350,7 @@ fn config(command: Command) -> ServerConfig {
             // After `cluster`: a cluster node has no default durable store.
             native.apply(&mut config, STANDALONE_FLIGHT_SQL);
             native.apply_graph(&mut config, false);
+            native.apply_git(&mut config);
             tuning.apply(&mut config);
             config
         }
@@ -1360,6 +1385,7 @@ fn config(command: Command) -> ServerConfig {
             let dev_plaintext = native.sqlgate_plaintext.is_none();
             native.apply(&mut config, DEV_FLIGHT_SQL);
             native.apply_graph(&mut config, true);
+            native.apply_git(&mut config);
             tuning.apply(&mut config);
             // The desktop's gate takes plaintext from loopback peers unless
             // told otherwise; a gateway never does (fix round 1, M6).
@@ -1390,6 +1416,7 @@ fn config(command: Command) -> ServerConfig {
             config.bucket = Some(bucket);
             native.apply(&mut config, STANDALONE_FLIGHT_SQL);
             native.apply_graph(&mut config, false);
+            native.apply_git(&mut config);
             config
         }
     }
