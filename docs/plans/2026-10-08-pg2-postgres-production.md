@@ -2193,3 +2193,23 @@ The checks ran on the scratch stack `deploy/pgdog/compose.yaml`: the pinned PgDo
 - **R20.7 Checked against the pinned PgDog.** v0.1.60 loaded the rendered golden (TLS paths dropped) and built one pool per (routed name, role) as rendered: `migrator`'s pools in session mode, and `shop__main__ro` as a replica. Tests in `tests/render.rs`:
   - `render_is_deterministic`, `render_golden_two_projects_three_branches` (goldens in `tests/golden/pgdog/`), `ungranted_role_absent_from_users`, `ro_endpoint_rendered_as_replica`, `pool_size_follows_cu`;
   - `sharded_project_is_left_out`, `plain_settings_and_addressless_endpoints` and `records_are_read_from_the_store`.
+
+### Task 21 rulings (2026-10-16)
+
+- **R21.1 The sidecar.** `crates/loams-pgdog-sync` builds `pgdog-config-sync` (Apache-2.0, a separate process; PgDog stays unmodified).
+  - It listens on 7695 with mutual TLS only: a client certificate must chain to the configured CA (`pg-control`'s), and anything else fails the handshake, because the files hold secrets (R20.5).
+  - Routes: `PUT /v1/config` (JSON `{generation, pgdog_toml, users_toml}`, at most 16 MiB) and `GET /v1/generation` (the plan's `GET /generation`, versioned).
+  - Each file goes to a temporary file in the same directory, is fsynced, and is renamed over the old one, so a reader sees a whole old or a whole new file; the generation is written last.
+  - At start, `--persisted` (the mounted Secret) is copied in unless the directory already holds a generation, so a restarted PgDog serves the last pushed config before `pg-control` pushes again.
+- **R21.2 The generation is Task 20's digest of both files**, not a counter. Identical records give the same generation on every `pg-control` instance and after a restart, so the acknowledgement is "the sink answers the rendered generation".
+- **R21.3 Where the applied generation lives.** RT1's `ConfigPush` machine is not built, so `PgDogPusher` keeps the generation each replica applied (sent, acknowledged, reloaded) in memory. After a restart it knows none, so the first drift check pushes every replica once; that is harmless, because `RELOAD` keeps live connections (R18.6).
+- **R21.4 Drift.** The pinned PgDog's `SHOW DATABASES` answers one empty column and `SHOW USERS` gives nothing to compare with a render (R18.7). So a replica has drifted when its sink holds another generation than the records render, or when this pusher has not reloaded it at that generation (a failed `RELOAD`). `PgDogAdmin::show_databases` answers the distinct `database` of `SHOW POOLS`.
+- **R21.5 Order per replica:** send, poll the sink's generation (every 100 ms, up to 5 s), then `RELOAD`. A replica that does not acknowledge is never reloaded and is reported in `Pushed::failed`; the other replicas still get the push.
+- **R21.6 Compose and single node.** `DirSink` writes `<root>/<namespace>/`, which PgDog's container mounts as a directory (not as single files, so the renames are visible inside it), then sends `RELOAD`. `it_pgdog` checks this against the pinned PgDog: a pushed read-only endpoint shows in `SHOW POOLS` without a restart.
+- **R21.7 The idle monitor** counts `sv_active + cl_waiting` (R18.7's carry); `PoolRow.cl_active` is gone.
+- **R21.8 What waits.**
+  - Task 22, which deploys PgDog: the binary's flags, the kicks (a store watch on the namespace's records into `PgDogPusher::run`), a periodic `resync`, and the sidecar's image and Helm templates. Until then nothing runs PgDog, and `pg-control` keeps `NoPgDog`.
+  - Task 23: the admin connection is plaintext until then.
+  - Task 24: credentials. `NoCredentials` renders no users.
+  - `run` pushes due namespaces one after another, so one slow replica (up to the 5 s acknowledgement timeout) delays the others. Task 22 decides whether to push namespaces concurrently.
+- Tests: `crates/loams-pgdog-sync/tests/sync.rs` (`sync_writes_atomically`, `sync_requires_mtls`, `pgdog_restart_loads_persisted_copy`); `tests/push.rs` (`push_debounces`, `reload_after_generation_ack`, `drift_triggers_repush`, `failed_reload_is_retried_by_resync`, `sidecar_sink_pushes_over_mtls`, `dir_sink_writes_the_namespace_directory`); `tests/it_pgdog.rs` (`it_reload_picks_up_a_pushed_change`, ignored by default, run locally with Podman).

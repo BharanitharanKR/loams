@@ -8526,8 +8526,10 @@ dependencies = [
  "async-trait",
  "axum 0.8.9",
  "base64 0.23.1",
+ "bytes",
  "futures",
  "hex",
+ "http-body-util",
  "hyper",
  "hyper-util",
  "jsonwebtoken",
@@ -8537,6 +8539,7 @@ dependencies = [
  "loams-common",
  "loams-kv",
  "loams-pg-control",
+ "loams-pgdog-sync",
  "loams-postgres",
  "postcard",
  "proptest",
@@ -8544,6 +8547,7 @@ dependencies = [
  "rcgen",
  "reqwest 0.13.5",
  "ring",
+ "rustls",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -8553,6 +8557,7 @@ dependencies = [
  "time",
  "tokio",
  "tokio-postgres",
+ "tokio-rustls",
  "toml 0.8.23",
  "tower 0.5.3",
  "tracing",
@@ -8561,6 +8566,27 @@ dependencies = [
  "url",
  "x509-parser",
  "zeroize",
+]
+
+[[package]]
+name = "loams-pgdog-sync"
+version = "0.1.0-preview.2"
+dependencies = [
+ "bytes",
+ "clap",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "rcgen",
+ "rustls",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
