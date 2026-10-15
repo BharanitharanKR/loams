@@ -137,6 +137,10 @@ services:
       - loams-data:/var/lib/loams
       - house-data:/var/lib/loams-house
       - pg-control-data:/var/lib/loams-pg-control
+      # Upgrade snapshots (design §54 §7.3): mode 0700, kept on this host,
+      # never uploaded. LOAMS_UPGRADE_SNAPSHOT_DIR puts them in a host
+      # directory instead of the volume.
+      - ${LOAMS_UPGRADE_SNAPSHOT_DIR:-upgrade-snapshots}:/var/lib/loams-upgrade-snapshots
     depends_on:
       pd:
         condition: service_healthy
@@ -491,3 +495,4 @@ volumes:
   pg-control-data:
   pg-runner-data:
   pg-runner-token:
+  upgrade-snapshots:

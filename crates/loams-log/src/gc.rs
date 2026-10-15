@@ -419,7 +419,15 @@ impl GcTask {
     /// once a later listing finds it empty.
     async fn retired(&self, ctx: &TaskContext, report: &mut GcReport) -> Result<(), TaskError> {
         let config = &self.shared.config;
-        let grace = millis(config.grace);
+        // An upgrade snapshot's state may name an object retired after it
+        // was taken: keep those while it is kept (UP1 Task 8).
+        let grace = match loams_common::meta::snapshot_gc_floor(&*ctx.meta).await? {
+            Some(floor) => {
+                let now = ctx.meta.clock_ms(Consistency::Linearizable).await?;
+                millis(config.grace).max(now.saturating_sub(floor))
+            }
+            None => millis(config.grace),
+        };
         let due: Vec<String> = ctx.meta.retired_expired(grace).await?;
         let mut budget = config.list_page;
         let mut objects = Vec::new();
@@ -499,6 +507,10 @@ impl GcTask {
             .map(|n| n.id)
             .collect();
         let grace = millis(config.grace);
+        // Objects an upgrade snapshot may name are kept while it is (UP1
+        // Task 8).
+        let floor = loams_common::meta::snapshot_gc_floor(&*ctx.meta).await?;
+        let pinned = |written_ms: u64| loams_common::meta::pinned_by(floor, written_ms);
         for namespace in namespaces {
             if ctx.cancel.is_cancelled() {
                 return Ok(());
@@ -514,6 +526,7 @@ impl GcTask {
                 .iter()
                 .filter(|info| info.path.ends_with(".seg"))
                 .map(|info| (info.path.clone(), object_time_ms(info)))
+                .filter(|(_, written)| !pinned(*written))
                 .collect();
             if !candidates.is_empty() {
                 let limit = config.list_page;
@@ -553,6 +566,7 @@ impl GcTask {
                             .any(|p| info.path.starts_with(p.as_str()))
                     })
                     .filter(|info| root.object_time_ms(info).saturating_add(grace) <= now)
+                    .filter(|info| !pinned(root.object_time_ms(info)))
                     .map(|info| info.path.clone())
                     .take(config.list_page)
                     .collect();

@@ -58,6 +58,40 @@ pub(crate) enum MigrateCommand {
         #[arg(long, value_enum, default_value_t = Output::Json)]
         output: Output,
     },
+    /// Snapshot the Loams-owned stores (writers stopped) into `<to>/<id>/`,
+    /// and record it as a GC root.
+    Snapshot {
+        #[command(flatten)]
+        stores: StoreArgs,
+        /// The snapshots directory (mode 0700).
+        #[arg(long)]
+        to: PathBuf,
+        /// agentd's data directory, when the stack runs it.
+        #[arg(long)]
+        agentd_dir: Option<PathBuf>,
+        #[arg(long)]
+        target_release: Option<String>,
+        #[arg(long, value_enum, default_value_t = Output::Json)]
+        output: Output,
+    },
+    /// Restore the Loams-owned stores from a snapshot directory (the stack
+    /// stopped). Refuses an incomplete or corrupt snapshot.
+    Restore {
+        #[command(flatten)]
+        stores: StoreArgs,
+        /// The snapshot's directory (`<snapshots>/<id>`).
+        #[arg(long)]
+        from: PathBuf,
+        #[arg(long)]
+        agentd_dir: Option<PathBuf>,
+        #[arg(long, value_enum, default_value_t = Output::Json)]
+        output: Output,
+    },
+    /// List or prune snapshots.
+    Snapshots {
+        #[command(subcommand)]
+        command: SnapshotsCommand,
+    },
     /// The read probes of every product (and the engine's, with --engine).
     Verify {
         #[command(flatten)]
@@ -69,6 +103,27 @@ pub(crate) enum MigrateCommand {
         target_release: Option<String>,
         #[arg(long, value_enum, default_value_t = Output::Json)]
         output: Output,
+    },
+}
+
+/// `loams migrate snapshots …`.
+#[derive(Debug, Subcommand)]
+// Parsed once per process: the size of a variant does not matter.
+#[allow(clippy::large_enum_variant)]
+pub(crate) enum SnapshotsCommand {
+    /// Every snapshot under the directory: ids, sizes and digests only.
+    List {
+        #[arg(long)]
+        dir: PathBuf,
+    },
+    /// Remove a snapshot: its GC root, then its files.
+    Prune {
+        #[command(flatten)]
+        stores: StoreArgs,
+        #[arg(long)]
+        dir: PathBuf,
+        #[arg(long)]
+        id: String,
     },
 }
 
@@ -265,11 +320,45 @@ async fn durable_resonate(_data_dir: &Path) -> Result<bool, String> {
 pub(crate) async fn run(command: MigrateCommand) -> ExitCode {
     let started = Instant::now();
     let stores = match &command {
+        MigrateCommand::Snapshots {
+            command: SnapshotsCommand::List { dir },
+        } => return list_snapshots(dir),
         MigrateCommand::Run { stores, .. }
         | MigrateCommand::Plan { stores, .. }
         | MigrateCommand::Status { stores, .. }
+        | MigrateCommand::Snapshot { stores, .. }
+        | MigrateCommand::Restore { stores, .. }
+        | MigrateCommand::Snapshots {
+            command: SnapshotsCommand::Prune { stores, .. },
+        }
         | MigrateCommand::Verify { stores, .. } => stores,
     };
+    let raft_dir = embedded_meta_dir(stores);
+    // The embedded metastore's directory is copied, or put back, while no
+    // node has it open.
+    let mut staged_raft = None;
+    match &command {
+        MigrateCommand::Snapshot { to, .. } => {
+            if let Some(meta_dir) = raft_dir.as_ref().filter(|d| d.exists()) {
+                match loams_migrate::snapshot::stage_raft(meta_dir, to) {
+                    Ok(staged) => staged_raft = Some(staged),
+                    Err(err) => {
+                        eprintln!("loams migrate: {err}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            }
+        }
+        MigrateCommand::Restore { from, .. } => {
+            if let Some(meta_dir) = &raft_dir
+                && let Err(err) = loams_migrate::snapshot::restore_raft(from, meta_dir)
+            {
+                eprintln!("loams migrate: {err}");
+                return snapshot_exit(&err);
+            }
+        }
+        _ => {}
+    }
     let open = match open(stores).await {
         Ok(open) => open,
         Err(err) => {
@@ -277,12 +366,51 @@ pub(crate) async fn run(command: MigrateCommand) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let code = execute(&command, &open.cx, started).await;
+    let code = execute(&command, &open.cx, started, staged_raft.as_deref()).await;
     open.close().await;
+    if let Some(staged) = staged_raft {
+        let _ = std::fs::remove_dir_all(staged);
+    }
     code
 }
 
-async fn execute(command: &MigrateCommand, cx: &Cx, started: Instant) -> ExitCode {
+/// `<data-dir>/meta` when the metastore is the embedded one.
+fn embedded_meta_dir(stores: &StoreArgs) -> Option<PathBuf> {
+    match stores.meta.clone().unwrap_or_default() {
+        MetaBackend::Raft => Some(stores.data_dir.join("meta")),
+        #[cfg(feature = "tikv")]
+        MetaBackend::Tikv(_) => None,
+    }
+}
+
+fn snapshot_exit(err: &loams_migrate::snapshot::SnapshotError) -> ExitCode {
+    use loams_migrate::snapshot::SnapshotError;
+    match err {
+        SnapshotError::Incomplete(_) | SnapshotError::Corrupt(_) => ExitCode::from(78),
+        SnapshotError::NotFound(_) => ExitCode::from(66),
+        SnapshotError::Io(_) => ExitCode::FAILURE,
+    }
+}
+
+fn list_snapshots(dir: &Path) -> ExitCode {
+    match loams_migrate::snapshot::list(dir) {
+        Ok(listed) => {
+            println!("{}", serde_json::to_value(&listed).unwrap_or_default());
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("loams migrate: {err}");
+            snapshot_exit(&err)
+        }
+    }
+}
+
+async fn execute(
+    command: &MigrateCommand,
+    cx: &Cx,
+    started: Instant,
+    staged_raft: Option<&Path>,
+) -> ExitCode {
     let path = UpgradePath::compiled();
     let runner = Runner::new(MIGRATIONS, path);
     match command {
@@ -386,6 +514,77 @@ async fn execute(command: &MigrateCommand, cx: &Cx, started: Instant) -> ExitCod
                 }
             }
         }
+        MigrateCommand::Snapshot {
+            to,
+            agentd_dir,
+            target_release,
+            output,
+            ..
+        } => {
+            let opts = loams_migrate::snapshot::SnapshotOptions {
+                target_release: target_release
+                    .clone()
+                    .unwrap_or_else(|| this_release().to_string()),
+                raft_dir: staged_raft.map(Path::to_path_buf),
+                agentd_dir: agentd_dir.clone(),
+                extra: Vec::new(),
+            };
+            match loams_migrate::snapshot::snapshot(cx, to, &opts).await {
+                Ok(manifest) => {
+                    let value = json!({
+                        "id": manifest.id,
+                        "dir": to.join(&manifest.id),
+                        "created_at_ms": manifest.created_at_ms,
+                        "release": manifest.release,
+                        "components": manifest.components,
+                    });
+                    print(*output, &value, || {
+                        format!("loams migrate: snapshot {} taken", manifest.id)
+                    });
+                    ExitCode::SUCCESS
+                }
+                Err(err) => {
+                    eprintln!("loams migrate: {err}");
+                    snapshot_exit(&err)
+                }
+            }
+        }
+        MigrateCommand::Restore {
+            from,
+            agentd_dir,
+            output,
+            ..
+        } => match loams_migrate::snapshot::restore(cx, from, None, agentd_dir.as_deref()).await {
+            Ok(mut report) => {
+                if staged_raft.is_none() && embedded_restored(from) {
+                    report.restored.insert(0, "raft".to_string());
+                }
+                let value = serde_json::to_value(&report).unwrap_or_default();
+                print(*output, &value, || {
+                    format!("loams migrate: restored {}", report.restored.join(", "))
+                });
+                ExitCode::SUCCESS
+            }
+            Err(err) => {
+                eprintln!("loams migrate: {err}");
+                snapshot_exit(&err)
+            }
+        },
+        MigrateCommand::Snapshots {
+            command: SnapshotsCommand::Prune { dir, id, .. },
+        } => match loams_migrate::snapshot::prune(cx, dir, id).await {
+            Ok(()) => {
+                println!("{}", json!({"pruned": id}));
+                ExitCode::SUCCESS
+            }
+            Err(err) => {
+                eprintln!("loams migrate: {err}");
+                snapshot_exit(&err)
+            }
+        },
+        MigrateCommand::Snapshots {
+            command: SnapshotsCommand::List { .. },
+        } => unreachable!("listed without the stores"),
         MigrateCommand::Status { output, .. } => match status(cx).await {
             Ok(value) => {
                 print(*output, &value, || value.to_string());
@@ -427,6 +626,13 @@ async fn execute(command: &MigrateCommand, cx: &Cx, started: Instant) -> ExitCod
             }
         }
     }
+}
+
+/// Whether snapshot `from` holds the embedded metastore (restored before
+/// the node opened).
+fn embedded_restored(from: &Path) -> bool {
+    loams_migrate::snapshot::SnapshotManifest::read(from)
+        .is_ok_and(|m| m.components.iter().any(|c| c.store == "raft"))
 }
 
 /// The stack record and the ledger as JSON.

@@ -593,9 +593,15 @@ impl ManifestStore {
         let current_ulid = ulid_of(&current.key);
         let referenced = current.manifest.keys();
         let grace_ms = u64::try_from(grace.as_millis()).unwrap_or(u64::MAX);
+        // Objects an upgrade snapshot may name stay while it is kept (UP1
+        // Task 8).
+        let floor = loams_common::meta::snapshot_gc_floor(&*self.meta)
+            .await
+            .map_err(|err| unavailable("reading the upgrade snapshots", &err))?;
         let mut deleted = 0;
         for object in &objects {
-            let aged = object.last_modified_ms.saturating_add(grace_ms) <= current_written;
+            let aged = object.last_modified_ms.saturating_add(grace_ms) <= current_written
+                && !loams_common::meta::pinned_by(floor, object.last_modified_ms);
             let stale = if object.path.starts_with(&manifests) {
                 object.path != current.key
                     && matches!((ulid_of(&object.path), current_ulid), (Some(a), Some(b)) if a < b)
@@ -634,16 +640,26 @@ impl ManifestStore {
             .list(&prefix)
             .await
             .map_err(|err| unavailable("listing a purged graph's objects", &err))?;
+        // An upgrade snapshot taken while the graph lived may restore it:
+        // its objects stay while the snapshot is kept (UP1 Task 8).
+        let floor = loams_common::meta::snapshot_gc_floor(&*self.meta)
+            .await
+            .map_err(|err| unavailable("reading the upgrade snapshots", &err))?;
+        let mut deleted = 0;
         for object in &objects {
+            if loams_common::meta::pinned_by(floor, object.last_modified_ms) {
+                continue;
+            }
             self.store
                 .delete(&object.path)
                 .await
                 .map_err(|err| unavailable("deleting a purged graph's objects", &err))?;
+            deleted += 1;
         }
         if let Ok(mut cache) = self.cache.lock() {
             cache.remove(&graph);
         }
-        Ok(objects.len())
+        Ok(deleted)
     }
 }
 
