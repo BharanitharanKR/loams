@@ -13,7 +13,8 @@ use loams_house_ipc::{Execute, Limits, Output};
 
 use crate::admission::{Outcome, WorkerLease, WorkerPool};
 use crate::catalog::Lake;
-use crate::classify::{Expect, Stmt, decide};
+use crate::classify::{Classified, Expect, Stmt, decide};
+use crate::config::UserMap;
 use crate::ddl::{self, ChColumn, Described, Kind, Oracle};
 use crate::deny;
 use crate::errors::{ChError, HouseError};
@@ -61,6 +62,49 @@ pub fn admit(
         deny::check(&tree).map_err(HouseError::from)?;
     }
     decide(classification, expect, readonly, unparsed)
+}
+
+/// The scopes a statement needs (HS1 Task 20, §49 §14).
+pub fn required(stmt: &Stmt) -> &'static [crate::identity::Scope] {
+    use crate::identity::Scope::{Ddl, Read, Write};
+    match stmt {
+        Stmt::Query { .. }
+        | Stmt::Show { .. }
+        | Stmt::Describe { .. }
+        | Stmt::Exists { .. }
+        | Stmt::Explain { .. }
+        | Stmt::Use(_)
+        | Stmt::Set(_)
+        | Stmt::CreateTemporaryTable { .. }
+        | Stmt::KillQuery(_)
+        | Stmt::Unsupported { .. } => &[Read],
+        Stmt::Drop(drop) if drop.temporary => &[Read],
+        Stmt::Insert(_) | Stmt::Optimize { .. } => &[Write],
+        Stmt::CreateTableAs { .. } => &[Ddl, Write],
+        Stmt::CreateDatabase { .. }
+        | Stmt::CreateTable { .. }
+        | Stmt::CreatePipe { .. }
+        | Stmt::CreateMaterializedView { .. }
+        | Stmt::Drop(_)
+        | Stmt::Truncate { .. }
+        | Stmt::AlterAddColumns { .. }
+        | Stmt::Rename { .. }
+        | Stmt::Undrop { .. } => &[Ddl],
+    }
+}
+
+/// `497` unless the identity holds every scope the statement needs (HS1 Task
+/// 20). A statement only ClickHouse's parser can read is a query here (it is
+/// held to reads further on).
+pub fn authorize(user: &UserMap, classified: &Classified) -> Result<(), HouseError> {
+    let (needed, what): (&[crate::identity::Scope], String) = match classified {
+        Classified::Known { stmt, .. } => (required(stmt), stmt.kind().to_string()),
+        Classified::Unparsed { .. } => (&[crate::identity::Scope::Read], "Query".to_string()),
+    };
+    match needed.iter().find(|scope| !user.scopes.has(**scope)) {
+        Some(scope) => Err(crate::identity::lacks(user, *scope, &what)),
+        None => Ok(()),
+    }
 }
 
 /// The task that will serve an owned statement this front does not yet (`48`).
@@ -222,13 +266,14 @@ pub enum CatalogOutcome {
 pub async fn catalog_answer(
     lake: Option<&Lake>,
     pool: &WorkerPool,
-    namespace: u64,
+    user: &UserMap,
     current: &str,
     stmt: &Stmt,
     text: &str,
     session: Option<&SessionGuard>,
     query_id: &str,
 ) -> Result<CatalogOutcome, HouseError> {
+    let namespace = user.namespace;
     let Some(lake) = lake else {
         return Ok(CatalogOutcome::NotOurs);
     };
@@ -240,14 +285,23 @@ pub async fn catalog_answer(
         return Ok(CatalogOutcome::Done);
     }
     if let Stmt::CreateTableAs { .. } = stmt {
-        return Ok(CatalogOutcome::CreateAs(Box::new(
-            crate::insert::CreateAs::parse(text, current)?,
-        )));
+        let plan = crate::insert::CreateAs::parse(text, current)?;
+        if !crate::identity::granted(user, &plan.database, &plan.name) {
+            return Err(crate::identity::not_granted(
+                user,
+                &plan.database,
+                &plan.name,
+            ));
+        }
+        return Ok(CatalogOutcome::CreateAs(Box::new(plan)));
     }
     if let Stmt::Truncate { .. } = stmt
         && let Some(((db, name), if_exists)) = crate::ddl::parse_truncate(text)
     {
         let database = db.unwrap_or_else(|| current.to_string());
+        if !crate::identity::granted(user, &database, &name) {
+            return Err(crate::identity::not_granted(user, &database, &name));
+        }
         let table = if lake.database_exists(namespace, &database).await? {
             lake.load(namespace, &database, &name).await?
         } else {
@@ -272,7 +326,7 @@ pub async fn catalog_answer(
     }
     if let Stmt::Insert(insert) = stmt {
         return Ok(
-            match crate::insert::target(lake, namespace, current, insert).await? {
+            match crate::insert::target(lake, user, current, insert).await? {
                 Some(target) => CatalogOutcome::Insert(Box::new(target)),
                 None => CatalogOutcome::NotOurs,
             },
@@ -281,6 +335,39 @@ pub async fn catalog_answer(
     let Some(kind) = catalog_kind(stmt) else {
         return Ok(CatalogOutcome::NotOurs);
     };
+    // The identity's grants (HS1 Task 20): DDL on a table or database outside
+    // them is `497`; a table outside them is as unknown to `DESCRIBE`, `SHOW
+    // CREATE` and `EXISTS` as a missing one.
+    for object in ddl::touched(kind, text, current) {
+        let allowed = match &object {
+            ddl::Object::Table((db, name)) => {
+                crate::identity::granted(user, db.as_deref().unwrap_or(current), name)
+            }
+            ddl::Object::Database(database) => crate::identity::granted_database(user, database),
+        };
+        if allowed {
+            continue;
+        }
+        return match (kind, object) {
+            (Kind::Exists, _) => Ok(CatalogOutcome::Rows(
+                "SELECT toUInt8(0) AS result".to_string(),
+            )),
+            (Kind::Describe | Kind::Show, ddl::Object::Table((db, name))) => {
+                Err(HouseError::from(ChError::unknown_table(format!(
+                    "Table {}.{name} does not exist",
+                    db.as_deref().unwrap_or(current)
+                ))))
+            }
+            (_, ddl::Object::Table((db, name))) => Err(crate::identity::not_granted(
+                user,
+                db.as_deref().unwrap_or(current),
+                &name,
+            )),
+            (_, ddl::Object::Database(database)) => {
+                Err(crate::identity::not_granted(user, &database, "*"))
+            }
+        };
+    }
     let mut oracle = WorkerOracle::new(pool, namespace, query_id);
     let answer = ddl::execute(lake, namespace, current, kind, text, &mut oracle).await;
     oracle.finish();
@@ -518,7 +605,7 @@ pub async fn read_plan(
     lake: Option<&Lake>,
     namespace: u64,
     database: &str,
-    user: &str,
+    user: &UserMap,
     lease: &mut WorkerLease,
     analysis: &loams_house_ipc::Analysis,
     sql: &str,
@@ -529,7 +616,8 @@ pub async fn read_plan(
             lake,
             namespace,
             database,
-            user,
+            user: &user.user,
+            grants: user.grants.as_ref(),
         },
         lease,
         analysis,

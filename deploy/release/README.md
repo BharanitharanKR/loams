@@ -62,8 +62,9 @@ down`; add `--volumes` to delete the data.
 
 ```sh
 echo 'LOAMS_HOUSE_ENDPOINT=https://house:8443' >> .env          # wire the engine to it
+echo 'HOUSE_PRINCIPALS=tailscale:you@example.com=read+write+ddl' >> .env   # who may use it
 docker compose --profile house up -d house house-tailscale loams
-docker compose exec house cat /var/lib/loams-house-link/house.key   # user `default`'s password
+docker compose exec house cat /var/lib/loams-house/house.key   # user `default`'s password
 curl -u "default:$PASSWORD" https://loams-house.<tailnet>.ts.net/ --data-binary 'SELECT 1'
 ```
 
@@ -72,10 +73,13 @@ network namespace, serves it on the tailnet as `HOUSE_TS_HOSTNAME`
 (`loams-house`), with `HOUSE_TS_AUTHKEY` (or a reusable `TS_AUTHKEY`). Its TLS
 listener (8443, HS1 Task 20) is the engine's link: on `house-link`, a network
 only the engine and the House join, with a certificate the House makes on first
-start. The engine trusts that certificate alone and signs in with the House's
-key, both in the `house-link` volume, after its own auth has let the caller in;
-with `LOAMS_HOUSE_ENDPOINT` set, `loams.house.v1` and the console's House page
-reach the House. The link needs `loams` and `loams-fabric` images built after
+start. The engine trusts that certificate alone and signs in with the link key,
+both in the `house-link` volume, after its own auth has let the caller in, and
+names that caller's Loams principal. The House gives each principal the scopes
+(`read`, `write`, `ddl`, `admin`) `HOUSE_PRINCIPALS` lists; a principal not
+listed has no House access, and every statement is recorded with its principal
+in `/var/lib/loams-house/audit.log`. With `LOAMS_HOUSE_ENDPOINT` set,
+`loams.house.v1` and the console's House page reach the House. The link needs `loams` and `loams-fabric` images built after
 0.1.0-preview.2. The House is also on the `house` network, which nothing else
 joins. Workers run sealed: `HOUSE_SANDBOX=pods` (default;
 Landlock with TCP rules on Linux 6.7 or later, and seccomp) or `netns` (adds a

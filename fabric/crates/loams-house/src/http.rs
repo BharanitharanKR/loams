@@ -725,6 +725,44 @@ struct Meta {
     worker: Option<String>,
     /// `X-Loams-Snapshot-Id` after a lake write (`table=id`, HS1 Task 12).
     snapshot: Option<String>,
+    /// The statement's audit record (HS1 Task 20), written once, when the
+    /// response's head is built.
+    audit: Option<Arc<Audit>>,
+}
+
+/// A statement's audit record on its way to the sink.
+#[derive(Debug)]
+struct Audit {
+    sink: Arc<dyn crate::audit::AuditSink>,
+    event: std::sync::Mutex<Option<crate::audit::AuditEvent>>,
+}
+
+impl Audit {
+    fn new(sink: &Arc<dyn crate::audit::AuditSink>, query_id: &str) -> Self {
+        Self {
+            sink: Arc::clone(sink),
+            event: std::sync::Mutex::new(Some(crate::audit::AuditEvent::now("http", query_id))),
+        }
+    }
+
+    fn update(&self, change: impl FnOnce(&mut crate::audit::AuditEvent)) {
+        if let Some(event) = self
+            .event
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_mut()
+        {
+            change(event);
+        }
+    }
+
+    fn finish(&self, code: i32) {
+        let taken = self.event.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(mut event) = taken {
+            event.code = code;
+            self.sink.record(&event);
+        }
+    }
 }
 
 impl Meta {
@@ -738,6 +776,9 @@ impl Meta {
         last: &Progress,
         close: bool,
     ) -> http::response::Builder {
+        if let Some(audit) = &self.audit {
+            audit.finish(code.unwrap_or(0));
+        }
         let mut builder = Response::builder()
             .status(status)
             .header("Content-Type", content_type)
@@ -869,6 +910,7 @@ async fn handle(shared: Arc<Shared>, request: Request<Incoming>) -> Response<Hou
                 affinity: None,
                 worker: None,
                 snapshot: None,
+                audit: None,
             };
             return meta.error(&err, &Progress::default(), true);
         }
@@ -939,7 +981,32 @@ async fn run(
         affinity: None,
         worker: None,
         snapshot: None,
+        audit: None,
     };
+    // Every statement's audit record (HS1 Task 20): the claimed user and
+    // principal now, the signed-in identity once known.
+    if let Some(sink) = &config.audit {
+        let audit = Audit::new(sink, &meta.query_id);
+        let pairs: Vec<(String, String)> = parts
+            .headers
+            .iter()
+            .filter_map(|(k, v)| {
+                v.to_str()
+                    .ok()
+                    .map(|v| (k.as_str().to_string(), v.to_string()))
+            })
+            .collect();
+        audit.update(|event| {
+            event.user = auth::credentials(&pairs, &params)
+                .map(|c| c.user)
+                .unwrap_or_default();
+            event.principal = pairs
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case(crate::identity::PRINCIPAL_HEADER))
+                .map(|(_, v)| v.clone());
+        });
+        meta.audit = Some(Arc::new(audit));
+    }
     let mut body = RequestBody::new(body, config.receive_timeout);
 
     // Everything before a worker: who, what, and how.
@@ -952,6 +1019,7 @@ async fn run(
         parts.method == Method::POST,
         &known,
         shared.lake.is_some(),
+        meta.audit.as_deref(),
     )
     .await;
     let prepared = match prepared {
@@ -1057,7 +1125,7 @@ async fn run(
                 gate::catalog_answer(
                     lake.map(Arc::as_ref),
                     &shared.pool,
-                    user.namespace,
+                    &user,
                     &current_database,
                     stmt,
                     &sql,
@@ -1240,7 +1308,7 @@ async fn run(
             shared.lake.as_deref(),
             user.namespace,
             &current_database,
-            &user.user,
+            &user,
             &mut lease,
             &analysis,
             &sql,
@@ -1307,6 +1375,7 @@ struct Prepared {
     first_data: Vec<u8>,
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn prepare(
     config: &HouseConfig,
     headers: &http::HeaderMap,
@@ -1315,6 +1384,7 @@ async fn prepare(
     post: bool,
     known: &std::collections::HashSet<String>,
     has_lake: bool,
+    audit: Option<&Audit>,
 ) -> Result<Prepared, HouseError> {
     let get = |name: &str| {
         params
@@ -1330,8 +1400,7 @@ async fn prepare(
                 .map(|v| (k.as_str().to_string(), v.to_string()))
         })
         .collect();
-    let credentials = auth::credentials(&header_pairs, params)?;
-    let user = auth::authenticate(&config.users, &credentials)?.clone();
+    let user = auth::identify(config, &header_pairs, params)?;
     for name in ["compress", "decompress"] {
         if get(name) == Some("1") {
             return Err(HouseError::from(ChError::not_implemented(format!(
@@ -1398,9 +1467,24 @@ async fn prepare(
         }
         None => classify(&plan.sql)?,
     };
+    // Audited with what it is before GET's and a read-only user's rule
+    // (`164`, as ClickHouse) and the identity's scopes (`497`, HS1 Task 20)
+    // decide.
+    if let Some(audit) = audit {
+        audit.update(|event| {
+            event.user = user.user.clone();
+            event.principal = user.principal.clone();
+            event.namespace = Some(user.namespace);
+            event.statement = Some(match &classified {
+                Classified::Known { stmt, .. } => stmt.kind().to_string(),
+                Classified::Unparsed { .. } => "Unparsed".to_string(),
+            });
+        });
+    }
     if readonly && matches!(&classified, Classified::Known { stmt, .. } if !stmt.is_read()) {
         return Err(readonly_error());
     }
+    gate::authorize(&user, &classified)?;
     let format = match &classified {
         Classified::Known { format, .. } | Classified::Unparsed { format, .. } => {
             format.clone().or(plan.format)
@@ -1576,7 +1660,7 @@ async fn lake_insert(
         pool: &shared.pool,
         namespace: user.namespace,
         database: &write.database,
-        user: &user.user,
+        user,
         query_id: &meta.query_id,
         params: &write.params,
         settings: &write.settings,

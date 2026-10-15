@@ -88,6 +88,14 @@ pub struct HouseConfig {
     /// The TLS listener (8443, HS1 Task 20), which may face other hosts:
     /// where it listens and its rustls configuration ([`crate::tls`]).
     pub tls: Option<TlsListener>,
+    /// The Loams principals the engine's link acts for (HS1 Task 20).
+    pub principals: Vec<crate::identity::PrincipalMap>,
+    /// Who an unmapped principal acts as; `None` (the default): nobody, it
+    /// has no House access. Only `--single-node --dev-unmapped-principals`
+    /// sets it.
+    pub unmapped_principals: Option<UserMap>,
+    /// Where every statement's audit record goes (HS1 Task 20); `None`, nowhere.
+    pub audit: Option<std::sync::Arc<dyn crate::audit::AuditSink>>,
 }
 
 /// A TLS listener (HS1 Task 20).
@@ -118,6 +126,9 @@ impl Default for HouseConfig {
             spool_budget_bytes: 8 * 1024 * 1024 * 1024,
             lake_insert_max_bytes: crate::insert::DEFAULT_MAX_INSERT_BYTES,
             tls: None,
+            principals: Vec::new(),
+            unmapped_principals: None,
+            audit: None,
             default_buffer_size: 1024 * 1024,
             max_query_size: 256 * 1024,
             receive_timeout: Duration::from_secs(30),
@@ -175,17 +186,44 @@ pub struct UserMap {
     pub namespace: u64,
     /// Whether the user may only read (as GET does for everyone).
     pub readonly: bool,
+    /// What it may do (HS1 Task 20, [`crate::identity`]).
+    pub scopes: crate::identity::Scopes,
+    /// The tables it may touch; `None`, every table of its namespace.
+    pub grants: Option<crate::identity::Grants>,
+    /// The engine's link: it acts for the Loams principal each request names.
+    pub link: bool,
+    /// The Loams principal this identity acts for, when the engine's link
+    /// named one (what the audit records).
+    pub principal: Option<String>,
 }
 
 impl UserMap {
-    /// A user from a clear-text password, hashed here.
+    /// A user from a clear-text password, hashed here: every scope, or `read`
+    /// alone when `readonly`; every table of its namespace.
     pub fn dev(user: &str, password: &str, namespace: u64, readonly: bool) -> Self {
         Self {
             user: user.to_string(),
             password_sha256: sha256_hex(password),
             namespace,
             readonly,
+            scopes: if readonly {
+                crate::identity::Scopes::READ
+            } else {
+                crate::identity::Scopes::ALL
+            },
+            grants: None,
+            link: false,
+            principal: None,
         }
+    }
+
+    /// The engine's link user (HS1 Task 20): signs in with `key` and acts for
+    /// the principals of [`HouseConfig::principals`].
+    pub fn link(user: &str, key: &str) -> Self {
+        let mut link = Self::dev(user, key, 0, true);
+        link.scopes = crate::identity::Scopes::default();
+        link.link = true;
+        link
     }
 
     /// Whether `password` is this user's, compared in constant time over the digest.
@@ -209,6 +247,10 @@ impl fmt::Debug for UserMap {
             .field("password_sha256", &"[redacted]")
             .field("namespace", &self.namespace)
             .field("readonly", &self.readonly)
+            .field("scopes", &self.scopes)
+            .field("grants", &self.grants)
+            .field("link", &self.link)
+            .field("principal", &self.principal)
             .finish()
     }
 }
@@ -339,9 +381,14 @@ pub struct HouseSection {
     /// `--data-dir`: the spool, the workers' private directories and, with
     /// `--single-node`, the local catalog, bucket and key.
     pub data_dir: Option<PathBuf>,
-    /// Development users (FL2 Task 2's `UserMap`) until HS1 Task 20.
+    /// Users, with their scopes and tables (HS1 Task 20).
     #[serde(default)]
     pub users: Vec<FileUser>,
+    /// The Loams principals the engine's link acts for (HS1 Task 20).
+    #[serde(default)]
+    pub principals: Vec<FilePrincipal>,
+    /// The file the audit is appended to (HS1 Task 20); `--audit-log`.
+    pub audit_log: Option<PathBuf>,
     /// `[house.limits]`.
     #[serde(default)]
     pub limits: LimitsSection,
@@ -372,6 +419,16 @@ pub struct FileUser {
     /// Whether the user may only read.
     #[serde(default)]
     pub readonly: bool,
+    /// Its scopes (HS1 Task 20); absent, every scope (or `read` when
+    /// `readonly`).
+    #[serde(default)]
+    pub scopes: Option<Vec<String>>,
+    /// Its tables, `database.table` with `*` for any; absent, every table.
+    #[serde(default)]
+    pub tables: Option<Vec<String>>,
+    /// The engine's link: it acts for `[[house.principals]]`.
+    #[serde(default)]
+    pub link: bool,
 }
 
 impl fmt::Debug for FileUser {
@@ -382,18 +439,70 @@ impl fmt::Debug for FileUser {
             .field("password_sha256", &"[redacted]")
             .field("namespace", &self.namespace)
             .field("readonly", &self.readonly)
+            .field("scopes", &self.scopes)
+            .field("tables", &self.tables)
+            .field("link", &self.link)
             .finish()
     }
 }
 
 impl From<&FileUser> for UserMap {
+    /// [`HouseFile::parse`] has checked the scopes and grants.
     fn from(user: &FileUser) -> Self {
+        let scopes = match &user.scopes {
+            Some(list) => crate::identity::Scopes::parse(&list.join(",")).unwrap_or_default(),
+            None if user.readonly => crate::identity::Scopes::READ,
+            None => crate::identity::Scopes::ALL,
+        };
         Self {
             user: user.user.clone(),
             password_sha256: user.password_sha256.to_ascii_lowercase(),
             namespace: user.namespace,
-            readonly: user.readonly,
+            readonly: user.readonly || scopes.read_only(),
+            scopes: if user.link {
+                crate::identity::Scopes::default()
+            } else {
+                scopes
+            },
+            grants: user
+                .tables
+                .as_ref()
+                .map(|t| crate::identity::Grants::parse(t).unwrap_or_default()),
+            link: user.link,
+            principal: None,
         }
+    }
+}
+
+/// One `[[house.principals]]` entry (HS1 Task 20).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FilePrincipal {
+    /// The Loams principal (`tailscale:<login>`, `apikey:<id>`, `user:<sub>`,
+    /// `session:<id>`, `dev-loopback`) or `email:<address>`.
+    pub principal: String,
+    /// The namespace its statements run in.
+    pub namespace: u64,
+    /// Its scopes: `read`, `write`, `ddl`, `admin`.
+    pub scopes: Vec<String>,
+    /// Its tables, `database.table` with `*` for any; absent, every table.
+    #[serde(default)]
+    pub tables: Option<Vec<String>>,
+}
+
+impl FilePrincipal {
+    /// The principal's map, or why the entry is not valid.
+    pub fn to_map(&self) -> Result<crate::identity::PrincipalMap, String> {
+        Ok(crate::identity::PrincipalMap {
+            principal: self.principal.clone(),
+            namespace: self.namespace,
+            scopes: crate::identity::Scopes::parse(&self.scopes.join(","))?,
+            grants: self
+                .tables
+                .as_ref()
+                .map(crate::identity::Grants::parse)
+                .transpose()?,
+        })
     }
 }
 
@@ -549,6 +658,26 @@ impl HouseFile {
                     user.user
                 ))));
             }
+            let bad = |why: String| {
+                HouseError::from(ChError::bad_arguments(format!(
+                    "the house configuration file: user {:?}: {why}",
+                    user.user
+                )))
+            };
+            if let Some(scopes) = &user.scopes {
+                crate::identity::Scopes::parse(&scopes.join(",")).map_err(bad)?;
+            }
+            if let Some(tables) = &user.tables {
+                crate::identity::Grants::parse(tables).map_err(bad)?;
+            }
+        }
+        for principal in &file.house.principals {
+            principal.to_map().map_err(|why| {
+                HouseError::from(ChError::bad_arguments(format!(
+                    "the house configuration file: principal {:?}: {why}",
+                    principal.principal
+                )))
+            })?;
         }
         Ok(file)
     }

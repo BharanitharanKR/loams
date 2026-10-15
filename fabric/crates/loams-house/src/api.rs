@@ -128,6 +128,16 @@ impl HouseApi {
         HouseServiceExt::register(self, Router::new())
     }
 
+    /// The caller, who must hold the `read` scope (the browsing RPCs).
+    fn reader(&self, ctx: &RequestContext) -> Result<UserMap, ConnectError> {
+        let user = self.caller(ctx)?;
+        if !user.scopes.read {
+            let err = crate::identity::lacks(&user, crate::identity::Scope::Read, "browsing");
+            return Err(to_connect(&err));
+        }
+        Ok(user)
+    }
+
     /// The caller, from the request's credentials.
     fn caller(&self, ctx: &RequestContext) -> Result<UserMap, ConnectError> {
         let headers: Vec<(String, String)> = ctx
@@ -140,10 +150,22 @@ impl HouseApi {
                     .map(|v| (name.as_str().to_string(), v.to_string()))
             })
             .collect();
-        let credentials = auth::credentials(&headers, &[]).map_err(|err| to_connect(&err))?;
-        auth::authenticate(&self.config.users, &credentials)
-            .cloned()
-            .map_err(|err| to_connect(&err))
+        auth::identify(&self.config, &headers, &[]).map_err(|err| {
+            // A refused sign-in is audited too, with what it claimed (HS1 Task 20).
+            if let Some(sink) = &self.config.audit {
+                let mut event = crate::audit::AuditEvent::now("api", "");
+                event.user = auth::credentials(&headers, &[])
+                    .map(|c| c.user)
+                    .unwrap_or_default();
+                event.principal = headers
+                    .iter()
+                    .find(|(k, _)| k.eq_ignore_ascii_case(crate::identity::PRINCIPAL_HEADER))
+                    .map(|(_, v)| v.clone());
+                event.code = err.code();
+                sink.record(&event);
+            }
+            to_connect(&err)
+        })
     }
 }
 
@@ -462,13 +484,20 @@ impl HouseService for HouseApi {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::ListDatabasesRequest>,
     ) -> ServiceResult<pb::ListDatabasesResponse> {
-        let user = self.caller(&ctx)?;
+        let user = self.reader(&ctx)?;
         let request = request.to_owned_message();
-        let databases = self
+        let databases: Vec<pb::Database> = self
             .catalog
             .databases(user.namespace)
             .await
-            .map_err(|err| to_connect(&err))?;
+            .map_err(|err| to_connect(&err))?
+            .into_iter()
+            .filter(|d| {
+                user.grants
+                    .as_ref()
+                    .is_none_or(|g| g.mentions_database(&d.name))
+            })
+            .collect();
         let (databases, next_page_token) = page(databases, request.page_size, &request.page_token)?;
         Response::ok(pb::ListDatabasesResponse {
             databases,
@@ -482,16 +511,19 @@ impl HouseService for HouseApi {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::ListTablesRequest>,
     ) -> ServiceResult<pb::ListTablesResponse> {
-        let user = self.caller(&ctx)?;
+        let user = self.reader(&ctx)?;
         let request = request.to_owned_message();
         let filter = request.filter.to_lowercase();
+        let database = database_or_default(&request.database);
         let tables: Vec<pb::Table> = self
             .catalog
-            .tables(user.namespace, database_or_default(&request.database))
+            .tables(user.namespace, database)
             .await
             .map_err(|err| to_connect(&err))?
             .into_iter()
             .filter(|t| filter.is_empty() || t.name.to_lowercase().contains(&filter))
+            // A table outside the caller's grants is not listed (HS1 Task 20).
+            .filter(|t| crate::identity::granted(&user, database, &t.name))
             .collect();
         let (tables, next_page_token) = page(tables, request.page_size, &request.page_token)?;
         Response::ok(pb::ListTablesResponse {
@@ -506,10 +538,24 @@ impl HouseService for HouseApi {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::DescribeTableRequest>,
     ) -> ServiceResult<pb::DescribeTableResponse> {
-        let user = self.caller(&ctx)?;
+        let user = self.reader(&ctx)?;
         let request = request.to_owned_message();
         if request.table.is_empty() {
             return Err(invalid("table", "table is empty"));
+        }
+        // A table outside the caller's grants is as unknown as a missing one.
+        if !crate::identity::granted(
+            &user,
+            database_or_default(&request.database),
+            &request.table,
+        ) {
+            return Err(to_connect(&HouseError::from(ChError::unknown_table(
+                format!(
+                    "Table {}.{} does not exist",
+                    database_or_default(&request.database),
+                    request.table
+                ),
+            ))));
         }
         let described = self
             .catalog

@@ -1885,6 +1885,54 @@ pub enum Answer {
     PassThrough,
 }
 
+/// The tables and databases a catalog statement names (HS1 Task 20's
+/// grants), with an unqualified table in `current`. A statement whose names
+/// cannot be read names nothing here: [`execute`] answers it.
+pub fn touched(kind: Kind, text: &str, current: &str) -> Vec<Object> {
+    let table = |(db, name): QualifiedName| {
+        Object::Table((Some(db.unwrap_or_else(|| current.to_string())), name))
+    };
+    let qualify = |object: Object| match object {
+        Object::Table(name) => table(name),
+        database => database,
+    };
+    match kind {
+        Kind::CreateDatabase => parse_create_database(text)
+            .map(|c| vec![Object::Database(c.name)])
+            .unwrap_or_default(),
+        Kind::CreateTable => parse_create_table(text)
+            .map(|c| vec![table((c.database, c.name))])
+            .unwrap_or_default(),
+        Kind::Drop => match parse_drop(text) {
+            Ok(drop) if drop.kind == "DATABASE" => drop
+                .names
+                .into_iter()
+                .map(|(_, name)| Object::Database(name))
+                .collect(),
+            Ok(drop) => drop.names.into_iter().map(table).collect(),
+            Err(_) => Vec::new(),
+        },
+        Kind::Undrop => parse_undrop(text)
+            .map(|n| vec![table(n)])
+            .unwrap_or_default(),
+        Kind::Rename => parse_rename(text)
+            .map(|pairs| {
+                pairs
+                    .into_iter()
+                    .flat_map(|(from, to)| [table(from), table(to)])
+                    .collect()
+            })
+            .unwrap_or_default(),
+        Kind::AlterAdd => parse_alter_add(text)
+            .map(|(name, _)| vec![table(name)])
+            .unwrap_or_default(),
+        Kind::Describe => parse_describe(text).map(table).into_iter().collect(),
+        Kind::Show => parse_show_create(text).map(qualify).into_iter().collect(),
+        Kind::Exists => parse_exists(text).map(qualify).into_iter().collect(),
+        Kind::Insert => Vec::new(),
+    }
+}
+
 /// What a statement is, for [`execute`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {

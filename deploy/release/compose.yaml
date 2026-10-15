@@ -127,7 +127,7 @@ services:
       # are not passed on).
       LOAMS_HOUSE_ENDPOINT: ${LOAMS_HOUSE_ENDPOINT:-}
       LOAMS_HOUSE_CA: /var/lib/loams-house-link/house.crt
-      LOAMS_HOUSE_KEY_FILE: /var/lib/loams-house-link/house.key
+      LOAMS_HOUSE_KEY_FILE: /var/lib/loams-house-link/link.key
       # Engine auth (preview): tailscale | oidc | apikey | off (loopback only).
       # tailscale trusts the Tailscale-User-Login headers that the sidecar's
       # `tailscale serve` proxy adds, on LOAMS_TAILSCALE_LISTEN only: a loopback
@@ -177,15 +177,19 @@ services:
   # - Its TLS listener, 0.0.0.0:8443 (HS1 Task 20), is the engine's link. It is
   #   reached on `house-link`, a network only the engine and the House join,
   #   with a self-signed certificate the House makes on first start. The engine
-  #   trusts that certificate alone and signs in with the House's key; both are
-  #   in the house-link volume, which the engine mounts read-only. Set
+  #   trusts that certificate alone and signs in with the link key; both are
+  #   in the house-link volume, which the engine mounts read-only. The link
+  #   acts for the Loams principal the engine authenticated, with the scopes
+  #   and tables HOUSE_PRINCIPALS gives it; a principal not listed has no House
+  #   access, and every statement is in the House's audit log
+  #   (/var/lib/loams-house/audit.log). Set
   #   LOAMS_HOUSE_ENDPOINT=https://house:8443 to wire the engine to it (the
   #   console's House page then works).
   #
-  # Clients sign in as ClickHouse user `default` with the password in
-  # /var/lib/loams-house-link/house.key (created on first start). Nothing else
-  # in the stack can reach the House, and its workers reach nothing of the
-  # stack.
+  # Clients of the tailnet door sign in as ClickHouse user `default` with the
+  # password in /var/lib/loams-house/house.key (created on first start).
+  # Nothing else in the stack can reach the House, and its workers reach
+  # nothing of the stack.
   #
   # Workers run sealed (L3): HOUSE_SANDBOX=pods (the default) is Landlock (TCP
   # rules, Linux 6.7 or later) and seccomp, inside this container and its own
@@ -206,7 +210,11 @@ services:
       - --house-tls-listen=0.0.0.0:8443
       - --house-tls-cert=/var/lib/loams-house-link/house.crt
       - --house-tls-key=/var/lib/loams-house/tls/house.key
-      - --local-key-file=/var/lib/loams-house-link/house.key
+      # The engine's link key (it acts for the principals below) and the
+      # Loams principals it may act for (HS1 Task 20): `principal=scopes`,
+      # `;`-separated; a principal not listed has no House access.
+      - --link-key-file=/var/lib/loams-house-link/link.key
+      - --principals=${HOUSE_PRINCIPALS:-}
     environment:
       RUST_LOG: ${RUST_LOG:-info}
     networks: [house, house-link]
@@ -424,7 +432,8 @@ volumes:
   tikv-data:
   loams-data:
   house-data:
-  # The House's certificate and key, which the engine reads (see `house`).
+  # The House's certificate and the link key, which the engine reads (see
+  # `house`).
   house-link:
   house-tailscale-state:
   tailscale-state:

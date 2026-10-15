@@ -271,8 +271,45 @@ async fn header_step(
 }
 
 impl HouseApi {
-    /// Checks a statement, takes a worker, analyses it, and starts it.
+    /// [`HouseApi::start_checked`], with the statement's audit record (HS1
+    /// Task 20): its identity, kind and how its start ended.
     async fn start(&self, user: &UserMap, st: Statement) -> Result<Started, ConnectError> {
+        let audit = self.config.audit.as_ref().map(|sink| {
+            let mut event = crate::audit::AuditEvent::now("api", &st.query_id);
+            event.user = user.user.clone();
+            event.principal = user.principal.clone();
+            event.namespace = Some(user.namespace);
+            event.statement = Some(
+                match classify(&request::plan(st.sql.as_bytes(), false).sql) {
+                    Ok(Classified::Known { stmt, .. }) => stmt.kind().to_string(),
+                    Ok(Classified::Unparsed { .. }) | Err(_) => "Unparsed".to_string(),
+                },
+            );
+            (sink, event)
+        });
+        let started = self.start_checked(user, st).await;
+        if let Some((sink, mut event)) = audit {
+            event.code = match &started {
+                Ok(_) => 0,
+                // The Connect code's ClickHouse counterpart (`reason_for`'s
+                // inverse, coarsely).
+                Err(err) => match err.code {
+                    ErrorCode::Unauthenticated => 516,
+                    ErrorCode::PermissionDenied => 497,
+                    ErrorCode::NotFound => 60,
+                    ErrorCode::InvalidArgument => 36,
+                    ErrorCode::Unimplemented => 48,
+                    ErrorCode::Unavailable => 210,
+                    _ => 1,
+                },
+            };
+            sink.record(&event);
+        }
+        started
+    }
+
+    /// Checks a statement, takes a worker, analyses it, and starts it.
+    async fn start_checked(&self, user: &UserMap, st: Statement) -> Result<Started, ConnectError> {
         let config = &self.config;
         if st.sql.trim().is_empty() {
             return Err(invalid("sql", "sql is empty"));
@@ -332,6 +369,12 @@ impl HouseApi {
             }
             None => classify(&plan.sql).map_err(|err| to_connect(&err))?,
         };
+        // A read-only request first (`house_read_only`), then the caller's
+        // scopes (HS1 Task 20).
+        if read_only && matches!(&classified, Classified::Known { stmt, .. } if !stmt.is_read()) {
+            return Err(refuse_write());
+        }
+        gate::authorize(user, &classified).map_err(|err| to_connect(&err))?;
         let trailing_format = match &classified {
             Classified::Known { format, .. } | Classified::Unparsed { format, .. } => {
                 format.is_some()
@@ -369,7 +412,7 @@ impl HouseApi {
             let outcome = gate::catalog_answer(
                 self.lake.as_deref(),
                 &self.pool,
-                user.namespace,
+                user,
                 database,
                 stmt,
                 &plan.sql,
@@ -420,7 +463,7 @@ impl HouseApi {
                         pool: &self.pool,
                         namespace: user.namespace,
                         database,
-                        user: &user.user,
+                        user,
                         query_id: &st.query_id,
                         params: &st.params,
                         settings: &st.settings,
@@ -551,7 +594,7 @@ impl HouseApi {
                 self.lake.as_deref(),
                 user.namespace,
                 database,
-                &user.user,
+                user,
                 &mut lease,
                 &analysis,
                 &sql,

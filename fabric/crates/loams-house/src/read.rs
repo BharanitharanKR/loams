@@ -481,6 +481,9 @@ pub struct ReadContext<'a> {
     pub database: &'a str,
     /// The House user (what `system.processes` shows).
     pub user: &'a str,
+    /// The tables the user may read (HS1 Task 20); `None`, every table of the
+    /// namespace.
+    pub grants: Option<&'a crate::identity::Grants>,
 }
 
 /// Whether a setting is on (`1`, `true`).
@@ -527,6 +530,14 @@ pub async fn plan(
             if let Some((database, name, table)) =
                 resolve(lake, ctx.namespace, ctx.database, printed).await?
             {
+                // A table outside the user's grants is not read (HS1 Task 20).
+                if ctx.grants.is_some_and(|g| !g.allows(&database, &name)) {
+                    return Err(HouseError::from(ChError::access_denied(format!(
+                        "{}: Not enough privileges on {database}.{name}: it is not among \
+                         this identity's tables.",
+                        ctx.user
+                    ))));
+                }
                 let fin = final_all || refs.finals.iter().any(|f| f == printed);
                 add(database, name, table, fin);
             }
@@ -548,6 +559,9 @@ pub async fn plan(
                 continue;
             }
             for name in lake.table_names(ctx.namespace, &database).await? {
+                if ctx.grants.is_some_and(|g| !g.allows(&database, &name)) {
+                    continue;
+                }
                 if let Some(table) = lake.load(ctx.namespace, &database, &name).await? {
                     add(database.clone(), name, table, final_all);
                 }

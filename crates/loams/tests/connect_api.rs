@@ -424,6 +424,7 @@ mod house {
     struct Seen {
         authorization: Option<String>,
         cookie: Option<String>,
+        principal: Option<String>,
         path_and_query: String,
         body: Vec<u8>,
         hop_by_hop: Vec<String>,
@@ -458,6 +459,10 @@ mod house {
                 .map(str::to_owned);
             seen.cookie = headers
                 .get("cookie")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
+            seen.principal = headers
+                .get("x-loams-principal")
                 .and_then(|v| v.to_str().ok())
                 .map(str::to_owned);
             seen.path_and_query = request
@@ -852,6 +857,7 @@ mod house {
             .header("authorization", "Bearer caller-token")
             .header("cookie", "session=caller")
             .header("x-clickhouse-key", "caller-key")
+            .header("x-loams-principal", "spoofed")
             .body("{\"sql\":\"SELECT 1\"}")
             .send()
             .await
@@ -861,6 +867,9 @@ mod house {
         let seen = std::mem::take(&mut *front.seen.lock().expect("seen"));
         assert_eq!(seen.authorization.as_deref(), Some("Bearer link-secret"));
         assert_eq!(seen.cookie, None, "the caller's cookie stays here");
+        // The principal this port authenticated (no auth here: the loopback
+        // developer), never the one the caller wrote.
+        assert_eq!(seen.principal.as_deref(), Some("dev-loopback"));
         assert_eq!(seen.body, b"{\"sql\":\"SELECT 1\"}");
         running.server.shutdown().await.expect("shutdown");
 

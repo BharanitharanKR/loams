@@ -552,3 +552,75 @@ fn tls_listener_serves_with_its_certificate() {
         .expect("another certificate");
     assert!(https(tls, &other_cert, &query("")).is_err());
 }
+
+/// HS1 Task 20 (R20.5): `--principals` maps the link's principals in the
+/// single node's namespace; elsewhere they come from `[[house.principals]]`.
+/// The link key, dev mode and the audit log are single-node settings.
+#[test]
+fn principals_link_key_and_audit_resolve() {
+    let dir = scratch("principals");
+    let data = dir.to_str().expect("utf-8");
+    let settings = resolve(
+        &[
+            "--single-node",
+            "--data-dir",
+            data,
+            "--link-key-file",
+            &format!("{data}/link/link.key"),
+            "--principals",
+            "tailscale:alice@x.com=read+write; apikey:ci=read",
+        ],
+        "",
+    )
+    .expect("resolves");
+    assert_eq!(settings.principals.len(), 2);
+    assert_eq!(settings.principals[0].principal, "tailscale:alice@x.com");
+    assert!(settings.principals[0].scopes.write && !settings.principals[0].scopes.ddl);
+    assert_eq!(settings.principals[1].namespace, house::LOCAL_NAMESPACE);
+    assert!(!settings.dev_unmapped_principals);
+    assert_eq!(settings.audit_log, Some(dir.join("audit.log")));
+
+    for (flags, want) in [
+        (vec!["--principals", "x=read"], "single-node"),
+        (vec!["--link-key-file", "/k"], "single-node"),
+        (vec!["--dev-unmapped-principals"], "single-node"),
+    ] {
+        let mut all = vec!["--data-dir", data];
+        all.extend(flags.iter());
+        let err = resolve(&all, "").expect_err("refused");
+        assert!(err.contains(want) || err.contains("--single-node"), "{err}");
+    }
+    let err = resolve(
+        &[
+            "--single-node",
+            "--data-dir",
+            data,
+            "--principals",
+            "x=root",
+        ],
+        "",
+    )
+    .expect_err("bad scope");
+    assert!(err.contains("unknown scope"), "{err}");
+
+    // The file: a principal with tables, in any namespace.
+    let settings = resolve(
+        &["--data-dir", data],
+        "[[house.principals]]\nprincipal = \"apikey:etl\"\nnamespace = 7\nscopes = [\"read\", \"write\"]\ntables = [\"sales.*\"]\n",
+    )
+    .expect("from the file");
+    assert_eq!(settings.principals[0].namespace, 7);
+    assert!(
+        settings.principals[0]
+            .grants
+            .as_ref()
+            .is_some_and(|g| g.allows("sales", "x") && !g.allows("web", "x"))
+    );
+    assert!(
+        resolve(
+            &["--data-dir", data],
+            "[[house.principals]]\nprincipal = \"p\"\nnamespace = 1\nscopes = [\"read\"]\ntables = [\"nodot\"]\n",
+        )
+        .is_err()
+    );
+}

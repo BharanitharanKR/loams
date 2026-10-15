@@ -178,6 +178,24 @@ pub fn authenticate<'a>(
     })
 }
 
+/// The identity a request acts as (HS1 Task 20): the user its credentials
+/// sign in as, or, for the engine's link, the Loams principal it names
+/// ([`crate::identity::resolve`]).
+pub fn identify(
+    config: &crate::config::HouseConfig,
+    headers: &[(String, String)],
+    params: &[(String, String)],
+) -> Result<UserMap, HouseError> {
+    let credentials = credentials(headers, params)?;
+    let user = authenticate(&config.users, &credentials)?;
+    crate::identity::resolve(
+        user,
+        headers,
+        &config.principals,
+        config.unmapped_principals.as_ref(),
+    )
+}
+
 /// ClickHouse's `516` for mixed credential sources.
 fn invalid(why: &str) -> HouseError {
     HouseError::from(ChError::authentication_failed(format!(
