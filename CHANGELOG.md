@@ -5,6 +5,12 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- **Git push and fetch to the bucket from the release packages.** `git-remote-loams`, git's
+  remote helper for `loams::<store-url>/ns/<ns>/repos/<repo>` URLs (`crates/loams-git-remote`),
+  now ships next to `loams` in the .deb, .rpm and .pkg.tar.zst (`/usr/bin`), the macOS
+  tarballs and the Windows zip, so `git clone`, `fetch` and `push` reach a Loams Git
+  repository on a bucket with no server in between. It is not published to crates.io.
+  `git-remote-loams --version` prints its version. See `docs/release/packaging.md`.
 - **Loams Studio, an agentic development environment in the console** (design §53, plan SD1).
   The console has two modes, Console and Studio. Studio runs coding agents in threads, each
   with its own git worktree. Around them it has a chat timeline, a composer, diff review with

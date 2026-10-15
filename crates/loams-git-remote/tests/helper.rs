@@ -470,3 +470,18 @@ async fn push_ref_limit_at_and_past() {
     );
     assert!(env.ref_txns(&repo).await.is_empty());
 }
+
+/// The release packages' smoke test: the installed helper answers
+/// `--version` without a remote, a bucket or a repository.
+#[test]
+fn version_flag_prints_the_version() {
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_git-remote-loams"))
+        .arg("--version")
+        .output()
+        .expect("run git-remote-loams");
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout).trim(),
+        format!("git-remote-loams {}", env!("CARGO_PKG_VERSION"))
+    );
+}

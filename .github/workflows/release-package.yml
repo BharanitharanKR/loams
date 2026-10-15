@@ -1,7 +1,8 @@
 name: Release packages
 
-# Linux packages, the Windows zip and the macOS tarballs of the `loams` binary for a
-# published release (the server stack itself ships as Linux containers; on macOS and
+# Linux packages, the Windows zip and the macOS tarballs of the `loams` binary, with
+# `git-remote-loams` (git's helper for `loams::` URLs, crates/loams-git-remote)
+# installed next to it, for a published release (the server stack itself ships as Linux containers; on macOS and
 # Windows it runs under Docker Desktop). This is the piece
 # that gives .github/workflows/release-sign.yml something to sign: its `sign`
 # job refuses to submit unless an .rpm is in the set (D625), because SignPath's
@@ -17,9 +18,11 @@ name: Release packages
 #
 #   Linux    loams_<v>_amd64.deb, loams-<v>-1.x86_64.rpm,
 #            loams-<v>-1-x86_64.pkg.tar.zst  (+ .sig when a GPG key exists)
-#   Windows  loams-<v>-windows-x86_64.zip, holding loams.exe and the console
+#            (both binaries in /usr/bin)
+#   Windows  loams-<v>-windows-x86_64.zip, holding loams.exe,
+#            git-remote-loams.exe and the console
 #   macOS    loams-<v>-macos-arm64.tar.gz, loams-<v>-macos-x86_64.tar.gz, holding
-#            loams and the console. arm64 builds on macos-15, x86_64 on
+#            loams, git-remote-loams and the console. arm64 builds on macos-15, x86_64 on
 #            macos-15-intel (variables MACOS_ARM64_RUNNER / MACOS_X64_RUNNER swap
 #            them; a runner of the other architecture cross-compiles), stripped
 #            and ad-hoc signed:
@@ -259,12 +262,29 @@ jobs:
       - name: build the server binary
         run: cargo build --release -j 4 -p loams --bin loams --locked
 
+      # A separate cargo call, so the helper's dependencies cannot change the
+      # server's feature set (features unify across the packages of one build).
+      - name: build git-remote-loams
+        run: |
+          set -euo pipefail
+          cargo build --release -j 4 -p loams-git-remote --bin git-remote-loams --locked
+          target/release/git-remote-loams --version
+
       # Recorded in the release notes so a reader can see what the binary
       # actually links against, next to the depends list nfpm.yaml declares.
-      - name: the binary's dynamic dependencies
+      # The helper must need nothing the server does not, or the one depends
+      # list in nfpm.yaml would not cover it.
+      - name: the binaries' dynamic dependencies
         run: |
           set -euo pipefail
           readelf -d target/release/loams | grep NEEDED | tee "$RUNNER_TEMP/needed.txt"
+          readelf -d target/release/git-remote-loams | grep NEEDED | tee "$RUNNER_TEMP/needed-git-remote.txt"
+          extra=$(comm -13 <(grep -o '\[.*\]' "$RUNNER_TEMP/needed.txt" | sort -u) \
+                           <(grep -o '\[.*\]' "$RUNNER_TEMP/needed-git-remote.txt" | sort -u))
+          if [ -n "$extra" ]; then
+            echo "::error::git-remote-loams needs libraries the server does not, so release/nfpm.yaml's depends list does not cover it: $extra"
+            exit 1
+          fi
 
       - name: build the three Linux packages
         id: package
@@ -281,6 +301,7 @@ jobs:
           nfpm --version | tail -1
 
           args=(package --version "$VERSION" --binary target/release/loams
+                --git-remote target/release/git-remote-loams
                 --format deb --format rpm --format archlinux
                 --out "$out" --mtime "$MTIME")
 
@@ -435,14 +456,20 @@ jobs:
       - name: build the server binary
         run: cargo build --release -j 4 -p loams --bin loams --locked
 
-      - name: report the toolchain and the binary
+      - name: build git-remote-loams
+        run: cargo build --release -j 4 -p loams-git-remote --bin git-remote-loams --locked
+
+      - name: report the toolchain and the binaries
         shell: pwsh
         run: |
           rustc -Vv
           cargo -V
           (Get-Item target/release/loams.exe).Length
-          # The smoke test: the binary starts and reports its version.
+          (Get-Item target/release/git-remote-loams.exe).Length
+          # The smoke test: each binary starts and reports its version.
           ./target/release/loams.exe --version
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./target/release/git-remote-loams.exe --version
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: build the Windows zip
@@ -457,6 +484,7 @@ jobs:
           python scripts/release/build-artifacts.py windows-zip `
             --version $env:VERSION `
             --binary target/release/loams.exe `
+            --git-remote target/release/git-remote-loams.exe `
             --console web/apps/console/dist `
             --out $out
           Get-ChildItem $out
@@ -532,6 +560,8 @@ jobs:
           set -euo pipefail
           rustup target add "$TARGET"
           cargo build --release -j 4 -p loams --bin loams --locked --target "$TARGET"
+          # Separately, so the helper cannot change the server's feature set.
+          cargo build --release -j 4 -p loams-git-remote --bin git-remote-loams --locked --target "$TARGET"
 
       # Strip (the release profile keeps symbols: ~470 MB) and then sign
       # ad-hoc, in that order: stripping invalidates the linker's signature, and
@@ -541,25 +571,27 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          bin="$RUNNER_TEMP/loams"
-          cp "target/$TARGET/release/loams" "$bin"
-          strip -x "$bin"
-          codesign --force --sign - "$bin"
-          codesign --verify --strict --verbose=2 "$bin"
-          file "$bin"
-          ls -l "$bin"
           host=$(uname -m)
-          if [ "$TARGET" = "$host-apple-darwin" ] || { [ "$host" = arm64 ] && [ "$TARGET" = aarch64-apple-darwin ]; }; then
-            "$bin" --version
-          elif [ "$TARGET" = x86_64-apple-darwin ]; then
-            # Cross-built on Apple Silicon: run it under Rosetta, which the image may lack.
-            arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
-            arch -x86_64 "$bin" --version
-          else
-            # Cross-built on Intel, which cannot run it: check the architecture only.
-            echo "::notice::arm64 binary cross-built on an Intel runner; not executed here"
-            [ "$(lipo -archs "$bin")" = arm64 ]
-          fi
+          for name in loams git-remote-loams; do
+            bin="$RUNNER_TEMP/$name"
+            cp "target/$TARGET/release/$name" "$bin"
+            strip -x "$bin"
+            codesign --force --sign - "$bin"
+            codesign --verify --strict --verbose=2 "$bin"
+            file "$bin"
+            ls -l "$bin"
+            if [ "$TARGET" = "$host-apple-darwin" ] || { [ "$host" = arm64 ] && [ "$TARGET" = aarch64-apple-darwin ]; }; then
+              "$bin" --version
+            elif [ "$TARGET" = x86_64-apple-darwin ]; then
+              # Cross-built on Apple Silicon: run it under Rosetta, which the image may lack.
+              arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
+              arch -x86_64 "$bin" --version
+            else
+              # Cross-built on Intel, which cannot run it: check the architecture only.
+              echo "::notice::arm64 $name cross-built on an Intel runner; not executed here"
+              [ "$(lipo -archs "$bin")" = arm64 ]
+            fi
+          done
 
       - name: build the macOS tarball
         env:
@@ -570,7 +602,7 @@ jobs:
           set -euo pipefail
           out="$RUNNER_TEMP/macos"
           python3 scripts/release/build-artifacts.py macos-tar --version "$VERSION" \
-            --binary "$RUNNER_TEMP/loams" --arch "$ARCH" \
+            --binary "$RUNNER_TEMP/loams" --git-remote "$RUNNER_TEMP/git-remote-loams" --arch "$ARCH" \
             --console web/apps/console/dist --out "$out" --mtime "$MTIME"
           ls -l "$out"
 
@@ -667,10 +699,18 @@ jobs:
             echo "> tar -xzf loams-$VERSION-macos-arm64.tar.gz"
             echo "> xattr -dr com.apple.quarantine loams-$VERSION-macos-arm64"
             echo "> ./loams-$VERSION-macos-arm64/loams --version"
+            echo "> ./loams-$VERSION-macos-arm64/git-remote-loams --version"
             echo "> \`\`\`"
             echo ">"
             echo "> The server stack itself (Postgres, the images in this release) runs as Linux containers;"
             echo "> on macOS and Windows use Docker Desktop with the attached compose bundle."
+            echo
+            echo "### Git push and fetch to the bucket"
+            echo
+            echo "Every package installs \`git-remote-loams\` next to \`loams\` (\`/usr/bin\` on Linux; the"
+            echo "top level of the zip and the tarballs). With that directory on PATH, git handles"
+            echo "\`loams::<store-url>/ns/<ns>/repos/<repo>\` URLs itself: \`git clone\`, \`fetch\` and \`push\`"
+            echo "go straight to the repository in the bucket, with no Loams server in between."
             echo
             echo "### Not in this release"
             echo

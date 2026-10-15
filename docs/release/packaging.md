@@ -12,9 +12,19 @@ is [`publishing.md`](publishing.md), which this does not change.
 
 ## What ships
 
-One binary is packaged: **`loams`**, `crates/loams/src/main.rs`. Its
-subcommands are `dev`, `standalone`, `cluster`, `warm`, `durable` and
-`migrate`. **[verified]** — read from the `Command` enum in that file.
+Two binaries are packaged: **`loams`**, `crates/loams/src/main.rs`, and, from
+0.1.0-preview.3, **`git-remote-loams`**, `crates/loams-git-remote` (git's
+remote helper for `loams::` URLs; see [Git push and fetch to the
+bucket](#git-push-and-fetch-to-the-bucket)). The `loams` subcommands are
+`dev`, `standalone`, `cluster`, `warm`, `durable` and `migrate`.
+**[verified]** — read from the `Command` enum in that file.
+
+`git-remote-loams` is installed next to `loams` in every artifact (`/usr/bin`
+in the Linux packages, the top level of the Windows zip and of the macOS
+tarballs) because git finds a remote helper by its name on PATH. It is not
+published to crates.io (`publish = false`; owner, 2026-10-15). It is built by
+its own `cargo build -p loams-git-remote` call, so its dependencies cannot
+change the server binary's feature set.
 
 The workspace has five other `[[bin]]` targets. **None of them is packaged**,
 deliberately:
@@ -69,6 +79,7 @@ at all. It can now.
 
 ```
 /usr/bin/loams                        the server binary, 0755
+/usr/bin/git-remote-loams             git's remote helper for loams:: URLs, 0755
 /usr/share/loams/console/             the built web console, 0644
 /usr/share/doc/loams/LICENSE
 /usr/share/doc/loams/NOTICE
@@ -107,6 +118,11 @@ package already ships it — `libc6` on Debian and Ubuntu (glibc has carried lib
 since 2.34), `glibc` on Fedora/RHEL/openSUSE, and `glibc` on Arch and CachyOS
 (`pacman -Qo` confirms the last). There is no `libm` package on Debian to name,
 so declaring one would produce a dependency that does not exist.
+
+`git-remote-loams` needs the same four libraries and nothing else, so the one
+`depends` list covers both binaries. The workflow's "the binaries' dynamic
+dependencies" step fails the build if the helper ever needs a library the
+server does not.
 
 The list this short is a consequence of the server's `reqwest` being
 `default-features = false`, so it links no TLS or proxy library.
@@ -152,9 +168,9 @@ right answer here.
 The artifact is a **`.zip`, not an `.msi`**: there is no installer UI in this
 project, and wrapping a console server binary in one would add a WiX build, a
 code-signing requirement, and nothing a user of the zip does not already do by
-hand. The zip holds `loams.exe`, the built console, `LICENSE`, `NOTICE` and
-`README.md` — the same content the Linux packages install, minus the systemd
-units.
+hand. The zip holds `loams.exe`, `git-remote-loams.exe`, the built console,
+`LICENSE`, `NOTICE` and `README.md` — the same content the Linux packages
+install, minus the systemd units.
 
 A **downloaded** copy triggers SmartScreen's *"Windows protected your PC"*. That
 is an **unknown-publisher** warning, not a malware detection, and it clears per
@@ -219,9 +235,30 @@ package.
 
 ```powershell
 Expand-Archive .\loams-0.0.1-windows-x86_64.zip -DestinationPath loams
-Get-Item .\loams\loams.exe | Unblock-File
+Get-Item .\loams\loams.exe, .\loams\git-remote-loams.exe | Unblock-File
 .\loams\loams.exe dev
 ```
+
+Add the `loams` directory to PATH for `git-remote-loams.exe` to be found.
+
+### Git push and fetch to the bucket
+
+Every package installs `git-remote-loams` next to `loams`. git runs a helper
+named `git-remote-<scheme>` for a `<scheme>::<address>` URL, so with the helper
+on PATH, plain git reaches a Loams Git repository in the bucket directly, with
+no Loams server in between:
+
+```sh
+git-remote-loams --version
+git clone loams::<store-url>/ns/<ns>/repos/<repo> work
+git -C work push origin main
+```
+
+The helper reads refs from the repository's WAL in the bucket, fetches stored
+packs, and pushes by uploading one pack and committing one ref transaction
+(design §36 §6.2). It runs `git` as a process, so git must be installed. On
+Linux the packages put it in `/usr/bin`; from the zip or a tarball, put the
+unpacked directory on PATH (or copy both binaries into a directory that is).
 
 ## systemd
 
