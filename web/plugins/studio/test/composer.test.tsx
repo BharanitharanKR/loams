@@ -20,6 +20,7 @@ import {
   type QueueMessageRequest,
   QueueService,
   RunGroupService,
+  SandboxLevel,
   type SendRequest,
   SessionSchema,
   SessionStatus,
@@ -334,6 +335,8 @@ describe('send', () => {
     await waitFor(() => expect(daemon.sent).toHaveLength(1));
     const req = daemon.sent[0];
     expect(req?.request?.worktree).toMatchObject({ repoPath: '/srv/site', base: 'main' });
+    // The daemon refuses SANDBOX_LEVEL_UNSPECIFIED: a new thread names Settings' default.
+    expect(req?.request?.sandbox).toBe(SandboxLevel.WORKSPACE_WRITE);
     expect(onStarted).toHaveBeenCalledWith(req?.chatId);
   });
 
@@ -553,7 +556,7 @@ describe('parallel_dialog_builds_create_run_group', () => {
         },
       }),
     ).toEqual({
-      spaceId: '',
+      // No project space: the optional field is left out, not sent empty.
       repoPath: '/srv/site',
       base: 'main',
       prompt: 'Try it',

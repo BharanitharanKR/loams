@@ -95,7 +95,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { applyNewThreadApprovalMode } from '../sidebar/useThreadActions.js';
+import { applyNewThreadApprovalMode, newThreadSandbox } from '../sidebar/useThreadActions.js';
 import { agentdFilesSource } from './files-source.js';
 import { isBusy, useChat, useQueue, useSessionStatus } from './live.js';
 import { mentionsFor, useMentions } from './mentions.js';
@@ -415,6 +415,9 @@ function ComposerWithDaemon({
               ...(harness ? { harness } : {}),
               ...(model ? { model } : {}),
               ...(reasoning ? { reasoning } : {}),
+              // The daemon refuses an unspecified sandbox (SD1 Task 29 found it): the
+              // thread's own, else this device's default for a new thread.
+              sandbox: (!isNew && chat?.config?.sandbox) || newThreadSandbox(),
               cwd: isNew ? (firstRunInWorktree ? '' : (project?.path ?? '')) : (chat?.cwd ?? ''),
               attachments: paths,
               ...(firstRunInWorktree ? { worktree: { repoPath: project.path, base } } : {}),
@@ -435,6 +438,7 @@ function ComposerWithDaemon({
       attachments,
       base,
       busy,
+      chat?.config?.sandbox,
       chat?.cwd,
       clients,
       draftKey,

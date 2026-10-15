@@ -64,6 +64,9 @@ catalog:
   rehype-sanitize: 6.0.0
   unified: 11.0.5
   shiki: 4.2.0
+  # Playwright for the console's and the desktop's end-to-end tests (SD1 Task 29):
+  # Apache-2.0, published 2026-09-04: the version the desktop smoke already pinned.
+  '@playwright/test': 1.63.0
 
 # Keep Vite+ isolated from the console's ordinary Vite/Vitest toolchain.
 overrides:

@@ -94,12 +94,6 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function newCommentId(): string {
-  return (
-    globalThis.crypto?.randomUUID?.() ?? `c-${Date.now()}-${Math.random().toString(36).slice(2)}`
-  );
-}
-
 /** The base a branch diff compares against when the reader has not picked one. */
 export function defaultBaseRef(branches: readonly string[]): string | null {
   for (const preferred of PREFERRED_BASES) if (branches.includes(preferred)) return preferred;
@@ -289,7 +283,9 @@ export function DiffPanel({ threadId, source, onOpenFile, className }: DiffPanel
     const existing = save.id ? comments.find((comment) => comment.id === save.id) : undefined;
     try {
       await source.upsertComment({
-        id: save.id ?? newCommentId(),
+        // A new comment has no id: the daemon assigns one, and refuses an id it does not
+        // know (UpsertReviewComment, G9; SD1 Task 29 found the client inventing one).
+        id: save.id ?? "",
         checkoutId,
         path: save.path,
         side: save.anchor.side,

@@ -24,6 +24,9 @@ catalogs:
     '@pierre/diffs':
       specifier: 1.5.1
       version: 1.5.1
+    '@playwright/test':
+      specifier: 1.63.0
+      version: 1.63.0
     '@tailwindcss/vite':
       specifier: 4.3.3
       version: 4.3.3
@@ -220,7 +223,7 @@ importers:
         specifier: workspace:*
         version: link:../../web/packages/proto
       '@playwright/test':
-        specifier: 1.63.0
+        specifier: 'catalog:'
         version: 1.63.0
       '@types/node':
         specifier: 24.13.6
@@ -1021,12 +1024,18 @@ importers:
       '@connectrpc/connect':
         specifier: 2.2.0
         version: 2.2.0(@bufbuild/protobuf@2.16.0)
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.63.0
       '@tailwindcss/vite':
         specifier: 'catalog:'
         version: 4.3.3(vite@8.3.1(@types/node@24.10.1)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       '@testing-library/react':
         specifier: 16.3.3
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
       '@types/react':
         specifier: 'catalog:'
         version: 19.3.0

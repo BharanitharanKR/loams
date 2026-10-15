@@ -40,7 +40,8 @@ export function buildCreateRunGroupRequest(input: {
 }): MessageInitShape<typeof CreateRunGroupRequestSchema> {
   const { choices } = input;
   return {
-    spaceId: input.spaceId ?? '',
+    // `optional` on the wire: an empty id would name a project space that does not exist.
+    ...(input.spaceId ? { spaceId: input.spaceId } : {}),
     repoPath: input.repoPath,
     base: choices.base,
     prompt: input.prompt,

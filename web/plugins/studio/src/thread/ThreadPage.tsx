@@ -131,11 +131,22 @@ function ThreadView({
   // A finished turn may have a new checkpoint and new usage.
   const { refetch: refetchCheckpoints } = checkpointsQuery;
   const { refetch: refetchUsage } = usageQuery;
+  // A turn short enough never to show as running between two renders (a queued run,
+  // such as a review sent to the agent) still adds entries, so the entry count is a
+  // trigger too; and the daemon records a turn's checkpoint as the turn ends, which can
+  // be just after the transcript says it is done, so the list is read again shortly
+  // after (SD1 Task 29 saw a turn's restore button missing).
+  const entryCount = transcript.entries.length;
   useEffect(() => {
-    if (running) return;
+    if (running || entryCount < 0) return;
     void refetchCheckpoints();
     void refetchUsage();
-  }, [running, refetchCheckpoints, refetchUsage]);
+    const again = setTimeout(() => {
+      void refetchCheckpoints();
+      void refetchUsage();
+    }, 1_500);
+    return () => clearTimeout(again);
+  }, [running, entryCount, refetchCheckpoints, refetchUsage]);
 
   const checkpoints = useMemo(
     () => new Set((checkpointsQuery.data?.checkpoints ?? []).map((c) => c.turnId)),

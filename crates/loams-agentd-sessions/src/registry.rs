@@ -26,6 +26,19 @@ fn auto_enabled(id: HarnessId) -> bool {
     id != HarnessId::Mock
 }
 
+/// Whether this daemon runs the Mock as its default harness
+/// (`LOAMS_DESKTOP_HARNESS=mock`, the e2e rig: SD1 Task 29). Then the Mock is
+/// listed as enabled, so a client's harness picker offers it (first, as the
+/// registry orders it) and Studio's composer runs it rather than a real agent.
+/// It still never counts toward the enabled set that Settings manages.
+pub fn mock_is_default() -> bool {
+    mock_is_default_value(std::env::var("LOAMS_DESKTOP_HARNESS").ok().as_deref())
+}
+
+fn mock_is_default_value(value: Option<&str>) -> bool {
+    value.is_some_and(|v| v.trim() == "mock")
+}
+
 /// A descriptor's effective enabled flag. `None` — a catalog from an engine
 /// predating the setting — falls back to detection, the same rule new devices
 /// start from (see [`HarnessRegistry::enabled_set`]).
@@ -457,6 +470,7 @@ impl HarnessRegistry {
     /// Catalog for `ListHarnesses` — never forces a lazy resolve.
     pub fn descriptors(&self) -> Vec<HarnessDescriptor> {
         let enabled = self.enabled_set();
+        let mock_listed_enabled = mock_is_default();
         let slots = self.slots();
         self.order()
             .iter()
@@ -473,7 +487,8 @@ impl HarnessRegistry {
                     },
                     None => return None,
                 };
-                descriptor.enabled = Some(enabled.contains(id));
+                descriptor.enabled =
+                    Some(enabled.contains(id) || (*id == HarnessId::Mock && mock_listed_enabled));
                 descriptor.can_install = loams_agentd_harness::install::can_install(*id);
                 Some(descriptor)
             })
@@ -784,6 +799,15 @@ mod tests {
         );
         assert!(registry.resolve(HarnessId::Mock).is_err());
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn mock_is_listed_enabled_only_when_it_is_the_default_harness() {
+        assert!(mock_is_default_value(Some("mock")));
+        assert!(mock_is_default_value(Some(" mock ")));
+        assert!(!mock_is_default_value(Some("codex")));
+        assert!(!mock_is_default_value(Some("")));
+        assert!(!mock_is_default_value(None));
     }
 
     #[test]

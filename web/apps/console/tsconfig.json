@@ -6,5 +6,7 @@
     // source files (@loams-core/*/src/compiler.ts), not the Node-only package roots.
     "allowImportingTsExtensions": true
   },
-  "include": ["src", "test"]
+  "include": ["src", "test"],
+  // Playwright's specs run in Node: test/e2e/tsconfig.json checks them.
+  "exclude": ["test/e2e"]
 }

@@ -77,11 +77,15 @@ export function newThreadConfig() {
   return create(ChatConfigSchema, {
     harness: HARNESS[settings.harness],
     ...(settings.model ? { model: settings.model } : {}),
-    sandbox:
-      settings.approvalMode === 'full-access'
-        ? SandboxLevel.DANGER_FULL_ACCESS
-        : SandboxLevel.WORKSPACE_WRITE,
+    sandbox: newThreadSandbox(),
   });
+}
+
+/** A new thread's sandbox: full access with Settings › Studio's full-access mode, else workspace writes. */
+export function newThreadSandbox(): SandboxLevel {
+  return readSettings().approvalMode === 'full-access'
+    ? SandboxLevel.DANGER_FULL_ACCESS
+    : SandboxLevel.WORKSPACE_WRITE;
 }
 
 type PinChange = MessageInitShape<typeof SidebarPinChangeSchema>['change'];
