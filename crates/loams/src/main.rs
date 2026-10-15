@@ -2882,6 +2882,16 @@ mod tests {
                 "--yes",
             ],
             &["loams", "upgrade", "--to", "latest", "--bundle", "/b"],
+            &["loams", "upgrade", "rollback", "--keep-writes", "--yes"],
+            &["loams", "upgrade", "rollback", "--snapshot", "01J"],
+            &[
+                "loams",
+                "upgrade",
+                "--to",
+                "0.1.0-preview.3",
+                "--no-auto-rollback",
+                "--keep-snapshot",
+            ],
         ] {
             let cli = Cli::try_parse_from(args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
             assert!(matches!(cli.command, Command::Upgrade(_)), "{args:?}");

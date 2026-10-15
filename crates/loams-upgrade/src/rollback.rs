@@ -172,3 +172,254 @@ pub fn failed(
         ),
     )
 }
+
+/// `loams upgrade rollback`'s options.
+#[derive(Clone, Debug, Default)]
+pub struct RollbackOptions {
+    /// The snapshot to restore (default: the last upgrade's).
+    pub snapshot: Option<String>,
+    /// Swap the images back and keep the data (Q824).
+    pub keep_writes: bool,
+    pub br_image: String,
+}
+
+/// The final report of a rollback.
+#[derive(Clone, Debug, PartialEq, schemars::JsonSchema, serde::Serialize)]
+pub struct RollbackReport {
+    /// The release the stack was at.
+    pub from: String,
+    /// The release it is at now.
+    pub to: String,
+    pub snapshot: String,
+    pub keep_writes: bool,
+    /// What was lost: the writes since the snapshot (none with
+    /// `--keep-writes`).
+    pub lost_writes: String,
+}
+
+/// `secs` (Unix) as `YYYY-MM-DD HH:MM UTC`.
+pub fn utc(secs: u64) -> String {
+    let days = (secs / 86_400) as i64;
+    let rem = secs % 86_400;
+    // Howard Hinnant's civil_from_days.
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02} UTC",
+        rem / 3600,
+        (rem % 3600) / 60
+    )
+}
+
+/// The upgrade a rollback undoes: `snapshot`'s, else the open attempt's (it
+/// took a snapshot), else the last one that finished.
+fn attempt_of(stack_dir: &Path, snapshot: Option<&str>) -> Result<Vec<crate::history::Entry>> {
+    let history = crate::history::History::of(stack_dir);
+    let entries = history.entries();
+    let attempt = match snapshot {
+        Some(id) => entries
+            .iter()
+            .find(|e| e.snapshot.as_deref() == Some(id))
+            .map(|e| e.attempt.clone()),
+        None => history
+            .open_attempt()
+            .filter(|a| crate::history::snapshot_of(a).is_some())
+            .map(|a| a[0].attempt.clone())
+            .or_else(|| history.last_done().map(|e| e.attempt)),
+    };
+    let Some(attempt) = attempt else {
+        return Err(UpgradeError::new(
+            "snapshot_not_found",
+            match snapshot {
+                Some(id) => format!("no upgrade in this stack's history took snapshot {id}"),
+                None => "no upgrade in this stack's history took a snapshot".to_string(),
+            },
+        ));
+    };
+    Ok(entries
+        .into_iter()
+        .filter(|e| e.attempt == attempt)
+        .collect())
+}
+
+/// Why `--keep-writes` cannot be used, if it cannot: a point-of-no-return
+/// migration was applied for `to` (the ledger, read by `to`'s image), or a
+/// third-party pin changed.
+fn keep_writes_refusal(
+    runtime: &dyn Runtime,
+    stack: &StackDir,
+    id: &str,
+    to: &str,
+) -> Result<Option<String>> {
+    let status = crate::status::status(runtime, stack, to)?;
+    let Some(ledger) = status
+        .migrate
+        .as_ref()
+        .and_then(|m| m["ledger"].as_array().cloned())
+    else {
+        return Ok(Some(format!(
+            "the ledger could not be read ({}), so no migration is known to be reversible",
+            status.migrate_error.unwrap_or_default()
+        )));
+    };
+    if let Some(entry) = ledger
+        .iter()
+        .find(|e| e["to"] == to && e["class"] == "point_of_no_return")
+    {
+        return Ok(Some(format!(
+            "migration {} is a point of no return: the previous release cannot open its data",
+            entry["id"].as_str().unwrap_or("?")
+        )));
+    }
+    let before = read_env(&install::host_copy_dir(&stack.dir, id).join("release/.env"));
+    let old = crate::check::current_components(&StackDir {
+        dir: stack.dir.clone(),
+        env: before,
+    });
+    let new = crate::check::current_components(stack);
+    if let Some((name, was)) = old
+        .iter()
+        .find(|(k, v)| new.get(*k).is_some_and(|n| n != *v))
+    {
+        return Ok(Some(format!(
+            "{name} changed from {was} to {}: its files do not go back",
+            new[name]
+        )));
+    }
+    Ok(None)
+}
+
+/// `loams upgrade rollback` (design §54 §8). `confirm` gets the question,
+/// which names the writes that will be lost.
+pub fn rollback(
+    runtime: &dyn Runtime,
+    stack: &mut StackDir,
+    opts: &RollbackOptions,
+    confirm: &dyn Fn(&str) -> bool,
+) -> Result<RollbackReport> {
+    use crate::history::{Entry, Event, History};
+    let entries = attempt_of(&stack.dir, opts.snapshot.as_deref())?;
+    let first = entries[0].clone();
+    let (id, tikv) = crate::history::snapshot_of(&entries).ok_or_else(|| {
+        UpgradeError::new(
+            "rollback_needs_snapshot",
+            "the upgrade stopped before its snapshot: nothing to roll back",
+        )
+    })?;
+    let taken_at = entries
+        .iter()
+        .find(|e| e.snapshot.as_deref() == Some(&id))
+        .map_or(first.at, |e| e.at);
+    let image = crate::bundle::loams_image(&stack.env, &first.to);
+    let now = crate::history::now();
+    let lost_writes = if opts.keep_writes {
+        "none: the data is kept".to_string()
+    } else {
+        format!(
+            "writes between {} and {} will be lost",
+            utc(taken_at),
+            utc(now)
+        )
+    };
+    if opts.keep_writes
+        && let Some(why) = keep_writes_refusal(runtime, stack, &id, &first.to)?
+    {
+        return Err(UpgradeError::new(
+            "rollback_needs_snapshot",
+            format!("--keep-writes cannot be used: {why}; roll back from the snapshot instead"),
+        ));
+    }
+    let question = format!(
+        "Roll the stack in {} back from {} to {} with snapshot {id}? {lost_writes}.",
+        stack.dir.display(),
+        first.to,
+        first.from
+    );
+    eprintln!("loams upgrade: {lost_writes}");
+    if !confirm(&question) {
+        return Err(UpgradeError::new(
+            "confirmation_required",
+            format!("a rollback stops the stack and {lost_writes}: pass --yes"),
+        ));
+    }
+    let history = History::of(&stack.dir);
+    let entry = |event: Event, error: Option<&str>| Entry {
+        attempt: first.attempt.clone(),
+        from: first.from.clone(),
+        to: first.to.clone(),
+        event,
+        step: Some("rollback".to_string()),
+        snapshot: Some(id.clone()),
+        tikv: tikv.clone(),
+        error: error.map(str::to_string),
+        at: crate::history::now(),
+    };
+    let result = if opts.keep_writes {
+        swap_images_back(runtime, stack, &id)
+    } else {
+        restore(
+            runtime,
+            stack,
+            &Restore {
+                snapshot: id.clone(),
+                tikv: tikv.clone(),
+                image,
+                br_image: opts.br_image.clone(),
+            },
+        )
+    };
+    match result {
+        Ok(()) => {
+            history.append(&entry(Event::RolledBack, None))?;
+            Ok(RollbackReport {
+                from: first.to.clone(),
+                to: first.from.clone(),
+                snapshot: id,
+                keep_writes: opts.keep_writes,
+                lost_writes,
+            })
+        }
+        Err(e) => {
+            let _ = history.append(&entry(Event::RollbackFailed, Some(e.code)));
+            let cause =
+                UpgradeError::new("rollback_failed", format!("rolling back to {}", first.from));
+            Err(failed(&stack.dir, &id, &cause, &e))
+        }
+    }
+}
+
+/// `--keep-writes`: the previous release's bundle and `.env` come back and
+/// start on the data as it is.
+fn swap_images_back(runtime: &dyn Runtime, stack: &mut StackDir, id: &str) -> Result<()> {
+    let config = compose::config(runtime, &stack.dir)?;
+    door::close(runtime, &stack.dir, &compose::services(&config))?;
+    compose::stop(runtime, &stack.dir, &compose::services(&config))?;
+    install::restore_host(&stack.dir, id)?;
+    stack.env = read_env(&stack.dir.join(".env"));
+    let config = compose::config(runtime, &stack.dir)?;
+    let enabled = compose::services(&config);
+    let services: Vec<String> = compose::long_running(&config)
+        .into_iter()
+        .filter(|s| !door::SIDECARS.contains(&s.as_str()))
+        .collect();
+    compose::up(runtime, &stack.dir, &services)?;
+    let bad: Vec<String> = compose::unhealthy(&compose::ps(runtime, &stack.dir)?)
+        .into_iter()
+        .filter(|s| !door::SIDECARS.contains(&s.as_str()))
+        .collect();
+    if !bad.is_empty() {
+        return Err(UpgradeError::new(
+            "rollback_failed",
+            format!("not healthy after the swap: {}", bad.join(", ")),
+        ));
+    }
+    crate::run::engine_ready(runtime, &stack.dir)?;
+    door::open(runtime, &stack.dir, &enabled)
+}

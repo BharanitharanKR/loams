@@ -2,6 +2,8 @@
 
 #![allow(dead_code)]
 
+pub mod world;
+
 use std::path::Path;
 use std::sync::Mutex;
 
