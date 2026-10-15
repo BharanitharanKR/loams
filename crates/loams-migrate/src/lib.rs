@@ -14,8 +14,10 @@
 //! - [`startup`]: the startup gate every Loams process runs before it
 //!   serves (§54 §4.3).
 //!
-//! Later UP1 tasks add preview.2's adoption, the store contexts, snapshots
-//! and restores.
+//! - [`adopt`] and [`migrations`]: `0000-adopt-preview-2`, which recognises
+//!   an unstamped preview.2 stack by fingerprint (§54 §5.3).
+//!
+//! Later UP1 tasks add the store contexts, snapshots and restores.
 
 /// Evaluates a named failpoint of the crash matrix. With the `failpoints`
 /// feature a configured failpoint stops the caller as a crash would (it
@@ -33,6 +35,7 @@ macro_rules! failpoint {
 }
 pub(crate) use failpoint;
 
+pub mod adopt;
 pub mod formats;
 pub mod ledger;
 pub mod migration;

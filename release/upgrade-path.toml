@@ -19,6 +19,12 @@ version     = "0.1.0-preview.3"
 from        = "0.1.0-preview.2"
 free_factor = 1.5
 
+[[release.migration]]
+id      = "0000-adopt-preview-2"
+store   = "meta"
+class   = "reversible"
+summary = "Record preview.2's versions (preview.2 writes no stack record)"
+
 [[release]]
 version = "0.1.0-preview.2"
 from    = "fresh"   # preview.1 → preview.2 keeps no data
