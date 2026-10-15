@@ -14,6 +14,10 @@ pub const PROJECT: &str = "loams";
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StackDir {
     pub dir: PathBuf,
+    /// The compose project: `COMPOSE_PROJECT_NAME` (the environment, then
+    /// `.env`), else the compose file's `loams`. Its volumes and network are
+    /// `<project>_<name>`.
+    pub project: String,
     /// `.env`'s settings (values are never printed).
     pub env: BTreeMap<String, String>,
 }
@@ -44,6 +48,15 @@ pub fn read_env(path: &Path) -> BTreeMap<String, String> {
         .collect()
 }
 
+/// The compose project of a stack whose `.env` is `env`.
+pub fn project_of(env: &BTreeMap<String, String>) -> String {
+    std::env::var("COMPOSE_PROJECT_NAME")
+        .ok()
+        .or_else(|| env.get("COMPOSE_PROJECT_NAME").cloned())
+        .filter(|p| !p.is_empty())
+        .unwrap_or_else(|| PROJECT.to_string())
+}
+
 impl StackDir {
     /// The stack: `flag` (`--dir`), else `env_dir` (`LOAMS_STACK_DIR`), else
     /// `cwd` when it holds one. `stack_not_found` otherwise.
@@ -64,7 +77,8 @@ impl StackDir {
             ));
         }
         let env = read_env(&dir.join(".env"));
-        Ok(StackDir { dir, env })
+        let project = project_of(&env);
+        Ok(StackDir { dir, project, env })
     }
 
     /// The release the stack runs: `.env`'s `LOAMS_VERSION`, else the

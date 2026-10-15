@@ -116,6 +116,32 @@ fn parse_version(text: &str) -> Option<Version<'_>> {
     })
 }
 
+/// Semver order of two releases (a pre-release before its release; numeric
+/// pre-release identifiers numerically); `None` when either does not parse.
+pub fn compare_releases(a: &str, b: &str) -> Option<std::cmp::Ordering> {
+    let (x, y) = (parse_version(a)?, parse_version(b)?);
+    let core = (x.major, x.minor, x.patch).cmp(&(y.major, y.minor, y.patch));
+    if core != std::cmp::Ordering::Equal {
+        return Some(core);
+    }
+    Some(match (x.pre, y.pre) {
+        (None, None) => std::cmp::Ordering::Equal,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (Some(p), Some(q)) => {
+            let ids = |s: &'_ str| -> Vec<(u64, String)> {
+                s.split('.')
+                    .map(|i| {
+                        i.parse()
+                            .map_or((u64::MAX, i.to_string()), |n| (n, String::new()))
+                    })
+                    .collect()
+            };
+            ids(p).cmp(&ids(q))
+        }
+    })
+}
+
 /// A minor line, `major.minor`.
 fn parse_line(text: &str) -> Option<(u64, u64)> {
     let (major, minor) = text.split_once('.')?;

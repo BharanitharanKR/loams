@@ -59,3 +59,23 @@ fn preview2_to_candidate_e2e() {
     assert_eq!(step["bundle"], "local, unverified");
     assert!(step["snapshot"].as_str().is_some_and(|s| !s.is_empty()));
 }
+
+/// After `preview2_to_candidate_e2e`: `rollback` restores the snapshot and
+/// the previous release serves again. The gate's fixture checker (UP1 Task
+/// 19, `run.py check --expect-new-writes absent`) then reads every fixture.
+#[test]
+#[ignore = "needs the upgraded stack of preview2_to_candidate_e2e (the upgrade gate)"]
+fn rollback_e2e_restores_fixtures() {
+    let e = e2e();
+    let (code, report) = upgrade(&["rollback", "--dir", &e.stack, "--yes"]);
+    assert_eq!(code, 0, "{report}");
+    assert_eq!(report["from"], e.to.as_str());
+    assert!(
+        report["lost_writes"]
+            .as_str()
+            .is_some_and(|w| w.contains("will be lost"))
+    );
+    let (code, status) = upgrade(&["status", "--dir", &e.stack]);
+    assert_eq!(code, 0, "{status}");
+    assert_eq!(status["release"], report["to"]);
+}

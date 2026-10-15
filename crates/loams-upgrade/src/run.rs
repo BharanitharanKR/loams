@@ -297,7 +297,7 @@ impl Run<'_> {
             "--env-file",
             &staged.display().to_string(),
             "-p",
-            crate::stackdir::PROJECT,
+            &self.stack.project,
             "pull",
             "--quiet",
         ]

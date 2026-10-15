@@ -246,7 +246,7 @@ pub fn plan(
 
 /// The bytes a snapshot would copy: the Loams-owned volumes and TiKV's, as
 /// `du` sees them in a helper of `image` (read-only mounts).
-pub fn snapshot_estimate(runtime: &dyn Runtime, image: &str) -> Result<u64> {
+pub fn snapshot_estimate(runtime: &dyn Runtime, stack: &StackDir, image: &str) -> Result<u64> {
     use crate::helpers::{HelperSpec, Mount, volume};
     let mounts = [
         "loams-data",
@@ -257,7 +257,7 @@ pub fn snapshot_estimate(runtime: &dyn Runtime, image: &str) -> Result<u64> {
     ]
     .iter()
     .map(|v| Mount {
-        source: volume(v),
+        source: volume(stack, v),
         target: format!("/vol/{v}"),
         read_only: true,
     })
@@ -330,7 +330,7 @@ pub fn check(
         current_components: current_components(stack),
         plan: plan(runtime, stack, &image, &current, target).ok(),
         unhealthy: unhealthy_services(runtime, stack)?,
-        snapshot_estimate_bytes: snapshot_estimate(runtime, &image).unwrap_or(0),
+        snapshot_estimate_bytes: snapshot_estimate(runtime, stack, &image).unwrap_or(0),
         free_bytes: free_bytes(runtime, stack),
     };
     report(&current, target, path, &observed)

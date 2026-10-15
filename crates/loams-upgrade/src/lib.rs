@@ -135,6 +135,17 @@ pub enum UpgradeCommand {
     Check,
     /// The stack record and the ledger, and the last attempt (read-only).
     Status,
+    /// Restore the stack from the last upgrade's snapshot and start the
+    /// previous release (or, with --keep-writes, swap the images back).
+    Rollback {
+        /// The snapshot to restore [default: the last upgrade's].
+        #[arg(long)]
+        snapshot: Option<String>,
+        /// Keep the data and swap the images back: only when every migration
+        /// applied was reversible and no third-party pin changed.
+        #[arg(long)]
+        keep_writes: bool,
+    },
     /// The snapshots kept on this host.
     Snapshots {
         #[command(subcommand)]
@@ -242,6 +253,20 @@ pub fn run_with(args: &UpgradeArgs, runtime: &dyn Runtime) -> Result<serde_json:
                     Ok(serde_json::json!({"pruned": id}))
                 }
             }
+        }
+        Some(UpgradeCommand::Rollback {
+            snapshot,
+            keep_writes,
+        }) => {
+            let mut stack = stack;
+            let opts = rollback::RollbackOptions {
+                snapshot: snapshot.clone(),
+                keep_writes: *keep_writes,
+                br_image: br_image(),
+            };
+            let yes = args.common.yes;
+            let report = rollback::rollback(runtime, &mut stack, &opts, &|q| confirmed(yes, q))?;
+            serde_json::to_value(&report).map_err(|e| UpgradeError::new("internal", e.to_string()))
         }
         None => upgrade(args, runtime, stack, &current),
     }

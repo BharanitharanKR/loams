@@ -276,16 +276,25 @@ async fn patch_line_newer_or_other_line_refused() {
     // A new line's first release takes exactly the last patch.
     assert!(train.check_adjacent("0.1.4", "0.2.0").is_ok());
     assert!(train.check_adjacent("0.1.1", "0.2.0").is_err());
-    // Through the runner: 0.1.5 data refuses 0.1.4.
+    // Through the runner: 0.1.5 data that no migration changed is read by
+    // 0.1.4 as it is (nothing to do; UP1 ruling T14-2), and 0.1.3 data
+    // cannot skip to 0.2.0.
     let stack = Stack::new().await;
     stack.stamp("0.1.5").await;
     let a = FileMigration::new("0001-a", 2);
     a.seed(stack.data.path());
     let migrations: [&dyn Migration; 1] = [&a];
+    let report = Runner::new(&migrations, &train)
+        .run(&mut stack.cx(), "0.1.4", &opts())
+        .await
+        .expect("nothing to do");
+    assert!(report.applied.is_empty());
+    let stack = Stack::new().await;
+    stack.stamp("0.1.1").await;
     assert_eq!(
         code(
             Runner::new(&migrations, &train)
-                .run(&mut stack.cx(), "0.1.4", &opts())
+                .run(&mut stack.cx(), "0.2.0", &opts())
                 .await
         ),
         "upgrade_step_not_adjacent"
@@ -398,5 +407,57 @@ async fn new_stack_is_stamped_and_unstamped_store_refused() {
             .expect("stamped")
             .release,
         P3
+    );
+}
+
+/// UP1 Task 14 (`rollback --keep-writes`, §54 §8): an older release's
+/// `migrate run` over data a newer release migrated is a no-op when every
+/// newer migration is `Reversible` and done, and refuses otherwise.
+#[tokio::test]
+async fn older_release_runs_on_reversible_newer_data() {
+    for (class_is_pnr, expect_ok) in [(false, true), (true, false)] {
+        let stack = Stack::new().await;
+        stack.stamp(P2).await;
+        let a = FileMigration::new("0001-a", 2);
+        let a = if class_is_pnr {
+            a.point_of_no_return()
+        } else {
+            a
+        };
+        a.seed(stack.data.path());
+        let migrations: [&dyn Migration; 1] = [&a];
+        let train = path("prerelease");
+        let runner = Runner::new(&migrations, &train);
+        let mut accept = opts();
+        accept.no_snapshot_i_accept_data_loss = true;
+        runner
+            .run(&mut stack.cx(), P3, &accept)
+            .await
+            .expect("to preview.3");
+        // preview.2's migrate over preview.3's data.
+        let older = runner.run(&mut stack.cx(), P2, &opts()).await;
+        if expect_ok {
+            let report = older.expect("reversible: nothing to do");
+            assert!(report.applied.is_empty() && !report.stack_written);
+        } else {
+            assert_eq!(code(older), "format_unreadable");
+        }
+        // The data stays at preview.3 either way.
+        let stamped = stack
+            .ledger()
+            .await
+            .stack()
+            .await
+            .expect("stack")
+            .expect("stamped");
+        assert_eq!(stamped.release, P3);
+    }
+    assert_eq!(
+        loams_migrate::path::compare_releases("0.1.0-preview.10", "0.1.0-preview.9"),
+        Some(std::cmp::Ordering::Greater)
+    );
+    assert_eq!(
+        loams_migrate::path::compare_releases("0.1.0", "0.1.0-preview.9"),
+        Some(std::cmp::Ordering::Greater)
     );
 }
