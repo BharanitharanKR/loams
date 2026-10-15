@@ -1207,6 +1207,9 @@ enum Command {
         #[command(subcommand)]
         command: migrate_cli::MigrateCommand,
     },
+    /// Upgrade a self-hosted compose stack one release at a time, with a
+    /// snapshot first (design §54 §10): `check`, `status`, `snapshots`.
+    Upgrade(loams_upgrade::UpgradeArgs),
     /// Engine authentication (LOAMS_AUTH_MODE): API keys.
     Auth {
         #[command(subcommand)]
@@ -1365,6 +1368,7 @@ fn config(command: Command) -> ServerConfig {
         Command::Durable { .. } => unreachable!("loams durable starts no server"),
         Command::Auth { .. } => unreachable!("loams auth starts no server"),
         Command::Migrate { .. } => unreachable!("loams migrate starts no server"),
+        Command::Upgrade(_) => unreachable!("loams upgrade starts no server"),
         #[cfg(feature = "live")]
         Command::LiveWorker => unreachable!("loams live-worker starts no server"),
         #[cfg(feature = "postgres")]
@@ -1567,6 +1571,11 @@ fn main() -> ExitCode {
     #[cfg(feature = "live")]
     if let Command::LiveWorker = cli.command {
         return loams_live_js::worker_main();
+    }
+    // A client (UP1 Task 12): it drives the container runtime, never the
+    // stores, and needs no async runtime.
+    if let Command::Upgrade(args) = &cli.command {
+        return loams_upgrade::run(args);
     }
     serve(cli)
 }
@@ -2846,6 +2855,37 @@ mod tests {
         // --data-dir is required; an unknown subcommand is refused.
         assert!(Cli::try_parse_from(["loams", "migrate", "run"]).is_err());
         assert!(Cli::try_parse_from(["loams", "migrate", "rollback", "--data-dir", "/d"]).is_err());
+    }
+
+    /// UP1 Task 12: `loams upgrade` is flattened into the binary.
+    #[test]
+    fn upgrade_subcommands_parse() {
+        for args in [
+            &[
+                "loams",
+                "upgrade",
+                "check",
+                "--dir",
+                "/s",
+                "--to",
+                "0.1.0-preview.3",
+            ][..],
+            &["loams", "upgrade", "status", "--output", "text"],
+            &["loams", "upgrade", "snapshots", "list"],
+            &[
+                "loams",
+                "upgrade",
+                "snapshots",
+                "prune",
+                "--id",
+                "01J",
+                "--yes",
+            ],
+            &["loams", "upgrade", "--to", "latest", "--bundle", "/b"],
+        ] {
+            let cli = Cli::try_parse_from(args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
+            assert!(matches!(cli.command, Command::Upgrade(_)), "{args:?}");
+        }
     }
 
     /// `loams durable migrate --durable-store …` (D1 Task 4): a store is
