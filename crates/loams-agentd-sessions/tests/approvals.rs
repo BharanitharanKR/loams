@@ -299,8 +299,9 @@ fn pending(list: &Value) -> &Vec<Value> {
 #[tokio::test]
 async fn full_access_unchanged() {
     let tmp = tempfile::tempdir().unwrap();
-    let daemon = Daemon::start(tmp.path(), ApprovalSettings::default());
-    // A thread with no mode: today's behaviour, whatever `autoApprove` says.
+    let daemon = Daemon::start(tmp.path(), ApprovalSettings::full_access_default());
+    // A thread with no mode on a configured full-access default: the
+    // behaviour before Task 13, whatever `autoApprove` says.
     daemon.create_chat("chat-a").await;
     daemon
         .send("chat-a", "ask c1 Bash rm -rf build", "m1", false)
@@ -338,6 +339,32 @@ async fn full_access_unchanged() {
         .await;
     assert!(pending(&list).is_empty(), "{list}");
     assert_eq!(list["mode"], "full-access");
+}
+
+/// Threat model I-1 (owner, 2026-10-15; SD1 T30-19): on the default
+/// settings a thread nobody set a mode for is supervised, so its run waits;
+/// full access is asked for.
+#[tokio::test]
+async fn no_mode_is_supervised_by_default() {
+    let tmp = tempfile::tempdir().unwrap();
+    let daemon = Daemon::start(tmp.path(), ApprovalSettings::default());
+    daemon.create_chat("chat-n").await;
+    daemon
+        .send("chat-n", "ask call-n Bash rm -rf build", "m1", true)
+        .await;
+    let list = daemon
+        .approvals_until(json!({ "chatId": "chat-n" }), |l| !pending(l).is_empty())
+        .await;
+    assert_eq!(list["mode"], "supervised");
+    assert_eq!(pending(&list)[0]["id"], "call-n");
+    assert!(daemon.seen.lock().unwrap().is_empty(), "nothing ran yet");
+    daemon
+        .resolve(Some("chat-n"), "call-n", "deny")
+        .await
+        .unwrap();
+    let seen = daemon.seen(1).await;
+    assert!(seen[0].supervised && !seen[0].auto_approve, "{seen:?}");
+    assert_eq!(seen[0].decision, Some(ApprovalDecision::Deny));
 }
 
 #[tokio::test]
@@ -564,11 +591,11 @@ async fn supervised_thread_refused_on_a_harness_that_cannot_ask() {
 }
 
 /// SD1 Task 30: a fork of a supervised thread hung under a thread with no
-/// mode (so the full-access default) stays supervised.
+/// mode (on a configured full-access default) stays supervised.
 #[tokio::test]
 async fn fork_keeps_its_source_mode() {
     let tmp = tempfile::tempdir().unwrap();
-    let daemon = Daemon::start(tmp.path(), ApprovalSettings::default());
+    let daemon = Daemon::start(tmp.path(), ApprovalSettings::full_access_default());
     daemon.create_chat("src").await;
     daemon.create_chat("other").await;
     daemon.send("src", "hello", "m1", false).await;

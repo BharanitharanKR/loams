@@ -21,7 +21,7 @@ use loams_agentd_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ProjectActionDraft, ProjectActionIcon,
     ReasoningLevel, RunRequest, SandboxLevel, SteeringMode, WorktreeSpec,
 };
-use loams_agentd_sessions::{EngineCore, HarnessRegistry};
+use loams_agentd_sessions::{ApprovalSettings, EngineCore, HarnessRegistry};
 
 const CHAT: &str = "chat-worktree-run";
 
@@ -192,8 +192,13 @@ async fn check_worktree_setup_and_reuse(use_project_symlink: bool) {
     let cwds: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
     let registry = HarnessRegistry::new();
     registry.register(Arc::new(RecordingHarness { cwds: cwds.clone() }));
-    let core = EngineCore::assemble(&tmp_path.join("data"), Arc::new(registry), HarnessId::Mock)
-        .expect("engine core assembles");
+    let core = EngineCore::assemble_with_approvals(
+        &tmp_path.join("data"),
+        Arc::new(registry),
+        HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
+    )
+    .expect("engine core assembles");
     // Terminals run /bin/sh with a temporary HOME and ZDOTDIR, never the
     // developer's login shell (plan DD1 T1-10).
     #[cfg(unix)]

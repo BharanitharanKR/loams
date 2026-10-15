@@ -42,6 +42,18 @@ All notable changes to this project are documented here. The format follows [Kee
   statement writes at most 1 GiB.
 
 ### Changed
+- **`loams-agentd` supervises new threads by default, on your own machine too.** Unset,
+  `[approvals] default_mode` is now `supervised` on a local daemon as on the remote
+  listener, so a thread that has no approval mode of its own (including older threads that
+  never had one set), and a run group created without one, asks before each tool call.
+  **Existing local users will start seeing approval prompts** for threads that used to run
+  unattended; Pi threads without a mode are refused until set to full access. Full access is
+  now always asked for: choose it in Studio's Settings › Approvals, call
+  `SetThreadApprovalMode`, pass a run group's `approvalMode`, or set
+  `default_mode = "full-access"` in the daemon's `config.toml` to keep the old behaviour. An
+  engine embedded with `EngineCore::assemble` is supervised too; pass
+  `ApprovalSettings::full_access_default()` to `assemble_with_approvals` for the old default
+  (threat model I-1, owner decision 2026-10-15).
 - **Loams Live on the main port.** `LiveService` and `LiveAdminService` are served on the
   engine's `--listen` port and on the `tailscale serve` target, behind the engine's auth, so
   the console and SDKs reach Live over the tailnet (LV1 Task 12). Until Live has TLS of its own

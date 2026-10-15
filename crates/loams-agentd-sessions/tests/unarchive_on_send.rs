@@ -15,7 +15,7 @@ use loams_agentd_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SandboxLevel,
     SteeringMode,
 };
-use loams_agentd_sessions::{EngineCore, HarnessRegistry};
+use loams_agentd_sessions::{ApprovalSettings, EngineCore, HarnessRegistry};
 
 const CHAT: &str = "chat-unarchive";
 
@@ -130,10 +130,11 @@ async fn sending_a_message_unarchives_the_chat() {
     let tmp = tempfile::tempdir().unwrap();
     let registry = HarnessRegistry::new();
     registry.register(Arc::new(AckHarness));
-    let core = EngineCore::assemble(
+    let core = EngineCore::assemble_with_approvals(
         &tmp.path().join("data"),
         Arc::new(registry),
         HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
     )
     .expect("engine core assembles");
 

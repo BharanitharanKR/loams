@@ -544,6 +544,18 @@ impl Engine {
             }
             owner.call(methods::MUTATE, params).await.unwrap();
         }
+        // The holding harness cannot ask for approvals, and a thread with no
+        // mode is supervised (threat model I-1, SD1 T30-19): the top-level
+        // chats ask for full access, as a client must; `side` inherits.
+        for chat in ["main", "other"] {
+            owner
+                .call(
+                    methods::SET_THREAD_APPROVAL_MODE,
+                    serde_json::json!({ "chatId": chat, "mode": "full-access" }),
+                )
+                .await
+                .unwrap();
+        }
         engine
     }
 

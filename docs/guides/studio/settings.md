@@ -17,7 +17,7 @@ Kept under `loams.studio.settings`:
 | **Approvals** | Supervised | Supervised or Full access: the new thread's approval mode, set on the daemon, and its sandbox (`workspace-write` or `danger-full-access`) ([Approvals](approvals.md#which-mode-a-thread-gets)) |
 | **Parallel runs** | 2 | 2 to 6. **Not used yet:** the Run in parallel dialog always starts with two variants and allows up to four |
 
-These defaults apply to threads created with **New thread** or Mod+N. A thread started from a project page's composer takes the composer's own pickers and the daemon's default approval mode ([Starting a thread](projects-and-threads.md#starting-a-thread)). Destructive git actions always ask, whatever **Approvals** says.
+These defaults apply to threads created with **New thread** or Mod+N. A thread started from a project page's composer takes the composer's own harness and model pickers and this **Approvals** mode ([Starting a thread](projects-and-threads.md#starting-a-thread)). **Full access** here is the explicit request for it: the daemon itself supervises every thread nobody chose a mode for. Destructive git actions always ask, whatever **Approvals** says.
 
 The palette's **Harness and model** rows change the same settings.
 

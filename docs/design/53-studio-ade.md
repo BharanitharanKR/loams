@@ -512,7 +512,7 @@ Each one is added to the ndjson method table (with role and `renderer`) and to `
     - ACP: forwards `session/request_permission`.
   
   The answer comes only from `ResolveApproval` by an `owner` (desktop) or `studio` (remote) client, never from the `mcp` role (DD1 Ruling 8).
-- **Default.** `supervised` for the web (a remote daemon is reachable over the network), and the person's choice on the desktop, with `supervised` pre-selected (Q803).
+- **Default.** `supervised` for the web (a remote daemon is reachable over the network), and the person's choice on the desktop, with `supervised` pre-selected (Q803). The daemon's own default, for a thread nobody chose a mode for, is `supervised` locally too (owner, 2026-10-15; SD1 T30-19): full access is always asked for.
 - **Run groups** use one approval mode for all members. "Approve for all variants" answers the same tool and arguments in each member, as one click with one record per member.
 - **Destructive git actions need an explicit confirmation**, whatever the mode: discard, restore, merge, push and delete worktree. They are never offered to the agent through the MCP shim.
 
