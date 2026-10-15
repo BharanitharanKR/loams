@@ -23,6 +23,8 @@
 
 mod files;
 mod manifest;
+pub mod postgres;
+pub mod tikv;
 
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -69,9 +71,25 @@ pub struct SnapshotOptions {
     pub raft_dir: Option<PathBuf>,
     /// agentd's data directory, when the stack runs it.
     pub agentd_dir: Option<PathBuf>,
-    /// Components another step took (TiKV, Postgres: UP1 Task 9), recorded
-    /// in the manifest as given.
+    /// Components another step took, recorded in the manifest as given.
     pub extra: Vec<Component>,
+    /// The snapshot id to use (`None`: a new ULID): the CLI picks it when a
+    /// helper (BR) writes into the snapshot directory first.
+    pub id: Option<String>,
+    /// TiKV's backup, taken by the CLI's helper into `<snapshot>/tikv`
+    /// (UP1 Task 9): how, and at which TiKV version.
+    pub tikv: Option<(tikv::TikvMethod, String)>,
+    /// Loams Postgres's storage (UP1 Task 9): drain the safekeeper, then
+    /// branch every timeline.
+    pub postgres: Option<PostgresOptions>,
+}
+
+/// Where Loams Postgres's storage answers, and how long a drain may take.
+#[derive(Clone, Debug)]
+pub struct PostgresOptions {
+    pub pageserver: String,
+    pub safekeeper: String,
+    pub drain_timeout: std::time::Duration,
 }
 
 fn now_ms() -> u64 {
@@ -87,7 +105,10 @@ pub async fn snapshot(
     to: &Path,
     opts: &SnapshotOptions,
 ) -> Result<SnapshotManifest, SnapshotError> {
-    let id = ulid::Ulid::generate().to_string();
+    let id = opts
+        .id
+        .clone()
+        .unwrap_or_else(|| ulid::Ulid::generate().to_string());
     let created_at_ms = now_ms();
     files::private_dir(to)?;
     let dir = to.join(&id);
@@ -146,6 +167,35 @@ pub async fn snapshot(
             agentd,
             &dir.join("agentd"),
         )?);
+    }
+    if let Some((method, version)) = &opts.tikv {
+        if files::size_of(&dir.join("tikv")) == 0 {
+            return Err(SnapshotError::Io(format!(
+                "the TiKV {} copy is missing: the CLI's helper writes <snapshot>/tikv first",
+                method.as_str()
+            )));
+        }
+        // The helper's files are TiKV's and BR's (other users): the
+        // snapshot directory above them is 0700.
+        let (bytes, sha256) = files::digest(&dir.join("tikv"))?;
+        let mut component = tikv::component(*method, version, bytes);
+        component.sha256 = sha256;
+        components.push(component);
+    }
+    if let Some(pg) = &opts.postgres {
+        let storage = postgres::PostgresStorage::new(&pg.pageserver, &pg.safekeeper)?;
+        let drained = storage
+            .drain(pg.drain_timeout, std::time::Duration::from_secs(2))
+            .await?;
+        let branches = storage.branch_every_timeline().await?;
+        let target = dir.join("postgres");
+        files::private_dir(&target)?;
+        let body = serde_json::to_vec_pretty(&postgres::Branches { drained, branches })
+            .map_err(|e| io("postgres/branches.json", e))?;
+        files::write_private(&target.join("branches.json"), &body)?;
+        let mut component = files::describe("postgres", "branch", &dir, "postgres")?;
+        component.method = "branch".to_string();
+        components.push(component);
     }
     components.extend(opts.extra.iter().cloned());
     let (stack_record, ledger) = match Ledger::open_existing(cx.meta.clone()).await {
@@ -351,19 +401,40 @@ pub struct RestoreReport {
     pub restored: Vec<String>,
     /// Bucket objects that were missing and were put back.
     pub objects_put_back: usize,
+    /// The Postgres branches the snapshot made: the CLI points each
+    /// timeline's computes back at its branch (or calls `pg-control`'s
+    /// `RestoreBranch`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub postgres_branches: Vec<postgres::SnapshotBranch>,
 }
 
 /// Restores every Loams-owned component of the snapshot at `from` (a
 /// snapshot directory). The stack must be stopped. Refuses an incomplete or
 /// corrupt snapshot before changing anything.
+///
+/// TiKV is restored by the CLI's helper (BR into a fresh cluster) before
+/// this runs: `tikv_version` is that cluster's version, and a snapshot with
+/// a `tikv` component is refused without it or at another version
+/// (`component_downgrade`).
 pub async fn restore(
     cx: &Cx,
     from: &Path,
     raft_dir: Option<&Path>,
     agentd_dir: Option<&Path>,
+    tikv_version: Option<&str>,
 ) -> Result<RestoreReport, SnapshotError> {
     let manifest = SnapshotManifest::read(from)?;
     manifest.check(from)?;
+    if let Some(taken) = manifest.components.iter().find(|c| c.store == "tikv") {
+        let taken = tikv::component_version(taken).unwrap_or_default();
+        let cluster = tikv_version.ok_or_else(|| {
+            SnapshotError::Io(format!(
+                "the snapshot holds TiKV at {taken}: restore it with BR into a fresh cluster \
+                 at that version, then pass --tikv-version"
+            ))
+        })?;
+        tikv::check_restore_target(taken, cluster)?;
+    }
     let mut report = RestoreReport {
         id: manifest.id.clone(),
         ..RestoreReport::default()
@@ -416,7 +487,15 @@ pub async fn restore(
                 })?;
                 files::replace_dir(&source, target)?;
             }
-            // TiKV and Postgres are restored by their own steps (Task 9).
+            // Restored by the CLI's helper; its version was checked above.
+            "tikv" => {}
+            "postgres" => {
+                let file = source.join("branches.json");
+                let body = std::fs::read(&file).map_err(|e| io(file.display(), e))?;
+                let branches: postgres::Branches =
+                    serde_json::from_slice(&body).map_err(|e| io(file.display(), e))?;
+                report.postgres_branches = branches.branches;
+            }
             _ => continue,
         }
         report.restored.push(component.store.clone());

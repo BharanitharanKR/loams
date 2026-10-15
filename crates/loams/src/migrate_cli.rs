@@ -25,6 +25,8 @@ use serde_json::json;
 
 /// `loams migrate <command>`.
 #[derive(Debug, Subcommand)]
+// Parsed once per process: the size of a variant does not matter.
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum MigrateCommand {
     /// Migrate the stack's stores to this release (or `--target-release`).
     Run {
@@ -71,6 +73,27 @@ pub(crate) enum MigrateCommand {
         agentd_dir: Option<PathBuf>,
         #[arg(long)]
         target_release: Option<String>,
+        /// The snapshot's id (a ULID), when a helper (BR) wrote into
+        /// `<to>/<id>/tikv` first.
+        #[arg(long)]
+        id: Option<String>,
+        /// How TiKV was backed up into `<to>/<id>/tikv` (by the CLI's
+        /// helper): `br` or `cold`.
+        #[arg(long, requires = "tikv_version")]
+        tikv: Option<String>,
+        /// The TiKV version the backup was taken at (`v8.5.8`).
+        #[arg(long)]
+        tikv_version: Option<String>,
+        /// Loams Postgres's pageserver management API: drain the safekeeper
+        /// and branch every timeline (with --safekeeper).
+        #[arg(long, requires = "safekeeper")]
+        pageserver: Option<String>,
+        /// Loams Postgres's safekeeper HTTP API.
+        #[arg(long, requires = "pageserver")]
+        safekeeper: Option<String>,
+        /// How long the drain may take, in seconds.
+        #[arg(long, default_value_t = 300)]
+        drain_timeout_secs: u64,
         #[arg(long, value_enum, default_value_t = Output::Json)]
         output: Output,
     },
@@ -84,6 +107,10 @@ pub(crate) enum MigrateCommand {
         from: PathBuf,
         #[arg(long)]
         agentd_dir: Option<PathBuf>,
+        /// The version of the fresh TiKV cluster the CLI's helper restored
+        /// the snapshot's BR backup (or cold copy) into (`v8.5.8`).
+        #[arg(long)]
+        tikv_version: Option<String>,
         #[arg(long, value_enum, default_value_t = Output::Json)]
         output: Output,
     },
@@ -518,16 +545,45 @@ async fn execute(
             to,
             agentd_dir,
             target_release,
+            id,
+            tikv,
+            tikv_version,
+            pageserver,
+            safekeeper,
+            drain_timeout_secs,
             output,
             ..
         } => {
+            use loams_migrate::snapshot::tikv::TikvMethod;
+            let tikv = match (tikv.as_deref(), tikv_version) {
+                (Some("br"), Some(v)) => Some((TikvMethod::Br, v.clone())),
+                (Some("cold"), Some(v)) => Some((TikvMethod::Cold, v.clone())),
+                (Some(other), _) => {
+                    eprintln!("loams migrate: --tikv {other:?}: expected br or cold");
+                    return ExitCode::from(2);
+                }
+                _ => None,
+            };
+            let postgres = match (pageserver, safekeeper) {
+                (Some(pageserver), Some(safekeeper)) => {
+                    Some(loams_migrate::snapshot::PostgresOptions {
+                        pageserver: pageserver.clone(),
+                        safekeeper: safekeeper.clone(),
+                        drain_timeout: std::time::Duration::from_secs(*drain_timeout_secs),
+                    })
+                }
+                _ => None,
+            };
             let opts = loams_migrate::snapshot::SnapshotOptions {
+                id: id.clone(),
+                tikv,
+                postgres,
                 target_release: target_release
                     .clone()
                     .unwrap_or_else(|| this_release().to_string()),
                 raft_dir: staged_raft.map(Path::to_path_buf),
                 agentd_dir: agentd_dir.clone(),
-                extra: Vec::new(),
+                ..Default::default()
             };
             match loams_migrate::snapshot::snapshot(cx, to, &opts).await {
                 Ok(manifest) => {
@@ -552,9 +608,18 @@ async fn execute(
         MigrateCommand::Restore {
             from,
             agentd_dir,
+            tikv_version,
             output,
             ..
-        } => match loams_migrate::snapshot::restore(cx, from, None, agentd_dir.as_deref()).await {
+        } => match loams_migrate::snapshot::restore(
+            cx,
+            from,
+            None,
+            agentd_dir.as_deref(),
+            tikv_version.as_deref(),
+        )
+        .await
+        {
             Ok(mut report) => {
                 if staged_raft.is_none() && embedded_restored(from) {
                     report.restored.insert(0, "raft".to_string());

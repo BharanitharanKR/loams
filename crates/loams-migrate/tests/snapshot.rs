@@ -113,8 +113,7 @@ impl Stores {
         SnapshotOptions {
             target_release: "0.1.0-preview.3".to_string(),
             raft_dir: Some(self.raft.path().to_path_buf()),
-            agentd_dir: None,
-            extra: Vec::new(),
+            ..SnapshotOptions::default()
         }
     }
 }
@@ -188,7 +187,7 @@ async fn restore_after_crash_mid_snapshot_refused() {
     // A crash before the manifest: the directory has copies but no manifest.
     std::fs::remove_file(dir.join(MANIFEST_FILE)).expect("remove");
     let before = read_dir(s.house.path());
-    let err = snapshot::restore(&s.cx(), &dir, Some(s.raft.path()), None)
+    let err = snapshot::restore(&s.cx(), &dir, Some(s.raft.path()), None, None)
         .await
         .unwrap_err();
     assert!(matches!(err, SnapshotError::Incomplete(_)), "{err}");
@@ -200,7 +199,7 @@ async fn restore_after_crash_mid_snapshot_refused() {
         .expect("snapshot");
     let other_dir = to.path().join(&other.id);
     std::fs::write(other_dir.join("house/catalog.sqlite"), b"tampered").expect("w");
-    let err = snapshot::restore(&s.cx(), &other_dir, Some(s.raft.path()), None)
+    let err = snapshot::restore(&s.cx(), &other_dir, Some(s.raft.path()), None, None)
         .await
         .unwrap_err();
     assert!(matches!(err, SnapshotError::Corrupt(_)), "{err}");
@@ -237,6 +236,7 @@ async fn snapshot_then_restore_round_trips_every_loams_store() {
         &s.cx(),
         &to.path().join(&manifest.id),
         Some(s.raft.path()),
+        None,
         None,
     )
     .await
@@ -441,4 +441,57 @@ async fn estimate_within_20_percent_of_actual() {
         diff <= actual as f64 * 0.2,
         "estimate {estimate}, actual {actual}"
     );
+}
+
+/// UP1 Task 9: the CLI's helper writes TiKV's backup into `<snapshot>/tikv`
+/// under the id it picked; the manifest records it with TiKV's version and
+/// digest, and a restore refuses a cluster at another version (or none).
+#[tokio::test]
+async fn tikv_component_restores_only_at_its_version() {
+    use loams_migrate::snapshot::tikv::TikvMethod;
+    let s = Stores::new().await;
+    let to = TempDir::new().expect("to");
+    let id = "01JB0000000000000000000000".to_string();
+    let opts = SnapshotOptions {
+        id: Some(id.clone()),
+        tikv: Some((TikvMethod::Br, "v8.5.8".to_string())),
+        ..s.opts()
+    };
+    // Without the helper's backup, the snapshot is refused.
+    let err = snapshot::snapshot(&s.cx(), to.path(), &opts)
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("TiKV br copy is missing"), "{err}");
+    let backup = to.path().join(&id).join("tikv");
+    std::fs::create_dir_all(&backup).expect("mkdir");
+    std::fs::write(backup.join("backupmeta"), b"br's meta").expect("w");
+    let manifest = snapshot::snapshot(&s.cx(), to.path(), &opts)
+        .await
+        .expect("snapshot");
+    assert_eq!(manifest.id, id);
+    let tikv = manifest
+        .components
+        .iter()
+        .find(|c| c.store == "tikv")
+        .expect("a tikv component");
+    assert_eq!(tikv.method, "br");
+    assert_eq!(tikv.version.as_deref(), Some("v8.5.8"));
+    assert_eq!(tikv.sha256.len(), 64, "{tikv:?}");
+    let dir = to.path().join(&id);
+    let restore = |version: Option<&'static str>| {
+        let cx = s.cx();
+        let dir = dir.clone();
+        let raft = s.raft.path().to_path_buf();
+        async move { snapshot::restore(&cx, &dir, Some(&raft), None, version).await }
+    };
+    let err = restore(None).await.unwrap_err();
+    assert!(err.to_string().contains("--tikv-version"), "{err}");
+    let err = restore(Some("v8.5.9")).await.unwrap_err();
+    assert!(err.to_string().contains("component_downgrade"), "{err}");
+    let report = restore(Some("8.5.8")).await.expect("restore");
+    assert!(report.restored.contains(&"tikv".to_string()), "{report:?}");
+    // A changed backup file is caught before anything is restored.
+    std::fs::write(backup.join("backupmeta"), b"tampered").expect("w");
+    let err = restore(Some("v8.5.8")).await.unwrap_err();
+    assert!(matches!(err, SnapshotError::Corrupt(_)), "{err}");
 }

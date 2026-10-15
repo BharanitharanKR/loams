@@ -239,6 +239,36 @@ impl NeonClient {
             .await
     }
 
+    /// `GET /v1/tenant`: the tenants attached here (UP1 Task 9: an upgrade
+    /// drains and branches every one).
+    pub async fn list_tenants(&self) -> Result<Vec<TenantId>, NeonError> {
+        #[derive(Deserialize)]
+        struct Item {
+            id: TenantId,
+        }
+        let items: Vec<Item> = self.http.get(Op::ListTenants, "/v1/tenant").await?;
+        Ok(items.into_iter().map(|i| i.id).collect())
+    }
+
+    /// `GET /v1/tenant/{t}/config`'s `tenant_specific_overrides`: the
+    /// settings the tenant overrides (UP1 Task 9 restores them after a
+    /// drain).
+    pub async fn tenant_overrides(
+        &self,
+        t: TenantId,
+    ) -> Result<BTreeMap<String, serde_json::Value>, NeonError> {
+        #[derive(Deserialize)]
+        struct Config {
+            #[serde(default)]
+            tenant_specific_overrides: BTreeMap<String, serde_json::Value>,
+        }
+        let config: Config = self
+            .http
+            .get(Op::GetTenantConfig, &format!("/v1/tenant/{t}/config"))
+            .await?;
+        Ok(config.tenant_specific_overrides)
+    }
+
     /// `GET /v1/tenant/{t}/timeline`.
     pub async fn list_timelines(&self, t: TenantId) -> Result<Vec<TimelineInfo>, NeonError> {
         self.http

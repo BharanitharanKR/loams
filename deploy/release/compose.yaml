@@ -69,6 +69,9 @@ services:
       - --config=/etc/tikv.toml
     volumes:
       - tikv-data:/data/tikv
+      # BR's `local://` backups of an upgrade snapshot (design §54 §7.2,
+      # UP1 Task 9): TiKV writes the SSTs where the BR helper reads them.
+      - ${LOAMS_UPGRADE_SNAPSHOT_DIR:-upgrade-snapshots}:/var/lib/loams-upgrade-snapshots
       - ./config/tikv.toml:/etc/tikv.toml:ro
     depends_on:
       pd:

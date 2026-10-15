@@ -18,6 +18,9 @@ fail = { workspace = true, optional = true }
 loams-common.workspace = true
 # Live's store, for `LiveCx` (embedded or TiKV, as `loams` builds it).
 loams-kv.workspace = true
+# Loams Postgres's pageserver and safekeeper APIs (snapshot drain and
+# branches, UP1 Task 9).
+loams-postgres.workspace = true
 loams-store.workspace = true
 postcard.workspace = true
 # preview.2's Durable and House SQLite files (read-only; the same
@@ -29,10 +32,15 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["time"] }
 toml.workspace = true
+tracing.workspace = true
 ulid.workspace = true
+url.workspace = true
 
 [dev-dependencies]
+# The fake pageserver and safekeeper of `tests/postgres.rs`.
+axum.workspace = true
 loams-meta.workspace = true
 # The preview.2 TiKV dump test (`LOAMS_TEST_PD`).
 loams-meta-tikv.workspace = true
