@@ -41,7 +41,9 @@ fn engine() -> String {
     std::env::var("IT_CONTAINER_ENGINE").unwrap_or_else(|_| "docker".into())
 }
 
-/// The pinned image, read from Task 18's scratch stack.
+/// The pinned image: the one reference pinned by digest in Task 18's
+/// scratch stack (its Postgres backends are pinned by tag). The image is
+/// named only in `deploy/pgdog` (Task 19's licence boundary).
 fn image() -> String {
     let compose = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -50,9 +52,10 @@ fn image() -> String {
     .unwrap();
     compose
         .lines()
-        .find_map(|l| l.trim().strip_prefix("image: ghcr.io/pgdogdev/pgdog@"))
-        .map(|digest| format!("ghcr.io/pgdogdev/pgdog@{digest}"))
+        .filter_map(|l| l.trim().strip_prefix("image: "))
+        .find(|image| image.contains("@sha256:"))
         .expect("the pinned PgDog image")
+        .to_owned()
 }
 
 /// Removes the container when the test ends, however it ends.
