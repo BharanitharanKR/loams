@@ -2,6 +2,8 @@ version: 2
 updates:
   - package-ecosystem: cargo
     directory: /
+    # Every update goes to dev; main moves only at a release merge.
+    target-branch: dev
     schedule:
       interval: weekly
       day: monday
@@ -48,6 +50,7 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
+    target-branch: dev
     schedule:
       interval: weekly
       day: monday
@@ -58,3 +61,55 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
+
+  # The root pnpm workspace (pnpm-workspace.yaml: web, plugins, SDKs, desktop).
+  # Shared UI versions live in its `catalog:`; security pins in its `overrides:`.
+  - package-ecosystem: npm
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    # The 14-day rule (pnpm-workspace.yaml): only releases at least 14 days old.
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 5
+    labels: ["area/web", "status/needs-triage"]
+    commit-message:
+      prefix: "deps"
+    groups:
+      npm-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # Dev-only client drivers for the sqlgate codec fixtures (SQ1 Task 3).
+  - package-ecosystem: npm
+    directory: /scripts/sqlgate/capture/node
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 2
+    labels: ["area/ci", "status/needs-triage"]
+    commit-message:
+      prefix: "deps"
+    groups:
+      sqlgate-capture-node:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: gomod
+    directory: /scripts/sqlgate/capture/go
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 2
+    labels: ["area/ci", "status/needs-triage"]
+    commit-message:
+      prefix: "deps"
+    groups:
+      sqlgate-capture-go:
+        update-types: ["minor", "patch"]
