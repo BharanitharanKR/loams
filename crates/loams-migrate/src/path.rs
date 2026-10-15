@@ -182,6 +182,19 @@ impl UpgradePath {
     /// Whether the release that introduced migration `id` is `release` or an
     /// earlier one, by the train's order (newest first). A migration the
     /// train does not list is never "at or before".
+    /// Whether the release that introduced migration `id` is after `target`
+    /// (the train lists releases newest first): a run to `target` leaves it
+    /// for a later release. A migration the train does not list is never
+    /// "after".
+    pub fn introduced_after(&self, id: &str, target: &str) -> bool {
+        let introduced = self
+            .releases
+            .iter()
+            .position(|r| r.migrations.iter().any(|m| m.id == id));
+        let target = self.releases.iter().position(|r| r.version == target);
+        matches!((introduced, target), (Some(i), Some(t)) if i < t)
+    }
+
     pub fn introduced_at_or_before(&self, id: &str, release: &str) -> bool {
         let introduced = self
             .releases
@@ -223,6 +236,47 @@ mod tests {
             path.release("0.1.0-preview.2").map(|r| r.from.as_str()),
             Some(FRESH)
         );
+    }
+
+    /// A migration belongs to the release that introduced it: a run to an
+    /// earlier release leaves it, a stack stamped at or after it skips it.
+    #[test]
+    fn migrations_belong_to_their_release() {
+        let path = UpgradePath::parse(
+            r#"
+            [[release]]
+            version = "0.1.0-preview.4"
+            from = "0.1.0-preview.3"
+            [[release.migration]]
+            id = "0002-later"
+            store = "meta"
+            class = "reversible"
+            summary = "later"
+
+            [[release]]
+            version = "0.1.0-preview.3"
+            from = "0.1.0-preview.2"
+            [[release.migration]]
+            id = "0001-now"
+            store = "meta"
+            class = "reversible"
+            summary = "now"
+
+            [[release]]
+            version = "0.1.0-preview.2"
+            from = "fresh"
+            "#,
+        )
+        .expect("parse");
+        assert!(path.introduced_after("0002-later", "0.1.0-preview.3"));
+        assert!(!path.introduced_after("0001-now", "0.1.0-preview.3"));
+        assert!(!path.introduced_after("0002-later", "0.1.0-preview.4"));
+        assert!(path.introduced_at_or_before("0001-now", "0.1.0-preview.3"));
+        assert!(path.introduced_at_or_before("0001-now", "0.1.0-preview.4"));
+        assert!(!path.introduced_at_or_before("0002-later", "0.1.0-preview.3"));
+        // A migration the train does not list is neither.
+        assert!(!path.introduced_after("9999-unlisted", "0.1.0-preview.3"));
+        assert!(!path.introduced_at_or_before("9999-unlisted", "0.1.0-preview.3"));
     }
 
     #[test]

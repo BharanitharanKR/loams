@@ -75,6 +75,8 @@ loams-live-js = { workspace = true, optional = true }
 # (design §44 §4). R1's crate owns those protos; `loams-proto` does not
 # generate them a second time.
 loams-live-proto.workspace = true
+# `loams migrate run --live-store`: Live's store for Live migrations (UP1 Task 7).
+loams-kv.workspace = true
 loams-log.workspace = true
 loams-meta.workspace = true
 loams-meta-tikv = { workspace = true, optional = true }
