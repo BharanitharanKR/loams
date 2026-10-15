@@ -158,6 +158,15 @@ pub struct ComputeSpec {
     /// replica can be promoted (`compute_ctl` refuses an unprewarmed one).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub autoprewarm: bool,
+    /// Save the local file cache's state to endpoint storage this often (a
+    /// primary, so a promoted replica can prewarm from it; PG2 Task 16).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offload_lfc_interval_seconds: Option<u64>,
+    /// Apply no roles, databases or extensions (`compute_ctl` leaves the
+    /// catalog as it is). The pinned `compute_ctl` must get this with
+    /// `/promote`: applying the catalog there panics (PG2 R16.6).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub skip_pg_catalog_updates: bool,
 }
 
 /// Builds a [`ComputeSpec`] from records.
@@ -180,6 +189,7 @@ pub struct ComputeSpecBuilder {
     mode: ComputeMode,
     endpoint_storage: Option<(String, Secret<String>)>,
     autoprewarm: bool,
+    offload_lfc_interval_seconds: Option<u64>,
 }
 
 impl ComputeSpecBuilder {
@@ -202,6 +212,7 @@ impl ComputeSpecBuilder {
             mode: ComputeMode::Primary,
             endpoint_storage: None,
             autoprewarm: false,
+            offload_lfc_interval_seconds: None,
         }
     }
 
@@ -216,6 +227,14 @@ impl ComputeSpecBuilder {
     /// failover target, R2.13). Needs [`Self::endpoint_storage`].
     pub fn autoprewarm(mut self, on: bool) -> Self {
         self.autoprewarm = on;
+        self
+    }
+
+    /// Save the local file cache's state to endpoint storage every
+    /// `seconds` (`compute_ctl`'s `offload_lfc_interval_seconds`; 0 is
+    /// never). Needs [`Self::endpoint_storage`].
+    pub fn offload_lfc_interval(mut self, seconds: u64) -> Self {
+        self.offload_lfc_interval_seconds = (seconds > 0).then_some(seconds);
         self
     }
 
@@ -378,6 +397,8 @@ impl ComputeSpecBuilder {
             endpoint_storage_addr: self.endpoint_storage.as_ref().map(|(a, _)| a.clone()),
             endpoint_storage_token: self.endpoint_storage.map(|(_, t)| t),
             autoprewarm: self.autoprewarm,
+            offload_lfc_interval_seconds: self.offload_lfc_interval_seconds,
+            skip_pg_catalog_updates: false,
         }
     }
 }

@@ -61,6 +61,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use loams_postgres::Lsn;
 pub use loams_postgres::compute_ctl::FileCacheMetrics;
 use loams_postgres::compute_ctl::{
     ComputeCtlClient, ComputeCtlConfig, ComputeStatus as CtlState, TerminateMode,
@@ -74,8 +75,8 @@ use crate::idle::IdleMonitor;
 use crate::ids::ComputeId;
 use crate::model::{
     BranchState, CRASH_WINDOW_MS, ComputeBinding, ComputeKey, ComputeRec, ComputeStatus, Cu,
-    DesiredState, EndpointRec, EndpointState, OperationError, OperationKey, OperationKind,
-    OperationRec, OperationState, PoolKey, ProjectState, Record as _,
+    DesiredState, EndpointRec, EndpointState, EndpointType, OperationError, OperationKey,
+    OperationKind, OperationRec, OperationState, PoolKey, ProjectState, Record as _,
 };
 use crate::neon::NeonWrite;
 use crate::observer::{Lifecycle, LifecycleKind};
@@ -157,7 +158,58 @@ pub trait ComputeCtl: Send + Sync + 'static {
         let _ = compute;
         Err(CtlError("compute_ctl's metrics are not read".into()))
     }
+    /// `POST /lfc/prewarm[?from_endpoint=]` (Task 16).
+    async fn prewarm(
+        &self,
+        compute: &ComputeRec,
+        from_endpoint: Option<&str>,
+    ) -> Result<(), CtlError> {
+        let _ = (compute, from_endpoint);
+        Err(CtlError("prewarming is not supported".into()))
+    }
+    /// `GET /lfc/prewarm` (Task 16).
+    async fn prewarm_state(&self, compute: &ComputeRec) -> Result<Prewarm, CtlError> {
+        let _ = compute;
+        Err(CtlError("prewarming is not supported".into()))
+    }
+    /// `POST /promote` with a primary's `spec`, once the replica replayed
+    /// `wal_flush_lsn` (Task 16). `Err` is a refusal or a failure.
+    async fn promote(
+        &self,
+        compute: &ComputeRec,
+        spec: &ComputeSpec,
+        wal_flush_lsn: Lsn,
+    ) -> Result<(), CtlError> {
+        let _ = (compute, spec, wal_flush_lsn);
+        Err(CtlError("promotion is not supported".into()))
+    }
 }
+
+/// A replica's file cache prewarm, as `GET /lfc/prewarm` reports it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Prewarm {
+    /// Not asked yet (the compute's start state).
+    NotPrewarmed,
+    Prewarming,
+    /// Ended: `completed`, `skipped` (no saved state), `failed` (for
+    /// example no endpoint storage) or `cancelled`. `compute_ctl` promotes
+    /// after any of them.
+    Done(String),
+}
+
+impl Prewarm {
+    fn of(status: &str) -> Self {
+        match status {
+            "not_prewarmed" => Prewarm::NotPrewarmed,
+            "prewarming" => Prewarm::Prewarming,
+            other => Prewarm::Done(other.to_owned()),
+        }
+    }
+}
+
+/// How long a promotion waits for the replica's prewarm before asking
+/// `compute_ctl` anyway (which then refuses an unprewarmed replica, R2.13).
+pub const PREWARM_WAIT: Duration = Duration::from_secs(120);
 
 /// [`ComputeCtl`] over HTTP at the record's `ctl_url`, with a
 /// [`CTL_TOKEN_TTL`] token per call.
@@ -248,6 +300,37 @@ impl ComputeCtl for HttpComputeCtl {
     async fn file_cache(&self, compute: &ComputeRec) -> Result<FileCacheMetrics, CtlError> {
         self.client(compute)?
             .autoscaling_metrics()
+            .await
+            .map_err(|e| CtlError(e.to_string()))
+    }
+
+    async fn prewarm(
+        &self,
+        compute: &ComputeRec,
+        from_endpoint: Option<&str>,
+    ) -> Result<(), CtlError> {
+        self.client(compute)?
+            .prewarm(from_endpoint)
+            .await
+            .map_err(|e| CtlError(e.to_string()))
+    }
+
+    async fn prewarm_state(&self, compute: &ComputeRec) -> Result<Prewarm, CtlError> {
+        self.client(compute)?
+            .prewarm_state()
+            .await
+            .map(|s| Prewarm::of(&s.status))
+            .map_err(|e| CtlError(e.to_string()))
+    }
+
+    async fn promote(
+        &self,
+        compute: &ComputeRec,
+        spec: &ComputeSpec,
+        wal_flush_lsn: Lsn,
+    ) -> Result<(), CtlError> {
+        self.client(compute)?
+            .promote(spec, wal_flush_lsn)
             .await
             .map_err(|e| CtlError(e.to_string()))
     }
@@ -471,6 +554,23 @@ fn resolve(
                 None
             }
         }
+        // Task 16: done when the types are swapped; refused when the flag
+        // went without them.
+        OperationKind::EndpointPromote => {
+            if rec.promote {
+                None
+            } else if rec.kind == EndpointType::ReadWrite {
+                Some(Ok(()))
+            } else {
+                Some(Err(OperationError {
+                    reason: "failed_precondition".into(),
+                    message: "the promotion did not complete: the branch's read-write endpoint \
+                              runs, or compute_ctl refused (replace the replica, or prewarm it \
+                              and retry)"
+                        .into(),
+                }))
+            }
+        }
         // Ended with the removal; no other kind is in `ops`.
         _ => None,
     }
@@ -484,6 +584,7 @@ fn is_endpoint_op(kind: OperationKind) -> bool {
             | OperationKind::EndpointSuspend
             | OperationKind::EndpointRestart
             | OperationKind::EndpointDelete
+            | OperationKind::EndpointPromote
     )
 }
 
@@ -1344,6 +1445,9 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
             self.write("endpoint.running", rec, Batch::new(), Settle::default())
                 .await?;
         }
+        if self.ep().promote {
+            return self.promote(compute).await;
+        }
         let due = match self.idle(&compute.record, last_active, asked).await? {
             Idle::Suspended => return Ok(Step::Done),
             Idle::Due(due) => due,
@@ -1353,6 +1457,171 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
             (Step::Done, Some(b)) => Step::Again(b),
             (step, _) => step,
         })
+    }
+
+    /// `RestartEndpoint{promote}` (Task 16) on this running read-only
+    /// endpoint: once its branch's read-write endpoint is down, prewarm the
+    /// replica's file cache (from the read-write endpoint's saved state;
+    /// waited for at most [`PREWARM_WAIT`]), then `compute_ctl`'s
+    /// `/promote` with a primary's spec at the WAL's flushed LSN, then one
+    /// batch swaps the two endpoints' types. A read-write endpoint that runs
+    /// (or is asked to) or a refusal ends the promotion, failed.
+    async fn promote(&mut self, compute: Versioned<ComputeRec>) -> Result<Step, ReconcileError> {
+        let ep = self.ep().clone();
+        let sibling = self
+            .snap
+            .endpoints
+            .iter()
+            .find(|e| {
+                e.record.id != ep.id
+                    && e.record.branch_id == ep.branch_id
+                    && e.record.kind == EndpointType::ReadWrite
+            })
+            .cloned();
+        let rw_runs = sibling.as_ref().is_some_and(|o| {
+            o.record.desired == DesiredState::Running || o.record.compute_id.is_some()
+        });
+        if ep.kind != EndpointType::ReadOnly || rw_runs {
+            tracing::warn!(endpoint = %ep.id, "the branch's read-write endpoint runs: the promotion ends");
+            return self.end_promotion(None).await;
+        }
+        let asked_at = self
+            .ops
+            .iter()
+            .filter(|o| o.record.kind == OperationKind::EndpointPromote)
+            .map(|o| o.record.created_at_ms)
+            .min()
+            .unwrap_or_else(|| self.now());
+        let waited = self.now().saturating_sub(asked_at)
+            >= u64::try_from(PREWARM_WAIT.as_millis()).unwrap_or(u64::MAX);
+        if !waited {
+            match self.c.ctl.prewarm_state(&compute.record).await {
+                Ok(Prewarm::NotPrewarmed) => {
+                    let from = sibling.as_ref().map(|o| o.record.id.as_str());
+                    if let Err(e) = self.c.ctl.prewarm(&compute.record, from).await {
+                        tracing::info!(compute = %compute.record.id, error = %e, "the prewarm was not started; retrying");
+                    }
+                    return Ok(Step::Again(self.c.poll));
+                }
+                Ok(Prewarm::Prewarming) => return Ok(Step::Again(self.c.poll)),
+                Ok(Prewarm::Done(status)) => {
+                    tracing::info!(compute = %compute.record.id, %status, "the replica's prewarm ended");
+                }
+                Err(e) => {
+                    tracing::info!(compute = %compute.record.id, error = %e, "the prewarm state is unknown; retrying");
+                    return Ok(Step::Again(self.act.ctx.config.retry_initial));
+                }
+            }
+        }
+        let project = &self.snap.project.record;
+        let Some(branch) = self.snap.branch(&ep.branch_id) else {
+            return Ok(Step::Done);
+        };
+        let heads = match self
+            .act
+            .ctx
+            .neon
+            .wal_heads(
+                loams_postgres::TenantId(project.tenant_id),
+                loams_postgres::TimelineId(branch.record.timeline_id),
+            )
+            .await
+        {
+            Ok(h) => h,
+            Err(e) => {
+                tracing::info!(endpoint = %ep.id, error = %e.message, "the WAL's heads are unknown; retrying");
+                return Ok(Step::Again(self.act.ctx.config.retry_initial));
+            }
+        };
+        let Some(binding) = compute.record.binding.clone() else {
+            return Ok(Step::Done);
+        };
+        let mut inputs = match spec::read_inputs(
+            &self.act.ctx.store,
+            &binding,
+            Some(&compute.record.id),
+        )
+        .await
+        {
+            Ok(i) => i,
+            Err(SpecError::Store(e)) => return Err(e.into()),
+            Err(e) => {
+                tracing::info!(endpoint = %ep.id, error = ?e, "no spec to promote with yet");
+                return Ok(Step::Again(self.act.ctx.config.retry_initial));
+            }
+        };
+        inputs.endpoint.kind = EndpointType::ReadWrite;
+        // The pinned compute_ctl panics applying the catalog inside
+        // `/promote` (it blocks on its runtime from within it; R16.6): the
+        // promotion's spec leaves the catalog alone (the replica has the
+        // primary's), and the compute's spec version is then recorded as
+        // unknown (0), so the next pass pushes the full spec through
+        // `/configure`.
+        let mut spec = match spec::build(
+            &self.c.sources,
+            &compute.record.id,
+            compute.record.cu,
+            &inputs,
+        ) {
+            Ok((spec, _)) => spec,
+            Err(e) => {
+                tracing::info!(endpoint = %ep.id, error = ?e, "no spec to promote with yet");
+                return Ok(Step::Again(self.act.ctx.config.retry_initial));
+            }
+        };
+        spec.skip_pg_catalog_updates = true;
+        self.act.renew().await?;
+        match self
+            .c
+            .ctl
+            .promote(&compute.record, &spec, heads.flush_lsn)
+            .await
+        {
+            Ok(()) => {
+                tracing::info!(endpoint = %ep.id, compute = %compute.record.id, "replica promoted");
+                self.end_promotion(Some((sibling, compute, 0))).await
+            }
+            Err(e) => {
+                tracing::warn!(endpoint = %ep.id, compute = %compute.record.id, error = %e, "compute_ctl refused the promotion");
+                self.end_promotion(None).await
+            }
+        }
+    }
+
+    /// Ends a promotion: with `swapped` (the read-write endpoint, if any,
+    /// the promoted compute and its primary spec's version) this endpoint
+    /// becomes read-write and that one read-only; without, nothing changes
+    /// but the flag, and the operation fails.
+    async fn end_promotion(
+        &mut self,
+        swapped: Option<(Option<Versioned<EndpointRec>>, Versioned<ComputeRec>, u64)>,
+    ) -> Result<Step, ReconcileError> {
+        let mut rec = self.ep().clone();
+        rec.promote = false;
+        let mut batch = Batch::new();
+        let mut compute_at = None;
+        if let Some((sibling, compute, version)) = &swapped {
+            rec.kind = EndpointType::ReadWrite;
+            if let Some(o) = sibling {
+                let mut demoted = o.record.clone();
+                demoted.kind = EndpointType::ReadOnly;
+                demoted.updated_at_ms = self.now();
+                batch.put(&demoted, Some(o.version))?;
+            }
+            let mut c = compute.record.clone();
+            c.spec_version = *version;
+            compute_at = Some((batch.put(&c, Some(compute.version))?, c));
+        }
+        let out = self
+            .write("endpoint.promote", rec, batch, Settle::default())
+            .await?;
+        if let Some((at, c)) = compute_at {
+            self.compute = Some(Versioned {
+                record: c,
+                version: out[at].unwrap_or_default(),
+            });
+        }
+        Ok(Step::Done)
     }
 
     /// The autoscaler follows the running compute (Task 15), with the

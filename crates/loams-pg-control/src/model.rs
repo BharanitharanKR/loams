@@ -515,6 +515,10 @@ pub struct EndpointRec {
     /// batch that writes the endpoint. At most [`MAX_OPEN_ENDPOINT_OPS`].
     #[serde(default)]
     pub open_ops: Vec<String>,
+    /// `RestartEndpoint{promote}` asked (Task 16): the reconciler makes
+    /// this read-only endpoint the branch's read-write one.
+    #[serde(default)]
+    pub promote: bool,
 }
 
 /// How long a compute crash counts toward `Failed` (§46 §7.1: three
@@ -554,6 +558,7 @@ impl EndpointRec {
             replace_compute: false,
             settings_version: 0,
             open_ops: Vec::new(),
+            promote: false,
         }
     }
 }
@@ -803,6 +808,8 @@ pub enum OperationKind {
     EndpointSuspend,
     EndpointRestart,
     EndpointDelete,
+    /// `RestartEndpoint{promote}` (Task 16); on the wire a restart.
+    EndpointPromote,
 }
 
 impl OperationKind {
@@ -817,6 +824,7 @@ impl OperationKind {
             OperationKind::EndpointSuspend => "postgres.endpoint.suspend",
             OperationKind::EndpointRestart => "postgres.endpoint.restart",
             OperationKind::EndpointDelete => "postgres.endpoint.delete",
+            OperationKind::EndpointPromote => "postgres.endpoint.restart",
         }
     }
 }

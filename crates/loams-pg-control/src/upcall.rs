@@ -76,6 +76,12 @@ pub use keys::{
 pub use limit::Rate;
 pub use spec::Sources as SpecSources;
 
+/// What specs are built from, beyond the records (Task 16's endpoint
+/// storage).
+pub mod spec_sources {
+    pub use super::spec::{EndpointStorage, LFC_OFFLOAD_INTERVAL_S};
+}
+
 use crate::ids::ComputeId;
 use crate::model::{
     BranchPrefix, BranchRec, ComputeKey, ComputeRec, ComputeStatus, EndpointPrefix, EndpointRec,
@@ -160,6 +166,8 @@ pub struct UpcallConfig {
     pub default_pageserver: Option<u64>,
     /// `loams-wal` pool name → its connection strings.
     pub wal_pools: BTreeMap<String, Vec<String>>,
+    /// Endpoint storage, for the computes' file cache state (Task 16).
+    pub endpoint_storage: Option<spec::EndpointStorage>,
     pub limits: UpcallLimits,
     pub clock: Clock,
 }
@@ -174,6 +182,7 @@ impl UpcallConfig {
             pageservers: BTreeMap::new(),
             default_pageserver: None,
             wal_pools: BTreeMap::new(),
+            endpoint_storage: None,
             limits: UpcallLimits::default(),
             clock: Clock::system(),
         }
@@ -359,6 +368,7 @@ impl UpcallServer {
                 pageservers: config.pageservers,
                 default_pageserver: config.default_pageserver,
                 wal_pools: config.wal_pools,
+                endpoint_storage: config.endpoint_storage,
             },
             notify_digest: config
                 .notify_token

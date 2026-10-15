@@ -228,6 +228,12 @@ pub struct PgControlConfig {
     pub default_pageserver: Option<u64>,
     /// `loams-wal` pool name → the connection strings computes write to.
     pub wal_pools: BTreeMap<String, Vec<String>>,
+    /// Endpoint storage (`host:port`) for the computes' file cache state
+    /// (Task 16); `None`: not run, and a promotion runs with a cold cache.
+    pub endpoint_storage: Option<String>,
+    /// Where the key endpoint storage verifies tokens with is written at
+    /// start (PEM).
+    pub endpoint_storage_pem_out: Option<PathBuf>,
     /// The storage controller's token for `notify-attach`; without it the
     /// route is not served.
     pub notify_token: Option<Secret<String>>,
@@ -282,6 +288,8 @@ impl PgControlConfig {
             pageservers: BTreeMap::new(),
             default_pageserver: None,
             wal_pools: BTreeMap::new(),
+            endpoint_storage: None,
+            endpoint_storage_pem_out: None,
             notify_token: None,
             audit: Arc::new(LogAuditSink),
             upkeep_every: Duration::from_secs(600),
@@ -536,8 +544,22 @@ fn computes(
             pageservers: config.pageservers.clone(),
             default_pageserver: config.default_pageserver,
             wal_pools: config.wal_pools.clone(),
+            endpoint_storage: endpoint_storage(config, keys),
         },
     ))
+}
+
+/// Endpoint storage as the specs name it (Task 16), signed with `keys`.
+fn endpoint_storage(
+    config: &PgControlConfig,
+    keys: &Arc<ComputeKeys>,
+) -> Option<loams_pg_control::upcall::spec_sources::EndpointStorage> {
+    config.endpoint_storage.as_ref().map(|addr| {
+        loams_pg_control::upcall::spec_sources::EndpointStorage {
+            addr: addr.clone(),
+            keys: keys.clone(),
+        }
+    })
 }
 
 /// The API listener's routes: every RPC path its own route, so any other
@@ -575,6 +597,16 @@ impl PgControl {
         let secrets = open_secrets(&config).await?;
         let signing_ref = SecretRef::parse(SIGNING_KEY_REF)?;
         let keys = Arc::new(load_or_create_signing_key(secrets.as_ref(), &signing_ref).await?);
+        if let Some(path) = &config.endpoint_storage_pem_out {
+            // The key endpoint storage verifies the computes' tokens with
+            // (its `pemfile`); public, so written plainly.
+            std::fs::write(path, keys.public_key_pem()).map_err(|e| {
+                PgControlError::Config(format!(
+                    "--endpoint-storage-pem-out {}: {e}",
+                    path.display()
+                ))
+            })?;
+        }
         let neon = NeonClients {
             storage: NeonClient::new(
                 NeonEndpoints {
@@ -615,6 +647,7 @@ impl PgControl {
                 pageservers: config.pageservers.clone(),
                 default_pageserver: config.default_pageserver,
                 wal_pools: config.wal_pools.clone(),
+                endpoint_storage: endpoint_storage(&config, &keys),
                 ..UpcallConfig::defaults(config.upcall_listen)
             },
         )

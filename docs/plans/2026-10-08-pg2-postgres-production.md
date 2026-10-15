@@ -2009,3 +2009,60 @@ No task of this plan put `pg-control` in the preview release stack: R10.10 noted
   - `tests/runtime_kube.rs` has `pod_cpu_from_the_metrics_api`, and `role.json` is re-blessed.
   - `loams-postgres`'s client test parses the exposition.
   - No kind run: metrics-server and storage in kind wait for Task 48. That the cache reloads without a restart (§46 §7.4's "verify") is Task 17's to measure on a real compute.
+
+### Task 16 rulings (2026-10-15)
+
+- **R16.1 Read-only endpoints.**
+  - A branch may have any number of read-only endpoints (Task 11 already allowed them). Their computes get a `Replica` spec, a hot standby following the branch's head.
+  - The warm pool binds to them too: the spec decides the mode.
+  - A `CreateEndpoint` of a read-write endpoint now also counts a read-only endpoint that is being promoted as the branch's read-write endpoint.
+- **R16.2 `standby_horizon` from `loams-wal` (Task 32's review M4).**
+  - The replication reader parses each replica's `'r'` standby status. Each connection keeps its last applied LSN; an applied LSN of 0 means none, and the entry goes when the connection closes.
+  - `WalService::standby_horizon(tl)` is the least of those LSNs on this instance, as the fork's `walsenders.get_hotstandby()` computes it. It is published as `standby_horizon` in `SafekeeperTimelineInfo` and in discovery responses.
+  - Hot-standby `'h'` feedback is not relayed to the proposer. Replica queries can then be cancelled by conflicts, which does not affect correctness. Relaying it is left for Task 39 (HA).
+  - Test: `standby_horizon_published_from_replica_feedback`.
+- **R16.3 Promotion (`RestartEndpoint{promote}`).**
+  - **The service** (`promote_endpoint`). The endpoint must be read-only, running, and not already being promoted. The branch's read-write endpoint must be down: no compute, and not asked to run. Otherwise the answer is `failed_precondition`.
+  - The batch sets `EndpointRec.promote`. It also checks the read-write endpoint's version and rewrites the branch's guard unchanged, so a racing start or create conflicts with it.
+  - The operation is `postgres.endpoint.restart` on the wire, as the proto says. Internally it is a new `OperationKind::EndpointPromote`, appended.
+  - **The reconciler**, on the running replica, under the project's lease:
+    1. It checks again that the read-write endpoint is down. If it is not, the operation fails.
+    2. It prewarms: `/lfc/prewarm`, from the read-write endpoint's saved cache state. It waits up to `PREWARM_WAIT` (2 min) for it.
+    3. It calls `/promote` with a primary's spec, at the flushed LSN from `loams-wal`.
+    4. One batch swaps the two endpoints' types and records the primary spec's version.
+  - A refusal (R2.13: an unprewarmed replica) fails the operation with `failed_precondition`, and nothing changes.
+  - The same compute keeps serving behind the same address. The old read-write endpoint starts as a replica afterwards.
+- **R16.4 Endpoint storage (R2.13: "this task deploys endpoint storage for the stacks that promote").**
+  - **Tokens and key.** `ComputeKeys` signs endpoint storage's EdDSA tokens, with claims `{tenant_id, timeline_id, endpoint_id, exp}`. It also writes its public key as an SPKI PEM, the `pemfile` endpoint storage reads.
+    - The upcall and `compute_ctl` tokens have other claims, so no verifier takes another's token, and one key serves all three.
+    - A token's expiry is the compute's creation time (from its ULID id) plus `COMPUTE_TOKEN_TTL`. The same records therefore still give the same spec bytes.
+  - **Verified against the pinned image's `endpoint_storage`.** It loaded our PEM. Our token could PUT and GET its own endpoint's state. Another key's token got 400. A PUT to another endpoint's path got 401. A GET of another endpoint's state is allowed, which is Neon's design so a promoted replica can read the primary's state.
+  - **The spec.** With `--endpoint-storage <host:port>`, every compute gets endpoint storage's address and token and `autoprewarm`. A primary also gets `offload_lfc_interval_seconds = 300`, a new spec field in `loams-postgres`.
+  - **Deployment.** The release stack's `postgres-control` profile runs `endpoint-storage` from the included storage stack's pinned `neon` image. That image is not a neon-archive copy, and the service is not one of the barred proxies.
+    - It uses the stack's RustFS bucket `neon` under `endpoint-storage/`, and publishes no ports.
+    - `pg-control` writes the key into a shared volume (`--endpoint-storage-pem-out`). Endpoint storage mounts it read-only and waits for it.
+    - The `loams-pg-control` image creates `/run/endpoint-storage`.
+    - `release-compose.yml`'s checks pass locally.
+  - The Helm chart's deployment is Task 48's.
+  - **Without endpoint storage** (`deploy/loams-postgres-dev`, single node), `/lfc/prewarm` ends `failed` ("endpoint_storage_addr missing"). The pinned `compute_ctl` promotes after a failed prewarm (it refuses only `not_prewarmed` and `prewarming`), so the promoted compute starts with a cold cache.
+- **R16.5 Tests.**
+  - `tests/replicas.rs` covers the four named cases: `ro_endpoint_starts_replica_spec`, `promote_swaps_types`, `promote_refused_while_rw_running` and `promote_refuses_an_unprewarmed_replica`. Specs are read through a real upcall listener (`Env::upcall_spec`).
+  - Unit test `endpoint_storage_takes_our_tokens_and_only_them`.
+  - `loams-postgres`'s spec test covers the offload field.
+  - The plan's `ro_rejects_writes` (`it_compose`) is `it_ro_endpoint_rejects_writes_then_promotes` in `tests/it_endpoint.rs`, run in `pg2-e2e.yml`'s compose job. On the dev stack, with real computes, it checks:
+    - the replica replays a row;
+    - it refuses an INSERT with `read_only_sql_transaction`;
+    - the promotion is refused while the read-write endpoint runs;
+    - once that endpoint is suspended, the replica is promoted behind the same address and takes writes.
+- **R16.6 The pinned `compute_ctl` panics in `/promote` (found by the real-compute test).**
+  - After `pg_promote()` succeeds, `promote_impl` runs on a tokio worker and calls the synchronous `reconfigure`. That calls `apply_spec_sql`, which does `Handle::current().block_on` ("Cannot start a runtime from within a runtime", `compute_tools/src/spec_apply.rs:50`). The task dies, and the answer is 500 "promote sender dropped". The fork's source at the pinned commit has the same code.
+  - Neon's own test escapes it because `neon_local`'s specs set `skip_pg_catalog_updates`.
+  - **Workaround here:** the promotion's spec sets `skip_pg_catalog_updates: true`, a new field in `loams-postgres`'s spec, sent only with `/promote`. The replica already has the primary's catalog. The compute's spec version is recorded as unknown, so the next pass pushes the full primary spec through `/configure`, which applies the catalog on a safe path.
+  - **Carry to NF1's patch queue:** run the catalog step of `promote_impl` off the async worker (`spawn_blocking`), or make it async.
+- **R16.7 Replicas never streamed WAL (found by the real-compute test; a gap since Task 8's spec).**
+  - Neon's control plane gives a hot standby `primary_conninfo` naming the safekeepers (`host=h1,h2 port=p1,p2 options='-c timeline_id=… tenant_id=…' application_name=replica replication=true`), `primary_slot_name = repl_<timeline>_`, `hot_standby = on` and `recovery_prefetch = off` (`control_plane/src/endpoint.rs`). Our spec gave none of these, so a read-only compute stayed at its base backup.
+  - The spec now sets them for `Replica` mode, after the endpoint's settings, which cannot name them (R11.3).
+  - `it_ro_endpoint_rejects_writes_then_promotes` checks that a row inserted after the replica started reaches it.
+- **R16.8 Real-compute runs (2026-10-15).** On `deploy/loams-postgres-dev`, as compose project `pg2-b2-it` under rootless Podman:
+  - `it_ro_endpoint_rejects_writes_then_promotes` passed twice. The promotion target is safekeeper1's flushed LSN after the read-write endpoint's suspend; the test reads it from safekeeper1's HTTP API (`IT_SAFEKEEPER_HTTP`), because its Neon is a fake.
+  - `it_endpoint_starts_suspends_and_deletes`, `it_idle_long_query_is_activity_then_suspends` and `it_compose_compute_answers_select_1` also pass. They now carry Task 15's file cache settings, so real computes start with the LFC on (R15.3).
