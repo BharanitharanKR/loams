@@ -2292,6 +2292,9 @@ jobs:
         name: the SignPath artifact guard self-test
         run: python3 scripts/ci/signpath-artifacts.py --self-test
       - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: the cold-start statistics self-test (PG2 Task 17)
+        run: python3 scripts/pg2/coldstart_stats.py --self-test
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
         name: PyYAML
         run: python3 -m pip install --quiet --disable-pip-version-check PyYAML
       - if: ${{ !cancelled() }} # report every check, not only the first failure

@@ -6,6 +6,14 @@ name: Postgres benchmark
 on:
   workflow_dispatch:
     inputs:
+      suite:
+        description: "wal: the WAL gate; coldstart: PG2 Task 17's cold starts"
+        type: choice
+        options: ["wal", "coldstart"]
+        default: "wal"
+      runs:
+        description: "Cold starts per variant (coldstart)"
+        default: "50"
       replicas:
         description: "Safekeepers / TiKV stores"
         type: choice
@@ -26,6 +34,7 @@ permissions:
 
 jobs:
   gate:
+    if: inputs.suite == 'wal'
     name: WAL benchmark
     runs-on: [self-hosted, loam-bench]
     timeout-minutes: 720
@@ -82,3 +91,28 @@ jobs:
           compose=(docker-compose); command -v docker-compose >/dev/null || compose=(docker compose)
           "${compose[@]}" -f deploy/loams-pg-bench/compose.yaml \
             --profile sk --profile sk3 down -v || true
+
+  # PG2 Task 17: suspended endpoint -> StartEndpoint -> first SELECT 1, on
+  # compose (deploy/loams-postgres-dev), recorded in bench/results/. Not a
+  # gate yet (PG2b exit); kind and PgDog follow (Tasks 48 and 26).
+  coldstart:
+    if: inputs.suite == 'coldstart'
+    name: Cold start
+    runs-on: [self-hosted, loam-bench]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - name: protoc
+        run: command -v protoc || { sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev; }
+      - name: cold starts
+        env:
+          RUNS: ${{ inputs.runs }}
+        run: |
+          case "$RUNS" in ''|*[!0-9]*) echo "runs must be a number" >&2; exit 2 ;; esac
+          scripts/pg2/cold-start.sh
+      - name: results
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: loams-pg-coldstart
+          path: bench/results/*-coldstart.json
