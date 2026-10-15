@@ -673,7 +673,8 @@ jobs:
       - name: GPG signatures
         env:
           LOAMS_GPG_PRIVATE_KEY: ${{ secrets.LOAMS_GPG_PRIVATE_KEY }}
-          LOAMS_GPG_KEY_ID: ${{ secrets.LOAMS_GPG_KEY_ID }}
+          # A key id is not a secret; the CLI packages (release-package.yml) read the same variable.
+          LOAMS_GPG_KEY_ID: ${{ vars.LOAMS_GPG_KEY_ID }}
           LOAMS_GPG_PASSPHRASE: ${{ secrets.LOAMS_GPG_PASSPHRASE }}
         run: bash apps/desktop-electron/scripts/gpg-sign.sh "$RUNNER_TEMP/release"
 
