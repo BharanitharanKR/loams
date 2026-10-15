@@ -50,6 +50,14 @@ export {
   invokeOn,
 } from './bridge.js';
 export {
+  type Capabilities,
+  capabilities,
+  compareVersions,
+  MIN_ENGINE,
+  UPGRADE_COMMAND,
+  unmet,
+} from './capabilities.js';
+export {
   type CatalogEntry,
   CatalogError,
   type CatalogPatch,

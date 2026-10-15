@@ -62,6 +62,12 @@ export interface FlagsService {
   apiVersions: string[];
   /** True until first-run setup has created the org and its owner. */
   setupRequired?: boolean;
+  /**
+   * Why GetInstance gave no answer: the engine does not have it
+   * (`unimplemented`, an engine too old for this console), or it could not
+   * be reached (`unreachable`).
+   */
+  instanceError?: 'unimplemented' | 'unreachable';
   has(api: string): boolean;
 }
 

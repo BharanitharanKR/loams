@@ -1,4 +1,9 @@
-import type { FlagsService, SessionService } from '@loams/console-host';
+import {
+  type FlagsService,
+  MIN_ENGINE,
+  type SessionService,
+  UPGRADE_COMMAND,
+} from '@loams/console-host';
 import { SlotProvider, SlotRegistry } from '@loams/slots';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useEffect } from 'react';
@@ -37,7 +42,7 @@ function setup(start = '/', flags?: FlagsService, s: SessionService = session) {
 const flags = {
   edition: 'oss',
   instanceName: 'Acme Loams',
-  serverVersion: '0.1.0-preview.1',
+  serverVersion: '0.1.0-preview.3',
   features: {},
   apiVersions: [],
   has: () => false,
@@ -72,7 +77,7 @@ describe('shell chrome', () => {
     expect(screen.getByRole('img', { name: 'Loams' })).toBeTruthy();
     expect(screen.getByText('OSS')).toBeTruthy();
     expect(screen.getByText('Preview').className).toBe('lc-preview');
-    expect(screen.getByText('Loams 0.1.0-preview.1')).toBeTruthy();
+    expect(screen.getByText('Loams 0.1.0-preview.3')).toBeTruthy();
   });
 
   it('breadcrumbs name the instance, the section and the page', () => {
@@ -304,3 +309,29 @@ function setupWithDock() {
   });
   return r;
 }
+
+describe('engine support (design §54 §13.1)', () => {
+  it('engine_older_than_n_minus_one_shows_upgrade_page', () => {
+    setup('/', { ...flags, serverVersion: '0.1.0-preview.1' });
+    const page = screen.getByRole('alert');
+    expect(within(page).getByRole('heading', { name: 'Upgrade your engine' })).toBeTruthy();
+    expect(page.textContent).toContain('This engine runs Loams 0.1.0-preview.1.');
+    expect(page.textContent).toContain(`works with Loams ${MIN_ENGINE} and later`);
+    expect(within(page).getByText(UPGRADE_COMMAND)).toBeTruthy();
+    // No chrome and no page: nothing that would call a missing RPC.
+    expect(screen.queryByRole('navigation')).toBeNull();
+  });
+
+  it('an engine without GetInstance gets the upgrade page too', () => {
+    setup('/', { ...flags, serverVersion: '', instanceError: 'unimplemented' });
+    expect(screen.getByRole('alert').textContent).toContain('does not answer GetInstance');
+  });
+
+  it('N−1 and an unreachable engine get the console', () => {
+    setup('/', { ...flags, serverVersion: MIN_ENGINE });
+    expect(screen.queryByRole('alert')).toBeNull();
+    cleanup();
+    setup('/', { ...flags, serverVersion: '', instanceError: 'unreachable' });
+    expect(screen.queryByText('Upgrade your engine')).toBeNull();
+  });
+});

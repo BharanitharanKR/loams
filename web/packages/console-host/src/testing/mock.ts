@@ -15,6 +15,10 @@ export interface MockOptions {
   features?: Record<string, boolean>;
   /** Which packages `GetInstance.api_versions` lists. */
   apiVersions?: string[];
+  /** `GetInstance.server_version` (default: the newest release, N). */
+  serverVersion?: string;
+  /** No GetInstance at all (an engine older than the console supports). */
+  noInstance?: boolean;
   /** When the mock session authenticated (older than 5 min → step-up). */
   authenticatedAt?: Date;
   /** The signed-in principal id: usr_omar (an approver) or usr_dana. */
@@ -30,6 +34,9 @@ export interface MockControl {
 }
 
 const STEP_UP_WINDOW_MS = 5 * 60 * 1000;
+
+/** The engine version the mock reports by default: the newest release (N). */
+export const MOCK_SERVER_VERSION = '0.1.0-preview.3';
 
 function principal(id: string, name: string, kind: instance.PrincipalKind, email = '') {
   return create(instance.PrincipalSchema, { id, displayName: name, kind, email });
@@ -125,16 +132,24 @@ export function createMockControl(options: MockOptions = {}): MockControl {
 
   const transport = createRouterTransport(({ service }) => {
     service(instance.InstanceService, {
-      getInstance: () => ({
-        instanceId: '01J9Z3MOCKINSTANCE00000000',
-        name: 'Demo instance',
-        edition: instance.Edition.OSS,
-        serverVersion: '0.1.0-preview.1',
-        apiVersions,
-        // `demo` tells the pages they show built-in sample data, not a server's.
-        features: { billing: false, demo: true, ...options.features },
-        signInMethods: [{ kind: instance.SignInKind.NONE }],
-      }),
+      getInstance: () => {
+        if (options.noInstance) {
+          throw new ConnectError(
+            'loams.instance.v1.InstanceService/GetInstance',
+            Code.Unimplemented,
+          );
+        }
+        return {
+          instanceId: '01J9Z3MOCKINSTANCE00000000',
+          name: 'Demo instance',
+          edition: instance.Edition.OSS,
+          serverVersion: options.serverVersion ?? MOCK_SERVER_VERSION,
+          apiVersions,
+          // `demo` tells the pages they show built-in sample data, not a server's.
+          features: { billing: false, demo: true, ...options.features },
+          signInMethods: [{ kind: instance.SignInKind.NONE }],
+        };
+      },
       whoAmI: () => ({
         principal: me,
         org: { id: 'org_acme', name: 'Acme' },
