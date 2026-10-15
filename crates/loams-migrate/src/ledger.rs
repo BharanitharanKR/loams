@@ -431,6 +431,15 @@ impl Ledger {
         Ok(all_done && !stacked)
     }
 
+    /// How many snapshot roots (`upgrade/snapshots/*`) are recorded.
+    pub async fn snapshot_roots(&self) -> Result<usize> {
+        Ok(self
+            .meta
+            .pointers_with_prefix(Consistency::Linearizable, self.namespace, SNAPSHOTS_PREFIX)
+            .await?
+            .len())
+    }
+
     async fn stack_pointer(&self) -> Result<Option<Pointer>> {
         Ok(self
             .meta
