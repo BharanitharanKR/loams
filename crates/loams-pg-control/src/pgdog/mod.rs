@@ -1,11 +1,14 @@
 //! PgDog, as `pg-control` talks to it (design §46 §8): through its admin
-//! database, one Deployment per Loams namespace. So far only the seam
-//! ([`PgDogAdmin`], the shared contract's RT1 adapter, extended) and the
-//! implementation for a deployment with no PgDog in front of its endpoints
-//! ([`NoPgDog`]). The idle monitor (Task 12) reads the clients of an
-//! endpoint's pools through it; rendering, the config push and the admin
-//! adapter itself are PG2c's (Tasks 20–22), the waker's polling Task 26's.
+//! database, one Deployment per Loams namespace. The seam is [`PgDogAdmin`]
+//! (the shared contract's RT1 adapter, extended): [`admin`] implements it
+//! over PgDog's admin database, and [`NoPgDog`] is a deployment with no
+//! PgDog in front of its endpoints. [`render`] turns a namespace's records
+//! into PgDog's two files (Task 20) and [`push`] delivers them (Task 21).
+//! The idle monitor (Task 12) reads the clients of an endpoint's pools
+//! through the seam; the waker's polling is Task 26's.
 
+pub mod admin;
+pub mod push;
 pub mod render;
 
 use async_trait::async_trait;
@@ -25,12 +28,11 @@ pub struct PoolRow {
     /// The routed name (§46 §8.1), PgDog's `[[databases]]` `name`.
     pub database: String,
     pub user: String,
-    /// Clients with a transaction (or, in session mode, a session) on a
-    /// server connection: a query running counts for as long as it runs.
-    pub cl_active: u64,
     /// Clients waiting for a server connection.
     pub cl_waiting: u64,
-    /// Server connections in use.
+    /// Server connections in use: a client's transaction (or, in session
+    /// mode, its session), so a query running counts for as long as it
+    /// runs. The pinned PgDog's `SHOW POOLS` has no `cl_active` (R18.7).
     pub sv_active: u64,
 }
 

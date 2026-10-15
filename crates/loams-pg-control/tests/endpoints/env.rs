@@ -394,7 +394,6 @@ impl FakePgDog {
         inner.pools.push(PoolRow {
             database: database.into(),
             user: "app".into(),
-            cl_active: active,
             cl_waiting: waiting,
             sv_active: active,
         });

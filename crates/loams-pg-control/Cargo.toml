@@ -31,7 +31,7 @@ axum.workspace = true
 base64.workspace = true
 futures.workspace = true
 hex.workspace = true
-hyper = { version = "1", features = ["server", "http1"] }
+hyper = { version = "1", features = ["server", "client", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 jsonwebtoken.workspace = true
 k8s-openapi = { workspace = true, optional = true }
@@ -65,6 +65,17 @@ subtle = "2.6"
 thiserror.workspace = true
 time.workspace = true
 tokio.workspace = true
+# PgDog's admin database (src/pgdog/admin.rs, Task 21), and SELECT 1 in the
+# compose tests.
+tokio-postgres = "0.7"
+# The config push to pgdog-config-sync over mutual TLS (src/pgdog/push.rs,
+# Task 21); both already in the lockfile through loams-sqlgate.
+rustls = { workspace = true, features = ["ring", "std", "tls12", "logging"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12", "logging"] }
+# The sidecar's file format and atomic writes, for compose's bind mount.
+loams-pgdog-sync = { path = "../loams-pgdog-sync" }
+http-body-util = "0.1"
+bytes.workspace = true
 # The compute images' pin file, deploy/pins/loams-postgres-images.toml
 # (runtime::images, Task 11); already in the lockfile.
 toml.workspace = true
@@ -80,9 +91,6 @@ zeroize.workspace = true
 loams-pg-control = { path = ".", features = ["faults"] }
 proptest.workspace = true
 tempfile.workspace = true
-# The compose runtime's end-to-end test reads the image pins and runs
-# SELECT 1 through an endpoint's address (tests/it_compose.rs).
-tokio-postgres = "0.7"
 # role_secret_never_logged captures every log line.
 tracing-subscriber.workspace = true
 # The compute certificates' checks (runtime::certs): the chain and the
