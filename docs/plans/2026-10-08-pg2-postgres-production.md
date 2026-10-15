@@ -2145,3 +2145,22 @@ The checks ran on the scratch stack `deploy/pgdog/compose.yaml`: the pinned PgDo
     - `min_pool_size = 0` (no connection is kept open, so none is checked and a suspended endpoint is not dialled for `below_min`);
     - `idle_timeout` below the shortest suspend timeout (30 s, under the 60 s minimum), so PgDog lets go of an idle compute.
   - Checking out a connection still health-checks it when it is older than `healthcheck_interval`, but only on behalf of a client, which is activity anyway.
+
+### Task 19 rulings (2026-10-15)
+
+- **R19.1 The bundle files.**
+  - `deploy/pgdog/LICENSE-NOTICE.md` gives the program, the version, the image digest, the exact source tag (`https://github.com/pgdogdev/pgdog/tree/v0.1.60`), the licence and "no modifications".
+  - `deploy/pgdog/LICENSE.AGPL-3.0` is PgDog's `LICENSE` at that tag: the FSF's AGPL v3 text, unchanged, with no PgDog-specific content.
+  - `deploy/pgdog/README.md` states §46 §8.3 verbatim.
+  - Bundles that reference the image carry both files: the single-node compose (Task 56), the Helm chart (Task 48) and the desktop's stack.
+- **R19.2 `LICENSES.md` is new, at the root.** None existed. `NOTICE` lists code derived into Loams, while `LICENSES.md` lists programs Loams runs as separate, unmodified processes. Its first row is PgDog.
+- **R19.3 The check** (`scripts/ci/pgdog-licence.sh`, over tracked files) fails in four cases:
+  - **A PgDog package:** a `pgdog`-named package in a `Cargo.lock`, `pnpm-lock.yaml`, `package-lock.json` or `yarn.lock`, or a vendored `pgdog*` directory under `vendor/`, `vendored/` or `third_party/`.
+  - **A reference in the wrong place:** a reference to `ghcr.io/pgdogdev/pgdog` outside the three bundles.
+    - The router conformance harness (`scripts/router/inventory`, RT1's, never distributed) is allowed.
+    - Prose (`*.md`) may name the image.
+  - **An unpinned reference:** one with no full `sha256` digest. An `@$var` reference counts as pinned when its file pins a full digest, as the harness's `digest="${PGDOG_DIGEST:-sha256:…}"` does.
+  - **A bundle without its notice:** a bundle that references the image but has no `LICENSE-NOTICE.md`.
+  - It then runs `scripts/spec/provenance.sh`.
+  - Its `--self-test` covers `no_pgdog_in_lockfiles`, `pgdog_image_pinned_by_digest` and `licence_bundle_present` (eleven fixture repositories).
+- **R19.4 Where it runs.** It runs in `ci.yml`'s unconditional light job, not in `pg2.yml` as the plan said. `pg2.yml` runs only when Postgres paths change, and a PgDog package could arrive through any lockfile or deploy file. It is part of `CI required`.
