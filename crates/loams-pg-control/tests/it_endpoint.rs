@@ -39,7 +39,7 @@ use loams_pg_control::model::{
     EndpointType, OperationState, ProjectRec, ProjectState, WalService,
 };
 use loams_pg_control::reconcile::endpoint::{Activity, ComputeCtl, Computes, HttpComputeCtl};
-use loams_pg_control::reconcile::{Reconciler, ReconcilerConfig};
+use loams_pg_control::reconcile::{Pass, Reconciler, ReconcilerConfig};
 use loams_pg_control::runtime::compose::{
     ComposeBin, ComposeConfig, ComposeRuntime, TokioCommandRunner,
 };
@@ -198,6 +198,7 @@ fn port_range(ns: &str) -> std::ops::Range<u16> {
         "it-ep" => 55_500..55_750,
         "it-idle" => 55_750..56_000,
         "it-ro" => 56_000..56_250,
+        "it-cold" => 56_250..56_500,
         other => panic!("no port range for the case {other}"),
     }
 }
@@ -977,4 +978,119 @@ async fn it_ro_endpoint_rejects_writes_then_promotes() {
         .unwrap()
         .get(0);
     assert_eq!(n, 3);
+}
+
+/// PG2 Task 17's cold start on compose, for `scripts/pg2/cold-start.sh`: a
+/// suspended endpoint, then `StartEndpoint`, until the first `SELECT 1`
+/// through the endpoint's address answers, `COLDSTART_RUNS` times (50).
+/// The reconciler is driven as its run loop paces it (a pass, then the
+/// wait the pass asks for). Each sample (ms) goes to `COLDSTART_OUT` (JSON)
+/// when set. Compose has no warm pool (R14.2), so this is the pool-off
+/// figure; the images are cached by the first start, which is not counted.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "the cold-start harness (scripts/pg2/cold-start.sh); needs deploy/loams-postgres-dev"]
+async fn it_cold_start_samples() {
+    let runs: usize = env("COLDSTART_RUNS", "50").parse().unwrap();
+    let st = stack("it-cold").await;
+    let (ns, project, store, h, r) = (st.ns, st.project.to_string(), &st.store, &st.h, &st.r);
+    let id = h
+        .service
+        .create_endpoint(
+            &user(),
+            CreateEndpoint {
+                namespace: ns.into(),
+                project_id: project.clone(),
+                kind: EndpointType::ReadWrite,
+                idempotency_key: "cold".into(),
+                ..CreateEndpoint::default()
+            },
+        )
+        .await
+        .unwrap()
+        .endpoint
+        .record
+        .id;
+    let action = |key: String| EndpointAction {
+        namespace: ns.into(),
+        project_id: project.clone(),
+        endpoint_id: id.clone(),
+        idempotency_key: key,
+    };
+    // A first start (not counted): the images are pulled, a login role made.
+    h.service
+        .start_endpoint(&user(), action("warm".into()))
+        .await
+        .unwrap();
+    settle(r, store, ns, &project, &id, Some(EndpointState::Running)).await;
+    let running = endpoint(store, &project, &id).await.unwrap();
+    let addr = running.backend_addr.clone().unwrap();
+    let password = format!("cold-{}", now_ms());
+    psql(
+        &st,
+        running.compute_id.as_deref().unwrap(),
+        &format!("CREATE ROLE cold LOGIN PASSWORD '{password}'"),
+    );
+    let mut samples = Vec::with_capacity(runs);
+    for i in 0..runs {
+        h.service
+            .suspend_endpoint(&user(), action(format!("suspend-{i}")))
+            .await
+            .unwrap();
+        settle(r, store, ns, &project, &id, Some(EndpointState::Suspended)).await;
+        let (addr, password) = (addr.clone(), password.clone());
+        let t0 = Instant::now();
+        h.service
+            .start_endpoint(&user(), action(format!("start-{i}")))
+            .await
+            .unwrap();
+        // The first SELECT 1 that answers, tried every 25 ms.
+        let probe = tokio::spawn(async move {
+            let (host, port) = addr.rsplit_once(':').unwrap();
+            loop {
+                let conf = format!(
+                    "host={host} port={port} user=cold password={password} dbname=postgres \
+                     connect_timeout=1"
+                );
+                if let Ok((client, conn)) =
+                    tokio_postgres::connect(&conf, tokio_postgres::NoTls).await
+                {
+                    tokio::spawn(conn);
+                    if client.query_one("SELECT 1", &[]).await.is_ok() {
+                        return t0.elapsed();
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(25)).await;
+            }
+        });
+        // The reconciler, as its run loop paces it.
+        let elapsed = loop {
+            if probe.is_finished() {
+                break probe.await.unwrap();
+            }
+            assert!(
+                t0.elapsed() < Duration::from_secs(180),
+                "run {i}: no SELECT 1"
+            );
+            let wait = match r.reconcile_project(ns, &project).await {
+                Ok(Pass::Again(after)) => after,
+                Ok(_) => Duration::from_millis(50),
+                Err(e) => {
+                    eprintln!("pass: {e}");
+                    Duration::from_millis(250)
+                }
+            };
+            tokio::time::sleep(wait.min(Duration::from_millis(500))).await;
+        };
+        let ms = elapsed.as_secs_f64() * 1000.0;
+        eprintln!("cold start {i}: {ms:.0} ms");
+        samples.push(ms);
+    }
+    if let Ok(out) = std::env::var("COLDSTART_OUT") {
+        let body = serde_json::json!({
+            "runtime": "compose",
+            "pool": "off",
+            "samples_ms": samples,
+        });
+        std::fs::write(out, body.to_string()).unwrap();
+    }
 }

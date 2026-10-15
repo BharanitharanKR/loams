@@ -2073,6 +2073,28 @@ No task of this plan put `pg-control` in the preview release stack: R10.10 noted
   - The PEM is written to a temporary file and renamed into place.
   - Tests: `suspend_ends_a_pending_promotion`, `rw_start_refused_while_promoting`, `an_unknown_promotion_outcome_replaces_the_compute` and `promote_errors_are_refusals_only_before_pg_promote`.
 
+### Task 17 rulings (2026-10-15)
+
+- **R17.1 What is measured.** The time from `StartEndpoint` on a suspended endpoint to the first `SELECT 1` that answers through the endpoint's address, as a login role, tried every 25 ms.
+  - The reconciler is driven as its run loop paces it: a pass, then the wait the pass asks for, at most 500 ms (`Computes::poll` while a compute starts).
+  - The first start is not counted: it pulls the images and makes the role.
+  - The measurement is `it_cold_start_samples` in `tests/it_endpoint.rs`. It uses the API service, the endpoint reconciler and the compose runtime, with real computes on `deploy/loams-postgres-dev`.
+  - `scripts/pg2/cold-start.sh` brings up the storage as its own compose project (`pg2-coldstart`), runs it, and writes `bench/results/<date>-<sha>-coldstart.json` through `scripts/pg2/coldstart_stats.py`. That helper takes p50, p90 and p99 by nearest rank (as the WAL benchmark's `stats.py`), min, max and mean, and §46 §16's target per variant.
+  - `stats_from_samples` is in the helper's `--self-test`, which CI's light job runs.
+  - `loams-pg-bench.yml` gains `suite: coldstart` (a `workflow_dispatch` on the `loam-bench` runner) with `runs`.
+- **R17.2 Variants.**
+  - Recorded now: compose with the pool off. Compose has no warm pool (R14.2).
+  - Kind with the pool on and off needs storage in the cluster, which Task 48's chart brings. The kind variants are added to the script then.
+  - **`scripts/pg2/wake-bench.sh` is not written here.** It measures from the first client connection through PgDog and the waker, so it belongs to Task 26, which builds the waker. The plan's PG2b exit records the numbers without gating.
+- **R17.3 The recorded run** (2026-10-15, at `b8da2481` plus this task's test; Linux x86_64, 14 CPUs, rootless Podman, images cached), 50 cold starts on compose with the pool off:
+  - p50 1417 ms, p90 2271 ms, p99 6594 ms; min 1026 ms, max 6594 ms, mean 1760 ms.
+  - This meets §46 §16's compose target (p99 ≤ 20 s). The samples are in `bench/results/20261015-b8da248180df-coldstart.json`.
+  - The few slow samples (3.3 s to 6.6 s) were not diagnosed: the shared build machine was busy.
+- **R17.4 PG2b exit.**
+  - Done: endpoints start, suspend when idle, restart and promote on compose (real computes: `it_endpoint`). The Kubernetes runtime's objects and lifecycle are tested against a stand-in API, and kind starts its Pods.
+  - The autoscaler is built (Task 15). It resizes only on Kubernetes, and real resizes wait for Task 48's cluster.
+  - Not yet run: Kubernetes end to end (storage in kind, Task 48).
+
 ### Task 18 rulings (2026-10-15): PgDog, checked
 
 The checks ran on the scratch stack `deploy/pgdog/compose.yaml`: the pinned PgDog, two `postgres:17.11` backends (`pg1`, `pg2`), and `pg3`, which starts later. Configs are in `deploy/pgdog/scratch/`. They were run locally under rootless Podman with `psql` 17 as the client. Nothing of PgDog's is in the repository: these are field names and observed behaviour.
