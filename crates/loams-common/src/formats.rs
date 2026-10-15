@@ -15,7 +15,7 @@
 //!
 //! Formats that carried no version before UP1 (the Raft log, pointer values,
 //! the graph catalog document, Live's journal, Git's pack and head hint, the
-//! House directory) are registered at version 1 with the rule "absent means
+//! House directory, the auth principal directory) are registered at version 1 with the rule "absent means
 //! 1": a reader that finds no version treats it as 1, and nothing is
 //! rewritten.
 
@@ -137,6 +137,10 @@ pub const LIVE_JOURNAL: FormatId = FormatId("live.journal");
 pub const DURABLE_SQLITE: FormatId = FormatId("durable.sqlite");
 pub const HOUSE_DIR: FormatId = FormatId("house.dir");
 pub const HOUSE_CATALOG: FormatId = FormatId("house.catalog");
+/// The auth principal directory: unversioned JSON in the bucket
+/// (`system/directory/`), named by pointer `principal-directory` in the
+/// `_system` namespace (`crates/loams/src/auth/directory.rs`).
+pub const AUTH_DIRECTORY: FormatId = FormatId("auth.directory");
 pub const PG_CONTROL_RECORD: FormatId = FormatId("pg_control.record");
 pub const PG_CONTROL_COMPOSE_STATE: FormatId = FormatId("pg_control.compose_state");
 pub const PG_CONTROL_SECRETS_FILE: FormatId = FormatId("pg_control.secrets_file");
@@ -181,6 +185,7 @@ pub static REGISTRY: &[FormatSpec] = &[
     spec(DURABLE_SQLITE.0, Store::Durable, 1, 1),
     spec(HOUSE_DIR.0, Store::House, 1, 1),
     spec(HOUSE_CATALOG.0, Store::House, 1, 1),
+    spec(AUTH_DIRECTORY.0, Store::Bucket, 1, 1),
     spec(PG_CONTROL_RECORD.0, Store::PgControl, 1, 1),
     spec(PG_CONTROL_COMPOSE_STATE.0, Store::PgControl, 1, 1),
     spec(PG_CONTROL_SECRETS_FILE.0, Store::PgControl, 1, 1),

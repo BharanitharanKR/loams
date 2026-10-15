@@ -32,7 +32,7 @@ mod changeset_reader {
     use super::*;
 
     fn props_at(version: u8) -> Vec<u8> {
-        let mut bytes = encode_props(&PropMap::new()).unwrap().to_vec();
+        let mut bytes = encode_props(&PropMap::new()).expect("encode").to_vec();
         bytes[0] = version;
         bytes
     }

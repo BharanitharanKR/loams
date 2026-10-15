@@ -728,6 +728,7 @@ unless marked; Task 1 moves each to `formats::check`.
 | `live.journal` | `JournalEntry`, no format field | none: "absent means 1" |
 | `durable.sqlite` | Resonate's `_sqlx_migrations` (`0001_initial`) | see T0-6 |
 | `house.dir`, `house.catalog` | no stamp; `catalog.sqlite` tables `namespaces`, `tables` (`fabric/crates/loams-house/src/catalog/local.rs`) | none: "absent means 1" |
+| `auth.directory` | none: the auth principal directory, JSON in `system/directory/`, named by pointer `principal-directory` in namespace `_system` (`crates/loams/src/auth/directory.rs`). It holds API key and session hashes | none: "absent means 1" (added by Task 1) |
 | `pg_control.record` | `FORMAT: u8 = 1`, `crates/loams-pg-control/src/model.rs` | exact |
 | `pg_control.secrets_file`, `pg_control.ca` | `FILE_FORMAT = 1` (`secrets/file.rs`), `CA_FORMAT = 1` (`runtime/certs.rs`) | exact (**not in §17**) |
 | `pg_control.compose_state` | `STATE_FORMAT = 1` (`runtime/compose.rs`, pg-runner's state files) | written, **never checked** (**not in §17**) |
@@ -744,9 +745,11 @@ key-value call and no multi-key transaction**. What it has: namespaces; per-name
 string key → string value with a CAS version, optionally fenced by a lease epoch; key and value each at most
 `MAX_KEY_LEN` = 1024 bytes); and global **leases** (`acquire_lease`/`renew_lease`/`release_lease`, fenced epochs).
 Each call applies atomically on both backends (one TiKV transaction through `loams-tikv`'s runner; one Raft
-`Command`). No namespace is reserved: `validate_name` accepts `_system` for a namespace (only streams, links and
-collections refuse a leading `_`), and the API layer checks nothing, so a preview.2 user **may already have a
-namespace named `_system`**. Ruling for Task 2:
+`Command`). **Correction (Task 1):** the namespace `_system` **already exists in preview.2**. The auth principal directory
+(`crates/loams/src/auth/directory.rs`, `SYSTEM_NAMESPACE`) creates it on its first write and keeps the pointer
+`principal-directory` there, so §54 §17's "no `_system` namespace" is wrong. Nothing reserves the name, though:
+`validate_name` accepts it (only streams, links and collections refuse a leading `_`), and the API layer checks
+nothing, so a user could also have created it. Ruling for Task 2:
 - The ledger uses the existing primitives, so neither backend's record or snapshot format changes, and preview.2's
   binaries still read the metastore after adoption (this is what makes `0000-adopt-preview-2` `Reversible` on the
   Raft backend too; a new `Command` variant or snapshot v9 would not be):
@@ -767,8 +770,10 @@ namespace named `_system`**. Ruling for Task 2:
   `migration_incomplete`, and a rerun of `migrate run` only writes the stack record. Task 2's test
   `stack_record_and_last_entry_commit_together` checks this ordering.
 - Reserving `_system`: `CreateNamespace` in the API layer (`crates/loams/src/api`) refuses it with
-  `namespace_reserved`, and list calls omit it. Task 5's fingerprint refuses adoption when a `_system` namespace
-  exists with anything but `upgrade/*` pointers (`stack_unrecognised`, naming the namespace).
+  `namespace_reserved`, and list calls omit it. Task 5's fingerprint accepts a `_system` namespace that holds only the
+  `principal-directory` pointer and `upgrade/*` pointers (no streams, collections, links or graphs), and
+  refuses anything else (`stack_unrecognised`, naming the namespace). The `principal-directory` pointer is
+  another conditional preview.2 marker (T0-6): preview.1 had no auth directory.
 
 **T0-3. The upgrade client crate.** CL1 Task 1 has not merged: there is no `crates/loams-cli`. Tasks 12–14 create
 `crates/loams-upgrade` (a library with CL1's no-server-dependency guard), flattened into the `loams` binary as

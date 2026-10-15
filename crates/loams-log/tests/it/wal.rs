@@ -170,7 +170,8 @@ mod formats {
         out[8..10].copy_from_slice(&version.to_le_bytes());
         let trailer_at = out.len() - wal::TRAILER_LEN;
         let index_offset =
-            u64::from_le_bytes(out[trailer_at..trailer_at + 8].try_into().unwrap()) as usize;
+            u64::from_le_bytes(out[trailer_at..trailer_at + 8].try_into().expect("8 bytes"))
+                as usize;
         let crc = crc32c::crc32c_append(
             crc32c::crc32c(&out[..wal::HEADER_LEN]),
             &out[index_offset..trailer_at],

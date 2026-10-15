@@ -368,9 +368,9 @@ mod format_tests {
     #[test]
     fn reader_refuses_next_version() {
         let spec = BuildSpec::new(2, Distance::Cosine);
-        let err = decode(&spec, &object(&spec, FLAT_VERSION + 1))
-            .err()
-            .expect("refused");
+        let Err(err) = decode(&spec, &object(&spec, FLAT_VERSION + 1)) else {
+            panic!("N+1 opened");
+        };
         assert!(err.to_string().contains("format_unreadable"), "{err}");
     }
 }
