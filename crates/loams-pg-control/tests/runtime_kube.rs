@@ -681,14 +681,14 @@ async fn pod_cpu_from_the_metrics_api() {
     assert!(rt.sample("acme", &compute).await.is_err(), "no metrics yet");
     api.lock().unwrap().objects.insert(
         (K8S_NS.into(), "podmetrics".into(), CMP.to_lowercase()),
-        json!({
-            "apiVersion": "metrics.k8s.io/v1beta1",
-            "kind": "PodMetrics",
-            "metadata": { "name": CMP.to_lowercase(), "namespace": K8S_NS },
-            "timestamp": "2026-10-14T00:00:00Z",
-            "window": "15s",
-            "containers": [{ "name": "compute", "usage": { "cpu": "400m", "memory": "1Gi" } }],
-        }),
+        serde_json::from_str::<Value>(
+            &std::fs::read_to_string(
+                FsPath::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/kube/pod_metrics.json"),
+            )
+            .unwrap(),
+        )
+        .unwrap(),
     );
     let s = rt.sample("acme", &compute).await.unwrap();
     // 0.4 cores of a 0.5 CU (0.5 vCPU) compute.

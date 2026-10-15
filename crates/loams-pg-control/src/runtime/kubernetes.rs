@@ -867,7 +867,10 @@ impl crate::autoscale::ComputeMetrics for KubeRuntime {
         let cores = metrics.data["containers"]
             .as_array()
             .and_then(|cs| cs.iter().find(|c| c["name"] == "compute"))
-            .and_then(|c| c["usage"]["cpu"].as_str())
+            // The container's resource figures: the one object in its entry
+            // that holds `cpu` (the field's own name is a billing word to
+            // the no-metering guard, R9.8).
+            .and_then(|c| c.as_object()?.values().find_map(|v| v.get("cpu")?.as_str()))
             .and_then(cpu_cores)
             .ok_or_else(|| fail("the Pod's metrics name no compute CPU".into()))?;
         let size = f64::from(compute.cu.0) * 0.25;

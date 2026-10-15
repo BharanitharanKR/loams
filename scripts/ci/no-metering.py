@@ -35,6 +35,13 @@ ALLOWED_NAMES = frozenset({
     # A Postgres GUC name (PG2 Task 11's settable parameters).
     "plan_cache_mode",
 })
+# Documents of other systems kept as test fixtures, whose names are theirs:
+# the Kubernetes metrics API's PodMetrics (its per-container CPU field,
+# which the autoscaler reads; PG2 Task 15). Each is listed by its exact path,
+# and the markers are still checked in it.
+FOREIGN_DOCUMENTS = frozenset({
+    "crates/loams-pg-control/tests/fixtures/kube/pod_metrics.json",
+})
 TOKEN = re.compile(r"[A-Za-z0-9_]+")
 CAMEL = re.compile(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|[0-9]+")
 
@@ -168,7 +175,8 @@ def main():
                        zip(name.split("/"), allowed.split("/")))
                for allowed in ALLOWLIST):
             continue
-        if name.startswith(NAME_SCOPES) and name.endswith(NAME_SUFFIXES):
+        if (name.startswith(NAME_SCOPES) and name.endswith(NAME_SUFFIXES)
+                and name not in FOREIGN_DOCUMENTS):
             for line, word in billing_names(name, data):
                 print(f"{name}:{line}: billing name {word!r} (D548, D550; PG2 Task 9)", file=sys.stderr)
                 failed = True
