@@ -7,7 +7,7 @@
 //! volumes of its step and the snapshots; its only credentials are the
 //! engine's own (`secrets/engine.env`), passed as an env file.
 
-use crate::stackdir::{PROJECT, StackDir};
+use crate::stackdir::StackDir;
 
 /// Where the snapshots are mounted in every helper (and in `tikv`, for BR).
 pub const SNAPSHOTS: &str = "/var/lib/loams-upgrade-snapshots";
@@ -85,17 +85,18 @@ impl HelperSpec {
     }
 }
 
-/// The compose volume `name` of the stack.
-pub fn volume(name: &str) -> String {
-    format!("{PROJECT}_{name}")
+/// The compose volume (or network) `name` of the stack.
+pub fn volume(stack: &StackDir, name: &str) -> String {
+    format!("{}_{name}", stack.project)
 }
 
 /// The snapshots' mount source: the host directory `.env` names, else the
 /// `upgrade-snapshots` volume.
 pub fn snapshots_source(stack: &StackDir) -> String {
-    stack
-        .snapshot_host_dir()
-        .map_or_else(|| volume("upgrade-snapshots"), |d| d.display().to_string())
+    stack.snapshot_host_dir().map_or_else(
+        || volume(stack, "upgrade-snapshots"),
+        |d| d.display().to_string(),
+    )
 }
 
 fn engine_env(stack: &StackDir) -> Option<String> {
@@ -136,20 +137,20 @@ pub fn migrate_helper(stack: &StackDir, image: &str, subcommand: &[String]) -> H
         image: image.to_string(),
         entrypoint: None,
         args,
-        network: volume("default"),
+        network: volume(stack, "default"),
         mounts: vec![
             Mount {
-                source: volume("loams-data"),
+                source: volume(stack, "loams-data"),
                 target: "/var/lib/loams".to_string(),
                 read_only: false,
             },
             Mount {
-                source: volume("house-data"),
+                source: volume(stack, "house-data"),
                 target: "/var/lib/loams-house".to_string(),
                 read_only: false,
             },
             Mount {
-                source: volume("pg-control-data"),
+                source: volume(stack, "pg-control-data"),
                 target: "/var/lib/loams-pg-control".to_string(),
                 read_only: false,
             },
@@ -181,7 +182,7 @@ pub fn br_helper(stack: &StackDir, image: &str, restore: bool, id: &str) -> Help
             "--log-file".to_string(),
             "/tmp/br.log".to_string(),
         ],
-        network: volume("default"),
+        network: volume(stack, "default"),
         mounts: vec![Mount {
             source: snapshots_source(stack),
             target: SNAPSHOTS.to_string(),
@@ -224,12 +225,12 @@ pub fn cold_copy_helper(stack: &StackDir, image: &str, restore: bool, id: &str) 
         network: "none".to_string(),
         mounts: vec![
             Mount {
-                source: volume("pd-data"),
+                source: volume(stack, "pd-data"),
                 target: "/vol/pd".to_string(),
                 read_only: !restore,
             },
             Mount {
-                source: volume("tikv-data"),
+                source: volume(stack, "tikv-data"),
                 target: "/vol/tikv".to_string(),
                 read_only: !restore,
             },

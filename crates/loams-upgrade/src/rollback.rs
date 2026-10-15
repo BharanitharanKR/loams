@@ -90,8 +90,8 @@ pub fn restore(runtime: &dyn Runtime, stack: &mut StackDir, restore: &Restore) -
                 "volume".to_string(),
                 "rm".to_string(),
                 "-f".to_string(),
-                volume("pd-data"),
-                volume("tikv-data"),
+                volume(stack, "pd-data"),
+                volume(stack, "tikv-data"),
             ])?;
             if !out.ok() {
                 return Err(UpgradeError::new(
@@ -281,6 +281,7 @@ fn keep_writes_refusal(
     let before = read_env(&install::host_copy_dir(&stack.dir, id).join("release/.env"));
     let old = crate::check::current_components(&StackDir {
         dir: stack.dir.clone(),
+        project: stack.project.clone(),
         env: before,
     });
     let new = crate::check::current_components(stack);
