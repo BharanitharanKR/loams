@@ -67,8 +67,11 @@ services:
       create-bucket:
         condition: service_completed_successfully
 
-  # WAL lands on the safekeeper's disk first and is offloaded to the bucket; as upstream's compose,
-  # this keeps it in the container filesystem. A real deployment gives each safekeeper a volume.
+  # WAL lands on the safekeeper's disk first and is offloaded to the bucket. Since preview.3 it is
+  # on the safekeeper-data volume, so recreating the container loses nothing (design §54 §9.3,
+  # D945). preview.2 kept it in the container filesystem: `loams upgrade` drains it (computes
+  # stopped, every timeline uploaded) before it recreates the container, and `migrate`'s
+  # `0001-safekeeper-volume` checks the drain again.
   safekeeper1:
     image: *neon-image
     environment: *s3-env
@@ -80,6 +83,8 @@ services:
         safekeeper --listen-pg=safekeeper1:5454 --listen-http=0.0.0.0:7676 --id=1
         --broker-endpoint=http://storage_broker:50051 -D /data
         --remote-storage="{endpoint='http://rustfs:9000', bucket_name='neon', bucket_region='us-east-1', prefix_in_bucket='/safekeeper/'}"
+    volumes:
+      - safekeeper-data:/data
     depends_on:
       storage_broker:
         condition: service_started
@@ -119,3 +124,4 @@ services:
 volumes:
   rustfs-data:
   pageserver-data:
+  safekeeper-data:

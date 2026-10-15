@@ -40,6 +40,7 @@ fn neon(what: &str, e: impl std::fmt::Display) -> SnapshotError {
 #[derive(Clone, Debug)]
 pub struct PostgresStorage {
     pageserver: NeonClient,
+    pageserver_url: Url,
     safekeeper: WalClient,
 }
 
@@ -78,9 +79,10 @@ impl PostgresStorage {
     /// safekeeper (`http://safekeeper1:7676`).
     pub fn new(pageserver: &str, safekeeper: &str) -> Result<Self, SnapshotError> {
         let url = |u: &str| Url::parse(u).map_err(|e| neon(u, e));
+        let pageserver_url = url(pageserver)?;
         let pageserver = NeonClient::new(
             NeonEndpoints {
-                pageserver: url(pageserver)?,
+                pageserver: pageserver_url.clone(),
                 storcon: None,
             },
             None,
@@ -90,8 +92,32 @@ impl PostgresStorage {
             WalClient::new(url(safekeeper)?, None).map_err(|e| neon("the safekeeper", e))?;
         Ok(PostgresStorage {
             pageserver,
+            pageserver_url,
             safekeeper,
         })
+    }
+
+    /// Whether this stack runs Loams Postgres: `false` when the pageserver's
+    /// name does not resolve (a stack composed without it,
+    /// `postgres-off.yaml`); any other failure is an error, never "absent".
+    pub async fn present(&self) -> Result<bool, SnapshotError> {
+        let host = self
+            .pageserver_url
+            .host_str()
+            .unwrap_or_default()
+            .to_string();
+        let port = self.pageserver_url.port_or_known_default().unwrap_or(80);
+        if tokio::net::lookup_host((host.as_str(), port))
+            .await
+            .is_err()
+        {
+            return Ok(false);
+        }
+        self.pageserver
+            .list_tenants()
+            .await
+            .map(|_| true)
+            .map_err(|e| neon("the pageserver", e))
     }
 
     /// Every (tenant, timeline) the pageserver holds, archived ones left out.
