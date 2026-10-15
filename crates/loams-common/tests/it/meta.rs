@@ -284,6 +284,9 @@ mod dyn_compatible {
         async fn ensure_graph_stream(&self, _: NamespaceId, _: &str) -> MetaResult<StreamId> {
             unimplemented!()
         }
+        async fn ensure_system_stream(&self, _: NamespaceId, _: &str) -> MetaResult<StreamId> {
+            unimplemented!()
+        }
         async fn drop_graph_stream(
             &self,
             _: NamespaceId,

@@ -24,8 +24,20 @@ pub async fn produce_records(
     stream: &str,
     records: Vec<(u32, Vec<Record>)>,
 ) -> Result<Vec<AppendAck>, ApiError> {
+    refuse_system_stream(stream)?;
     let id = checked_stream(meta, ns, stream, &records).await?;
     Ok(writer.append_many(id, records).await?)
+}
+
+/// Refuses an outside producer's write to a reserved system stream (`_git`, GT1 Task 15):
+/// only its subsystem appends there, so its events cannot be forged.
+pub(crate) fn refuse_system_stream(stream: &str) -> Result<(), ApiError> {
+    match loams_common::meta::system_stream_partitions(stream) {
+        Some(_) => Err(ApiError::invalid(format!(
+            "stream {stream} is a reserved system stream: only the server appends to it"
+        ))),
+        None => Ok(()),
+    }
 }
 
 /// The id of stream `stream`, after rule 4's check of `records` for an

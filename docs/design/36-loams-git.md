@@ -265,6 +265,8 @@ Forking repository A at sequence `s` writes repository B's `checkpoints/00000000
 
 After a segment commits, the sequencer appends each transaction's CloudEvent to the namespace stream `_git` (partition key `repo_id`) through `ProduceCloudEvents` (D270), deduplicated by `source` + `id`. This is §15 §3.2's "append a record to the repo's event stream", at least once with a repair sweep that compares `head` with the stream's last `loamsseq`. Code-index links (§15 §4) and usage consumers (§11) read it. On a commercial Cloudflare target (`loams-platform`) the sequencer posts to a Queue whose consumer calls `ProduceCloudEvents`.
 
+**As built (GT1b, Task 15; `crates/loams-git/src/mirror_events.rs`, `crates/loams/src/api/git_events.rs`, plan rulings T15.1–T15.5).** `_git` is a reserved system stream (8 partitions, keyed by `repo_id`), created only by the metastore command `EnsureSystemStream` (every backend and the conformance suite); public producers (`POST …/events`, record produce, `ProduceCloudEvents`) are refused, so its events cannot be forged. The mirror is a task beside each sequencer that commits: it follows the WAL with `watch`, publishes through the CloudEvents ingest (deduplicated by `source` + `id`), retries with backoff, and never delays an acknowledgement. A best-effort cursor (`ns/<ns>/repos/<repo_id>/mirror.json`) replaces the comparison with the stream's last `loamsseq`: the hourly repair publishes whatever each WAL holds past its cursor. In-process consumers use `RepoSequencers::subscribe(ns, tenant, repo, from)`, resumable by seq.
+
 ## 5. The traits (D392)
 
 All four live in `crates/loams-git` and are object-safe (`Arc<dyn …>`). On `wasm32` targets they use `async_trait(?Send)`, because Workers futures are not `Send` (§17).

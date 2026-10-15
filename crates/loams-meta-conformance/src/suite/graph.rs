@@ -296,3 +296,57 @@ pub async fn drop_graph_stream_is_fenced_and_retires_its_objects(backend: &dyn B
     // The name is free for a graph made again under the same id.
     assert_ne!(meta.ensure_graph_stream(ns, GRAPH).await.expect("again"), s);
 }
+
+/// GT1 Task 15: reserved system streams (`_git`) are created only by
+/// `ensure_system_stream`, with their own partition count, idempotently.
+pub async fn system_streams_are_reserved_and_idempotent(backend: &dyn Backend) {
+    use loams_common::meta::{GIT_STREAM, system_stream_partitions};
+
+    let db = backend.start().await;
+    let meta = db.first();
+    let ns = namespace(meta, "system-streams").await;
+    let created = meta
+        .ensure_system_stream(ns, GIT_STREAM)
+        .await
+        .expect("ensure _git");
+    assert_eq!(
+        db.last()
+            .ensure_system_stream(ns, GIT_STREAM)
+            .await
+            .expect("again"),
+        created
+    );
+    let found = db
+        .last()
+        .stream_by_name(L, ns, GIT_STREAM)
+        .await
+        .expect("read")
+        .expect("the _git stream");
+    assert_eq!(found.id, created);
+    assert_eq!(Some(found.partitions), system_stream_partitions(GIT_STREAM));
+    // Nobody creates it as an ordinary stream, and no other name is a system stream.
+    assert!(matches!(
+        rejected(
+            meta.create_stream(
+                ns,
+                GIT_STREAM,
+                1,
+                loams_common::meta::WalClass::Standard,
+                loams_common::meta::Retention::default(),
+            )
+            .await
+        ),
+        ApplyError::InvalidArgument(_)
+    ));
+    assert!(matches!(
+        rejected(meta.ensure_system_stream(ns, "_other").await),
+        ApplyError::InvalidArgument(_)
+    ));
+    assert!(matches!(
+        rejected(
+            meta.ensure_system_stream(NamespaceId(u64::MAX - 7), GIT_STREAM)
+                .await
+        ),
+        ApplyError::NamespaceNotFound(_)
+    ));
+}

@@ -34,6 +34,10 @@
 //! ordinary stream record). Its golden files are `commands-gr1.12.bin` and
 //! `replies-gr1.12.bin`; bless only them:
 //! `LOAMS_BLESS_GOLDEN=1 cargo test -p loams-meta --test it gr1_12`.
+//!
+//! GT1 Task 15 appends `Command::EnsureSystemStream` (no new `Reply`, no snapshot format: a
+//! system stream is an ordinary stream record). Its golden file is `commands-gt1.15.bin`;
+//! bless only it: `LOAMS_BLESS_GOLDEN=1 cargo test -p loams-meta --test it gt1_15`.
 
 use std::collections::BTreeMap;
 use std::io;
@@ -691,6 +695,8 @@ fn every_command_variant_is_in_the_golden_list() {
             Command::CommitWalFenced { .. }
             | Command::EnsureGraphStream { .. }
             | Command::DropGraphStream { .. } => continue,
+            // GT1 Task 15's, listed in `golden_commands_gt1_15`.
+            Command::EnsureSystemStream { .. } => continue,
         };
         seen.insert(name);
     }
@@ -1605,4 +1611,65 @@ fn the_gr1_12_commands_apply_and_leave_one_graph_stream() {
             .stream_by_name(NamespaceId(1), &format!("graph.{LEGACY_GRAPH}"))
             .is_none()
     );
+}
+
+// ----- GT1 Task 15: reserved system streams -----
+
+/// Continues from an empty state: a namespace, its `_git` stream, and the same command again.
+fn golden_commands_gt1_15() -> Vec<Command> {
+    vec![
+        Command::CreateNamespace {
+            name: "acme".to_string(),
+        },
+        Command::EnsureSystemStream {
+            namespace: NamespaceId(1),
+            name: "_git".to_string(),
+        },
+        Command::EnsureSystemStream {
+            namespace: NamespaceId(1),
+            name: "_git".to_string(),
+        },
+    ]
+}
+
+#[test]
+fn gt1_15_commands_encode_to_the_golden_bytes() {
+    let fresh = postcard::to_stdvec(&golden_commands_gt1_15()).expect("encode");
+    let golden = golden_bytes("commands-gt1.15.bin", &fresh);
+    assert_eq!(fresh, golden);
+    let decoded: Vec<Command> = postcard::from_bytes(&golden).expect("decode");
+    assert_eq!(decoded, golden_commands_gt1_15());
+}
+
+#[test]
+fn the_gt1_15_commands_apply_and_leave_one_git_stream() {
+    let mut state = MetaState::default();
+    let mut replies = Vec::new();
+    for command in golden_commands_gt1_15() {
+        replies.push(
+            state
+                .apply(command.clone())
+                .unwrap_or_else(|e| panic!("{command:?} failed to apply: {e}")),
+        );
+    }
+    assert!(
+        state.check_invariants().is_empty(),
+        "{:?}",
+        state.check_invariants()
+    );
+    assert_eq!(
+        replies[1], replies[2],
+        "the second ensure finds the first stream"
+    );
+    let stream = state
+        .stream_by_name(NamespaceId(1), "_git")
+        .expect("the _git stream");
+    assert_eq!(stream.partitions, 8);
+    assert!(matches!(
+        state.apply(Command::EnsureSystemStream {
+            namespace: NamespaceId(1),
+            name: "_nope".to_string(),
+        }),
+        Err(ApplyError::InvalidArgument(_))
+    ));
 }

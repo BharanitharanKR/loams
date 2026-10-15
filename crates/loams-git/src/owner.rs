@@ -30,6 +30,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use futures::stream::BoxStream;
 use loams_store::Store;
 use sha2::{Digest, Sha256};
 use tokio::sync::{Mutex, OnceCell};
@@ -41,10 +42,11 @@ use crate::format::pb;
 use crate::forward::{
     SeqCommit, SeqForwarder, decode_answer, decode_request, encode_answer, encode_request,
 };
-use crate::ids::{IdemKey, NamespaceId, RepoId};
+use crate::ids::{IdemKey, NamespaceId, RepoId, Seq};
 use crate::limits::{FORWARD_TIMEOUT, SEQ_IDLE_EVICT};
+use crate::mirror_events::{GitEventSink, MirrorCursor, run_mirror};
 use crate::paths::RepoPaths;
-use crate::reflog::{Receipt, RefError, RefLog, RefTxn};
+use crate::reflog::{CommittedTxn, Receipt, RefError, RefLog, RefTxn};
 use crate::sequencer::{BucketRefLog, SequencerConfig};
 use crate::wal::StoreWalStore;
 
@@ -208,6 +210,8 @@ struct Held {
 struct Entry {
     log: OnceCell<BucketRefLog>,
     lease: Mutex<Option<Held>>,
+    /// The `_git` mirror of this repository, while this node commits it (Task 15).
+    mirror: std::sync::Mutex<Option<JoinHandle<()>>>,
     /// Calls using the sequencer now: an entry in use is never evicted.
     busy: AtomicUsize,
     /// When it was last used, in ms since [`Inner::epoch`].
@@ -231,6 +235,8 @@ struct Inner {
     placement: Arc<dyn SeqPlacement>,
     leases: Option<Arc<dyn SeqLeases>>,
     forwarder: Option<Arc<dyn SeqForwarder>>,
+    /// Where committed transactions are mirrored (`_git`, Task 15).
+    mirror: Option<Arc<dyn GitEventSink>>,
     config: OwnerConfig,
     /// One entry per repository: the map's lock is held only to find or add
     /// one, so a slow cold open of one repository never blocks another.
@@ -280,6 +286,29 @@ impl RepoSequencers {
         )
     }
 
+    /// Mirrors every transaction this node commits into its namespace's `_git` stream through
+    /// `sink` (§36 §4.8, Task 15). Call before the first commit.
+    pub fn with_mirror(mut self, sink: Arc<dyn GitEventSink>) -> Self {
+        match Arc::get_mut(&mut self.inner) {
+            Some(inner) => inner.mirror = Some(sink),
+            None => tracing::warn!("with_mirror after the sequencers were shared: ignored"),
+        }
+        self
+    }
+
+    /// The committed transactions of `repo` from `from` on, in order, without gaps, at least
+    /// once (`GitEvents::subscribe`, Task 15): an in-process consumer that stops resumes from
+    /// the seq after the last one it handled.
+    pub async fn subscribe(
+        &self,
+        ns: NamespaceId,
+        tenant: &str,
+        repo: &RepoId,
+        from: Seq,
+    ) -> Result<BoxStream<'static, Result<CommittedTxn, RefError>>, RefError> {
+        Ok(self.get(ns, tenant, repo).await?.watch(from))
+    }
+
     fn build(
         store: Store,
         clock: Arc<dyn Clock>,
@@ -295,6 +324,7 @@ impl RepoSequencers {
                 placement,
                 leases,
                 forwarder,
+                mirror: None,
                 config,
                 entries: Mutex::new(HashMap::new()),
                 stats: OwnerStats::default(),
@@ -430,6 +460,7 @@ impl RepoSequencers {
         if lease {
             self.ensure_lease(&entry, ns, repo).await;
         }
+        self.ensure_mirror(&entry, &log, ns, repo);
         match commit {
             SeqCommit::Ref(txn) => log.commit(txn).await,
             SeqCommit::Config { key, change } => log.commit_config(key, change).await,
@@ -506,6 +537,26 @@ impl RepoSequencers {
             Err(err) => {
                 tracing::debug!(%ns, %repo, error = %err, "committing without the sequencer lease");
             }
+        }
+    }
+
+    /// Starts the `_git` mirror of a repository this node commits, if it has none.
+    fn ensure_mirror(&self, entry: &Entry, log: &BucketRefLog, ns: NamespaceId, repo: &RepoId) {
+        let Some(sink) = &self.inner.mirror else {
+            return;
+        };
+        let mut mirror = entry
+            .mirror
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if mirror.is_none() {
+            *mirror = Some(tokio::spawn(run_mirror(
+                Arc::new(log.clone()),
+                MirrorCursor::new(self.inner.store.clone(), ns, repo),
+                Arc::clone(sink),
+                ns,
+                repo.clone(),
+            )));
         }
     }
 
@@ -602,6 +653,7 @@ impl Inner {
     /// Closes a removed entry: stops its renewals, releases its lease, and
     /// shuts its sequencer down.
     async fn retire(&self, ns: NamespaceId, repo: &RepoId, entry: &Entry) {
+        stop_mirror(entry);
         if let Some(held) = entry.lease.lock().await.take() {
             held.renew.abort();
             if let Some(leases) = &self.leases {
@@ -667,6 +719,7 @@ async fn renew_lease(inner: Weak<Inner>, ns: NamespaceId, repo: RepoId, key: Str
         if let Some(entry) = entry {
             // This task is the renewal: forget it rather than abort itself.
             entry.lease.lock().await.take();
+            stop_mirror(&entry);
             if let Some(log) = entry.log.get() {
                 log.clone().shutdown().await;
             }
@@ -706,5 +759,17 @@ async fn sweep(inner: Weak<Inner>, idle: Duration) {
             }
             inner.retire(ns, &repo, &entry).await;
         }
+    }
+}
+
+/// Stops a repository's `_git` mirror, if it runs.
+fn stop_mirror(entry: &Entry) {
+    if let Some(mirror) = entry
+        .mirror
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take()
+    {
+        mirror.abort();
     }
 }

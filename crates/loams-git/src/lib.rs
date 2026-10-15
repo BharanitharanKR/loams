@@ -19,6 +19,7 @@ pub mod forward;
 pub mod gc;
 pub mod ids;
 pub mod limits;
+pub mod mirror_events;
 pub mod odb;
 pub mod owner;
 pub mod paths;
@@ -49,6 +50,7 @@ pub use ids::{
     IdemKey, MountId, NamespaceId, ObjectId, Principal, RefName, RepoId, RepoName, RepoPath,
     SecretId, Seq, SnapN, TraceParent, WsId, WsName,
 };
+pub use mirror_events::{GitEventSink, MirrorCursor, repair_repo, run_mirror};
 pub use odb::{ObjectDb, OdbError, PackCache, PackCacheOdb};
 pub use owner::{
     AlwaysHere, Cluster, LeaseError, OwnerConfig, OwnerStatsSnapshot, RepoSequencers, SeqLeases,
